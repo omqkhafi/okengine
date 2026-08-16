@@ -55,6 +55,7 @@ import {
   logDevRequest,
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
+import { asBrowserJsonCodeBlock, httpNavGroups } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
 import { fail } from "./errors.ts";
 import {
@@ -269,6 +270,8 @@ export interface ExecuteResult {
   readonly cache: "hit" | "miss" | "none";
   /** Handler duration in milliseconds (high-res; may be fractional). */
   readonly durationMs: number;
+  /** WideEvent / run id for this invocation. */
+  readonly runId: string;
 }
 
 /**
@@ -414,18 +417,18 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
       readonly principal?: ResolvedPrincipal;
       /**
        * Console invoke-as / trusted in-process callers only.
-       * When true, `principal` / `auth` injection is honoured outside `env: "test"`.
+       * When true, `principal` / `auth` injection applies outside `env: "test"`.
        * Must never be set from public HTTP request handling.
        */
       readonly trustedInvoke?: boolean;
       /**
        * Console Operator invoke — skip the flow's gate chain.
-       * Honoured only with {@link trustedInvoke}.
+       * Takes effect only with {@link trustedInvoke}.
        */
       readonly bypassGates?: boolean;
       /**
        * Console Call API — open store handles with cleartext PII.
-       * Honoured only with {@link trustedInvoke}.
+       * Takes effect only with {@link trustedInvoke}.
        */
       readonly revealPii?: boolean;
       /** Parent WideEvent id when this execution was caused by another. */
@@ -1249,8 +1252,8 @@ export function oke(options: OkeOptions): OkeApp {
 
       const binding = authBinding;
       const cookieOpts = gateConfig.auth?.cookies;
-      const verifyBearer = wiredAuth?.verifyBearerToken;
       const cookieToken = wiredAuth?.tokenFromCookieHeader;
+      const apiKeyStore = gateConfig.auth?.apiKeyStore;
       const elementHooks = createElementPipelineHooks({
         gates: booted.gate,
         principals,
@@ -1260,7 +1263,10 @@ export function oke(options: OkeOptions): OkeApp {
           ? { bypassGates: true }
           : {}),
         verifyBearer:
-          binding && verifyBearer ? async (token) => verifyBearer(binding, token) : undefined,
+          binding && wiredAuth
+            ? async (token) =>
+                wiredAuth.verifyBearerOrApiKey(binding, token, apiKeyStore)
+            : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
         resolveToken:
           binding && cookieOpts?.enabled && cookieToken
@@ -1543,6 +1549,7 @@ export function oke(options: OkeOptions): OkeApp {
       fx,
       cache: cacheDimensionOf(telemetry),
       durationMs,
+      runId,
     };
   }
 
@@ -1704,6 +1711,8 @@ export function oke(options: OkeOptions): OkeApp {
     async fetch(request) {
       const started = performance.now();
       let flowLabel: string | undefined;
+      let runLabel: string | undefined;
+      let cacheLabel: "hit" | "miss" | "none" | undefined;
       const url = new URL(request.url);
       const method = request.method.toUpperCase();
 
@@ -1717,12 +1726,20 @@ export function oke(options: OkeOptions): OkeApp {
             method,
             path: url.pathname,
             flow: flowLabel,
+            runId: runLabel,
             status: response.status,
             ms: Math.round(performance.now() - started),
             detail: await failureDetailFromResponse(response),
           });
         }
-        return response;
+        return asBrowserJsonCodeBlock(
+          request,
+          response,
+          options.name,
+          httpNavGroups(adopted, request),
+          performance.now() - started,
+          cacheLabel ?? "none",
+        );
       };
 
       // Kernel readiness — distinct from app-authored GET /health (liveness).
@@ -1774,6 +1791,8 @@ export function oke(options: OkeOptions): OkeApp {
             { kind: "internal" } satisfies InternalTrigger,
             { request },
           );
+          runLabel = internalResult.runId;
+          cacheLabel = internalResult.cache;
           return respond(encodeExecuteResult(internalResult));
         }
       }
@@ -1850,6 +1869,8 @@ export function oke(options: OkeOptions): OkeApp {
         params,
         validated,
       });
+      runLabel = result.runId;
+      cacheLabel = result.cache;
 
       return respond(encodeExecuteResult(result));
     },

@@ -19,6 +19,7 @@ const AUTH_ENTRY_PATHS = new Set([
   "/console/setup/claim",
   "/console/session/login",
   "/console/session/me",
+  "/console/session/logout",
 ]);
 
 let sessionExpired = false;
@@ -269,6 +270,18 @@ export async function sessionLogin(body: SessionLoginInput): Promise<ConsoleApiR
  */
 export async function sessionMe(): Promise<ConsoleApiResult<SessionMe>> {
   return consoleFetch<SessionMe>("/console/session/me");
+}
+
+/** POST /console/session/logout payload (matches server `{ ok: true }`). */
+export type SessionLogout = {
+  readonly ok: true;
+};
+
+/**
+ * POST /console/session/logout — end the operator session and clear cookies.
+ */
+export async function sessionLogout(): Promise<ConsoleApiResult<SessionLogout>> {
+  return consoleFetch<SessionLogout>("/console/session/logout", { method: "POST" });
 }
 
 /** Manifest snapshot payload (`GET /console/manifest`). */
@@ -1069,6 +1082,72 @@ export async function storeSqlAdvise(
 ): Promise<ConsoleApiResult<StoreSqlAdviseResult>> {
   return consoleFetch<StoreSqlAdviseResult>("/console/store/sql/advise", {
     method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Named limitation: INFO is instance-wide, not `oke:kv:{ns}:`. */
+export const STORE_KV_STATS_SERVER_WIDE_GAP = "StoreKvStatsServerWideGap" as const;
+
+/** Named limitation: SLOWLOG args include keys and values. */
+export const STORE_KV_STATS_SLOWLOG_ARGS_GAP = "StoreKvStatsSlowlogArgsGap" as const;
+
+/** Request body for `QUERY /console/store/kv/stats`. */
+export type StoreKvStatsInput = {
+  readonly ref: string;
+  readonly tenant?: string;
+  readonly revealPii?: boolean;
+};
+
+/** One INFO commandstats row. */
+export type StoreKvCommandStatRow = {
+  readonly command: string;
+  readonly calls: number;
+  readonly usec: number;
+  readonly usecPerCall: number | null;
+};
+
+/** One SLOWLOG row (args collapsed unless reveal). */
+export type StoreKvSlowlogRow = {
+  readonly id: number;
+  readonly timestamp: number;
+  readonly durationUs: number;
+  readonly command: string;
+  readonly args: readonly string[];
+};
+
+/** Success payload from `QUERY /console/store/kv/stats`. */
+export type StoreKvStatsResult = {
+  readonly engine: "redis" | "memory";
+  readonly kpis: {
+    readonly hitRate: number | null;
+    readonly opsPerSec: number | null;
+    readonly evictedKeys: number | null;
+    readonly expiredKeys: number | null;
+  };
+  readonly commands: readonly StoreKvCommandStatRow[];
+  readonly slowlog: readonly StoreKvSlowlogRow[];
+  readonly latency: ReadonlyArray<{
+    readonly event: string;
+    readonly latestUs: number | null;
+    readonly allTimeUs: number | null;
+  }>;
+  readonly limitation: typeof STORE_KV_STATS_SERVER_WIDE_GAP;
+  readonly slowlogLimitation: typeof STORE_KV_STATS_SLOWLOG_ARGS_GAP;
+  readonly masked: boolean;
+  readonly namespacePrefix: string;
+};
+
+/**
+ * QUERY /console/store/kv/stats — Redis-wire INFO / COMMANDSTATS / SLOWLOG.
+ *
+ * @param body - KV store ref + optional reveal
+ */
+export async function storeKvStats(
+  body: StoreKvStatsInput,
+): Promise<ConsoleApiResult<StoreKvStatsResult>> {
+  return consoleFetch<StoreKvStatsResult>("/console/store/kv/stats", {
+    method: "QUERY",
     body: JSON.stringify(body),
   });
 }

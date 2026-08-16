@@ -18,7 +18,8 @@ describe("sanitizeReturnTo", () => {
     expect(sanitizeReturnTo("/vault?name=STRIPE_KEY&action=rotate")).toBe(
       "/vault?name=STRIPE_KEY&action=rotate",
     );
-    expect(sanitizeReturnTo("/monitoring?window=7d")).toBe("/monitoring?window=7d");
+    expect(sanitizeReturnTo("/observability?window=7d")).toBe("/observability?window=7d");
+    expect(sanitizeReturnTo("/monitoring?window=7d")).toBe("/observability?window=7d");
   });
 
   test("rejects unknown paths including /units", () => {
@@ -66,8 +67,11 @@ describe("validateAuthSearch / authGateSearch", () => {
     expect(authGateSearch("/vault?name=STRIPE_KEY")).toEqual({
       next: "/vault?name=STRIPE_KEY",
     });
+    expect(authGateSearch("/observability?window=7d")).toEqual({
+      next: "/observability?window=7d",
+    });
     expect(authGateSearch("/monitoring?window=7d")).toEqual({
-      next: "/monitoring?window=7d",
+      next: "/observability?window=7d",
     });
   });
 
@@ -103,8 +107,12 @@ describe("afterAuthLocation", () => {
       to: "/vault",
       search: { name: "STRIPE_KEY", action: "rotate-master" },
     });
+    expect(afterAuthLocation("/observability?window=7d&run=r1")).toEqual({
+      to: "/observability",
+      search: { window: "7d", run: "r1" },
+    });
     expect(afterAuthLocation("/monitoring?window=7d&run=r1")).toEqual({
-      to: "/monitoring",
+      to: "/observability",
       search: { window: "7d", run: "r1" },
     });
   });

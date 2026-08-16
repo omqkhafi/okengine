@@ -4,11 +4,14 @@
 
 import type { JSX, ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ShortcutKeys } from "@/lib/shortcut-keys.tsx";
 import { cn } from "@/lib/utils.ts";
 
 /** Props for {@link ToolbarTip}. */
 export interface ToolbarTipProps {
   readonly label: string;
+  /** Optional key caps shown after the label. */
+  readonly keys?: readonly string[];
   readonly className?: string;
   readonly children: ReactNode;
 }
@@ -19,7 +22,7 @@ export interface ToolbarTipProps {
  *
  * @param props - Hint copy + control
  */
-export function ToolbarTip({ label, className, children }: ToolbarTipProps): JSX.Element {
+export function ToolbarTip({ label, keys, className, children }: ToolbarTipProps): JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger
@@ -31,6 +34,7 @@ export function ToolbarTip({ label, className, children }: ToolbarTipProps): JSX
       />
       <TooltipContent side="bottom" className="text-[11px]">
         {label}
+        {keys && keys.length > 0 ? <ShortcutKeys keys={keys} /> : null}
       </TooltipContent>
     </Tooltip>
   );

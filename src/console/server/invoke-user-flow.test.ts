@@ -42,6 +42,7 @@ function execute(over: Partial<ExecuteResult>): ExecuteResult {
     fx: {} as ExecuteResult["fx"],
     cache: "none",
     durationMs: 0,
+    runId: "run_test",
     ...over,
   };
 }

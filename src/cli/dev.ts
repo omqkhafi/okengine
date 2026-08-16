@@ -1122,6 +1122,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         hostname: "127.0.0.1",
         cwd,
         env: "dev",
+        okeConfig: loadedConfig,
         // CLI paints the claim on the live board — do not dump it to raw stdout.
         silentClaim: options.silentClaim ?? true,
         runsIngestSecret,

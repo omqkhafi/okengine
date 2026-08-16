@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, type ComponentProps, type JSX } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
 /** One menu entry — either an action or a visual separator. */
@@ -101,11 +102,7 @@ export function StoreGridContextMenu({
               <HugeiconsIcon icon={item.icon} className="size-3.5 shrink-0" aria-hidden />
             ) : null}
             <span className="min-w-0 truncate">{item.label}</span>
-            {item.shortcut ? (
-              <span className="ml-auto pl-4 font-mono text-[10px] tracking-widest text-muted-foreground">
-                {item.shortcut}
-              </span>
-            ) : null}
+            {item.shortcut ? <Kbd className="ml-auto">{item.shortcut}</Kbd> : null}
           </button>
         ),
       )}

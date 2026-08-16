@@ -7,9 +7,10 @@ describe("shouldExpireSession", () => {
     expect(shouldExpireSession("/console/runs", { code: "Unauthorized" })).toBe(true);
   });
 
-  test("leaves claim, login, and session/me to the route guard", () => {
+  test("leaves claim, login, session/me, and logout to the route guard", () => {
     expect(shouldExpireSession("/console/session/me", { code: "Unauthorized" })).toBe(false);
     expect(shouldExpireSession("/console/session/login", { code: "Unauthorized" })).toBe(false);
+    expect(shouldExpireSession("/console/session/logout", { code: "Unauthorized" })).toBe(false);
     expect(shouldExpireSession("/console/setup/status", { code: "Unauthorized" })).toBe(false);
     expect(shouldExpireSession("/console/setup/claim", { code: "Unauthorized" })).toBe(false);
   });

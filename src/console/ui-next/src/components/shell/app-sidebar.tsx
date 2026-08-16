@@ -1,11 +1,11 @@
 /**
- * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Vault / Monitoring.
+ * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Observability / Vault.
  */
 
 import {
   AccessIcon,
-  Activity03Icon,
   Archive02Icon,
+  ChartAnalysisIcon,
   Shapes01Icon,
   WorkflowSquare08Icon,
 } from "@hugeicons/core-free-icons";
@@ -13,7 +13,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import { OkeLogoIcon } from "@/components/oke-logo";
-import { NavUser } from "@/components/shell/nav-user";
+import { NavFooter } from "@/components/shell/nav-footer";
 import {
   Sidebar,
   SidebarContent,
@@ -25,20 +25,25 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import type { SessionOperator } from "@/client.ts";
 import { lastSearchFor, type ConsoleModulePath } from "@/lib/last-module-search.ts";
+import { ShortcutTipLabel } from "@/lib/shortcut-keys.tsx";
+import { consoleShortcut, type ConsoleShortcutId } from "@/lib/shortcut.ts";
 import { useLastModuleSearch } from "@/lib/use-last-module-search.ts";
+
+const NAV_ITEM_CLASS =
+  "rounded-none! justify-center hover:bg-muted/50! hover:text-foreground data-active:bg-muted/70! data-active:text-foreground group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:w-full! group-data-[collapsible=icon]:p-0!";
 
 const navItems: ReadonlyArray<{
   readonly title: string;
   readonly to: ConsoleModulePath;
   readonly icon: typeof WorkflowSquare08Icon;
+  readonly shortcut: Exclude<ConsoleShortcutId, "fast" | "settings" | "logout">;
 }> = [
-  { title: "Overview", to: "/overview", icon: WorkflowSquare08Icon },
-  { title: "Flows", to: "/flows", icon: Shapes01Icon },
-  { title: "Store", to: "/store", icon: Archive02Icon },
-  { title: "Vault", to: "/vault", icon: AccessIcon },
-  { title: "Monitoring", to: "/monitoring", icon: Activity03Icon },
+  { title: "Overview", to: "/overview", icon: WorkflowSquare08Icon, shortcut: "overview" },
+  { title: "Flows", to: "/flows", icon: Shapes01Icon, shortcut: "flows" },
+  { title: "Store", to: "/store", icon: Archive02Icon, shortcut: "store" },
+  { title: "Observability", to: "/observability", icon: ChartAnalysisIcon, shortcut: "observability" },
+  { title: "Vault", to: "/vault", icon: AccessIcon, shortcut: "vault" },
 ];
 
 /**
@@ -55,13 +60,17 @@ function SidebarBrand() {
 /**
  * Always-collapsed icon sidebar for the authenticated Console shell.
  *
- * @param props - Sidebar props plus the signed-in operator
+ * @param props - Sidebar props plus footer actions
  */
 export function AppSidebar({
-  operator,
+  onFast,
+  onSettings,
+  onLogout,
   ...props
 }: ComponentProps<typeof Sidebar> & {
-  readonly operator: SessionOperator;
+  readonly onFast: () => void;
+  readonly onSettings: () => void;
+  readonly onLogout: () => void;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const memory = useLastModuleSearch();
@@ -80,8 +89,12 @@ export function AppSidebar({
                 <SidebarMenuButton
                   render={<Link to={item.to} search={lastSearchFor(memory, item.to) as never} />}
                   isActive={pathname === item.to}
-                  tooltip={item.title}
-                  className="rounded-none! justify-center hover:bg-muted/50! hover:text-foreground data-active:bg-muted/70! data-active:text-foreground group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:w-full! group-data-[collapsible=icon]:p-0!"
+                  tooltip={{
+                    children: (
+                      <ShortcutTipLabel label={item.title} keys={consoleShortcut(item.shortcut)} />
+                    ),
+                  }}
+                  className={NAV_ITEM_CLASS}
                 >
                   <HugeiconsIcon icon={item.icon} />
                   <span className="sr-only">{item.title}</span>
@@ -91,8 +104,8 @@ export function AppSidebar({
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser operator={operator} />
+      <SidebarFooter className="border-t border-border/60 p-0">
+        <NavFooter onFast={onFast} onSettings={onSettings} onLogout={onLogout} />
       </SidebarFooter>
     </Sidebar>
   );

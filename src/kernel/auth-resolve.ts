@@ -6,6 +6,8 @@
  * separately in the pipeline (`allowTestPrincipals`).
  */
 
+import { authenticateApiKey, type ApiKeyStore } from "../auth/api-keys.ts";
+import type { ApiKeyRow } from "../auth/tables.ts";
 import {
   createSessionStore,
   verifyAccess,
@@ -83,4 +85,53 @@ export function claimsToPrincipal(claims: AccessClaims): ResolvedPrincipal {
     scopes: claims.scopes,
     verified: true,
   };
+}
+
+/**
+ * Map an authenticated API key row to the pipeline principal shape.
+ * Uses the bare key id so Access `runTouchesKey` matches `WideEvent.principal`.
+ *
+ * @param row - Authenticated key
+ */
+export function apiKeyRowToPrincipal(row: ApiKeyRow): ResolvedPrincipal {
+  if (row.plane === "operator") {
+    return {
+      plane: "operator",
+      operatorId: row.id,
+      userId: null,
+      scopes: row.scopes,
+      verified: true,
+      apiKeyId: row.id,
+    };
+  }
+  return {
+    plane: "user",
+    userId: row.id,
+    scopes: row.scopes,
+    verified: true,
+    apiKeyId: row.id,
+  };
+}
+
+/**
+ * Verify a Bearer token as a session JWT, then as an API key when a store is bound.
+ *
+ * @param auth - Session binding
+ * @param token - Raw Bearer token
+ * @param apiKeys - Optional key store
+ */
+export async function verifyBearerOrApiKey(
+  auth: AppAuthBinding,
+  token: string,
+  apiKeys?: ApiKeyStore,
+): Promise<ResolvedPrincipal> {
+  try {
+    return await verifyBearerToken(auth, token);
+  } catch (err) {
+    if (apiKeys) {
+      const row = await authenticateApiKey(apiKeys, token, auth.now);
+      if (row) return apiKeyRowToPrincipal(row);
+    }
+    throw err;
+  }
 }

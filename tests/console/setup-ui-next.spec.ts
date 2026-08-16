@@ -59,7 +59,9 @@ async function expectShell(page: import("@playwright/test").Page): Promise<void>
   await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Vault" })).toBeVisible();
   await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible();
-  await expect(page.locator('[data-slot="operator-avatar"]')).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Fast" })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Settings" })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Logout" })).toBeVisible();
 }
 
 test("ui-next claim succeeds and already-claimed path closes setup", async ({ page, request }) => {

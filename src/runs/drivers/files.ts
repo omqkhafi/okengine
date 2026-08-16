@@ -20,6 +20,7 @@ import {
   type DuckSession,
 } from "../duckdb.ts";
 import {
+  parquetUnionSql,
   partitionKey,
   partitionObjectKey,
   rowToWideEvent,
@@ -190,11 +191,9 @@ export const filesRunsDriver: RunsDriver = {
         viewReady = false;
         return [];
       }
-      const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
+      const scan = await parquetUnionSql(session.conn, paths);
       await session.conn.run(`DROP VIEW IF EXISTS runs`);
-      await session.conn.run(
-        `CREATE VIEW runs AS SELECT * FROM read_parquet([${list}], union_by_name = true)`,
-      );
+      await session.conn.run(`CREATE VIEW runs AS ${scan}`);
       viewReady = true;
       return paths;
     }

@@ -114,6 +114,8 @@ Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); 
 
 `Content-Type: application/json` is required — missing → **400** `InvalidQuery`, anything else → **415** `UnsupportedMediaType` with `Accept-Query: "application/json"`. Invalid JSON is **400** (no sniffing). Responses advertise `Accept-Query`. okengine does not assign `Location` / `Content-Location` result URIs.
 
+A browser `GET` (`Accept` prefers `text/html`) paints the `{ data, error }` envelope in traces chrome — status, latency, and cache, Routes rail (static GET links), copy, line numbers, Pretty / Raw, Console on **6533**. `curl`, `Accept: application/json`, and `?format=json` stay JSON.
+
 ```typescript
 export const findOrder = on(
   http.get("/orders/:id").gate(member), // gates evaluate before do runs
@@ -328,6 +330,11 @@ Only after terminal failure for that journal attempt — not on sleep, not mid-r
 <Accordion title="How do I share logic between flows — a private function?">
 
 Make it a plain flow with no trigger and `fx.call` it. You keep contracts, the Manifest entry, and tracing; a bare function would hide the work from the effect graph.
+
+</Accordion>
+<Accordion title="The browser shows a code block instead of JSON">
+
+That is the HTML view for a navigated `GET` when `Accept` prefers `text/html`. Send `Accept: application/json`, add `?format=json`, or use `curl` — the envelope is unchanged. `?raw=1` is the compact view of the same page.
 
 </Accordion>
 <Accordion title="GET on a POST-only path">

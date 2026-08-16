@@ -33,6 +33,9 @@ digest Clock, and an AI summarize stub.
 To exercise Docker with a larger domain, run `examples/keel` from the okengine
 repo (`bun run dev:keel`) — not a create-oke template.
 
+Open **6530** in a browser to read the envelope in a code block. The right rail
+lists HTTP routes — static GET paths are links. `curl` still gets `{ data, error }`.
+
 <Surfaces />
 
 </Step>
@@ -55,7 +58,7 @@ export const health = on(
 );
 ```
 
-Named flows show up as `main.health` (not `flow_1`) in `oke dev` logs.
+Named flows show up as `main.health` (not `flow_1`) in `oke dev` logs, with the run id after the timestamp.
 Change the route or output and save — App and Console update together from the
 same Manifest.
 

@@ -5,6 +5,7 @@
 import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useId, useState, type ComponentProps } from "react";
+import { EXPLORER_ICON_BUTTON_BARE_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ export function PasswordInput({ className, id, revealNonce, ...props }: Password
   const inputType = visible ? "text" : "password";
 
   return (
-    <div className="relative">
+    <div className="relative w-full min-w-0">
       <Input
         key={inputType}
         {...props}
@@ -48,7 +49,7 @@ export function PasswordInput({ className, id, revealNonce, ...props }: Password
         aria-pressed={visible}
         aria-controls={inputId}
         aria-describedby={statusId}
-        className="absolute top-1/2 right-2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(EXPLORER_ICON_BUTTON_BARE_CLASS, "absolute top-1/2 right-0 -translate-y-1/2")}
       >
         <HugeiconsIcon
           icon={visible ? ViewOffSlashIcon : ViewIcon}

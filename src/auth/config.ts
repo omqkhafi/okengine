@@ -6,6 +6,7 @@
 
 import type { PasswordHashOptions } from "../runtime/types.ts";
 import type { SessionStore } from "./sessions.ts";
+import type { ApiKeyStore } from "./api-keys.ts";
 import type { BreachCheckFn } from "./breach-check.ts";
 import type { PasswordPolicyOptions } from "./password-policy.ts";
 import {
@@ -109,6 +110,11 @@ export interface GateAuthOptions extends AuthSchemaOptions {
    * Not part of the public app DX — escape hatch for embedding.
    */
   readonly sessions?: SessionStore;
+  /**
+   * In-memory API key store for Bearer key auth (tests / embedding).
+   * Distinct from schema `apiKeys` table options.
+   */
+  readonly apiKeyStore?: ApiKeyStore;
   /** Injectable clock. */
   readonly now?: () => number;
 }
@@ -164,6 +170,7 @@ export interface ResolvedGateAuth {
   };
   readonly hooks: AuthDatabaseHooks | undefined;
   readonly sessions: SessionStore | undefined;
+  readonly apiKeyStore: ApiKeyStore | undefined;
   readonly now: (() => number) | undefined;
 }
 
@@ -271,6 +278,7 @@ export function resolveGateAuth(options: ResolveGateAuthOptions): ResolvedGateAu
     },
     hooks: auth.hooks,
     sessions: auth.sessions,
+    apiKeyStore: auth.apiKeyStore,
     now: auth.now,
   };
 }

@@ -50,6 +50,8 @@ export type DevRequestLogInput = {
   readonly path: string;
   /** Flow name, RPC method, or tool id. */
   readonly flow?: string;
+  /** WideEvent / run id when the request executed a flow. */
+  readonly runId?: string;
   readonly status: number;
   readonly ms: number;
   /** Human failure detail (error.message / code) for 4xx/5xx. */
@@ -137,6 +139,7 @@ export function logDevRequest(input: DevRequestLogInput): void {
       method: input.method,
       path: input.path,
       flow: input.flow,
+      runId: input.runId,
       status: input.status,
       ms: input.ms,
       detail: input.detail,
@@ -151,6 +154,7 @@ export function logDevRequest(input: DevRequestLogInput): void {
  * @param request - Incoming request
  * @param handle - Inner fetch
  * @param resolveFlow - Optional label after the response (e.g. RPC method)
+ * @param resolveRunId - Optional WideEvent / run id after the response
  */
 export async function timedDevFetch(
   request: Request,
@@ -158,6 +162,8 @@ export async function timedDevFetch(
   options: {
     readonly surface?: DevLogSurface;
     readonly resolveFlow?: (request: Request, response: Response) => string | undefined;
+    /** WideEvent / run id after the response (when the request executed a flow). */
+    readonly resolveRunId?: (request: Request, response: Response) => string | undefined;
     /** Skip logging for this path/method. */
     readonly silent?: (request: Request) => boolean;
   } = {},
@@ -175,6 +181,7 @@ export async function timedDevFetch(
     method,
     path: url.pathname,
     flow: options.resolveFlow?.(request, response),
+    runId: options.resolveRunId?.(request, response),
     status: response.status,
     ms: Math.round(performance.now() - started),
     detail,

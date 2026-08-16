@@ -523,3 +523,56 @@ describe("agent tool trail carries effects; denials are not errors", () => {
     expect(runtime.denials).toHaveLength(1);
   });
 });
+
+describe("ask journal tokens", () => {
+  test("mock driver tokens reach the journal", async () => {
+    const smart = ai.model("smart", { provider: "mock" });
+    const triage = smart.prompt("ticket-triage", { version: 1 });
+    const client = await mockAiDriver.open({
+      model: "mock",
+      mockResponses: { "*": { urgency: "high" } },
+    });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: { smart: client },
+    });
+
+    await runtime.ask("ticket-triage", { subject: "hello" });
+    expect(runtime.journal).toHaveLength(1);
+    const entry = runtime.journal[0]!;
+    expect(entry.inputTokens).toBeGreaterThan(0);
+    expect(entry.outputTokens).toBeGreaterThan(0);
+    expect(entry.cost).toBe(0);
+  });
+
+  test("token-only complete result journals tokens and omits invented cost", async () => {
+    const smart = ai.model("smart", { provider: "openai-compatible" });
+    const triage = smart.prompt("ticket-triage", { version: 2 });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: {
+        smart: {
+          driverId: "openai-compatible",
+          model: "gpt-test",
+          async complete() {
+            return {
+              text: JSON.stringify({ ok: true }),
+              raw: { ok: true },
+              model: "gpt-test",
+              driverId: "openai-compatible",
+              usage: { inputTokens: 12, outputTokens: 7 },
+            };
+          },
+        },
+      },
+    });
+
+    await runtime.ask("ticket-triage", { subject: "x" });
+    const entry = runtime.journal[0]!;
+    expect(entry.inputTokens).toBe(12);
+    expect(entry.outputTokens).toBe(7);
+    expect(entry.cost).toBe(0);
+  });
+});

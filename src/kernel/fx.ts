@@ -866,6 +866,29 @@ export interface FxContext {
 }
 
 /**
+ * Stamp prompt version and driver-supplied cost onto run telemetry after ask.
+ * Cost is added only when the journal recorded a value greater than zero —
+ * token-only drivers must not invent a $0 WideEvent field.
+ *
+ * @param telemetry - Per-run collector
+ * @param runtime - AI runtime that just ran the ask
+ * @param prompt - Resolved prompt name
+ */
+function stampAskTelemetry(
+  telemetry: RunTelemetry | undefined,
+  runtime: AiRuntime,
+  prompt: string,
+): void {
+  if (!telemetry) return;
+  const last = runtime.journal[runtime.journal.length - 1];
+  const fromJournal = last?.prompt === prompt ? last : undefined;
+  const version = fromJournal?.version ?? runtime.prompts.get(prompt)?.version;
+  if (typeof version === "number") telemetry.promptVersion = version;
+  const cost = fromJournal?.cost ?? 0;
+  if (cost > 0) telemetry.cost += cost;
+}
+
+/**
  * Create an in-memory `fx` context (v1 stubs, full surface).
  *
  * @param options - Flow identity, declared effects, ledger, principals
@@ -1673,14 +1696,18 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           return {};
         }
         if (options.aiRuntime) {
-          return options.aiRuntime.ask(name, input, {
-            via: opts?.via?.map(resolveName),
-            ...(opts?.timeout !== undefined ? { timeout: opts.timeout } : {}),
-            tools: opts?.tools?.map(resolveName),
-            maxSteps: opts?.maxSteps,
-            // Host fx.call — same capability / ledger / Runs path as any call.
-            callTool: (tool, toolInput) => fx.call(tool, toolInput),
-          });
+          try {
+            return await options.aiRuntime.ask(name, input, {
+              via: opts?.via?.map(resolveName),
+              ...(opts?.timeout !== undefined ? { timeout: opts.timeout } : {}),
+              tools: opts?.tools?.map(resolveName),
+              maxSteps: opts?.maxSteps,
+              // Host fx.call — same capability / ledger / Runs path as any call.
+              callTool: (tool, toolInput) => fx.call(tool, toolInput),
+            });
+          } finally {
+            stampAskTelemetry(telemetry, options.aiRuntime, name);
+          }
         }
         throw new Error(`fx.ask: AI runtime is not configured for prompt "${name}"`);
       });

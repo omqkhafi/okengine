@@ -41,6 +41,11 @@ import {
   STORE_SQL_STATS_PII_GAP,
   StoreSqlStatsError,
 } from "./store-stats.ts";
+import {
+  STORE_KV_STATS_SERVER_WIDE_GAP,
+  STORE_KV_STATS_SLOWLOG_ARGS_GAP,
+  StoreKvStatsError,
+} from "./store-kv-stats.ts";
 
 export { PUBLIC_CONSOLE_FLOWS };
 
@@ -1661,6 +1666,52 @@ const PgStatStatementsNotPreloaded = z.object({ reason: z.string() });
 const PgStatStatementsUnsupported = z.object({ reason: z.string() });
 const PgStatStatementsNotCreated = z.object({ reason: z.string() });
 
+const StoreKvStatsIn = z.object({
+  ref: z.string().min(1),
+  tenant: z.string().optional(),
+  revealPii: z.boolean().optional(),
+});
+
+const StoreKvStatsOut = z.object({
+  engine: z.enum(["redis", "memory"]),
+  kpis: z.object({
+    hitRate: z.number().nullable(),
+    opsPerSec: z.number().nullable(),
+    evictedKeys: z.number().nullable(),
+    expiredKeys: z.number().nullable(),
+  }),
+  commands: z.array(
+    z.object({
+      command: z.string(),
+      calls: z.number(),
+      usec: z.number(),
+      usecPerCall: z.number().nullable(),
+    }),
+  ),
+  slowlog: z.array(
+    z.object({
+      id: z.number(),
+      timestamp: z.number(),
+      durationUs: z.number(),
+      command: z.string(),
+      args: z.array(z.string()),
+    }),
+  ),
+  latency: z.array(
+    z.object({
+      event: z.string(),
+      latestUs: z.number().nullable(),
+      allTimeUs: z.number().nullable(),
+    }),
+  ),
+  limitation: z.literal(STORE_KV_STATS_SERVER_WIDE_GAP),
+  slowlogLimitation: z.literal(STORE_KV_STATS_SLOWLOG_ARGS_GAP),
+  masked: z.boolean(),
+  namespacePrefix: z.string(),
+});
+
+const KvStatsUnsupported = z.object({ reason: z.string() });
+
 const RunsQueryIn = z.object({
   sql: z.string().min(1),
   revealPii: z.boolean().optional(),
@@ -1747,6 +1798,7 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly stats: AnyFlowDef;
       readonly locks: AnyFlowDef;
       readonly advise: AnyFlowDef;
+      readonly kvStats: AnyFlowDef;
     };
     readonly vault: {
       readonly list: AnyFlowDef;
@@ -1827,6 +1879,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const storeStats = createStoreSqlStats(state);
   const storeLocks = createStoreSqlLocks(state);
   const storeAdvise = createStoreSqlAdvise(state);
+  const storeKvStats = createStoreKvStats(state);
   const vaultList = createVaultList(state);
   const vaultSet = createVaultSet(state);
   const vaultCreate = createVaultCreate(state);
@@ -1887,6 +1940,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/store/preview"), storePreview),
     bindHttp(http.query("/console/store/sql/stats"), storeStats),
     bindHttp(http.query("/console/store/sql/locks"), storeLocks),
+    bindHttp(http.query("/console/store/kv/stats"), storeKvStats),
     bindHttp(http.post("/console/store/sql/advise"), storeAdvise),
     bindHttp(http.get("/console/vault"), vaultList),
     bindHttp(http.post("/console/vault/set"), vaultSet),
@@ -1950,6 +2004,7 @@ export function createConsoleBindings(state: ConsoleState): {
         stats: storeStats,
         locks: storeLocks,
         advise: storeAdvise,
+        kvStats: storeKvStats,
       },
       vault: {
         list: vaultList,
@@ -3165,6 +3220,56 @@ function createStoreSqlAdvise(state: ConsoleState) {
         return result;
       } catch (err) {
         return failStoreSqlStats(err);
+      }
+    },
+  });
+}
+
+function failStoreKvStats(err: unknown) {
+  if (err instanceof StoreKvStatsError) {
+    return fail("KvStatsUnsupported", { reason: err.message });
+  }
+  return fail("KvStatsUnsupported", {
+    reason: err instanceof Error ? err.message : String(err),
+  });
+}
+
+function createStoreKvStats(state: ConsoleState) {
+  return flow("console.store.kv.stats", {
+    plane: "operator",
+    in: StoreKvStatsIn,
+    out: StoreKvStatsOut,
+    errors: {
+      AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      KvStatsUnsupported,
+    },
+    do: async (input: z.infer<typeof StoreKvStatsIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const tenantFail = requireTenantIfDeclared(state, input.tenant);
+      if (tenantFail) return tenantFail;
+      if (input.revealPii === true) {
+        fx.log.info("console.store.kv.stats.reveal", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          tenant: input.tenant,
+        });
+      }
+      try {
+        const result = await state.queryStoreKvStats(input.ref as ResourceRef, {
+          revealPii: input.revealPii === true,
+        });
+        fx.log.info("console.store.kv.stats", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          revealPii: input.revealPii === true,
+          engine: result.engine,
+          slowlogCount: result.slowlog.length,
+        });
+        return result;
+      } catch (err) {
+        return failStoreKvStats(err);
       }
     },
   });

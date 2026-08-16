@@ -33,6 +33,7 @@ export function StorePage(): JSX.Element {
     queryFacet,
     schemaView,
     performanceView,
+    performanceFacet,
     setSelectedResource,
     setSelectedTenant,
     setQueryFacet,
@@ -67,14 +68,20 @@ export function StorePage(): JSX.Element {
               queryFacet={queryFacet}
               schemaActive={schemaView}
               performanceActive={performanceView}
+              performanceFacet={performanceFacet}
               onOpenQuery={(facet) => {
                 setQueryFacet(queryFacet === facet ? null : facet);
               }}
               onOpenSchema={() => {
                 setSchemaView(!schemaView);
               }}
-              onOpenPerformance={() => {
-                setPerformanceView(!performanceView);
+              onOpenPerformance={(facet) => {
+                const current = performanceFacet ?? "sql";
+                if (performanceView && current === facet) {
+                  setPerformanceView(false);
+                } else {
+                  setPerformanceView(true, facet);
+                }
               }}
             />
           </div>
@@ -99,6 +106,7 @@ export function StorePage(): JSX.Element {
                   stores={stores}
                   selectedEffectRef={effectRef}
                   tenant={selectedTenant}
+                  facet={performanceFacet ?? "sql"}
                 />
               ) : queryFacet ? (
                 <QueryConsole

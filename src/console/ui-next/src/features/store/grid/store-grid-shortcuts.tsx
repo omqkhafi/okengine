@@ -3,6 +3,7 @@
  */
 
 import type { JSX } from "react";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Sheet,
   SheetContent,
@@ -10,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { modKey } from "@/lib/shortcut.ts";
 
 /** Props for {@link StoreGridShortcuts}. */
 export interface StoreGridShortcutsProps {
@@ -95,9 +97,7 @@ export function StoreGridShortcuts({ open, onOpenChange }: StoreGridShortcutsPro
       >
         <SheetHeader>
           <SheetTitle>Keyboard shortcuts</SheetTitle>
-          <SheetDescription>
-            Spreadsheet-style navigation, selection, and editing. Ctrl is Cmd on macOS.
-          </SheetDescription>
+          <SheetDescription>Spreadsheet-style navigation, selection, and editing.</SheetDescription>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
           {GROUPS.map((group) => (
@@ -109,9 +109,9 @@ export function StoreGridShortcuts({ open, onOpenChange }: StoreGridShortcutsPro
                 {group.rows.map(([keys, description]) => (
                   <li key={keys} className="flex items-center justify-between gap-3 text-[12px]">
                     <span className="text-muted-foreground">{description}</span>
-                    <kbd className="shrink-0 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap">
-                      {keys}
-                    </kbd>
+                    <Kbd className="shrink-0 whitespace-nowrap">
+                      {keys.replaceAll("Ctrl", modKey())}
+                    </Kbd>
                   </li>
                 ))}
               </ul>

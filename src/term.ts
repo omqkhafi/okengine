@@ -577,6 +577,34 @@ function wrapWords(text: string, width: number): string[] {
   return lines;
 }
 
+/** Tone for {@link formatDevNote} — warning (4xx / boot) or error (5xx). */
+export type DevNoteTone = "warn" | "error";
+
+/**
+ * House note block — title chip on its own row, body underneath.
+ * Same column as Claim / Docker: `◇  Title` then `│` then `│  body`.
+ *
+ * @param options - Title, body, tone
+ */
+export function formatDevNote(options: {
+  readonly title: string;
+  readonly body: string;
+  readonly tone?: DevNoteTone;
+  readonly color?: boolean;
+}): string {
+  const s = termStyle(options.color ?? termColorEnabled());
+  const ink = options.tone === "error" ? s.red : s.yellow;
+  const bar = `${s.dim}│${s.reset}`;
+  const width = Math.max(40, Math.min(72, (process.stdout.columns ?? 80) - 6));
+  const wrapped = wrapWords(options.body.trim(), width);
+  const lines = [`${ink}◇${s.reset}  ${s.bold}${ink}${options.title}${s.reset}`, bar];
+  for (const line of wrapped) {
+    lines.push(`${bar}  ${ink}${line}${s.reset}`);
+  }
+  lines.push(bar);
+  return `${lines.join("\n")}\n`;
+}
+
 /**
  * Boot honesty notice — Clack-like column under the `oke dev` hero.
  *
@@ -584,17 +612,8 @@ function wrapWords(text: string, width: number): string[] {
  * @param color - Color on/off
  */
 export function formatBootWarn(message: string, color: boolean = termColorEnabled()): string {
-  const s = termStyle(color);
-  const bar = `${s.dim}│${s.reset}`;
   const body = message.replace(/^oke boot:\s*/i, "").trim();
-  const width = Math.max(40, Math.min(72, (process.stdout.columns ?? 80) - 6));
-  const wrapped = wrapWords(body, width);
-  const lines = [`${s.yellow}◇${s.reset}  ${s.dim}Notice${s.reset}`];
-  for (const line of wrapped) {
-    lines.push(`${bar}  ${s.dim}${line}${s.reset}`);
-  }
-  lines.push(bar);
-  return `${lines.join("\n")}\n`;
+  return formatDevNote({ title: "Notice", body, tone: "warn", color });
 }
 
 /**
@@ -666,9 +685,11 @@ export function formatDevLogTime(at: Date = new Date()): string {
  * One HTTP/RPC request line for the `oke dev` TTY.
  *
  * @example
- * `●  Backend GET  /health                 main.health            12ms  200  2026-07-26  03:11:42`
+ * `●  Backend GET  /health                 main.health            12ms  200  2026-07-26  03:11:42  a1b2c3d4-…`
  *
- * @param options - Surface, method, path, flow, timing, status
+ * 4xx/5xx append a house note (`◇  401` then the message), not a dim `↳`.
+ *
+ * @param options - Surface, method, path, flow, timing, status, run id
  */
 export function formatRequestLine(options: {
   readonly surface: DevLogSurface;
@@ -682,6 +703,8 @@ export function formatRequestLine(options: {
   readonly color?: boolean;
   /** Failure detail printed on a follow-up line (4xx/5xx). */
   readonly detail?: string;
+  /** WideEvent / run id when the request executed a flow. */
+  readonly runId?: string;
 }): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const at = options.at ?? new Date();
@@ -705,6 +728,8 @@ export function formatRequestLine(options: {
   const path = options.path.length > 28 ? `${options.path.slice(0, 27)}…` : options.path.padEnd(28);
   const flow = (options.flow ?? "—").padEnd(22);
   const ms = `${options.ms}ms`.padStart(6);
+  const runId = options.runId?.trim();
+  const run = runId && runId.length > 0 ? `  ${s.dim}${runId}${s.reset}` : "";
   const main =
     `${surfaceColor}●${s.reset}  ` +
     `${surfaceColor}${options.surface.padEnd(7)}${s.reset}  ` +
@@ -714,11 +739,18 @@ export function formatRequestLine(options: {
     `${s.dim}${ms}${s.reset}  ` +
     `${statusColor}${options.status}${s.reset}  ` +
     `${s.dim}${date}${s.reset}  ` +
-    `${s.dim}${time}${s.reset}\n`;
+    `${s.dim}${time}${s.reset}` +
+    `${run}\n`;
   const detail = options.detail?.trim();
   if (!detail || options.status < 400) return main;
-  const clipped = detail.length > 120 ? `${detail.slice(0, 119)}…` : detail;
-  return `${main}${s.dim}   ↳ ${clipped}${s.reset}\n`;
+  const tone: DevNoteTone = options.status >= 500 ? "error" : "warn";
+  const note = formatDevNote({
+    title: String(options.status),
+    body: detail,
+    tone,
+    color: options.color ?? termColorEnabled(),
+  });
+  return `${main}${s.dim}│${s.reset}\n${note}`;
 }
 
 /**

@@ -78,6 +78,9 @@ input. Defaults to dry-run when the ledger has `send` / `ask` (pass `--live`
 to override). Needs a build that persisted `WideEvent.input`. Console Traces
 Replay (`POST /console/traces/replay`) uses the same `runReplay` path.
 
+`oke dev` request lines print the WideEvent / run id after the timestamp.
+Paste it into Traces or `oke replay --request-id`.
+
 `oke dev` bridges host-app WideEvents into Console Traces: the CLI starts
 Console first, mints a loopback ingest secret, and sets `OKE_RUNS_INGEST_URL` /
 `OKE_RUNS_INGEST_SECRET` on the host child so every recorded run POSTs to

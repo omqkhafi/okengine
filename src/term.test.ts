@@ -7,6 +7,7 @@ import {
   formatAppReadyLine,
   formatBootWarn,
   formatClaimNote,
+  formatDevNote,
   formatCliChrome,
   formatDevBanner,
   formatDevHero,
@@ -185,6 +186,25 @@ describe("term", () => {
     expect(out).toContain("Notice");
     expect(out).toContain("process-local");
     expect(out).not.toContain("oke boot:");
+    expect(out).toMatch(/◇ {2}Notice\n│\n│ {2}Channel/);
+  });
+
+  test("formatDevNote colors the title chip and body", () => {
+    const warn = formatDevNote({
+      title: "Notice",
+      body: "open capability",
+      tone: "warn",
+      color: true,
+    });
+    const err = formatDevNote({
+      title: "500",
+      body: "boom",
+      tone: "error",
+      color: true,
+    });
+    expect(warn).toContain("\u001b[33m");
+    expect(err).toContain("\u001b[31m");
+    expect(warn).toContain("\u001b[1m");
   });
 
   test("formatCliChrome routes boot and status lines", () => {
@@ -213,6 +233,22 @@ describe("term", () => {
     expect(out).not.toMatch(/\u001b\[/);
   });
 
+  test("formatRequestLine appends run id after time", () => {
+    const at = new Date(2026, 6, 26, 3, 11, 42);
+    const out = formatRequestLine({
+      surface: "Console",
+      method: "GET",
+      path: "/console/vault",
+      flow: "console.vault.list",
+      status: 200,
+      ms: 5,
+      runId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      at,
+      color: false,
+    });
+    expect(out).toContain("03:11:42  a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+  });
+
   test("formatRequestLine prints failure detail under 4xx/5xx", () => {
     const out = formatRequestLine({
       surface: "Console",
@@ -225,7 +261,9 @@ describe("term", () => {
       color: false,
     });
     expect(out).toContain("400");
-    expect(out).toContain("↳ Password needs at least 12 characters");
+    expect(out).toContain("Password needs at least 12 characters");
+    expect(out).toMatch(/◇ {2}400\n│\n│ {2}Password/);
+    expect(out).not.toContain("↳");
   });
 
   test("formatStackSummary is scannable", () => {

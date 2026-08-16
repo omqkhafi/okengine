@@ -13,10 +13,14 @@ import { goAfterAuth, type AfterAuthNavigate } from "./auth-redirect.ts";
 import {
   AUTH_SUBMIT_SUCCESS_MS,
   AuthCard,
-  authSubmitClassName,
+  AuthSubmitButton,
+  authFieldClassName,
+  authFieldGroupClassName,
+  authFieldRowClassName,
+  authFieldValueClassName,
+  authLabelClassName,
   authSubmitState,
 } from "@/components/auth-card";
-import { StatefulButton } from "@/components/motion/button/index.ts";
 import { PasswordInput } from "@/components/password-input";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -26,9 +30,6 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 type LoginValues = z.infer<typeof loginSchema>;
-
-const inputClassName =
-  "h-10 rounded-xl border-foreground/10 bg-muted/50 px-3 text-base md:text-sm dark:bg-background/50";
 
 /**
  * Join id tokens for aria-describedby (skips empty).
@@ -53,7 +54,7 @@ function RequiredMark() {
 }
 
 /**
- * Email + password login card for a closed Console setup.
+ * Email + password login for a closed Console setup.
  */
 export function LoginForm() {
   const qc = useQueryClient();
@@ -103,11 +104,9 @@ export function LoginForm() {
       status={{ label: "Setup closed" }}
       description="Sign in with an existing operator account."
       footer={
-        <StatefulButton
+        <AuthSubmitButton
           type="submit"
           form="login-form"
-          size="lg"
-          pressScale={0.98}
           state={authSubmitState({
             pending: login.isPending,
             success: login.isSuccess,
@@ -116,16 +115,15 @@ export function LoginForm() {
           loadingText="Signing in"
           successText="Signed in"
           errorText="Try again"
-          className={authSubmitClassName}
         >
           Sign in
-        </StatefulButton>
+        </AuthSubmitButton>
       }
     >
       {({ titleId, descriptionId }) => (
         <form
           id="login-form"
-          className="flex flex-col gap-6"
+          className="flex flex-col"
           autoComplete="on"
           noValidate
           aria-labelledby={titleId}
@@ -137,15 +135,19 @@ export function LoginForm() {
             void form.handleSubmit();
           }}
         >
-          <FieldGroup className="gap-5" role="group" aria-label="Operator credentials">
+          <FieldGroup
+            className={authFieldGroupClassName}
+            role="group"
+            aria-label="Operator credentials"
+          >
             <form.Field
               name="email"
               children={(field) => {
                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                 const errorId = `${field.name}-error`;
                 return (
-                  <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                    <FieldLabel htmlFor={field.name}>
+                  <Field data-invalid={isInvalid || undefined} className={authFieldRowClassName}>
+                    <FieldLabel htmlFor={field.name} className={authLabelClassName}>
                       Email
                       <RequiredMark />
                     </FieldLabel>
@@ -163,10 +165,14 @@ export function LoginForm() {
                       aria-required
                       aria-describedby={describedBy(isInvalid && errorId)}
                       required
-                      className={inputClassName}
+                      className={authFieldClassName}
                     />
                     {isInvalid ? (
-                      <FieldError id={errorId} errors={field.state.meta.errors} />
+                      <FieldError
+                        id={errorId}
+                        className={authFieldValueClassName}
+                        errors={field.state.meta.errors}
+                      />
                     ) : null}
                   </Field>
                 );
@@ -179,8 +185,8 @@ export function LoginForm() {
                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                 const errorId = `${field.name}-error`;
                 return (
-                  <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                    <FieldLabel htmlFor={field.name}>
+                  <Field data-invalid={isInvalid || undefined} className={authFieldRowClassName}>
+                    <FieldLabel htmlFor={field.name} className={authLabelClassName}>
                       Password
                       <RequiredMark />
                     </FieldLabel>
@@ -196,10 +202,14 @@ export function LoginForm() {
                       aria-required
                       aria-describedby={describedBy(isInvalid && errorId)}
                       required
-                      className={inputClassName}
+                      className={authFieldClassName}
                     />
                     {isInvalid ? (
-                      <FieldError id={errorId} errors={field.state.meta.errors} />
+                      <FieldError
+                        id={errorId}
+                        className={authFieldValueClassName}
+                        errors={field.state.meta.errors}
+                      />
                     ) : null}
                   </Field>
                 );
@@ -210,7 +220,7 @@ export function LoginForm() {
           {formError ? (
             <p
               id={formErrorId}
-              className="text-sm text-destructive"
+              className="px-5 py-3.5 text-sm text-destructive"
               role="alert"
               aria-live="assertive"
             >

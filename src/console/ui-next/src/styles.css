@@ -176,6 +176,14 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Native controls / autofill follow the class theme, not OS alone.
+     https://tailwindcss.com/docs/color-scheme */
+  html {
+    @apply scheme-light;
+  }
+  html.dark {
+    @apply scheme-dark;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     margin: 0;
@@ -183,6 +191,25 @@
   }
   #root {
     min-height: 100dvh;
+  }
+
+  /* Chrome paints autofill as a UA wash. Delay it so the field stays
+     the surface; ink uses the theme token. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    caret-color: var(--foreground);
+    background-color: transparent !important;
+    background-image: none !important;
+    -webkit-background-clip: text;
+    background-clip: text;
+    transition:
+      background-color 99999s ease-out 0s,
+      background-image 99999s ease-out 0s;
   }
 }
 

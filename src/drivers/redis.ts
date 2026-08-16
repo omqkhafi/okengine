@@ -74,6 +74,11 @@ export async function openRedisKv(options: KvOpenOptions): Promise<KvNamespace> 
     async close() {
       /* Bun.redis is process-scoped; injected fakes may no-op */
     },
+    ...(client.send
+      ? {
+          send: (command: string, args: readonly string[] = []) => client.send!(command, [...args]),
+        }
+      : {}),
   };
 }
 

@@ -96,8 +96,48 @@ export interface AiJournalEntry {
   readonly outcome: AiAskOutcome;
   readonly cost: number;
   readonly latencyMs: number;
+  /** Driver-reported input tokens (omitted when the driver did not supply them). */
+  readonly inputTokens?: number;
+  /** Driver-reported output tokens (omitted when the driver did not supply them). */
+  readonly outputTokens?: number;
   readonly schemaMismatch?: AiSchemaMismatch;
   readonly at: number;
+}
+
+/** Optional token counts from a complete() / tool-loop usage bag. */
+type UsageTokens = {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+};
+
+/**
+ * Copy driver token fields when they are numbers — never invent counts.
+ *
+ * @param usage - Complete / loop usage
+ */
+function tokenFields(usage: UsageTokens | undefined): UsageTokens {
+  return {
+    ...(typeof usage?.inputTokens === "number" ? { inputTokens: usage.inputTokens } : {}),
+    ...(typeof usage?.outputTokens === "number" ? { outputTokens: usage.outputTokens } : {}),
+  };
+}
+
+/**
+ * Add one complete() usage onto running token totals.
+ *
+ * @param acc - Mutable totals
+ * @param usage - Driver usage
+ */
+function addUsageTokens(
+  acc: { inputTokens?: number; outputTokens?: number },
+  usage: UsageTokens | undefined,
+): void {
+  if (typeof usage?.inputTokens === "number") {
+    acc.inputTokens = (acc.inputTokens ?? 0) + usage.inputTokens;
+  }
+  if (typeof usage?.outputTokens === "number") {
+    acc.outputTokens = (acc.outputTokens ?? 0) + usage.outputTokens;
+  }
 }
 
 /** Options for {@link createAiRuntime}. */
@@ -416,6 +456,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly denials: AgentDenial[];
     readonly steps: number;
     readonly cost: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
   }> {
     const messages = [...opts.messages];
     const defs = toolDefsFor(opts.tools);
@@ -424,6 +466,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     const runDenials: AgentDenial[] = [];
     let steps = 0;
     let cost = 0;
+    const tokens: { inputTokens?: number; outputTokens?: number } = {};
     let lastText = "";
     let lastRaw: unknown = {};
     let lastToolResult: unknown;
@@ -438,6 +481,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
       cost += result.usage?.cost ?? 0;
+      addUsageTokens(tokens, result.usage);
       lastText = result.text;
       lastRaw = result.raw !== undefined ? result.raw : result.text;
 
@@ -452,6 +496,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           denials: runDenials,
           steps,
           cost,
+          ...tokenFields(tokens),
         };
       }
 
@@ -495,6 +540,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       denials: runDenials,
       steps,
       cost,
+      ...tokenFields(tokens),
     };
   }
 
@@ -536,7 +582,15 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       let lastError: string | undefined;
       let lastSchema: AiSchemaMismatch | undefined;
       let totalCost = 0;
+      const totalTokens: { inputTokens?: number; outputTokens?: number } = {};
       const userContent = promptContentFromInput(input);
+
+      const pushJournal = (entry: Omit<AiJournalEntry, "inputTokens" | "outputTokens">): void => {
+        journal.push({
+          ...entry,
+          ...tokenFields(totalTokens),
+        });
+      };
 
       for (const modelName of via) {
         let sameModelTries = 0;
@@ -565,6 +619,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 loop.lastToolResult !== undefined && !loop.text ? loop.lastToolResult : loop.raw;
               attemptCost = loop.cost;
               totalCost += attemptCost;
+              addUsageTokens(totalTokens, loop);
               if (loop.denials.length > 0 && loop.trail.every((t) => t.status === "denied")) {
                 throw new Error(
                   `ai: all tool calls denied for prompt "${prompt}": ${loop.denials[0]?.reason}`,
@@ -579,6 +634,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               });
               attemptCost = result.usage?.cost ?? 0;
               totalCost += attemptCost;
+              addUsageTokens(totalTokens, result.usage);
               // Prefer assistant text — `raw` is often the transport envelope
               // (OpenAI chat.completion object), which must not shadow the content.
               raw =
@@ -607,7 +663,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 at: now(),
               });
               if (journalingForced) {
-                journal.push({
+                pushJournal({
                   prompt,
                   ...(version !== undefined ? { version } : {}),
                   input,
@@ -631,7 +687,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                   at: now(),
                 });
                 if (journalingForced) {
-                  journal.push({
+                  pushJournal({
                     prompt,
                     ...(version !== undefined ? { version } : {}),
                     input,
@@ -662,7 +718,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
 
             if (!isRetryableAiError(err)) {
               if (journalingForced) {
-                journal.push({
+                pushJournal({
                   prompt,
                   ...(version !== undefined ? { version } : {}),
                   input,
@@ -688,7 +744,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       }
 
       if (journalingForced) {
-        journal.push({
+        pushJournal({
           prompt,
           ...(version !== undefined ? { version } : {}),
           input,

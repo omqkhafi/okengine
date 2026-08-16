@@ -15,6 +15,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ShortcutKeys } from "@/lib/shortcut-keys.tsx";
+import { modChord } from "@/lib/shortcut.ts";
 import { cn } from "@/lib/utils";
 import { formatGridCell } from "../lib/grid-model.ts";
 import {
@@ -261,10 +263,16 @@ export function JsonValueSheet({
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 px-4 py-2.5">
           {canEdit ? (
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {tab === "json"
-                ? "Edit JSON · blur or ⌘↵ to apply"
-                : "Click a value to edit · Changes to review"}
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+              {tab === "json" ? (
+                <>
+                  Edit JSON · blur or
+                  <ShortcutKeys keys={modChord("↵")} />
+                  to apply
+                </>
+              ) : (
+                "Click a value to edit · Changes to review"
+              )}
             </span>
           ) : (
             <span />

@@ -14,7 +14,7 @@ needed).
 
 ### ✨ Added
 
-- Console **Runs SQL** (`POST /console/runs/query`, Monitoring
+- Console **Runs SQL** (`POST /console/runs/query`, Observability
   SQL tab) — read-only DuckDB over `.oke/runs`. Statement
   guard rejects DDL/DML/external access; isolated session
   sets `enable_external_access=false`; 5s timeout; 1000-row
@@ -26,13 +26,13 @@ needed).
   heartbeats every 5s (30s TTL) on the existing 1s
   scheduler. `GET /console/instances` joins Clock and
   Journal leases by the unified boot `instanceId`.
-  Monitoring shows `N alive` (unbound is empty, not 0).
+  Observability shows `N alive` (unbound is empty, not 0).
 
 - create-oke `standard` / `advanced` ship a Vite 8 `web/` SPA.
   Vite owns `index.html` and proxies `/notes` · `/health` ·
   `/_oke` to the app. `bun run web` after `oke dev`.
 
-- Console **Monitoring** (`/monitoring`) — health strip (Vault seal/KEK,
+- Console **Observability** (`/observability`) — health strip (Vault seal/KEK,
   Store drift, Clock overdue/lease, Signal queue lag, window P95 /
   error rate), top errors from the persisted runs buffer (opens
   Trace detail), and a Bklit composed chart (request volume, error
@@ -291,6 +291,13 @@ needed).
   CSRF treats QUERY as safe (like GET). The client always sends a JSON body on QUERY (`{}` when
   only path params remain).
 
+- Browser `GET` (`Accept` prefers `text/html`) paints the JSON envelope in
+  traces chrome — flush h-10 strips, hairline /60, status + handler latency
+  + cache (hit / miss / none), a right-rail Routes tree (static GET links;
+  POST and `:param` listed),
+  line numbers, copy, Pretty / Raw (compact stays on the same page). `curl`,
+  `Accept: application/json`, `?format=json`, and `/_/` · `/_oke/` stay JSON.
+
 - Console operator reads `store/query`, `gates/simulate`, `gates/powers`, `access/effective`,
   and `channels/preview` now bind QUERY. `store/preview` stays POST (audited dry-run).
 
@@ -445,7 +452,7 @@ needed).
 - ui-next authenticated shell (Phase 3): TanStack Router (`/` pre-auth, `/overview` ·
   `/flows` · `/store` guarded shell). Claim and login success navigate to `/overview`.
   Sidebar-07 layout collapsed by default, OKE logo header, Overview/Flows/Store nav with
-  honest Empty placeholders, operator Avatar footer from real session/`session/me`.
+  honest Empty placeholders.
   Unauthenticated shell visits redirect to `/`. Gate: `test:console:setup-ui-next`.
 
 - Parallel Console SPA scaffold at `src/console/ui-next/` (React + Vite + shadcn/Base UI +
@@ -455,6 +462,17 @@ needed).
 
 - ui-next shell chrome: OKE wordmark + light/dark/system theme toggle (official shadcn Vite
   ThemeProvider, `oke-console-theme` storage, no next-themes).
+
+- Console sidebar **Fast** opens a ⌘K command palette (navigate, theme,
+  settings, logout). **Settings** is a dialog with operator identity and
+  the theme toggle. **Logout** posts `/console/session/logout` and
+  returns to sign-in.
+
+- Console **Kbd** key caps on the command palette, sidebar tooltips,
+  Query run/save, Store grid find/undo/redo, and shortcut sheets.
+  `⌘1`…`⌘5` hop Overview / Flows / Store / Monitoring / Vault;
+  `⌘,` opens Settings; `⌘E` logs out. Caps show ⌘ on Mac and
+  Ctrl on Windows.
 
 - `motion` (Motion for React) reserved for near-future ui-next animations; import via
   `motion/react`.
@@ -489,6 +507,11 @@ needed).
   Postgres recipe.
 
 
+- Store KV **Performance** (`QUERY /console/store/kv/stats`) — Redis-wire
+  `INFO` / `COMMANDSTATS` / `SLOWLOG` / `LATENCY` on the KV band.
+  `memory` returns `KvStatsUnsupported`. INFO is instance-wide
+  (`StoreKvStatsServerWideGap`). SLOWLOG args collapse until reveal
+  (`StoreKvStatsSlowlogArgsGap`). No `MONITOR`, no invented hot-keys.
 
 ### 💥 Breaking Changes
 
@@ -511,9 +534,18 @@ needed).
 
 ### ♻️ Changed
 
+- Console Sign in / Create admin expanding-arrow tile uses primary
+  ink, not sky.
+
+- Console Sign in / first-admin claim is a docked lock:
+  wordmark sits on the plate, calibration ticks on the
+  corners, two-column instrument fields, page-ink tile
+  on the key. The submit key sits below the plate, not
+  inside it.
+
 - Console explorers share the Overview traces language: flush rows,
   bare tinted icons, tabular counts, and a full-height selection rail.
-  Flows, Store, Vault, and Monitoring lists plus detail headers drop
+  Flows, Store, Vault, and Observability lists plus detail headers drop
   boxed wells. Advanced on Flows is an icon control like Traces.
 
 - Console Vault list rows are two lines: description + risk on the
@@ -525,13 +557,17 @@ needed).
   list, JSON inspect, and Vault fingerprints. Store browse restyles
   the row checkbox at the table, not the shared control.
 
-- Console Vault detail drops the resolution winner box and filled
-  layer chips. Readers are flush rows with hover-reveal actions.
-  Identity headers (Vault / Store / Units) drop blur and the
-  translucent fill. Set / Rotate are square strip actions.
+- Console Vault detail is one path: identity, a next-action
+  banner with the verb (Set / Rotate) when something is
+  wrong, a posture strip (from / read / readers / blast),
+  then the lock path as a first-hit-wins spine. Pick a
+  layer to copy its fill command in the row. Fingerprints
+  and readers stay flush lists. Shared and in-flight runs
+  sit on the posture strip / blast banner — no Advanced
+  dump. One Set or Rotate on the page, not two.
 
 - Console inspector identity (Vault / Store / Units) matches
-  the Monitoring Query / Metrics header: one h-8 strip.
+  the Observability Query / Metrics header: one h-8 strip.
   Title, kind, and env / copy sit on one centered baseline;
   risk, PII, Set, and Rotate stay full-height strip tokens.
   Vault posture and Units activity use the same stretch bar.
@@ -741,8 +777,10 @@ needed).
 
 - Units explorer bands and folders start collapsed (search still expands matches).
 
-- Setup / sign-in footer (`ConsoleChrome`) is brand left, theme toggle
-  center, version right — no hairline rules against the toggle.
+- Setup / sign-in is a gate, not an inspector: OKE wordmark in open
+  air, LED eyebrow + display title, underline ledger fields, ink key.
+  The page foot stays traces (brand, theme tokens, version) — no
+  boxed tray, no pill theme well.
 
 - Console Units inspector is a vertical workbench: contract briefing
   above, Call API docked below (always visible). Request/Response sit
@@ -791,8 +829,12 @@ needed).
 - Console Store **Extension library** Install reviews required extensions and the `CREATE EXTENSION` SQL (requires first) before enabling a pack.
 - Console Store **Extension library** is a marketplace sheet: featured Timescale / Cron / PostGIS cards, search + category select, and an installed badge — not a flat list.
 
-- ui-next auth card is a nested tray: form plate inset on a muted chassis,
-  setup-state LED on the plate, Sign in / claim CTA on the tray.
+- Console claim / sign-in drops the nested muted tray. The form is a
+  lock ledger (uppercase labels, underline fields, display title);
+  setup state stays an LED eyebrow, not a strip chip.
+- Console Sign in / Create admin is a sharp expanding-arrow key
+  (primary bar inverted per theme, sky tile, near-black dotted
+  trail) — beUI motion, Console rail color, no lime pill.
 
 - ui-next Traces filter chrome: title, Advanced (icon + count), and live status share one header; All/Errors + duration sit on a single non-wrapping row with the duration select filling leftover width — no more wrap that stranded Advanced on a second line.
 
@@ -827,11 +869,18 @@ needed).
 - ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
   out mid-progress in dark mode).
 
-- ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
+- Console theme toggle is strip tokens (ink when active, icon-only when
+  idle) — no sliding pill, no muted chip. Same control in Settings.
 
 - ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
 
 - ui-next authenticated sidebar stays always icon-collapsed on desktop (no expand / rail / header trigger); mobile sheet trigger unchanged.
+
+- Console sidebar footer drops the operator avatar. Icon actions are
+  Fast (command palette), Settings, and Logout.
+
+- Console sidebar order is Overview / Flows / Store / Monitoring /
+  Vault. Monitoring uses the chart-analysis mark.
 
 - ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
 
@@ -870,6 +919,26 @@ needed).
   Console yet — named backlog, not silently dropped. Backend
   projections remain.
 
+- `oke dev` request lines append the WideEvent / run id after the
+  timestamp so a Console `GET /console/vault` line can be pasted
+  into Traces or `oke replay --request-id`.
+
+- `oke dev` Notices and 4xx/5xx request follow-ups use the Claim
+  house block: a colored `◇  Notice` / `◇  401` chip on its own
+  row, then the body — yellow for warnings, red for 5xx. No dim
+  `↳` line.
+
+- Console Monitoring is now **Observability**. Canonical route is
+  `/observability`; `/monitoring` keeps a search-preserving redirect
+  (bookmarks and `?next=`). Sidebar, command palette, and digit `4`
+  point at the new path.
+
+- `fx.ask` stamps `RunTelemetry.promptVersion` and adds cost only when
+  the driver supplies `usage.cost` greater than zero. Token counts
+  persist on the ask journal. `oke dev` attaches the host AI runtime
+  so Call API asks reach `GET /console/ai`. Child-process HTTP asks
+  still have a separate journal (no ingest bridge).
+
 ### 🔥 Removed
 
 - `store.resource({ unit })` — unit comes from `flow("notes.list")`
@@ -878,6 +947,21 @@ needed).
 - Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
 
 ### 🐛 Fixed
+
+- Console Traces / Runs no longer 500 after a failed login
+  sits next to a successful run. All-null `error_code`
+  Parquet batches were JSON; `Unauthorized` was VARCHAR —
+  DuckDB refused the union.
+
+- Console shortcut caps use ⌘ on Mac and Ctrl on Windows.
+  Detection reads Client Hints / userAgent, not only
+  `navigator.platform`.
+
+- Command palette search mark is `size-3.5`, same as
+  explorer row icons — it no longer fills the 40px strip.
+
+- Sidebar Logout hover is destructive ink + wash. Tooltip
+  and palette show `⌘E` / `Ctrl+E`.
 
 - Boot mints one `instanceId` (`inst-<uuid>`) for Clock,
   Journal, and the fleet registry. They no longer mint
@@ -1158,12 +1242,27 @@ needed).
   on localhost:3000 was still asking for the script; the site now
   serves an unregistering worker and drops the registration.
 
+- Console Vault lock-path no longer shows `simulate` under
+  `oke dev` when `drivers.vault.dev` is `"vault"`. The Console
+  was not given `oke.config`, so it fell back to the env driver.
+  `oke dev` now passes the loaded config; `serveConsole` loads
+  `oke.config.ts` from cwd when it is omitted.
+
+- HTTP API-key Bearer now authenticates through `onAuth`. WideEvent
+  `principal` is the key id and `dimensions.api_key` is stamped.
+  Session JWTs stay `claims.sub` with no key dimension. Forged /
+  revoked / expired keys are 401.
+
+- Console fields stay transparent when the browser autofills.
+  `html` uses Tailwind `scheme-light` / `scheme-dark`; autofill
+  ink follows `--foreground` with no UA wash.
+
 ### 🔒 Security
 
-- Console login `?next=` is allow-listed to `/flows`, `/units`,
-  `/store`, and `/vault` (plus their search). `/overview` rewrites to
-  `/flows`. Other values are dropped so an expired session cannot be
-  turned into an open redirect.
+- Console login `?next=` is allow-listed to `/overview`, `/flows`,
+  `/store`, `/vault`, and `/observability` (plus their search).
+  `/monitoring` rewrites to `/observability`. Other values (including
+  `/units`) are dropped so an expired session cannot be an open redirect.
 
 - Console Store hides `oke_console` (operators, sessions, credential hashes) unless
   `OKE_CONSOLE_AUTH_STORE=1`. Query is refused when the flag is off.
@@ -1193,6 +1292,15 @@ needed).
 
 - Host → Console runs ingest never returns WideEvent bodies; operator
   reads stay on the masked `projectRun` path (adversarial PII gate covered).
+
+- Store KV SLOWLOG args (keys and values) stay collapsed until
+  `revealPii: true`, which writes `console.store.kv.stats.reveal`
+  (operator, ref). Named limitation `StoreKvStatsSlowlogArgsGap`.
+
+- Host HTTP API-key authentication stamps `principal` as the bare
+  key id (and `dimensions.api_key`) so Access per-key matching is
+  real when a request is key-authenticated.
+
 
 ## v0.11.2 — 2026-08-10
 

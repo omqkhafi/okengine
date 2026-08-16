@@ -3,9 +3,9 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createOperator } from "../../auth/operator.ts";
 import { issueSession } from "../../auth/index.ts";
 import { connectPglite } from "../../drivers/pglite.ts";
@@ -15,6 +15,9 @@ import {
 } from "../../elements/vault/builtin-adapter.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import { startConsoleApp, type ConsoleAppHandle } from "./serve.ts";
+
+/** Repo `okengine/config` — absolute import so a temp `oke.config.ts` needs no install. */
+const CONFIG_MOD = resolve(import.meta.dir, "../../config/index.ts");
 
 const PASSWORD = "Password1234!";
 
@@ -415,6 +418,38 @@ describe("console vault HTTP — set without a pre-bound runtime", () => {
       expect(body.data?.ok).toBe(true);
       expect(body.data?.name).toBe("GITHUB_TOKEN");
       expect(handle.state.vaultRuntime).toBeTruthy();
+      const listed = await handle.state.listVault();
+      expect(listed.backend?.driverId).toBe("env");
+    } finally {
+      await handle.app.stop();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("loads drivers.vault from oke.config.ts so the lock-path is built-in", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-vault-pin-"));
+    await writeFile(
+      join(cwd, "oke.config.ts"),
+      `import { defineConfig } from ${JSON.stringify(CONFIG_MOD)};
+export default defineConfig({ drivers: { vault: { dev: "vault" } } });
+`,
+    );
+    const handle = await startConsoleApp({
+      cwd,
+      silentClaim: true,
+      secret: "vault-http-pin",
+      manifest: {
+        oke: "1.0",
+        app: "keel",
+        vault: {
+          GITHUB_TOKEN: { description: "GitHub Issues sync token", rotate: "90d" },
+        },
+      } as Manifest,
+    });
+    try {
+      const listed = await handle.state.listVault();
+      expect(listed.backend?.driverId).toBe("vault");
+      expect(listed.backend?.builtin).toBe(true);
     } finally {
       await handle.app.stop();
       await rm(cwd, { recursive: true, force: true });

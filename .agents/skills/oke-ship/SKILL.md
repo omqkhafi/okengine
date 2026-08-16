@@ -74,13 +74,13 @@ Site gate: the newest **versioned** release (`## v…`) must equal `package.json
 Rules:
 
 - Groups only when non-empty, in order: `### ✨ Added` · `### 💥 Breaking Changes` · `### ♻️ Changed` · `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🐛 Fixed` · `### 🔒 Security`
-- Large groups add `####` area headings (only when that area has bullets), in order: `Console — Chrome` · `Console — Monitoring` · `Console — Store` · `Console — Vault` · `Console — Flows & traces` · `Console — Units & Call API` · `Console — Auth & shell` · `Runtime` · `Dev, Keel & create-oke` · `Docs`
+- Large groups add `####` area headings (only when that area has bullets), in order: `Console — Chrome` · `Console — Observability` · `Console — Store` · `Console — Vault` · `Console — Flows & traces` · `Console — Units & Call API` · `Console — Auth & shell` · `Runtime` · `Dev, Keel & create-oke` · `Docs`
 - Pick the area from where the change lives (do not invent new area names):
 
   | Change lives in…                                      | `####` area              |
   | ----------------------------------------------------- | ------------------------ |
   | Console chrome, sidebar, theme, explorer tokens, sheets | Console — Chrome       |
-  | `/monitoring`, runs SQL, fleet / instances            | Console — Monitoring     |
+  | `/observability`, runs SQL, fleet / instances         | Console — Observability  |
   | Store browse, query, files, schema, RLS, catalog      | Console — Store          |
   | Vault page / lock-path                                | Console — Vault          |
   | Flows graph, traces, overview hub                     | Console — Flows & traces |

@@ -224,6 +224,13 @@ export interface StoreRuntime {
    */
   openRef(ref: ResourceRef, ctx: StoreInvokeContext): Promise<StoreHandle>;
   /**
+   * Driver KV namespace for Console engine telemetry. Not the `fx.store`
+   * handle — `send` stays off the public surface.
+   *
+   * @param ref - `kv:name`
+   */
+  kvNamespace(ref: ResourceRef): Promise<KvNamespace>;
+  /**
    * Register a declaration (usually done at module load).
    *
    * @param decl - Declaration to register
@@ -497,6 +504,16 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       const decl = declarations.get(ref);
       if (!decl) throw new Error(`Unknown store ref: ${ref}`);
       return this.open(decl, ctx);
+    },
+    async kvNamespace(ref) {
+      const decl = declarations.get(ref);
+      if (!decl || decl.facet !== "kv") {
+        throw new Error(`Unknown kv ref: ${ref}`);
+      }
+      await openKv(decl);
+      const ns = kvNs.get(decl.name);
+      if (!ns) throw new Error(`Unknown kv ref: ${ref}`);
+      return ns;
     },
     onWriteEffects(effects) {
       return cache.invalidateFromEffects(effects);

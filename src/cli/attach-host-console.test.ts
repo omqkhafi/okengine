@@ -3,7 +3,9 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { userPrincipal } from "../auth/planes.ts";
+import { projectAiPanel } from "../console/server/ai.ts";
 import type { ConsoleState } from "../console/server/state.ts";
+import { resetAiDecls } from "../elements/ai.ts";
 import { resetFlowSeq } from "../kernel/flow.ts";
 import { resetBindings } from "../kernel/on.ts";
 import { attachHostToConsole } from "./attach-host-console.ts";
@@ -13,6 +15,7 @@ const OKE = resolve(import.meta.dir, "../index.ts");
 afterEach(() => {
   resetBindings();
   resetFlowSeq();
+  resetAiDecls();
 });
 
 describe("attachHostToConsole", () => {
@@ -66,6 +69,57 @@ export const app = oke({
     expect(ingested.some((row) => row.event?.flow === "main.ping")).toBe(true);
     await attached!.stop();
     expect(state.invokeUserFlow).toBeNull();
+  });
+
+  test("binds host aiRuntime so Console projection sees a journaled ask", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-attach-ai-"));
+    const entry = join(dir, "app.ts");
+    await writeFile(
+      entry,
+      `
+import { oke, on, flow, http, gate, ai } from ${JSON.stringify(OKE)};
+const smart = ai.model("smart", { provider: "mock" });
+smart.prompt("ticket-triage", { version: 2 });
+export const ping = on(
+  http.get("/ping").gate.public,
+  flow("main.ping", {
+    effects: { asks: ["ticket-triage"] },
+    do: (_input, fx) => fx.ask("ticket-triage", { subject: "hello" }),
+  }),
+);
+export const app = oke({
+  name: "attach-ai",
+  gate: { policies: [gate.public] },
+}).adopt({ ping });
+`,
+    );
+
+    const state = {
+      invokeUserFlow: null,
+      storeRuntime: null,
+      aiRuntime: null,
+    } as unknown as ConsoleState;
+    const attached = await attachHostToConsole({ entry, cwd: dir, state });
+    expect(attached).not.toBeNull();
+    expect(state.aiRuntime).toBeTruthy();
+
+    const result = await state.invokeUserFlow!({
+      flowId: "main.ping",
+      body: {},
+      principal: userPrincipal({ userId: "u1", verified: true }),
+      operatorId: "op",
+    });
+    expect(result.status).toBe(200);
+
+    const projection = projectAiPanel({
+      manifest: null,
+      aiRuntime: state.aiRuntime,
+    });
+    expect(projection.journal.length).toBeGreaterThan(0);
+    expect(projection.journal[0]!.prompt).toBe("ticket-triage");
+    expect(projection.journal[0]!.inputTokens).toBeGreaterThan(0);
+    expect(projection.versions.length).toBeGreaterThan(0);
+    await attached!.stop();
   });
 
   test("returns null when the entry is not a bootable app", async () => {

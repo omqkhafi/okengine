@@ -43,6 +43,7 @@ export const CONSOLE_SPA_PATHS = [
   "/flows",
   "/store",
   "/vault",
+  "/observability",
   "/monitoring",
 ] as const;
 
@@ -62,6 +63,27 @@ export function isConsoleSpaPath(pathname: string): boolean {
  */
 export function isConsoleKernelPath(pathname: string): boolean {
   return pathname.startsWith("/console/") || pathname.startsWith("/plugin-frame/");
+}
+
+/**
+ * Use the caller's `oke.config` when given; otherwise load it from `cwd`
+ * so Console sees `drivers.vault` (built-in vs the env default).
+ * Missing or unreadable config stays `null` — framework defaults apply.
+ *
+ * @param cwd - Project root
+ * @param explicit - Already-loaded config, or `null` when the caller tried
+ */
+async function resolveServeOkeConfig(
+  cwd: string,
+  explicit: CreateConsoleAppOptions["okeConfig"],
+): Promise<CreateConsoleAppOptions["okeConfig"]> {
+  if (explicit !== undefined) return explicit;
+  try {
+    const { loadOkeConfig } = await import("../../cli/load-config.ts");
+    return (await loadOkeConfig(cwd)).config;
+  } catch {
+    return null;
+  }
 }
 
 /** Options for {@link serveConsole}. */
@@ -103,6 +125,7 @@ export async function serveConsole(
   const hostname = options.hostname ?? "127.0.0.1";
   const port = options.port ?? CONSOLE_PORT;
   const cwd = options.cwd ?? process.cwd();
+  const okeConfig = await resolveServeOkeConfig(cwd, options.okeConfig);
   const wantPersist = options.persist !== false && options.operators === undefined;
   const persistence = wantPersist
     ? await openConsolePersistence(cwd, {
@@ -112,6 +135,7 @@ export async function serveConsole(
   const handle = createConsoleApp({
     ...options,
     cwd,
+    okeConfig,
     silentClaim: options.silentClaim ?? false,
     ...(persistence
       ? {
@@ -262,6 +286,7 @@ export async function startConsoleApp(
   } = {},
 ): Promise<ConsoleAppHandle> {
   const cwd = options.cwd ?? process.cwd();
+  const okeConfig = await resolveServeOkeConfig(cwd, options.okeConfig);
   const persistence =
     options.persist === true && options.operators === undefined
       ? await openConsolePersistence(cwd, {
@@ -271,6 +296,7 @@ export async function startConsoleApp(
   const handle = createConsoleApp({
     ...options,
     cwd,
+    okeConfig,
     silentClaim: options.silentClaim ?? true,
     ...(persistence
       ? {

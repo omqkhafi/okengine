@@ -1,6 +1,6 @@
 /**
- * Theme provider — official shadcn Vite dark-mode pattern (no next-themes).
- * @see https://ui.shadcn.com/docs/dark-mode/vite
+ * Theme provider — class strategy from Tailwind dark mode.
+ * @see https://tailwindcss.com/docs/dark-mode
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
@@ -43,19 +43,18 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = window.document.documentElement;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
 
-    root.classList.remove("light", "dark");
+    const apply = (): void => {
+      const resolved = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      root.classList.remove("light", "dark");
+      root.classList.add(resolved);
+    };
 
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-
-      root.classList.add(systemTheme);
-      return;
-    }
-
-    root.classList.add(theme);
+    apply();
+    if (theme !== "system") return;
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
   }, [theme]);
 
   const value: ThemeProviderState = {

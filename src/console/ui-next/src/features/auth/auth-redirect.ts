@@ -2,24 +2,29 @@
  * Post-auth return path — keep the operator on the module they were in
  * after a session expires, instead of always landing on `/overview`.
  *
- * Only `/overview`, `/flows`, `/store`, `/vault`, and `/monitoring` (plus their
- * search) are legal. Anything else is dropped so `?next=` cannot be an open redirect.
+ * Only `/overview`, `/flows`, `/store`, `/vault`, and `/observability` (plus their
+ * search) are legal. `/monitoring` is rewritten to `/observability`. Anything else
+ * is dropped so `?next=` cannot be an open redirect.
  */
 
 import { validateFlowsSearch, type FlowsSearch } from "../flows/state/flows-selection.ts";
 import { validateStoreSearch, type StoreSearch } from "../store/state/store-selection.ts";
 import { validateUnitsSearch, type UnitsSearch } from "../units/state/units-selection.ts";
 import {
-  validateMonitoringSearch,
-  type MonitoringSearch,
-} from "../monitoring/state/monitoring-selection.ts";
+  validateObservabilitySearch,
+  type ObservabilitySearch,
+} from "../observability/state/observability-selection.ts";
 import { validateVaultSearch, type VaultSearch } from "../vault/state/vault-selection.ts";
 
 /** Default shell module when no safe return path is present. */
 export const DEFAULT_AFTER_AUTH = "/overview" as const;
 
 /** Shell pathnames that may be restored after login. */
-const SHELL_PATHS = new Set(["/overview", "/flows", "/store", "/vault", "/monitoring"]);
+const SHELL_PATHS = new Set(["/overview", "/flows", "/store", "/vault", "/observability"]);
+
+/** Retired live module — rewritten to {@link CANONICAL_OBSERVABILITY}. */
+const LEGACY_MONITORING = "/monitoring";
+const CANONICAL_OBSERVABILITY = "/observability";
 
 /** Upper bound so a crafted `next` cannot bloat the login URL. */
 const MAX_RETURN_TO_LENGTH = 1024;
@@ -35,10 +40,10 @@ export type AfterAuthLocation =
   | { readonly to: "/flows"; readonly search: UnitsSearch }
   | { readonly to: "/store"; readonly search: StoreSearch }
   | { readonly to: "/vault"; readonly search: VaultSearch }
-  | { readonly to: "/monitoring"; readonly search: MonitoringSearch };
+  | { readonly to: "/observability"; readonly search: ObservabilitySearch };
 
 /**
- * Keep only an in-console shell href (`/overview` | `/flows` | `/store` | `/vault` | `/monitoring` + search).
+ * Keep only an in-console shell href (`/overview` | `/flows` | `/store` | `/vault` | `/observability` + search).
  *
  * @param value - Raw `next` search param or `pathname + search`
  */
@@ -61,6 +66,7 @@ export function sanitizeReturnTo(value: unknown): string | undefined {
     return undefined;
   }
 
+  if (pathname === LEGACY_MONITORING) pathname = CANONICAL_OBSERVABILITY;
   if (!SHELL_PATHS.has(pathname)) return undefined;
   return search.length > 0 ? `${pathname}${search}` : pathname;
 }
@@ -105,8 +111,8 @@ export function afterAuthLocation(value: unknown): AfterAuthLocation {
   if (url.pathname === "/vault") {
     return { to: "/vault", search: validateVaultSearch(raw) };
   }
-  if (url.pathname === "/monitoring") {
-    return { to: "/monitoring", search: validateMonitoringSearch(raw) };
+  if (url.pathname === CANONICAL_OBSERVABILITY) {
+    return { to: "/observability", search: validateObservabilitySearch(raw) };
   }
   return { to: "/overview", search: validateFlowsSearch(raw) };
 }
@@ -117,7 +123,7 @@ export type AfterAuthNavigate = {
   (opts: { to: "/flows"; search: UnitsSearch }): unknown;
   (opts: { to: "/store"; search: StoreSearch }): unknown;
   (opts: { to: "/vault"; search: VaultSearch }): unknown;
-  (opts: { to: "/monitoring"; search: MonitoringSearch }): unknown;
+  (opts: { to: "/observability"; search: ObservabilitySearch }): unknown;
 };
 
 /**
@@ -138,8 +144,8 @@ export function goAfterAuth(navigate: AfterAuthNavigate, value: unknown): void {
     case "/vault":
       void navigate({ to: "/vault", search: dest.search });
       return;
-    case "/monitoring":
-      void navigate({ to: "/monitoring", search: dest.search });
+    case "/observability":
+      void navigate({ to: "/observability", search: dest.search });
       return;
     default:
       void navigate({ to: "/overview", search: dest.search });

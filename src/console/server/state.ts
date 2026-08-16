@@ -276,9 +276,7 @@ export interface ConsoleState {
     readonly gateApplied: boolean;
   }>;
   /** Engine-native pg_stat_statements + KPIs. */
-  queryStoreSqlStats: (
-    ref: ResourceRef,
-  ) => Promise<import("./store-stats.ts").StoreSqlStatsResult>;
+  queryStoreSqlStats: (ref: ResourceRef) => Promise<import("./store-stats.ts").StoreSqlStatsResult>;
   /** Live lock blocking (query text collapsed unless reveal). */
   queryStoreSqlLocks: (
     ref: ResourceRef,
@@ -289,6 +287,11 @@ export interface ConsoleState {
     ref: ResourceRef,
     query: string,
   ) => Promise<import("./store-stats.ts").StoreSqlAdviseResult>;
+  /** Redis-wire KV INFO / COMMANDSTATS / SLOWLOG (args collapsed unless reveal). */
+  queryStoreKvStats: (
+    ref: ResourceRef,
+    options?: { readonly revealPii?: boolean },
+  ) => Promise<import("./store-kv-stats.ts").StoreKvStatsResult>;
   /**
    * Live Clock runtime. Bound after boot from Manifest clocks
    * or host injection (A — reuse reconciliation / lease / DST).
@@ -927,6 +930,17 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         );
       }
       return stats.adviseStoreSqlIndex(state.storeRuntime, ref, query);
+    },
+    queryStoreKvStats: async (ref, options) => {
+      const kvStats = await import("./store-kv-stats.ts");
+      await markPanel<typeof import("./store.ts")>("store");
+      if (!state.storeRuntime) {
+        throw new kvStats.StoreKvStatsError(
+          kvStats.KV_STATS_UNSUPPORTED,
+          "Store runtime not bound",
+        );
+      }
+      return kvStats.queryStoreKvStats(state.storeRuntime, ref, options);
     },
     clockRuntime: options.clockRuntime ?? null,
     listClocks: async () => {

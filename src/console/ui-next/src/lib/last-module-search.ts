@@ -1,6 +1,6 @@
 /**
  * Remember each Console module's last URL search so sidebar hops
- * restore Overview / Flows / Store / Vault / Monitoring instead of wiping them.
+ * restore Overview / Flows / Store / Observability / Vault instead of wiping them.
  */
 
 /** Authenticated Console modules that own URL search. */
@@ -8,8 +8,8 @@ export const CONSOLE_MODULE_PATHS = [
   "/overview",
   "/flows",
   "/store",
+  "/observability",
   "/vault",
-  "/monitoring",
 ] as const;
 
 /** Pathname for a Console module. */
@@ -69,9 +69,10 @@ export function rememberModuleSearch(
   path: string,
   search: Record<string, unknown>,
 ): LastModuleSearch {
-  if (!isConsoleModulePath(path)) return memory;
-  if (sameSearchRecord(memory[path], search)) return memory;
-  return { ...memory, [path]: { ...search } };
+  const modulePath = path === "/monitoring" ? "/observability" : path;
+  if (!isConsoleModulePath(modulePath)) return memory;
+  if (sameSearchRecord(memory[modulePath], search)) return memory;
+  return { ...memory, [modulePath]: { ...search } };
 }
 
 /**
@@ -98,11 +99,21 @@ export function parseLastModuleSearch(raw: string | null): LastModuleSearch {
     const parsed: unknown = JSON.parse(raw);
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const out: LastModuleSearch = {};
+    const record = parsed as Record<string, unknown>;
     for (const path of CONSOLE_MODULE_PATHS) {
-      const value = (parsed as Record<string, unknown>)[path];
+      const value = record[path];
       if (value && typeof value === "object" && !Array.isArray(value)) {
         out[path] = { ...(value as Record<string, unknown>) };
       }
+    }
+    const legacy = record["/monitoring"];
+    if (
+      out["/observability"] === undefined &&
+      legacy &&
+      typeof legacy === "object" &&
+      !Array.isArray(legacy)
+    ) {
+      out["/observability"] = { ...(legacy as Record<string, unknown>) };
     }
     return out;
   } catch {

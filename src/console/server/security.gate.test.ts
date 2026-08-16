@@ -464,6 +464,29 @@ describe("console security gates (whole surface)", () => {
     expect(audit!.data?.operatorId).toBe(operatorId);
   });
 
+  test("5g. store KV slowlog reveal is audited as console.store.kv.stats.reveal", async () => {
+    const res = await handle.app.fetch(
+      new Request("http://console.test/console/store/kv/stats", {
+        method: "QUERY",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${operatorToken}`,
+        },
+        body: JSON.stringify({ ref: "kv:cache", revealPii: true }),
+      }),
+    );
+    expect(res.status).not.toBe(401);
+    const runs = await handle.state.listRuns();
+    const kvRuns = runs.filter((r: WideEvent) => r.flow === "console.store.kv.stats");
+    const auditRun = kvRuns.find((r: WideEvent) =>
+      r.logs.some((l) => l.message === "console.store.kv.stats.reveal"),
+    );
+    expect(auditRun).toBeDefined();
+    const audit = auditRun!.logs.find((l) => l.message === "console.store.kv.stats.reveal");
+    expect(audit!.data?.ref).toBe("kv:cache");
+    expect(audit!.data?.operatorId).toBe(operatorId);
+  });
+
   test("7. every registered console.* flow leaves a Runs entry when executed", async () => {
     const flows = consoleFlows(handle);
     const before = new Set((await handle.state.listRuns()).map((r: WideEvent) => r.flow));

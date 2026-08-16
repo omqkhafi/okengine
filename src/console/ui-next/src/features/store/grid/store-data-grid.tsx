@@ -55,6 +55,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ShortcutKeys } from "@/lib/shortcut-keys.tsx";
+import { modChord, modShiftChord } from "@/lib/shortcut.ts";
 import { cn } from "@/lib/utils.ts";
 import { useStoreEdit } from "../data/use-store-edit.ts";
 import { JsonValueSheet } from "../detail/json-value-sheet.tsx";
@@ -952,9 +954,10 @@ export function StoreDataGrid({
         {toolbarExtras ? (
           <Separator orientation="vertical" className="mx-0.5 my-2 h-4 self-center" />
         ) : null}
-        <div
+        <ToolbarTip
+          label={indexMode ? "Search this index" : "Find in this page"}
+          keys={modChord("F")}
           className="relative min-w-40 flex-1"
-          title={indexMode ? "Search this index (Ctrl+F)" : "Find in this page (Ctrl+F)"}
         >
           <HugeiconsIcon
             icon={Search01Icon}
@@ -972,7 +975,7 @@ export function StoreDataGrid({
             data-slot={indexMode ? "index-search" : "grid-find"}
             className="h-6 border-0 bg-transparent pl-7 text-[11px] shadow-none focus-visible:border-transparent focus-visible:bg-muted/40 focus-visible:ring-0 md:text-[11px] dark:bg-transparent"
           />
-        </div>
+        </ToolbarTip>
         {indexMode ? (
           <div className="flex items-center gap-1 text-[11px]" title="Hits to return">
             <span className="text-muted-foreground">topK</span>
@@ -1124,7 +1127,7 @@ export function StoreDataGrid({
           ) : null}
           <GridIconButton
             label="Undo edit"
-            shortcut="Ctrl+Z"
+            keys={modChord("Z")}
             disabled={(pending.size === 0 && history.past.length === 0) || saving}
             onClick={onUndo}
             slot="undo-edit"
@@ -1133,7 +1136,7 @@ export function StoreDataGrid({
           </GridIconButton>
           <GridIconButton
             label="Redo edit"
-            shortcut="Ctrl+Shift+Z"
+            keys={modShiftChord("Z")}
             disabled={history.future.length === 0 || saving || pending.size > 0}
             onClick={onRedo}
             slot="redo-edit"
@@ -1798,14 +1801,14 @@ function downloadText(filename: string, text: string, mime: string): void {
 /** Icon-only toolbar control with a tooltip. */
 function GridIconButton({
   label,
-  shortcut,
+  keys,
   disabled,
   onClick,
   slot,
   children,
 }: {
   readonly label: string;
-  readonly shortcut?: string;
+  readonly keys?: readonly string[];
   readonly disabled?: boolean;
   readonly onClick: () => void;
   readonly slot: string;
@@ -1833,7 +1836,8 @@ function GridIconButton({
         )}
       />
       <TooltipContent side="bottom" className="text-[11px]">
-        {shortcut ? `${label} (${shortcut})` : label}
+        {label}
+        {keys && keys.length > 0 ? <ShortcutKeys keys={keys} /> : null}
       </TooltipContent>
     </Tooltip>
   );

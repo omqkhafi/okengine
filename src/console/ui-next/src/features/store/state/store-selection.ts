@@ -58,6 +58,11 @@ export function useStoreSelection() {
       : null;
   const schemaView = search.view === "schema";
   const performanceView = search.view === "performance";
+  const performanceFacet: StoreQueryFacet | null = performanceView
+    ? search.facet === "kv"
+      ? "kv"
+      : "sql"
+    : null;
 
   const setSelectedResource = useCallback(
     (resource: string | null, options?: { readonly keepView?: boolean }) => {
@@ -105,13 +110,13 @@ export function useStoreSelection() {
   );
 
   const setPerformanceView = useCallback(
-    (open: boolean) => {
+    (open: boolean, facet?: StoreQueryFacet) => {
       void navigate({
         to: ".",
         search: (prev: Record<string, unknown>) => ({
           ...prev,
           view: open ? ("performance" as const) : undefined,
-          facet: undefined,
+          facet: open && facet === "kv" ? ("kv" as const) : undefined,
         }),
         replace: true,
       });
@@ -139,6 +144,7 @@ export function useStoreSelection() {
     queryFacet,
     schemaView,
     performanceView,
+    performanceFacet,
     setSelectedResource,
     setSelectedTenant,
     setQueryFacet,

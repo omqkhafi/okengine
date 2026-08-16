@@ -11,7 +11,12 @@ import { createAuthHttpBindings, type AuthHttpMaterialization } from "../auth/bi
 import { tokenFromCookieHeader } from "../auth/cookies.ts";
 import { setActiveGateAuthContext } from "../auth/method-context.ts";
 import type { ResolvedGateConfig } from "../elements/gate/config.ts";
-import { createAppAuthBinding, verifyBearerToken, type AppAuthBinding } from "./auth-resolve.ts";
+import {
+  createAppAuthBinding,
+  verifyBearerOrApiKey,
+  verifyBearerToken,
+  type AppAuthBinding,
+} from "./auth-resolve.ts";
 import type { PluginDef } from "./plugin.ts";
 
 /** Result of wiring Gate auth at construction. */
@@ -20,6 +25,7 @@ export interface WiredGateAuth {
   readonly authPlugin: PluginDef | undefined;
   readonly authBinding: AppAuthBinding;
   readonly verifyBearerToken: typeof verifyBearerToken;
+  readonly verifyBearerOrApiKey: typeof verifyBearerOrApiKey;
   readonly tokenFromCookieHeader: typeof tokenFromCookieHeader;
   /** Rebuild binding when boot supplies a clock. */
   rebind(now: () => number): AppAuthBinding;
@@ -85,6 +91,7 @@ export function wireGateAuth(options: WireGateAuthOptions): WiredGateAuth {
     authPlugin: pluginDef,
     authBinding,
     verifyBearerToken,
+    verifyBearerOrApiKey,
     tokenFromCookieHeader,
     rebind(now) {
       authBinding = createAppAuthBinding({

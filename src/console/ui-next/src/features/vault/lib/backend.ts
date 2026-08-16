@@ -108,6 +108,7 @@ export function vaultDriverKind(backend: VaultBackend | null | undefined): strin
     case "memory":
       return "memory";
     case "env":
+      // Not "env" — that word is the process.env lock-path layer.
       return "simulate";
   }
 }

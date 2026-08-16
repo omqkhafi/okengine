@@ -8,6 +8,7 @@ describe("isConsoleSpaPath", () => {
     expect(isConsoleSpaPath("/flows")).toBe(true);
     expect(isConsoleSpaPath("/store")).toBe(true);
     expect(isConsoleSpaPath("/vault")).toBe(true);
+    expect(isConsoleSpaPath("/observability")).toBe(true);
     expect(isConsoleSpaPath("/monitoring")).toBe(true);
   });
 

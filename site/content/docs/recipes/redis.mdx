@@ -93,6 +93,12 @@ Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an i
 | Healthcheck    | `redis-cli -a <password> ping`, every 5s, 10 retries |
 | Connection URL | `redis://:pass@host:6379`                            |
 
+<Callout title="Console Performance">
+  Store → KV band → **Performance** reads `INFO` / `SLOWLOG` on this instance.
+  Those commands are server-wide, not scoped to `oke:kv:{ns}:`.
+  `memory` (tests) returns `KvStatsUnsupported`.
+</Callout>
+
 ## Troubleshooting
 
 <Accordions>

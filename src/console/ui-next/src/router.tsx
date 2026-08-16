@@ -1,6 +1,7 @@
 /**
  * Console router — code-based TanStack Router (Vite SPA).
- * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault` | `/monitoring`.
+ * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault` | `/observability`.
+ * `/monitoring` is a one-shot search-preserving redirect to `/observability`.
  * Authenticated pages are `lazyRouteComponent` so Vite splits them out of the entry.
  * Any other path is a 404 — no legacy rewrites.
  */
@@ -27,7 +28,7 @@ import { ClaimPage } from "./features/setup/claim-page.tsx";
 import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
 import { validateStoreSearch } from "./features/store/state/store-selection.ts";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
-import { validateMonitoringSearch } from "./features/monitoring/state/monitoring-selection.ts";
+import { validateObservabilitySearch } from "./features/observability/state/observability-selection.ts";
 import { validateVaultSearch } from "./features/vault/state/vault-selection.ts";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
@@ -111,14 +112,23 @@ const vaultRoute = createRoute({
   component: lazyRouteComponent(() => import("./features/vault/vault-page.tsx"), "VaultPage"),
 });
 
-const monitoringRoute = createRoute({
+const observabilityRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/observability",
+  validateSearch: validateObservabilitySearch,
+  component: lazyRouteComponent(
+    () => import("./features/observability/observability-page.tsx"),
+    "ObservabilityPage",
+  ),
+});
+
+const monitoringRedirectRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/monitoring",
-  validateSearch: validateMonitoringSearch,
-  component: lazyRouteComponent(
-    () => import("./features/monitoring/monitoring-page.tsx"),
-    "MonitoringPage",
-  ),
+  validateSearch: validateObservabilitySearch,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: "/observability", search });
+  },
 });
 
 const routeTree = rootRoute.addChildren([
@@ -128,7 +138,8 @@ const routeTree = rootRoute.addChildren([
     flowsRoute,
     storeRoute,
     vaultRoute,
-    monitoringRoute,
+    observabilityRoute,
+    monitoringRedirectRoute,
   ]),
 ]);
 

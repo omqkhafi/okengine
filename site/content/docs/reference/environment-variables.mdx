@@ -133,7 +133,7 @@ provider's real credentials — credentials alone never send.
 | `OKE_DOCKER`             | `"1"` marks Compose / `oke dev` posture (set by the CLI)                                                              |
 | `OKE_DB_AUTO_PUSH`       | Overrides `db.autoPush` at boot                                                                                       |
 | `OKE_DRIZZLE_DIALECT`    | `"postgresql"` for drizzle-kit overlays (templates hardcode it)                                                       |
-| `OKE_DEV_REQUEST_LOG`    | `"1"` logs requests during `oke dev` (set by the CLI)                                                                 |
+| `OKE_DEV_REQUEST_LOG`    | `"1"` logs requests during `oke dev` (set by the CLI) — surface, flow, status, timestamp, run id                      |
 | `OKE_CONSOLE_SECRET`     | Console operator-session signing secret (HMAC) — set in production; else `.oke/console.secret`. Not a Vault contract. |
 | `OKE_CONSOLE_AUTH_STORE` | `"1"` lists the operator-plane `oke_console` schema in Store browse (read-only). Hidden by default.                    |
 | `OKE_RUNS_INGEST_URL`    | Host → Console WideEvent ingest URL (`oke dev` sets this on the app child). Enables a memory runs store + push.       |

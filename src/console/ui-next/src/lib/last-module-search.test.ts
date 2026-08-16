@@ -11,7 +11,8 @@ describe("last-module-search", () => {
   test("only Console modules are remembered", () => {
     expect(isConsoleModulePath("/overview")).toBe(true);
     expect(isConsoleModulePath("/flows")).toBe(true);
-    expect(isConsoleModulePath("/monitoring")).toBe(true);
+    expect(isConsoleModulePath("/observability")).toBe(true);
+    expect(isConsoleModulePath("/monitoring")).toBe(false);
     expect(isConsoleModulePath("/units")).toBe(false);
     expect(isConsoleModulePath("/")).toBe(false);
     const left = rememberModuleSearch({}, "/overview", { run: "iss-1", flow: "issues.get" });
@@ -32,6 +33,9 @@ describe("last-module-search", () => {
     ).toEqual({
       "/store": { resource: "sql:issues" },
       "/overview": { run: "r1" },
+    });
+    expect(parseLastModuleSearch('{"/monitoring":{"window":"7d"}}')).toEqual({
+      "/observability": { window: "7d" },
     });
   });
 

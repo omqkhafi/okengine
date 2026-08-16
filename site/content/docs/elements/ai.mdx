@@ -301,7 +301,10 @@ Attach `evals: "./evals/<name>.jsonl"` to the prompt and run `oke eval` in CI. T
 </Accordion>
 <Accordion title="An agent looped and burned budget">
 
-Bound it at declaration: `maxSteps` caps iterations, `budget.maxCostPerRun` caps spend. The Console's AI view shows cost per run so you can tune both against real numbers.
+Bound it at declaration: `maxSteps` caps iterations, `budget.maxCostPerRun` caps spend.
+
+`fx.ask` stamps `promptVersion` on the run. Cost is recorded only when the
+driver reports `usage.cost` — tokens land on the ask journal either way.
 
 </Accordion>
 </Accordions>

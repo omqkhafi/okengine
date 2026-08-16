@@ -43,6 +43,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -50,6 +51,8 @@ import { cn } from "@/lib/utils.ts";
 import { STORE_QUERY_KEY } from "../data/use-store-query.ts";
 import { useStoreSql } from "../data/use-store-sql.ts";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
+import { ShortcutKeys } from "@/lib/shortcut-keys.tsx";
+import { modChord, modShiftChord } from "@/lib/shortcut.ts";
 import { formatKvTtl } from "../lib/kv-meta.ts";
 import { kvSetPatch, parseKvQuery } from "../lib/kv-query.ts";
 import {
@@ -167,8 +170,8 @@ export function QueryConsole({
   const tenantReady = !tenancyDeclared || (tenant !== null && tenant.length > 0);
   const authLocked = store ? isConsoleAuthStore(store.ref) : false;
   const isSql = facet === "sql";
-  const shortcut =
-    typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "⌘Enter" : "Ctrl+Enter";
+  const runKeys = modChord("Enter");
+  const saveKeys = modChord("S");
 
   const schemaTables = useMemo(() => querySchemaTables(store, manifest), [store, manifest]);
   const statements = useMemo(() => (isSql ? splitSqlStatements(text) : []), [isSql, text]);
@@ -590,10 +593,7 @@ export function QueryConsole({
   };
 
   const pending = isSql ? sql.isPending || scriptPending : kvPending;
-  const allShortcut =
-    typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
-      ? "⌘⇧Enter"
-      : "Ctrl+Shift+Enter";
+  const runAllKeys = modShiftChord("Enter");
 
   return (
     <div
@@ -779,21 +779,27 @@ export function QueryConsole({
           <HugeiconsIcon icon={SourceCodeIcon} data-icon="inline-start" className="size-3.5" />
           Prettify
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-full rounded-none px-2 text-[11px]"
-          onClick={saveActive}
-          data-slot="store-query-save"
+        <ToolbarTip
+          label={savedFlash ? "Saved" : "Save"}
+          keys={saveKeys}
+          className="flex self-stretch"
         >
-          <HugeiconsIcon
-            icon={savedFlash ? Tick02Icon : FloppyDiskIcon}
-            data-icon="inline-start"
-            className="size-3.5"
-          />
-          {savedFlash ? "Saved" : "Save"}
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-full rounded-none px-2 text-[11px]"
+            onClick={saveActive}
+            data-slot="store-query-save"
+          >
+            <HugeiconsIcon
+              icon={savedFlash ? Tick02Icon : FloppyDiskIcon}
+              data-icon="inline-start"
+              className="size-3.5"
+            />
+            {savedFlash ? "Saved" : "Save"}
+          </Button>
+        </ToolbarTip>
         <HistoryMenu
           entries={history}
           saved={saved}
@@ -883,7 +889,8 @@ export function QueryConsole({
         <span className="flex-1" />
         <div className="flex items-stretch">
           <ToolbarTip
-            label={selected ? `Run selection (${shortcut})` : `Run (${shortcut})`}
+            label={selected ? "Run selection" : "Run"}
+            keys={runKeys}
             className="flex self-stretch"
           >
             <Button
@@ -900,7 +907,7 @@ export function QueryConsole({
                 <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
               )}
               {selected ? "Run selection" : "Run"}
-              <kbd className="hidden font-mono text-[10px] opacity-70 sm:inline">{shortcut}</kbd>
+              <ShortcutKeys keys={runKeys} className="hidden sm:inline-flex" />
             </Button>
           </ToolbarTip>
           {isSql ? (
@@ -924,11 +931,15 @@ export function QueryConsole({
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={run}>
                     Run current
-                    <span className="ml-auto font-mono text-[10px] opacity-60">{shortcut}</span>
+                    <DropdownMenuShortcut>
+                      <ShortcutKeys keys={runKeys} />
+                    </DropdownMenuShortcut>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={runAll} disabled={statements.length < 2}>
                     Run all
-                    <span className="ml-auto font-mono text-[10px] opacity-60">{allShortcut}</span>
+                    <DropdownMenuShortcut>
+                      <ShortcutKeys keys={runAllKeys} />
+                    </DropdownMenuShortcut>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />

@@ -10,7 +10,7 @@
 
 import { pathToFileURL } from "node:url";
 import { bindHostInvokeUserFlow } from "../console/server/invoke-user-flow.ts";
-import type { ConsoleState } from "../console/server/state.ts";
+import { bindAiRuntime, type ConsoleState } from "../console/server/state.ts";
 import type { OkeApp } from "../kernel/app.ts";
 import { findAppWithPlugins } from "../elements/store/load-plugin-tables.ts";
 import type { RunsConsoleBridgeTarget } from "../runs/bridge-to-console.ts";
@@ -63,6 +63,8 @@ export async function attachHostToConsole(
   if (store) options.state.storeRuntime = store;
   const vault = host.elements?.vault ?? host.bootResult?.vault;
   if (vault) options.state.vaultRuntime = vault;
+  const ai = host.elements?.ai ?? host.bootResult?.ai;
+  if (ai) bindAiRuntime(options.state, ai);
 
   return {
     stop: async () => {

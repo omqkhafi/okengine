@@ -23,16 +23,19 @@ import { useStoreSqlLocks } from "../data/use-store-sql-locks.ts";
 import { useStoreSqlStats } from "../data/use-store-sql-stats.ts";
 import { indexAdvisorEnableMode } from "./advisor-enable.ts";
 import { PG_LIBRARY_EXTENSIONS, extensionInstallSql } from "../lib/pg-extension-library.ts";
+import { KvPerformancePanel } from "./kv-performance-panel.tsx";
 
 /** Props for {@link PerformancePanel}. */
 export interface PerformancePanelProps {
   readonly stores: readonly StoreListStore[];
   readonly selectedEffectRef: string | null;
   readonly tenant: string | null;
+  /** Which facet opened the performance pane (`kv` vs SQL default). */
+  readonly facet?: "sql" | "kv";
 }
 
 /**
- * Right-pane engine telemetry for the SQL facet.
+ * Right-pane engine telemetry for the SQL or KV facet.
  *
  * @param props - Stores + selection
  */
@@ -40,7 +43,13 @@ export function PerformancePanel({
   stores,
   selectedEffectRef,
   tenant,
+  facet = "sql",
 }: PerformancePanelProps): JSX.Element {
+  if (facet === "kv") {
+    return (
+      <KvPerformancePanel stores={stores} selectedEffectRef={selectedEffectRef} tenant={tenant} />
+    );
+  }
   const store = pickQueryStore(stores, "sql", selectedEffectRef);
   const [lockReveal, setLockReveal] = useState(false);
   const [adviseFor, setAdviseFor] = useState<StoreSqlStatementRow | null>(null);

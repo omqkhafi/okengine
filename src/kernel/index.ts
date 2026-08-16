@@ -65,8 +65,10 @@ export {
 } from "./pipeline.ts";
 
 export {
+  apiKeyRowToPrincipal,
   claimsToPrincipal,
   createAppAuthBinding,
+  verifyBearerOrApiKey,
   verifyBearerToken,
   type AppAuthBinding,
   type CreateAppAuthBindingOptions,

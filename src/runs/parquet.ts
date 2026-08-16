@@ -8,8 +8,48 @@
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { duckPath, duckQuery, openDuckDB } from "./duckdb.ts";
+import { duckIdent, duckPath, duckQuery, openDuckDB, type DuckSession } from "./duckdb.ts";
 import type { WideEvent } from "./types.ts";
+
+/**
+ * Columns that must stay VARCHAR across partitions.
+ *
+ * `read_json_auto` infers all-null batches as JSON; a later file with
+ * `"Unauthorized"` is VARCHAR. DuckDB then fails the union.
+ */
+const PARQUET_VARCHAR_COLUMNS = [
+  "id",
+  "parent_id",
+  "flow",
+  "unit",
+  "trigger",
+  "plane",
+  "tenant",
+  "principal",
+  "subject_id",
+  "gates",
+  "cache",
+  "replica",
+  "build_version",
+  "error_code",
+  "error_message",
+  "input",
+  "output",
+  "effects",
+  "logs",
+  "archived",
+  "dimensions",
+] as const;
+
+/** Numeric wide-event columns — all-null batches must not become JSON. */
+const PARQUET_DOUBLE_COLUMNS = [
+  "replica_lag_ms",
+  "cost",
+  "prompt_version",
+  "duration_ms",
+  "started_at",
+  "ended_at",
+] as const;
 
 /** Flattened Parquet / SQL row. */
 export type ParquetRow = Record<string, string | number | boolean | null>;
@@ -55,7 +95,7 @@ export function wideEventToRow(event: WideEvent): ParquetRow {
   for (const [k, v] of Object.entries(event.dimensions)) {
     const col = `dim_${k}`;
     if (row[col] !== undefined) continue;
-    if (v === undefined) continue;
+    if (v === undefined || v === null) continue;
     row[col] =
       typeof v === "string" || typeof v === "number" || typeof v === "boolean"
         ? v
@@ -144,13 +184,36 @@ export async function writeParquet(path: string, rows: readonly ParquetRow[]): P
   await writeFile(jsonl, rows.map((r) => JSON.stringify(r)).join("\n"));
   const session = await openDuckDB();
   try {
+    const replace = parquetWriteReplaceSql();
     await session.conn.run(
-      `COPY (SELECT * FROM read_json_auto('${duckPath(jsonl)}')) TO '${duckPath(path)}' (FORMAT PARQUET, COMPRESSION ZSTD)`,
+      `COPY (SELECT * REPLACE (${replace}) FROM read_json_auto('${duckPath(jsonl)}')) TO '${duckPath(path)}' (FORMAT PARQUET, COMPRESSION ZSTD)`,
     );
   } finally {
     session.close();
     await unlink(jsonl).catch(() => undefined);
   }
+}
+
+/**
+ * SQL that reads one or more Parquet files as one relation.
+ *
+ * Per-file JSON columns (all-null `read_json_auto` inference) are cast
+ * before `UNION ALL BY NAME` so VARCHAR `"Unauthorized"` and JSON null
+ * can sit in the same `error_code` column.
+ *
+ * @param conn - Open DuckDB connection
+ * @param paths - Absolute Parquet paths
+ */
+export async function parquetUnionSql(
+  conn: DuckSession["conn"],
+  paths: readonly string[],
+): Promise<string> {
+  if (paths.length === 0) return "SELECT * FROM (SELECT 1 WHERE FALSE)";
+  const selects: string[] = [];
+  for (const path of paths) {
+    selects.push(await parquetFileSelectSql(conn, path));
+  }
+  return selects.length === 1 ? selects[0]! : selects.join(" UNION ALL BY NAME ");
 }
 
 /**
@@ -162,11 +225,8 @@ export async function readParquet(paths: readonly string[]): Promise<ParquetRow[
   if (paths.length === 0) return [];
   const session = await openDuckDB();
   try {
-    const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
-    const rows = await duckQuery(
-      session.conn,
-      `SELECT * FROM read_parquet([${list}], union_by_name = true)`,
-    );
+    const sql = await parquetUnionSql(session.conn, paths);
+    const rows = await duckQuery(session.conn, sql);
     return rows as ParquetRow[];
   } finally {
     session.close();
@@ -194,6 +254,52 @@ export function partitionKey(startedAt: number): string {
  */
 export function partitionObjectKey(day: string, id: string): string {
   return join("runs", `day=${day}`, `${id}.parquet`);
+}
+
+function parquetWriteReplaceSql(): string {
+  const varchar = PARQUET_VARCHAR_COLUMNS.map(
+    (col) => `CAST(${duckIdent(col)} AS VARCHAR) AS ${duckIdent(col)}`,
+  );
+  const doubles = PARQUET_DOUBLE_COLUMNS.map(
+    (col) => `CAST(${duckIdent(col)} AS DOUBLE) AS ${duckIdent(col)}`,
+  );
+  return [...varchar, ...doubles].join(", ");
+}
+
+async function parquetFileSelectSql(conn: DuckSession["conn"], path: string): Promise<string> {
+  const from = `read_parquet('${duckPath(path)}')`;
+  const described = await duckQuery(conn, `DESCRIBE SELECT * FROM ${from}`);
+  const replacements: string[] = [];
+  for (const row of described) {
+    const name = columnNameOf(row);
+    if (name === undefined) continue;
+    const type = columnTypeOf(row);
+    if (type === undefined) continue;
+    const ident = duckIdent(name);
+    if ((PARQUET_VARCHAR_COLUMNS as readonly string[]).includes(name)) {
+      replacements.push(`CAST(${ident} AS VARCHAR) AS ${ident}`);
+      continue;
+    }
+    if ((PARQUET_DOUBLE_COLUMNS as readonly string[]).includes(name)) {
+      replacements.push(`CAST(${ident} AS DOUBLE) AS ${ident}`);
+      continue;
+    }
+    if (type.toUpperCase() === "JSON") {
+      replacements.push(`CAST(${ident} AS VARCHAR) AS ${ident}`);
+    }
+  }
+  if (replacements.length === 0) return `SELECT * FROM ${from}`;
+  return `SELECT * REPLACE (${replacements.join(", ")}) FROM ${from}`;
+}
+
+function columnNameOf(row: Record<string, unknown>): string | undefined {
+  const name = row.column_name ?? row.Column;
+  return typeof name === "string" && name.length > 0 ? name : undefined;
+}
+
+function columnTypeOf(row: Record<string, unknown>): string | undefined {
+  const type = row.column_type ?? row.Type;
+  return typeof type === "string" && type.length > 0 ? type : undefined;
 }
 
 function parseJsonArray(value: unknown): unknown[] {

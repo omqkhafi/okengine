@@ -127,6 +127,15 @@ export interface KvNamespace {
    * @param key - Entry key
    */
   ttlMs(key: string): Promise<number | null>;
+  /**
+   * Redis-wire command send for Console engine telemetry
+   * (`INFO` / `COMMANDSTATS` / `SLOWLOG` / `LATENCY`). Absent on `memory`.
+   * Not copied onto the public `fx.store` handle.
+   *
+   * @param command - Redis command name
+   * @param args - Command arguments
+   */
+  send?(command: string, args?: readonly string[]): Promise<unknown>;
   /** Close / release. */
   close(): Promise<void>;
 }

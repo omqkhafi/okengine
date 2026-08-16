@@ -21,16 +21,21 @@ import {
   AUTH_SUBMIT_SUCCESS_MS,
   AuthCard,
   AuthCardSkeleton,
-  authSubmitClassName,
+  AuthSubmitButton,
+  authFieldClassName,
+  authFieldGroupClassName,
+  authFieldRowClassName,
+  authFieldValueClassName,
+  authLabelClassName,
   authSubmitState,
 } from "@/components/auth-card";
 import { ConsoleChrome } from "@/components/console-chrome";
-import { StatefulButton } from "@/components/motion/button/index.ts";
 import { GeneratePasswordButton } from "@/components/generate-password-button";
 import { PasswordInput } from "@/components/password-input";
 import { PasswordStrength } from "@/components/password-strength";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils.ts";
 import { evaluateConsolePasswordRules } from "@console/password-policy";
 
 const claimSchema = z.object({
@@ -45,9 +50,6 @@ const claimSchema = z.object({
     }),
 });
 type ClaimValues = z.infer<typeof claimSchema>;
-
-const inputClassName =
-  "h-10 rounded-xl border-foreground/10 bg-muted/50 px-3 text-base md:text-sm dark:bg-background/50";
 
 /**
  * Join id tokens for aria-describedby (skips empty).
@@ -154,7 +156,7 @@ export function ClaimPage() {
           status={{ label: "Offline", tone: "alert" }}
           description="Could not reach the setup API."
         >
-          <p className="text-sm text-muted-foreground" role="alert">
+          <p className="px-5 pb-6 text-sm text-muted-foreground" role="alert">
             {status.error instanceof Error
               ? status.error.message
               : "Is the Console kernel running on :6533?"}
@@ -181,11 +183,9 @@ export function ClaimPage() {
         status={{ label: "Setup open", tone: "open" }}
         description="Enter the claim code from the `oke dev` board, or run `oke console claim-code`. This wizard closes permanently after the first operator."
         footer={
-          <StatefulButton
+          <AuthSubmitButton
             type="submit"
             form="claim-form"
-            size="lg"
-            pressScale={0.98}
             state={authSubmitState({
               pending: claim.isPending,
               success: claim.isSuccess,
@@ -194,16 +194,15 @@ export function ClaimPage() {
             loadingText="Creating"
             successText="Created"
             errorText="Try again"
-            className={authSubmitClassName}
           >
             Create admin account
-          </StatefulButton>
+          </AuthSubmitButton>
         }
       >
         {({ titleId, descriptionId }) => (
           <form
             id="claim-form"
-            className="flex flex-col gap-6"
+            className="flex flex-col"
             autoComplete="off"
             noValidate
             aria-labelledby={titleId}
@@ -215,15 +214,19 @@ export function ClaimPage() {
               void form.handleSubmit();
             }}
           >
-            <FieldGroup className="gap-5" role="group" aria-label="First admin details">
+            <FieldGroup
+              className={authFieldGroupClassName}
+              role="group"
+              aria-label="First admin details"
+            >
               <form.Field
                 name="claimCode"
                 children={(field) => {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                      <FieldLabel htmlFor={field.name}>
+                    <Field data-invalid={isInvalid || undefined} className={authFieldRowClassName}>
+                      <FieldLabel htmlFor={field.name} className={authLabelClassName}>
                         Claim code
                         <RequiredMark />
                       </FieldLabel>
@@ -244,10 +247,14 @@ export function ClaimPage() {
                         aria-required
                         aria-describedby={describedBy(isInvalid && errorId)}
                         required
-                        className={inputClassName}
+                        className={authFieldClassName}
                       />
                       {isInvalid ? (
-                        <FieldError id={errorId} errors={field.state.meta.errors} />
+                        <FieldError
+                          id={errorId}
+                          className={authFieldValueClassName}
+                          errors={field.state.meta.errors}
+                        />
                       ) : null}
                     </Field>
                   );
@@ -260,8 +267,8 @@ export function ClaimPage() {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                      <FieldLabel htmlFor={field.name}>
+                    <Field data-invalid={isInvalid || undefined} className={authFieldRowClassName}>
+                      <FieldLabel htmlFor={field.name} className={authLabelClassName}>
                         Name
                         <RequiredMark />
                       </FieldLabel>
@@ -278,10 +285,14 @@ export function ClaimPage() {
                         aria-required
                         aria-describedby={describedBy(isInvalid && errorId)}
                         required
-                        className={inputClassName}
+                        className={authFieldClassName}
                       />
                       {isInvalid ? (
-                        <FieldError id={errorId} errors={field.state.meta.errors} />
+                        <FieldError
+                          id={errorId}
+                          className={authFieldValueClassName}
+                          errors={field.state.meta.errors}
+                        />
                       ) : null}
                     </Field>
                   );
@@ -294,8 +305,8 @@ export function ClaimPage() {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                      <FieldLabel htmlFor={field.name}>
+                    <Field data-invalid={isInvalid || undefined} className={authFieldRowClassName}>
+                      <FieldLabel htmlFor={field.name} className={authLabelClassName}>
                         Email
                         <RequiredMark />
                       </FieldLabel>
@@ -313,10 +324,14 @@ export function ClaimPage() {
                         aria-required
                         aria-describedby={describedBy(isInvalid && errorId)}
                         required
-                        className={inputClassName}
+                        className={authFieldClassName}
                       />
                       {isInvalid ? (
-                        <FieldError id={errorId} errors={field.state.meta.errors} />
+                        <FieldError
+                          id={errorId}
+                          className={authFieldValueClassName}
+                          errors={field.state.meta.errors}
+                        />
                       ) : null}
                     </Field>
                   );
@@ -330,9 +345,12 @@ export function ClaimPage() {
                   const strengthId = `${field.name}-strength`;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <FieldLabel htmlFor={field.name}>
+                    <Field
+                      data-invalid={isInvalid || undefined}
+                      className={cn(authFieldRowClassName, "items-start")}
+                    >
+                      <div className="flex flex-col items-start gap-1.5 pt-1.5">
+                        <FieldLabel htmlFor={field.name} className={authLabelClassName}>
                           Password
                           <RequiredMark />
                         </FieldLabel>
@@ -344,26 +362,28 @@ export function ClaimPage() {
                           }}
                         />
                       </div>
-                      <PasswordInput
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        revealNonce={passwordRevealNonce}
-                        minLength={12}
-                        autoComplete="new-password"
-                        placeholder="Password"
-                        aria-invalid={isInvalid}
-                        aria-required
-                        aria-describedby={describedBy(strengthId, isInvalid && errorId)}
-                        required
-                        className={inputClassName}
-                      />
-                      <PasswordStrength id={strengthId} password={field.state.value} />
-                      {isInvalid ? (
-                        <FieldError id={errorId} errors={field.state.meta.errors} />
-                      ) : null}
+                      <div className="flex min-w-0 flex-col gap-1.5">
+                        <PasswordInput
+                          id={field.name}
+                          name={field.name}
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          revealNonce={passwordRevealNonce}
+                          minLength={12}
+                          autoComplete="new-password"
+                          placeholder="Password"
+                          aria-invalid={isInvalid}
+                          aria-required
+                          aria-describedby={describedBy(strengthId, isInvalid && errorId)}
+                          required
+                          className={authFieldClassName}
+                        />
+                        <PasswordStrength id={strengthId} password={field.state.value} />
+                        {isInvalid ? (
+                          <FieldError id={errorId} errors={field.state.meta.errors} />
+                        ) : null}
+                      </div>
                     </Field>
                   );
                 }}
@@ -373,7 +393,7 @@ export function ClaimPage() {
             {formError ? (
               <p
                 id={formErrorId}
-                className="text-sm text-destructive"
+                className="px-5 py-3.5 text-sm text-destructive"
                 role="alert"
                 aria-live="assertive"
               >

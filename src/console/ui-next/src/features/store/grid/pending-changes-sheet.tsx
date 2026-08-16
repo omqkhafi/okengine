@@ -16,6 +16,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ShortcutKeys } from "@/lib/shortcut-keys.tsx";
+import { modChord } from "@/lib/shortcut.ts";
 import { cn } from "@/lib/utils.ts";
 import { pendingToUpdates, type PendingCell } from "../lib/pending-edits.ts";
 import { formatGridCell } from "../lib/grid-model.ts";
@@ -74,8 +76,7 @@ export function PendingChangesSheet({
     [scriptText],
   );
   const count = pending.size;
-  const shortcut =
-    typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "⌘S" : "Ctrl+S";
+  const saveKeys = modChord("S");
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -181,9 +182,7 @@ export function PendingChangesSheet({
             data-slot="commit-all"
           >
             {saving ? "Committing…" : `Commit All (${count})`}
-            <kbd className="ml-1.5 rounded border border-primary-foreground/30 px-1 font-mono text-[10px] opacity-80">
-              {shortcut}
-            </kbd>
+            <ShortcutKeys keys={saveKeys} className="ml-1.5" />
           </SheetFooterButton>
         </SheetFooter>
       </SheetContent>

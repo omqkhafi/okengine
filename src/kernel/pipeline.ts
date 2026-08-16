@@ -37,6 +37,8 @@ export interface ResolvedPrincipal {
   readonly operatorId?: string | null;
   readonly scopes?: Iterable<string>;
   readonly verified?: boolean;
+  /** Authenticating API key id when Bearer was a key secret. */
+  readonly apiKeyId?: string;
 }
 
 /** Dependencies for {@link createElementPipelineHooks}. */
@@ -67,7 +69,7 @@ export interface PipelineDeps {
   readonly allowTestPrincipals?: boolean;
   /**
    * Console Operator invoke — skip the flow's gate chain.
-   * Honoured only when {@link allowTestPrincipals} is also true.
+   * Takes effect only when {@link allowTestPrincipals} is also true.
    */
   readonly bypassGates?: boolean;
   /** Per-invocation principal bag (same object passed into createFx). */
@@ -192,6 +194,9 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
       try {
         const principal = await deps.verifyBearer(token);
         applyPrincipal(deps.principals, principal);
+        if (principal.apiKeyId) {
+          deps.telemetry.dimensions.api_key = principal.apiKeyId;
+        }
         return;
       } catch {
         // Forge / expiry / revoke → typed Unauthorized (never throw).

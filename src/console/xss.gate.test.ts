@@ -23,6 +23,8 @@ const FEATURES_ROOT = `${UI_ROOT}/features`;
 export const CONSOLE_UI_FEATURE_DIRS = [
   "auth",
   "flows",
+  "not-found",
+  "observability",
   "setup",
   "store",
   "units",

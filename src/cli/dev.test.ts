@@ -1057,3 +1057,10 @@ export const posts = store.schema.table("posts", {
     expect(plain).not.toContain("schema.decl.ts has an error");
   }, 60_000);
 });
+
+describe("oke dev Console vault config", () => {
+  test("hands loaded oke.config to Console so drivers.vault is not the env default", async () => {
+    const src = await Bun.file(new URL("./dev.ts", import.meta.url)).text();
+    expect(src).toMatch(/okeConfig:\s*loadedConfig/);
+  });
+});

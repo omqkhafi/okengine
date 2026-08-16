@@ -48,9 +48,17 @@ relations — declared `.references()` plus inferred `*_id` columns — not the
 query-console Schema rail.
 
 <Callout title="Query performance">
-  The SQL band **Performance** view reads `pg_stat_statements` and live locks
-  (`QUERY /console/store/sql/stats` and `/locks`). Alpine needs preload plus
-  `CREATE EXTENSION`; Index Advisor is opt-in on [Postgres](/docs/recipes/postgres#query-performance).
+  SQL **Performance** reads `pg_stat_statements` and live locks
+  (`QUERY /console/store/sql/stats` and `/locks`).
+
+  Alpine needs preload plus `CREATE EXTENSION`. Index Advisor is opt-in on
+  [Postgres](/docs/recipes/postgres#query-performance).
+
+  KV **Performance** reads Redis-wire `INFO` / `COMMANDSTATS` / `SLOWLOG`
+  (`QUERY /console/store/kv/stats`). In-process `memory` is unsupported.
+
+  INFO is instance-wide (`StoreKvStatsServerWideGap`). SLOWLOG args collapse
+  until reveal (`StoreKvStatsSlowlogArgsGap`). No hot-key table.
 </Callout>
 
 **Colorize** groups tables by prefix and FK family. Click a related table to
@@ -520,6 +528,9 @@ declaration; drivers swap `memory` ↔ `redis` per environment.
 
 The Console KV band opens a query console for `list`, `get`, `set`, `delete`, and `ttl`.
 Prettify rewrites commands to call form and indents `set` JSON.
+
+The same band’s **Performance** control opens engine telemetry on the `redis`
+driver. In-process `memory` is unsupported (`KvStatsUnsupported`).
 
 ### Quick start
 

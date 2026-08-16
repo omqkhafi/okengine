@@ -26,6 +26,10 @@ describe("validateStoreSearch", () => {
 
   test("accepts the query performance view", () => {
     expect(validateStoreSearch({ view: "performance" })).toEqual({ view: "performance" });
+    expect(validateStoreSearch({ view: "performance", facet: "kv" })).toEqual({
+      view: "performance",
+      facet: "kv",
+    });
   });
 
   test("drops unknown view / facet", () => {

@@ -99,9 +99,11 @@ export interface StoreTreeProps {
   /** SQL schema visualizer is the right pane. */
   readonly schemaActive?: boolean;
   readonly onOpenSchema?: () => void;
-  /** SQL query performance is the right pane. */
+  /** Engine performance is the right pane. */
   readonly performanceActive?: boolean;
-  readonly onOpenPerformance?: () => void;
+  /** Which facet owns the open performance pane. */
+  readonly performanceFacet?: StoreQueryFacet | null;
+  readonly onOpenPerformance?: (facet: StoreQueryFacet) => void;
 }
 
 /**
@@ -118,6 +120,7 @@ export function StoreTree({
   schemaActive = false,
   onOpenSchema,
   performanceActive = false,
+  performanceFacet = null,
   onOpenPerformance,
 }: StoreTreeProps): JSX.Element {
   const [query, setQuery] = useState("");
@@ -242,8 +245,16 @@ export function StoreTree({
                   }
                   schemaActive={band.facet === "sql" && schemaActive}
                   onOpenSchema={band.facet === "sql" ? onOpenSchema : undefined}
-                  performanceActive={band.facet === "sql" && performanceActive}
-                  onOpenPerformance={band.facet === "sql" ? onOpenPerformance : undefined}
+                  performanceActive={
+                    (band.facet === "sql" || band.facet === "kv") &&
+                    performanceActive &&
+                    (performanceFacet ?? "sql") === (band.facet === "kv" ? "kv" : "sql")
+                  }
+                  onOpenPerformance={
+                    onOpenPerformance && (band.facet === "sql" || band.facet === "kv")
+                      ? () => onOpenPerformance(band.facet === "kv" ? "kv" : "sql")
+                      : undefined
+                  }
                 />
               );
             })}

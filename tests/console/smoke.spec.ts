@@ -95,9 +95,13 @@ test("claim succeeds, login restores the shell, and each module loads", async ({
   await expect(page).toHaveURL(/\/vault/);
   await expect(page.locator('[data-slot="vault-page"]')).toBeVisible({ timeout: 15_000 });
 
-  await page.goto("/monitoring");
-  await expect(page).toHaveURL(/\/monitoring/);
-  await expect(page.locator('[data-slot="monitoring-page"]')).toBeVisible({ timeout: 15_000 });
+  await page.goto("/observability");
+  await expect(page).toHaveURL(/\/observability/);
+  await expect(page.locator('[data-slot="observability-page"]')).toBeVisible({ timeout: 15_000 });
+
+  await page.goto("/monitoring?window=7d");
+  await expect(page).toHaveURL(/\/observability\?window=7d/);
+  await expect(page.locator('[data-slot="observability-page"]')).toBeVisible({ timeout: 15_000 });
 
   await page.goto("/overview");
   await expect(page).toHaveURL(/\/overview/);

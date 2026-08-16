@@ -161,7 +161,7 @@ The Console (`:6533` → `/flows`) lists clock-triggered flows in the cron / eve
 
 Named clocks still carry health — drift, overdue, missed runs + catch-up `"one"`, and the lease holder.
 
-`/monitoring` adds an Instances chip from `GET /console/instances` (alive ⇔ presence TTL not expired). A cron lease holder is not a fleet census.
+`/observability` adds an Instances chip from `GET /console/instances` (alive ⇔ presence TTL not expired). A cron lease holder is not a fleet census.
 
 From there you can **pause** any cron, **wake early** a sleeping durable run, or **edit the schedule** when `overridable: true`. Edit on a locked clock throws `ScheduleNotOverridableError` (`clock "…" is not overridable`).
 
@@ -194,7 +194,7 @@ They are not sharing one CronStore. In-memory leases are per process. Point ever
 `postgres` CronStore (`DATABASE_URL`), or use `file` on a shared volume for single-host multi-process.
 
 </Accordion>
-<Accordion title="Monitoring says no fleet">
+<Accordion title="Observability says no fleet">
 
 The registry is off in `test` and when there is no shared SQL URL. `dev`/`prod` write `oke_instances` on the same Postgres as Clock. Unbound is empty — not `0 alive`.
 
