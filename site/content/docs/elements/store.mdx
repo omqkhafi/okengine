@@ -626,9 +626,9 @@ images: {
 
 | Variable           | When                             |
 | ------------------ | -------------------------------- |
-| `REDIS_URL`                 | Required for the `redis` driver                         |
-| `OKE_STORE_KV_URL`          | Override if `REDIS_URL` is unset                        |
-| `OKE_KV_DRIVER`             | Force a driver id                                       |
+| `REDIS_URL`        | Required for the `redis` driver  |
+| `OKE_STORE_KV_URL` | Override if `REDIS_URL` is unset |
+| `OKE_KV_DRIVER`    | Force a driver id                |
 
 Missing Redis URL fails boot loudly: `oke boot: redis driver needs REDIS_URL`.
 
@@ -648,8 +648,8 @@ Gate rates and Signal stay on `REDIS_URL`. Missing `DATABASE_URL` with the postg
 fails boot: `oke boot: durable store.kv needs DATABASE_URL`.
 
 <Callout title="Not per-key, not Flow durable, not auto-cache">
-  Durable KV is a JSONB table on the same Postgres as `store.sql`. Flow `durable` journals
-  steps. Tier-1 auto-cache is an in-process Map and never reads `store.kv`.
+  Durable KV is a JSONB table on the same Postgres as `store.sql`. Flow `durable` journals steps.
+  Tier-1 auto-cache is an in-process Map and never reads `store.kv`.
 </Callout>
 
 Driver id stays `redis` for every image below — same `REDIS_URL`, zero Flow changes.
