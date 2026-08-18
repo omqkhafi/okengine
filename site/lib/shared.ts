@@ -17,6 +17,9 @@ export const gitConfig = {
   branch: "main",
 } as const;
 
+/** Published package page on npm. */
+export const npmPackageUrl = "https://www.npmjs.com/package/okengine";
+
 /**
  * Build a blob URL for a repo-relative path.
  *

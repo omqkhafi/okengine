@@ -14,7 +14,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { TypescriptMark } from "@/components/chrome/icons";
 import { AiOnboardButton } from "@/components/landing/ai-onboard-button";
 import { cn } from "@/lib/cn";
-import { ELEMENTS, EXPORTS, REAL_TODAY, TAGLINE } from "@/lib/elements";
+import { ELEMENTS, REAL_TODAY, TAGLINE } from "@/lib/elements";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 /**
@@ -28,7 +28,7 @@ const HERO_PILL_ICON: Record<(typeof REAL_TODAY)[number]["id"], ReactNode> = {
 };
 
 /** Beat ids — each number in the headline is a real count from the framework. */
-type BeatId = "law" | "elements" | "exports";
+type BeatId = "law" | "elements";
 
 /** One species, four names — from introduction / unified-theory §4. */
 const TRIGGERS: ReadonlyArray<{ readonly code: string; readonly zoo: string }> = [
@@ -44,7 +44,6 @@ const BEATS: ReadonlyArray<{
 }> = [
   { id: "law", label: "One law." },
   { id: "elements", label: "Eight elements." },
-  { id: "exports", label: "Ten exports." },
 ];
 
 /** Same spring as the sticky topbar so hero motion feels like one system. */
@@ -124,10 +123,10 @@ const pillStatic: Variants = {
 };
 
 /**
- * Left-column homepage hero: interactive three-count headline, tagline, CTAs.
+ * Left-column homepage hero: interactive two-count headline, tagline, CTAs.
  *
  * Each headline line is a real count from the framework. Selecting one swaps the
- * tagline for a compact panel that proves the number — law, elements, or exports.
+ * tagline for a compact panel that proves the number — law or elements.
  */
 export function HeroTitle() {
   const baseId = useId();
@@ -180,10 +179,10 @@ export function HeroTitle() {
           variants={beatsGroup}
           data-hero-interactive
         >
-          <span className="sr-only">One law. Eight elements. Ten exports.</span>
+          <span className="sr-only">One law. Eight elements.</span>
           <span
             role="tablist"
-            aria-label="Explore the three counts"
+            aria-label="Explore the two counts"
             className="flex flex-col items-start"
           >
             {BEATS.map((beat) => {
@@ -296,7 +295,7 @@ export function HeroTitle() {
 }
 
 /**
- * Compact proof panel for one headline beat — law, elements, or exports.
+ * Compact proof panel for one headline beat — law or elements.
  *
  * @param id - Which count is open
  */
@@ -321,50 +320,29 @@ function BeatPanel({ id }: { readonly id: BeatId }) {
     );
   }
 
-  if (id === "elements") {
-    return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground">
-          Everything a backend needs reduces to eight typed elements. New infra is a{" "}
-          <span className="text-fd-foreground">driver</span> — never a ninth.
-        </p>
-        <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
-          {ELEMENTS.map((el) => (
-            <li key={el.name}>
-              <Link
-                href={el.href}
-                className="group flex flex-col gap-0.5 rounded-sm py-0.5 transition-colors"
-              >
-                <span className="font-mono text-xs text-fd-foreground group-hover:underline">
-                  {el.name}
-                </span>
-                <span className="text-[10px] leading-snug text-fd-muted-foreground">
-                  {el.essence}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground">
-        The entire public vocabulary. Client, Console, and infra{" "}
-        <span className="text-fd-foreground">derive</span> from these ten — nothing else to learn.
+        Everything a backend needs reduces to eight typed elements. New infra is a{" "}
+        <span className="text-fd-foreground">driver</span> — never a ninth.
       </p>
-      <code className="block overflow-x-auto font-mono text-[11px] leading-relaxed text-fd-foreground sm:text-xs">
-        <span className="text-fd-muted-foreground">{"import { "}</span>
-        {EXPORTS.map((item, i) => (
-          <span key={item.name}>
-            {item.name}
-            {i < EXPORTS.length - 1 ? <span className="text-fd-muted-foreground">, </span> : null}
-          </span>
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+        {ELEMENTS.map((el) => (
+          <li key={el.name}>
+            <Link
+              href={el.href}
+              className="group flex flex-col gap-0.5 rounded-sm py-0.5 transition-colors"
+            >
+              <span className="font-mono text-xs text-fd-foreground group-hover:underline">
+                {el.name}
+              </span>
+              <span className="text-[10px] leading-snug text-fd-muted-foreground">
+                {el.essence}
+              </span>
+            </Link>
+          </li>
         ))}
-        <span className="text-fd-muted-foreground">{' } from "okengine"'}</span>
-      </code>
+      </ul>
     </div>
   );
 }

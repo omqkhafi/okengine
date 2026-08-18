@@ -2,7 +2,7 @@
  * Homepage shell layout adapted from better-auth/better-auth `docs/app/page.tsx`
  * under the MIT License. Copyright (c) 2024 - present, Bereket Engida.
  * See site/NOTICE. Brand art, Trusted By, Ask AI, and sign-in demos omitted;
- * the hero visual is the okengine element lattice.
+ * the hero visual is the okengine isometric element lattice.
  */
 
 import { ArrowRight, ArrowUpRight } from "lucide-react";

@@ -22,22 +22,26 @@ import {
   useMotionValueEvent,
   type MotionValue,
 } from "framer-motion";
-import { Menu, Search, X } from "lucide-react";
+import { Menu, Moon, Search, Sun, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSearchContext } from "@fumadocs/base-ui/contexts/search";
 import { ThemeSwitch } from "@fumadocs/base-ui/layouts/shared/slots/theme-switch";
+import { useTheme } from "@fumadocs/base-ui/provider/base";
 import type * as PageTree from "fumadocs-core/page-tree";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DocsTreeNav } from "@/components/chrome/docs-sidebar";
-import { ExternalArrow, GithubMark } from "@/components/chrome/icons";
+import { ExternalArrow, GithubMark, NpmMark } from "@/components/chrome/icons";
 import { OkeLogo } from "@/components/oke-logo";
 import { cn } from "@/lib/cn";
 import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from "@/lib/nav";
-import { gitConfig } from "@/lib/shared";
+import { gitConfig, npmPackageUrl } from "@/lib/shared";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 const REPO_URL = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+
+/** Flush 1:1 header cells — height is `--landing-topbar-height`. */
+const SQUARE_CELL = "flex aspect-square h-full shrink-0 items-center justify-center";
 
 /** One easing for every header transition, so the parts move as one object. */
 const EASE = { type: "spring", stiffness: 420, damping: 38, mass: 0.9 } as const;
@@ -147,6 +151,33 @@ function useActiveTabIndicator(
   useMotionValueEvent(paneWidthMv, "change", () => measure(false));
 
   return { stripRef, tabRefs, x, width };
+}
+
+/**
+ * Square light/dark toggle. Reads the live `dark` class — `resolvedTheme` is
+ * unset until next-themes hydrates, and `startViewTransition` can exist in
+ * embedded previews without ever running its update callback.
+ */
+function HeaderThemeButton() {
+  const { setTheme } = useTheme();
+
+  return (
+    <button
+      type="button"
+      aria-label="Toggle theme"
+      onClick={() => {
+        const next = document.documentElement.classList.contains("dark") ? "light" : "dark";
+        setTheme(next);
+      }}
+      className={cn(
+        SQUARE_CELL,
+        "text-fd-muted-foreground transition-colors duration-150 hover:bg-fd-foreground/[0.03] hover:text-fd-foreground",
+      )}
+    >
+      <Sun className="hidden size-4 dark:block" aria-hidden />
+      <Moon className="size-4 dark:hidden" aria-hidden />
+    </button>
+  );
 }
 
 /**
@@ -274,6 +305,7 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
               />
             ) : null}
 
+            <HeaderThemeButton />
             <a
               href={REPO_URL}
               target="_blank"
@@ -283,6 +315,15 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
               <GithubMark className="size-3.5 opacity-70" />
               <span className="font-mono text-xs tracking-wider uppercase">github</span>
               <ExternalArrow className="size-2.5 opacity-50" />
+            </a>
+            <a
+              href={npmPackageUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label="okengine on npm"
+              className={cn(SQUARE_CELL, "transition-opacity duration-150 hover:opacity-90")}
+            >
+              <NpmMark className="size-full" />
             </a>
           </div>
         </div>
@@ -321,6 +362,16 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
                 >
                   <GithubMark className="size-3.5" />
                   github
+                  <ExternalArrow className="size-2.5 opacity-50" />
+                </a>
+                <a
+                  href={npmPackageUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="flex items-center gap-2 px-4 py-3 font-mono text-xs tracking-wider text-fd-muted-foreground uppercase transition-colors hover:text-fd-foreground"
+                >
+                  <NpmMark className="size-3.5" />
+                  npm
                   <ExternalArrow className="size-2.5 opacity-50" />
                 </a>
               </nav>

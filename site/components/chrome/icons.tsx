@@ -21,6 +21,27 @@ export function GithubMark({ className }: { className?: string }) {
 }
 
 /**
+ * npm cube — red field, white n. Brand red is `#CB3837` (Simple Icons / npmjs).
+ *
+ * The official mark's n is a hole; this paints the field and the n as two
+ * fills so the cube stays correct on any background, including a flush header
+ * cell that is itself the cube.
+ *
+ * @param className - Sizing / colour classes
+ */
+export function NpmMark({ className }: { className?: string }) {
+  return (
+    <svg role="img" viewBox="0 0 24 24" className={className} aria-hidden>
+      <path fill="#CB3837" d="M0 0h24v24H0z" />
+      <path
+        fill="#fff"
+        d="M5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z"
+      />
+    </svg>
+  );
+}
+
+/**
  * TypeScript mark (Simple Icons path; brand blue is `#3178C6`).
  *
  * @param className - Sizing / colour classes

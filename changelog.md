@@ -27,6 +27,31 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Store, Redis/Valkey/Dragonfly recipes, and env/config pages document durable
   KV as a SQL table — not a second Redis.
 
+- Site header adds two square actions before GitHub — a light/dark toggle
+  and an npm cube (brand red) linking to the published package.
+
+### ♻️ Changed
+
+#### Docs
+
+- Homepage hero lattice is now an isometric Three.js field — eight rounded
+  slabs with real thickness, two-letter lid marks, and a hover / idle lift
+  instead of the flat periodic-table grid.
+
+- Homepage hero headline is now two beats — One law. / Eight elements. —
+  the Ten exports. line and its proof panel are gone (exports still live
+  in the vocabulary band).
+
+### 🐛 Fixed
+
+#### Docs
+
+- Hero lattice no longer flashes white on dark-mode refresh, and the canvas
+  stays transparent so the page background shows through. Slabs now use a
+  clean two-material keycap build: neutral matte lids with a subtle metal
+  edge, and walls painted with each element's color so the depth reads
+  clearly in both themes.
+
 ## v0.12.0 — 2026-08-16
 
 ### ✨ Added

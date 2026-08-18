@@ -1,8 +1,9 @@
 /**
  * Top-level surface model for the header tab strip.
  *
- * The strip is the only site-wide navigation: three tabs plus one inverted CTA.
- * Anything deeper than a tab belongs in the docs sidebar, not here.
+ * The strip is the only site-wide navigation: three tabs, then square theme
+ * and npm actions, then the inverted GitHub CTA. Anything deeper than a tab
+ * belongs in the docs sidebar, not here.
  */
 
 /** One tab in the header strip. */

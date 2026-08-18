@@ -273,6 +273,30 @@
   animation-play-state: paused;
 }
 
+/*
+ * Hero isometric lattice — Three.js canvas. The stage pins the aspect so the
+ * ortho camera has a stable box; the canvas fills it.
+ */
+.oke-iso-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  background-color: transparent;
+}
+
+.oke-iso-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
+  opacity: 0;
+  transition: opacity 500ms ease-out;
+}
+
+.oke-iso-canvas.is-ready {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oke-seam-trace {
     animation: none;
