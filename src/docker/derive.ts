@@ -68,7 +68,6 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     normalised.host ?? "127.0.0.1",
     normalised.controls,
     normalised.instanceId,
-    normalised.durableKv === true,
   );
 
   // Always emit Dockerfile for deploy; stack-only runs ignore it.

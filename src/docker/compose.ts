@@ -399,7 +399,6 @@ export function buildStackEnv(
   host = "127.0.0.1",
   controls: Readonly<Record<string, string>> = {},
   instanceId?: string,
-  durableKv = false,
 ): Record<string, string> {
   const env: Record<string, string> = {};
   for (const spec of specs) {
@@ -443,14 +442,6 @@ export function buildStackEnv(
       env[`${prefix}_PASSWORD`] = spec.credentials.password;
       env[`${prefix}_URL`] = url;
       env.REDIS_URL = url;
-    } else if (spec.role === "store.kv.durable") {
-      env[`${prefix}_PASSWORD`] = spec.credentials.password;
-      env[`${prefix}_URL`] = url;
-      env.OKE_STORE_KV_DURABLE_URL = url;
-      env.REDIS_DURABLE_URL = url;
-      env.OKE_STORE_KV_DURABLE_APPENDONLY = durableKv ? "yes" : "no";
-      env.OKE_STORE_KV_DURABLE_APPENDFSYNC = "everysec";
-      env.OKE_STORE_KV_DURABLE_SNAPSHOT_CRON = durableKv ? "* * * * *" : "";
     } else if (spec.role === "store.files") {
       env[`${prefix}_URL`] = url;
       env.S3_ACCESS_KEY_ID = spec.credentials.user;
@@ -513,7 +504,6 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "store.sql": "store.sql — Postgres",
   pgdog: "pgdog — connection pooler (in front of Postgres)",
   "store.kv": "store.kv — Redis",
-  "store.kv.durable": "store.kv.durable — Redis (AOF volume)",
   "store.files": "store.files — object storage (S3)",
   "store.index": "store.index — search index",
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
@@ -549,13 +539,6 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   // OKE_PGDOG_URL is already emitted as `${prefix}_URL`.
   pgdog: [],
   "store.kv": ["REDIS_URL", "OKE_STORE_KV_MAXMEMORY", "OKE_STORE_KV_MAXMEMORY_POLICY"],
-  "store.kv.durable": [
-    "OKE_STORE_KV_DURABLE_URL",
-    "REDIS_DURABLE_URL",
-    "OKE_STORE_KV_DURABLE_APPENDONLY",
-    "OKE_STORE_KV_DURABLE_APPENDFSYNC",
-    "OKE_STORE_KV_DURABLE_SNAPSHOT_CRON",
-  ],
   "store.files": [
     "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY",
@@ -587,10 +570,6 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
 const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   "store.sql": ["PGDATA=/var/lib/postgresql/data/pgdata", "POSTGRES_INITDB_ARGS=--data-checksums"],
   "store.kv": ["OKE_STORE_KV_MAXMEMORY=256mb", "OKE_STORE_KV_MAXMEMORY_POLICY=allkeys-lru"],
-  "store.kv.durable": [
-    "OKE_STORE_KV_DURABLE_APPENDONLY=no",
-    "OKE_STORE_KV_DURABLE_APPENDFSYNC=everysec",
-  ],
   "store.files": ["S3_SESSION_TOKEN="],
   "channel.email": [
     "SMTP_USER=",

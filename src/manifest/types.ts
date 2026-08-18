@@ -235,8 +235,8 @@ export interface Store {
   indexes?: string[];
   classifications?: Record<string, ClassificationValue>;
   /**
-   * KV only — namespace binds to the durable Redis URL, not the cache URL.
-   * Distinct from Flow `durable` (journaled steps). Not per-key persistence.
+   * KV only — namespace persists in SQL (`oke_kv`), not the cache Redis.
+   * Distinct from Flow `durable` (journaled steps).
    */
   durable?: boolean;
 }

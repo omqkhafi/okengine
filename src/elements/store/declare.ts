@@ -75,9 +75,8 @@ export interface KvStoreOptions {
   /** Optional description. */
   readonly description?: string;
   /**
-   * Bind this namespace to the durable KV URL (`OKE_STORE_KV_DURABLE_URL`),
-   * not the cache Redis (`REDIS_URL`). Persistence is server-wide — this is
-   * a second store, not a per-key flag. Distinct from Flow `durable`.
+   * Persist this namespace in SQL (`oke_kv` JSONB on `DATABASE_URL`),
+   * not the cache Redis (`REDIS_URL`). Distinct from Flow `durable`.
    */
   readonly durable?: boolean;
 }

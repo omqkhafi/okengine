@@ -17,7 +17,7 @@ import {
 } from "../docker/index.ts";
 import { dockerCleanCli, dockerCleanHelp } from "./docker-clean.ts";
 import { EXIT_OK } from "./exit.ts";
-import { loadOkeConfig, loadManifest, manifestHasDurableKv, resolveImages } from "./load-config.ts";
+import { loadOkeConfig, loadManifest, resolveImages } from "./load-config.ts";
 
 /** Options for {@link runDockerDerive}. */
 export interface DockerCliOptions {
@@ -65,7 +65,6 @@ export async function runDockerDerive(
 
   let images = options.images;
   let app = "app";
-  let durableKv = false;
   if (!images) {
     try {
       const loaded = await loadOkeConfig(cwd, options.configPath);
@@ -76,21 +75,9 @@ export async function runDockerDerive(
         const manifest = await loadManifest(options.manifestPath);
         images = resolveImages(undefined, manifest);
         app = manifest.app;
-        durableKv = manifestHasDurableKv(manifest);
       } else {
         write("oke docker: no oke.config.ts / images — nothing to derive\n");
         return { code: 1 };
-      }
-    }
-  }
-  if (!durableKv) {
-    for (const name of options.manifestPath
-      ? [options.manifestPath]
-      : ["oke.manifest.json", "manifest.oke.json"]) {
-      const path = resolve(cwd, name);
-      if (await Bun.file(path).exists()) {
-        durableKv = manifestHasDurableKv(await loadManifest(path));
-        break;
       }
     }
   }
@@ -116,7 +103,6 @@ export async function runDockerDerive(
       outDir,
       composeDir,
       includeApp: true,
-      durableKv,
       ...(options.credentials ? { credentials: options.credentials } : {}),
     });
 

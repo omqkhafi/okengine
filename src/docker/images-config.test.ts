@@ -55,11 +55,6 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       // store.kv — redis-family
       { images: { store: { kv: "redis:8-alpine" } }, role: "store.kv", image: "redis:8-alpine" },
       {
-        images: { store: { kvDurable: "redis:8-alpine" } },
-        role: "store.kv.durable",
-        image: "redis:8-alpine",
-      },
-      {
         images: { store: { kv: "valkey/valkey:8-alpine" } },
         role: "store.kv",
         image: "valkey/valkey:8-alpine",

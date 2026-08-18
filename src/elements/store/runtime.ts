@@ -42,6 +42,7 @@ import type {
   SqlStoreDecl,
   StoreDecl,
 } from "./declare.ts";
+import { openSqlKvNamespace } from "./kv-sql.ts";
 import { createGatedFilesStoreHandle, type GatedFilesFxBridge } from "./files-fx.ts";
 import {
   createFilesImagePipeline,
@@ -98,6 +99,11 @@ export interface CreateStoreRuntimeOptions {
    * Boot sets `off` for docker/prod and local+autoPush.
    */
   readonly domainDdl?: DomainDdlMode;
+  /**
+   * Shared SQL URL for durable KV (and apps with no `store.sql()` decl).
+   * Durable namespaces open via `sharedSqlConn`, never a second Redis.
+   */
+  readonly sqlUrl?: string;
 }
 
 /** Per-invocation context when opening a handle through the runtime. */
@@ -118,7 +124,7 @@ export type StoreHandle =
 /** KV handle on `fx.store`. */
 export interface KvStoreFxHandle {
   readonly ref: `kv:${string}`;
-  readonly driverId: "memory" | "redis";
+  readonly driverId: "memory" | "redis" | "postgres" | "pglite";
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, ttl?: string): Promise<void>;
   delete(key: string): Promise<boolean>;
@@ -383,17 +389,37 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     return sharedSqlConn(sqlDriver, "primary", { url });
   }
 
+  /**
+   * Durable KV — JSONB table on the shared SQL connection.
+   *
+   * @param name - Namespace
+   */
+  async function openDurableKv(name: string): Promise<KvNamespace> {
+    const sqlDriver = options.drivers.sql;
+    if (!sqlDriver) {
+      throw new Error("oke store: durable store.kv needs a configured sql driver");
+    }
+    const firstSql = Object.values(options.sql ?? [])[0];
+    const url = options.sqlUrl ?? firstSql?.primary.url;
+    const conn = await sharedSqlConn(sqlDriver, "primary", { url });
+    return openSqlKvNamespace({ conn, namespace: name, now });
+  }
+
   async function openKv(decl: KvStoreDecl): Promise<KvStoreFxHandle> {
-    const driver = options.drivers.kv;
-    if (!driver) throw new Error("No kv driver configured");
     let ns = kvNs.get(decl.name);
     if (!ns) {
-      const binding = options.kv?.[decl.name] ?? {};
-      ns = await driver.open({
-        name: decl.name,
-        url: binding.url,
-        client: binding.client as never,
-      });
+      if (decl.durable === true) {
+        ns = await openDurableKv(decl.name);
+      } else {
+        const driver = options.drivers.kv;
+        if (!driver) throw new Error("No kv driver configured");
+        const binding = options.kv?.[decl.name] ?? {};
+        ns = await driver.open({
+          name: decl.name,
+          url: binding.url,
+          client: binding.client as never,
+        });
+      }
       kvNs.set(decl.name, ns);
     }
     const driverId = ns.driverId;

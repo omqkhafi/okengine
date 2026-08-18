@@ -69,11 +69,8 @@ The recipe runs:
 The default `store.kv` recipe declares **no named volume**. Process memory is the source of truth;
 a container recreate loses those keys.
 
-`store.kv.durable` always mounts `store-kv-durable-data:/data`. AOF stays off
-(`OKE_STORE_KV_DURABLE_APPENDONLY=no`) until the app declares `{ durable: true }`.
-
-Then `--appendonly yes --appendfsync everysec` (~1s RPO). Recreate `store-kv-durable` after
-that flip — the named volume stays. AOF is server-wide, not per-key.
+Keys that must survive go on `{ durable: true }` — a JSONB table on your SQL database, not a
+second Redis. See [Store · Durable KV](/docs/elements/store#durable-kv).
 
 ## Production note
 

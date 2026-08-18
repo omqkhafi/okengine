@@ -39,7 +39,6 @@ Smoke-check: `redis-cli -u "$REDIS_URL" PING`.
 | HA              | Enable high availability in the data store settings before you need failover |
 | Driver          | Same `redis` driver as self-hosted Dragonfly                                 |
 | Port            | Drawer URI often uses **6385** (not 6379) — copy the URI wholesale           |
-| Durable KV      | Engine has no AOF — HA + snapshots, not `everysec` AOF. Same honesty as the [Dragonfly image](/docs/recipes/dragonfly). |
 
 Self-hosting comparison: the [Dragonfly image](/docs/recipes/dragonfly) needs
 `OKE_STORE_KV_PASSWORD` + `memlock`; Cloud replaces that with the drawer passkey.

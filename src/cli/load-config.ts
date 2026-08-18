@@ -67,7 +67,6 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
     kv === "redis" || signal === "redis" || (config.drivers?.prod ?? []).includes("redis");
   if (needsKv) {
     out["store.kv"] = DEFAULT_KV_IMAGE;
-    out["store.kv.durable"] = DEFAULT_KV_IMAGE;
   }
 
   return out;
@@ -153,33 +152,9 @@ export function resolveImages(
   manifest?: Manifest,
 ): Readonly<Record<string, string>> {
   const explicit = config?.images ? flattenImagesConfig(config.images) : manifest?.images;
-  if (explicit && Object.keys(explicit).length > 0) return ensureDurableKvImage(explicit);
+  if (explicit && Object.keys(explicit).length > 0) return explicit;
   if (config) return defaultImagesFromConfig(config);
   return {};
-}
-
-/**
- * When `store.kv` is pinned, always emit `store.kv.durable` (same image unless
- * already set) so the named volume exists before any `{ durable: true }` opt-in.
- *
- * @param images - Flat role → image map
- */
-export function ensureDurableKvImage(
-  images: Readonly<Record<string, string>>,
-): Readonly<Record<string, string>> {
-  const kv = images["store.kv"];
-  if (!kv || images["store.kv.durable"]) return images;
-  return { ...images, "store.kv.durable": kv };
-}
-
-/**
- * True when any Manifest store is a durable KV namespace.
- *
- * @param manifest - Optional Manifest
- */
-export function manifestHasDurableKv(manifest?: Manifest | null): boolean {
-  if (!manifest?.stores) return false;
-  return Object.values(manifest.stores).some((s) => s.facet === "kv" && s.durable === true);
 }
 
 /** Compact driver mismatch for {@link formatStackSummary}. */

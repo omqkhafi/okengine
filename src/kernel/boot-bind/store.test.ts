@@ -103,8 +103,8 @@ describe("bindStore durable KV routing", () => {
   const prev = {
     redis: process.env.REDIS_URL,
     kv: process.env.OKE_STORE_KV_URL,
-    durable: process.env.OKE_STORE_KV_DURABLE_URL,
-    durableAlias: process.env.REDIS_DURABLE_URL,
+    database: process.env.DATABASE_URL,
+    sql: process.env.OKE_STORE_SQL_URL,
   };
 
   afterEach(() => {
@@ -113,13 +113,13 @@ describe("bindStore durable KV routing", () => {
     else process.env.REDIS_URL = prev.redis;
     if (prev.kv === undefined) delete process.env.OKE_STORE_KV_URL;
     else process.env.OKE_STORE_KV_URL = prev.kv;
-    if (prev.durable === undefined) delete process.env.OKE_STORE_KV_DURABLE_URL;
-    else process.env.OKE_STORE_KV_DURABLE_URL = prev.durable;
-    if (prev.durableAlias === undefined) delete process.env.REDIS_DURABLE_URL;
-    else process.env.REDIS_DURABLE_URL = prev.durableAlias;
+    if (prev.database === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prev.database;
+    if (prev.sql === undefined) delete process.env.OKE_STORE_SQL_URL;
+    else process.env.OKE_STORE_SQL_URL = prev.sql;
   });
 
-  test("memory + durable in test does not throw or warn", () => {
+  test("pglite + durable in test does not throw or warn", () => {
     const warnings: string[] = [];
     const prevWarn = console.warn;
     console.warn = (...args: unknown[]) => {
@@ -138,9 +138,9 @@ describe("bindStore durable KV routing", () => {
     }
   });
 
-  test("redis + durable without URL throws outside test", () => {
-    delete process.env.OKE_STORE_KV_DURABLE_URL;
-    delete process.env.REDIS_DURABLE_URL;
+  test("postgres + durable without DATABASE_URL throws outside test", () => {
+    delete process.env.DATABASE_URL;
+    delete process.env.OKE_STORE_SQL_URL;
     process.env.REDIS_URL = "redis://cache";
     expect(() =>
       bindStore(
@@ -149,7 +149,7 @@ describe("bindStore durable KV routing", () => {
           config: {
             drivers: {
               store: {
-                sql: { dev: "memory", test: "memory", prod: "memory" },
+                sql: { dev: "postgres", test: "pglite", prod: "postgres" },
                 kv: { dev: "redis", test: "memory", prod: "redis" },
               },
             },
@@ -159,7 +159,7 @@ describe("bindStore durable KV routing", () => {
         () => Date.now(),
         false,
       ),
-    ).toThrow(/OKE_STORE_KV_DURABLE_URL/);
+    ).toThrow(/DATABASE_URL/);
   });
 
   test("redis + cache-shaped KV warns once outside test", () => {
@@ -189,70 +189,35 @@ describe("bindStore durable KV routing", () => {
     }
   });
 
-  test("same cache and durable URL warns once", () => {
-    process.env.REDIS_URL = "redis://shared";
-    process.env.OKE_STORE_KV_DURABLE_URL = "redis://shared";
-    const warnings: string[] = [];
-    const prevWarn = console.warn;
-    console.warn = (...args: unknown[]) => {
-      warnings.push(args.map(String).join(" "));
-    };
-    try {
-      bindStore(
-        {
-          stores: [store.kv("sessions"), store.kv("ledger", { durable: true })],
-          config: {
-            drivers: {
-              store: {
-                sql: { dev: "memory", test: "memory", prod: "memory" },
-                kv: { dev: "redis", test: "memory", prod: "redis" },
-              },
-            },
-          },
-        },
-        "dev",
-        () => Date.now(),
-        false,
-      );
-      expect(warnings.some((w) => w.includes("same"))).toBe(true);
-    } finally {
-      console.warn = prevWarn;
-    }
-  });
-
-  test("Dragonfly durable pin warns snapshot RPO", () => {
+  test("non-durable KV keeps REDIS_URL; durable does not", async () => {
     process.env.REDIS_URL = "redis://cache";
-    process.env.OKE_STORE_KV_DURABLE_URL = "redis://durable";
-    const warnings: string[] = [];
-    const prevWarn = console.warn;
-    console.warn = (...args: unknown[]) => {
-      warnings.push(args.map(String).join(" "));
-    };
-    try {
-      bindStore(
-        {
-          stores: [store.kv("ledger", { durable: true })],
-          config: {
-            drivers: {
-              store: {
-                sql: { dev: "memory", test: "memory", prod: "memory" },
-                kv: { dev: "redis", test: "memory", prod: "redis" },
-              },
+    const sessions = store.kv("sessions");
+    const ledger = store.kv("ledger", { durable: true });
+    const runtime = bindStore(
+      {
+        stores: [sessions, ledger],
+        config: {
+          drivers: {
+            store: {
+              sql: { test: "pglite" },
+              kv: { test: "memory" },
             },
-            images: { store: { kvDurable: "docker.dragonflydb.io/dragonflydb/dragonfly" } },
           },
         },
-        "dev",
-        () => Date.now(),
-        false,
-      );
-      expect(warnings.some((w) => w.includes("Dragonfly") && w.includes("snapshot"))).toBe(true);
-    } finally {
-      console.warn = prevWarn;
-    }
+      },
+      "test",
+      () => Date.now(),
+      false,
+    );
+    const ctx = { effects: {} };
+    const cache = await runtime.open(sessions, ctx);
+    const durable = await runtime.open(ledger, ctx);
+    expect(cache.driverId).toBe("memory");
+    expect(durable.driverId).toBe("pglite");
+    await runtime.close();
   });
 
-  test("memory + durable in dev warns that memory cannot honor durability", () => {
+  test("memory SQL + durable in dev warns that memory cannot honor durability", () => {
     const warnings: string[] = [];
     const prevWarn = console.warn;
     console.warn = (...args: unknown[]) => {

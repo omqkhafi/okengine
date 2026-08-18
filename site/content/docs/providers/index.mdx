@@ -43,8 +43,7 @@ Managed Postgres-wire databases — set `DATABASE_URL`, driver stays `postgres`.
 ## Redis providers
 
 Managed Redis-wire caches — set `REDIS_URL`, driver stays `redis`.
-`{ durable: true }` uses `OKE_STORE_KV_DURABLE_URL`; oke cannot turn AOF on inside a managed URL.
-See each provider's Durable KV row.
+`{ durable: true }` KV lives in your SQL database, not a second Redis.
 
 <Cards>
   <Card

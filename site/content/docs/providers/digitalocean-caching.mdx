@@ -39,7 +39,6 @@ there is no plaintext option.
 | TLS             | Always — use `rediss://`                                                              |
 | Trusted sources | Hard firewall — missing entry ⇒ refused even with correct password                    |
 | VPC             | Prefer private connection string + VPC CIDR as a single trusted source                |
-| Durable KV      | Default `persistence: rdb` (~10 min if keys change). **No AOF. No backups/restore** (fork from latest only). Persistence can be set `off`. |
 
 Standalone **Upstash-on-DigitalOcean marketplace** listings are a different, deprecated
 product — not this Databases service.

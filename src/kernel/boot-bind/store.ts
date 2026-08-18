@@ -2,12 +2,7 @@
  * Lazy store binder — loaded only when Store is declared.
  */
 
-import {
-  flattenImagesConfig,
-  resolveDomainDdlMode,
-  resolveDriverId,
-  type ConfigEnv,
-} from "../../config/index.ts";
+import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import {
   STORE_FILES_DEFAULTS,
   STORE_KV_DEFAULTS,
@@ -41,8 +36,6 @@ import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runt
 let filesFsWarned = false;
 let kvCacheShapedWarned = false;
 let kvMemoryDurableWarned = false;
-let kvSameUrlWarned = false;
-let kvDragonflyDurableWarned = false;
 
 /** Test helper — reset the one-shot `fs` multi-instance warn. */
 export function resetFilesFsWarnForTests(): void {
@@ -53,8 +46,6 @@ export function resetFilesFsWarnForTests(): void {
 export function resetKvDurableWarnsForTests(): void {
   kvCacheShapedWarned = false;
   kvMemoryDurableWarned = false;
-  kvSameUrlWarned = false;
-  kvDragonflyDurableWarned = false;
 }
 
 /**
@@ -73,7 +64,7 @@ function warnFilesFsMultiInstance(): void {
 
 /**
  * Warn once: default KV namespaces are cache-shaped (no AOF) unless
- * `{ durable: true }` routes them to the second URL.
+ * `{ durable: true }` persists them in SQL (`oke_kv`).
  */
 function warnKvCacheShaped(names: readonly string[]): void {
   if (kvCacheShapedWarned) return;
@@ -85,48 +76,22 @@ function warnKvCacheShaped(names: readonly string[]): void {
   const extra = names.length > 4 ? ` (and ${String(names.length - 4)} more)` : "";
   emitBootWarn(
     `oke boot: store.kv ${listed}${extra} is cache-shaped — a Redis recreate drops keys ` +
-      "(no AOF). Declare `{ durable: true }` on a separate namespace and set " +
-      "OKE_STORE_KV_DURABLE_URL when the data must survive.",
+      "(no AOF). Declare `{ durable: true }` on a separate namespace to persist in " +
+      "your SQL database (`oke_kv`).",
   );
 }
 
 /**
- * Warn once: in-process memory cannot honor `{ durable: true }`.
+ * Warn once: in-process memory SQL cannot honor `{ durable: true }`.
  */
 function warnKvMemoryDurable(names: readonly string[]): void {
   if (kvMemoryDurableWarned) return;
   kvMemoryDurableWarned = true;
   const listed = names.map((n) => `"${n}"`).join(", ");
   emitBootWarn(
-    `oke boot: store.kv ${listed} declared { durable: true } but drivers.store.kv is ` +
-      '"memory" — keys are process-local and vanish on restart. Use drivers.store.kv ' +
-      "redis with OKE_STORE_KV_DURABLE_URL.",
-  );
-}
-
-/**
- * Warn once: cache and durable URLs are the same host — persistence is server-wide.
- */
-function warnKvSameUrl(): void {
-  if (kvSameUrlWarned) return;
-  kvSameUrlWarned = true;
-  emitBootWarn(
-    "oke boot: REDIS_URL and OKE_STORE_KV_DURABLE_URL are the same — Redis persistence " +
-      "is server-wide, so cache namespaces on this instance are persisted too (and share " +
-      "eviction). Point durable KV at a second database when you need the split.",
-  );
-}
-
-/**
- * Warn once: Dragonfly has snapshot RPO, not Redis AOF everysec.
- */
-function warnKvDragonflyDurable(): void {
-  if (kvDragonflyDurableWarned) return;
-  kvDragonflyDurableWarned = true;
-  emitBootWarn(
-    "oke boot: durable store.kv is pinned to Dragonfly — persistence is snapshot-scheduled " +
-      "(minute granularity, plus save-on-shutdown), not Redis AOF everysec. Writes between " +
-      "snapshots are volatile. Pin Redis or Valkey on images.store.kvDurable for AOF RPO.",
+    `oke boot: store.kv ${listed} declared { durable: true } but drivers.store.sql is ` +
+      '"memory" — keys are process-local and vanish on restart. Use drivers.store.sql ' +
+      "postgres with DATABASE_URL.",
   );
 }
 
@@ -141,33 +106,27 @@ export function bindStore(
   const filesId = resolveFilesDriverId(options, env, docker);
   const indexId = resolveIndexDriverId(options, env, docker);
   if (filesId === "fs") warnFilesFsMultiInstance();
-  const sqlUrl = sqlUrlFor(sqlId, docker, env);
-  const kvUrl = kvUrlFor(kvId, docker);
   const kvDecls = (options.stores ?? []).filter(isKvDecl);
   const durableKvDecls = kvDecls.filter((d) => d.durable === true);
   const cacheKvDecls = kvDecls.filter((d) => d.durable !== true);
-  const kvDurableUrl = durableKvDecls.length > 0 ? kvDurableUrlFor(kvId, docker, env) : undefined;
+  if (durableKvDecls.length > 0 && sqlId === "postgres") {
+    const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL;
+    if (!url) {
+      throw new Error(
+        docker
+          ? "oke boot: durable store.kv needs DATABASE_URL (did `oke dev` write .env.local?)"
+          : "oke boot: durable store.kv needs DATABASE_URL",
+      );
+    }
+  }
+  const sqlUrl = sqlUrlFor(sqlId, docker, env);
+  const kvUrl = kvUrlFor(kvId, docker);
   const filesRoot = filesRootFor(filesId);
   if (kvId === "redis" && env !== "test" && cacheKvDecls.length > 0) {
     warnKvCacheShaped(cacheKvDecls.map((d) => d.name));
   }
-  if (kvId === "memory" && env !== "test" && durableKvDecls.length > 0) {
+  if (sqlId === "memory" && env !== "test" && durableKvDecls.length > 0) {
     warnKvMemoryDurable(durableKvDecls.map((d) => d.name));
-  }
-  if (
-    kvId === "redis" &&
-    kvUrl !== undefined &&
-    kvDurableUrl !== undefined &&
-    kvUrl === kvDurableUrl
-  ) {
-    warnKvSameUrl();
-  }
-  if (
-    kvId === "redis" &&
-    durableKvDecls.length > 0 &&
-    isDragonflyDurablePin(options, kvDurableUrl)
-  ) {
-    warnKvDragonflyDurable();
   }
 
   const sqlBindings: Record<string, { name: string; primary: { url: string } }> = {};
@@ -182,8 +141,11 @@ export function bindStore(
         primary: { url: sqlUrl },
       };
     } else if (isKvDecl(decl)) {
-      const url = decl.durable === true ? kvDurableUrl : kvUrl;
-      kvBindings[decl.name] = url !== undefined ? { url } : {};
+      if (decl.durable === true) {
+        kvBindings[decl.name] = {};
+      } else {
+        kvBindings[decl.name] = kvUrl !== undefined ? { url: kvUrl } : {};
+      }
     } else if (isFilesDecl(decl)) {
       filesBindings[decl.name] = filesRoot !== undefined ? { root: filesRoot } : {};
     } else if (isIndexDecl(decl)) {
@@ -216,6 +178,7 @@ export function bindStore(
     index: indexBindings,
     now,
     domainDdl,
+    sqlUrl,
   });
   for (const decl of options.stores ?? []) {
     store.register?.(decl);
@@ -381,34 +344,6 @@ function kvUrlFor(kvId: string, docker: boolean): string | undefined {
     );
   }
   return url;
-}
-
-/**
- * Durable KV URL — second Redis, never REDIS_URL, unless the operator
- * points both at the same host (warned separately).
- */
-function kvDurableUrlFor(kvId: string, docker: boolean, env: ConfigEnv): string | undefined {
-  if (kvId !== "redis") return undefined;
-  const url = process.env.OKE_STORE_KV_DURABLE_URL ?? process.env.REDIS_DURABLE_URL ?? undefined;
-  if (!url) {
-    if (env === "test") return undefined;
-    throw new Error(
-      docker
-        ? "oke boot: durable store.kv needs OKE_STORE_KV_DURABLE_URL (did `oke dev` write .env.local?)"
-        : "oke boot: durable store.kv needs OKE_STORE_KV_DURABLE_URL",
-    );
-  }
-  return url;
-}
-
-/**
- * True when the durable pin or URL is Dragonfly — snapshot RPO, not AOF.
- */
-function isDragonflyDurablePin(options: BootOptions, durableUrl: string | undefined): boolean {
-  const flat = flattenImagesConfig(options.config?.images);
-  const pin = flat["store.kv.durable"] ?? flat["store.kv"];
-  if (pin !== undefined && /dragonfly/i.test(pin)) return true;
-  return Boolean(durableUrl && /dragonfly/i.test(durableUrl));
 }
 
 function filesRootFor(filesId: string): string | undefined {

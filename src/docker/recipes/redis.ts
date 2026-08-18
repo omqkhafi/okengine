@@ -3,10 +3,9 @@
  *
  * Valkey and Dragonfly are separate recipes — same `redis` driver /
  * `redis://` URL, different binaries. Pin via `images["store.kv"]`.
- * Role `store.kv.durable` adds a named volume + env-gated AOF.
  */
 
-import { credEnv, durableKvVolume, kvServerCommand } from "../helpers.ts";
+import { credEnv, kvServerCommand } from "../helpers.ts";
 import type { ImageRecipe } from "../types.ts";
 
 /** Redis Open Source — Redis protocol on 6379. */
@@ -22,7 +21,6 @@ export const redis: ImageRecipe = {
       timeout: "3s",
       retries: 10,
     },
-    ...(durableKvVolume(s).length > 0 ? { volumes: durableKvVolume(s) } : {}),
   }),
   url: (_s, c) => `redis://:${encodeURIComponent(c.password)}@${c.host}:${c.port}`,
 };

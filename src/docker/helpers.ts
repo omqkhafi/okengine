@@ -109,21 +109,8 @@ export function envPrefix(role: string): string {
   return `OKE_${role.replaceAll(".", "_").toUpperCase()}`;
 }
 
-/** Compose role for `{ durable: true }` KV — second Redis-family service. */
-export const STORE_KV_DURABLE_ROLE = "store.kv.durable" as const;
-
 /**
- * Whether this spec is the durable KV companion (volume + AOF/snapshot flags).
- *
- * @param role - Compose role key
- */
-export function isDurableKvRole(role: string): boolean {
-  return role === STORE_KV_DURABLE_ROLE;
-}
-
-/**
- * `redis-server` / `valkey-server` command — role-prefixed password; durable
- * role adds `--dir /data` and env-gated AOF (`APPENDONLY` defaults `no`).
+ * `redis-server` / `valkey-server` command — role-prefixed password.
  *
  * @param spec - Service
  * @param binary - Server binary
@@ -135,14 +122,11 @@ export function kvServerCommand(
   const p = envPrefix(spec.role);
   const pass = `$$${p}_PASSWORD`;
   const memory = `--maxmemory "$$\{${p}_MAXMEMORY:-0}" --maxmemory-policy "$$\{${p}_MAXMEMORY_POLICY:-noeviction}"`;
-  if (isDurableKvRole(spec.role)) {
-    return `exec ${binary} --requirepass "${pass}" --dir /data --appendonly "$$\{${p}_APPENDONLY:-no}" --appendfsync "$$\{${p}_APPENDFSYNC:-everysec}" ${memory}`;
-  }
   return `exec ${binary} --requirepass "${pass}" ${memory}`;
 }
 
 /**
- * Dragonfly command — durable role mounts `/data` and env-gates `snapshot_cron`.
+ * Dragonfly command — Redis-wire, role-prefixed password.
  *
  * @param spec - Service
  */
@@ -150,20 +134,7 @@ export function dragonflyServerCommand(spec: ServiceSpec): string {
   const p = envPrefix(spec.role);
   const pass = `$$${p}_PASSWORD`;
   const memory = `--maxmemory "$$\{${p}_MAXMEMORY:-0}"`;
-  if (isDurableKvRole(spec.role)) {
-    return `exec dragonfly --requirepass "${pass}" --dir /data --dbfilename dump --snapshot_cron "$$\{${p}_SNAPSHOT_CRON:-}" ${memory}`;
-  }
   return `exec dragonfly --requirepass "${pass}" ${memory}`;
-}
-
-/**
- * Named volume for the durable KV data dir (`store-kv-durable-data:/data`).
- *
- * @param spec - Service
- */
-export function durableKvVolume(spec: ServiceSpec): string[] {
-  if (!isDurableKvRole(spec.role)) return [];
-  return [`${spec.serviceName}-data:/data`];
 }
 
 /**
@@ -175,7 +146,6 @@ export function durableKvVolume(spec: ServiceSpec): string[] {
 export function defaultHostPort(role: string, containerPort: number): number {
   if (role === "store.sql") return 5432;
   if (role === "store.kv") return 6379;
-  if (role === STORE_KV_DURABLE_ROLE) return 6380;
   if (role === "signal") return 4222;
   if (role === "pgdog") return 6432;
   if (role === "proxy") return 80;

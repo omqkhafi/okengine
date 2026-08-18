@@ -68,11 +68,8 @@ If the host forbids unlimited memlock, the container may fail to start.
 
 The default `store.kv` recipe declares **no named volume** — ephemeral, same as Redis/Valkey.
 
-`store.kv.durable` mounts `/data` and sets `--dbfilename dump` plus an env-gated
-`--snapshot_cron` (minute granularity when a durable store is declared).
-
-Dragonfly has **no AOF**. Writes between snapshots are volatile. Pin Redis or Valkey on
-`images.store.kvDurable` for AOF-equivalent RPO.
+Keys that must survive go on `{ durable: true }` — a JSONB table on your SQL database.
+Dragonfly snapshots are not involved. See [Store · Durable KV](/docs/elements/store#durable-kv).
 
 ## Production note
 

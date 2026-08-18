@@ -37,7 +37,6 @@ TLS is mandatory — `redis://` without TLS fails.
 | Pricing     | Per-request — watch command fan-out in hot KV paths                         |
 | Eviction    | Plan max size / eviction; serverless still has quotas                       |
 | Consistency | Global replication options are product-specific — confirm region in Details |
-| Durable KV  | Platform-persisted (memory + disk). Eviction is a **separate** console toggle — if on, `{ durable: true }` keys can still vanish. oke cannot see that toggle. |
 
 Do not put [PgDog](/docs/recipes/pgdog)-style thinking on Redis: there is no separate
 “pooled hostname” toggle. Connection count pressure shows up as Upstash plan limits /

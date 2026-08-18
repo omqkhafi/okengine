@@ -628,33 +628,29 @@ images: {
 | ------------------ | -------------------------------- |
 | `REDIS_URL`                 | Required for the `redis` driver                         |
 | `OKE_STORE_KV_URL`          | Override if `REDIS_URL` is unset                        |
-| `OKE_STORE_KV_DURABLE_URL`  | Required when any `store.kv` is `{ durable: true }`     |
-| `REDIS_DURABLE_URL`         | Alias if `OKE_STORE_KV_DURABLE_URL` is unset            |
 | `OKE_KV_DRIVER`             | Force a driver id                                       |
 
 Missing Redis URL fails boot loudly: `oke boot: redis driver needs REDIS_URL`.
 
 ### Durable KV
 
-Default `store.kv("sessions")` is cache-shaped — a Redis recreate drops keys. Opt in with a
-**second namespace** on a second URL. Not a per-key flag: Redis AOF is server-wide.
+Default `store.kv("sessions")` is cache-shaped — a Redis recreate drops keys.
+
+`{ durable: true }` persists that namespace in your SQL database (`oke_kv` JSONB on
+`DATABASE_URL`). Not a per-key Redis flag, not Flow `durable`, not tier-1 auto-cache.
 
 ```typescript
 export const sessions = store.kv("sessions", { description: "Session cache" });
 export const ledger = store.kv("ledger", { durable: true, description: "Idempotency keys" });
 ```
 
-`{ durable: true }` binds that namespace to `OKE_STORE_KV_DURABLE_URL`. Gate rates and Signal stay
-on `REDIS_URL`. Missing durable URL fails boot: `oke boot: durable store.kv needs OKE_STORE_KV_DURABLE_URL`.
+Gate rates and Signal stay on `REDIS_URL`. Missing `DATABASE_URL` with the postgres driver
+fails boot: `oke boot: durable store.kv needs DATABASE_URL`.
 
 <Callout title="Not per-key, not Flow durable, not auto-cache">
-  Persistence is server-wide — two stores, two servers (or two managed databases). Flow `durable`
-  journals steps. Tier-1 auto-cache is an in-process Map and never reads `store.kv`.
+  Durable KV is a JSONB table on the same Postgres as `store.sql`. Flow `durable` journals
+  steps. Tier-1 auto-cache is an in-process Map and never reads `store.kv`.
 </Callout>
-
-Self-hosted Redis/Valkey AOF is `appendonly yes` + `appendfsync everysec` (~1s RPO) when at least
-one durable store is declared. The durable volume is always in compose; AOF flags stay off until
-then. Dragonfly durable is snapshot-scheduled — boot warns. See [Redis](/docs/recipes/redis).
 
 Driver id stays `redis` for every image below — same `REDIS_URL`, zero Flow changes.
 Redis is the default because it is the most mature and battle-tested; Valkey and

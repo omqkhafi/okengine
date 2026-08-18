@@ -151,7 +151,6 @@ images: {
   store: {
     sql: "postgres:18-alpine",
     kv: "redis:8-alpine",
-    kvDurable: "redis:8-alpine",
     files: "rustfs/rustfs:1.0.0-rc.2",
   },
   channel: { email: "axllent/mailpit:v1.30.7" },
@@ -164,7 +163,7 @@ images: {
 Omitted image keys mean no container for that role. When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog — see [Store](/docs/elements/store#multiple-environments).
 
 For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays `redis`.
-`images.store.kvDurable` pins the second Redis for `{ durable: true }` (same image when omitted).
+`{ durable: true }` KV lives in SQL (`oke_kv` on `DATABASE_URL`), not a second Redis image.
 For `ai`, see [Recipes · AI](/docs/recipes#ai-local--self-hosted). For `proxy`, see [Reverse proxy](/docs/deployment/reverse-proxy).
 
 ## i18n

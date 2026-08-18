@@ -42,7 +42,6 @@ network.
 | AUTH       | Optional but recommended; string is on the instance Security panel               |
 | TLS        | **Not** default — enable in-transit encryption explicitly; port becomes **6378** |
 | Tiers      | Basic vs Standard (replica) — pick before you need HA                            |
-| Durable KV | Non-cluster Memorystore has **no AOF** — optional RDB snapshots (1–24h). Cluster AOF exists; oke's URL client targets a Primary Endpoint / non-cluster. |
 
 ## Real gotcha — TLS port flip
 

@@ -16,17 +16,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- `store.kv(name, { durable: true })` binds that namespace to a second Redis
-  (`OKE_STORE_KV_DURABLE_URL`). Persistence is server-wide — not per-key.
-  Compose always mounts `store-kv-durable`; AOF (`appendonly yes` /
-  `appendfsync everysec`) stays off until a durable store is declared.
-  Dragonfly durable is snapshot-scheduled and boot-warns.
+- `store.kv(name, { durable: true })` persists that namespace in SQL (`oke_kv`
+  JSONB on `DATABASE_URL`). Cache namespaces stay on `REDIS_URL`. Expired keys
+  are hidden on read and deleted on write/open.
 
 #### Docs
 
-- Store, Redis/Valkey/Dragonfly recipes, and managed Redis provider pages
-  document durable KV, the two-URL split, and per-provider persistence gaps
-  (ElastiCache AOF unsupported; Azure Basic/Standard none; Memorystore no AOF).
+- Store, Redis/Valkey/Dragonfly recipes, and env/config pages document durable
+  KV as a SQL table — not a second Redis.
 
 ## v0.12.0 — 2026-08-16
 

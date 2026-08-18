@@ -83,7 +83,7 @@ export interface SqlDriver {
 /** Key-value namespace handle. */
 export interface KvNamespace {
   /** Protocol driver id. */
-  readonly driverId: "memory" | "redis";
+  readonly driverId: "memory" | "redis" | "postgres" | "pglite";
   /**
    * Read a key.
    *

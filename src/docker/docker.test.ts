@@ -175,69 +175,6 @@ describe("image recipes", () => {
     expect(derived.stackEnv.REDIS_URL).toContain("redis://");
   });
 
-  test("store.kv.durable mounts a volume and env-gates AOF; cache role stays ephemeral", () => {
-    const image = "redis:8-alpine";
-    const cacheSpec: ServiceSpec = {
-      role: "store.kv",
-      serviceName: "store-kv",
-      image,
-      port: 6379,
-      hostPort: 6379,
-      credentials: fixedCreds["store.kv"],
-    };
-    const durableSpec: ServiceSpec = {
-      role: "store.kv.durable",
-      serviceName: "store-kv-durable",
-      image,
-      port: 6379,
-      hostPort: 6380,
-      credentials: { user: "oke", password: "s3cret-durable-kv-password", database: "oke" },
-    };
-    const cacheApplied = recipeFor(image).apply(cacheSpec);
-    expect(cacheApplied.volumes).toBeUndefined();
-    expect(String(cacheApplied.command)).not.toContain("appendonly");
-    const durableApplied = recipeFor(image).apply(durableSpec);
-    expect(durableApplied.volumes).toEqual(["store-kv-durable-data:/data"]);
-    expect(String(durableApplied.command)).toContain("$$OKE_STORE_KV_DURABLE_PASSWORD");
-    expect(String(durableApplied.command)).toContain("APPENDONLY:-no");
-    expect(String(durableApplied.command)).toContain("--dir /data");
-
-    const derived = deriveInfrastructure({
-      images: { "store.kv": image, "store.kv.durable": image },
-      credentials: {
-        "store.kv": fixedCreds["store.kv"],
-        "store.kv.durable": durableSpec.credentials,
-      },
-      durableKv: true,
-    });
-    const yml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
-    expect(yml).toContain("store-kv-durable-data:/data");
-    expect(yml).toContain("store-kv-durable-data:");
-    expect(derived.stackEnv.REDIS_URL).toContain(":6379");
-    expect(derived.stackEnv.OKE_STORE_KV_DURABLE_URL).toContain(":6380");
-    expect(derived.stackEnv.OKE_STORE_KV_DURABLE_APPENDONLY).toBe("yes");
-    expect(derived.stackEnv.OKE_STORE_KV_DURABLE_APPENDFSYNC).toBe("everysec");
-    expect(derived.stackEnv.REDIS_URL).not.toBe(derived.stackEnv.OKE_STORE_KV_DURABLE_URL);
-  });
-
-  test("Dragonfly durable role uses snapshot flags, not appendonly", () => {
-    const image = "docker.dragonflydb.io/dragonflydb/dragonfly";
-    const spec: ServiceSpec = {
-      role: "store.kv.durable",
-      serviceName: "store-kv-durable",
-      image,
-      port: 6379,
-      hostPort: 6380,
-      credentials: { user: "oke", password: "s3cret-durable-kv-password", database: "oke" },
-    };
-    const applied = recipeFor(image).apply(spec);
-    expect(String(applied.command)).toContain("--dir /data");
-    expect(String(applied.command)).toContain("--dbfilename dump");
-    expect(String(applied.command)).toContain("SNAPSHOT_CRON");
-    expect(String(applied.command)).not.toContain("appendonly");
-    expect(applied.volumes).toEqual(["store-kv-durable-data:/data"]);
-  });
-
   test("cockroach matches official image, port 26257, COCKROACH_* env, sslmode=require URL", () => {
     const image = "cockroachdb/cockroach:v25.2.0";
     expect(recipeFor(image).id).toBe("cockroach");

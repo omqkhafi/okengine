@@ -40,15 +40,13 @@ describe("hostPortForInstance", () => {
     const n = instancePortOffset(id);
     const sql = hostPortForInstance("store.sql", 5432, id);
     const kv = hostPortForInstance("store.kv", 6379, id);
-    const kvDurable = hostPortForInstance("store.kv.durable", 6379, id);
     const files = hostPortForInstance("store.files", 9000, id);
     const filesConsole = extraHostPortForInstance("store.files", 9001, id);
     const email = hostPortForInstance("channel.email", 1025, id);
     const emailUi = extraHostPortForInstance("channel.email", 8025, id);
-    expect([sql, kv, kvDurable, files, filesConsole, email, emailUi]).toEqual([
+    expect([sql, kv, files, filesConsole, email, emailUi]).toEqual([
       15_000 + n,
       16_000 + n,
-      27_000 + n,
       18_000 + n,
       19_000 + n,
       20_000 + n,

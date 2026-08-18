@@ -16,8 +16,8 @@ import { takeRate } from "./strategies.ts";
 
 /** KV surface required for rate gates. */
 export interface GateKv {
-  /** Driver id when known (`memory` · `redis`). */
-  readonly driverId?: "memory" | "redis";
+  /** Driver id when known (`memory` · `redis`; SQL ids unused on rate gates). */
+  readonly driverId?: "memory" | "redis" | "postgres" | "pglite";
   eval<T = unknown>(script: string, keys: readonly string[], args?: readonly string[]): Promise<T>;
 }
 
@@ -46,7 +46,7 @@ export interface GateRuntime {
   /** Registered declarations by name. */
   readonly gates: ReadonlyMap<string, GateDecl>;
   /** KV backend used for rate limits (`memory` · `redis`, or unset). */
-  readonly kvDriverId: "memory" | "redis" | undefined;
+  readonly kvDriverId: "memory" | "redis" | "postgres" | "pglite" | undefined;
   /**
    * Evaluate a gate chain in order; stop on first denial.
    *
