@@ -17,6 +17,7 @@ describe("flattenImagesConfig", () => {
         store: {
           sql: "postgres:18-alpine",
           kv: "redis:8-alpine",
+          kvDurable: "redis:8-alpine",
           files: "rustfs/rustfs:1.0.0",
           index: "getmeili/meilisearch:v1.53",
         },
@@ -28,6 +29,7 @@ describe("flattenImagesConfig", () => {
     ).toEqual({
       "store.sql": "postgres:18-alpine",
       "store.kv": "redis:8-alpine",
+      "store.kv.durable": "redis:8-alpine",
       "store.files": "rustfs/rustfs:1.0.0",
       "store.index": "getmeili/meilisearch:v1.53",
       "channel.email": "axllent/mailpit:v1.30.7",
@@ -57,6 +59,7 @@ describe("defaultImagesFromConfig", () => {
       "store.sql": "postgres:18-alpine",
       pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
       "store.kv": "redis:8-alpine",
+      "store.kv.durable": "redis:8-alpine",
     });
   });
 
@@ -132,6 +135,17 @@ describe("resolveImages", () => {
     });
     expect(images["store.sql"]).toBe("postgres:18-alpine");
     expect(images["store.kv"]).toBe("redis:8-alpine");
+    expect(images["store.kv.durable"]).toBe("redis:8-alpine");
+  });
+
+  test("explicit store.kv pin also emits store.kv.durable when omitted", () => {
+    const images = resolveImages({
+      images: { store: { kv: "valkey/valkey:8-alpine" } },
+    });
+    expect(images).toEqual({
+      "store.kv": "valkey/valkey:8-alpine",
+      "store.kv.durable": "valkey/valkey:8-alpine",
+    });
   });
 });
 

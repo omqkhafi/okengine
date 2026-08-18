@@ -234,6 +234,11 @@ export interface Store {
   buckets?: string[];
   indexes?: string[];
   classifications?: Record<string, ClassificationValue>;
+  /**
+   * KV only — namespace binds to the durable Redis URL, not the cache URL.
+   * Distinct from Flow `durable` (journaled steps). Not per-key persistence.
+   */
+  durable?: boolean;
 }
 
 /** Named clock / schedule. */

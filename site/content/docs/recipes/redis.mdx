@@ -66,12 +66,14 @@ The recipe runs:
 
 ## Data and backup
 
-The Redis recipe declares **no named volume**. Process memory is the source of truth;
-a container recreate loses keys unless you add persistence yourself
-(`compose.override.yml` + Redis AOF/RDB).
+The default `store.kv` recipe declares **no named volume**. Process memory is the source of truth;
+a container recreate loses those keys.
 
-**Backup means (default recipe):** treat KV as a cache — rebuild from SQL / files, or
-add an explicit volume + `SAVE`/`BGSAVE` policy before you rely on durability.
+`store.kv.durable` always mounts `store-kv-durable-data:/data`. AOF stays off
+(`OKE_STORE_KV_DURABLE_APPENDONLY=no`) until the app declares `{ durable: true }`.
+
+Then `--appendonly yes --appendfsync everysec` (~1s RPO). Recreate `store-kv-durable` after
+that flip — the named volume stays. AOF is server-wide, not per-key.
 
 ## Production note
 

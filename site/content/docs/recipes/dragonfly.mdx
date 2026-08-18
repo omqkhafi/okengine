@@ -66,9 +66,13 @@ If the host forbids unlimited memlock, the container may fail to start.
 
 ## Data and backup
 
-No named volume — ephemeral by default, same as Redis/Valkey. **Backup means:** do not
-treat this container as durable storage until you add a volume and Dragonfly persistence
-settings; rebuild from SQL/files, or use [Dragonfly Cloud](/docs/providers/dragonfly-cloud).
+The default `store.kv` recipe declares **no named volume** — ephemeral, same as Redis/Valkey.
+
+`store.kv.durable` mounts `/data` and sets `--dbfilename dump` plus an env-gated
+`--snapshot_cron` (minute granularity when a durable store is declared).
+
+Dragonfly has **no AOF**. Writes between snapshots are volatile. Pin Redis or Valkey on
+`images.store.kvDurable` for AOF-equivalent RPO.
 
 ## Production note
 

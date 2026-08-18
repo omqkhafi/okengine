@@ -61,9 +61,11 @@ Same knobs as Redis: `OKE_STORE_KV_MAXMEMORY`, `OKE_STORE_KV_MAXMEMORY_POLICY`.
 
 ## Data and backup
 
-No named volume in the recipe — same ephemeral default as [Redis](/docs/recipes/redis).
-**Backup means:** do not assume durability until you add a volume + persistence config;
-treat the default as a shared cache rebuilt from durable stores.
+The default `store.kv` recipe declares **no named volume** — same ephemeral default as
+[Redis](/docs/recipes/redis).
+
+`store.kv.durable` always mounts a named volume. AOF flags match Redis
+(`appendonly yes` + `appendfsync everysec`) and stay off until `{ durable: true }` is declared.
 
 ## Production note
 

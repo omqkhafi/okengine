@@ -35,9 +35,12 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 
 | Variable           | Used for                 | Default when unset |
 | ------------------ | ------------------------ | ------------------ |
-| `REDIS_URL`        | Redis connection         | driver default     |
-| `OKE_STORE_KV_URL` | Explicit KV URL override | —                  |
-| `OKE_KV_DRIVER`    | Force the kv driver id   | config map         |
+| `REDIS_URL`                    | Cache Redis connection                         | driver default |
+| `OKE_STORE_KV_URL`             | Explicit cache KV URL override                 | —              |
+| `OKE_STORE_KV_DURABLE_URL`     | Durable KV (`store.kv(..., { durable: true })`) | —              |
+| `REDIS_DURABLE_URL`            | Alias if `OKE_STORE_KV_DURABLE_URL` is unset   | —              |
+| `OKE_STORE_KV_DURABLE_APPENDONLY` | Compose AOF flag (`yes` when a durable store exists) | `no`     |
+| `OKE_KV_DRIVER`                | Force the kv driver id                         | config map     |
 
 ## Files store
 

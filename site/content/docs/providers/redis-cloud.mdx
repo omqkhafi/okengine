@@ -41,6 +41,7 @@ Port is a **per-database high port**, not always `6379` — copy it from the pan
 | Private       | Pro private endpoint needs VPC peering / PrivateLink / PSC first                  |
 | Modules       | RediSearch / RedisJSON optional — unused by oke's KV driver                       |
 | Port          | Per-database high port from Configuration — never assume `6379`                   |
+| Durable KV    | Persistence **off by default**. Free Essentials: none. Paid Essentials: AOF every 1s or snapshots. Pro: AOF every write / every 1s / snapshots. Console setting — not the URL. |
 
 Essentials vs Pro panels differ (Access vs General), but **Connect** always opens the
 wizard with a filled client snippet — prefer that when the Configuration layout feels

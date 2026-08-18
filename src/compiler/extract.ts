@@ -650,6 +650,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           const namespaces = new Set(storeEntry.namespaces ?? []);
           namespaces.add(storeName);
           storeEntry.namespaces = [...namespaces].sort();
+          if (boolProp(storeOpts, "durable")) storeEntry.durable = true;
         } else if (facet === "files") {
           const buckets = new Set(storeEntry.buckets ?? []);
           buckets.add(storeName);

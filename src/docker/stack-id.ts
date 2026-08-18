@@ -52,6 +52,7 @@ export function hostPortForInstance(
   const n = instancePortOffset(instanceId);
   if (role === "store.sql") return 15_000 + n;
   if (role === "store.kv") return 16_000 + n;
+  if (role === "store.kv.durable") return 27_000 + n;
   if (role === "signal") return 17_000 + n;
   if (role === "store.files") return 18_000 + n;
   if (role === "channel.email") return 20_000 + n;
@@ -119,6 +120,9 @@ export const STACK_CONTROL_KEYS = [
   "POSTGRES_INITDB_ARGS",
   "OKE_STORE_KV_MAXMEMORY",
   "OKE_STORE_KV_MAXMEMORY_POLICY",
+  "OKE_STORE_KV_DURABLE_APPENDONLY",
+  "OKE_STORE_KV_DURABLE_APPENDFSYNC",
+  "OKE_STORE_KV_DURABLE_SNAPSHOT_CRON",
   "S3_REGION",
   "S3_SESSION_TOKEN",
   "SMTP_USER",

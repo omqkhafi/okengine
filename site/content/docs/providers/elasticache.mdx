@@ -42,6 +42,7 @@ REDIS_URL=rediss://:AUTH_TOKEN@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com
 | Cluster mode       | Prefer **disabled** + Primary Endpoint for oke's URL-shaped client                  |
 | Transit encryption | When enabled, scheme must be `rediss://`                                            |
 | AUTH               | Set at create/rotate — ElastiCache does not show a Redis-Cloud-style “eye” password |
+| Durable KV         | `appendonly` / `appendfsync` are **not supported** on Redis OSS ≥2.8.22 or Valkey. Snapshots + Multi-AZ only. AWS's durable product is MemoryDB — not an oke recipe. |
 
 Reader endpoints exist for read scaling; oke's single `REDIS_URL` should target the
 **Primary Endpoint** so writes and Gate/Signal counters hit the primary.

@@ -293,6 +293,7 @@ export const stripeKey = vault.secret("STRIPE_KEY", {
     expect(manifest.stores?.embeddings?.description).toBe("Document embeddings");
     expect(manifest.stores?.sessions?.description).toBe("Session cache");
     expect(manifest.stores?.sessions?.namespaces).toEqual(["sessions"]);
+    expect(manifest.stores?.sessions?.durable).toBeUndefined();
     expect(manifest.signals?.["order-placed"]?.description).toBe("Order placed event");
     expect(manifest.channels?.["booking-confirmed"]?.description).toBe(
       "Booking confirmation email",
@@ -300,6 +301,19 @@ export const stripeKey = vault.secret("STRIPE_KEY", {
     expect(manifest.clocks?.["expire-holds"]?.description).toBe("Expire unpaid holds");
     expect(manifest.gates?.member?.description).toBe("Verified members only");
     expect(manifest.vault?.STRIPE_KEY?.description).toBe("Payments gateway key");
+  });
+
+  test("extracts store.kv durable onto the Manifest store", async () => {
+    const manifest = await extractFromSources({
+      "src/kv.ts": `
+import { store } from "okengine";
+export const sessions = store.kv("sessions", { description: "Session cache" });
+export const ledger = store.kv("ledger", { durable: true, description: "Idempotency keys" });
+`,
+    });
+    expect(manifest.stores?.sessions?.durable).toBeUndefined();
+    expect(manifest.stores?.ledger?.durable).toBe(true);
+    expect(manifest.stores?.ledger?.namespaces).toEqual(["ledger"]);
   });
 });
 

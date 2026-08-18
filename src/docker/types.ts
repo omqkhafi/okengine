@@ -207,6 +207,12 @@ export interface DeriveOptions {
    * `oke dev -s` projects do not share one Postgres on `:5432`.
    */
   readonly instanceId?: string;
+  /**
+   * When true, stack env enables AOF (`APPENDONLY=yes`) / Dragonfly snapshot
+   * cron on `store.kv.durable`. Volume is always mounted; flags stay off
+   * until a Manifest store declares `{ durable: true }`.
+   */
+  readonly durableKv?: boolean;
 }
 
 /** Default relative directory for generated Docker / compose artefacts. */

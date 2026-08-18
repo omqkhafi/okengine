@@ -18,7 +18,7 @@ import {
 import { drizzleDialectFromSqlDriver } from "../drivers/drizzle-dialect.ts";
 import { ensureDrizzleConfig } from "./ensure-drizzle-config.ts";
 import { runDb } from "./db.ts";
-import { loadOkeConfig, resolveImages } from "./load-config.ts";
+import { loadManifest, loadOkeConfig, manifestHasDurableKv, resolveImages } from "./load-config.ts";
 
 /** Options for {@link syncDevSchema}. */
 export interface DevSchemaSyncOptions {
@@ -89,6 +89,14 @@ async function ensureDockerStack(
   const appSlug = stackAppSlug(cwd);
   const credentials = await loadExistingStackCredentials(cwd, roles);
   const controls = await loadExistingStackControls(cwd);
+  let durableKv = false;
+  for (const name of ["oke.manifest.json", "manifest.oke.json"]) {
+    const path = resolve(cwd, name);
+    if (await Bun.file(path).exists()) {
+      durableKv = manifestHasDurableKv(await loadManifest(path));
+      break;
+    }
+  }
   const derived = deriveInfrastructure({
     images,
     app: appSlug,
@@ -96,6 +104,7 @@ async function ensureDockerStack(
     includeApp: false,
     composeDir: DEFAULT_DOCKER_DIR,
     instanceId,
+    durableKv,
     ...(credentials ? { credentials } : {}),
     ...(controls ? { controls } : {}),
     host: "127.0.0.1",

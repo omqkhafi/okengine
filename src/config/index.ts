@@ -92,6 +92,8 @@ export interface ImagesConfig {
   readonly store?: {
     readonly sql?: string;
     readonly kv?: string;
+    /** Second Redis-family pin for `{ durable: true }` KV namespaces. */
+    readonly kvDurable?: string;
     readonly files?: string;
     readonly index?: string;
   };
@@ -119,6 +121,7 @@ export function flattenImagesConfig(
   const out: Record<string, string> = {};
   if (images.store?.sql) out["store.sql"] = images.store.sql;
   if (images.store?.kv) out["store.kv"] = images.store.kv;
+  if (images.store?.kvDurable) out["store.kv.durable"] = images.store.kvDurable;
   if (images.store?.files) out["store.files"] = images.store.files;
   if (images.store?.index) out["store.index"] = images.store.index;
   if (images.channel?.email) out["channel.email"] = images.channel.email;

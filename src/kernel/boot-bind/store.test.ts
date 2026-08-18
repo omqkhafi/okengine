@@ -3,11 +3,12 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { files } from "../../elements/store.ts";
+import { files, store } from "../../elements/store.ts";
 import {
   bindStore,
   indexDriverFor,
   resetFilesFsWarnForTests,
+  resetKvDurableWarnsForTests,
   resolveFilesDriverId,
   resolveIndexDriverId,
   resolveKvDriverId,
@@ -95,6 +96,189 @@ describe("bindStore driver resolution", () => {
     // kv / files are untouched by the sql-only override.
     expect(resolveKvDriverId(options, "test", false)).toBe("memory");
     expect(resolveKvDriverId(options, "dev", true)).toBe("redis");
+  });
+});
+
+describe("bindStore durable KV routing", () => {
+  const prev = {
+    redis: process.env.REDIS_URL,
+    kv: process.env.OKE_STORE_KV_URL,
+    durable: process.env.OKE_STORE_KV_DURABLE_URL,
+    durableAlias: process.env.REDIS_DURABLE_URL,
+  };
+
+  afterEach(() => {
+    resetKvDurableWarnsForTests();
+    if (prev.redis === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = prev.redis;
+    if (prev.kv === undefined) delete process.env.OKE_STORE_KV_URL;
+    else process.env.OKE_STORE_KV_URL = prev.kv;
+    if (prev.durable === undefined) delete process.env.OKE_STORE_KV_DURABLE_URL;
+    else process.env.OKE_STORE_KV_DURABLE_URL = prev.durable;
+    if (prev.durableAlias === undefined) delete process.env.REDIS_DURABLE_URL;
+    else process.env.REDIS_DURABLE_URL = prev.durableAlias;
+  });
+
+  test("memory + durable in test does not throw or warn", () => {
+    const warnings: string[] = [];
+    const prevWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      bindStore(
+        { stores: [store.kv("ledger", { durable: true })] },
+        "test",
+        () => Date.now(),
+        false,
+      );
+      expect(warnings.some((w) => w.includes("durable"))).toBe(false);
+    } finally {
+      console.warn = prevWarn;
+    }
+  });
+
+  test("redis + durable without URL throws outside test", () => {
+    delete process.env.OKE_STORE_KV_DURABLE_URL;
+    delete process.env.REDIS_DURABLE_URL;
+    process.env.REDIS_URL = "redis://cache";
+    expect(() =>
+      bindStore(
+        {
+          stores: [store.kv("ledger", { durable: true })],
+          config: {
+            drivers: {
+              store: {
+                sql: { dev: "memory", test: "memory", prod: "memory" },
+                kv: { dev: "redis", test: "memory", prod: "redis" },
+              },
+            },
+          },
+        },
+        "dev",
+        () => Date.now(),
+        false,
+      ),
+    ).toThrow(/OKE_STORE_KV_DURABLE_URL/);
+  });
+
+  test("redis + cache-shaped KV warns once outside test", () => {
+    process.env.REDIS_URL = "redis://cache";
+    const warnings: string[] = [];
+    const prevWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      const options = {
+        stores: [store.kv("sessions")],
+        config: {
+          drivers: {
+            store: {
+              sql: { dev: "memory", test: "memory", prod: "memory" },
+              kv: { dev: "redis", test: "memory", prod: "redis" },
+            },
+          },
+        },
+      };
+      bindStore(options, "dev", () => Date.now(), false);
+      bindStore(options, "dev", () => Date.now(), false);
+      expect(warnings.filter((w) => w.includes("cache-shaped"))).toHaveLength(1);
+    } finally {
+      console.warn = prevWarn;
+    }
+  });
+
+  test("same cache and durable URL warns once", () => {
+    process.env.REDIS_URL = "redis://shared";
+    process.env.OKE_STORE_KV_DURABLE_URL = "redis://shared";
+    const warnings: string[] = [];
+    const prevWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      bindStore(
+        {
+          stores: [store.kv("sessions"), store.kv("ledger", { durable: true })],
+          config: {
+            drivers: {
+              store: {
+                sql: { dev: "memory", test: "memory", prod: "memory" },
+                kv: { dev: "redis", test: "memory", prod: "redis" },
+              },
+            },
+          },
+        },
+        "dev",
+        () => Date.now(),
+        false,
+      );
+      expect(warnings.some((w) => w.includes("same"))).toBe(true);
+    } finally {
+      console.warn = prevWarn;
+    }
+  });
+
+  test("Dragonfly durable pin warns snapshot RPO", () => {
+    process.env.REDIS_URL = "redis://cache";
+    process.env.OKE_STORE_KV_DURABLE_URL = "redis://durable";
+    const warnings: string[] = [];
+    const prevWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      bindStore(
+        {
+          stores: [store.kv("ledger", { durable: true })],
+          config: {
+            drivers: {
+              store: {
+                sql: { dev: "memory", test: "memory", prod: "memory" },
+                kv: { dev: "redis", test: "memory", prod: "redis" },
+              },
+            },
+            images: { store: { kvDurable: "docker.dragonflydb.io/dragonflydb/dragonfly" } },
+          },
+        },
+        "dev",
+        () => Date.now(),
+        false,
+      );
+      expect(warnings.some((w) => w.includes("Dragonfly") && w.includes("snapshot"))).toBe(true);
+    } finally {
+      console.warn = prevWarn;
+    }
+  });
+
+  test("memory + durable in dev warns that memory cannot honor durability", () => {
+    const warnings: string[] = [];
+    const prevWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      bindStore(
+        {
+          stores: [store.kv("ledger", { durable: true })],
+          config: {
+            drivers: {
+              store: {
+                sql: { dev: "memory", test: "memory", prod: "memory" },
+                kv: { dev: "memory", test: "memory", prod: "redis" },
+              },
+            },
+          },
+        },
+        "dev",
+        () => Date.now(),
+        false,
+      );
+      expect(warnings.some((w) => w.includes("memory") && w.includes("durable"))).toBe(true);
+    } finally {
+      console.warn = prevWarn;
+    }
   });
 });
 

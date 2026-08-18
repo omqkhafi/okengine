@@ -779,6 +779,21 @@ function diffStore(before: Store, after: Store, path: string, out: ManifestChang
   diffStringSet(before.namespaces, after.namespaces, `${path}/namespaces`, out);
   diffStringSet(before.buckets, after.buckets, `${path}/buckets`, out);
   diffStringSet(before.indexes, after.indexes, `${path}/indexes`, out);
+  if (
+    before.durable !== after.durable &&
+    (before.durable !== undefined || after.durable !== undefined)
+  ) {
+    out.push(
+      change(
+        `${path}/durable`,
+        after.durable === true ? "effect-widening" : "contract-breaking",
+        "changed",
+        before.durable,
+        after.durable,
+        `store durable ${String(before.durable)} → ${String(after.durable)}`,
+      ),
+    );
+  }
   if (!deepEqual(before.classifications, after.classifications)) {
     out.push(
       change(

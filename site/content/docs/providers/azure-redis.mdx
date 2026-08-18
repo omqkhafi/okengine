@@ -39,6 +39,9 @@ oke.
 | Standard             | Replicated                              |
 | Premium / Enterprise | Clustering, persistence, VNet           |
 
+`{ durable: true }` needs a URL whose **tier actually persists**. Basic and Standard have **no**
+RDB/AOF. Premium offers RDB/AOF; Enterprise persistence is preview. oke cannot enable AOF via URL.
+
 Non-TLS: **Settings → Advanced settings → Allow access only via SSL = No** — avoid in
 production. Entra ID auth exists on newer tiers; oke's URL driver expects access-key
 auth in `REDIS_URL`.

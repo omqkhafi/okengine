@@ -74,6 +74,12 @@ export interface SqlStoreDecl extends StoreDeclBase {
 export interface KvStoreOptions {
   /** Optional description. */
   readonly description?: string;
+  /**
+   * Bind this namespace to the durable KV URL (`OKE_STORE_KV_DURABLE_URL`),
+   * not the cache Redis (`REDIS_URL`). Persistence is server-wide — this is
+   * a second store, not a per-key flag. Distinct from Flow `durable`.
+   */
+  readonly durable?: boolean;
 }
 
 /** KV store declaration. */
@@ -81,6 +87,7 @@ export interface KvStoreDecl extends StoreDeclBase {
   readonly facet: "kv";
   readonly ref: `kv:${string}`;
   readonly description?: string;
+  readonly durable?: boolean;
 }
 
 /** Options for {@link store.files}. */
@@ -179,6 +186,7 @@ export function kv(name: string, options: KvStoreOptions = {}): KvStoreDecl {
     name,
     ref: `kv:${name}`,
     ...(options.description !== undefined ? { description: options.description } : {}),
+    ...(options.durable === true ? { durable: true } : {}),
   };
 }
 

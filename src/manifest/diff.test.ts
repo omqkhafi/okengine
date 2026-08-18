@@ -309,6 +309,19 @@ describe("diffManifest — additional branches", () => {
     expect(hasCategory(result.changes, "contract-breaking", "facet")).toBe(true);
   });
 
+  test("store.kv durable on is effect-widening; off is contract-breaking", async () => {
+    const before = await loadBase();
+    before.stores!.db!.facet = "kv";
+    before.stores!.db!.namespaces = ["cache"];
+    delete before.stores!.db!.tables;
+    const on = clone(before);
+    on.stores!.db!.durable = true;
+    expect(hasCategory(diffManifest(before, on).changes, "effect-widening", "durable")).toBe(true);
+    const off = clone(on);
+    off.stores!.db!.durable = false;
+    expect(hasCategory(diffManifest(on, off).changes, "contract-breaking", "durable")).toBe(true);
+  });
+
   test("clocks, vault, channels, journeys, drivers, i18n, topology, images", async () => {
     const before = await loadBase();
     const after = clone(before);

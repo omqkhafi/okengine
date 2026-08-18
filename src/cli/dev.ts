@@ -62,7 +62,7 @@ import {
   resolveDevProfile,
   resolveDevRuntimeEnv,
 } from "./hero-meta.ts";
-import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
+import { loadManifest, loadOkeConfig, manifestHasDurableKv, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 import { resolveDevPorts } from "./ports.ts";
 import {
@@ -561,6 +561,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const reusedCreds =
       options.credentials ?? (await loadExistingStackCredentials(cwd, stackRoles));
     const controls = await loadExistingStackControls(cwd);
+    const projectManifest = await tryLoadProjectManifest(cwd);
     const derived = deriveInfrastructure({
       images,
       app: appSlug,
@@ -569,6 +570,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       includeApp: false,
       composeDir,
       instanceId,
+      durableKv: manifestHasDurableKv(projectManifest),
       ...(reusedCreds ? { credentials: reusedCreds } : {}),
       ...(controls ? { controls } : {}),
       host: "127.0.0.1",

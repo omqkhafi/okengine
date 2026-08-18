@@ -63,6 +63,8 @@ describe("store facets", () => {
   test("declares sql · kv · files · index with resource refs", () => {
     expect(store.sql("notes").ref).toBe("sql:notes");
     expect(store.kv("sessions").ref).toBe("kv:sessions");
+    expect(store.kv("ledger", { durable: true }).durable).toBe(true);
+    expect(store.kv("sessions").durable).toBeUndefined();
     expect(store.files("uploads").ref).toBe("files:uploads");
     expect(store.index("kb", { dims: 8 }).ref).toBe("index:kb");
   });
