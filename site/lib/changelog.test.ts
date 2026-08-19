@@ -174,7 +174,10 @@ describe("changelog.md", () => {
     expect([...dates].sort().reverse()).toEqual(dates);
 
     for (const release of releases) {
-      const bullets = release.groups.reduce((total, group) => total + group.items.length, 0);
+      const bullets = release.groups.reduce((total, group) => {
+        const nested = group.subgroups.reduce((sum, sub) => sum + sub.items.length, 0);
+        return total + group.items.length + nested;
+      }, 0);
       expect(bullets).toBeGreaterThan(0);
     }
   });

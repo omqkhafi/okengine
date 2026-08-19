@@ -28,7 +28,7 @@ export const purgeOld = on(
   every("1h"),
   flow("links.purgeOld", {
     do: async (_, fx) => {
-      const cutoff = fx.clock.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
+      const cutoff = fx.clock.ago("30d");
       await fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
     },
   }),
@@ -68,12 +68,15 @@ export const sendDaily = on(
 <Step>
 ### Ask for time inside flows
 
-`fx.clock` is the only clock a flow knows:
+`fx.clock` is the only clock a flow knows. Instants stay epoch-ms; spans use the same
+duration strings as `every()` and `sleep()`:
 
 ```typescript
 do: async (input, fx) => {
-  const now = fx.clock.now(); // epoch-ms, injectable
-  await fx.clock.sleep("wait-for-payment", "7d"); // durable — survives restarts on a shared journal
+  const cutoff = fx.clock.ago("30d");
+  const expiresAt = fx.clock.fromNow("14d");
+  const window = input.createdAt + fx.clock.duration("7d");
+  await fx.clock.sleep("wait-for-payment", "7d");
 };
 ```
 
@@ -97,6 +100,18 @@ difference.
 | `timezone`    | string  | `"UTC"` | IANA timezone for cron evaluation                              |
 | `overridable` | boolean | `false` | Allow the Console to **edit** the schedule (pause is separate) |
 | `description` | string  | —       | Human title in the Console (falls back to the clock name)      |
+
+### `fx.clock`
+
+| Call                      | Returns    | Meaning                                              |
+| ------------------------- | ---------- | ---------------------------------------------------- |
+| `now()`                   | instant    | Injected epoch-ms                                    |
+| `ago("30d")`              | instant    | now − duration                                       |
+| `fromNow("14d")`          | instant    | now + duration                                       |
+| `duration("7d")`          | span ms    | Offset a stored instant (`createdAt + duration`)     |
+| `sleep(label, "7d")`      | —          | Durable sleep                                        |
+
+Same duration strings as `every()`: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400_000 ms, not a calendar day. Unknown strings parse as `0`.
 
 ## Sleeping inside a flow
 

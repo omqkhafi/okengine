@@ -366,6 +366,9 @@ describe("fx — wholesale swap", () => {
       },
       clock: {
         now: () => 0,
+        ago: () => 0,
+        fromNow: () => 0,
+        duration: () => 0,
         sleep: async () => undefined,
       },
       vault: {
@@ -511,6 +514,19 @@ describe("fx.t — catalogs", () => {
     expect(fx.t("errors.notFound")).toBe("Not found");
     expect(fx.t("items", { count: 2 })).toBe("2 items");
     expect(fx.t("missing")).toBe("missing");
+  });
+});
+
+describe("fx.clock — relative instants", () => {
+  test("ago / fromNow / duration use the injected now and duration strings", () => {
+    const fx = createFx({ flow: "sessions.sweepExpired", effects: {}, now: () => 1_000_000 });
+    expect(fx.clock.now()).toBe(1_000_000);
+    expect(fx.clock.duration("30d")).toBe(30 * 86_400_000);
+    expect(fx.clock.ago("30d")).toBe(1_000_000 - 30 * 86_400_000);
+    expect(fx.clock.fromNow("14d")).toBe(1_000_000 + 14 * 86_400_000);
+    expect(fx.clock.duration("nope")).toBe(0);
+    expect(fx.clock.ago("nope")).toBe(1_000_000);
+    expect(fx.clock.fromNow("200ms")).toBe(1_000_200);
   });
 });
 

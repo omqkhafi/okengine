@@ -169,12 +169,15 @@ AI calls are nondeterministic: journaling is forced on and auto-cache disabled a
 
 ## Clock
 
-| Signature                         | Notes                                                 |
-| --------------------------------- | ----------------------------------------------------- |
-| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"           |
-| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise |
+| Signature                         | Notes                                                                 |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"                           |
+| `fx.clock.ago(duration)`          | Instant before now (`"30d"` → now − 30 days)                          |
+| `fx.clock.fromNow(duration)`      | Instant after now (`"14d"` → now + 14 days)                           |
+| `fx.clock.duration(duration)`     | Span in ms — offset a stored instant (`createdAt + duration("7d")`)   |
+| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise                 |
 
-Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`.
+Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400_000 ms, not a calendar day. Unknown strings parse as `0`.
 
 ## Cache
 

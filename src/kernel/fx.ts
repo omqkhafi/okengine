@@ -141,6 +141,27 @@ export interface FxClock {
   /** Current epoch-ms (injectable via {@link CreateFxOptions.now}). */
   now(): number;
   /**
+   * Instant `duration` before {@link FxClock.now} (`"30d"` → now − 30 days).
+   * Uses the same duration strings as {@link FxClock.sleep} / `every()`.
+   *
+   * @param duration - Duration string (e.g. `"30d"`, `"2h"`)
+   */
+  ago(duration: string): number;
+  /**
+   * Instant `duration` after {@link FxClock.now} (`"14d"` → now + 14 days).
+   * Uses the same duration strings as {@link FxClock.sleep} / `every()`.
+   *
+   * @param duration - Duration string (e.g. `"14d"`, `"15m"`)
+   */
+  fromNow(duration: string): number;
+  /**
+   * Span in milliseconds (`"30d"` → `2_592_000_000`). Compose with a stored
+   * instant: `createdAt + fx.clock.duration("7d")`. Unknown strings are `0`.
+   *
+   * @param duration - Duration string (e.g. `"30d"`, `"200ms"`)
+   */
+  duration(duration: string): number;
+  /**
    * Durable sleep — when the flow is `durable`, journals the wake time and
    * survives restart / deploy. Without a journal, resolves immediately
    * (non-durable flows).
@@ -1336,6 +1357,15 @@ export function createFxContext(options: CreateFxOptions): FxContext {
 
   const clock: FxClock = {
     now,
+    ago(duration: string): number {
+      return now() - parseDurationMs(duration);
+    },
+    fromNow(duration: string): number {
+      return now() + parseDurationMs(duration);
+    },
+    duration(duration: string): number {
+      return parseDurationMs(duration);
+    },
     async sleep(label: string, duration: string): Promise<void> {
       if (journal) {
         await journal.sleep(label, duration, parseDurationMs);

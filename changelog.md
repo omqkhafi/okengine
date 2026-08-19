@@ -12,6 +12,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.13.1 — 2026-08-19
+
+### ✨ Added
+
+#### Runtime
+
+- `fx.clock.ago()`, `fromNow()`, and `duration()` — relative instants
+  and spans, using the same duration strings as `every()` and `sleep()`.
+
+#### Docs
+
+- Clock, Flow, and fx pages document `ago` / `fromNow` / `duration`
+  and replace `now() - 30 * 24 * 60 * 60 * 1000` with `ago("30d")`.
+
 ## v0.13.0 — 2026-08-18
 
 ### ✨ Added

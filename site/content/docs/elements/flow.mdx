@@ -154,7 +154,7 @@ on(
   every("1h"),
   flow("sessions.sweepExpired", {
     do: async (_, fx) => {
-      const cutoff = fx.clock.now() - 30 * 24 * 60 * 60 * 1000;
+      const cutoff = fx.clock.ago("30d");
       await fx.store(db).delete(sessions).where(lt(sessions.createdAt, cutoff));
     },
   }),
@@ -203,7 +203,7 @@ Everything a flow may touch, on one object:
 | `fx.run(agent, input)`                      | ask             | Run a bounded agent                                |
 | `fx.call(flow, input)`                      | call            | Invoke another flow                                |
 | `fx.vault.get(contract)`                    | secret          | Read a secret (`Redacted`; logs masked)            |
-| `fx.clock.now()` / `.sleep(…)`              | —               | Injected time / durable sleep                      |
+| `fx.clock.now/ago/fromNow/duration/sleep`   | —               | Injected instants, spans, durable sleep            |
 | `fx.cache.get/set`                          | —               | Shared cache with effect-aware invalidation        |
 | `fx.step(name, fn, { undo? })`              | —               | Named durable step — optional LIFO undo on failure |
 | `fx.all` / `fx.race` / `fx.retry`           | —               | Structured concurrency + backoff retry             |
