@@ -46,6 +46,12 @@ export type ResourceRef = `${StoreFacet}:${string}`;
  */
 export type RunsResourceRef = "runs";
 
+/**
+ * Dead-letter read capability for `fx.deadLetters` — not a store facet.
+ * Declare on `effects.reads` (never `writes`).
+ */
+export type SignalResourceRef = `signal:${string}`;
+
 /** Signal name reference. */
 export type SignalRef = string;
 
@@ -74,8 +80,8 @@ export type JsonSchema = string | Record<string, unknown>;
  * `sends` / `asks` are irreversible (asks also nondeterministic + cost).
  */
 export interface Effects {
-  /** Store reads, plus optional `"runs"` for `fx.runs`. */
-  reads?: Array<ResourceRef | RunsResourceRef>;
+  /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters`. */
+  reads?: Array<ResourceRef | RunsResourceRef | SignalResourceRef>;
   /** Store writes. */
   writes?: ResourceRef[];
   /** Emitted signals. */

@@ -69,8 +69,9 @@ export interface SignalMessage {
 }
 
 /** Dead-letter entry with full attempt history. */
-export interface DeadLetter extends SignalMessage {
+export interface DeadLetter<T = unknown> extends Omit<SignalMessage, "payload" | "status"> {
   readonly status: "dead";
+  readonly payload: T;
 }
 
 /** Per-subscriber lag / errors (broadcast physics). */

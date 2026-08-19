@@ -12,6 +12,21 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.13.2 — 2026-08-19
+
+### ✨ Added
+
+#### Runtime
+
+- `fx.deadLetters(signal)` lists dead-lettered messages for one signal.
+  Records `read` on `signal:<name>` (inferred, capability-gated). Build
+  a `GET /notifications/failed` flow with `fx.json.withQuery`.
+
+#### Docs
+
+- Signal and fx pages document `fx.deadLetters` and a failed-messages
+  HTTP flow.
+
 ## v0.13.1 — 2026-08-19
 
 ### ✨ Added

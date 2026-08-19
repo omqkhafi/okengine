@@ -111,6 +111,11 @@
       "type": "string",
       "pattern": "^(sql|kv|files|index):.+$"
     },
+    "SignalResourceRef": {
+      "description": "Dead-letter read via fx.deadLetters — signal:<name>, not a store facet.",
+      "type": "string",
+      "pattern": "^signal:.+$"
+    },
     "SignalRef": {
       "type": "string",
       "minLength": 1
@@ -145,7 +150,8 @@
               {
                 "const": "runs",
                 "description": "Runs wide-event store via fx.runs (observability read)."
-              }
+              },
+              { "$ref": "#/$defs/SignalResourceRef" }
             ]
           },
           "uniqueItems": true

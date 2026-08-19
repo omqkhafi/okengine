@@ -198,6 +198,7 @@ Everything a flow may touch, on one object:
 | ------------------------------------------- | --------------- | -------------------------------------------------- |
 | `fx.store(db).select/insert/…`              | read / write    | SQL, KV, files, index sessions                     |
 | `fx.emit(signal, payload)`                  | emit            | Publish a signal (transactional with writes)       |
+| `fx.deadLetters(signal)`                    | read            | Dead-lettered messages for that signal             |
 | `fx.send(template, opts)`                   | send            | Reach a human (email · SMS · …)                    |
 | `fx.ask(prompt, input)`                     | ask             | Call a versioned AI prompt                         |
 | `fx.run(agent, input)`                      | ask             | Run a bounded agent                                |

@@ -361,6 +361,9 @@ describe("fx — wholesale swap", () => {
       async emit(signal) {
         calls.push(`emit:${typeof signal === "string" ? signal : signal.name}`);
       },
+      async deadLetters() {
+        return [];
+      },
       async call() {
         return null;
       },

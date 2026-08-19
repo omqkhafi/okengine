@@ -33,9 +33,10 @@ See [Store](/docs/elements/store) for the query-builder surface.
 
 ## Signals
 
-| Signature                             | Records | Notes                                                                                                                                                                                                     |
-| ------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fx.emit(signal, payload?, { key? })` | `emit`  | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1042** (orphan) or **OKE1043** (schema) |
+| Signature                             | Records                | Notes                                                                                                                                                                                                     |
+| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fx.emit(signal, payload?, { key? })` | `emit`                 | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1042** (orphan) or **OKE1043** (schema) |
+| `fx.deadLetters(signal)`              | `read` `signal:<name>` | Dead-lettered messages for that signal. Payload typed from `SignalDecl<T>`. Page with `fx.json.withQuery`. Cross-signal throws **OKE1001**.                                                               |
 
 ## Runs (observability read)
 
@@ -169,13 +170,13 @@ AI calls are nondeterministic: journaling is forced on and auto-cache disabled a
 
 ## Clock
 
-| Signature                         | Notes                                                                 |
-| --------------------------------- | --------------------------------------------------------------------- |
-| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"                           |
-| `fx.clock.ago(duration)`          | Instant before now (`"30d"` → now − 30 days)                          |
-| `fx.clock.fromNow(duration)`      | Instant after now (`"14d"` → now + 14 days)                           |
-| `fx.clock.duration(duration)`     | Span in ms — offset a stored instant (`createdAt + duration("7d")`)   |
-| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise                 |
+| Signature                         | Notes                                                               |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"                         |
+| `fx.clock.ago(duration)`          | Instant before now (`"30d"` → now − 30 days)                        |
+| `fx.clock.fromNow(duration)`      | Instant after now (`"14d"` → now + 14 days)                         |
+| `fx.clock.duration(duration)`     | Span in ms — offset a stored instant (`createdAt + duration("7d")`) |
+| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise               |
 
 Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400_000 ms, not a calendar day. Unknown strings parse as `0`.
 

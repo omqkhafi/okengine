@@ -9,7 +9,7 @@
  * for deterministic tests (§7.6).
  */
 
-import type { Effects, ResourceRef } from "../manifest/types.ts";
+import type { Effects, ResourceRef, SignalResourceRef } from "../manifest/types.ts";
 import type { QueryPageSpec } from "./list-page.ts";
 import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type {
@@ -27,8 +27,8 @@ import type {
   SqlStoreHandle,
 } from "../elements/store.ts";
 import type { SqlRow } from "../drivers/types.ts";
-import type { SignalRuntime } from "../elements/signal.ts";
-import type { SignalEmitOptions } from "../drivers/signal-types.ts";
+import type { SignalDecl, SignalRuntime } from "../elements/signal.ts";
+import type { DeadLetter, SignalEmitOptions } from "../drivers/signal-types.ts";
 import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
@@ -72,6 +72,15 @@ async function loadRunsWindow(): Promise<typeof import("../runs/window.ts")> {
 
 /** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
 export const RUNS_RESOURCE = "runs";
+
+/**
+ * Capability ref for {@link Fx.deadLetters} — `signal:<name>`, never a store facet.
+ *
+ * @param name - Signal name
+ */
+export function signalReadRef(name: string): SignalResourceRef {
+  return `signal:${name}`;
+}
 
 export type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 
@@ -588,6 +597,15 @@ export interface Fx {
    * @param options - Optional emit options (`key` for per-key once ordering)
    */
   emit(signal: NamedRef, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
+  /**
+   * Query dead-lettered messages for one signal (records `read` on `signal:<name>`).
+   *
+   * Requires a bound signal runtime and `effects.reads` including `signal:<name>`.
+   *
+   * @param signal - Signal name or handle
+   */
+  deadLetters<T>(signal: SignalDecl<T>): Promise<readonly DeadLetter<T>[]>;
+  deadLetters(signal: NamedRef): Promise<readonly DeadLetter[]>;
   /**
    * Call another flow (records `call`). Stub returns `undefined`.
    *
@@ -1619,6 +1637,15 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           };
           await options.signalRuntime.emit(name, payload, merged);
         }
+      });
+    },
+    deadLetters(signal: NamedRef) {
+      const name = resolveName(signal);
+      return gated("read", signalReadRef(name), async () => {
+        if (!options.signalRuntime) {
+          throw new Error("fx.deadLetters requires a bound signal runtime");
+        }
+        return options.signalRuntime.deadLetters(name);
       });
     },
     call(flow, input) {

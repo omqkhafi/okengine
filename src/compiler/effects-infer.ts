@@ -12,6 +12,7 @@ import type {
   ResourceRef,
   SecretRef,
   SignalRef,
+  SignalResourceRef,
   TemplateRef,
   FlowRef,
 } from "../manifest/types.ts";
@@ -142,7 +143,7 @@ const TABLE_ARG_METHODS = new Set([
  * @param options - Handler AST, bindings, and annotation flag
  */
 export function inferEffects(options: InferEffectsOptions): InferredEffects {
-  const reads = new Set<ResourceRef>();
+  const reads = new Set<ResourceRef | SignalResourceRef>();
   const writes = new Set<ResourceRef>();
   const emits = new Set<SignalRef>();
   const sends = new Set<TemplateRef>();
@@ -170,6 +171,12 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     if (chain.rootMethod === "emit" && call === chain.rootCall) {
       const ref = resolveNamed(call.arguments[0], options.bindings, "signal");
       if (ref) emits.add(ref);
+      continue;
+    }
+
+    if (chain.rootMethod === "deadLetters" && call === chain.rootCall) {
+      const ref = resolveNamed(call.arguments[0], options.bindings, "signal");
+      if (ref) reads.add(`signal:${ref}`);
       continue;
     }
 

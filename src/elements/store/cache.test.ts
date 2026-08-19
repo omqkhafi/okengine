@@ -92,6 +92,7 @@ describe("autoCacheEligible", () => {
       false,
     );
     expect(autoCacheEligible({ effects: { reads: ["runs"] } })).toBe(false);
+    expect(autoCacheEligible({ effects: { reads: ["signal:notify"] } })).toBe(false);
     expect(autoCacheEligible({ effects: {} })).toBe(false);
   });
 
@@ -112,6 +113,7 @@ describe("autoCacheEligible", () => {
         { kind: "read", resource: "sql:views" },
         { kind: "read", resource: "sql:views" },
         { kind: "read", resource: "runs" },
+        { kind: "read", resource: "signal:notify" },
         { kind: "write", resource: "sql:views" },
         { kind: "ask", resource: "summarize" },
         { kind: "emit", resource: "view-changed" },

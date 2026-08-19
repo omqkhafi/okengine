@@ -34,7 +34,8 @@ export interface SignalOptions {
 }
 
 /**
- * Declared signal handle — usable as `on(signal, flow)` and `fx.emit(signal, …)`.
+ * Declared signal handle — usable as `on(signal, flow)`, `fx.emit(signal, …)`,
+ * and `fx.deadLetters(signal)`.
  */
 export interface SignalDecl<T = unknown> {
   /** Signal name (manifest key). */

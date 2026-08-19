@@ -71,6 +71,8 @@ export {
   type SignalDecl,
   type SignalOptions,
   type SignalRuntime,
+  type DeadLetter,
+  type SignalFailureReason,
 } from "./elements/signal.ts";
 
 export {

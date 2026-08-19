@@ -75,6 +75,26 @@ describe("validateManifest", () => {
     expect(result.ok).toBe(false);
   });
 
+  test("accepts signal resource refs on reads only", async () => {
+    const reads = await validateManifest({
+      oke: "1.0",
+      app: "x",
+      flows: {
+        f: { effects: { reads: ["signal:notify"] } },
+      },
+    });
+    expect(reads.ok).toBe(true);
+
+    const writes = await validateManifest({
+      oke: "1.0",
+      app: "x",
+      flows: {
+        f: { effects: { writes: ["signal:notify"] } },
+      },
+    });
+    expect(writes.ok).toBe(false);
+  });
+
   test("parseManifest throws ManifestValidationError on invalid JSON", async () => {
     expect(parseManifest("{")).rejects.toBeInstanceOf(ManifestValidationError);
   });

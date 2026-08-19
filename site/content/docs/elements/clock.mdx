@@ -103,13 +103,13 @@ difference.
 
 ### `fx.clock`
 
-| Call                      | Returns    | Meaning                                              |
-| ------------------------- | ---------- | ---------------------------------------------------- |
-| `now()`                   | instant    | Injected epoch-ms                                    |
-| `ago("30d")`              | instant    | now − duration                                       |
-| `fromNow("14d")`          | instant    | now + duration                                       |
-| `duration("7d")`          | span ms    | Offset a stored instant (`createdAt + duration`)     |
-| `sleep(label, "7d")`      | —          | Durable sleep                                        |
+| Call                 | Returns | Meaning                                          |
+| -------------------- | ------- | ------------------------------------------------ |
+| `now()`              | instant | Injected epoch-ms                                |
+| `ago("30d")`         | instant | now − duration                                   |
+| `fromNow("14d")`     | instant | now + duration                                   |
+| `duration("7d")`     | span ms | Offset a stored instant (`createdAt + duration`) |
+| `sleep(label, "7d")` | —       | Durable sleep                                    |
 
 Same duration strings as `every()`: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400_000 ms, not a calendar day. Unknown strings parse as `0`.
 

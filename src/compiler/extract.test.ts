@@ -598,6 +598,25 @@ export const expire = on(
   });
 });
 
+describe("extractManifest — fx.deadLetters", () => {
+  test("fx.deadLetters(signal) infers reads: [signal:<name>]", async () => {
+    const source = `
+import { on, flow, http, signal } from "okengine";
+
+export const notify = signal("notify", { delivery: "once" });
+
+export const failed = on(
+  http.get("/notifications/failed").gate.public,
+  flow("notifications.failed", {
+    do: async (input, fx) => fx.json.withQuery(await fx.deadLetters(notify), input),
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/failed.ts": source });
+    expect(manifest.flows?.["notifications.failed"]?.effects?.reads).toEqual(["signal:notify"]);
+  });
+});
+
 describe("extractManifest — channel medium binder aliasing", () => {
   test("mail.template(...) resolves through `const mail = channel.email(...)`", async () => {
     const source = `

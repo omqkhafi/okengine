@@ -53,7 +53,7 @@ export function tier1KeysForReads(
   effects: Effects,
   dimsByResource?: Readonly<Record<string, readonly string[]>>,
 ): string[] {
-  const reads = (effects.reads ?? []).filter((r): r is ResourceRef => r !== "runs");
+  const reads = (effects.reads ?? []).filter((r): r is ResourceRef => isStoreResourceRef(r));
   return reads.map((resource) => computedCacheKey(resource, dimsByResource?.[resource]));
 }
 
@@ -223,7 +223,7 @@ export function resolveCacheEffects(
   declared: Effects | undefined,
   learnedReads: readonly ResourceRef[] | undefined,
 ): Effects {
-  const declaredReads = (declared?.reads ?? []).filter((r) => r !== "runs");
+  const declaredReads = (declared?.reads ?? []).filter((r) => isStoreResourceRef(r));
   if (declaredReads.length > 0 || (declared?.writes?.length ?? 0) > 0) {
     return declared ?? {};
   }
@@ -275,7 +275,7 @@ export function autoCacheEligible(options: {
   const effects = options.effects ?? {};
   if ((effects.asks?.length ?? 0) > 0) return false;
   if ((effects.writes?.length ?? 0) > 0) return false;
-  const reads = (effects.reads ?? []).filter((r) => r !== "runs");
+  const reads = (effects.reads ?? []).filter((r) => isStoreResourceRef(r));
   return reads.length > 0;
 }
 

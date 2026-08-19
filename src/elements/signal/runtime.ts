@@ -3,7 +3,12 @@
  * emit / subscribe / live / drain for `fx` and tests.
  */
 
-import type { SignalBus, SignalDriver, SignalEmitOptions } from "../../drivers/signal-types.ts";
+import type {
+  DeadLetter,
+  SignalBus,
+  SignalDriver,
+  SignalEmitOptions,
+} from "../../drivers/signal-types.ts";
 import type { SignalDecl } from "./declare.ts";
 
 /** Options for {@link createSignalRuntime}. */
@@ -48,6 +53,12 @@ export interface SignalRuntime {
    * @param options - Optional emit options (`key` for per-key once ordering)
    */
   emit(name: string, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
+  /**
+   * Dead-lettered messages for one signal (auto-starts).
+   *
+   * @param name - Signal name
+   */
+  deadLetters(name: string): Promise<readonly DeadLetter[]>;
   /** Close the bus. */
   close(): Promise<void>;
 }
@@ -86,6 +97,10 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
     async emit(name, payload, options) {
       const b = await this.start();
       await b.emit(name, payload, options);
+    },
+    async deadLetters(name) {
+      const b = await this.start();
+      return b.deadLetters(name);
     },
     async close() {
       if (bus) {
