@@ -78,4 +78,7 @@ reports/
 # Local Taqnyat scratch script (never commit)
 src/plugins/__taqnyat-final.ts
 
+# Local HyperFrames compositions (promo / explainer drafts — not the product)
+/video/
+
 .cursor/plans/
