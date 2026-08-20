@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   buildAlterPolicySql,
   buildCreatePolicySql,
+  buildRlsIdentityPreludeSql,
   emitPgPolicySource,
   formatPolicyRole,
+  OKE_RLS_ROLE,
   parseSqlPolicySpec,
   rlsScopesJson,
   sqlPolicyRowId,
@@ -116,5 +118,25 @@ describe("rlsScopesJson", () => {
     expect(rlsScopesJson(["booking:create", "member", "member"])).toBe(
       '["booking:create","member"]',
     );
+  });
+});
+
+describe("buildRlsIdentityPreludeSql", () => {
+  test("emits one statement per exec — never a multi-command batch", () => {
+    const stmts = buildRlsIdentityPreludeSql({
+      gate: "member",
+      userId: "alice",
+      scopes: ["member"],
+    });
+    expect(stmts.map((s) => s.sql)).toEqual([
+      "BEGIN",
+      `SET LOCAL ROLE ${OKE_RLS_ROLE}`,
+      "SET LOCAL row_security = on",
+      "SELECT set_config('oke.gate', ?, true), set_config('oke.user', ?, true), set_config('oke.scopes', ?, true)",
+    ]);
+    for (const stmt of stmts) {
+      expect(stmt.sql.includes(";")).toBe(false);
+    }
+    expect(stmts[3]?.params).toEqual(["member", "alice", '["member"]']);
   });
 });

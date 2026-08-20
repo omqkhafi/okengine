@@ -85,6 +85,13 @@ export async function connectPglite(options: SqlConnectOptions = {}): Promise<Sq
       return rs.rows;
     },
     async exec(sql, params = []) {
+      // Prepared `query` rejects multi-command scripts (`BEGIN; SET; …`).
+      // Param-less SQL uses simple-protocol `exec` (helpers, BEGIN, SET).
+      if (params.length === 0) {
+        const results = await db.exec(sql);
+        const last = results[results.length - 1];
+        return { changes: last?.affectedRows ?? 0 };
+      }
       const rs = await db.query<SqlRow>(toPostgresParams(sql), [...params]);
       return { changes: rs.affectedRows ?? 0 };
     },

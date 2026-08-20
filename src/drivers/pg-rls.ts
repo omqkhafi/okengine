@@ -38,6 +38,12 @@ const SPECIAL_POLICY_ROLES = new Set(["public", "current_role", "current_user", 
 /** Drivers that honor `SET LOCAL row_security` + `oke.*` GUCs. */
 export const RLS_CONTEXT_DRIVERS = new Set<string>(["postgres", "pglite"]);
 
+/**
+ * Non-superuser role the stamp `SET LOCAL ROLE`s into so RLS applies.
+ * Table owners and PGlite's `postgres` superuser otherwise bypass policies.
+ */
+export const OKE_RLS_ROLE = "oke_app";
+
 /** Live Gate principal stamped onto a SQL statement. */
 export type RlsIdentity = {
   readonly gate: string;
@@ -46,8 +52,8 @@ export type RlsIdentity = {
 };
 
 /**
- * SQL that installs `oke.gate()`, `oke.user()`, and `oke.has_scope(text)`.
- * Safe to run repeatedly (`CREATE OR REPLACE`).
+ * SQL that installs `oke.gate()`, `oke.user()`, `oke.has_scope(text)`,
+ * and the {@link OKE_RLS_ROLE} worker role. Safe to run repeatedly.
  */
 export const OKE_RLS_HELPER_SQL = `CREATE SCHEMA IF NOT EXISTS oke;
 CREATE OR REPLACE FUNCTION oke.gate() RETURNS text
@@ -60,7 +66,20 @@ LANGUAGE sql STABLE AS $$
     WHEN current_setting('oke.scopes', true) IN ('') THEN false
     ELSE current_setting('oke.scopes', true)::jsonb ? p_scope
   END
-$$;`;
+$$;
+DO $oke_rls_role$
+BEGIN
+  CREATE ROLE ${OKE_RLS_ROLE} NOSUPERUSER NOBYPASSRLS NOLOGIN;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END
+$oke_rls_role$;
+GRANT USAGE ON SCHEMA public TO ${OKE_RLS_ROLE};
+GRANT USAGE ON SCHEMA oke TO ${OKE_RLS_ROLE};
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA oke TO ${OKE_RLS_ROLE};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${OKE_RLS_ROLE};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${OKE_RLS_ROLE};
+GRANT ${OKE_RLS_ROLE} TO CURRENT_USER;`;
 
 /**
  * Quote a Postgres identifier (`"`), stripping embedded quotes.
@@ -359,17 +378,26 @@ function escapeSqlTemplate(expr: string): string {
   return expr.replaceAll("\\", "\\\\").replaceAll("`", "\\`");
 }
 
+/** One statement in the RLS identity prelude (never a multi-command batch). */
+export type RlsPreludeStatement = {
+  readonly sql: string;
+  readonly params?: readonly string[];
+};
+
 /**
- * `BEGIN` + `SET LOCAL` + `oke.*` GUCs as one script (no user statement).
+ * Per-statement identity frame (no user SQL). PGlite's `query` path is
+ * prepared statements and rejects `BEGIN; SET; SELECT` as one script.
  *
  * @param identity - Gate principal
  */
-export function buildRlsIdentityPreludeSql(identity: RlsIdentity): {
-  readonly sql: string;
-  readonly params: readonly string[];
-} {
-  return {
-    sql: `BEGIN; SET LOCAL row_security = on; SELECT set_config('oke.gate', ?, true), set_config('oke.user', ?, true), set_config('oke.scopes', ?, true)`,
-    params: [identity.gate, identity.userId, rlsScopesJson(identity.scopes)],
-  };
+export function buildRlsIdentityPreludeSql(identity: RlsIdentity): readonly RlsPreludeStatement[] {
+  return [
+    { sql: "BEGIN" },
+    { sql: `SET LOCAL ROLE ${OKE_RLS_ROLE}` },
+    { sql: "SET LOCAL row_security = on" },
+    {
+      sql: `SELECT set_config('oke.gate', ?, true), set_config('oke.user', ?, true), set_config('oke.scopes', ?, true)`,
+      params: [identity.gate, identity.userId, rlsScopesJson(identity.scopes)],
+    },
+  ];
 }

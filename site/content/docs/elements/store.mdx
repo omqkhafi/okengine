@@ -323,8 +323,10 @@ escape hatch — predicates use `oke.*`, never `current_setting`.
 
 <Callout title="User-plane fx.store applies RLS">
   HTTP / resource flows stamp Gate identity onto every postgres / pglite
-  statement. Table-owner bypass ends for those surfaces. Operator,
-  `bypassGates`, cron / CDC / signal, and catalog DDL stay unstamped.
+  statement (`BEGIN`, `SET LOCAL ROLE oke_app`, `set_config` — split so
+  PGlite's prepared `query` path can run them). Table-owner / superuser
+  bypass ends for those surfaces. Operator, `bypassGates`, cron / CDC /
+  signal, and catalog DDL stay unstamped.
 </Callout>
 
 #### Foreign keys and relations

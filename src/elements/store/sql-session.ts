@@ -34,6 +34,50 @@ import {
 
 export type { WhereMap } from "./sql-condition.ts";
 
+/** Serialize stamp frames on a shared connection so concurrent identities cannot interleave. */
+const rlsStampTails = new WeakMap<SqlConnection, Promise<unknown>>();
+
+/**
+ * True when SQL must not enter an RLS identity frame (txn control or DDL).
+ *
+ * @param sql - Statement
+ */
+export function isRlsStampExemptSql(sql: string): boolean {
+  return /^\s*(begin|commit|rollback|create|alter|drop|truncate|grant|revoke|comment)\b/i.test(
+    sql,
+  );
+}
+
+/**
+ * Run `fn` after any in-flight stamp on `connection` finishes.
+ *
+ * @param connection - Shared SQL connection
+ * @param fn - Stamp frame
+ */
+async function withRlsStampLock<T>(
+  connection: SqlConnection,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = rlsStampTails.get(connection) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  rlsStampTails.set(
+    connection,
+    prev.then(
+      () => gate,
+      () => gate,
+    ),
+  );
+  await prev.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 /** Options for a SQL session. */
 export interface SqlSessionOptions {
   /** Open connection (already role-routed). */
@@ -380,14 +424,21 @@ export function createSqlStoreHandle(
 
   async function withRlsStamp<T>(fn: () => Promise<T>, sql: string): Promise<T> {
     if (!rls || !RLS_CONTEXT_DRIVERS.has(connection.driverId)) return fn();
-    if (/^\s*(begin|commit|rollback)\b/i.test(sql)) return fn();
+    if (isRlsStampExemptSql(sql)) return fn();
+    return withRlsStampLock(connection, () => applyRlsStamp(fn));
+  }
+
+  async function applyRlsStamp<T>(fn: () => Promise<T>): Promise<T> {
+    if (!rls) return fn();
     if (!helpersReady) {
       await connection.exec(OKE_RLS_HELPER_SQL);
       helpersReady = true;
     }
     const prelude = buildRlsIdentityPreludeSql(rls);
     try {
-      await connection.exec(prelude.sql, prelude.params);
+      for (const stmt of prelude) {
+        await connection.exec(stmt.sql, stmt.params ?? []);
+      }
       const result = await fn();
       await connection.exec("COMMIT");
       return result;

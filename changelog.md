@@ -73,6 +73,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Overview Traces Advanced filters now reveal/collapse with the existing
   AgentDisclosure clip-path (220ms open / 140ms close, EASE_OUT).
 
+### 🐛 Fixed
+
+#### Runtime
+
+- PGlite RLS stamp is split statements (`BEGIN`, `SET LOCAL ROLE oke_app`,
+  `set_config`) — a multi-command batch is rejected by PGlite's prepared
+  `query` path. Concurrent identities on the shared connection are serialized.
+
+
 ## v0.14.1 — 2026-08-20
 
 ### 🐛 Fixed
