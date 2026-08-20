@@ -942,7 +942,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     return { code: 0, plan };
   }
 
+  let boardPaused = false;
   const repaintBoard = (aiStatus?: DevStatus): void => {
+    if (boardPaused) return;
     bootBoard.paint(paintBootBoard(aiStatus ?? heroAiStatus));
   };
 
@@ -1026,15 +1028,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           `oke db push (dev · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
         ),
       );
-      if (result.code === 0) {
-        const { maybeAskSeed } = await import("./ask-seed.ts");
-        await maybeAskSeed({
-          cwd,
-          env: configEnv,
-          write,
-          stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
-        });
-      }
     } catch (err) {
       write(await formatDevSchemaSyncFailure(cwd, err, "boot"));
     }
@@ -1517,6 +1510,25 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       const { launchDevLiveControls } = await import("./tui/DevLive.tsx");
       await launchDevLiveControls({
         onRefresh: () => refreshChrome(),
+        onSeed: async () => {
+          const { runSlashCli } = await import("./tui/slash-run.ts");
+          boardPaused = true;
+          const lines: string[] = [];
+          try {
+            const code = await runSlashCli(cwd, ["db", "seed", "--force"], (line) => {
+              lines.push(line);
+              write(line);
+            });
+            if (code === 0) return;
+            const last = [...lines]
+              .reverse()
+              .map((line) => line.trim())
+              .find((line) => line.length > 0 && !line.startsWith("✗") && !line.startsWith("$"));
+            throw new Error(last || "oke db seed failed");
+          } finally {
+            boardPaused = false;
+          }
+        },
         onComposeUp: () => composeAction("up"),
         onComposeStop: () => composeAction("stop"),
         onQuit: () => {

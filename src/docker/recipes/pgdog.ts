@@ -35,12 +35,14 @@ export function buildPgDogToml(opts: {
     'host = "0.0.0.0"',
     "port = 6432",
     'pooler_mode = "transaction"',
+    "default_pool_size = 20",
     "",
     "[[databases]]",
     `name = ${tomlString(db)}`,
     `host = ${tomlString(host)}`,
     `port = ${port}`,
     `database_name = ${tomlString(db)}`,
+    "pool_size = 20",
     "",
   ].join("\n");
 }

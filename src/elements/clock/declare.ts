@@ -5,6 +5,8 @@
  * the effective state from the Store (console §5), never the code directly.
  */
 
+import { clockRegistry } from "../../kernel/element-registries.ts";
+
 /** Options for {@link clock}. */
 export interface ClockOptions {
   /** Cron expression (`m h dom mon dow`). */
@@ -41,6 +43,27 @@ export interface ClockDecl {
 }
 
 /**
+ * `clock()` pushes into the shared {@link clockRegistry}
+ * (`src/kernel/element-registries.ts`) so {@link oke} can auto-populate
+ * `clocks` with zero explicit array — mirrors the {@link on} trigger-drain
+ * registry (`src/kernel/on.ts`).
+ *
+ * Snapshot of every clock declared since the last reset.
+ */
+export function listClocks(): readonly ClockDecl[] {
+  return clockRegistry.slice();
+}
+
+/**
+ * Clear the clock registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetClocks(): void {
+  clockRegistry.length = 0;
+}
+
+/**
  * Declare a named clock / cron schedule.
  *
  * @param name - Schedule name
@@ -50,7 +73,7 @@ export function clock(name: string, options: ClockOptions = {}): ClockDecl {
   if (!options.cron && !options.every) {
     throw new TypeError(`clock("${name}"): require cron or every`);
   }
-  return {
+  const decl: ClockDecl = {
     name,
     cron: options.cron,
     every: options.every,
@@ -58,4 +81,6 @@ export function clock(name: string, options: ClockOptions = {}): ClockDecl {
     overridable: options.overridable ?? false,
     ...(options.description !== undefined ? { description: options.description } : {}),
   };
+  clockRegistry.push(decl);
+  return decl;
 }

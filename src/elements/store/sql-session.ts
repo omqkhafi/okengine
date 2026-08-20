@@ -9,7 +9,7 @@ import type { DomainDdlMode } from "../../config/index.ts";
 import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/types.ts";
 import {
   buildRlsIdentityPreludeSql,
-  OKE_RLS_HELPER_SQL,
+  installOkeRlsHelpers,
   RLS_CONTEXT_DRIVERS,
   type RlsIdentity,
 } from "../../drivers/pg-rls.ts";
@@ -43,9 +43,7 @@ const rlsStampTails = new WeakMap<SqlConnection, Promise<unknown>>();
  * @param sql - Statement
  */
 export function isRlsStampExemptSql(sql: string): boolean {
-  return /^\s*(begin|commit|rollback|create|alter|drop|truncate|grant|revoke|comment)\b/i.test(
-    sql,
-  );
+  return /^\s*(begin|commit|rollback|create|alter|drop|truncate|grant|revoke|comment)\b/i.test(sql);
 }
 
 /**
@@ -54,10 +52,7 @@ export function isRlsStampExemptSql(sql: string): boolean {
  * @param connection - Shared SQL connection
  * @param fn - Stamp frame
  */
-async function withRlsStampLock<T>(
-  connection: SqlConnection,
-  fn: () => Promise<T>,
-): Promise<T> {
+async function withRlsStampLock<T>(connection: SqlConnection, fn: () => Promise<T>): Promise<T> {
   const prev = rlsStampTails.get(connection) ?? Promise.resolve();
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
@@ -415,41 +410,41 @@ export function createSqlStoreHandle(
   }
 
   function query(sql: string, params: readonly unknown[] = []): Promise<SqlRow[]> {
-    return withSchemaGuard(() => withRlsStamp(() => connection.query(sql, params), sql));
+    return withSchemaGuard(() => withRlsStamp((conn) => conn.query(sql, params), sql));
   }
 
   function exec(sql: string, params: readonly unknown[] = []): Promise<{ changes: number }> {
-    return withSchemaGuard(() => withRlsStamp(() => connection.exec(sql, params), sql));
+    return withSchemaGuard(() => withRlsStamp((conn) => conn.exec(sql, params), sql));
   }
 
-  async function withRlsStamp<T>(fn: () => Promise<T>, sql: string): Promise<T> {
-    if (!rls || !RLS_CONTEXT_DRIVERS.has(connection.driverId)) return fn();
-    if (isRlsStampExemptSql(sql)) return fn();
-    return withRlsStampLock(connection, () => applyRlsStamp(fn));
+  async function withRlsStamp<T>(fn: (conn: SqlConnection) => Promise<T>, sql: string): Promise<T> {
+    if (!rls || !RLS_CONTEXT_DRIVERS.has(connection.driverId)) return fn(connection);
+    if (isRlsStampExemptSql(sql)) return fn(connection);
+    const run = (): Promise<T> => applyRlsStamp(fn);
+    // PGlite is one backend session — concurrent identities must not interleave.
+    // Pooled postgres pins each stamp via `transaction()` instead.
+    if (connection.driverId === "pglite") {
+      return withRlsStampLock(connection, run);
+    }
+    return run();
   }
 
-  async function applyRlsStamp<T>(fn: () => Promise<T>): Promise<T> {
-    if (!rls) return fn();
+  async function applyRlsStamp<T>(fn: (conn: SqlConnection) => Promise<T>): Promise<T> {
+    if (!rls) return fn(connection);
     if (!helpersReady) {
-      await connection.exec(OKE_RLS_HELPER_SQL);
+      await installOkeRlsHelpers((sql) => connection.exec(sql));
       helpersReady = true;
     }
-    const prelude = buildRlsIdentityPreludeSql(rls);
-    try {
-      for (const stmt of prelude) {
-        await connection.exec(stmt.sql, stmt.params ?? []);
+    const frame = async (tx: SqlConnection): Promise<T> => {
+      for (const stmt of buildRlsIdentityPreludeSql(rls)) {
+        await tx.exec(stmt.sql, stmt.params ?? []);
       }
-      const result = await fn();
-      await connection.exec("COMMIT");
-      return result;
-    } catch (err) {
-      try {
-        await connection.exec("ROLLBACK");
-      } catch {
-        // Connection may already be idle.
-      }
-      throw err;
+      return fn(tx);
+    };
+    if (!connection.transaction) {
+      throw new Error("RLS stamp needs SqlConnection.transaction to pin SET LOCAL");
     }
+    return connection.transaction(frame);
   }
 
   async function ensureFromMeta(table: TableHandle | unknown): Promise<void> {

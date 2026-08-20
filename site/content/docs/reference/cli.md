@@ -48,7 +48,7 @@ oke schema generate              # core + plugin stubs → .oke/schema/oke.ts (-
 oke db push                      # domain schema.ts → live DB (dev; drizzle-kit)
 oke db generate                  # versioned SQL under drizzle/ (review)
 oke db migrate                   # apply migrations (explicit; never auto in prod)
-oke db seed                      # this app's defineSeed (name + essential + env); never at boot
+oke db seed                      # this app's defineSeed (name + essential + env) — standard CLI path
 oke db seed --env prod --force   # CI: skip prod confirmation prompt
 oke db studio                    # drizzle-kit Studio (long-running)
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
@@ -116,8 +116,7 @@ yellow pending/loading · red error · dim idle. Compose health keeps polling
 (`docker compose ps -a`); AI ● tracks model phase while the AI container is up.
 Boot does not wait for the model to become ready. A successful session writes
 `.oke/dev.json` (pid · ports · startedAt) and clears it on stop. Durable local
-markers live in `.oke/state.json` (`seededAt` + `seed` after the one-shot
-prompt for this app's `defineSeed({ name })`) — not in the session lock. Console session signing uses
+markers live in `.oke/state.json` — not in the session lock. Console session signing uses
 `.oke/console.secret` (or `OKE_CONSOLE_SECRET`); that is not a Vault secret.
 
 On a TTY, Ink keyboard controls stay active after boot (`useInput` — same
@@ -128,6 +127,7 @@ board.
 | --------- | ----------------------------------- |
 | `?`       | help                                |
 | `r`       | refresh — clear logs, show latest ● |
+| `s`       | `oke db seed`                       |
 | `q`       | quit `oke dev`                      |
 | `u` / `x` | compose up / stop (whole stack)     |
 

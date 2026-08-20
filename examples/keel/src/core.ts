@@ -112,25 +112,6 @@ export const memberAdminWrite = gate.all(member, memberAdmin);
 /** Webhook admin write chain. */
 export const webhookAdminWrite = gate.all(member, webhookAdmin);
 
-/** Policies + rates passed to `oke({ gate })`. */
-export const KEEL_GATES = [
-  member,
-  taskWrite,
-  projectAdmin,
-  commentWrite,
-  filesWrite,
-  memberAdmin,
-  webhookAdmin,
-  tasksWriteRate,
-  commentsWriteRate,
-  pmWriteRate,
-  tasksWrite,
-  commentsWrite,
-  projectAdminWrite,
-  memberAdminWrite,
-  webhookAdminWrite,
-] as const;
-
 // --- Vault -------------------------------------------------------------------
 
 /** GitHub PR / issue intake token (stub ingest — never called outbound). */
@@ -304,7 +285,7 @@ export const openaiApiKey = vault.secret("OPENAI_API_KEY", {
   dev: "sk-dev-keel-openai-compatible",
 });
 
-/** Vault contracts passed to `oke({ secrets })`. */
+/** Vault contracts — auto-register; seed reads this list. */
 export const KEEL_VAULT = [
   githubToken,
   openaiKey,
@@ -404,16 +385,6 @@ export const goalAtRiskMail = mail.template("goal-at-risk", {
   }),
 });
 
-/** Channel templates passed to `oke({ channel })`. */
-export const KEEL_TEMPLATES = [
-  taskAssignedMail,
-  mentionReplyMail,
-  taskOverdueMail,
-  dailyDigestMail,
-  formReceivedMail,
-  goalAtRiskMail,
-] as const;
-
 // --- Clock -------------------------------------------------------------------
 
 /** Expire stale compose drafts. */
@@ -453,27 +424,6 @@ export const rollupGoalsClock = clock("rollup-goals", {
   timezone: "UTC",
   description: "Weekly goal rollup",
 });
-
-/** Clocks passed to `oke()` — each unit's scheduled flow uses a short verb (`drafts.expire`). */
-export const KEEL_CLOCKS = [
-  expireDraftsClock,
-  watchOverdueClock,
-  dailyDigestClock,
-  spawnRecurringClock,
-  rollupGoalsClock,
-] as const;
-
-/** KV / index facets — not auto-registered. */
-export const KEEL_EXTRA_STORES = [
-  draftsKv,
-  viewPrefsKv,
-  remindersKv,
-  webhooksKv,
-  taskIndex,
-  documentIndex,
-  commentIndex,
-  projectIndex,
-] as const;
 
 // --- AI ----------------------------------------------------------------------
 

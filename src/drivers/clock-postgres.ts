@@ -7,7 +7,13 @@
  */
 
 import type { CronRow, CronStatus, CronStore } from "../elements/clock/reconcile.ts";
-import { toPostgresParams } from "./postgres.ts";
+import {
+  resolvePostgresUrl,
+  sharedPostgresClient,
+  toPostgresParams,
+  withPinnedPostgres,
+  type PostgresClientLike,
+} from "./postgres.ts";
 
 /** Row shape in `oke_crons` (lease columns mirror `oke_signal_messages`). */
 interface CronDbRow {
@@ -69,7 +75,7 @@ export interface BunCronClient {
   close?(options?: { timeout?: number }): Promise<void>;
 }
 
-function wrapBunClient(client: BunCronClient): PostgresCronSql {
+function wrapBunClient(client: PostgresClientLike): PostgresCronSql {
   const api: PostgresCronSql = {
     async query(sql, params = []) {
       const pg = toPostgresParams(sql);
@@ -92,7 +98,7 @@ function wrapBunClient(client: BunCronClient): PostgresCronSql {
       return { changes: 0 };
     },
     async begin(fn) {
-      return client.begin(async (tx) => fn(wrapBunClient(tx)));
+      return withPinnedPostgres(client, (tx) => fn(wrapBunClient(tx)));
     },
     async close() {
       await client.close?.();
@@ -365,10 +371,8 @@ export async function createPostgresCronStore(
   const sql =
     options.sql ??
     wrapBunClient(
-      options.client ??
-        (new Bun.SQL(
-          options.url ?? process.env.DATABASE_URL ?? "postgres://localhost:5432/oke",
-        ) as unknown as BunCronClient),
+      (options.client ??
+        sharedPostgresClient(resolvePostgresUrl(options.url))) as PostgresClientLike,
     );
 
   await ensureSchema(sql);

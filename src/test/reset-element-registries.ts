@@ -1,7 +1,8 @@
 /**
- * Global safety net for the `store.sql` / `store.files` / `vault.secret` /
- * `signal()` / `channel.<medium>().template()` / `ai.model`·prompt·embed·agent
- * auto-registries (`src/kernel/element-registries.ts`).
+ * Global safety net for the `store.*` / `vault.secret` / `signal()` /
+ * `clock()` / `gate.policy`·scope·rate / `channel.<medium>().template()` /
+ * `ai.model`·prompt·embed·agent auto-registries
+ * (`src/kernel/element-registries.ts`).
  *
  * Unlike `on()` bindings — created almost exclusively to wire a real app —
  * these factories are called throughout the suite as bare value constructors,
@@ -23,6 +24,8 @@ import {
   aiModelRegistry,
   aiPromptRegistry,
   channelTemplateRegistry,
+  clockRegistry,
+  gateRegistry,
   requiredEnvRegistry,
   secretRegistry,
   signalRegistry,
@@ -34,6 +37,8 @@ afterEach(() => {
   secretRegistry.length = 0;
   requiredEnvRegistry.length = 0;
   signalRegistry.length = 0;
+  clockRegistry.length = 0;
+  gateRegistry.length = 0;
   channelTemplateRegistry.length = 0;
   aiModelRegistry.length = 0;
   aiPromptRegistry.length = 0;

@@ -17,7 +17,7 @@ import { loadPluginTablesFromAppEntry } from "../elements/store/load-plugin-tabl
 import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../config/index.ts";
 import type { TableContribution } from "../kernel/plugin.ts";
 import { runSeed, type SeedOptions } from "./db-seed.ts";
-import { OKE_RLS_HELPER_SQL } from "../drivers/pg-rls.ts";
+import { installOkeRlsHelpers as runOkeRlsHelperStatements } from "../drivers/pg-rls.ts";
 import { resolveDrizzleKitEnv } from "./drizzle-env.ts";
 import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
@@ -529,7 +529,7 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
   push       Apply schema to the live local DB (dev; no migration files)
   generate   Write versioned SQL under drizzle/ for review
   migrate    Apply generated migrations (explicit; never automatic in prod)
-  seed       Run defineSeed (essential + env category); never at boot
+  seed       Run defineSeed (essential + env category) — standard CLI path
   studio     Open drizzle-kit Studio (long-running)
 
   --env      Override config env (dev|test|prod)
@@ -591,7 +591,7 @@ async function installOkeRlsHelpers(write: (text: string) => void): Promise<void
       const { connectPglite } = await import("../drivers/pglite.ts");
       const conn = await connectPglite({ url: pgliteUrl });
       try {
-        await conn.exec(OKE_RLS_HELPER_SQL);
+        await runOkeRlsHelperStatements((sql) => conn.exec(sql));
       } finally {
         await conn.close();
       }
@@ -601,7 +601,7 @@ async function installOkeRlsHelpers(write: (text: string) => void): Promise<void
     const { connectPostgres } = await import("../drivers/postgres.ts");
     const conn = await connectPostgres({ url });
     try {
-      await conn.exec(OKE_RLS_HELPER_SQL);
+      await runOkeRlsHelperStatements((sql) => conn.exec(sql));
     } finally {
       await conn.close();
     }

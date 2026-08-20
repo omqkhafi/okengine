@@ -129,7 +129,6 @@ describe("buildRlsIdentityPreludeSql", () => {
       scopes: ["member"],
     });
     expect(stmts.map((s) => s.sql)).toEqual([
-      "BEGIN",
       `SET LOCAL ROLE ${OKE_RLS_ROLE}`,
       "SET LOCAL row_security = on",
       "SELECT set_config('oke.gate', ?, true), set_config('oke.user', ?, true), set_config('oke.scopes', ?, true)",
@@ -137,6 +136,6 @@ describe("buildRlsIdentityPreludeSql", () => {
     for (const stmt of stmts) {
       expect(stmt.sql.includes(";")).toBe(false);
     }
-    expect(stmts[3]?.params).toEqual(["member", "alice", '["member"]']);
+    expect(stmts[2]?.params).toEqual(["member", "alice", '["member"]']);
   });
 });

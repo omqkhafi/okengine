@@ -14,6 +14,7 @@ describe("dev-controls", () => {
     expect(parseDevControlKey("?")).toBe("?");
     expect(parseDevControlKey("h")).toBe("?");
     expect(parseDevControlKey("r")).toBe("r");
+    expect(parseDevControlKey("s")).toBe("s");
     expect(parseDevControlKey("u")).toBe("u");
     expect(parseDevControlKey("x")).toBe("x");
     expect(parseDevControlKey("c")).toBeNull();
@@ -33,6 +34,8 @@ describe("dev-controls", () => {
     expect(formatDevControlsHint(false)).toContain("quit");
     expect(formatDevControlsHint(false)).not.toContain("services");
     expect(formatDevControlsHelp(false)).toContain("refresh");
+    expect(formatDevControlsHint(false)).toContain("seed");
+    expect(formatDevControlsHelp(false)).toContain("oke db seed");
     expect(formatDevControlsHelp(false)).not.toContain("select service");
   });
 
@@ -74,6 +77,22 @@ describe("dev-controls", () => {
     expect(refreshed).toBe(1);
     expect(panels).toBe(1);
     expect(quit).toBe(true);
+    d.stop();
+  });
+
+  test("dispatcher s runs onSeed", async () => {
+    let seeded = 0;
+    const d = createDevControlDispatcher({
+      write: () => {},
+      onQuit: () => {},
+      onSeed: () => {
+        seeded += 1;
+      },
+      composeAction: async () => {},
+    });
+    d.handleKey("s");
+    await Bun.sleep(10);
+    expect(seeded).toBe(1);
     d.stop();
   });
 

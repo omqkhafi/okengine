@@ -13,6 +13,7 @@ node_modules
 !/docs/guides/**
 !site/content/docs/
 !site/content/docs/**
+!.cursor/**
 
 # output
 out
@@ -81,4 +82,3 @@ src/plugins/__taqnyat-final.ts
 # Local HyperFrames compositions (promo / explainer drafts — not the product)
 /video/
 
-.cursor/plans/

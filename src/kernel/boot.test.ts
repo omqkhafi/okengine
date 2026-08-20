@@ -116,9 +116,9 @@ describe("boot — lazy element needs", () => {
         if (raw.byteLength === 0) continue;
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
-      // Rebased after 0.12.0 store/http graph growth
-      // (~47.6 kB gzip with export externals).
-      expect(total).toBeLessThan(48_000);
+      // Rebased after clock / gate / kv / index auto-drain on `oke()`.
+      // (~48.3 kB gzip with export externals).
+      expect(total).toBeLessThan(49_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

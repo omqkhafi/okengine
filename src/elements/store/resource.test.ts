@@ -7,7 +7,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { pgliteDriver } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";

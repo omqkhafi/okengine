@@ -1,10 +1,10 @@
 /**
- * Zod from generated Drizzle tables — `createSelectSchema` / insert / update.
+ * Zod from generated Drizzle tables — `drizzle-orm/zod` select / insert / update.
  *
  * Flow `in` / `out` pick and refine these instead of rewriting columns.
  */
 
-import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import type { ZodType } from "zod";
 import { pageOut } from "@/lib/http";
 import {

@@ -3,13 +3,14 @@
  *
  * Covers the gap unit tests missed: a live policy, two concurrent identity
  * bags on one shared connection, and row-level isolation. PGlite `query`
- * rejects multi-command batches — the stamp must be split statements.
+ * rejects multi-command batches — the stamp is split statements pinned
+ * through `SqlConnection.transaction`.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { connectPglite } from "../../drivers/pglite.ts";
 import { connectPostgres } from "../../drivers/postgres.ts";
-import { OKE_RLS_HELPER_SQL } from "../../drivers/pg-rls.ts";
+import { installOkeRlsHelpers } from "../../drivers/pg-rls.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
 import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
 
@@ -37,7 +38,7 @@ beforeAll(async () => {
   await conn.exec(NOTES_DDL);
   await conn.exec(`INSERT INTO notes VALUES ('a', 'alice', 'hi'), ('b', 'bob', 'yo')`);
   await conn.exec(`ALTER TABLE notes ENABLE ROW LEVEL SECURITY`);
-  await conn.exec(OKE_RLS_HELPER_SQL);
+  await installOkeRlsHelpers((sql) => conn.exec(sql));
   await conn.exec(OWNER_POLICY);
   asAlice = createSqlStoreHandle("sql:app", {
     connection: conn,
@@ -68,10 +69,9 @@ afterAll(async () => {
 describe("sql-session RLS isolation (pglite)", () => {
   test("pglite query rejects a multi-command batch (the old prelude)", async () => {
     await expect(
-      conn.query(
-        "BEGIN; SET LOCAL row_security = on; SELECT set_config('oke.user', $1, true)",
-        ["alice"],
-      ),
+      conn.query("BEGIN; SET LOCAL row_security = on; SELECT set_config('oke.user', $1, true)", [
+        "alice",
+      ]),
     ).rejects.toThrow(/multiple commands/i);
   });
 
@@ -113,49 +113,53 @@ describe("sql-session RLS isolation (live postgres)", () => {
   const live = LIVE_PG ? test : test.skip;
   const table = "oke_rls_isolation_notes";
 
-  live("split stamp isolates concurrent identities", async () => {
-    const pg = await connectPostgres({
-      url: process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL,
-      role: "primary",
-    });
-    try {
-      await pg.exec(`DROP TABLE IF EXISTS ${table}`);
-      await pg.exec(
-        `CREATE TABLE ${table} (id text PRIMARY KEY, owner text NOT NULL, body text NOT NULL)`,
-      );
-      await pg.exec(`INSERT INTO ${table} VALUES ('a', 'alice', 'hi'), ('b', 'bob', 'yo')`);
-      await pg.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
-      await pg.exec(OKE_RLS_HELPER_SQL);
-      await pg.exec(
-        `CREATE POLICY owner_select ON ${table} AS PERMISSIVE FOR SELECT TO public USING (owner = oke.user())`,
-      );
-      const alice = createSqlStoreHandle("sql:app", {
-        connection: pg,
-        classifications: new Map(),
-        routedRole: "primary",
-        domainDdl: "off",
-        rls: { gate: "member", userId: "alice", scopes: ["member"] },
+  live(
+    "split stamp isolates concurrent identities",
+    async () => {
+      const pg = await connectPostgres({
+        url: process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL,
+        role: "primary",
       });
-      const bob = createSqlStoreHandle("sql:app", {
-        connection: pg,
-        classifications: new Map(),
-        routedRole: "primary",
-        domainDdl: "off",
-        rls: { gate: "member", userId: "bob", scopes: ["member"] },
-      });
-      const [a, b] = await Promise.all([
-        alice.raw(`SELECT id, owner FROM ${table} ORDER BY id`),
-        bob.raw(`SELECT id, owner FROM ${table} ORDER BY id`),
-      ]);
-      expect(a).toEqual([{ id: "a", owner: "alice" }]);
-      expect(b).toEqual([{ id: "b", owner: "bob" }]);
-    } finally {
       try {
         await pg.exec(`DROP TABLE IF EXISTS ${table}`);
-      } catch {
-        // Best-effort cleanup.
+        await pg.exec(
+          `CREATE TABLE ${table} (id text PRIMARY KEY, owner text NOT NULL, body text NOT NULL)`,
+        );
+        await pg.exec(`INSERT INTO ${table} VALUES ('a', 'alice', 'hi'), ('b', 'bob', 'yo')`);
+        await pg.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+        await installOkeRlsHelpers((sql) => pg.exec(sql));
+        await pg.exec(
+          `CREATE POLICY owner_select ON ${table} AS PERMISSIVE FOR SELECT TO public USING (owner = oke.user())`,
+        );
+        const alice = createSqlStoreHandle("sql:app", {
+          connection: pg,
+          classifications: new Map(),
+          routedRole: "primary",
+          domainDdl: "off",
+          rls: { gate: "member", userId: "alice", scopes: ["member"] },
+        });
+        const bob = createSqlStoreHandle("sql:app", {
+          connection: pg,
+          classifications: new Map(),
+          routedRole: "primary",
+          domainDdl: "off",
+          rls: { gate: "member", userId: "bob", scopes: ["member"] },
+        });
+        const [a, b] = await Promise.all([
+          alice.raw(`SELECT id, owner FROM ${table} ORDER BY id`),
+          bob.raw(`SELECT id, owner FROM ${table} ORDER BY id`),
+        ]);
+        expect(a).toEqual([{ id: "a", owner: "alice" }]);
+        expect(b).toEqual([{ id: "b", owner: "bob" }]);
+      } finally {
+        try {
+          await pg.exec(`DROP TABLE IF EXISTS ${table}`);
+        } catch {
+          // Best-effort cleanup.
+        }
+        await pg.close();
       }
-      await pg.close();
-    }
-  }, 20_000);
+    },
+    20_000,
+  );
 });

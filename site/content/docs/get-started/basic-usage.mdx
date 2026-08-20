@@ -79,8 +79,8 @@ export const app = oke({ name: "notes" }).adopt(routes);
 export type App = typeof app;
 ```
 
-`import "@/core"` loads stores, secrets, channels, and message catalogs
-(via `locales/index.ts`) so they auto-register before `oke()`.
+`import "@/core"` loads stores, secrets, gates, clocks, channels, and
+message catalogs (via `locales/index.ts`) so they auto-register before `oke()`.
 
 ```typescript title="client"
 import { createClient } from "okengine/client";

@@ -56,7 +56,7 @@ export function StoreSeeding() {
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Seed blocks by env</p>
         <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
-          oke db seed — never at boot
+          oke db seed — standard CLI path
         </code>
       </div>
 

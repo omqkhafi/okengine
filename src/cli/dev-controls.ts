@@ -31,6 +31,10 @@ export type StartDevControlsOptions = {
    */
   readonly onComposeSettled?: () => void | Promise<void>;
   /**
+   * Run `oke db seed` (tests / non-Ink dispatcher).
+   */
+  readonly onSeed?: () => void | Promise<void>;
+  /**
    * Run a compose control action against the whole stack.
    *
    * @param action - up / stop
@@ -50,6 +54,7 @@ export function formatDevControlsHint(color: boolean = termColorEnabled()): stri
     `${s.dim}│${s.reset}  ${s.dim}keys${s.reset}  ` +
     `${s.cyan}?${s.reset} help · ` +
     `${s.cyan}r${s.reset} refresh · ` +
+    `${s.cyan}s${s.reset} seed · ` +
     `${s.cyan}q${s.reset} quit · ` +
     `${s.cyan}u${s.reset} up · ` +
     `${s.cyan}x${s.reset} stop` +
@@ -72,6 +77,7 @@ export function formatDevControlsHelp(color: boolean = termColorEnabled()): stri
     `${s.green}◇${s.reset}  ${s.bold}Keys${s.reset}`,
     k("?", "help"),
     k("r", "refresh — clear logs, show latest ●"),
+    k("s", "oke db seed"),
     k("q", "quit oke dev"),
     k("u", "compose up -d (all)"),
     k("x", "compose stop (all)"),
@@ -138,6 +144,13 @@ export function createDevControlDispatcher(opts: StartDevControlsOptions): DevCo
       if (key === "?") {
         const body = formatDevControlsHelp(color);
         void Promise.resolve(opts.onShowPanel?.(body) ?? opts.write(body));
+        return;
+      }
+      if (key === "s") {
+        void Promise.resolve(opts.onSeed?.()).catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          opts.write(formatStatusLine(`seed failed — ${msg}`, color, "error"));
+        });
         return;
       }
       if (key === "u" || key === "x") {

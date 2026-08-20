@@ -52,34 +52,52 @@ export type RlsIdentity = {
 };
 
 /**
- * SQL that installs `oke.gate()`, `oke.user()`, `oke.has_scope(text)`,
- * and the {@link OKE_RLS_ROLE} worker role. Safe to run repeatedly.
+ * One statement at a time — Bun.SQL `unsafe` / PGlite `query` reject
+ * multi-command batches. Safe to run repeatedly.
  */
-export const OKE_RLS_HELPER_SQL = `CREATE SCHEMA IF NOT EXISTS oke;
-CREATE OR REPLACE FUNCTION oke.gate() RETURNS text
-LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.gate', true) $$;
-CREATE OR REPLACE FUNCTION oke.user() RETURNS text
-LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.user', true) $$;
-CREATE OR REPLACE FUNCTION oke.has_scope(p_scope text) RETURNS boolean
+export const OKE_RLS_HELPER_STATEMENTS: readonly string[] = [
+  "CREATE SCHEMA IF NOT EXISTS oke",
+  `CREATE OR REPLACE FUNCTION oke.gate() RETURNS text
+LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.gate', true) $$`,
+  `CREATE OR REPLACE FUNCTION oke.user() RETURNS text
+LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.user', true) $$`,
+  `CREATE OR REPLACE FUNCTION oke.has_scope(p_scope text) RETURNS boolean
 LANGUAGE sql STABLE AS $$
   SELECT CASE
     WHEN current_setting('oke.scopes', true) IN ('') THEN false
     ELSE current_setting('oke.scopes', true)::jsonb ? p_scope
   END
-$$;
-DO $oke_rls_role$
+$$`,
+  `DO $oke_rls_role$
 BEGIN
   CREATE ROLE ${OKE_RLS_ROLE} NOSUPERUSER NOBYPASSRLS NOLOGIN;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END
-$oke_rls_role$;
-GRANT USAGE ON SCHEMA public TO ${OKE_RLS_ROLE};
-GRANT USAGE ON SCHEMA oke TO ${OKE_RLS_ROLE};
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA oke TO ${OKE_RLS_ROLE};
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${OKE_RLS_ROLE};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${OKE_RLS_ROLE};
-GRANT ${OKE_RLS_ROLE} TO CURRENT_USER;`;
+$oke_rls_role$`,
+  `GRANT USAGE ON SCHEMA public TO ${OKE_RLS_ROLE}`,
+  `GRANT USAGE ON SCHEMA oke TO ${OKE_RLS_ROLE}`,
+  `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA oke TO ${OKE_RLS_ROLE}`,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${OKE_RLS_ROLE}`,
+  `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${OKE_RLS_ROLE}`,
+  `GRANT ${OKE_RLS_ROLE} TO CURRENT_USER`,
+];
+
+/**
+ * All {@link OKE_RLS_HELPER_STATEMENTS} as one script (PGlite `exec` / `oke db push`).
+ */
+export const OKE_RLS_HELPER_SQL = `${OKE_RLS_HELPER_STATEMENTS.join(";\n")};`;
+
+/**
+ * Install `oke.*` helpers one statement at a time.
+ *
+ * @param exec - Statement runner
+ */
+export async function installOkeRlsHelpers(exec: (sql: string) => Promise<unknown>): Promise<void> {
+  for (const stmt of OKE_RLS_HELPER_STATEMENTS) {
+    await exec(stmt);
+  }
+}
 
 /**
  * Quote a Postgres identifier (`"`), stripping embedded quotes.
@@ -191,7 +209,9 @@ export function rlsScopesJson(scopes: readonly string[]): string {
  */
 export function buildCreatePolicySql(spec: SqlPolicySpec): string {
   const roles =
-    spec.roles.length === 0 ? "public" : spec.roles.map((role) => formatPolicyRole(role)).join(", ");
+    spec.roles.length === 0
+      ? "public"
+      : spec.roles.map((role) => formatPolicyRole(role)).join(", ");
   let text = `CREATE POLICY ${quotePgIdent(spec.name)} ON ${quotePgIdent(spec.table)} AS ${spec.behavior} FOR ${spec.command} TO ${roles}`;
   if (spec.using !== undefined && spec.using.trim() !== "") {
     text += ` USING (${spec.using.trim()})`;
@@ -264,10 +284,8 @@ export function parseSqlPolicySpec(raw: Readonly<Record<string, unknown>>): SqlP
   const table = typeof raw.table === "string" ? raw.table.trim() : "";
   if (!isPgPolicyName(name)) throw new Error(`invalid policy name "${name}"`);
   if (!isPgIdent(table)) throw new Error(`invalid table name "${table}"`);
-  const command =
-    parseSqlPolicyCommand(raw.command) ?? parseSqlPolicyCommand(raw.for) ?? "SELECT";
-  const behavior =
-    parseSqlPolicyBehavior(raw.behavior ?? raw.permissive ?? raw.as) ?? "PERMISSIVE";
+  const command = parseSqlPolicyCommand(raw.command) ?? parseSqlPolicyCommand(raw.for) ?? "SELECT";
+  const behavior = parseSqlPolicyBehavior(raw.behavior ?? raw.permissive ?? raw.as) ?? "PERMISSIVE";
   const rolesRaw = rolesField(raw.roles ?? raw.to);
   const roles = parseSqlPolicyRoles(rolesRaw);
   if (!roles) throw new Error("invalid policy roles");
@@ -385,14 +403,16 @@ export type RlsPreludeStatement = {
 };
 
 /**
- * Per-statement identity frame (no user SQL). PGlite's `query` path is
- * prepared statements and rejects `BEGIN; SET; SELECT` as one script.
+ * Per-statement identity frame (no user SQL, no `BEGIN`).
+ *
+ * The caller pins these to one backend connection via `SqlConnection.transaction`.
+ * PGlite's `query` path is prepared statements and rejects `BEGIN; SET; SELECT`
+ * as one script.
  *
  * @param identity - Gate principal
  */
 export function buildRlsIdentityPreludeSql(identity: RlsIdentity): readonly RlsPreludeStatement[] {
   return [
-    { sql: "BEGIN" },
     { sql: `SET LOCAL ROLE ${OKE_RLS_ROLE}` },
     { sql: "SET LOCAL row_security = on" },
     {

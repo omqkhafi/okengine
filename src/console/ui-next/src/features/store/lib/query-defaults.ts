@@ -17,6 +17,66 @@ export function defaultSqlQuery(table?: string): string {
   return `SELECT *\nFROM "${table}"\nLIMIT 50;`;
 }
 
+const DEFAULT_SQL = /^SELECT \*\nFROM "([^"]+)"\nLIMIT 50;$/;
+const DEFAULT_KV = /^\/\/ list  ·  get  ·  set  ·  delete  ·  ttl\nlist(?: (.+))?$/;
+
+/**
+ * Replace a leftover default `SELECT` when that table is gone.
+ * Custom SQL is left alone.
+ *
+ * @param text - Editor buffer
+ * @param tables - Live table names
+ * @param random - Unit interval used to pick a replacement table
+ */
+export function reconcileDefaultSql(
+  text: string,
+  tables: readonly string[],
+  random: () => number = Math.random,
+): string {
+  const match = DEFAULT_SQL.exec(text);
+  if (!match) return text;
+  const table = match[1];
+  if (table && tables.includes(table)) return text;
+  return defaultSqlQuery(pickChildName(tables, random));
+}
+
+/**
+ * Replace a leftover default `list ns:` when that namespace is gone.
+ *
+ * @param text - Editor buffer
+ * @param namespaces - Live namespace names
+ * @param random - Unit interval used to pick a replacement namespace
+ */
+export function reconcileDefaultKv(
+  text: string,
+  namespaces: readonly string[],
+  random: () => number = Math.random,
+): string {
+  const match = DEFAULT_KV.exec(text);
+  if (!match) return text;
+  const prefix = match[1];
+  if (!prefix) return text;
+  const name = prefix.endsWith(":") ? prefix.slice(0, -1) : prefix;
+  if (namespaces.includes(name)) return text;
+  const next = pickChildName(namespaces, random);
+  return defaultKvQuery(next ? `${next}:` : undefined);
+}
+
+/**
+ * Re-seed a default buffer against the live store children.
+ *
+ * @param text - Editor buffer
+ * @param names - Table or namespace names
+ * @param facet - SQL or KV
+ */
+export function reconcileDefaultQuery(
+  text: string,
+  names: readonly string[],
+  facet: Extract<StoreFacet, "sql" | "kv">,
+): string {
+  return facet === "sql" ? reconcileDefaultSql(text, names) : reconcileDefaultKv(text, names);
+}
+
 /**
  * Seed KV command for a namespace prefix.
  *
@@ -59,12 +119,34 @@ export function pickQueryStore(
 }
 
 /**
- * Default child name under a store (first table / namespace).
+ * One live child name, picked at random.
+ *
+ * @param names - Table or namespace names
+ * @param random - Unit interval in `[0, 1)`
+ */
+export function pickChildName(
+  names: readonly string[],
+  random: () => number = Math.random,
+): string | undefined {
+  if (names.length === 0) return undefined;
+  const index = Math.min(names.length - 1, Math.floor(random() * names.length));
+  return names[index];
+}
+
+/**
+ * Default child name under a store (random table / namespace).
  *
  * @param store - Store row
+ * @param random - Unit interval used to pick
  */
-export function firstChildName(store: StoreListStore): string | undefined {
-  return store.children[0]?.name;
+export function randomChildName(
+  store: StoreListStore,
+  random: () => number = Math.random,
+): string | undefined {
+  return pickChildName(
+    store.children.map((child) => child.name),
+    random,
+  );
 }
 
 /**

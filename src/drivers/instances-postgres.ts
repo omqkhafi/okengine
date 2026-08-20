@@ -7,7 +7,7 @@
 
 import type { ConfigEnv } from "../config/index.ts";
 import type { InstanceRow, InstanceStore } from "../kernel/instances.ts";
-import { toPostgresParams } from "./postgres.ts";
+import { resolvePostgresUrl, sharedPostgresClient, toPostgresParams } from "./postgres.ts";
 
 /** Minimal SQL surface for the postgres instance store. */
 export interface PostgresInstanceSql {
@@ -109,9 +109,7 @@ export async function createPostgresInstanceStore(
     options.sql ??
     wrapBunClient(
       options.client ??
-        (new Bun.SQL(
-          options.url ?? process.env.DATABASE_URL ?? "postgres://localhost:5432/oke",
-        ) as unknown as BunInstanceClient),
+        (sharedPostgresClient(resolvePostgresUrl(options.url)) as unknown as BunInstanceClient),
     );
 
   await ensureSchema(sql);

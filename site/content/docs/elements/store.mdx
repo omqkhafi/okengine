@@ -19,6 +19,9 @@ only the driver changes.
 Every facet accepts optional `description` — a human title in the Console (falls back to the store
 name).
 
+`store.sql` / `kv` / `files` / `index` auto-register when the declaring module is imported before
+`oke()`. `oke({ stores })` is still valid and additive.
+
 ## SQL
 
 <StoreFacetMark facet="sql" />
@@ -292,29 +295,33 @@ await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 
 The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle (`pgTable` for Postgres / PGLite) into `src/db/schema.drizzle.ts`.
 
-| Field API                                    | Meaning                                         |
-| -------------------------------------------- | ----------------------------------------------- |
-| `field.text()` / `field.integer()`           | v1 column primitives                            |
-| `.primaryKey()` · `.notNull()` · `.unique()` | constraints                                     |
-| `.default(v)` · `.defaultFn(id \| now)`      | defaults                                        |
-| `.pii()` · `.sensitive()` · `.retain("30d")` | privacy classification                          |
-| `.as("sql_name")`                            | override the automatic `camelCase → snake_case` |
-| `.describe("…")`                             | human title in the Console (falls back to key)  |
-| `.references(() => col, { onDelete })`       | foreign key                                     |
-| `store.schema.rls()`                         | `pgTable.withRLS` when there are no policies    |
+| Field API                                    | Meaning                                                          |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| `field.text()` / `field.integer()`           | v1 column primitives                                             |
+| `.primaryKey()` · `.notNull()` · `.unique()` | constraints                                                      |
+| `.default(v)` · `.defaultFn(id \| now)`      | defaults                                                         |
+| `.pii()` · `.sensitive()` · `.retain("30d")` | privacy classification                                           |
+| `.as("sql_name")`                            | override the automatic `camelCase → snake_case`                  |
+| `.describe("…")`                             | human title in the Console (falls back to key)                   |
+| `.references(() => col, { onDelete })`       | foreign key                                                      |
+| `store.schema.rls()`                         | `pgTable.withRLS` when there are no policies                     |
 | `store.schema.policy.gate/owner/scope`       | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()`) |
 
 Third argument on `store.schema.table` is Drizzle-shaped extras:
 
 ```typescript
-export const bookings = store.schema.table("bookings", {
-  id: field.text().primaryKey(),
-  owner: field.text().notNull(),
-}, [
-  store.schema.policy.gate("member", { for: "select" }),
-  store.schema.policy.owner("owner", { for: "all" }),
-  store.schema.policy.scope("booking:create", { for: "insert" }),
-]);
+export const bookings = store.schema.table(
+  "bookings",
+  {
+    id: field.text().primaryKey(),
+    owner: field.text().notNull(),
+  },
+  [
+    store.schema.policy.gate("member", { for: "select" }),
+    store.schema.policy.owner("owner", { for: "all" }),
+    store.schema.policy.scope("booking:create", { for: "insert" }),
+  ],
+);
 ```
 
 Helpers emit stable names (`gate_member_select`). Raw
@@ -322,11 +329,9 @@ Helpers emit stable names (`gate_member_select`). Raw
 escape hatch — predicates use `oke.*`, never `current_setting`.
 
 <Callout title="User-plane fx.store applies RLS">
-  HTTP / resource flows stamp Gate identity onto every postgres / pglite
-  statement (`BEGIN`, `SET LOCAL ROLE oke_app`, `set_config` — split so
-  PGlite's prepared `query` path can run them). Table-owner / superuser
-  bypass ends for those surfaces. Operator, `bypassGates`, cron / CDC /
-  signal, and catalog DDL stay unstamped.
+  HTTP / resource flows stamp Gate identity onto every postgres / pglite statement (`SET LOCAL ROLE
+  oke_app` + `set_config` in one pinned transaction). Table-owner bypass ends there; operator / cron
+  / CDC / signal / catalog stay unstamped.
 </Callout>
 
 #### Foreign keys and relations
@@ -383,9 +388,9 @@ Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
 | Staging / prod | `oke db generate` → review files → `oke db migrate` on that DB |
 
 <Callout title="Connection pooling is infrastructure, not app code" type="info">
-  Bun.SQL defaults to **10** connections per process — fine per instance. Scale out and `N × pool`
-  can exceed Postgres `max_connections`. `dev`/`prod` put **PgDog** in front; `DATABASE_URL` → port
-  `6432`. No app code changes.
+  One shared Bun.SQL pool (**8** connections) per URL. `dev`/`prod` put **PgDog** in front
+  (`DATABASE_URL` → port `6432`, `pool_size` 20). RLS stamps `reserve` one slot, then `SET LOCAL` in
+  that transaction — a leaked `BEGIN` exhausts checkout.
 </Callout>
 
 **Why PgDog (not PgBouncer as the default).** Transaction pooling fixes the
@@ -398,8 +403,9 @@ Not wired this round — readiness only.
 
 #### Seeding
 
-`oke db seed` loads `defineSeed` from `src/db/seed/index.ts` — **never at boot**.
-`name` is this app's seed (template or example). The prompt and `.oke/state.json` key off it.
+`oke db seed` loads `defineSeed` from `src/db/seed/index.ts` — a separate
+command, never at boot. Not every project has a seed. In `oke dev`, `s` runs
+the same command. `name` is this app's seed (template or example).
 
 <StoreSeeding />
 

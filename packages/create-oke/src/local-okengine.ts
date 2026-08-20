@@ -2,9 +2,7 @@
  * Consumer-facing `file:` package for local / monorepo create-oke.
  *
  * Linking the monorepo root pulls `workspaces` + `devDependencies` into the
- * scaffold (Console UI, drizzle-zod, …). Bun then warns that RC
- * `drizzle-orm` fails drizzle-zod’s `>=0.36` peer. Stage a publish-shaped
- * tree instead:
+ * scaffold (Console UI, …). Stage a publish-shaped tree instead:
  *
  * 1. Copy `files` (Bun’s `file:` install drops directory symlinks).
  * 2. Install dependencies **in the stage** — Bun keeps `package.json` as a

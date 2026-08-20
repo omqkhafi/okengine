@@ -5,7 +5,10 @@ import {
   defaultKvQuery,
   defaultSqlQuery,
   isConsoleAuthStore,
+  pickChildName,
   pickQueryStore,
+  reconcileDefaultKv,
+  reconcileDefaultSql,
 } from "./query-defaults.ts";
 
 const emptyWillNot = { writerFlowIds: [], signals: [], channels: [] };
@@ -52,6 +55,28 @@ describe("default queries", () => {
   test("kv seeds list with a comment legend", () => {
     expect(defaultKvQuery("holds:")).toContain("list holds:");
     expect(defaultKvQuery()).toContain("list");
+  });
+
+  test("picks a random live child", () => {
+    expect(pickChildName(["activity", "tasks"], () => 0)).toBe("activity");
+    expect(pickChildName(["activity", "tasks"], () => 0.99)).toBe("tasks");
+    expect(pickChildName([])).toBeUndefined();
+  });
+
+  test("rewrites a leftover default select when the table is gone", () => {
+    const stale = defaultSqlQuery("issues");
+    expect(reconcileDefaultSql(stale, ["activity", "tasks"], () => 0.99)).toBe(
+      defaultSqlQuery("tasks"),
+    );
+    expect(reconcileDefaultSql(stale, ["issues"])).toBe(stale);
+    expect(reconcileDefaultSql("SELECT 1 FROM issues", ["activity"])).toBe("SELECT 1 FROM issues");
+  });
+
+  test("rewrites a leftover default kv list when the namespace is gone", () => {
+    const stale = defaultKvQuery("sessions:");
+    expect(reconcileDefaultKv(stale, ["holds", "locks"], () => 0)).toBe(defaultKvQuery("holds:"));
+    expect(reconcileDefaultKv(stale, ["sessions"])).toBe(stale);
+    expect(reconcileDefaultKv("get sessions:a", ["holds"])).toBe("get sessions:a");
   });
 });
 

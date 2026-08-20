@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-rc.4",
-    "drizzle-zod": "^0.8.3",
     "okengine": "file:../..",
     "zod": "^4.4.3"
   },

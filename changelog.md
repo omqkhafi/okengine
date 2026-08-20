@@ -52,6 +52,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - User-plane HTTP `fx.store` stamps Gate identity per statement on
   postgres / pglite. Cron / CDC / signal stay table-owner.
+- `oke()` auto-drains `store.kv` / `store.index`, `clock()`, and
+  `gate.policy` / `.scope` / `.rate` the same way as `store.sql` /
+  `vault.secret`. Import the declaring module before `oke()` — no
+  hand-built `stores` / `clocks` / `gate.policies` arrays.
 
 #### Docs
 
@@ -61,6 +65,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Store
 - Store tree toolbar shows SQL, KV, Files, and Index icons to show or hide each facet. The eye menu and per-band Hide control are gone.
+
+- Query Run is play + label only. ⌘ Enter stays on the tooltip and the
+  run menu.
 
 - Owner / Gate templates and the policy Code dock use `oke.user()` /
   `oke.gate()` / `oke.has_scope()`.
@@ -73,13 +80,39 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Overview Traces Advanced filters now reveal/collapse with the existing
   AgentDisclosure clip-path (220ms open / 140ms close, EASE_OUT).
 
+#### Dev, Keel & create-oke
+
+- `oke db seed` is a separate command (`intro` / confirm / `outro`). `oke
+  dev` does not ask to seed — not every project has a seed. The live
+  controls add `s` to run that command as a child (`oke db seed --force`),
+  not inside the `oke dev` process.
+- Keel (and store resource tests) generate Zod from tables via
+  `drizzle-orm/zod`. The separate `drizzle-zod` package is gone.
+- Keel and create-oke templates are `oke({ name })` — stores, secrets,
+  gates, clocks, and channel templates auto-register from `@/core`.
+
 ### 🐛 Fixed
+
+#### Console — Chrome
+
+- Key caps on primary buttons use the button ink so chords stay readable.
+
+#### Console — Store
+
+- Query console replaces a leftover default `SELECT` when that table is
+  not in the live store, and seeds a random live table (not always the
+  first).
 
 #### Runtime
 
-- PGlite RLS stamp is split statements (`BEGIN`, `SET LOCAL ROLE oke_app`,
+- PGlite RLS stamp is split statements (`SET LOCAL ROLE oke_app`,
   `set_config`) — a multi-command batch is rejected by PGlite's prepared
   `query` path. Concurrent identities on the shared connection are serialized.
+
+- Postgres RLS stamps `reserve()` one Bun.SQL slot, then `BEGIN` / `SET LOCAL`
+  on that slot. `begin()` plus parent `unsafe()` was deadlocking PgDog
+  (`checkout timeout`). Store, journal, clock, and instances share one pool
+  of 8; PgDog `pool_size` is 20.
 
 
 ## v0.14.1 — 2026-08-20

@@ -62,6 +62,16 @@ export interface SqlConnection {
    * @param params - Bound parameters
    */
   exec(sql: string, params?: readonly unknown[]): Promise<{ changes: number }>;
+  /**
+   * Pin `fn` to one backend connection for a single transaction.
+   *
+   * Required for `SET LOCAL` RLS stamps on pooled `postgres` (Bun.SQL /
+   * PgDog transaction mode). A standalone `BEGIN` via {@link exec} returns
+   * the connection to the pool still in a transaction and exhausts checkout.
+   *
+   * @param fn - Work that must share the reserved connection
+   */
+  transaction?<T>(fn: (tx: SqlConnection) => Promise<T>): Promise<T>;
   /** Close the connection. */
   close(): Promise<void>;
 }

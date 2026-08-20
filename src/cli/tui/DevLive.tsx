@@ -13,6 +13,7 @@ import { TUI_BRAND, TUI_HINT, TUI_MUTED, TUI_WARN } from "./theme.ts";
 /** Props for {@link DevLiveControls}. */
 export type DevLiveControlsProps = {
   readonly onRefresh: () => void | Promise<void>;
+  readonly onSeed: () => void | Promise<void>;
   readonly onComposeUp: () => void | Promise<void>;
   readonly onComposeStop: () => void | Promise<void>;
   readonly onQuit: () => void;
@@ -49,6 +50,14 @@ export function DevLiveControls(props: DevLiveControlsProps): ReactElement {
         .finally(() => setBusy(false));
       return;
     }
+    if (ctrl === "s") {
+      setBusy(true);
+      void Promise.resolve(props.onSeed())
+        .then(() => setStatus("seeded"))
+        .catch((err: unknown) => setStatus(err instanceof Error ? err.message : String(err)))
+        .finally(() => setBusy(false));
+      return;
+    }
     if (ctrl === "u" || ctrl === "x") {
       setBusy(true);
       const run = ctrl === "u" ? props.onComposeUp : props.onComposeStop;
@@ -66,13 +75,13 @@ export function DevLiveControls(props: DevLiveControlsProps): ReactElement {
           oke dev
         </Text>
         <Text color={TUI_MUTED}> · controls · </Text>
-        <Text color={TUI_HINT}>? help · r refresh · q quit · u up · x stop</Text>
+        <Text color={TUI_HINT}>? help · r refresh · s seed · q quit · u up · x stop</Text>
         {busy ? <Text color={TUI_WARN}> · working…</Text> : null}
         {status ? <Text color={TUI_MUTED}>{` · ${status}`}</Text> : null}
       </Text>
       {help ? (
         <Text color={TUI_MUTED}>
-          r clear/refresh board · q quit · u compose up · x compose stop
+          r clear/refresh board · s oke db seed · q quit · u compose up · x compose stop
         </Text>
       ) : null}
     </Box>
@@ -104,6 +113,7 @@ export async function launchDevLiveControls(props: DevLiveControlsProps): Promis
 
   const bound: DevLiveControlsProps = {
     onRefresh: () => afterStdout(props.onRefresh),
+    onSeed: () => afterStdout(props.onSeed),
     onComposeUp: () => afterStdout(props.onComposeUp),
     onComposeStop: () => afterStdout(props.onComposeStop),
     onQuit: props.onQuit,

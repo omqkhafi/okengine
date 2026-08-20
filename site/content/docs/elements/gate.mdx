@@ -19,10 +19,10 @@ store write, emit, or channel send runs.
 <Steps>
 
 <Step>
-### Declare policies and register the Gate bag
+### Declare policies
 
-Policies are named predicates; rate limits are declarative budgets. Put the ones you reuse in
-`oke({ gate: { policies } })`:
+Policies are named predicates; rate limits are declarative budgets. Import the module before
+`oke()` — they auto-register. `oke({ gate: { policies } })` is still valid and additive.
 
 ```typescript title="src/gates.ts"
 import { gate } from "okengine";
@@ -43,14 +43,10 @@ export const fair = gate.rate({
 the scope checked.
 
 ```typescript title="src/app.ts"
+import "./gates";
 import { oke } from "okengine";
-import { member, canBook, fair } from "./gates";
 
-export const app = oke({
-  name: "shop",
-  env: "dev",
-  gate: { policies: [member, canBook, fair] },
-});
+export const app = oke({ name: "shop", env: "dev" });
 ```
 
 </Step>
@@ -140,7 +136,7 @@ back to the policy name). The name `"public"` is reserved — use `gate.public`,
 `gate.policy("public", …)`.
 
 `gate.all()` with no members throws. Nested `all` handles flatten.
-`oke({ gate: { policies: [write] } })` registers the members.
+Members auto-register when declared; `oke({ gate: { policies: [write] } })` is additive.
 
 ### Policy context
 

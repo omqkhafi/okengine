@@ -32,7 +32,7 @@ import {
   quotePgIdent,
   sqlPolicyRowId,
   emitStoreSchemaPolicySource,
-  OKE_RLS_HELPER_SQL,
+  installOkeRlsHelpers,
 } from "../../drivers/pg-rls.ts";
 import type { ConsoleStoreChild, ConsoleWillNotFire } from "./store.ts";
 
@@ -182,7 +182,7 @@ export async function createSqlPolicy(
   patch: Readonly<Record<string, unknown>>,
 ): Promise<void> {
   try {
-    await sql.raw(OKE_RLS_HELPER_SQL);
+    await installOkeRlsHelpers((stmt) => sql.raw(stmt));
   } catch {
     // Memory / engines without CREATE FUNCTION — CREATE POLICY may still run.
   }
@@ -528,9 +528,7 @@ function declaredPoliciesFromManifest(
   for (const [table, spec] of Object.entries(tables)) {
     for (const [name, policy] of Object.entries(spec.policies ?? {})) {
       const command = (policy.for ?? "all").toUpperCase();
-      const roles = Array.isArray(policy.to)
-        ? policy.to.join(", ")
-        : (policy.to ?? "public");
+      const roles = Array.isArray(policy.to) ? policy.to.join(", ") : (policy.to ?? "public");
       const permissive = (policy.as ?? "permissive").toUpperCase();
       out.push({
         id: sqlPolicyRowId(table, name),

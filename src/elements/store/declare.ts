@@ -122,13 +122,12 @@ export interface IndexStoreDecl extends StoreDeclBase {
 export type StoreDecl = SqlStoreDecl | KvStoreDecl | FilesStoreDecl | IndexStoreDecl;
 
 /**
- * `store.sql` / `store.files` push into the shared {@link storeRegistry}
+ * Every `store.*` facet pushes into the shared {@link storeRegistry}
  * (`src/kernel/element-registries.ts`) so {@link oke} can auto-populate
  * `stores` with zero explicit array — mirrors the {@link on} trigger-drain
- * registry (`src/kernel/on.ts`). `store.kv` / `store.index` are
- * intentionally not auto-registered (out of scope).
+ * registry (`src/kernel/on.ts`).
  *
- * Snapshot of every `store.sql` / `store.files` declared since the last reset.
+ * Snapshot of every store declared since the last reset.
  */
 export function listStores(): readonly StoreDecl[] {
   return storeRegistry.slice();
@@ -180,13 +179,15 @@ export function sql(name: string, options: SqlStoreOptions = {}): SqlStoreDecl {
  * @param options - Options
  */
 export function kv(name: string, options: KvStoreOptions = {}): KvStoreDecl {
-  return {
+  const decl: KvStoreDecl = {
     facet: "kv",
     name,
     ref: `kv:${name}`,
     ...(options.description !== undefined ? { description: options.description } : {}),
     ...(options.durable === true ? { durable: true } : {}),
   };
+  storeRegistry.push(decl);
+  return decl;
 }
 
 /**
@@ -213,13 +214,15 @@ export function files(name: string, options: FilesStoreOptions = {}): FilesStore
  * @param options - Dimensions
  */
 export function index(name: string, options: IndexStoreOptions = {}): IndexStoreDecl {
-  return {
+  const decl: IndexStoreDecl = {
     facet: "index",
     name,
     ref: `index:${name}`,
     ...(options.description !== undefined ? { description: options.description } : {}),
     dims: options.dims,
   };
+  storeRegistry.push(decl);
+  return decl;
 }
 
 /** Public `store` element — four facets + abstract schema declare + resource. */

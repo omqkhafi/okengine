@@ -59,8 +59,8 @@ export type ScaffoldPackageJson = {
  * Resolve the `okengine` dependency string written into the scaffolded package.json.
  *
  * - Monorepo / local: staged publish-shaped `file:` package (no workspaces /
- *   no monorepo `devDependencies` — those pull drizzle-zod and trip Bun’s RC
- *   peer check)
+ *   no monorepo `devDependencies` — those pull Console UI and other
+ *   workspace-only packages into the scaffold)
  * - Published create-oke: the version of this package (kept in lockstep with okengine)
  *
  * @param localOkengineRoot - Absolute path when available

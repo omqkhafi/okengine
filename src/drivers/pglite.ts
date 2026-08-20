@@ -77,7 +77,7 @@ export async function connectPglite(options: SqlConnectOptions = {}): Promise<Sq
     resolved === "memory"
       ? await PGlite.create({ extensions: { vector } })
       : await PGlite.create(resolved, { extensions: { vector } });
-  return {
+  const connection: SqlConnection = {
     driverId: "pglite",
     role,
     async query(sql, params = []) {
@@ -95,10 +95,26 @@ export async function connectPglite(options: SqlConnectOptions = {}): Promise<Sq
       const rs = await db.query<SqlRow>(toPostgresParams(sql), [...params]);
       return { changes: rs.affectedRows ?? 0 };
     },
+    async transaction(fn) {
+      await db.exec("BEGIN");
+      try {
+        const result = await fn(connection);
+        await db.exec("COMMIT");
+        return result;
+      } catch (err) {
+        try {
+          await db.exec("ROLLBACK");
+        } catch {
+          // Already aborted.
+        }
+        throw err;
+      }
+    },
     async close() {
       await db.close();
     },
   };
+  return connection;
 }
 
 /** Protocol-named pglite driver. */

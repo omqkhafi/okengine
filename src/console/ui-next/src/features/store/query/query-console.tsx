@@ -60,9 +60,10 @@ import { kvSetPatch, parseKvQuery } from "../lib/kv-query.ts";
 import {
   defaultKvQuery,
   defaultSqlQuery,
-  firstChildName,
+  randomChildName,
   isConsoleAuthStore,
   pickQueryStore,
+  reconcileDefaultQuery,
 } from "../lib/query-defaults.ts";
 import {
   addQueryTab,
@@ -138,10 +139,12 @@ export function QueryConsole({
   );
   const store = ofFacet.find((s) => s.ref === storeRef) ?? pickQueryStore(ofFacet, facet, null);
   const seed = seedEditor(store, facet, selectedEffectRef);
+  const childNames = store?.children.map((child) => child.name) ?? [];
 
-  const [tabs, setTabs] = useState<readonly QueryTab[]>(
-    () => loadQueryTabs(facet) ?? [{ id: "q_1", title: "Query 1", text: seed }],
-  );
+  const [tabs, setTabs] = useState<readonly QueryTab[]>(() => {
+    const loaded = loadQueryTabs(facet) ?? [{ id: "q_1", title: "Query 1", text: seed }];
+    return reconcileLoadedTabs(loaded, childNames, facet);
+  });
   const [activeId, setActiveId] = useState(() => tabs[0]?.id ?? "q_1");
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const text = active?.text ?? seed;
@@ -196,6 +199,13 @@ export function QueryConsole({
     if (!next) return;
     setStoreRef((prev) => (ofFacet.some((s) => s.ref === prev) ? prev : next.ref));
   }, [stores, facet, selectedEffectRef, ofFacet]);
+
+  const childKey = childNames.join("\0");
+  useEffect(() => {
+    const names = childKey.length === 0 ? [] : childKey.split("\0");
+    if (names.length === 0) return;
+    setTabs((prev) => reconcileLoadedTabs(prev, names, facet));
+  }, [childKey, facet]);
 
   useEffect(() => {
     saveQueryTabs(facet, tabs);
@@ -259,11 +269,7 @@ export function QueryConsole({
     setExecuted(set?.executed ?? next.map((row) => row.executed).join("\n") ?? null);
   };
 
-  const runBatch = (
-    texts: readonly string[],
-    includePii = !piiMasked,
-    gate = rlsAs,
-  ): void => {
+  const runBatch = (texts: readonly string[], includePii = !piiMasked, gate = rlsAs): void => {
     if (!store) return;
     setResultsOpen(true);
     setError(null);
@@ -929,7 +935,6 @@ export function QueryConsole({
                 <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
               )}
               {selected ? "Run selection" : "Run"}
-              <ShortcutKeys keys={runKeys} className="hidden sm:inline-flex" />
             </Button>
           </ToolbarTip>
           {isSql ? (
@@ -1073,6 +1078,22 @@ function writeChanges(rows: readonly QueryResultRow[]): number | null {
   return typeof changes === "number" && Number.isFinite(changes) ? changes : null;
 }
 
+/** Rewrite leftover default seeds that name a table the live store dropped. */
+function reconcileLoadedTabs(
+  tabs: readonly QueryTab[],
+  names: readonly string[],
+  facet: StoreQueryFacet,
+): readonly QueryTab[] {
+  let changed = false;
+  const next = tabs.map((tab) => {
+    const text = reconcileDefaultQuery(tab.text, names, facet);
+    if (text === tab.text) return tab;
+    changed = true;
+    return { ...tab, text };
+  });
+  return changed ? next : tabs;
+}
+
 function seedEditor(
   store: StoreListStore | null | undefined,
   facet: StoreQueryFacet,
@@ -1082,7 +1103,7 @@ function seedEditor(
   const selected = selectedEffectRef
     ? store.children.find((c) => c.effectRef === selectedEffectRef)?.name
     : undefined;
-  const name = selected ?? firstChildName(store);
+  const name = selected ?? randomChildName(store);
   return facet === "sql" ? defaultSqlQuery(name) : defaultKvQuery(name ? `${name}:` : undefined);
 }
 

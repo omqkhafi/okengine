@@ -1,17 +1,21 @@
 /**
- * `oke({...})` auto-populates `stores` / `secrets` / `signals` /
- * `channel.templates` from the same kind of module-evaluation registry
- * already proven for `on()`'s trigger drain (`registry-isolation.test.ts`).
+ * `oke({...})` auto-populates `stores` / `secrets` / `signals` / `clocks` /
+ * `gate.policies` / `channel.templates` from the same kind of
+ * module-evaluation registry already proven for `on()`'s trigger drain
+ * (`registry-isolation.test.ts`).
  *
- * `store.sql` / `store.files`, `vault.secret`, `signal()`, and medium-binder
- * `.template()` push into a shared registry (`src/kernel/element-registries.ts`)
- * at call time — zero change to how developers call them. `oke()` drains it
- * at construction under the same `registry: "consume" | "keep" | "ignore"`
- * switch that already governs bindings.
+ * `store.*`, `vault.secret`, `signal()`, `clock()`, `gate.policy` / `.scope`
+ * / `.rate`, and medium-binder `.template()` push into a shared registry
+ * (`src/kernel/element-registries.ts`) at call time — zero change to how
+ * developers call them. `oke()` drains it at construction under the same
+ * `registry: "consume" | "keep" | "ignore"` switch that already governs
+ * bindings.
  */
 
 import { describe, expect, test } from "bun:test";
 import { channel } from "../elements/channel/declare.ts";
+import { clock } from "../elements/clock/declare.ts";
+import { gate } from "../elements/gate/declare.ts";
 import { signal } from "../elements/signal/declare.ts";
 import { store } from "../elements/store/declare.ts";
 import { vault } from "../elements/vault/declare.ts";
@@ -20,7 +24,7 @@ import { flow } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
 import { http } from "./triggers.ts";
 
-describe("oke() auto-registry — stores/secrets/signals/channel.templates/ai", () => {
+describe("oke() auto-registry — stores/secrets/signals/clocks/gates/channel.templates/ai", () => {
   test("before/after: zero explicit arrays boots identically to the explicit-array form", async () => {
     resetBindings();
 
@@ -159,6 +163,42 @@ describe("oke() auto-registry — stores/secrets/signals/channel.templates/ai", 
     // silently picked up IGNORED_SECRET from the registry either way.
     await app.boot({ env: "test", unguardedHttp: "allow" });
     expect(app.bootResult?.vault?.contracts.has("IGNORED_SECRET")).toBeFalsy();
+  });
+
+  test("store.kv / store.index / clock() / gate.policy auto-drain — no explicit oke() arrays", async () => {
+    resetBindings();
+    store.kv("drafts", { description: "Compose drafts" });
+    store.index("tasks", { description: "Task search" });
+    clock("daily-digest", { cron: "0 8 * * *", every: "1d", timezone: "UTC" });
+    const member = gate.policy("member", ({ auth }) => !!auth.verified);
+    gate.scope("task:write");
+    gate.rate({ max: 60, per: "1m", keyBy: "user" });
+
+    const ping = flow("auto.ping", {
+      do: () => ({ ok: true as const }),
+    });
+    on(http.get("/auto-ping").gate(member), ping);
+
+    const app = oke({
+      name: "auto-kv-clock-gate",
+      autoBoot: false,
+      startScheduler: false,
+    });
+
+    expect(app.$options.stores?.some((s) => s.ref === "kv:drafts")).toBe(true);
+    expect(app.$options.stores?.some((s) => s.ref === "index:tasks")).toBe(true);
+    expect(app.$options.clocks?.some((c) => c.name === "daily-digest")).toBe(true);
+    expect(app.$options.gate?.policies?.some((g) => "name" in g && g.name === "member")).toBe(true);
+    expect(app.$options.gate?.policies?.some((g) => "name" in g && g.name === "task:write")).toBe(
+      true,
+    );
+
+    await app.boot({ env: "test" });
+    expect(app.bootResult?.store?.declarations.has("kv:drafts")).toBe(true);
+    expect(app.bootResult?.store?.declarations.has("index:tasks")).toBe(true);
+    expect(app.bootResult?.clock?.declarations.has("daily-digest")).toBe(true);
+    expect(app.bootResult?.gate?.gates.has("member")).toBe(true);
+    expect(app.bootResult?.gate?.gates.has("task:write")).toBe(true);
   });
 
   test('registry: "consume" (default) drains stores/secrets/signals/channel.templates — a later app does not inherit them', async () => {

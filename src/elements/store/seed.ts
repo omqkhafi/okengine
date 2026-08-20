@@ -61,7 +61,7 @@ export function resolveSeedIdentity(
 }
 
 /**
- * Confirm copy for `oke dev` / `oke db seed` — names this app's seed.
+ * Confirm copy for `oke db seed` — names this app's seed.
  *
  * @param identity - Resolved {@link SeedIdentity}
  */

@@ -4,7 +4,13 @@
  * Protocol-named: Neon, Supabase, RDS, Timescale all speak postgres.
  */
 
-import type { SqlConnectOptions, SqlConnection, SqlDriver, SqlRow } from "./types.ts";
+import type { SqlConnectOptions, SqlConnection, SqlDriver, SqlRole, SqlRow } from "./types.ts";
+
+/** Bun.SQL client checked out via {@link PostgresClientLike.reserve}. */
+export interface PostgresReservedClient extends PostgresClientLike {
+  /** Return the connection to the pool. */
+  release(): void;
+}
 
 /** Minimal surface we use from Bun.SQL (and test fakes). */
 export interface PostgresClientLike {
@@ -12,7 +18,86 @@ export interface PostgresClientLike {
     sql: string,
     values?: unknown[],
   ): PromiseLike<SqlRow[] | { length: number; changes?: number } | SqlRow[]>;
+  /**
+   * Pin one pooled TCP connection. Required in front of PgDog — `begin()`
+   * then `unsafe()` on the parent client can checkout a second slot and
+   * deadlock the pool (`checkout timeout`).
+   */
+  reserve?(): Promise<PostgresReservedClient>;
+  /**
+   * Reserve one pooled connection for a transaction (Bun.SQL).
+   *
+   * @param fn - Work on the reserved client
+   */
+  begin?<T>(fn: (tx: PostgresClientLike) => Promise<T> | T): Promise<T>;
   close?(options?: { timeout?: number }): Promise<void>;
+}
+
+/** Cap shared Bun.SQL pools so one process cannot outrun PgDog (default 10). */
+export const POSTGRES_POOL_MAX = 8;
+
+const sharedClients = new Map<string, PostgresClientLike>();
+
+/**
+ * Resolve the Postgres URL (injected, `DATABASE_URL`, then localhost).
+ *
+ * @param url - Explicit URL
+ */
+export function resolvePostgresUrl(url?: string): string {
+  return url ?? process.env.DATABASE_URL ?? "postgres://localhost:5432/oke";
+}
+
+/**
+ * One Bun.SQL pool per URL for store / journal / clock / vault / console.
+ *
+ * @param url - Connection URL
+ */
+export function sharedPostgresClient(url?: string): PostgresClientLike {
+  const key = resolvePostgresUrl(url);
+  const existing = sharedClients.get(key);
+  if (existing) return existing;
+  const created = new Bun.SQL(key, { max: POSTGRES_POOL_MAX }) as unknown as PostgresClientLike;
+  sharedClients.set(key, created);
+  return created;
+}
+
+/**
+ * Pin one pooled connection, `BEGIN`, run `fn`, `COMMIT`/`ROLLBACK`, release.
+ *
+ * Prefer `reserve()` — Bun.SQL `begin()` then `unsafe()` on the parent
+ * client can checkout a second slot and deadlock PgDog.
+ *
+ * @param client - Pool or test fake
+ * @param fn - Work on the pinned client
+ */
+export async function withPinnedPostgres<T>(
+  client: PostgresClientLike,
+  fn: (tx: PostgresClientLike) => Promise<T>,
+): Promise<T> {
+  if (typeof client.reserve === "function") {
+    const reserved = await client.reserve();
+    try {
+      await reserved.unsafe("BEGIN");
+      try {
+        const result = await fn(reserved);
+        await reserved.unsafe("COMMIT");
+        return result;
+      } catch (err) {
+        try {
+          await reserved.unsafe("ROLLBACK");
+        } catch {
+          // Already aborted.
+        }
+        throw err;
+      }
+    } finally {
+      reserved.release();
+    }
+  }
+  if (typeof client.begin === "function") {
+    return client.begin(fn);
+  }
+  throw new Error("postgres client needs reserve() or begin() to pin a transaction");
 }
 
 /**
@@ -32,11 +117,24 @@ export function toPostgresParams(sql: string): string {
  */
 export async function connectPostgres(options: SqlConnectOptions = {}): Promise<SqlConnection> {
   const role = options.role ?? "primary";
-  const client =
-    (options.client as PostgresClientLike | undefined) ??
-    new Bun.SQL(options.url ?? process.env.DATABASE_URL ?? "postgres://localhost:5432/oke");
+  const injected = options.client as PostgresClientLike | undefined;
+  const client = injected ?? sharedPostgresClient(options.url);
+  return wrapPostgresClient(client, role, { shared: injected === undefined });
+}
 
-  return {
+/**
+ * Bind a Bun.SQL-compatible client as {@link SqlConnection}.
+ *
+ * @param client - Pool or reserved transaction client
+ * @param role - Primary vs replica
+ * @param opts - Shared-pool / already-pinned flags
+ */
+function wrapPostgresClient(
+  client: PostgresClientLike,
+  role: SqlRole,
+  opts: { readonly shared?: boolean; readonly pinned?: boolean } = {},
+): SqlConnection {
+  const connection: SqlConnection = {
     driverId: "postgres",
     role,
     async query(sql, params = []) {
@@ -61,10 +159,15 @@ export async function connectPostgres(options: SqlConnectOptions = {}): Promise<
       }
       return { changes: 0 };
     },
+    async transaction(fn) {
+      if (opts.pinned) return fn(connection);
+      return withPinnedPostgres(client, (tx) => fn(wrapPostgresClient(tx, role, { pinned: true })));
+    },
     async close() {
-      await client.close?.();
+      if (!opts.shared) await client.close?.();
     },
   };
+  return connection;
 }
 
 /**
@@ -82,10 +185,27 @@ export function createPostgresFakeClient(): PostgresClientLike & {
 
   return {
     tables,
+    async begin(fn) {
+      return fn(this);
+    },
+    async reserve() {
+      return Object.assign(this, {
+        release() {
+          /* fake has no pool */
+        },
+      });
+    },
     async unsafe(sql, values = []) {
       const text = sql.trim();
       // Accept both ? (pre-conversion) and $n forms.
       const normalised = text.replace(/\$\d+/g, "?");
+      if (
+        /^(begin|commit|rollback|set\b|select set_config|create\b|grant\b|do\b|alter\b)\b/i.test(
+          normalised,
+        )
+      ) {
+        return [];
+      }
 
       const create =
         /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\((.+)\)\s*$/i.exec(

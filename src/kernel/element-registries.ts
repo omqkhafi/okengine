@@ -1,8 +1,9 @@
 /**
- * Module-evaluation registries for `store.sql` / `store.files`, `vault.secret`,
- * `vault.env.required`, `signal()`, `channel.<medium>().template()`, and
- * `ai.model` / `.prompt` / `ai.embed` / `ai.agent` / `ai.mcpServer` — the plain arrays behind
- * each declare module's `listX()` / `resetX()` pair (mirrors `on.ts`'s
+ * Module-evaluation registries for `store.*`, `vault.secret`,
+ * `vault.env.required`, `signal()`, `clock()`, `gate.policy` / `.scope` /
+ * `.rate`, `channel.<medium>().template()`, and `ai.model` / `.prompt` /
+ * `ai.embed` / `ai.agent` / `ai.mcpServer` — the plain arrays behind each
+ * declare module's `listX()` / `resetX()` pair (mirrors `on.ts`'s
  * trigger-drain `bindings` array).
  *
  * Lives here, not in the declare modules themselves, so {@link oke} can read
@@ -24,8 +25,10 @@ import type { StoreDecl } from "../elements/store/declare.ts";
 import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
+import type { ClockDecl } from "../elements/clock/declare.ts";
+import type { GateDecl } from "../elements/gate/declare.ts";
 
-/** `store.sql` / `store.files` declarations since the last reset. */
+/** `store.sql` / `store.kv` / `store.files` / `store.index` declarations since the last reset. */
 export const storeRegistry: StoreDecl[] = [];
 /** `vault.secret` declarations since the last reset. */
 export const secretRegistry: VaultSecretDecl[] = [];
@@ -33,6 +36,10 @@ export const secretRegistry: VaultSecretDecl[] = [];
 export const requiredEnvRegistry: string[] = [];
 /** `signal()` declarations since the last reset. */
 export const signalRegistry: SignalDecl[] = [];
+/** `clock()` declarations since the last reset. */
+export const clockRegistry: ClockDecl[] = [];
+/** `gate.policy` / `gate.scope` / `gate.rate` declarations since the last reset. */
+export const gateRegistry: GateDecl[] = [];
 /** Medium-binder `.template()` declarations since the last reset. */
 export const channelTemplateRegistry: ChannelTemplateDecl[] = [];
 /** `ai.model` declarations since the last reset. */

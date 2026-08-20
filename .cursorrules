@@ -23,7 +23,7 @@
 - World access goes through `fx` — effects are inferred.
 - Use `zod` for all runtime schema validation.
 - Use `drizzle-orm` for database operations; prefer `store.resource` for declarative CRUD.
-- Use `drizzle-zod` to bridge Drizzle schemas with Zod when needed.
+- Use `drizzle-orm/zod` to bridge Drizzle tables with Zod when needed.
 
 # ---------- Flow Patterns ----------
 - A Flow with no trigger is call-only (internal / private).

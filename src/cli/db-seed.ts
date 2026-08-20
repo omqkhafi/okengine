@@ -4,7 +4,7 @@
  */
 
 import { resolve } from "node:path";
-import { isCancel, text } from "@clack/prompts";
+import { intro, isCancel, outro, text } from "@clack/prompts";
 import type { ConfigEnv, OkeConfig } from "../config/index.ts";
 import {
   normalizeSeedFns,
@@ -56,6 +56,11 @@ export interface SeedOptions {
    */
   readonly confirmEnv?: (env: ConfigEnv, target: string) => Promise<boolean>;
   readonly stdinIsTTY?: boolean;
+  /**
+   * Clack `intro` / `outro` for the standalone `oke db seed` path.
+   * Default: on when stdin is a TTY.
+   */
+  readonly intro?: boolean;
 }
 
 /**
@@ -233,7 +238,13 @@ export async function bootSeedFx(
   if (!app) {
     throw new Error(`oke db seed: no oke() app export in ${entryAbs}`);
   }
-  await app.boot({ env, startScheduler: false, config: config ?? undefined, rootDir: cwd });
+  await app.boot({
+    env,
+    startScheduler: false,
+    config: config ?? undefined,
+    rootDir: cwd,
+    docker: process.env.OKE_DOCKER === "1",
+  });
   const storeRuntime = app.elements?.store ?? app.bootResult?.store;
   if (!storeRuntime) {
     throw new Error(
@@ -243,6 +254,7 @@ export async function bootSeedFx(
   const fx = createFx({
     flow: "oke.db.seed",
     storeRuntime,
+    rlsBypass: true,
   });
   return {
     fx,
@@ -262,6 +274,14 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
   const loaded = await loadOkeConfig(cwd).catch(() => null);
   const env = options.env ?? (await resolveDevSqlEnv(cwd));
+  const tty = options.stdinIsTTY ?? Boolean(process.stdin.isTTY);
+  const useIntro = options.intro !== false && tty;
+  if (useIntro) intro("oke db seed");
+
+  const finish = (code: number, message: string): number => {
+    if (useIntro) outro(message);
+    return code;
+  };
 
   let targetLabel = String(env);
   try {
@@ -274,7 +294,6 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
 
   if (env === "dev" || env === "prod") {
     if (options.force !== true) {
-      const tty = options.stdinIsTTY ?? Boolean(process.stdin.isTTY);
       const confirm =
         options.confirmEnv ??
         (tty
@@ -288,7 +307,7 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
       const ok = await confirm(env, targetLabel);
       if (!ok) {
         write("oke db seed: cancelled\n");
-        return EXIT_USAGE;
+        return finish(EXIT_USAGE, "Cancelled.");
       }
     }
   }
@@ -308,10 +327,10 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
     stop = session.stop;
     await executeSeedDef(def, env, session.fx, write);
     write("oke db seed: ok\n");
-    return EXIT_OK;
+    return finish(EXIT_OK, "oke db seed: ok");
   } catch (err) {
     write(`oke db seed: ${err instanceof Error ? err.message : String(err)}\n`);
-    return EXIT_RUNTIME;
+    return finish(EXIT_RUNTIME, "oke db seed: failed");
   } finally {
     if (stop) await stop().catch(() => {});
   }

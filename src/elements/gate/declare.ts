@@ -5,6 +5,7 @@
  */
 
 import type { RateStrategy } from "../../manifest/types.ts";
+import { gateRegistry } from "../../kernel/element-registries.ts";
 import { DEFAULT_RATE_STRATEGY } from "./constants.ts";
 import { GATE_PUBLIC_NAME, type GateAllDecl, type GateMember } from "./flatten.ts";
 
@@ -90,6 +91,29 @@ export interface RateGateDecl {
 export type GateDecl = PolicyGateDecl | RateGateDecl;
 
 /**
+ * `gate.policy` / `gate.scope` / `gate.rate` push into the shared
+ * {@link gateRegistry} (`src/kernel/element-registries.ts`) so {@link oke}
+ * can auto-populate `gate.policies` with zero explicit array — mirrors the
+ * {@link on} trigger-drain registry (`src/kernel/on.ts`). `gate.public` is
+ * built into the runtime; `gate.all` is a composition of already-registered
+ * members.
+ *
+ * Snapshot of every policy / rate declared since the last reset.
+ */
+export function listGates(): readonly GateDecl[] {
+  return gateRegistry.slice();
+}
+
+/**
+ * Clear the gate registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetGates(): void {
+  gateRegistry.length = 0;
+}
+
+/**
  * Shape of the {@link gate} element namespace.
  */
 export interface GateNamespace {
@@ -151,9 +175,11 @@ export const gate: GateNamespace = {
       );
     }
     if (typeof checkOrOptions === "function") {
-      return { kind: "policy", name, check: checkOrOptions };
+      const decl: PolicyGateDecl = { kind: "policy", name, check: checkOrOptions };
+      gateRegistry.push(decl);
+      return decl;
     }
-    return {
+    const decl: PolicyGateDecl = {
       kind: "policy",
       name,
       check: checkOrOptions.check,
@@ -161,6 +187,8 @@ export const gate: GateNamespace = {
         ? { description: checkOrOptions.description }
         : {}),
     };
+    gateRegistry.push(decl);
+    return decl;
   },
 
   /**
@@ -172,12 +200,14 @@ export const gate: GateNamespace = {
     if (name === GATE_PUBLIC_NAME) {
       throw new TypeError('gate.scope: name "public" is reserved — use gate.public');
     }
-    return {
+    const decl: PolicyGateDecl = {
       kind: "policy",
       name,
       check: ({ auth }) => auth.scopes.has(name),
       scopes: [name],
     };
+    gateRegistry.push(decl);
+    return decl;
   },
 
   public: {
@@ -201,7 +231,7 @@ export const gate: GateNamespace = {
     }
     const strategy = options.strategy ?? DEFAULT_RATE_STRATEGY;
     const name = `rate:${strategy}:${options.max}/${options.per}`;
-    return {
+    const decl: RateGateDecl = {
       kind: "rate",
       name,
       strategy,
@@ -211,6 +241,8 @@ export const gate: GateNamespace = {
       overridable: options.overridable ?? false,
       ...(options.description !== undefined ? { description: options.description } : {}),
     };
+    gateRegistry.push(decl);
+    return decl;
   },
 
   /**

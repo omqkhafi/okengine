@@ -52,6 +52,8 @@ export const dailyReport = clock("daily-report", {
 });
 ```
 
+Import the module before `oke()` — named clocks auto-register. No `oke({ clocks })` list.
+
 ```typescript title="src/flows/reports/daily.ts"
 export const sendDaily = on(
   dailyReport,

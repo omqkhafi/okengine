@@ -392,11 +392,13 @@ describe("image recipes", () => {
     expect(pgdogToml).toContain('host = "0.0.0.0"');
     expect(pgdogToml).toContain("port = 6432");
     expect(pgdogToml).toContain('pooler_mode = "transaction"');
+    expect(pgdogToml).toContain("default_pool_size = 20");
     expect(pgdogToml).toContain("[[databases]]");
     expect(pgdogToml).toContain('name = "oke"');
     expect(pgdogToml).toContain('host = "store-sql"');
     expect(pgdogToml).toContain("port = 5432");
     expect(pgdogToml).toContain('database_name = "oke"');
+    expect(pgdogToml).toContain("pool_size = 20");
 
     const usersToml = buildPgDogUsersToml({
       user: "oke",
@@ -936,6 +938,7 @@ describe("deriveInfrastructure", () => {
 
     const pgdogToml = result.files.find((f) => f.path === "pgdog/pgdog.toml")!.content;
     expect(pgdogToml).toContain('pooler_mode = "transaction"');
+    expect(pgdogToml).toContain("pool_size = 20");
     expect(pgdogToml).toContain('host = "store-sql"');
     expect(pgdogToml).not.toContain(fixedCreds["store.sql"].password);
 

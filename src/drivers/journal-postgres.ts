@@ -14,7 +14,13 @@ import {
   type JournalRun,
   type JournalStore,
 } from "../kernel/journal.ts";
-import { toPostgresParams } from "./postgres.ts";
+import {
+  resolvePostgresUrl,
+  sharedPostgresClient,
+  toPostgresParams,
+  withPinnedPostgres,
+  type PostgresClientLike,
+} from "./postgres.ts";
 
 /** Row shape in `oke_journal_runs` (lease columns mirror `oke_crons`). */
 interface JournalDbRow {
@@ -87,7 +93,7 @@ export interface BunJournalClient {
   close?(options?: { timeout?: number }): Promise<void>;
 }
 
-function wrapBunClient(client: BunJournalClient): PostgresJournalSql {
+function wrapBunClient(client: PostgresClientLike): PostgresJournalSql {
   const api: PostgresJournalSql = {
     async query(sql, params = []) {
       const pg = toPostgresParams(sql);
@@ -110,7 +116,7 @@ function wrapBunClient(client: BunJournalClient): PostgresJournalSql {
       return { changes: 0 };
     },
     async begin(fn) {
-      return client.begin(async (tx) => fn(wrapBunClient(tx)));
+      return withPinnedPostgres(client, (tx) => fn(wrapBunClient(tx)));
     },
     async close() {
       await client.close?.();
@@ -437,10 +443,8 @@ export async function createPostgresJournalStore(
   const sql =
     options.sql ??
     wrapBunClient(
-      options.client ??
-        (new Bun.SQL(
-          options.url ?? process.env.DATABASE_URL ?? "postgres://localhost:5432/oke",
-        ) as unknown as BunJournalClient),
+      (options.client ??
+        sharedPostgresClient(resolvePostgresUrl(options.url))) as PostgresClientLike,
     );
 
   await ensureSchema(sql);

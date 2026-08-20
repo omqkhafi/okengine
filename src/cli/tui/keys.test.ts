@@ -2,10 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mapDevControlInput } from "./keys.ts";
 
 describe("mapDevControlInput", () => {
-  test("maps ? r q u x and aliases", () => {
+  test("maps ? r s q u x and aliases", () => {
     expect(mapDevControlInput("?", {})).toBe("?");
     expect(mapDevControlInput("h", {})).toBe("?");
     expect(mapDevControlInput("r", {})).toBe("r");
+    expect(mapDevControlInput("s", {})).toBe("s");
     expect(mapDevControlInput("q", {})).toBe("q");
     expect(mapDevControlInput("u", {})).toBe("u");
     expect(mapDevControlInput("x", {})).toBe("x");

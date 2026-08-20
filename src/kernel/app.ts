@@ -91,6 +91,8 @@ import {
   aiModelRegistry,
   aiPromptRegistry,
   channelTemplateRegistry,
+  clockRegistry,
+  gateRegistry,
   requiredEnvRegistry,
   secretRegistry,
   signalRegistry,
@@ -579,11 +581,12 @@ export function oke(options: OkeOptions): OkeApp {
       : [...listBindings(), ...(options.bindings ?? [])];
   if (registry === "consume") resetBindings();
 
-  // Same registry mode drains store.sql/store.files, vault.secret, signal(),
-  // channel.<medium>().template(), and ai.model/prompt/embed/agent/mcpServer —
-  // module-evaluation registries that mirror `on`'s trigger drain
-  // (`listBindings`/`resetBindings` above). Explicit `options.stores` /
-  // `secrets` / `signals` / `channel.templates` / `ai` are additive, never
+  // Same registry mode drains store.*, vault.secret, signal(), clock(),
+  // gate.policy/scope/rate, channel.<medium>().template(), and
+  // ai.model/prompt/embed/agent/mcpServer — module-evaluation registries
+  // that mirror `on`'s trigger drain (`listBindings`/`resetBindings` above).
+  // Explicit `options.stores` / `secrets` / `signals` / `clocks` /
+  // `gate.policies` / `channel.templates` / `ai` are additive, never
   // silently ignored — deduped by reference so an explicitly-passed decl
   // that is also in the registry is not doubled.
   const registrySnapshot =
@@ -593,6 +596,8 @@ export function oke(options: OkeOptions): OkeApp {
           secrets: [],
           requiredEnv: [],
           signals: [],
+          clocks: [],
+          gates: [],
           channelTemplates: [],
           aiModels: [],
           aiPrompts: [],
@@ -605,6 +610,8 @@ export function oke(options: OkeOptions): OkeApp {
           secrets: secretRegistry.slice(),
           requiredEnv: requiredEnvRegistry.slice(),
           signals: signalRegistry.slice(),
+          clocks: clockRegistry.slice(),
+          gates: gateRegistry.slice(),
           channelTemplates: channelTemplateRegistry.slice(),
           aiModels: aiModelRegistry.slice(),
           aiPrompts: aiPromptRegistry.slice(),
@@ -617,6 +624,8 @@ export function oke(options: OkeOptions): OkeApp {
     secretRegistry.length = 0;
     requiredEnvRegistry.length = 0;
     signalRegistry.length = 0;
+    clockRegistry.length = 0;
+    gateRegistry.length = 0;
     channelTemplateRegistry.length = 0;
     aiModelRegistry.length = 0;
     aiPromptRegistry.length = 0;
@@ -627,6 +636,8 @@ export function oke(options: OkeOptions): OkeApp {
   const effectiveStores = mergeUnique(options.stores, registrySnapshot.stores);
   const effectiveSecrets = mergeUnique(options.secrets, registrySnapshot.secrets);
   const effectiveSignals = mergeUnique(options.signals, registrySnapshot.signals);
+  const effectiveClocks = mergeUnique(options.clocks, registrySnapshot.clocks);
+  const effectivePolicies = mergeUnique(options.gate?.policies, registrySnapshot.gates);
   /**
    * Fold registered `vault.env.required` names into the vault boot options so
    * boot reports missing env vars in the same gap list as missing secrets.
@@ -661,16 +672,25 @@ export function oke(options: OkeOptions): OkeApp {
 
   // Resolve Gate bag early so auth HTTP Bindings join `adopted` + the router
   // before posture audit (same ensureBoot → doBoot path — never a side channel).
+  const mergedGate: GateOptions | undefined =
+    effectivePolicies.length > 0
+      ? { ...options.gate, policies: effectivePolicies }
+      : options.gate;
   const gateConfig: ResolvedGateConfig = resolveGateConfig({
-    gate: options.gate,
+    gate: mergedGate,
     env: options.env,
   });
 
-  /** Retained for test harness / boot merges (includes auto-drained AI decls). */
-  const $options: OkeOptions =
-    effectiveAi === undefined || options.ai === effectiveAi
-      ? options
-      : { ...options, ai: effectiveAi };
+  /** Retained for test harness / boot merges (includes auto-drained decls). */
+  const $options: OkeOptions = {
+    ...options,
+    ...(effectiveAi !== undefined ? { ai: effectiveAi } : {}),
+    ...(effectiveStores.length > 0 ? { stores: effectiveStores } : {}),
+    ...(effectiveSecrets.length > 0 ? { secrets: effectiveSecrets } : {}),
+    ...(effectiveSignals.length > 0 ? { signals: effectiveSignals } : {}),
+    ...(effectiveClocks.length > 0 ? { clocks: effectiveClocks } : {}),
+    ...(mergedGate !== undefined ? { gate: mergedGate } : {}),
+  };
 
   const appHooks: HookMap = {};
   const unitHooks = new Map<string, HookMap>();
@@ -966,7 +986,7 @@ export function oke(options: OkeOptions): OkeApp {
       vault: withRequiredEnv(overrides?.vault ?? options.vault),
       gates: [...baseGates, ...authGates],
       signals: overrides?.signals ?? effectiveSignals,
-      clocks: overrides?.clocks ?? options.clocks,
+      clocks: overrides?.clocks ?? effectiveClocks,
       stores: overrides?.stores ?? effectiveStores,
       channel: overrides?.channel ?? effectiveChannel,
       ai: overrides?.ai ?? effectiveAi,
@@ -1022,7 +1042,7 @@ export function oke(options: OkeOptions): OkeApp {
 
     const baseSecrets = overrides?.secrets ?? effectiveSecrets;
     const baseSignals = overrides?.signals ?? effectiveSignals;
-    const baseClocks = overrides?.clocks ?? options.clocks ?? [];
+    const baseClocks = overrides?.clocks ?? effectiveClocks;
     const baseChannel = overrides?.channel ?? effectiveChannel;
     const mergedCatalog = mergeTemplateCatalogs(baseChannel?.catalog, ...pluginChannelCatalogs);
 

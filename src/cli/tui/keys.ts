@@ -1,10 +1,10 @@
 /**
  * Shared keyboard mapping for Ink `useInput` and pure tests.
- * Parity with legacy `parseDevControlKey` (`? r q u x`).
+ * Parity with legacy `parseDevControlKey` (`? r s q u x`).
  */
 
 /** Dev control action from a keypress. */
-export type DevControlKey = "?" | "r" | "q" | "u" | "x";
+export type DevControlKey = "?" | "r" | "s" | "q" | "u" | "x";
 
 /**
  * Map Ink input (+ ctrl) to a control key.
@@ -20,6 +20,7 @@ export function mapDevControlInput(
   if (input === "?" || input === "h" || input === "H") return "?";
   if (input === "q" || input === "Q") return "q";
   if (input === "r" || input === "R") return "r";
+  if (input === "s" || input === "S") return "s";
   if (input === "u" || input === "U") return "u";
   if (input === "x" || input === "X") return "x";
   return null;
