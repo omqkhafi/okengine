@@ -1086,7 +1086,11 @@ function collectMcpServer(call: CallExpression, program: AstNode, scope: Project
   const bearerId = identifierName(bearerNode);
   const auth =
     bearerLit ??
-    (bearerId ? (scope.bindings.get(bearerId)?.kind === "secret" ? scope.bindings.get(bearerId)?.ref : bearerId) : undefined);
+    (bearerId
+      ? scope.bindings.get(bearerId)?.kind === "secret"
+        ? scope.bindings.get(bearerId)?.ref
+        : bearerId
+      : undefined);
   const server: AiMcpServer = {
     tools,
     ...(url ? { url } : {}),

@@ -205,9 +205,7 @@ export function mcpHeaderAnnotationsValid(inputSchema: unknown): boolean {
   return mcpParamHeaders(inputSchema, {}) !== null;
 }
 
-function schemaProperties(
-  inputSchema: unknown,
-): Record<string, unknown> | undefined {
+function schemaProperties(inputSchema: unknown): Record<string, unknown> | undefined {
   if (inputSchema === null || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
     return undefined;
   }

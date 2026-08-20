@@ -97,7 +97,7 @@ One placed order can need all three physics at once — pick a signal per job, n
 
 | Signal          | Mode        | Job                                                         |
 | --------------- | ----------- | ----------------------------------------------------------- |
-| `order-placed`  | `once`      | One job — competing workers, retries, DLQ           |
+| `order-placed`  | `once`      | One job — competing workers, retries, DLQ                   |
 | `order-changed` | `broadcast` | Fan-out — cache invalidation **and** customer notification  |
 | `order-status`  | `live`      | Status feed — retained history a late subscriber can replay |
 
@@ -257,7 +257,8 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 <Callout title="Client subscription is not shipped yet">
   `delivery: "live"` means the **driver** retains and replays. Listen with `bus.live()` on the
   server — not `on(signal, flow)`. `createClient` has no SSE / WebSocket / `client.live` yet — poll
-  an HTTP Flow. See [Client · Signal and live queries](/docs/reference/client#signal-and-live-queries).
+  an HTTP Flow. See [Client · Signal and live
+  queries](/docs/reference/client#signal-and-live-queries).
 </Callout>
 
 ## Orphaned signal config

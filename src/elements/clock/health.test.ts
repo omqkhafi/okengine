@@ -113,12 +113,7 @@ describe("nextOccurrences", () => {
       from,
       until,
     );
-    expect(quarters).toEqual([
-      from,
-      from + 15 * 60_000,
-      from + 30 * 60_000,
-      from + 45 * 60_000,
-    ]);
+    expect(quarters).toEqual([from, from + 15 * 60_000, from + 30 * 60_000, from + 45 * 60_000]);
 
     const hours = nextOccurrences(
       row({

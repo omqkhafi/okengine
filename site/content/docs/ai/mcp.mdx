@@ -5,7 +5,7 @@ icon: "Plug"
 source: "docs/spec/unified-theory.md"
 ---
 
-Two directions, same protocol. **Serve:** OKE exposes your running app on port **6535** so an agent can read the Manifest and take confirmed actions. **Consume:** your Flows call *external* MCP servers as tools — declared on `ai.mcpServer`, dispatched through `fx.call`.
+Two directions, same protocol. **Serve:** OKE exposes your running app on port **6535** so an agent can read the Manifest and take confirmed actions. **Consume:** your Flows call _external_ MCP servers as tools — declared on `ai.mcpServer`, dispatched through `fx.call`.
 
 The server on **6535** speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead.
 
@@ -100,7 +100,7 @@ The docs content ships inside the `okengine` package, so the index your agent se
 
 ## Consume — `ai.mcpServer`
 
-Your app can *call* other MCP servers. Those tools are not a second loop — they join `fx.ask` / `ai.agent` the same way a Flow tool does.
+Your app can _call_ other MCP servers. Those tools are not a second loop — they join `fx.ask` / `ai.agent` the same way a Flow tool does.
 
 ```typescript
 export const github = ai.mcpServer("github", {
@@ -112,12 +112,12 @@ export const github = ai.mcpServer("github", {
 await fx.ask(triage, input, { tools: [github.tool("create_issue")] });
 ```
 
-| Rule | Meaning |
-| ---- | ------- |
-| Allowlist | `tools` is required. Extra names from `tools/list` are dropped. |
-| Capability | `mcp:<server>/<tool>` on `effects.calls` — undeclared throws **OKE1007**. |
-| Transport | `url` (Streamable HTTP) **or** `command` + `args` (stdio). Not both. |
-| Cancel | HTTP aborts the fetch / SSE stream. stdio sends `notifications/cancelled` then kills the process. |
+| Rule       | Meaning                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| Allowlist  | `tools` is required. Extra names from `tools/list` are dropped.                                   |
+| Capability | `mcp:<server>/<tool>` on `effects.calls` — undeclared throws **OKE1007**.                         |
+| Transport  | `url` (Streamable HTTP) **or** `command` + `args` (stdio). Not both.                              |
+| Cancel     | HTTP aborts the fetch / SSE stream. stdio sends `notifications/cancelled` then kills the process. |
 
 Console draws each declared server as one **AI** node on the flow graph; Units chips read `Call github → create_issue`; traces label the effect **MCP call**. There is no separate MCP page or connect UI.
 

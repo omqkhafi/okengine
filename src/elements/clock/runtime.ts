@@ -279,9 +279,13 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
               handler: () => unknown,
               options?: { readonly tz?: string },
             ) => { stop(): void; unref(): void }
-          )(decl.cron, () => {
-            void runtime.tick();
-          }, { tz: decl.timezone });
+          )(
+            decl.cron,
+            () => {
+              void runtime.tick();
+            },
+            { tz: decl.timezone },
+          );
           job.unref();
           wakes.push(job);
         } catch {

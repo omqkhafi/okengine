@@ -305,7 +305,9 @@ describe("effectEventLabel", () => {
     expect(effectEventLabel({ kind: "read", resource: "sql:bookings" })).toBe("DB query");
     expect(effectEventLabel({ kind: "write", resource: "sql:bookings" })).toBe("DB write");
     expect(effectEventLabel({ kind: "emit", resource: "order-placed" })).toBe("Emit");
-    expect(effectEventLabel({ kind: "call", resource: "mcp:github/create_issue" })).toBe("MCP call");
+    expect(effectEventLabel({ kind: "call", resource: "mcp:github/create_issue" })).toBe(
+      "MCP call",
+    );
   });
 
   test("mcp call chips and glyphs", () => {

@@ -64,9 +64,9 @@ describe("sliceManifestForFocus", () => {
     };
     const sliced = sliceManifestForFocus(manifest, { kind: "unit", unit: "support" });
     expect(Object.keys(sliced.flows ?? {})).toEqual(["support.triage"]);
-    expect(flowTouchesNode(manifest.flows!["support.triage"]!, "support.triage", "mcp:github")).toBe(
-      true,
-    );
+    expect(
+      flowTouchesNode(manifest.flows!["support.triage"]!, "support.triage", "mcp:github"),
+    ).toBe(true);
   });
 
   test("sliced Manifest lays out a small graph", () => {

@@ -19,11 +19,7 @@ import {
   type McpListedTool,
   type McpProtocolEra,
 } from "./mcp-protocol.ts";
-import {
-  McpTransportError,
-  type McpTransport,
-  type McpWireResult,
-} from "./mcp-transport.ts";
+import { McpTransportError, type McpTransport, type McpWireResult } from "./mcp-transport.ts";
 
 /** Options for {@link createMcpClient}. */
 export interface CreateMcpClientOptions {
@@ -77,7 +73,9 @@ export function createMcpClient(options: CreateMcpClientOptions = {}): McpClient
     if (existing) return existing;
     const injected = options.transports?.[decl.name];
     const transport = injected ?? transportFor(decl, options.resolveSecret);
-    const eraKey = decl.url ? httpOrigin(decl.url) : `stdio:${decl.command}:${(decl.args ?? []).join("\0")}`;
+    const eraKey = decl.url
+      ? httpOrigin(decl.url)
+      : `stdio:${decl.command}:${(decl.args ?? []).join("\0")}`;
     const session: ServerSession = {
       decl,
       transport,
@@ -98,7 +96,13 @@ export function createMcpClient(options: CreateMcpClientOptions = {}): McpClient
   ): Promise<unknown> {
     const id = nextId++;
     const era = session.era ?? "modern";
-    const headers = requestHeaders(method, era, session.sessionId, extra.toolName, extra.extraHeaders);
+    const headers = requestHeaders(
+      method,
+      era,
+      session.sessionId,
+      extra.toolName,
+      extra.extraHeaders,
+    );
     const wireParams = era === "modern" ? withMeta(params, meta) : params;
     const result = await session.transport.request({
       id,
@@ -122,8 +126,7 @@ export function createMcpClient(options: CreateMcpClientOptions = {}): McpClient
     }
 
     const probeMethod = session.cancelMode === "stdio" ? "server/discover" : "tools/list";
-    const probeSignal =
-      session.cancelMode === "stdio" ? withTimeout(signal, 2_000) : signal;
+    const probeSignal = session.cancelMode === "stdio" ? withTimeout(signal, 2_000) : signal;
     let first: McpWireResult;
     try {
       first = (await rpc(session, probeMethod, {}, probeSignal)) as McpWireResult;
@@ -177,7 +180,10 @@ export function createMcpClient(options: CreateMcpClientOptions = {}): McpClient
     eraByKey.set(session.eraKey, era);
   }
 
-  async function listTools(session: ServerSession, signal?: AbortSignal): Promise<readonly McpListedTool[]> {
+  async function listTools(
+    session: ServerSession,
+    signal?: AbortSignal,
+  ): Promise<readonly McpListedTool[]> {
     if (session.listed) return session.listed;
     await ensureEra(session, signal);
     if (session.listed) return session.listed;
@@ -207,20 +213,27 @@ export function createMcpClient(options: CreateMcpClientOptions = {}): McpClient
       await ensureEra(session, signal);
       const listed = await listTools(session, signal);
       const tool = listed.find((t) => t.name === parsed.tool);
-      const args = input && typeof input === "object" && !Array.isArray(input)
-        ? (input as Record<string, unknown>)
-        : {};
+      const args =
+        input && typeof input === "object" && !Array.isArray(input)
+          ? (input as Record<string, unknown>)
+          : {};
       const split = mcpParamHeaders(tool?.inputSchema, args);
       if (split === null) {
         throw new Error(`ai.mcp: tool "${parsed.tool}" has an invalid x-mcp-header annotation`);
       }
-      const result = (await rpc(session, "tools/call", {
-        name: parsed.tool,
-        arguments: split.body,
-      }, signal, {
-        toolName: parsed.tool,
-        extraHeaders: split.headers,
-      })) as McpWireResult;
+      const result = (await rpc(
+        session,
+        "tools/call",
+        {
+          name: parsed.tool,
+          arguments: split.body,
+        },
+        signal,
+        {
+          toolName: parsed.tool,
+          extraHeaders: split.headers,
+        },
+      )) as McpWireResult;
       if (!result.ok) throw rpcFailure(result, "tools/call");
       return interpretToolsCallResult(result.result);
     },
@@ -285,9 +298,7 @@ function requestHeaders(
 
 function filterAllowlist(decl: AiMcpServerDecl, listed: McpListedTool[]): McpListedTool[] {
   const allow = new Set(decl.tools);
-  return listed.filter(
-    (t) => allow.has(t.name) && mcpHeaderAnnotationsValid(t.inputSchema),
-  );
+  return listed.filter((t) => allow.has(t.name) && mcpHeaderAnnotationsValid(t.inputSchema));
 }
 
 function classifyFirstError(

@@ -146,12 +146,12 @@ contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Ch
 
 ## AI
 
-| Signature                                             | Records                   | Returns                                                                       |
-| ----------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| `fx.ask(prompt, input?, { via?, tools?, maxSteps? })` | `ask` (+ `call` per tool) | Object validated against the prompt's `out`                                   |
-| `fx.run(agent, input?)`                               | `ask`                     | Agent result                                                                  |
+| Signature                                             | Records                   | Returns                                                                                                  |
+| ----------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `fx.ask(prompt, input?, { via?, tools?, maxSteps? })` | `ask` (+ `call` per tool) | Object validated against the prompt's `out`                                                              |
+| `fx.run(agent, input?)`                               | `ask`                     | Agent result                                                                                             |
 | `fx.stream(model, { prompt?, data?, via? })`          | `ask`                     | `AsyncIterable<string>` — real driver stream; cancels via ambient `fx.signal` (HTTP disconnect included) |
-| `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                  |
+| `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                                             |
 
 AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them. `tools` are Flow refs — each model tool call goes through `fx.call` (same capability and Runs path).
 
@@ -196,13 +196,13 @@ keys. Use `cache: false` to opt out, or `cache: "30s"` for a TTL.
 
 ## Responses
 
-| Helper                                    | Status | Body                                                        |
-| ----------------------------------------- | ------ | ----------------------------------------------------------- |
-| `fx.json.ok(value, { meta? })`            | 200    | `{ data, meta?, error: null }`                              |
-| `fx.json.create(value)`                   | 201    | `{ data, error: null }`                                     |
-| `fx.json.empty()`                         | 204    | no body                                                     |
-| `fx.json.with(page)` / `with(data, meta)` | 200    | `{ data, meta, error: null }` — already-built pager         |
-| `fx.json.withQuery(rows, input, spec?)`   | 200    | In-memory list page — zero-config `q` / auto-eq / PostgREST |
+| Helper                                    | Status | Body                                                           |
+| ----------------------------------------- | ------ | -------------------------------------------------------------- |
+| `fx.json.ok(value, { meta? })`            | 200    | `{ data, meta?, error: null }`                                 |
+| `fx.json.create(value)`                   | 201    | `{ data, error: null }`                                        |
+| `fx.json.empty()`                         | 204    | no body                                                        |
+| `fx.json.with(page)` / `with(data, meta)` | 200    | `{ data, meta, error: null }` — already-built pager            |
+| `fx.json.withQuery(rows, input, spec?)`   | 200    | In-memory list page — zero-config `q` / auto-eq / PostgREST    |
 | `fx.json.stream(chunks)`                  | 200    | `text/event-stream` — JSON `data:` frames, then `data: [DONE]` |
 
 Returning a plain value instead answers 200 with `{ data: value, error: null }` — the helpers exist for status and `meta` control. Pass `fx.stream(...)` into `fx.json.stream` to reach the HTTP client token-by-token.

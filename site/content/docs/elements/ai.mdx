@@ -70,12 +70,12 @@ export const triage = smart.prompt("ticket-triage", {
 
 ## The building blocks
 
-| Declaration                | Produces                                                           |
-| -------------------------- | ------------------------------------------------------------------ |
-| `ai.model(name, opts)`     | Logical model binding — provider / tier / model id / optional `driverId` |
-| `model.prompt(name, opts)` | Versioned prompt with typed in/out, evals, budget                  |
-| `ai.embed(name, opts)`     | Embedding pipeline into a `store.index` (searched via `fx.search`) |
-| `ai.agent(name, opts)`     | Bounded agent whose tools are **your own flows**                   |
+| Declaration                | Produces                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `ai.model(name, opts)`     | Logical model binding — provider / tier / model id / optional `driverId`        |
+| `model.prompt(name, opts)` | Versioned prompt with typed in/out, evals, budget                               |
+| `ai.embed(name, opts)`     | Embedding pipeline into a `store.index` (searched via `fx.search`)              |
+| `ai.agent(name, opts)`     | Bounded agent whose tools are **your own flows**                                |
 | `ai.mcpServer(name, opts)` | External MCP server — allowlisted tools join `fx.call` as `mcp:<server>/<tool>` |
 
 <AiBlocks />

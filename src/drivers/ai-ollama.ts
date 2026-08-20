@@ -267,7 +267,10 @@ function parseOllamaToolCalls(
  * @param res - Streaming response
  * @param signal - Optional abort
  */
-async function* readOllamaNdjson(res: Response, signal?: AbortSignal): AsyncGenerator<AiStreamChunk> {
+async function* readOllamaNdjson(
+  res: Response,
+  signal?: AbortSignal,
+): AsyncGenerator<AiStreamChunk> {
   const reader = res.body?.getReader();
   if (!reader) {
     throw new OllamaUnavailableError("ollama: stream response has no body");
@@ -316,8 +319,11 @@ function bunJsonl(): {
   parse(text: string): unknown[];
   parseChunk(text: string): BunJsonlParse;
 } {
-  const jsonl = (Bun as typeof Bun & { JSONL?: { parse: (t: string) => unknown[]; parseChunk: (t: string) => BunJsonlParse } })
-    .JSONL;
+  const jsonl = (
+    Bun as typeof Bun & {
+      JSONL?: { parse: (t: string) => unknown[]; parseChunk: (t: string) => BunJsonlParse };
+    }
+  ).JSONL;
   if (!jsonl) {
     throw new Error("ollama: Bun.JSONL is required (Bun >= 1.4.0)");
   }

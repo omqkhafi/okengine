@@ -450,6 +450,23 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
    * @param keyRow - That version's live wrapped DEK
    */
   async function decryptRow(row: SecretRow, keyRow: KeyRow): Promise<string> {
+    try {
+      return await decryptRowOnce(row, keyRow);
+    } catch (err) {
+      // Stale key snapshot: rotation committed and dropped `pending` after
+      // this read. Reload the wrap and retry once — never return torn bytes.
+      if (!(err instanceof VaultError) || err.code !== "INVALID_KEY") throw err;
+      return await decryptRowOnce(row, await readKeyRow(row.id));
+    }
+  }
+
+  /**
+   * Unwrap the DEK and decrypt the value ciphertext.
+   *
+   * @param row - Stored secret version
+   * @param keyRow - That version's wrapped DEK
+   */
+  async function decryptRowOnce(row: SecretRow, keyRow: KeyRow): Promise<string> {
     const path = row.path;
     const version = toInt(row.version);
     const algorithm = row.algorithm as VaultAlgorithm;

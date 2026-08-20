@@ -353,9 +353,7 @@ export const ai: AiNamespace = {
     }
     const allow = new Set(options.tools);
     const authName =
-      typeof options.auth?.bearer === "string"
-        ? options.auth.bearer
-        : options.auth?.bearer?.name;
+      typeof options.auth?.bearer === "string" ? options.auth.bearer : options.auth?.bearer?.name;
     const decl: AiMcpServerDecl = {
       kind: "mcp-server",
       name,

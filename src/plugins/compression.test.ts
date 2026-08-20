@@ -141,6 +141,6 @@ describe("compression plugin", () => {
     );
     expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
     expect(res.headers.get("content-encoding")).toBeNull();
-    expect(await res.text()).toContain("data: \"hello\"");
+    expect(await res.text()).toContain('data: "hello"');
   });
 });

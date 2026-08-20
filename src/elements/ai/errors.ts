@@ -122,7 +122,10 @@ function isTimeoutAbort(err: unknown): boolean {
     return true;
   }
   const reason = "reason" in err ? (err as { reason: unknown }).reason : undefined;
-  if (reason instanceof Error && (reason.name === "TimeoutError" || /timeout/i.test(reason.message))) {
+  if (
+    reason instanceof Error &&
+    (reason.name === "TimeoutError" || /timeout/i.test(reason.message))
+  ) {
     return true;
   }
   return false;

@@ -12,6 +12,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### 🐛 Fixed
+
+#### Runtime
+
+- Vault `get` retries once after a stale DEK wrap when master rotation
+  commits mid-read. Concurrent reads return the intact value, not
+  `INVALID_KEY`.
+
 ## v0.14.0 — 2026-08-20
 
 ### ✨ Added
