@@ -21,9 +21,11 @@ import {
   type SchemaColumnDecl,
   type SchemaColumnInput,
   type SchemaRelationEntry,
+  type SchemaPolicyDecl,
   type SchemaRelationsDecl,
   type SchemaTableDecl,
 } from "./schema-decl.ts";
+import { emitPgPolicySource, parseSqlPolicySpec } from "../../drivers/pg-rls.ts";
 
 /** Supported Drizzle dialects for domain schema emit (Postgres-family only). */
 export type SqlDialect = "postgres";
@@ -186,7 +188,15 @@ export function emitDrizzleSource(
     Object.values(t.columns).some((c) => c.sqlType === "integer"),
   );
   const pgIntImport = needsInteger ? "bigint" : null;
-  const coreImport = `import { pgTable, text${pgIntImport ? `, ${pgIntImport}` : ""} } from "drizzle-orm/pg-core";`;
+  const needsPolicy = tables.some((t) => (t.policies?.length ?? 0) > 0);
+  const coreNames = [
+    "pgTable",
+    "text",
+    pgIntImport,
+    needsPolicy ? "pgPolicy" : null,
+  ].filter((name): name is string => name !== null);
+  const coreImport = `import { ${coreNames.join(", ")} } from "drizzle-orm/pg-core";`;
+  const sqlImport = needsPolicy ? `import { sql } from "drizzle-orm";\n` : "";
 
   const needsId = tables.some((t) =>
     Object.values(t.columns).some((c) => c.defaultFnKind === "id"),
@@ -204,19 +214,14 @@ export function emitDrizzleSource(
   const relationsImport =
     relations.length > 0 ? `import { defineRelations } from "drizzle-orm";\n` : "";
 
-  const blocks = tables.map((table) => {
-    const lines = Object.values(table.columns).map(
-      (col) => `  ${col.key}: ${emitColumnSource(col, dialect)},`,
-    );
-    const sqlName = schemaTableSqlName(table) ?? table.name;
-    return `export const ${exportNameForTable(sqlName)} = pgTable(${JSON.stringify(sqlName)}, {\n${lines.join("\n")}\n});`;
-  });
+  const blocks = tables.map((table) => emitTableBlock(table, dialect));
 
   const relationsBlock = emitRelationsSource(relations);
 
   return [
     GENERATED_SCHEMA_HEADER,
     coreImport,
+    sqlImport.trimEnd(),
     relationsImport.trimEnd(),
     helperImport.trimEnd(),
     "",
@@ -226,6 +231,40 @@ export function emitDrizzleSource(
   ]
     .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
     .join("\n");
+}
+
+function emitTableBlock(table: SchemaTableDecl, dialect: SqlDialect): string {
+  const lines = Object.values(table.columns).map(
+    (col) => `  ${col.key}: ${emitColumnSource(col, dialect)},`,
+  );
+  const sqlName = schemaTableSqlName(table) ?? table.name;
+  const exportName = exportNameForTable(sqlName);
+  const cols = `{\n${lines.join("\n")}\n}`;
+  const policies = table.policies ?? [];
+  if (policies.length === 0) {
+    const ctor = table.rls === true ? "pgTable.withRLS" : "pgTable";
+    return `export const ${exportName} = ${ctor}(${JSON.stringify(sqlName)}, ${cols});`;
+  }
+  const extras = policies.map((policy) => `  ${emitPolicyExtra(policy, sqlName)},`).join("\n");
+  return `export const ${exportName} = pgTable(${JSON.stringify(sqlName)}, ${cols}, (_t) => [\n${extras}\n]);`;
+}
+
+function emitPolicyExtra(policy: SchemaPolicyDecl, table: string): string {
+  const roles = Array.isArray(policy.to)
+    ? policy.to.join(", ")
+    : typeof policy.to === "string"
+      ? policy.to
+      : "public";
+  const spec = parseSqlPolicySpec({
+    name: policy.name,
+    table,
+    as: policy.as,
+    to: roles,
+    for: policy.for,
+    using: policy.using,
+    withCheck: policy.withCheck,
+  });
+  return emitPgPolicySource(spec).replaceAll("\n", "\n  ");
 }
 
 function exportNameForTable(name: string): string {

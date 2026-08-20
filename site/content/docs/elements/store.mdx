@@ -39,9 +39,9 @@ Manifest tables, columns, and keywords.
 Classified PII stays masked unless the toolbar **PII** control is on
 (`revealPii: true`, audited).
 
-**Gate** views the result as Operator (default, bypasses RLS), public, a
-selected user (via their matching policy), or a Manifest policy gate.
-`asGate` sets `oke.gate` on postgres / pglite for `current_setting('oke.gate', true)`.
+**Gate** views as Operator (bypass), public, a user, or a policy. SQL,
+browse, and grid edit send `{ asGate, asUserId }`. postgres / pglite stamp
+`oke.gate()` / `oke.user()` / `oke.has_scope()`; memory is catalog-only.
 
 The SQL band **Schema** control opens a visualizer of Manifest tables and
 relations — declared `.references()` plus inferred `*_id` columns — not the
@@ -92,13 +92,13 @@ Each SQL table row shows whether Postgres RLS is on (emerald shield)
 or off (muted shield). KV, files, and index have no badge. Enabling
 RLS on create flips that shield.
 
-**RLS Policies** lists `pg_policies`. Create policy pins the SQL preview;
-**Templates** slides a flush library beside it (every `FOR` command, owner,
-`oke.gate`). Or edit `roles` / `USING` / `WITH CHECK` in the grid (`ALTER POLICY`).
+**RLS Policies** lists `pg_policies` plus Manifest policies (`declared` /
+`live`). Create policy pins SQL | Code (`store.schema.policy` + `pgPolicy`).
+**Templates** use `oke.user()` / `oke.gate()` / `oke.has_scope()`.
 
 Create policy picks a Gate posture (Read / Write / Both), or **Policy &
-scope** for `gate.public`, `gate.policy`, and `gate.scope`. `TO public`
-stays on the SQL — those picks are not Postgres roles.
+scope**. Those picks fill `USING` / `WITH CHECK`. `TO` stays `public` —
+Gate names are not Postgres roles.
 
 ### Quick start
 
@@ -301,6 +301,31 @@ The recommended path: declare tables ORM-agnostically, then let `oke db` emit re
 | `.as("sql_name")`                            | override the automatic `camelCase → snake_case` |
 | `.describe("…")`                             | human title in the Console (falls back to key)  |
 | `.references(() => col, { onDelete })`       | foreign key                                     |
+| `store.schema.rls()`                         | `pgTable.withRLS` when there are no policies    |
+| `store.schema.policy.gate/owner/scope`       | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()`) |
+
+Third argument on `store.schema.table` is Drizzle-shaped extras:
+
+```typescript
+export const bookings = store.schema.table("bookings", {
+  id: field.text().primaryKey(),
+  owner: field.text().notNull(),
+}, [
+  store.schema.policy.gate("member", { for: "select" }),
+  store.schema.policy.owner("owner", { for: "all" }),
+  store.schema.policy.scope("booking:create", { for: "insert" }),
+]);
+```
+
+Helpers emit stable names (`gate_member_select`). Raw
+`store.schema.policy("name", { as, to, for, using, withCheck })` is the
+escape hatch — predicates use `oke.*`, never `current_setting`.
+
+<Callout title="User-plane fx.store applies RLS">
+  HTTP / resource flows stamp Gate identity onto every postgres / pglite
+  statement. Table-owner bypass ends for those surfaces. Operator,
+  `bypassGates`, cron / CDC / signal, and catalog DDL stay unstamped.
+</Callout>
 
 #### Foreign keys and relations
 

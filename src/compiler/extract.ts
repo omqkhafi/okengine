@@ -30,6 +30,7 @@ import type {
   SignalDelivery,
   Slo,
   Store,
+  TablePolicy,
   Trigger,
 } from "../manifest/types.ts";
 import { sqlTableRef } from "../manifest/sql-resource.ts";
@@ -67,16 +68,20 @@ export interface ExtractManifestOptions {
 }
 
 /** Internal project scope accumulated across files. */
+type DeclaredSchemaTable = {
+  readonly name: string;
+  readonly columns: Record<string, DeclaredColumn>;
+  readonly rls?: boolean;
+  readonly policies?: Record<string, TablePolicy>;
+};
+
 interface ProjectScope {
   app: string;
   bindings: Map<string, InferBinding>;
   signals: Record<string, Signal>;
   stores: Record<string, Store>;
   /** Binding or table name → declared columns from `store.schema.table`. */
-  schemaTables: Map<
-    string,
-    { readonly name: string; readonly columns: Record<string, DeclaredColumn> }
-  >;
+  schemaTables: Map<string, DeclaredSchemaTable>;
   clocks: Record<string, Clock>;
   gates: Record<string, Gate>;
   /** Local binding name → gate manifest id (policy name or rate expression). */
@@ -326,7 +331,7 @@ function finalizeRefs(scope: ProjectScope): void {
       if (!declared) continue;
       const existing = table.columns ?? {};
       if (Object.keys(existing).length === 0) {
-        store.tables[name] = { ...table, columns: declared.columns };
+        store.tables[name] = { ...table, ...tableFromDeclared(declared) };
       }
     }
   }
@@ -338,7 +343,7 @@ function finalizeRefs(scope: ProjectScope): void {
     if (!store.tables) continue;
     for (const name of Object.keys(store.tables)) attachedNames.add(name);
   }
-  const orphanByName = new Map<string, { name: string; columns: Record<string, DeclaredColumn> }>();
+  const orphanByName = new Map<string, DeclaredSchemaTable>();
   for (const t of scope.schemaTables.values()) {
     if (!attachedNames.has(t.name)) orphanByName.set(t.name, t);
   }
@@ -351,7 +356,7 @@ function finalizeRefs(scope: ProjectScope): void {
     target.tables = target.tables ?? {};
     for (const t of orphanByName.values()) {
       if (target.tables[t.name]) continue;
-      target.tables[t.name] = { columns: t.columns };
+      target.tables[t.name] = tableFromDeclared(t);
     }
   }
 }
@@ -361,7 +366,8 @@ function collectSchemaTable(call: CallExpression, program: AstNode, scope: Proje
   if (!tableName) return;
   const colsNode = objectArg(call.arguments[1]);
   const columns = colsNode ? parseDeclaredColumns(colsNode) : {};
-  const entry = { name: tableName, columns };
+  const extras = parseSchemaTableExtras(call.arguments[2]);
+  const entry = { name: tableName, columns, ...extras };
   scope.schemaTables.set(tableName, entry);
   const bindingName = enclosingConstName(call, program);
   if (bindingName) {
@@ -396,7 +402,7 @@ function attachSchemaOption(
         const id = (value as Identifier).name;
         const declared = scope.schemaTables.get(id) ?? scope.schemaTables.get(key);
         if (declared) {
-          store.tables[declared.name] = { columns: declared.columns };
+          store.tables[declared.name] = tableFromDeclared(declared);
         } else {
           store.tables[key] = store.tables[key] ?? {};
         }
@@ -406,7 +412,7 @@ function attachSchemaOption(
       if (value.type === "CallExpression") {
         const inline = parseInlineSchemaTable(value as CallExpression);
         if (inline) {
-          store.tables[inline.name] = { columns: inline.columns };
+          store.tables[inline.name] = tableFromDeclared(inline);
           scope.schemaTables.set(inline.name, inline);
         }
       }
@@ -422,7 +428,7 @@ function attachSchemaOption(
 
 function parseInlineSchemaTable(
   call: CallExpression,
-): { name: string; columns: Record<string, DeclaredColumn> } | undefined {
+): DeclaredSchemaTable | undefined {
   const callee = call.callee;
   if (callee.type !== "MemberExpression") return undefined;
   const member = callee as AstNode & { object: AstNode; property: AstNode };
@@ -438,6 +444,117 @@ function parseInlineSchemaTable(
   return {
     name: tableName,
     columns: colsNode ? parseDeclaredColumns(colsNode) : {},
+    ...parseSchemaTableExtras(call.arguments[2]),
+  };
+}
+
+function tableFromDeclared(t: DeclaredSchemaTable): {
+  columns: Record<string, DeclaredColumn>;
+  rls?: boolean;
+  policies?: Record<string, TablePolicy>;
+} {
+  return {
+    columns: t.columns,
+    ...(t.rls ? { rls: true } : {}),
+    ...(t.policies ? { policies: t.policies } : {}),
+  };
+}
+
+function parseSchemaTableExtras(
+  node: AstNode | undefined,
+): Pick<DeclaredSchemaTable, "rls" | "policies"> {
+  if (!node || node.type !== "ArrayExpression") return {};
+  const els = (node as AstNode & { elements?: AstNode[] }).elements ?? [];
+  const policies: Record<string, TablePolicy> = {};
+  let rls = false;
+  for (const el of els) {
+    if (!el || el.type !== "CallExpression") continue;
+    const extra = parseSchemaTableExtra(el as CallExpression);
+    if (!extra) continue;
+    if (extra.kind === "rls") {
+      rls = true;
+      continue;
+    }
+    policies[extra.name] = extra.policy;
+    rls = true;
+  }
+  return {
+    ...(rls ? { rls: true } : {}),
+    ...(Object.keys(policies).length > 0 ? { policies } : {}),
+  };
+}
+
+function parseSchemaTableExtra(
+  call: CallExpression,
+): { kind: "rls" } | { kind: "policy"; name: string; policy: TablePolicy } | undefined {
+  const callee = call.callee;
+  if (callee.type !== "MemberExpression") return undefined;
+  const member = callee as AstNode & { object: AstNode; property: AstNode };
+  const method = identifierName(member.property);
+  if (method === "rls" && isStoreSchemaCallee(member.object)) {
+    return { kind: "rls" };
+  }
+  if (method === "policy" && isStoreSchemaCallee(member.object)) {
+    const name = stringArg(call.arguments[0]);
+    if (!name) return undefined;
+    return { kind: "policy", name, policy: parseTablePolicyOptions(objectArg(call.arguments[1])) };
+  }
+  if (
+    (method === "gate" || method === "owner" || method === "scope") &&
+    isStoreSchemaPolicyCallee(member.object)
+  ) {
+    const key = stringArg(call.arguments[0]);
+    if (!key) return undefined;
+    const opts = objectArg(call.arguments[1]);
+    const command = (stringProp(opts, "for") ??
+      (method === "owner" ? "all" : method === "scope" ? "insert" : "select")) as TablePolicy["for"];
+    const slug = key.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    const name = `${method}_${slug}_${command}`;
+    const lit = `'${key.replaceAll("'", "''")}'`;
+    const expr =
+      method === "gate"
+        ? `oke.gate() = ${lit}`
+        : method === "owner"
+          ? `${key} = oke.user()`
+          : `oke.has_scope(${lit})`;
+    const policy: TablePolicy = {
+      for: command,
+      ...(command === "insert"
+        ? { withCheck: expr }
+        : command === "update" || command === "all"
+          ? { using: expr, withCheck: expr }
+          : { using: expr }),
+    };
+    return { kind: "policy", name, policy };
+  }
+  return undefined;
+}
+
+function isStoreSchemaCallee(node: AstNode): boolean {
+  if (node.type !== "MemberExpression") return false;
+  const member = node as AstNode & { object: AstNode; property: AstNode };
+  return identifierName(member.object) === "store" && identifierName(member.property) === "schema";
+}
+
+function isStoreSchemaPolicyCallee(node: AstNode): boolean {
+  if (node.type !== "MemberExpression") return false;
+  const member = node as AstNode & { object: AstNode; property: AstNode };
+  return identifierName(member.property) === "policy" && isStoreSchemaCallee(member.object);
+}
+
+function parseTablePolicyOptions(opts: AstNode | undefined): TablePolicy {
+  const as = stringProp(opts, "as") as TablePolicy["as"];
+  const forCmd = stringProp(opts, "for") as TablePolicy["for"];
+  const using = stringProp(opts, "using");
+  const withCheck = stringProp(opts, "withCheck");
+  const toNode = objectProp(opts, "to");
+  const to = stringArg(toNode) ?? stringArrayProp(opts, "to");
+  return {
+    ...(as ? { as } : {}),
+    ...(to ? { to } : {}),
+    ...(forCmd ? { for: forCmd } : {}),
+    ...(using ? { using } : {}),
+    ...(withCheck ? { withCheck } : {}),
   };
 }
 

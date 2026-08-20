@@ -55,6 +55,7 @@ import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { buildStoreGridModel, type StoreGridRow } from "../lib/grid-model.ts";
 import { parseIndexQuery } from "../lib/index-query.ts";
 import { childCatalogKind, groupSqlChildren, isSqlCatalogChild } from "../lib/sql-catalog.ts";
+import { QueryGateMenu } from "../query/query-gate-menu.tsx";
 import { TouchedByLists } from "./touched-by-section.tsx";
 
 /** Browse page sizes offered in the Rows select. */
@@ -116,6 +117,10 @@ export function BrowseSection({
   const [indexOpen, setIndexOpen] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
+  const [rlsAs, setRlsAs] = useState<{ asGate: string | null; asUserId: string | null }>({
+    asGate: null,
+    asUserId: null,
+  });
 
   const debouncedIndexText = useDebouncedValue(indexText, INDEX_SEARCH_DEBOUNCE_MS);
   const indexQuery = useMemo(() => parseIndexQuery(debouncedIndexText), [debouncedIndexText]);
@@ -133,8 +138,25 @@ export function BrowseSection({
         : {}),
       ...(store.facet === "index" && indexQuery.kind === "text" ? { q: indexQuery.q, topK } : {}),
       ...(store.facet === "sql" && !piiMasked ? { revealPii: true } : {}),
+      ...(store.facet === "sql" && !isSqlCatalogChild(child) && rlsAs.asGate
+        ? { asGate: rlsAs.asGate }
+        : {}),
+      ...(store.facet === "sql" && !isSqlCatalogChild(child) && rlsAs.asUserId
+        ? { asUserId: rlsAs.asUserId }
+        : {}),
     };
-  }, [store.ref, store.facet, child.name, tenant, tenantReady, limit, indexQuery, topK, piiMasked]);
+  }, [
+    store.ref,
+    store.facet,
+    child,
+    tenant,
+    tenantReady,
+    limit,
+    indexQuery,
+    topK,
+    piiMasked,
+    rlsAs,
+  ]);
 
   const browse = useStoreQuery(queryInput, tenantReady);
   const deleteMutation = useStoreDelete();
@@ -191,6 +213,8 @@ export function BrowseSection({
               c.key === "with_check" ||
               c.key === "command" ||
               c.key === "permissive",
+            ...(c.key === "origin" ? { label: "Origin" } : {}),
+            ...(c.key === "code" ? { label: "Code" } : {}),
           })),
       };
     }
@@ -269,6 +293,9 @@ export function BrowseSection({
 
   const toolbarExtras = (
     <>
+      {store.facet === "sql" && !isSqlCatalogChild(child) ? (
+        <QueryGateMenu manifest={manifest} value={rlsAs} onChange={setRlsAs} />
+      ) : null}
       <Tooltip>
         <TooltipTrigger
           render={(props) => (
@@ -576,6 +603,8 @@ export function BrowseSection({
             }
             insertOpen={insertOpen}
             onInsertOpenChange={setInsertOpen}
+            asGate={rlsAs.asGate}
+            asUserId={rlsAs.asUserId}
             onDeleteRows={
               authReadOnly || extensionCatalog ? undefined : (rows) => setDeleting(rows)
             }

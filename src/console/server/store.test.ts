@@ -1097,7 +1097,9 @@ describe("runStoreSql", () => {
       asGate: "public",
     });
     expect(result.asGate).toBe("public");
+    expect(result.asUserId).toBeNull();
     expect(result.gateApplied).toBe(false);
+    expect(result.rls.applied).toBe(false);
     expect(result.rows).toHaveLength(1);
     await runtime.close();
   });

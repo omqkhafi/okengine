@@ -1,9 +1,8 @@
 /**
  * Query-console "view as Gate" choices — Operator, public, user, or policy.
  *
- * Gates are OKE authorization, not Postgres `TO` roles. Selecting one sets
- * `oke.gate` on postgres / pglite so RLS policies can read
- * `current_setting('oke.gate', true)`.
+ * Gates are OKE authorization, not Postgres `TO` roles. Selecting one stamps
+ * `oke.gate()` / `oke.user()` / `oke.has_scope()` on postgres / pglite.
  */
 
 import type { RlsCatalogGate, RlsGateCatalog } from "./rls-gate-catalog.ts";
@@ -34,6 +33,12 @@ export type QueryGateUserChoice = {
   readonly detail: string;
   /** Policy Gate applied when this user is selected. */
   readonly gate: string;
+};
+
+/** Picker value shared by SQL console, browse, and grid edit. */
+export type RlsPickerValue = {
+  readonly asGate: string | null;
+  readonly asUserId: string | null;
 };
 
 /** Identity slice used to build As-card user rows. */
@@ -175,8 +180,29 @@ export function filterQueryGateAsChoices<
  *
  * @param asGate - Selected gate name, or null for Operator
  */
-export function queryGateToolbarLabel(asGate: string | null): string {
+export function queryGateToolbarLabel(
+  asGate: string | null,
+  asUserId?: string | null,
+  userLabel?: string | null,
+): string {
+  if (asUserId && userLabel) return `User · ${userLabel}`;
+  if (asUserId) return `User · ${asUserId}`;
   return asGate && asGate.length > 0 ? `Gate · ${asGate}` : "Gate";
+}
+
+/**
+ * Request fields for store query / edit / SQL.
+ *
+ * @param value - Picker bag
+ */
+export function rlsPickerPayload(value: RlsPickerValue): {
+  readonly asGate?: string;
+  readonly asUserId?: string;
+} {
+  return {
+    ...(value.asGate ? { asGate: value.asGate } : {}),
+    ...(value.asUserId ? { asUserId: value.asUserId } : {}),
+  };
 }
 
 function gateChoiceDetail(gate: RlsCatalogGate): string {

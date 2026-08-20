@@ -17,6 +17,7 @@ import { loadPluginTablesFromAppEntry } from "../elements/store/load-plugin-tabl
 import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../config/index.ts";
 import type { TableContribution } from "../kernel/plugin.ts";
 import { runSeed, type SeedOptions } from "./db-seed.ts";
+import { OKE_RLS_HELPER_SQL } from "../drivers/pg-rls.ts";
 import { resolveDrizzleKitEnv } from "./drizzle-env.ts";
 import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
@@ -305,9 +306,10 @@ export async function runPush(
 
   let result: DbKitResult;
   try {
-    result = await withDrizzleKitEnv(cwd, loaded?.config, env, () =>
-      pushFn({ config: configPath }),
-    );
+    result = await withDrizzleKitEnv(cwd, loaded?.config, env, async () => {
+      await installOkeRlsHelpers(write);
+      return pushFn({ config: configPath });
+    });
   } catch (err) {
     write(`oke db push: ${err instanceof Error ? err.message : String(err)}\n`);
     write("         → install drizzle-kit and ensure drizzle.config.ts exists\n");
@@ -402,7 +404,9 @@ export async function runMigrate(
     });
 
   const { overlay } = await resolveDrizzleKitEnv(cwd, loaded?.config, env);
+  const restore = applyDrizzleEnvOverlay(overlay);
   try {
+    await installOkeRlsHelpers(write);
     const code = await migrateFn({
       config: configPath,
       cwd,
@@ -417,6 +421,8 @@ export async function runMigrate(
   } catch (err) {
     write(`oke db migrate: ${err instanceof Error ? err.message : String(err)}\n`);
     return EXIT_RUNTIME;
+  } finally {
+    restore();
   }
 }
 
@@ -569,6 +575,39 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
   }
 
   return runDb(sub, { config, env, force, entry });
+}
+
+/**
+ * Install `oke.gate()` / `oke.user()` / `oke.has_scope()` before drizzle-kit
+ * so `CREATE POLICY … oke.gate()` succeeds.
+ *
+ * @param write - Output
+ */
+async function installOkeRlsHelpers(write: (text: string) => void): Promise<void> {
+  const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL;
+  const pgliteUrl = process.env.OKE_PGLITE_URL;
+  try {
+    if (pgliteUrl && !url) {
+      const { connectPglite } = await import("../drivers/pglite.ts");
+      const conn = await connectPglite({ url: pgliteUrl });
+      try {
+        await conn.exec(OKE_RLS_HELPER_SQL);
+      } finally {
+        await conn.close();
+      }
+      return;
+    }
+    if (!url) return;
+    const { connectPostgres } = await import("../drivers/postgres.ts");
+    const conn = await connectPostgres({ url });
+    try {
+      await conn.exec(OKE_RLS_HELPER_SQL);
+    } finally {
+      await conn.close();
+    }
+  } catch (err) {
+    write(`oke db: oke.* helpers skipped — ${err instanceof Error ? err.message : String(err)}\n`);
+  }
 }
 
 function parseConfigEnv(value: string | undefined): ConfigEnv | undefined {

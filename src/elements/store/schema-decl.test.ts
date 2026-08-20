@@ -260,3 +260,42 @@ describe("emitDrizzleSource — references + relations (Linkly-shaped)", () => {
     expect(relations.config.daily?.link?.target).toBe("links");
   });
 });
+
+describe("store.schema RLS extras", () => {
+  test("helpers stamp rls + named policies", () => {
+    const bookings = store.schema.table(
+      "bookings",
+      {
+        id: field.text().primaryKey(),
+        owner: field.text().notNull(),
+      },
+      [
+        store.schema.policy.gate("member", { for: "select" }),
+        store.schema.policy.owner("owner", { for: "all" }),
+        store.schema.policy.scope("booking:create", { for: "insert" }),
+      ],
+    );
+    expect(bookings.rls).toBe(true);
+    expect(bookings.policies?.map((p) => p.name)).toEqual([
+      "gate_member_select",
+      "owner_owner_all",
+      "scope_booking_create_insert",
+    ]);
+    const src = emitDrizzleSource([bookings], "postgres");
+    expect(src).toContain("pgPolicy");
+    expect(src).toContain("oke.gate() = ");
+    expect(src).toContain("oke.user()");
+    expect(src).toContain("oke.has_scope(");
+  });
+
+  test("rls() without policies emits pgTable.withRLS", () => {
+    const notes = store.schema.table(
+      "notes",
+      { id: field.text().primaryKey() },
+      [store.schema.rls()],
+    );
+    expect(notes.rls).toBe(true);
+    expect(notes.policies).toBeUndefined();
+    expect(emitDrizzleSource([notes], "postgres")).toContain("pgTable.withRLS");
+  });
+});

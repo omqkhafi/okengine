@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   buildAlterPolicySql,
   buildCreatePolicySql,
+  emitPgPolicySource,
+  formatPolicyRole,
   parseSqlPolicySpec,
+  rlsScopesJson,
   sqlPolicyRowId,
 } from "./pg-rls.ts";
 
@@ -36,6 +39,22 @@ describe("parseSqlPolicySpec", () => {
     expect(spec.withCheck).toBe("true");
   });
 
+  test("accepts Drizzle as/to/for aliases", () => {
+    const spec = parseSqlPolicySpec({
+      name: "gate_read",
+      table: "bookings",
+      for: "select",
+      as: "permissive",
+      to: "current_user",
+      using: "oke.gate() = 'member'",
+    });
+    expect(spec.command).toBe("SELECT");
+    expect(spec.behavior).toBe("PERMISSIVE");
+    expect(spec.roles).toEqual(["current_user"]);
+    expect(buildCreatePolicySql(spec)).toContain("TO current_user");
+    expect(buildCreatePolicySql(spec)).not.toContain('"current_user"');
+  });
+
   test("rejects stacked statements in USING", () => {
     expect(() =>
       parseSqlPolicySpec({
@@ -67,5 +86,35 @@ describe("buildAlterPolicySql", () => {
         using: "true; drop table comments",
       }),
     ).toThrow("invalid USING");
+  });
+});
+
+describe("formatPolicyRole", () => {
+  test("leaves Drizzle special roles unquoted", () => {
+    expect(formatPolicyRole("public")).toBe("public");
+    expect(formatPolicyRole("current_user")).toBe("current_user");
+    expect(formatPolicyRole("member")).toBe('"member"');
+  });
+});
+
+describe("emitPgPolicySource", () => {
+  test("emits drizzle pgPolicy with oke helpers", () => {
+    const spec = parseSqlPolicySpec({
+      name: "gate_member_select",
+      table: "bookings",
+      command: "SELECT",
+      using: "oke.gate() = 'member'",
+    });
+    expect(emitPgPolicySource(spec)).toContain('pgPolicy("gate_member_select"');
+    expect(emitPgPolicySource(spec)).toContain('for: "select"');
+    expect(emitPgPolicySource(spec)).toContain("oke.gate() = 'member'");
+  });
+});
+
+describe("rlsScopesJson", () => {
+  test("sorts unique scopes", () => {
+    expect(rlsScopesJson(["booking:create", "member", "member"])).toBe(
+      '["booking:create","member"]',
+    );
   });
 });

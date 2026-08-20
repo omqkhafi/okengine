@@ -21,6 +21,7 @@ import {
   queryGateToolbarLabel,
   queryGateUserChoices,
   type QueryGateMode,
+  type RlsPickerValue,
 } from "../lib/query-gate.ts";
 import { mergeRlsGateCatalog, rlsGateCatalog } from "../lib/rls-gate-catalog.ts";
 import {
@@ -35,8 +36,8 @@ import {
 /** Props for {@link QueryGateMenu}. */
 export interface QueryGateMenuProps {
   readonly manifest: Manifest | null;
-  readonly asGate: string | null;
-  readonly onChange: (asGate: string | null) => void;
+  readonly value: RlsPickerValue;
+  readonly onChange: (next: RlsPickerValue) => void;
 }
 
 /**
@@ -44,7 +45,8 @@ export interface QueryGateMenuProps {
  *
  * @param props - Manifest + current pick
  */
-export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps): JSX.Element {
+export function QueryGateMenu({ manifest, value, onChange }: QueryGateMenuProps): JSX.Element {
+  const { asGate, asUserId } = value;
   const gatesQuery = useGates(true);
   const identitiesQuery = useFlowsIdentities();
   const catalog = useMemo(
@@ -61,33 +63,30 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
     "Intentionally unauthenticated.";
   const mode = queryGateMode(asGate);
   const active = asGate !== null;
-  const [asUserId, setAsUserId] = useState<string | null>(null);
-  const [asTab, setAsTab] = useState<GateAsTab>("policy");
+  const [asTab, setAsTab] = useState<GateAsTab>(asUserId ? "user" : "policy");
   const selectedPolicy = policies.find((policy) => policy.id === asGate) ?? null;
   const selectedUser = users.find((user) => user.id === asUserId && user.gate === asGate) ?? null;
   const asEnabled = policies.length > 0 || users.length > 0;
 
   const selectMode = (next: QueryGateMode): void => {
     if (next === "operator") {
-      setAsUserId(null);
-      onChange(null);
+      onChange({ asGate: null, asUserId: null });
       return;
     }
     if (next === "public") {
-      setAsUserId(null);
-      onChange("public");
+      onChange({ asGate: "public", asUserId: null });
       return;
     }
     if (mode === "as") return;
     const fallback = selectedPolicy?.id ?? policies[0]?.id ?? users[0]?.gate ?? null;
     if (fallback === null) return;
     if (users[0] && fallback === users[0].gate && policies.length === 0) {
-      setAsUserId(users[0].id);
       setAsTab("user");
-    } else {
-      setAsTab("policy");
+      onChange({ asGate: users[0].gate, asUserId: users[0].id });
+      return;
     }
-    onChange(fallback);
+    setAsTab("policy");
+    onChange({ asGate: fallback, asUserId: null });
   };
 
   return (
@@ -111,7 +110,9 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
               data-icon="inline-start"
               className="size-3.5"
             />
-            <span className="truncate">{queryGateToolbarLabel(asGate)}</span>
+            <span className="truncate">
+              {queryGateToolbarLabel(asGate, asUserId, selectedUser?.label)}
+            </span>
           </Button>
         )}
       />
@@ -143,12 +144,12 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
         </GateModeStrip>
         {mode === "operator" ? (
           <GateModeDetail title="Operator" badge="Default">
-            Bypasses RLS. No <span className="font-mono">oke.gate</span> is set.
+            Bypasses RLS. No <span className="font-mono">oke.gate()</span> stamp.
           </GateModeDetail>
         ) : null}
         {mode === "public" ? (
           <GateModeDetail title="Public">
-            {publicDetail} Sets <span className="font-mono">oke.gate</span> to{" "}
+            {publicDetail} Sets <span className="font-mono">oke.gate()</span> to{" "}
             <span className="font-mono">public</span>.
           </GateModeDetail>
         ) : null}
@@ -161,14 +162,12 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
             asGate={asGate}
             asUserId={selectedUser?.id ?? null}
             onSelectPolicy={(policy) => {
-              setAsUserId(null);
               setAsTab("policy");
-              onChange(policy.id);
+              onChange({ asGate: policy.id, asUserId: null });
             }}
             onSelectUser={(user) => {
-              setAsUserId(user.id);
               setAsTab("user");
-              onChange(user.gate);
+              onChange({ asGate: user.gate, asUserId: user.id });
             }}
           />
         ) : null}

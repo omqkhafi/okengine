@@ -7,10 +7,15 @@ import {
   buildRowSecuritySql,
   parseSqlPolicySpec,
   quotePgIdent,
+  formatPolicyRole,
+  emitPgPolicySource,
+  emitStoreSchemaPolicySource,
   type SqlPolicyBehavior,
   type SqlPolicyCommand,
   type SqlPolicySpec,
 } from "../../../../../../drivers/pg-rls.ts";
+
+export { emitPgPolicySource, emitStoreSchemaPolicySource };
 
 export type { SqlPolicyBehavior, SqlPolicyCommand, SqlPolicySpec };
 export { buildCreatePolicySql, buildRowSecuritySql, parseSqlPolicySpec };
@@ -28,7 +33,8 @@ export type RlsPolicyTemplate = {
   readonly withCheck?: string;
 };
 
-const OKE_GATE = "current_setting('oke.gate', true)";
+const OKE_GATE = "oke.gate()";
+const OKE_USER = "oke.user()";
 
 /** Common Postgres RLS starters — OKE Gate / owner / join, no vendor auth helpers. */
 export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
@@ -52,14 +58,14 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     id: "owner-read",
     name: "owner_read",
     title: "Enable read for owners",
-    detail: "SELECT when a text owner column matches current_user.",
+    detail: "SELECT when a text owner column matches oke.user().",
     command: "SELECT",
-    using: "owner = current_user",
+    using: `owner = ${OKE_USER}`,
   },
   {
     id: "gate-read",
     name: "gate_read",
-    title: "Enable read when oke.gate matches",
+    title: "Enable read when oke.gate() matches",
     detail: `SELECT when ${OKE_GATE} equals a Gate name (pair Policy & scope).`,
     command: "SELECT",
     using: `${OKE_GATE} = 'member'`,
@@ -71,7 +77,7 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     detail: "SELECT with EXISTS against members — membership joins, not a column on this table.",
     command: "SELECT",
     using:
-      "exists (select 1 from members m where m.user_id = current_user and m.team_id = team_id)",
+      "exists (select 1 from members m where m.user_id = oke.user() and m.team_id = team_id)",
   },
   {
     id: "insert-all",
@@ -85,14 +91,14 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     id: "insert-owner",
     name: "insert_owner",
     title: "Enable insert for owners",
-    detail: "INSERT WITH CHECK so new rows set owner to current_user.",
+    detail: "INSERT WITH CHECK so new rows set owner to oke.user().",
     command: "INSERT",
-    withCheck: "owner = current_user",
+    withCheck: `owner = ${OKE_USER}`,
   },
   {
     id: "insert-gate",
     name: "insert_gate",
-    title: "Enable insert when oke.gate matches",
+    title: "Enable insert when oke.gate() matches",
     detail: `INSERT WITH CHECK when ${OKE_GATE} equals a Gate name.`,
     command: "INSERT",
     withCheck: `${OKE_GATE} = 'member'`,
@@ -101,15 +107,15 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     id: "update-owner",
     name: "update_owner",
     title: "Enable update for owners",
-    detail: "UPDATE own rows. USING and WITH CHECK both require owner = current_user.",
+    detail: "UPDATE own rows. USING and WITH CHECK both require owner = oke.user().",
     command: "UPDATE",
-    using: "owner = current_user",
-    withCheck: "owner = current_user",
+    using: `owner = ${OKE_USER}`,
+    withCheck: `owner = ${OKE_USER}`,
   },
   {
     id: "update-gate",
     name: "update_gate",
-    title: "Enable update when oke.gate matches",
+    title: "Enable update when oke.gate() matches",
     detail: `UPDATE when ${OKE_GATE} equals a Gate name.`,
     command: "UPDATE",
     using: `${OKE_GATE} = 'member'`,
@@ -119,9 +125,9 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     id: "delete-owner",
     name: "delete_owner",
     title: "Enable delete for owners",
-    detail: "DELETE when a text owner column matches current_user.",
+    detail: "DELETE when a text owner column matches oke.user().",
     command: "DELETE",
-    using: "owner = current_user",
+    using: `owner = ${OKE_USER}`,
   },
   {
     id: "deny-delete",
@@ -135,15 +141,15 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     id: "all-owner",
     name: "owner_all",
     title: "Enable all commands for owners",
-    detail: "ALL commands when owner = current_user (USING and WITH CHECK).",
+    detail: "ALL commands when owner = oke.user() (USING and WITH CHECK).",
     command: "ALL",
-    using: "owner = current_user",
-    withCheck: "owner = current_user",
+    using: `owner = ${OKE_USER}`,
+    withCheck: `owner = ${OKE_USER}`,
   },
   {
     id: "all-gate",
     name: "gate_all",
-    title: "Enable all commands when oke.gate matches",
+    title: "Enable all commands when oke.gate() matches",
     detail: `ALL commands when ${OKE_GATE} equals a Gate name.`,
     command: "ALL",
     using: `${OKE_GATE} = 'member'`,
@@ -153,7 +159,7 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     id: "restrictive-gate",
     name: "restrictive_gate",
     title: "Restrictive extra Gate check",
-    detail: "RESTRICTIVE policy ANDs with permissive ones. Requires oke.gate to be set.",
+    detail: "RESTRICTIVE policy ANDs with permissive ones. Requires oke.gate() to be set.",
     command: "ALL",
     behavior: "RESTRICTIVE",
     using: `${OKE_GATE} is not null`,
@@ -262,6 +268,30 @@ export function rlsGateActionsForMode(mode: RlsGateMode): readonly string[] {
  * @param spec - Policy fields
  * @param enableRls - Also enable RLS on the table
  */
+/**
+ * Code-dock sources: `store.schema.policy` plus Drizzle `pgPolicy`.
+ *
+ * @param spec - Policy fields
+ */
+export function rlsPolicyCodeSource(spec: SqlPolicySpec): string {
+  return `${emitStoreSchemaPolicySource(spec)}\n\n${emitPgPolicySource(spec)}`;
+}
+
+/**
+ * USING / WITH CHECK from Advanced Gate picks (never Postgres `TO`).
+ *
+ * @param gates - Selected policy / public / scope names
+ */
+export function rlsGatePredicateSql(gates: readonly string[]): string {
+  if (gates.length === 0) return "true";
+  return gates
+    .map((gate) => {
+      const lit = `'${gate.replaceAll("'", "''")}'`;
+      return gate.includes(":") ? `oke.has_scope(${lit})` : `oke.gate() = ${lit}`;
+    })
+    .join(" OR ");
+}
+
 export function rlsPolicyPreviewSql(spec: SqlPolicySpec, enableRls: boolean): string {
   const create = formatCreatePolicyPreview(spec);
   if (!enableRls) return `${create};`;
@@ -272,7 +302,7 @@ function formatCreatePolicyPreview(spec: SqlPolicySpec): string {
   const roles =
     spec.roles.length === 0
       ? "public"
-      : spec.roles.map((role) => (role === "public" ? "public" : quotePgIdent(role))).join(", ");
+      : spec.roles.map((role) => formatPolicyRole(role)).join(", ");
   const lines = [
     `CREATE POLICY ${quotePgIdent(spec.name)}`,
     `  ON ${quotePgIdent(spec.table)}`,

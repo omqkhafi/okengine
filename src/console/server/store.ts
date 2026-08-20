@@ -29,6 +29,7 @@ import {
   type SqlStoreHandle,
   type StoreRuntime,
 } from "../../elements/store.ts";
+import { RLS_CONTEXT_DRIVERS, type RlsIdentity } from "../../drivers/pg-rls.ts";
 import { DryRunWriteIsolationError, withDryRun } from "../../kernel/dry-run.ts";
 import { addPiiFieldName, piiNameAliases, PII_MASK } from "../../elements/store/classify.ts";
 import { rankIndexHits } from "./index-search.ts";
@@ -183,6 +184,7 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
       ref,
       facet,
       childrenOf(manifest!, name, facet, store),
+      store.tables,
     );
     const replicaLagMs = facet === "sql" ? latestReplicaLag(options.runs ?? [], children) : null;
 
@@ -291,14 +293,30 @@ async function withSqlTableRls(
   ref: ResourceRef,
   facet: StoreFacet,
   children: readonly ConsoleStoreChild[],
+  tables?: NonNullable<Manifest["stores"]>[string]["tables"],
 ): Promise<readonly ConsoleStoreChild[]> {
-  if (facet !== "sql" || runtime === null) return children;
+  const declared = declaredTableRls(tables);
+  if (facet !== "sql" || runtime === null) {
+    return applySqlTableRls(children, new Map(), declared);
+  }
   try {
     const sql = (await runtime.openRef(ref, { effects: { reads: [ref] } })) as SqlStoreHandle;
-    return applySqlTableRls(children, await listSqlTableRls(sql));
+    return applySqlTableRls(children, await listSqlTableRls(sql), declared);
   } catch {
-    return children;
+    return applySqlTableRls(children, new Map(), declared);
   }
+}
+
+function declaredTableRls(
+  tables: NonNullable<Manifest["stores"]>[string]["tables"] | undefined,
+): ReadonlyMap<string, boolean> {
+  const out = new Map<string, boolean>();
+  for (const [name, table] of Object.entries(tables ?? {})) {
+    if (table.rls === true || Object.keys(table.policies ?? {}).length > 0) {
+      out.set(name, true);
+    }
+  }
+  return out;
 }
 
 function columnDescriptionsFor(
@@ -411,6 +429,9 @@ export interface StoreQueryInput {
   readonly q?: string;
   readonly topK?: number;
   readonly revealPii?: boolean;
+  readonly asGate?: string;
+  readonly asUserId?: string;
+  readonly rls?: RlsIdentity;
 }
 
 /** Query result shape. */
@@ -436,6 +457,11 @@ export interface StoreQueryResult {
   readonly facetDistribution?: Record<string, Record<string, number>>;
   readonly masked: boolean;
   readonly routedRole?: "primary" | "replica";
+  readonly rls?: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
 }
 
 const KV_TTL_RE = /^(\d+)(ms|s|m|h|d)$/;
@@ -508,18 +534,27 @@ export async function queryStore(
 ): Promise<StoreQueryResult> {
   const [facet] = input.ref.split(":") as [StoreFacet, string];
   const effects: Effects = { reads: [input.ref] };
+  const catalog = input.child ? sqlCatalogKind(input.child) : null;
+  const rls = catalog ? undefined : input.rls;
   const handle = await runtime.openRef(input.ref, {
     effects,
     revealPii: input.revealPii === true,
+    ...(rls ? { rls } : {}),
   });
 
   if (facet === "sql") {
     const sql = handle as SqlStoreHandle;
     const table = input.child;
+    const stamped = rlsStamp(sql.driverId, rls);
     if (!table) {
-      return { facet, rows: [], masked: !input.revealPii, routedRole: sql.routedRole };
+      return {
+        facet,
+        rows: [],
+        masked: !input.revealPii,
+        routedRole: sql.routedRole,
+        ...(stamped ? { rls: stamped } : {}),
+      };
     }
-    const catalog = sqlCatalogKind(table);
     if (catalog) {
       const storeName = input.ref.split(":")[1] ?? "";
       const rows = await listSqlCatalog(sql, catalog, manifest, storeName, input.limit ?? 200);
@@ -540,6 +575,7 @@ export async function queryStore(
         rows,
         masked: !input.revealPii,
         routedRole: sql.routedRole,
+        ...(stamped ? { rls: stamped } : {}),
       };
     } catch {
       // Table may not exist yet — empty browse.
@@ -548,6 +584,7 @@ export async function queryStore(
         rows: [],
         masked: !input.revealPii,
         routedRole: sql.routedRole,
+        ...(stamped ? { rls: stamped } : {}),
       };
     }
   }
@@ -765,6 +802,9 @@ export interface StoreEditInput {
   readonly confirmation?: string;
   readonly reason?: string;
   readonly confirmed?: boolean;
+  readonly asGate?: string;
+  readonly asUserId?: string;
+  readonly rls?: RlsIdentity;
 }
 
 /** Result of a direct store edit (preview or applied). */
@@ -777,6 +817,11 @@ export interface StoreEditResult {
     readonly kind: "send" | "ask";
     readonly resource: string;
   }>;
+  readonly rls?: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
 }
 
 /**
@@ -818,6 +863,15 @@ export async function editStore(
         willNotFire,
         applied: false,
         wouldHaveFired,
+        ...(input.rls
+          ? {
+              rls: {
+                gate: input.rls.gate,
+                userId: input.rls.userId,
+                applied: false,
+              },
+            }
+          : {}),
       };
     } catch (err) {
       await restoreEditTarget(runtime, snapshot);
@@ -828,7 +882,7 @@ export async function editStore(
     }
   }
 
-  await applyEdit(runtime, input, { revealPii: false, persistMeta: true }, manifest);
+  const appliedRls = await applyEdit(runtime, input, { revealPii: false, persistMeta: true }, manifest);
   // Direct edit: invalidate cache for written resource (effects-derived).
   runtime.onWriteEffects({ writes: [effectRef] });
   void options.production;
@@ -838,6 +892,7 @@ export async function editStore(
     willNotFire,
     applied: true,
     wouldHaveFired: [],
+    ...(appliedRls ? { rls: appliedRls } : {}),
   };
 }
 
@@ -1125,11 +1180,14 @@ async function applyEdit(
   input: StoreEditInput,
   ctx: { readonly revealPii: boolean; readonly persistMeta?: boolean },
   manifest?: Manifest | null,
-): Promise<void> {
+): Promise<StoreEditResult["rls"] | undefined> {
   const [facet] = input.ref.split(":") as [StoreFacet, string];
+  const catalog = input.child ? sqlCatalogKind(input.child) : null;
+  const rls = catalog ? undefined : input.rls;
   const handle = await runtime.openRef(input.ref, {
     effects: { writes: [input.ref] },
     revealPii: ctx.revealPii,
+    ...(rls ? { rls } : {}),
   });
 
   if (facet === "files") {
@@ -1242,12 +1300,12 @@ async function applyEdit(
         `INSERT INTO "${table}" (${columns}) VALUES (${placeholders})`,
         sets.map((c) => input.patch[c]),
       );
-      return;
+      return rlsStamp(sql.driverId, rls);
     }
     const assignments = sets.map((c) => `"${c}" = ?`).join(", ");
     const params = [...sets.map((c) => input.patch[c]), id];
     await sql.raw(`UPDATE "${table}" SET ${assignments} WHERE "id" = ?`, params);
-    return;
+    return rlsStamp(sql.driverId, rls);
   }
 
   throw new Error(`direct edit not supported for facet ${facet}`);
@@ -1383,7 +1441,23 @@ export function isKnownConsoleSqlGate(manifest: Manifest | null, name: string): 
   return gate.kind !== "rate" && !name.startsWith("rate:");
 }
 
-const GATE_CONTEXT_DRIVERS = new Set<SqlStoreHandle["driverId"]>(["postgres", "pglite"]);
+function rlsStamp(
+  driverId: string,
+  identity: RlsIdentity | undefined,
+):
+  | {
+      readonly gate: string | null;
+      readonly userId: string;
+      readonly applied: boolean;
+    }
+  | undefined {
+  if (!identity) return undefined;
+  return {
+    gate: identity.gate,
+    userId: identity.userId,
+    applied: RLS_CONTEXT_DRIVERS.has(driverId),
+  };
+}
 
 /** DML / DDL heads — keep in sync with `isSqlWrite` in the query console. */
 const STORE_SQL_WRITE_HEADS = new Set([
@@ -1434,72 +1508,50 @@ export async function runStoreSql(
     readonly allowWrite: boolean;
     readonly revealPii?: boolean;
     readonly tenant?: string;
-    /** View rows as this Gate (`oke.gate` GUC on postgres / pglite). */
+    /** View rows as this Gate (`oke.gate` on postgres / pglite). */
     readonly asGate?: string;
+    readonly asUserId?: string;
+    readonly rls?: RlsIdentity;
   },
 ): Promise<{
   readonly rows: readonly Record<string, unknown>[];
   readonly masked: boolean;
   readonly routedRole: "primary" | "replica";
   readonly asGate: string | null;
+  readonly asUserId: string | null;
   readonly gateApplied: boolean;
+  readonly rls: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
 }> {
   const trimmed = sqlText.trim().replace(/;+\s*$/, "");
   const isWrite = isStoreSqlWrite(trimmed);
   if (isWrite && !options.allowWrite) {
     throw new Error("SQL console is read-only by default — write requires console:store.sql:write");
   }
+  const rls = options.rls;
   const handle = (await runtime.openRef(ref, {
     effects: isWrite ? { writes: [ref] } : { reads: [ref] },
     revealPii: options.revealPii === true,
+    ...(rls ? { rls } : {}),
   })) as SqlStoreHandle;
-  const asGate = options.asGate?.trim() || null;
-  let gateApplied = false;
-  try {
-    if (asGate) gateApplied = await applySqlGateContext(handle, asGate);
-    const rows = await handle.raw(trimmed);
-    if (gateApplied) await handle.raw("COMMIT");
-    return {
-      rows,
-      masked: !options.revealPii,
-      routedRole: handle.routedRole,
-      asGate,
-      gateApplied,
-    };
-  } catch (err) {
-    if (gateApplied) {
-      try {
-        await handle.raw("ROLLBACK");
-      } catch {
-        // Connection may already be idle after a failed SET.
-      }
-    }
-    throw err;
-  }
-}
-
-/**
- * Open a transaction and set `oke.gate` + `row_security` for RLS simulation.
- * No-op on memory SQL.
- *
- * @param handle - Open SQL handle
- * @param gate - Validated Gate name
- */
-async function applySqlGateContext(handle: SqlStoreHandle, gate: string): Promise<boolean> {
-  if (!GATE_CONTEXT_DRIVERS.has(handle.driverId)) return false;
-  try {
-    await handle.raw("BEGIN");
-    await handle.raw("SET LOCAL row_security = on");
-    await handle.raw("SELECT set_config('oke.gate', ?, true)", [gate]);
-    return true;
-  } catch {
-    try {
-      await handle.raw("ROLLBACK");
-    } catch {
-      // ignore
-    }
-    return false;
-  }
+  const stamped = rlsStamp(handle.driverId, rls) ?? {
+    gate: rls?.gate ?? options.asGate?.trim() ?? null,
+    userId: rls?.userId ?? options.asUserId?.trim() ?? "",
+    applied: false,
+  };
+  const rows = await handle.raw(trimmed);
+  return {
+    rows,
+    masked: !options.revealPii,
+    routedRole: handle.routedRole,
+    asGate: stamped.gate,
+    asUserId: stamped.userId.length > 0 ? stamped.userId : options.asUserId?.trim() || null,
+    gateApplied: stamped.applied,
+    rls: stamped,
+  };
 }
 
 /**

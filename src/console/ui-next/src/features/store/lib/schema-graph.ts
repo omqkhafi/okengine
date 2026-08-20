@@ -35,6 +35,8 @@ export type SchemaGraphTable = {
   readonly storeName: string;
   readonly storeRef: string;
   readonly columns: readonly SchemaGraphColumn[];
+  /** Manifest `rls` or any declared policies. */
+  readonly rls?: boolean;
 };
 
 /** Custom data on a schema-visualizer table node. */
@@ -138,11 +140,13 @@ export function schemaGraphTables(
     if (store.facet !== "sql") continue;
     for (const child of store.children) {
       if (isSqlCatalogChild(child)) continue;
+      const declared = manifest?.stores?.[store.name]?.tables?.[child.name];
       out.push({
         id: child.effectRef,
         name: child.name,
         storeName: store.name,
         storeRef: store.ref,
+        rls: declared?.rls === true || Object.keys(declared?.policies ?? {}).length > 0,
         columns: columnsForChild(
           store,
           child.name,

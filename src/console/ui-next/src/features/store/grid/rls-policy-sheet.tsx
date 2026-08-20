@@ -75,6 +75,8 @@ import {
   rlsGateModeFromCommand,
   rlsPolicyPredicates,
   rlsPolicyPreviewSql,
+  rlsPolicyCodeSource,
+  rlsGatePredicateSql,
   type RlsGateMode,
   type RlsPolicyTemplate,
   type SqlPolicyBehavior,
@@ -117,6 +119,7 @@ export function RlsPolicySheet({
   const edit = useStoreEdit();
   const gatesQuery = useGates(open);
   const [name, setName] = useState("");
+  const [dock, setDock] = useState<"sql" | "code">("sql");
   const [table, setTable] = useState(tables[0] ?? "");
   const [command, setCommand] = useState<SqlPolicyCommand>("SELECT");
   const [behavior, setBehavior] = useState<SqlPolicyBehavior>("PERMISSIVE");
@@ -155,7 +158,10 @@ export function RlsPolicySheet({
         using: predicates.using ? using : "",
         withCheck: predicates.withCheck ? withCheck : "",
       });
-      return rlsPolicyPreviewSql(spec, enableRls);
+      return {
+        sql: rlsPolicyPreviewSql(spec, enableRls),
+        code: rlsPolicyCodeSource(spec),
+      };
     } catch {
       return null;
     }
@@ -184,9 +190,13 @@ export function RlsPolicySheet({
   };
 
   const toggleGate = (id: string): void => {
-    setSelectedGates((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
+    setSelectedGates((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      const expr = rlsGatePredicateSql(next);
+      setUsing(expr);
+      setWithCheck(expr);
+      return next;
+    });
   };
 
   const submit = async (): Promise<void> => {
@@ -366,9 +376,28 @@ export function RlsPolicySheet({
             data-slot="rls-policy-sql-dock"
           >
             <div className="flex items-center justify-between gap-3 px-4 py-2">
-              <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-                SQL
-              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={cn(
+                    "text-[10px] font-semibold tracking-[0.12em] uppercase",
+                    dock === "sql" ? "text-foreground" : "text-muted-foreground",
+                  )}
+                  onClick={() => setDock("sql")}
+                >
+                  SQL
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "text-[10px] font-semibold tracking-[0.12em] uppercase",
+                    dock === "code" ? "text-foreground" : "text-muted-foreground",
+                  )}
+                  onClick={() => setDock("code")}
+                >
+                  Code
+                </button>
+              </div>
               <label className="inline-flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">Enable RLS</span>
                 <Switch
@@ -382,8 +411,8 @@ export function RlsPolicySheet({
             {preview ? (
               <div className="max-h-28 overflow-y-auto px-4 pb-3">
                 <AgentCode
-                  code={preview}
-                  language="sql"
+                  code={dock === "sql" ? preview.sql : preview.code}
+                  language={dock === "sql" ? "sql" : "typescript"}
                   className="overflow-visible whitespace-pre-wrap break-words text-[11px] leading-relaxed"
                 />
               </div>

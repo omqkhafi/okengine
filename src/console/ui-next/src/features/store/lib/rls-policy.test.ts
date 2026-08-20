@@ -9,6 +9,8 @@ import {
   rlsGateModeFromCommand,
   rlsPolicyPredicates,
   rlsPolicyPreviewSql,
+  rlsPolicyCodeSource,
+  rlsGatePredicateSql,
   rlsStoreGateActions,
 } from "./rls-policy.ts";
 
@@ -62,6 +64,35 @@ describe("RLS_POLICY_TEMPLATES", () => {
     expect(filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, "oke.gate").length).toBeGreaterThan(0);
     expect(filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, "owner").length).toBeGreaterThan(0);
     expect(filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, "missing")).toEqual([]);
+    expect(RLS_POLICY_TEMPLATES.some((tpl) => /\bcurrent_user\b/.test(`${tpl.using} ${tpl.withCheck}`))).toBe(
+      false,
+    );
+    expect(RLS_POLICY_TEMPLATES.some((tpl) => /oke\.user\(\)/.test(`${tpl.using} ${tpl.withCheck}`))).toBe(
+      true,
+    );
+  });
+});
+
+describe("rlsGatePredicateSql", () => {
+  test("fills oke.gate / oke.has_scope — not Postgres TO", () => {
+    expect(rlsGatePredicateSql([])).toBe("true");
+    expect(rlsGatePredicateSql(["member"])).toBe("oke.gate() = 'member'");
+    expect(rlsGatePredicateSql(["booking:create"])).toBe("oke.has_scope('booking:create')");
+  });
+});
+
+describe("rlsPolicyCodeSource", () => {
+  test("emits store.schema.policy and pgPolicy", () => {
+    const spec = parseSqlPolicySpec({
+      name: "gate_member_select",
+      table: "bookings",
+      command: "SELECT",
+      using: "oke.gate() = 'member'",
+    });
+    const code = rlsPolicyCodeSource(spec);
+    expect(code).toContain("store.schema.policy");
+    expect(code).toContain("pgPolicy");
+    expect(code).toContain("oke.gate()");
   });
 });
 

@@ -6,6 +6,8 @@ import { DatabaseIcon, File01Icon, Key01Icon, Search01Icon } from "@hugeicons/co
 import type { StoreFacet, StoreListChild, StoreListStore } from "@/client.ts";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { isStoreFacet, STORE_FACETS } from "./parse-resource-ref.ts";
+
+export { STORE_FACETS };
 import { isSqlCatalogChild, storeChildLabel } from "./sql-catalog.ts";
 
 /** Facet band label for the left explorer. */

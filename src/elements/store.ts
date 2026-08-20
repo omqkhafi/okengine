@@ -26,6 +26,11 @@ export {
   schema,
   schemaTable,
   schemaRelations,
+  schemaRls,
+  schemaPolicy,
+  schemaPolicyGate,
+  schemaPolicyOwner,
+  schemaPolicyScope,
   isSchemaTableDecl,
   isSchemaColumnDecl,
   isSchemaRelationsDecl,
@@ -43,6 +48,8 @@ export type {
   SchemaTableDecl,
   SchemaTableWithColumns,
   SchemaRelationsDecl,
+  SchemaPolicyDecl,
+  SchemaTableExtra,
   SchemaRelationEntry,
   SchemaRelationOne,
   SchemaRelationMany,
@@ -123,6 +130,13 @@ export type {
   WhereMap,
 } from "./store/sql-session.ts";
 
+export {
+  resolveRlsIdentity,
+  rlsIdentityFromAuth,
+  firstPolicyOrPublic,
+  policyGateForScopes,
+} from "./store/rls-identity.ts";
+export type { RlsIdentityRow, ResolveRlsIdentityInput } from "./store/rls-identity.ts";
 export { createStoreRuntime, putTier2 } from "./store/runtime.ts";
 export type {
   StoreRuntime,

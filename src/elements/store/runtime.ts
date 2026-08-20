@@ -24,6 +24,7 @@ import type {
   VectorIndexStore,
 } from "../../drivers/types.ts";
 import { indexDriverNeedsSql } from "../../drivers/types.ts";
+import type { RlsIdentity } from "../../drivers/pg-rls.ts";
 import { buildClassificationMap, type MaskRowsOptions } from "./classify.ts";
 import {
   createStoreCache,
@@ -112,6 +113,8 @@ export interface StoreInvokeContext {
   readonly effects: Effects;
   /** Reveal PII (gated elsewhere). */
   readonly revealPii?: boolean;
+  /** Gate identity for RLS (`oke.gate` / `oke.user` / `oke.has_scope`). */
+  readonly rls?: RlsIdentity;
 }
 
 /** Unified handle returned for any facet. */
@@ -347,6 +350,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       revealPii: ctx.revealPii,
       routedRole: target.role,
       domainDdl: options.domainDdl ?? "ensure",
+      ...(ctx.rls ? { rls: ctx.rls } : {}),
     });
   }
 

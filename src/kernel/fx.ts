@@ -27,6 +27,8 @@ import type {
   StoreRuntime,
   SqlStoreHandle,
 } from "../elements/store.ts";
+import { rlsIdentityFromAuth } from "../elements/store.ts";
+import type { RlsIdentity } from "../drivers/pg-rls.ts";
 import type { SqlRow } from "../drivers/types.ts";
 import type { SignalDecl, SignalRuntime } from "../elements/signal.ts";
 import type { DeadLetter, SignalEmitOptions } from "../drivers/signal-types.ts";
@@ -911,6 +913,12 @@ export interface CreateFxOptions {
   readonly runId?: string;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
+  /** Trigger gate names for RLS (`oke.gate` = first policy/public). */
+  readonly rlsGateNames?: readonly string[];
+  /** Skip RLS stamp (Operator / `bypassGates` / operator-plane flows). */
+  readonly rlsBypass?: boolean;
+  /** Forced bag (Console / Call API). Wins over {@link rlsGateNames}. */
+  readonly rls?: import("../drivers/pg-rls.ts").RlsIdentity;
   /**
    * Active journal session when the flow is durable. Every `fx` call is
    * recorded; `step` / `sleep` replay from the journal on resume.
@@ -1024,6 +1032,19 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       },
     } satisfies FxPrincipal);
   const journal = options.journal;
+
+  function rlsInvokeContext(): { rls?: RlsIdentity } {
+    if (options.rlsBypass === true) return {};
+    if (options.rls) return { rls: options.rls };
+    const identity = rlsIdentityFromAuth({
+      userId: auth.userId,
+      scopes: auth.scopes,
+      gateNames: options.rlsGateNames ?? [],
+      bypass: false,
+      operator: false,
+    });
+    return identity ? { rls: identity } : {};
+  }
 
   async function gated<T>(
     kind: Parameters<CapabilityToken["assert"]>[0],
@@ -1342,6 +1363,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           cache.handle = await runtime.open(decl, {
             effects: options.effects ?? {},
             revealPii: options.revealPii,
+            ...rlsInvokeContext(),
           });
         }
         return cache.handle;
@@ -1361,6 +1383,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           {
             effects: options.effects ?? {},
             revealPii: options.revealPii,
+            ...rlsInvokeContext(),
           },
           {
             gate: gated,

@@ -12,6 +12,67 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Console — Store
+
+- One Gate picker on SQL, browse, and grid edit. Policy sheet Code tab
+  shows `store.schema.policy` plus `pgPolicy`. Policy grid marks
+  `declared` vs `live`. Schema cards show Manifest RLS.
+
+#### Runtime
+
+- `store.schema.policy.gate/owner/scope` and `store.schema.rls()`.
+  `oke db push` installs `oke.*` helpers before drizzle-kit.
+
+### 💥 Breaking Changes
+
+#### Console — Store
+
+- SQL / browse / edit payloads are `{ asGate, asUserId }`. Local-only
+  `asUserId` on the SQL picker is gone — the server stamps the full bag.
+
+#### Console — Units & Call API
+
+- Policy-only invoke no longer mints `userId: "gate:${name}"`. `oke.user()`
+  is empty unless a seeded user is picked. Invoke may return `rls`.
+
+#### Runtime
+
+- User-plane `fx.store` applies RLS on postgres / pglite. Apps that created
+  Console policies and relied on the app role ignoring them now filter.
+- Public contract is `oke.gate()` / `oke.user()` / `oke.has_scope()`. Docs
+  and templates no longer teach `current_setting` or `current_user`.
+- Special `TO` roles stay unquoted (`public`, `current_user`). Manifest
+  `Table` gains `rls` + `policies`.
+
+### ♻️ Changed
+
+#### Runtime
+
+- User-plane HTTP `fx.store` stamps Gate identity per statement on
+  postgres / pglite. Cron / CDC / signal stay table-owner.
+
+#### Docs
+
+- Bumped site dependencies: fumadocs to `16.14.5` / MDX `15.3.0`, Next to
+  `16.3.1`, plus patch/minor updates for `@base-ui/react`, lucide, postcss,
+  and `@types/node`.
+
+#### Console — Store
+- Store tree toolbar shows SQL, KV, Files, and Index icons to show or hide each facet. The eye menu and per-band Hide control are gone.
+
+- Owner / Gate templates and the policy Code dock use `oke.user()` /
+  `oke.gate()` / `oke.has_scope()`.
+
+- Store Query results fade in once per completed run (180ms EASE_OUT,
+  translateY 4px; reduced-motion opacity 120ms).
+
+#### Console — Flows & traces
+
+- Overview Traces Advanced filters now reveal/collapse with the existing
+  AgentDisclosure clip-path (220ms open / 140ms close, EASE_OUT).
+
 ## v0.14.1 — 2026-08-20
 
 ### 🐛 Fixed

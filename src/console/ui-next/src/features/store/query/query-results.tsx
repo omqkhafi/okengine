@@ -2,7 +2,7 @@
  * Query console results — table / JSON / raw, copy, download, cell inspect.
  */
 
-import { useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
@@ -30,6 +30,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { EASE_OUT } from "@/lib/ease.ts";
+import { motion, useReducedMotion } from "@/lib/motion.ts";
 import { cn } from "@/lib/utils.ts";
 import { JsonValueSheet } from "../detail/json-value-sheet.tsx";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
@@ -103,6 +105,14 @@ export function QueryResults({
       rows.map((row) => columns.map((col) => cellExportText(row[col]))),
     );
   }, [rows, columns]);
+
+  const reduce = useReducedMotion() ?? false;
+  const wasPending = useRef(pending);
+  const [appearId, setAppearId] = useState(0);
+  useEffect(() => {
+    if (wasPending.current && !pending) setAppearId((n) => n + 1);
+    wasPending.current = pending;
+  }, [pending]);
 
   const copy = (kind: "json" | "csv"): void => {
     const text = kind === "csv" ? csvText : jsonText;
@@ -210,93 +220,110 @@ export function QueryResults({
 
       {collapsed ? null : (
         <div className="min-h-0 flex-1 overflow-auto">
-          {error ? (
-            <p
-              className="px-3 py-4 font-mono text-xs leading-relaxed text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : pending ? (
+          {pending ? (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">Running…</p>
-          ) : rows === null && view !== "raw" ? (
-            <Empty className="h-full min-h-40 border-0">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <HugeiconsIcon icon={PlayIcon} className="size-4" />
-                </EmptyMedia>
-                <EmptyTitle>No results yet</EmptyTitle>
-                <EmptyDescription>Run a query to see results here.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : view === "raw" ? (
-            executed ? (
-              <div className="p-3" data-slot="store-query-raw">
-                <QueryHighlightView
-                  code={executed}
-                  language={executedLanguage}
-                  className="text-xs leading-5"
-                />
-              </div>
-            ) : (
-              <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-                Nothing executed yet.
-              </p>
-            )
-          ) : view === "json" ? (
-            <HighlightedJson
-              json={jsonText}
-              dataSlot="store-query-json"
-              className="min-h-full p-3"
-            />
-          ) : rows && rows.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-              Query returned 0 rows.
-            </p>
           ) : (
-            <table className="w-full min-w-max border-collapse text-left text-[12px]">
-              <thead className="sticky top-0 z-10 bg-background">
-                <tr>
-                  {columns.map((col) => (
-                    <th
-                      key={col}
-                      scope="col"
-                      className="border-b border-border/60 px-3 py-1.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(rows ?? []).map((row, i) => (
-                  <tr key={i} className="border-b border-border/60 hover:bg-muted/50">
-                    {columns.map((col) => {
-                      const value = row[col];
-                      const inspectable = asInspectableJson(value) !== null;
-                      return (
-                        <td
+            <motion.div
+              key={appearId}
+              initial={
+                appearId === 0
+                  ? false
+                  : reduce
+                    ? { opacity: 0 }
+                    : { opacity: 0, transform: "translateY(4px)" }
+              }
+              animate={reduce ? { opacity: 1 } : { opacity: 1, transform: "translateY(0px)" }}
+              transition={{ duration: reduce ? 0.12 : 0.18, ease: EASE_OUT }}
+            >
+              {error ? (
+                <p
+                  className="px-3 py-4 font-mono text-xs leading-relaxed text-destructive"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              ) : rows === null && view !== "raw" ? (
+                <Empty className="h-full min-h-40 border-0">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <HugeiconsIcon icon={PlayIcon} className="size-4" />
+                    </EmptyMedia>
+                    <EmptyTitle>No results yet</EmptyTitle>
+                    <EmptyDescription>Run a query to see results here.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : view === "raw" ? (
+                executed ? (
+                  <div className="p-3" data-slot="store-query-raw">
+                    <QueryHighlightView
+                      code={executed}
+                      language={executedLanguage}
+                      className="text-xs leading-5"
+                    />
+                  </div>
+                ) : (
+                  <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    Nothing executed yet.
+                  </p>
+                )
+              ) : view === "json" ? (
+                <HighlightedJson
+                  json={jsonText}
+                  dataSlot="store-query-json"
+                  className="min-h-full p-3"
+                />
+              ) : rows && rows.length === 0 ? (
+                <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  Query returned 0 rows.
+                </p>
+              ) : (
+                <table className="w-full min-w-max border-collapse text-left text-[12px]">
+                  <thead className="sticky top-0 z-10 bg-background">
+                    <tr>
+                      {columns.map((col) => (
+                        <th
                           key={col}
-                          className="max-w-xs truncate px-3 py-1.5 font-mono text-foreground/90"
+                          scope="col"
+                          className="border-b border-border/60 px-3 py-1.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
                         >
-                          {inspectable ? (
-                            <button
-                              type="button"
-                              className="max-w-full truncate text-left underline decoration-border/70 underline-offset-2 hover:text-foreground"
-                              onClick={() => setInspect({ rowId: String(i), column: col, value })}
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(rows ?? []).map((row, i) => (
+                      <tr key={i} className="border-b border-border/60 hover:bg-muted/50">
+                        {columns.map((col) => {
+                          const value = row[col];
+                          const inspectable = asInspectableJson(value) !== null;
+                          return (
+                            <td
+                              key={col}
+                              className="max-w-xs truncate px-3 py-1.5 font-mono text-foreground/90"
                             >
-                              {formatGridCell(value)}
-                            </button>
-                          ) : (
-                            formatGridCell(value)
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                              {inspectable ? (
+                                <button
+                                  type="button"
+                                  className="max-w-full truncate text-left underline decoration-border/70 underline-offset-2 hover:text-foreground"
+                                  onClick={() =>
+                                    setInspect({ rowId: String(i), column: col, value })
+                                  }
+                                >
+                                  {formatGridCell(value)}
+                                </button>
+                              ) : (
+                                formatGridCell(value)
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </motion.div>
           )}
         </div>
       )}

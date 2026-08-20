@@ -270,6 +270,12 @@ Pass **and** deny land on the run's `gates` dimension. Console (`:6533` → `/fl
 chain on the flow contract. Rate `overridable` is a catalog flag only — Clock schedules are what the Console can
 edit live today.
 
+<Callout title="RLS reads the stamped principal">
+  After HTTP Gate passes, user-plane `fx.store` stamps `oke.gate()`,
+  `oke.user()`, and `oke.has_scope()`. Rate, cron, CDC, and signal stay
+  unstamped. Helpers: [Store](/docs/elements/store).
+</Callout>
+
 ## Troubleshooting
 
 <Accordions>

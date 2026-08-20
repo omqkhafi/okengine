@@ -33,6 +33,8 @@ import { consoleFailureMessage } from "./i18n.ts";
 import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 import { resolveInvokeAs } from "./invoke-user-flow.ts";
+import { resolveRlsIdentity } from "../../elements/store.ts";
+import type { RlsIdentity } from "../../drivers/pg-rls.ts";
 import { isKnownConsoleSqlGate, StoreFileNotFoundError, tenancyDeclared } from "./store.ts";
 import {
   PG_STAT_STATEMENTS_NOT_CREATED,
@@ -354,6 +356,13 @@ const InvokeOut = z.object({
   durationMs: z.number().optional(),
   peakTier: z.enum(["none", "reads", "writes", "emits", "external", "capabilities"]),
   auditedAt: z.number(),
+  rls: z
+    .object({
+      gate: z.string().nullable(),
+      userId: z.string(),
+      applied: z.boolean(),
+    })
+    .optional(),
 });
 
 const SetupClosed = z.object({ reason: z.string() });
@@ -1445,6 +1454,17 @@ const StoreListOut = z.object({
   ),
 });
 
+const StoreRlsAs = {
+  asGate: z.string().min(1).optional(),
+  asUserId: z.string().min(1).optional(),
+};
+
+const StoreRlsOut = z.object({
+  gate: z.string().nullable(),
+  userId: z.string(),
+  applied: z.boolean(),
+});
+
 const StoreQueryIn = z.object({
   ref: z.string().min(1),
   child: z.string().optional(),
@@ -1455,6 +1475,7 @@ const StoreQueryIn = z.object({
   q: z.string().optional(),
   topK: z.number().min(1).max(100).optional(),
   revealPii: z.boolean().optional(),
+  ...StoreRlsAs,
 });
 
 const StoreQueryOut = z.object({
@@ -1483,6 +1504,7 @@ const StoreQueryOut = z.object({
     .optional(),
   masked: z.boolean(),
   routedRole: z.enum(["primary", "replica"]).optional(),
+  rls: StoreRlsOut.optional(),
 });
 
 const StoreRevealIn = z.object({
@@ -1527,6 +1549,7 @@ const StoreEditIn = z.object({
   reason: z.string().optional(),
   /** When false/omitted, returns willNotFire without applying. */
   commit: z.boolean().optional(),
+  ...StoreRlsAs,
 });
 
 const StoreEditOut = z.object({
@@ -1541,6 +1564,7 @@ const StoreEditOut = z.object({
     }),
   ),
   at: z.number(),
+  rls: StoreRlsOut.optional(),
 });
 
 const StoreDeleteIn = z.object({
@@ -1578,6 +1602,7 @@ const StoreSqlIn = z.object({
   allowWrite: z.boolean().optional(),
   revealPii: z.boolean().optional(),
   asGate: z.string().min(1).optional(),
+  asUserId: z.string().min(1).optional(),
 });
 
 const StoreSqlOut = z.object({
@@ -1585,7 +1610,9 @@ const StoreSqlOut = z.object({
   masked: z.boolean(),
   routedRole: z.enum(["primary", "replica"]),
   asGate: z.string().nullable(),
+  asUserId: z.string().nullable(),
   gateApplied: z.boolean(),
+  rls: StoreRlsOut.optional(),
 });
 
 const StoreSqlStatsIn = z.object({
@@ -2664,6 +2691,7 @@ function createFlowsInvoke(state: ConsoleState) {
         ...(assumed.bypassGates ? { bypassGates: true } : {}),
         ...(input.reason !== undefined ? { reason: input.reason } : {}),
         ...(input.revealPii === true ? { revealPii: true } : {}),
+        ...(assumed.rls ? { rls: assumed.rls } : {}),
       });
 
       const reveal = input.revealPii === true;
@@ -2716,6 +2744,11 @@ function createFlowsInvoke(state: ConsoleState) {
         ...(host.durationMs !== undefined ? { durationMs: host.durationMs } : {}),
         peakTier,
         auditedAt: state.now(),
+        rls: {
+          gate: assumed.rls?.gate ?? null,
+          userId: assumed.rls?.userId ?? "",
+          applied: assumed.rls !== null,
+        },
       };
     },
   });
@@ -2806,6 +2839,30 @@ function createStoreList(state: ConsoleState) {
   });
 }
 
+function consoleStoreRls(
+  state: ConsoleState,
+  input: { readonly asGate?: string; readonly asUserId?: string },
+): { readonly ok: true; readonly rls: RlsIdentity | null } | { readonly ok: false; readonly reason: string } {
+  if (input.asGate !== undefined && !isKnownConsoleSqlGate(state.manifest, input.asGate)) {
+    return { ok: false, reason: `unknown gate: ${input.asGate}` };
+  }
+  if (input.asUserId !== undefined) {
+    const identity = state.identities.find((row) => row.id === input.asUserId);
+    if (!identity || identity.status === "disabled") {
+      return { ok: false, reason: `unknown identity: ${input.asUserId}` };
+    }
+  }
+  return {
+    ok: true,
+    rls: resolveRlsIdentity({
+      asGate: input.asGate,
+      asUserId: input.asUserId,
+      identities: state.identities,
+      manifest: state.manifest,
+    }),
+  };
+}
+
 function createStoreQuery(state: ConsoleState) {
   return flow("console.store.query", {
     plane: "operator",
@@ -2824,6 +2881,8 @@ function createStoreQuery(state: ConsoleState) {
           tenant: input.tenant,
         });
       }
+      const assumed = consoleStoreRls(state, input);
+      if (!assumed.ok) return fail("StoreNotFound", { ref: assumed.reason });
       return state.queryStore({
         ref: input.ref as ResourceRef,
         child: input.child,
@@ -2834,6 +2893,9 @@ function createStoreQuery(state: ConsoleState) {
         q: input.q,
         topK: input.topK,
         revealPii: input.revealPii === true,
+        ...(input.asGate !== undefined ? { asGate: input.asGate } : {}),
+        ...(input.asUserId !== undefined ? { asUserId: input.asUserId } : {}),
+        ...(assumed.rls ? { rls: assumed.rls } : {}),
       });
     },
   });
@@ -2922,6 +2984,14 @@ function createStoreEdit(state: ConsoleState) {
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
       if (tenantFail) return tenantFail;
 
+      const assumed = consoleStoreRls(state, input);
+      if (!assumed.ok) return fail("StoreNotFound", { ref: assumed.reason });
+      const rlsFields = {
+        ...(input.asGate !== undefined ? { asGate: input.asGate } : {}),
+        ...(input.asUserId !== undefined ? { asUserId: input.asUserId } : {}),
+        ...(assumed.rls ? { rls: assumed.rls } : {}),
+      };
+
       if (!input.commit) {
         // Return will-not-fire payload without applying — informational confirm.
         const preview = await state.editStore(
@@ -2932,6 +3002,7 @@ function createStoreEdit(state: ConsoleState) {
             id: input.id,
             key: input.key,
             patch: input.patch,
+            ...rlsFields,
           },
           { dryRun: true },
         );
@@ -2942,6 +3013,7 @@ function createStoreEdit(state: ConsoleState) {
           willNotFire: preview.willNotFire,
           wouldHaveFired: [...preview.wouldHaveFired],
           at: state.now(),
+          ...(preview.rls ? { rls: preview.rls } : {}),
         };
       }
 
@@ -2962,6 +3034,7 @@ function createStoreEdit(state: ConsoleState) {
           id: input.id,
           key: input.key,
           patch: input.patch,
+          ...rlsFields,
         },
         { dryRun: false },
       );
@@ -2979,6 +3052,7 @@ function createStoreEdit(state: ConsoleState) {
         willNotFire: result.willNotFire,
         wouldHaveFired: [...result.wouldHaveFired],
         at: state.now(),
+        ...(result.rls ? { rls: result.rls } : {}),
       };
     },
   });
@@ -3074,9 +3148,8 @@ function createStoreSql(state: ConsoleState) {
             tenant: input.tenant,
           });
         }
-        if (input.asGate !== undefined && !isKnownConsoleSqlGate(state.manifest, input.asGate)) {
-          return fail("StoreNotFound", { ref: `unknown gate: ${input.asGate}` });
-        }
+        const assumed = consoleStoreRls(state, input);
+        if (!assumed.ok) return fail("StoreNotFound", { ref: assumed.reason });
         if (input.asGate !== undefined) {
           fx.log.info("console.store.sql.asGate", {
             operatorId: fx.operator.id,
@@ -3090,6 +3163,8 @@ function createStoreSql(state: ConsoleState) {
           revealPii: input.revealPii === true,
           tenant: input.tenant,
           ...(input.asGate !== undefined ? { asGate: input.asGate } : {}),
+          ...(input.asUserId !== undefined ? { asUserId: input.asUserId } : {}),
+          ...(assumed.rls ? { rls: assumed.rls } : {}),
         });
         fx.log.info("console.store.sql", {
           operatorId: fx.operator.id,
@@ -3097,6 +3172,7 @@ function createStoreSql(state: ConsoleState) {
           allowWrite: input.allowWrite === true,
           revealPii: input.revealPii === true,
           asGate: input.asGate ?? null,
+          asUserId: input.asUserId ?? null,
           rowCount: result.rows.length,
         });
         return result;

@@ -4,6 +4,8 @@
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { JSX } from "react";
+import { ShieldEnergyIcon, ShieldOff } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@/lib/utils.ts";
 import {
   schemaRelationLabel,
@@ -47,6 +49,21 @@ export function SchemaTableNode({ data }: NodeProps<SchemaTableNode>): JSX.Eleme
       >
         <span className="size-2 shrink-0 rounded-full" style={{ background: hex }} aria-hidden />
         <span className="min-w-0 truncate font-semibold text-foreground">{table.name}</span>
+        <span
+          data-slot="store-schema-rls"
+          data-rls={table.rls === true ? "on" : "off"}
+          title={table.rls === true ? "RLS enabled" : "RLS disabled"}
+          className={cn(
+            "shrink-0",
+            table.rls === true ? "text-emerald-500" : "text-muted-foreground/35",
+          )}
+        >
+          <HugeiconsIcon
+            icon={table.rls === true ? ShieldEnergyIcon : ShieldOff}
+            className="size-3"
+            aria-hidden
+          />
+        </span>
         {showStore ? (
           <span className="ml-auto shrink-0 font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">
             {table.storeName}

@@ -181,7 +181,9 @@ describe("resolveInvokeAs", () => {
     const resolved = resolveInvokeAs({ asGate: "member" }, IDENTITIES, MANIFEST);
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
-    expect(resolved.asUserId).toBe("gate:member");
+    expect(resolved.asUserId).toBe("");
+    expect(resolved.principal.userId).toBe("");
+    expect(resolved.rls).toEqual({ gate: "member", userId: "", scopes: ["member"] });
     expect([...resolved.principal.scopes]).toEqual(["member"]);
     expect(resolved.principal.verified).toBe(true);
   });

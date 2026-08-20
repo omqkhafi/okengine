@@ -7,6 +7,12 @@
 
 import type { DomainDdlMode } from "../../config/index.ts";
 import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/types.ts";
+import {
+  buildRlsIdentityPreludeSql,
+  OKE_RLS_HELPER_SQL,
+  RLS_CONTEXT_DRIVERS,
+  type RlsIdentity,
+} from "../../drivers/pg-rls.ts";
 import { throwOke } from "../../kernel/errors.ts";
 import { maskRows, tableFromSql } from "./classify.ts";
 import { isMissingDomainRelationError } from "./missing-relation.ts";
@@ -44,6 +50,8 @@ export interface SqlSessionOptions {
    * and local+autoPush). Default `ensure` for backward-compatible tests.
    */
   readonly domainDdl?: DomainDdlMode;
+  /** Gate identity — stamps `oke.*` on postgres / pglite. */
+  readonly rls?: RlsIdentity;
 }
 
 /**
@@ -339,8 +347,9 @@ export function createSqlStoreHandle(
   ref: `sql:${string}`,
   options: SqlSessionOptions,
 ): SqlStoreHandle {
-  const { connection, classifications, revealPii } = options;
+  const { connection, classifications, revealPii, rls } = options;
   const domainDdl: DomainDdlMode = options.domainDdl ?? "ensure";
+  let helpersReady = false;
 
   function mask(rows: SqlRow[], table?: string): SqlRow[] {
     return maskRows(rows, { classifications, table, revealPii });
@@ -362,11 +371,34 @@ export function createSqlStoreHandle(
   }
 
   function query(sql: string, params: readonly unknown[] = []): Promise<SqlRow[]> {
-    return withSchemaGuard(() => connection.query(sql, params));
+    return withSchemaGuard(() => withRlsStamp(() => connection.query(sql, params), sql));
   }
 
   function exec(sql: string, params: readonly unknown[] = []): Promise<{ changes: number }> {
-    return withSchemaGuard(() => connection.exec(sql, params));
+    return withSchemaGuard(() => withRlsStamp(() => connection.exec(sql, params), sql));
+  }
+
+  async function withRlsStamp<T>(fn: () => Promise<T>, sql: string): Promise<T> {
+    if (!rls || !RLS_CONTEXT_DRIVERS.has(connection.driverId)) return fn();
+    if (/^\s*(begin|commit|rollback)\b/i.test(sql)) return fn();
+    if (!helpersReady) {
+      await connection.exec(OKE_RLS_HELPER_SQL);
+      helpersReady = true;
+    }
+    const prelude = buildRlsIdentityPreludeSql(rls);
+    try {
+      await connection.exec(prelude.sql, prelude.params);
+      const result = await fn();
+      await connection.exec("COMMIT");
+      return result;
+    } catch (err) {
+      try {
+        await connection.exec("ROLLBACK");
+      } catch {
+        // Connection may already be idle.
+      }
+      throw err;
+    }
   }
 
   async function ensureFromMeta(table: TableHandle | unknown): Promise<void> {

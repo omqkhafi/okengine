@@ -263,7 +263,8 @@ export function GateAsPicker({
             </>
           ) : (
             <>
-              {selected.detail} Sets <span className="font-mono">oke.gate</span> for RLS.
+              {selected.detail} Sets <span className="font-mono">oke.gate()</span> /{" "}
+              <span className="font-mono">oke.user()</span> for RLS.
             </>
           )}
         </p>

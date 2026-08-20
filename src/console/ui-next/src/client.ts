@@ -506,6 +506,11 @@ export type FlowsInvokeResult = {
   readonly flowId: string;
   readonly asUserId: string;
   readonly asGate?: string | null;
+  readonly rls?: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
   readonly trigger: string;
   readonly response: unknown;
   /** True when classified PII keys were redacted. */
@@ -772,6 +777,8 @@ export type StoreQueryInput = {
   readonly topK?: number;
   /** When true, SQL browse returns PII cleartext (audited). Default masks. */
   readonly revealPii?: boolean;
+  readonly asGate?: string;
+  readonly asUserId?: string;
 };
 
 /** Success payload from `QUERY /console/store/query` (matches server `StoreQueryOut`). */
@@ -793,6 +800,11 @@ export type StoreQueryResult = {
   }>;
   readonly masked: boolean;
   readonly routedRole?: "primary" | "replica";
+  readonly rls?: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
 };
 
 /**
@@ -851,6 +863,8 @@ export type StoreEditInput = {
   readonly confirmation?: string;
   readonly reason?: string;
   readonly commit?: boolean;
+  readonly asGate?: string;
+  readonly asUserId?: string;
 };
 
 /** Success payload from `POST /console/store/edit` (matches server). */
@@ -864,6 +878,11 @@ export type StoreEditResult = {
     readonly resource: string;
   }>;
   readonly at: number;
+  readonly rls?: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
 };
 
 /**
@@ -934,6 +953,7 @@ export type StoreSqlInput = {
   readonly revealPii?: boolean;
   /** View rows as this Gate (`oke.gate` on postgres / pglite). */
   readonly asGate?: string;
+  readonly asUserId?: string;
 };
 
 /** Success payload from `POST /console/store/sql` (matches server `StoreSqlOut`). */
@@ -942,7 +962,13 @@ export type StoreSqlResult = {
   readonly masked: boolean;
   readonly routedRole: "primary" | "replica";
   readonly asGate: string | null;
+  readonly asUserId: string | null;
   readonly gateApplied: boolean;
+  readonly rls?: {
+    readonly gate: string | null;
+    readonly userId: string;
+    readonly applied: boolean;
+  };
 };
 
 /**

@@ -255,10 +255,9 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 `live` retains every delivered message and replays the **full history** to a late `bus.live()` subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display).
 
 <Callout title="Client subscription is not shipped yet">
-  `delivery: "live"` means the **driver** retains and replays. Listen with `bus.live()` on the
-  server — not `on(signal, flow)`. `createClient` has no SSE / WebSocket / `client.live` yet — poll
-  an HTTP Flow. See [Client · Signal and live
-  queries](/docs/reference/client#signal-and-live-queries).
+  `delivery: "live"` means the **driver** retains and replays. Listen with
+  `bus.live()` on the server — not `on(signal, flow)`. `createClient` has no
+  SSE yet — poll HTTP. See [Client](/docs/reference/client#signal-and-live-queries).
 </Callout>
 
 ## Orphaned signal config

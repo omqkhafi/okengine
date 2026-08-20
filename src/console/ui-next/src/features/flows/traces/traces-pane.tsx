@@ -15,6 +15,7 @@ import {
   EXPLORER_STRIP_TOKEN_IDLE_CLASS,
   EXPLORER_TOOLBAR_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
+import { AgentDisclosure } from "@/components/agents/agent-disclosure.tsx";
 import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
 import {
   Empty,
@@ -236,10 +237,16 @@ export function TracesPane({
         ) : null}
       </div>
 
-      {runs.length > 0 && advancedOpen ? (
-        <div id="traces-advanced-panel">
+      {runs.length > 0 ? (
+        <AgentDisclosure
+          id="traces-advanced-panel"
+          role="region"
+          aria-label="Advanced filters"
+          open={advancedOpen}
+          className="shrink-0"
+        >
           <AdvancedFilters query={filters.advanced} runs={runs} onChange={setAdvanced} />
-        </div>
+        </AgentDisclosure>
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

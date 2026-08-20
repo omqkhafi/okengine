@@ -1,5 +1,6 @@
 /**
- * Postgres row-level security — identifiers and `CREATE POLICY` SQL.
+ * Postgres row-level security — identifiers, `CREATE POLICY` SQL,
+ * Drizzle emit, and Gate identity helpers (`oke.gate` / `oke.user` / `oke.has_scope`).
  */
 
 /** Policy command (`FOR`). */
@@ -30,6 +31,36 @@ export type SqlPolicyAlterSpec = {
 
 const POLICY_COMMANDS = new Set<string>(["ALL", "SELECT", "INSERT", "UPDATE", "DELETE"]);
 const POLICY_BEHAVIORS = new Set<string>(["PERMISSIVE", "RESTRICTIVE"]);
+
+/** Drizzle / Postgres `TO` targets that must not be quoted. */
+const SPECIAL_POLICY_ROLES = new Set(["public", "current_role", "current_user", "session_user"]);
+
+/** Drivers that honor `SET LOCAL row_security` + `oke.*` GUCs. */
+export const RLS_CONTEXT_DRIVERS = new Set<string>(["postgres", "pglite"]);
+
+/** Live Gate principal stamped onto a SQL statement. */
+export type RlsIdentity = {
+  readonly gate: string;
+  readonly userId: string;
+  readonly scopes: readonly string[];
+};
+
+/**
+ * SQL that installs `oke.gate()`, `oke.user()`, and `oke.has_scope(text)`.
+ * Safe to run repeatedly (`CREATE OR REPLACE`).
+ */
+export const OKE_RLS_HELPER_SQL = `CREATE SCHEMA IF NOT EXISTS oke;
+CREATE OR REPLACE FUNCTION oke.gate() RETURNS text
+LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.gate', true) $$;
+CREATE OR REPLACE FUNCTION oke.user() RETURNS text
+LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.user', true) $$;
+CREATE OR REPLACE FUNCTION oke.has_scope(p_scope text) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+  SELECT CASE
+    WHEN current_setting('oke.scopes', true) IN ('') THEN false
+    ELSE current_setting('oke.scopes', true)::jsonb ? p_scope
+  END
+$$;`;
 
 /**
  * Quote a Postgres identifier (`"`), stripping embedded quotes.
@@ -102,9 +133,36 @@ export function parseSqlPolicyRoles(raw: string): readonly string[] | null {
     .filter((part) => part.length > 0);
   if (parts.length === 0) return ["public"];
   for (const part of parts) {
-    if (part !== "public" && !isPgIdent(part)) return null;
+    if (!isPolicyRoleName(part)) return null;
   }
   return parts;
+}
+
+/**
+ * True when `name` is `public`, a Drizzle special role, or a simple identifier.
+ *
+ * @param name - Role token
+ */
+export function isPolicyRoleName(name: string): boolean {
+  return SPECIAL_POLICY_ROLES.has(name.toLowerCase()) || isPgIdent(name);
+}
+
+/**
+ * Format a `TO` role — special names stay unquoted.
+ *
+ * @param role - Role token
+ */
+export function formatPolicyRole(role: string): string {
+  return SPECIAL_POLICY_ROLES.has(role.toLowerCase()) ? role.toLowerCase() : quotePgIdent(role);
+}
+
+/**
+ * JSON text stored in `oke.scopes` (sorted unique).
+ *
+ * @param scopes - Scope strings
+ */
+export function rlsScopesJson(scopes: readonly string[]): string {
+  return JSON.stringify([...new Set(scopes)].sort());
 }
 
 /**
@@ -114,9 +172,7 @@ export function parseSqlPolicyRoles(raw: string): readonly string[] | null {
  */
 export function buildCreatePolicySql(spec: SqlPolicySpec): string {
   const roles =
-    spec.roles.length === 0
-      ? "public"
-      : spec.roles.map((role) => (role === "public" ? "public" : quotePgIdent(role))).join(", ");
+    spec.roles.length === 0 ? "public" : spec.roles.map((role) => formatPolicyRole(role)).join(", ");
   let text = `CREATE POLICY ${quotePgIdent(spec.name)} ON ${quotePgIdent(spec.table)} AS ${spec.behavior} FOR ${spec.command} TO ${roles}`;
   if (spec.using !== undefined && spec.using.trim() !== "") {
     text += ` USING (${spec.using.trim()})`;
@@ -153,7 +209,7 @@ export function buildAlterPolicySql(spec: SqlPolicyAlterSpec): string {
     const roles =
       spec.roles.length === 0
         ? "public"
-        : spec.roles.map((role) => (role === "public" ? "public" : quotePgIdent(role))).join(", ");
+        : spec.roles.map((role) => formatPolicyRole(role)).join(", ");
     parts.push(`TO ${roles}`);
   }
   if (spec.using !== undefined && spec.using.trim() !== "") {
@@ -189,9 +245,11 @@ export function parseSqlPolicySpec(raw: Readonly<Record<string, unknown>>): SqlP
   const table = typeof raw.table === "string" ? raw.table.trim() : "";
   if (!isPgPolicyName(name)) throw new Error(`invalid policy name "${name}"`);
   if (!isPgIdent(table)) throw new Error(`invalid table name "${table}"`);
-  const command = parseSqlPolicyCommand(raw.command) ?? "SELECT";
-  const behavior = parseSqlPolicyBehavior(raw.behavior ?? raw.permissive) ?? "PERMISSIVE";
-  const rolesRaw = typeof raw.roles === "string" ? raw.roles : "public";
+  const command =
+    parseSqlPolicyCommand(raw.command) ?? parseSqlPolicyCommand(raw.for) ?? "SELECT";
+  const behavior =
+    parseSqlPolicyBehavior(raw.behavior ?? raw.permissive ?? raw.as) ?? "PERMISSIVE";
+  const rolesRaw = rolesField(raw.roles ?? raw.to);
   const roles = parseSqlPolicyRoles(rolesRaw);
   if (!roles) throw new Error("invalid policy roles");
   const using = typeof raw.using === "string" ? raw.using.trim() : "";
@@ -231,4 +289,87 @@ export function parseSqlPolicyRowId(id: string): { readonly table: string; reado
     throw new Error(`invalid policy id "${id}"`);
   }
   return { table: id.slice(0, cut), name: id.slice(cut + 1) };
+}
+
+function rolesField(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) {
+    return raw.filter((part): part is string => typeof part === "string").join(", ");
+  }
+  return "public";
+}
+
+/**
+ * Drizzle `pgPolicy(...)` source for emit / Console copy-as-code.
+ *
+ * @param spec - Validated policy
+ */
+export function emitPgPolicySource(spec: SqlPolicySpec): string {
+  const to =
+    spec.roles.length === 1
+      ? JSON.stringify(formatEmitRole(spec.roles[0]!))
+      : `[${spec.roles.map((role) => JSON.stringify(formatEmitRole(role))).join(", ")}]`;
+  const lines = [
+    `pgPolicy(${JSON.stringify(spec.name)}, {`,
+    `  as: ${JSON.stringify(spec.behavior.toLowerCase())},`,
+    `  to: ${to},`,
+    `  for: ${JSON.stringify(spec.command.toLowerCase())},`,
+  ];
+  if (spec.using !== undefined && spec.using.trim() !== "") {
+    lines.push(`  using: sql\`${escapeSqlTemplate(spec.using.trim())}\`,`);
+  }
+  if (spec.withCheck !== undefined && spec.withCheck.trim() !== "") {
+    lines.push(`  withCheck: sql\`${escapeSqlTemplate(spec.withCheck.trim())}\`,`);
+  }
+  lines.push(`})`);
+  return lines.join("\n");
+}
+
+/**
+ * `store.schema.policy(...)` source for Console copy-as-code.
+ *
+ * @param spec - Validated policy
+ */
+export function emitStoreSchemaPolicySource(spec: SqlPolicySpec): string {
+  const to =
+    spec.roles.length === 1
+      ? JSON.stringify(formatEmitRole(spec.roles[0]!))
+      : `[${spec.roles.map((role) => JSON.stringify(formatEmitRole(role))).join(", ")}]`;
+  const lines = [
+    `store.schema.policy(${JSON.stringify(spec.name)}, {`,
+    `  as: ${JSON.stringify(spec.behavior.toLowerCase())},`,
+    `  to: ${to},`,
+    `  for: ${JSON.stringify(spec.command.toLowerCase())},`,
+  ];
+  if (spec.using !== undefined && spec.using.trim() !== "") {
+    lines.push(`  using: ${JSON.stringify(spec.using.trim())},`);
+  }
+  if (spec.withCheck !== undefined && spec.withCheck.trim() !== "") {
+    lines.push(`  withCheck: ${JSON.stringify(spec.withCheck.trim())},`);
+  }
+  lines.push(`})`);
+  return lines.join("\n");
+}
+
+function formatEmitRole(role: string): string {
+  return SPECIAL_POLICY_ROLES.has(role.toLowerCase()) ? role.toLowerCase() : role;
+}
+
+function escapeSqlTemplate(expr: string): string {
+  return expr.replaceAll("\\", "\\\\").replaceAll("`", "\\`");
+}
+
+/**
+ * `BEGIN` + `SET LOCAL` + `oke.*` GUCs as one script (no user statement).
+ *
+ * @param identity - Gate principal
+ */
+export function buildRlsIdentityPreludeSql(identity: RlsIdentity): {
+  readonly sql: string;
+  readonly params: readonly string[];
+} {
+  return {
+    sql: `BEGIN; SET LOCAL row_security = on; SELECT set_config('oke.gate', ?, true), set_config('oke.user', ?, true), set_config('oke.scopes', ?, true)`,
+    params: [identity.gate, identity.userId, rlsScopesJson(identity.scopes)],
+  };
 }

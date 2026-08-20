@@ -14,6 +14,8 @@ import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { isJsonResult } from "../../kernel/fx.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
 import type { Trigger } from "../../kernel/triggers.ts";
+import type { RlsIdentity } from "../../drivers/pg-rls.ts";
+import { resolveRlsIdentity } from "../../elements/store.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import type { ConsoleIdentity } from "./state.ts";
 
@@ -32,6 +34,8 @@ export interface InvokeUserFlowInput {
    * Envelope remask is skipped separately when this is true.
    */
   readonly revealPii?: boolean;
+  /** Same bag as SQL console / browse — stamped onto host `fx.store`. */
+  readonly rls?: RlsIdentity;
 }
 
 /** Resolved Call API invoke-as principal. */
@@ -42,6 +46,7 @@ export type ResolvedInvokeAs =
       readonly asUserId: string;
       readonly asGate: string | null;
       readonly bypassGates: boolean;
+      readonly rls: RlsIdentity | null;
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -75,6 +80,12 @@ export function resolveInvokeAs(
       asUserId: identity.id,
       asGate: asGate ?? null,
       bypassGates: false,
+      rls: resolveRlsIdentity({
+        asUserId: identity.id,
+        asGate: asGate ?? null,
+        identities,
+        manifest,
+      }),
     };
   }
 
@@ -89,6 +100,7 @@ export function resolveInvokeAs(
       asUserId: "console:operator",
       asGate: null,
       bypassGates: true,
+      rls: null,
     };
   }
 
@@ -103,6 +115,7 @@ export function resolveInvokeAs(
       asUserId: "public",
       asGate: "public",
       bypassGates: false,
+      rls: resolveRlsIdentity({ asGate: "public", manifest }),
     };
   }
 
@@ -114,13 +127,14 @@ export function resolveInvokeAs(
   return {
     ok: true,
     principal: userPrincipal({
-      userId: `gate:${asGate}`,
+      userId: "",
       scopes,
       verified: true,
     }),
-    asUserId: `gate:${asGate}`,
+    asUserId: "",
     asGate,
     bypassGates: false,
+    rls: resolveRlsIdentity({ asGate, manifest }),
   };
 }
 
@@ -353,6 +367,7 @@ export function bindHostInvokeUserFlow(app: InvokeHostApp): ConsoleInvokeUserFlo
       runId,
       ...(input.bypassGates === true ? { bypassGates: true } : {}),
       ...(input.revealPii === true ? { revealPii: true } : {}),
+      ...(input.rls ? { rls: input.rls } : {}),
       principal: {
         plane: "user",
         userId: input.principal.userId.length > 0 ? input.principal.userId : null,

@@ -17,8 +17,6 @@ import {
   ShieldOff,
   SourceCodeIcon,
   TableIcon,
-  ViewIcon,
-  ViewOffSlashIcon,
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -33,7 +31,6 @@ import {
   EXPLORER_GROUP_ROW_CLASS,
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
-  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
   EXPLORER_LIST_EMPTY_CLASS,
   EXPLORER_RAIL_ACTIVE_CLASS,
   EXPLORER_RAIL_CLASS,
@@ -45,16 +42,6 @@ import {
 import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
 import { TreeExpandToggle } from "@/components/explorer/tree-expand-toggle.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -65,6 +52,7 @@ import {
   loadHiddenFacets,
   saveHiddenFacets,
   STORE_FACET_SPECS,
+  STORE_FACETS,
   isSingletonStoreLeaf,
   storeTreeAncestorKeys,
   storeTreeFacetKey,
@@ -127,7 +115,6 @@ export function StoreTree({
   const [query, setQuery] = useState("");
   const [openByKey, setOpenByKey] = useState<Readonly<Record<string, boolean>>>({});
   const [hiddenFacets, setHiddenFacets] = useState<ReadonlySet<StoreFacet>>(loadHiddenFacets);
-  const allBands = useMemo(() => bandStoreTree(stores), [stores]);
   const bands = useMemo(() => bandStoreTree(filterStoreTree(stores, query)), [stores, query]);
   const visibleBands = useMemo(() => visibleFacetBands(bands, hiddenFacets), [bands, hiddenFacets]);
   const keys = useMemo(() => storeTreeOpenKeys(visibleBands), [visibleBands]);
@@ -172,15 +159,6 @@ export function StoreTree({
     });
   };
 
-  const showAllFacets = (): void => {
-    setHiddenFacets((prev) => {
-      if (prev.size === 0) return prev;
-      const next = new Set<StoreFacet>();
-      saveHiddenFacets(next);
-      return next;
-    });
-  };
-
   const toggleAll = (): void => {
     const next = !allOpen;
     setOpenByKey((prev) => {
@@ -201,12 +179,7 @@ export function StoreTree({
             aria-label="Search stores"
             data-slot="store-search"
           />
-          <FacetVisibilityMenu
-            bands={allBands}
-            hiddenFacets={hiddenFacets}
-            onHiddenChange={setFacetHidden}
-            onShowAll={showAllFacets}
-          />
+          <FacetIconToggles hiddenFacets={hiddenFacets} onHiddenChange={setFacetHidden} />
           <TreeExpandToggle
             allOpen={allOpen}
             disabled={keys.length === 0}
@@ -229,7 +202,6 @@ export function StoreTree({
                 <FacetBand
                   key={band.facet}
                   band={band}
-                  onHide={() => setFacetHidden(band.facet, true)}
                   open={storeTreeIsOpen(facetKey, openByKey)}
                   onOpenChange={(open) => setKeyOpen(facetKey, open)}
                   storeOpen={(ref) =>
@@ -267,79 +239,53 @@ export function StoreTree({
 }
 
 /**
- * Search-bar control to show or hide Store facet bands.
+ * Toolbar tokens for the four Store facets — press to show or hide the band.
  *
- * @param props - Present bands + hidden set + toggles
+ * @param props - Hidden set + toggle
  */
-function FacetVisibilityMenu({
-  bands,
+function FacetIconToggles({
   hiddenFacets,
   onHiddenChange,
-  onShowAll,
 }: {
-  readonly bands: readonly StoreFacetBand[];
   readonly hiddenFacets: ReadonlySet<StoreFacet>;
   readonly onHiddenChange: (facet: StoreFacet, hidden: boolean) => void;
-  readonly onShowAll: () => void;
 }): JSX.Element {
-  const hiddenCount = bands.filter((band) => hiddenFacets.has(band.facet)).length;
-  const anyHidden = hiddenCount > 0;
-
   return (
-    <DropdownMenu>
-      <ToolbarTip label="Show and hide facets" className="flex self-stretch">
-        <DropdownMenuTrigger
-          render={(props) => (
+    <div
+      className="flex h-full shrink-0 items-stretch"
+      role="group"
+      aria-label="Store facets"
+      data-slot="store-tree-facet-toggles"
+    >
+      {STORE_FACETS.map((facet) => {
+        const spec = STORE_FACET_SPECS[facet];
+        const visible = !hiddenFacets.has(facet);
+        return (
+          <ToolbarTip
+            key={facet}
+            label={visible ? `Hide ${spec.label}` : `Show ${spec.label}`}
+            className="flex self-stretch"
+          >
             <button
-              {...props}
               type="button"
-              aria-label="Show and hide facets"
-              data-slot="store-tree-visibility"
-              disabled={bands.length === 0}
+              aria-label={visible ? `Hide ${spec.label}` : `Show ${spec.label}`}
+              aria-pressed={visible}
+              data-slot="store-tree-facet-toggle"
+              data-facet={facet}
+              onClick={() => onHiddenChange(facet, visible)}
               className={cn(
                 EXPLORER_ICON_BUTTON_CLASS,
-                anyHidden && EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+                visible
+                  ? explorerIconInk(spec.wellClass)
+                  : "text-muted-foreground/40 hover:text-muted-foreground",
               )}
             >
-              <HugeiconsIcon
-                icon={anyHidden ? ViewOffSlashIcon : ViewIcon}
-                className="size-3.5"
-                aria-hidden
-              />
+              <HugeiconsIcon icon={spec.icon} className={EXPLORER_ICON_CLASS} aria-hidden />
             </button>
-          )}
-        />
-      </ToolbarTip>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Facets</DropdownMenuLabel>
-          {bands.map((band) => {
-            const spec = STORE_FACET_SPECS[band.facet];
-            const visible = !hiddenFacets.has(band.facet);
-            return (
-              <DropdownMenuCheckboxItem
-                key={band.facet}
-                checked={visible}
-                data-slot="store-tree-visibility-facet"
-                data-facet={band.facet}
-                onCheckedChange={(checked) => onHiddenChange(band.facet, checked === false)}
-              >
-                <HugeiconsIcon icon={spec.icon} className="size-3.5" aria-hidden />
-                {spec.label}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
-        </DropdownMenuGroup>
-        {anyHidden ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem data-slot="store-tree-visibility-show-all" onClick={onShowAll}>
-              Show all
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </ToolbarTip>
+        );
+      })}
+    </div>
   );
 }
 
@@ -350,7 +296,6 @@ function FacetVisibilityMenu({
  */
 function FacetBand({
   band,
-  onHide,
   open,
   onOpenChange,
   storeOpen,
@@ -365,7 +310,6 @@ function FacetBand({
   onOpenPerformance,
 }: {
   readonly band: StoreFacetBand;
-  readonly onHide: () => void;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly storeOpen: (ref: string) => boolean;
@@ -444,7 +388,6 @@ function FacetBand({
                     onOpen={onOpenQuery}
                   />
                 ) : null}
-                <FacetVisibilityButton label={band.label} onHide={onHide} />
                 <TreeExpandToggle
                   allOpen={storesOpen}
                   disabled={storeRefs.length === 0}
@@ -816,49 +759,6 @@ function PerformanceBandButton({
       />
       <TooltipContent side="bottom" className="text-[11px]">
         Query performance
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
- * Hide a facet band from the explorer. Restore it from the search-bar menu.
- *
- * @param props - Band label + hide
- */
-function FacetVisibilityButton({
-  label,
-  onHide,
-}: {
-  readonly label: string;
-  readonly onHide: () => void;
-}): JSX.Element {
-  const action = `Hide ${label}`;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props) => (
-          <button
-            {...props}
-            type="button"
-            aria-label={action}
-            data-slot="store-facet-visibility"
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onClick?.(event);
-              onHide();
-            }}
-            className={cn(
-              "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
-              "hover:bg-muted/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-            )}
-          >
-            <HugeiconsIcon icon={ViewOffSlashIcon} className="size-3.5" aria-hidden />
-          </button>
-        )}
-      />
-      <TooltipContent side="bottom" className="text-[11px]">
-        {action}
       </TooltipContent>
     </Tooltip>
   );

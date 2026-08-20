@@ -153,7 +153,10 @@ export function QueryConsole({
   const [kvPending, setKvPending] = useState(false);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [piiMasked, setPiiMasked] = useState(true);
-  const [asGate, setAsGate] = useState<string | null>(null);
+  const [rlsAs, setRlsAs] = useState<{ asGate: string | null; asUserId: string | null }>({
+    asGate: null,
+    asUserId: null,
+  });
   const [resultsOpen, setResultsOpen] = useState(true);
   const [history, setHistory] = useState<readonly QueryHistoryEntry[]>(() =>
     loadQueryHistory(facet),
@@ -256,7 +259,11 @@ export function QueryConsole({
     setExecuted(set?.executed ?? next.map((row) => row.executed).join("\n") ?? null);
   };
 
-  const runBatch = (texts: readonly string[], includePii = !piiMasked, gate = asGate): void => {
+  const runBatch = (
+    texts: readonly string[],
+    includePii = !piiMasked,
+    gate = rlsAs,
+  ): void => {
     if (!store) return;
     setResultsOpen(true);
     setError(null);
@@ -290,7 +297,8 @@ export function QueryConsole({
               sql: sqlText,
               ...(writing ? { allowWrite: true } : {}),
               ...(includePii ? { revealPii: true } : {}),
-              ...(gate ? { asGate: gate } : {}),
+              ...(gate.asGate ? { asGate: gate.asGate } : {}),
+              ...(gate.asUserId ? { asUserId: gate.asUserId } : {}),
               ...(tenant ? { tenant } : {}),
             });
             const changed = writeChanges(data.rows);
@@ -302,8 +310,13 @@ export function QueryConsole({
             ];
             if (data.masked) bits.push("PII masked");
             else if (includePii) bits.push("PII visible");
-            if (data.asGate) {
-              bits.push(data.gateApplied ? `as ${data.asGate}` : `as ${data.asGate} (not applied)`);
+            if (data.rls?.gate ?? data.asGate) {
+              const label = data.rls?.userId
+                ? `${data.rls.gate} / ${data.rls.userId}`
+                : (data.rls?.gate ?? data.asGate);
+              bits.push(
+                data.gateApplied || data.rls?.applied ? `as ${label}` : `as ${label} (not applied)`,
+              );
             }
             nextSets.push({
               label: sqlStatementLabel(sqlText),
@@ -351,7 +364,7 @@ export function QueryConsole({
     })();
   };
 
-  const runText = (sqlText: string, includePii = !piiMasked, gate = asGate): void => {
+  const runText = (sqlText: string, includePii = !piiMasked, gate = rlsAs): void => {
     if (!store) return;
     setResultsOpen(true);
     setError(null);
@@ -876,9 +889,9 @@ export function QueryConsole({
         {isSql ? (
           <QueryGateMenu
             manifest={manifest}
-            asGate={asGate}
+            value={rlsAs}
             onChange={(next) => {
-              setAsGate(next);
+              setRlsAs(next);
               if (executed && !isSqlWrite(executed)) {
                 runText(executed, !piiMasked, next);
               }

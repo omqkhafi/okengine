@@ -132,6 +132,9 @@ export interface StoreDataGridProps {
   readonly insertOpen?: boolean;
   readonly onInsertOpenChange?: (open: boolean) => void;
   readonly onDeleteRows?: (rows: readonly StoreGridRow[]) => void;
+  /** Gate identity for row DML (`oke.*` stamp). Catalog DDL ignores this. */
+  readonly asGate?: string | null;
+  readonly asUserId?: string | null;
 }
 
 /** Row height presets (px) for the height menu. */
@@ -231,6 +234,8 @@ export function StoreDataGrid({
   insertOpen = false,
   onInsertOpenChange,
   onDeleteRows,
+  asGate = null,
+  asUserId = null,
 }: StoreDataGridProps): JSX.Element {
   const [findText, setFindText] = useState("");
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -533,6 +538,8 @@ export function StoreDataGrid({
             ref: storeRef,
             ...(facet === "sql" ? { child: childName, id: rowId } : { key: rowId }),
             ...(tenant ? { tenant } : {}),
+            ...(asGate ? { asGate } : {}),
+            ...(asUserId ? { asUserId } : {}),
             patch: sanitizeStorePatch(patch),
             commit: true,
           }),
@@ -1324,6 +1331,8 @@ export function StoreDataGrid({
           childName={childName}
           tenant={tenant}
           columns={model.columns}
+          asGate={asGate}
+          asUserId={asUserId}
         />
       ) : null}
 

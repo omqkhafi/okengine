@@ -241,6 +241,33 @@ export const db = store.sql("app", { schema: { notes } });
     });
   });
 
+  test("extracts RLS helpers onto store.tables", async () => {
+    const source = `
+import { store, field } from "okengine";
+
+export const bookings = store.schema.table("bookings", {
+  id: field.text().primaryKey(),
+  owner: field.text().notNull(),
+}, [
+  store.schema.policy.gate("member", { for: "select" }),
+  store.schema.policy.owner("owner"),
+]);
+
+export const db = store.sql("app", { schema: { bookings } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    const table = manifest.stores?.app?.tables?.bookings;
+    expect(table?.rls).toBe(true);
+    expect(table?.policies?.gate_member_select).toMatchObject({
+      for: "select",
+      using: "oke.gate() = 'member'",
+    });
+    expect(table?.policies?.owner_owner_all?.using).toContain("oke.user()");
+  });
+
+
   test("extracts optional description fields additively", async () => {
     const source = `
 import { store, field, signal, channel, clock, gate, vault } from "okengine";

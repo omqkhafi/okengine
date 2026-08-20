@@ -224,10 +224,23 @@ export interface DeclaredColumn extends ColumnClassification {
 /** Field classification value forms. */
 export type ClassificationValue = string | string[] | ColumnClassification;
 
+/** Declared Postgres RLS policy on a {@link Table}. */
+export interface TablePolicy {
+  as?: "permissive" | "restrictive";
+  to?: string | string[];
+  for?: "all" | "select" | "insert" | "update" | "delete";
+  using?: string;
+  withCheck?: string;
+}
+
 /** SQL table metadata. */
 export interface Table {
   columns?: Record<string, DeclaredColumn | ColumnClassification>;
   classifications?: Record<string, ClassificationValue>;
+  /** RLS enabled (`pgTable.withRLS` or any policy). */
+  rls?: boolean;
+  /** Policy name → Drizzle-shaped spec. */
+  policies?: Record<string, TablePolicy>;
 }
 
 /** One Store declaration. */

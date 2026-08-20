@@ -99,6 +99,7 @@ import {
 import {
   applyPrincipal,
   createElementPipelineHooks,
+  gateNamesOf,
   type PrincipalBag,
   type ResolvedPrincipal,
 } from "./pipeline.ts";
@@ -435,6 +436,8 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
        * Takes effect only with {@link trustedInvoke}.
        */
       readonly revealPii?: boolean;
+      /** Forced RLS bag (Console / Call API). Operator omit = no stamp. */
+      readonly rls?: import("../drivers/pg-rls.ts").RlsIdentity;
       /** Parent WideEvent id when this execution was caused by another. */
       readonly parentId?: string;
       /** Explicit run / WideEvent id (defaults to a new UUID). */
@@ -1138,6 +1141,8 @@ export function oke(options: OkeOptions): OkeApp {
       readonly bypassGates?: boolean;
       /** Console Call API — cleartext store PII. Requires {@link trustedInvoke}. */
       readonly revealPii?: boolean;
+      /** Forced RLS bag (Console / Call API). Operator omit = no stamp. */
+      readonly rls?: import("../drivers/pg-rls.ts").RlsIdentity;
       /** Frozen origin identity for {@link Fx.principal} across `fx.call`. */
       readonly originPrincipal?: FxPrincipal;
       /** Explicit locale override for {@link Fx.t} / channel sends. */
@@ -1189,6 +1194,7 @@ export function oke(options: OkeOptions): OkeApp {
       readonly trustedInvoke?: boolean;
       readonly bypassGates?: boolean;
       readonly revealPii?: boolean;
+      readonly rls?: import("../drivers/pg-rls.ts").RlsIdentity;
       readonly originPrincipal?: FxPrincipal;
       readonly locale?: string;
       readonly parentId?: string;
@@ -1339,6 +1345,9 @@ export function oke(options: OkeOptions): OkeApp {
       ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(extras?.trustedInvoke === true && extras.revealPii === true ? { revealPii: true } : {}),
+      rlsGateNames: gateNamesOf(trigger),
+      rlsBypass: extras?.bypassGates === true || flowDef.plane === "operator",
+      ...(extras?.rls ? { rls: extras.rls } : {}),
       ...(capability ? { capability } : {}),
       ...(booted
         ? {

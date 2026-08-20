@@ -41,4 +41,9 @@ describe("applySqlTableRls", () => {
     const rows = [{ ...child("comments"), rls: false }];
     expect(applySqlTableRls(rows, new Map())[0]?.rls).toBe(false);
   });
+
+  test("Manifest declared RLS wins when live catalog is empty", () => {
+    const out = applySqlTableRls([child("bookings")], new Map(), new Map([["bookings", true]]));
+    expect(out[0]?.rls).toBe(true);
+  });
 });

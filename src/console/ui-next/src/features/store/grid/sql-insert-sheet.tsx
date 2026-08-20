@@ -33,6 +33,8 @@ export interface SqlInsertSheetProps {
   readonly childName: string;
   readonly tenant?: string | null;
   readonly columns: readonly StoreGridColumn[];
+  readonly asGate?: string | null;
+  readonly asUserId?: string | null;
 }
 
 /**
@@ -47,6 +49,8 @@ export function SqlInsertSheet({
   childName,
   tenant,
   columns,
+  asGate = null,
+  asUserId = null,
 }: SqlInsertSheetProps): JSX.Element {
   const { mutate, isPending, reset } = useStoreEdit();
   const fields = useMemo(() => insertFormColumns(columns), [columns]);
@@ -77,6 +81,8 @@ export function SqlInsertSheet({
         ref: storeRef,
         child: childName,
         ...(tenant ? { tenant } : {}),
+        ...(asGate ? { asGate } : {}),
+        ...(asUserId ? { asUserId } : {}),
         patch: built.patch,
         commit: true,
       },

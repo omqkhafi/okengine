@@ -31,6 +31,8 @@ import {
   parseSqlPolicySpec,
   quotePgIdent,
   sqlPolicyRowId,
+  emitStoreSchemaPolicySource,
+  OKE_RLS_HELPER_SQL,
 } from "../../drivers/pg-rls.ts";
 import type { ConsoleStoreChild, ConsoleWillNotFire } from "./store.ts";
 
@@ -125,10 +127,14 @@ export async function listSqlTableRls(sql: SqlStoreHandle): Promise<ReadonlyMap<
 export function applySqlTableRls(
   children: readonly ConsoleStoreChild[],
   rlsByTable: ReadonlyMap<string, boolean>,
+  declared?: ReadonlyMap<string, boolean>,
 ): ConsoleStoreChild[] {
   return children.map((child) => {
     if (child.kind !== "table") return child;
-    return { ...child, rls: rlsByTable.get(child.name) ?? child.rls === true };
+    return {
+      ...child,
+      rls: rlsByTable.get(child.name) ?? declared?.get(child.name) ?? child.rls === true,
+    };
   });
 }
 
@@ -156,6 +162,9 @@ export async function listSqlCatalog(
   limit: number,
 ): Promise<readonly Record<string, unknown>[]> {
   const live = await tryLiveCatalog(sql, kind, limit);
+  if (kind === "policy") {
+    return overlayDeclaredPolicies(live ?? [], manifest, storeName).slice(0, limit);
+  }
   if (live) return live;
   if (kind === "index") return manifestIndexes(manifest, storeName).slice(0, limit);
   if (kind === "extension") return fallbackExtensions().slice(0, limit);
@@ -172,6 +181,11 @@ export async function createSqlPolicy(
   sql: SqlStoreHandle,
   patch: Readonly<Record<string, unknown>>,
 ): Promise<void> {
+  try {
+    await sql.raw(OKE_RLS_HELPER_SQL);
+  } catch {
+    // Memory / engines without CREATE FUNCTION — CREATE POLICY may still run.
+  }
   const spec = parseSqlPolicySpec(patch);
   if (patch.enableRls === true) {
     await sql.raw(buildRowSecuritySql(spec.table, true));
@@ -393,11 +407,13 @@ function catalogColumnDescriptions(kind: SqlCatalogKind): Readonly<Record<string
     return {
       name: "Policy",
       table: "Table",
+      origin: "Declared or live-only",
       command: "Command",
       roles: "Roles",
       permissive: "Permissive or restrictive",
       using: "USING expression",
       with_check: "WITH CHECK expression",
+      code: "Copy as code",
     };
   }
   return {
@@ -459,17 +475,113 @@ function isAppCatalogSchema(row: Record<string, unknown>): boolean {
 function projectPolicyRow(row: Record<string, unknown>): Record<string, unknown> {
   const name = stringOrNull(row.name ?? row.policyname) ?? "";
   const table = stringOrNull(row.table ?? row.tablename) ?? "";
+  const command = stringOrNull(row.command ?? row.cmd) ?? "ALL";
+  const roles = rolesText(row.roles);
+  const using = stringOrNull(row.using ?? row.qual);
+  const withCheck = stringOrNull(row.with_check);
+  const permissive = stringOrNull(row.permissive) ?? "PERMISSIVE";
   return {
     id: sqlPolicyRowId(table, name),
     name,
     table,
     schema: stringOrNull(row.schema ?? row.schemaname) ?? "public",
-    command: stringOrNull(row.command ?? row.cmd) ?? "ALL",
-    roles: rolesText(row.roles),
-    permissive: stringOrNull(row.permissive) ?? "PERMISSIVE",
-    using: stringOrNull(row.using ?? row.qual),
-    with_check: stringOrNull(row.with_check),
+    command,
+    roles,
+    permissive,
+    using,
+    with_check: withCheck,
+    origin: stringOrNull(row.origin) ?? "live",
+    code: policyCopyAsCode({
+      name,
+      table,
+      command,
+      roles,
+      permissive,
+      using,
+      withCheck,
+    }),
   };
+}
+
+function overlayDeclaredPolicies(
+  live: readonly Record<string, unknown>[],
+  manifest: Manifest | null,
+  storeName: string,
+): Record<string, unknown>[] {
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const row of live) {
+    byId.set(String(row.id), { ...row, origin: "live" });
+  }
+  for (const row of declaredPoliciesFromManifest(manifest, storeName)) {
+    const existing = byId.get(row.id);
+    byId.set(row.id, existing ? { ...existing, ...row, origin: "declared" } : row);
+  }
+  return [...byId.values()];
+}
+
+function declaredPoliciesFromManifest(
+  manifest: Manifest | null,
+  storeName: string,
+): Array<Record<string, unknown> & { readonly id: string }> {
+  const tables = manifest?.stores?.[storeName]?.tables ?? {};
+  const out: Array<Record<string, unknown> & { readonly id: string }> = [];
+  for (const [table, spec] of Object.entries(tables)) {
+    for (const [name, policy] of Object.entries(spec.policies ?? {})) {
+      const command = (policy.for ?? "all").toUpperCase();
+      const roles = Array.isArray(policy.to)
+        ? policy.to.join(", ")
+        : (policy.to ?? "public");
+      const permissive = (policy.as ?? "permissive").toUpperCase();
+      out.push({
+        id: sqlPolicyRowId(table, name),
+        name,
+        table,
+        schema: "public",
+        command,
+        roles,
+        permissive,
+        using: policy.using ?? null,
+        with_check: policy.withCheck ?? null,
+        origin: "declared",
+        code: policyCopyAsCode({
+          name,
+          table,
+          command,
+          roles,
+          permissive,
+          using: policy.using,
+          withCheck: policy.withCheck,
+        }),
+      });
+    }
+  }
+  return out;
+}
+
+function policyCopyAsCode(input: {
+  readonly name: string;
+  readonly table: string;
+  readonly command: string;
+  readonly roles: string;
+  readonly permissive: string;
+  readonly using?: string | null;
+  readonly withCheck?: string | null;
+}): string {
+  try {
+    return emitStoreSchemaPolicySource(
+      parseSqlPolicySpec({
+        name: input.name,
+        table: input.table,
+        command: input.command,
+        behavior: input.permissive,
+        roles: input.roles,
+        using: input.using ?? "",
+        withCheck: input.withCheck ?? "",
+      }),
+    );
+  } catch {
+    return "";
+  }
 }
 
 function projectTriggerRow(row: Record<string, unknown>): Record<string, unknown> {

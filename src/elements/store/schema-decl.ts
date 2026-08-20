@@ -69,6 +69,42 @@ export interface SchemaColumnDecl extends ColumnDef {
   getSQL(): never;
 }
 
+/** Policy command on a {@link SchemaPolicyDecl}. */
+export type SchemaPolicyFor = "all" | "select" | "insert" | "update" | "delete";
+
+/** Policy behavior on a {@link SchemaPolicyDecl}. */
+export type SchemaPolicyAs = "permissive" | "restrictive";
+
+/**
+ * Drizzle-shaped policy extra (`pgPolicy` emit).
+ */
+export interface SchemaPolicyDecl {
+  readonly kind: "schema-policy";
+  readonly name: string;
+  readonly as?: SchemaPolicyAs;
+  readonly to?: string | readonly string[];
+  readonly for?: SchemaPolicyFor;
+  readonly using?: string;
+  readonly withCheck?: string;
+}
+
+/** Enable RLS with no policies (`pgTable.withRLS`). */
+export interface SchemaRlsEnableDecl {
+  readonly kind: "schema-rls";
+}
+
+/** Third-arg extra for {@link schemaTable}. */
+export type SchemaTableExtra = SchemaPolicyDecl | SchemaRlsEnableDecl;
+
+/** Options for {@link schemaPolicy} / Gate helpers. */
+export interface SchemaPolicyOptions {
+  readonly as?: SchemaPolicyAs;
+  readonly to?: string | readonly string[];
+  readonly for?: SchemaPolicyFor;
+  readonly using?: string;
+  readonly withCheck?: string;
+}
+
 /** Table from {@link store.schema.table} — extends {@link TableHandle}. */
 export interface SchemaTableDecl extends TableHandle {
   readonly kind: "schema-table";
@@ -78,6 +114,10 @@ export interface SchemaTableDecl extends TableHandle {
    * (spreading columns would otherwise shadow {@link TableHandle.name}).
    */
   readonly tableName?: string;
+  /** `true` when {@link schemaRls} was declared or any policy is present. */
+  readonly rls?: boolean;
+  /** Declared policies (emit + Manifest). */
+  readonly policies?: readonly SchemaPolicyDecl[];
 }
 
 /** Fluent field builder before key finalization. */
@@ -310,20 +350,26 @@ export type SchemaTableWithColumns<
  *
  * @param name - SQL table name
  * @param columns - Column map using {@link field} builders
+ * @param extras - RLS enable + {@link schemaPolicy} extras (Drizzle third arg)
  */
 export function schemaTable<C extends Record<string, SchemaColumnInput>>(
   name: string,
   columns: C,
+  extras: readonly SchemaTableExtra[] = [],
 ): SchemaTableWithColumns<{ [K in keyof C]: SchemaColumnDecl }> {
   const finalized = finalizeColumnMap(columns);
   const stamped: Record<string, SchemaColumnDecl> = {};
   for (const [key, col] of Object.entries(finalized)) {
     stamped[key] = { ...col, tableName: name };
   }
+  const policies = extras.filter((extra): extra is SchemaPolicyDecl => extra.kind === "schema-policy");
+  const rls = extras.some((extra) => extra.kind === "schema-rls") || policies.length > 0;
   const table = {
     name,
     columns: stamped,
     ...stamped,
+    ...(rls ? { rls: true } : {}),
+    ...(policies.length > 0 ? { policies } : {}),
   };
   // Survive columns named `name` or `kind` (they would otherwise shadow
   // the table discriminant / SQL name).
@@ -331,6 +377,110 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
   Object.defineProperty(table, "tableName", { value: name, enumerable: false });
   return table as SchemaTableWithColumns<{ [K in keyof C]: SchemaColumnDecl }>;
 }
+
+/**
+ * Enable RLS with no policies (`pgTable.withRLS`).
+ */
+export function schemaRls(): SchemaRlsEnableDecl {
+  return { kind: "schema-rls" };
+}
+
+/**
+ * Raw Drizzle-shaped policy extra.
+ *
+ * @param name - Policy name
+ * @param options - `as` / `to` / `for` / `using` / `withCheck`
+ */
+export function schemaPolicy(name: string, options: SchemaPolicyOptions = {}): SchemaPolicyDecl {
+  return {
+    kind: "schema-policy",
+    name,
+    ...(options.as !== undefined ? { as: options.as } : {}),
+    ...(options.to !== undefined ? { to: options.to } : {}),
+    ...(options.for !== undefined ? { for: options.for } : {}),
+    ...(options.using !== undefined ? { using: options.using } : {}),
+    ...(options.withCheck !== undefined ? { withCheck: options.withCheck } : {}),
+  };
+}
+
+function sqlStringLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function helperPolicyName(prefix: string, key: string, command: SchemaPolicyFor): string {
+  const slug = key.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  return `${prefix}_${slug}_${command}`;
+}
+
+function policyPredicates(
+  command: SchemaPolicyFor,
+  expr: string,
+): { readonly using?: string; readonly withCheck?: string } {
+  if (command === "insert") return { withCheck: expr };
+  if (command === "update" || command === "all") return { using: expr, withCheck: expr };
+  return { using: expr };
+}
+
+/**
+ * Gate-name policy — `oke.gate() = 'member'`.
+ *
+ * @param gate - Policy / public Gate name
+ * @param options - Command (default `select`)
+ */
+export function schemaPolicyGate(
+  gate: string,
+  options: Pick<SchemaPolicyOptions, "for" | "as" | "to"> = {},
+): SchemaPolicyDecl {
+  const command = options.for ?? "select";
+  return schemaPolicy(helperPolicyName("gate", gate, command), {
+    ...options,
+    for: command,
+    ...policyPredicates(command, `oke.gate() = ${sqlStringLiteral(gate)}`),
+  });
+}
+
+/**
+ * Owner-column policy — `owner = oke.user()`.
+ *
+ * @param column - SQL / JS column name
+ * @param options - Command (default `all`)
+ */
+export function schemaPolicyOwner(
+  column: string,
+  options: Pick<SchemaPolicyOptions, "for" | "as" | "to"> = {},
+): SchemaPolicyDecl {
+  const command = options.for ?? "all";
+  return schemaPolicy(helperPolicyName("owner", column, command), {
+    ...options,
+    for: command,
+    ...policyPredicates(command, `${column} = oke.user()`),
+  });
+}
+
+/**
+ * Scope policy — `oke.has_scope('booking:create')`.
+ *
+ * @param scope - Scope string
+ * @param options - Command (default `insert`)
+ */
+export function schemaPolicyScope(
+  scope: string,
+  options: Pick<SchemaPolicyOptions, "for" | "as" | "to"> = {},
+): SchemaPolicyDecl {
+  const command = options.for ?? "insert";
+  return schemaPolicy(helperPolicyName("scope", scope, command), {
+    ...options,
+    for: command,
+    ...policyPredicates(command, `oke.has_scope(${sqlStringLiteral(scope)})`),
+  });
+}
+
+/** `store.schema.policy` — raw + Gate helpers. */
+export const schemaPolicyApi = Object.assign(schemaPolicy, {
+  gate: schemaPolicyGate,
+  owner: schemaPolicyOwner,
+  scope: schemaPolicyScope,
+});
 
 // ─── Relations (mirrors drizzle-orm `defineRelations`) ───────────────────────
 
@@ -527,6 +677,8 @@ export function schemaRelations<T extends Readonly<Record<string, SchemaTableDec
 export const schema = {
   table: schemaTable,
   relations: schemaRelations,
+  rls: schemaRls,
+  policy: schemaPolicyApi,
 } as const;
 
 /**

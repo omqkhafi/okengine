@@ -15,9 +15,7 @@ export const activity = pgTable("activity", {
 
 export const comments = pgTable("comments", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
   authorEmail: text("author_email"),
   body: text("body").notNull(),
   resolvedAt: text("resolved_at"),
@@ -26,20 +24,14 @@ export const comments = pgTable("comments", {
 
 export const custom_field_values = pgTable("custom_field_values", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  fieldId: text("field_id")
-    .notNull()
-    .references(() => custom_fields.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  fieldId: text("field_id").notNull().references(() => custom_fields.id, { onDelete: "cascade" }),
   value: text("value").notNull(),
 });
 
 export const custom_fields = pgTable("custom_fields", {
   id: text("id").primaryKey().$defaultFn(id),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   type: text("type").notNull(),
 });
@@ -64,9 +56,7 @@ export const file_objects = pgTable("file_objects", {
 
 export const form_submissions = pgTable("form_submissions", {
   id: text("id").primaryKey().$defaultFn(id),
-  formId: text("form_id")
-    .notNull()
-    .references(() => forms.id, { onDelete: "cascade" }),
+  formId: text("form_id").notNull().references(() => forms.id, { onDelete: "cascade" }),
   taskId: text("task_id").references(() => tasks.id, { onDelete: "set null" }),
   payloadJson: text("payload_json").notNull(),
   customerName: text("customer_name").notNull(),
@@ -75,9 +65,7 @@ export const form_submissions = pgTable("form_submissions", {
 
 export const forms = pgTable("forms", {
   id: text("id").primaryKey().$defaultFn(id),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   schemaJson: text("schema_json").notNull(),
   createdAt: bigint("created_at", { mode: "number" }).notNull().$defaultFn(now),
@@ -114,9 +102,7 @@ export const members = pgTable("members", {
 
 export const project_updates = pgTable("project_updates", {
   id: text("id").primaryKey().$defaultFn(id),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   health: text("health").notNull(),
   body: text("body").notNull(),
   authorEmail: text("author_email"),
@@ -125,9 +111,7 @@ export const project_updates = pgTable("project_updates", {
 
 export const projects = pgTable("projects", {
   id: text("id").primaryKey().$defaultFn(id),
-  spaceId: text("space_id")
-    .notNull()
-    .references(() => spaces.id),
+  spaceId: text("space_id").notNull().references(() => spaces.id),
   goalId: text("goal_id").references(() => goals.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   status: text("status").notNull(),
@@ -141,18 +125,14 @@ export const projects = pgTable("projects", {
 
 export const recurrence = pgTable("recurrence", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
   every: text("every").notNull(),
   nextAt: text("next_at").notNull(),
 });
 
 export const sections = pgTable("sections", {
   id: text("id").primaryKey().$defaultFn(id),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   sortOrder: bigint("sort_order", { mode: "number" }).notNull(),
 });
@@ -173,38 +153,26 @@ export const tags = pgTable("tags", {
 
 export const task_assignees = pgTable("task_assignees", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
   assigneeEmail: text("assignee_email").notNull(),
 });
 
 export const task_dependencies = pgTable("task_dependencies", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  blocksTaskId: text("blocks_task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  blocksTaskId: text("blocks_task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
 });
 
 export const task_followers = pgTable("task_followers", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
   followerEmail: text("follower_email").notNull(),
 });
 
 export const task_tags = pgTable("task_tags", {
   id: text("id").primaryKey().$defaultFn(id),
-  taskId: text("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  tagId: text("tag_id")
-    .notNull()
-    .references(() => tags.id, { onDelete: "cascade" }),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  tagId: text("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
 });
 
 export const tasks = pgTable("tasks", {
@@ -216,9 +184,7 @@ export const tasks = pgTable("tasks", {
   priority: bigint("priority", { mode: "number" }).notNull(),
   estimate: bigint("estimate", { mode: "number" }),
   status: text("status").notNull(),
-  spaceId: text("space_id")
-    .notNull()
-    .references(() => spaces.id),
+  spaceId: text("space_id").notNull().references(() => spaces.id),
   projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
   sectionId: text("section_id").references(() => sections.id, { onDelete: "set null" }),
   parentId: text("parent_id"),
@@ -234,9 +200,7 @@ export const tasks = pgTable("tasks", {
 
 export const views = pgTable("views", {
   id: text("id").primaryKey().$defaultFn(id),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   kind: text("kind").notNull(),
   filtersJson: text("filters_json"),
@@ -244,79 +208,52 @@ export const views = pgTable("views", {
   createdAt: bigint("created_at", { mode: "number" }).notNull().$defaultFn(now),
 });
 
-export const relations = defineRelations(
-  {
-    spaces,
-    members,
-    goals,
-    projects,
-    sections,
-    tasks,
-    task_assignees,
-    task_followers,
-    task_dependencies,
-    tags,
-    task_tags,
-    custom_fields,
-    custom_field_values,
-    comments,
-    activity,
-    documents,
-    file_objects,
-    project_updates,
-    views,
-    forms,
-    form_submissions,
-    inbox,
-    recurrence,
+export const relations = defineRelations({ spaces, members, goals, projects, sections, tasks, task_assignees, task_followers, task_dependencies, tags, task_tags, custom_fields, custom_field_values, comments, activity, documents, file_objects, project_updates, views, forms, form_submissions, inbox, recurrence }, (r) => ({
+  spaces: {
+    members: r.many.members({ from: r.spaces.id, to: r.members.spaceId }),
+    projects: r.many.projects({ from: r.spaces.id, to: r.projects.spaceId }),
   },
-  (r) => ({
-    spaces: {
-      members: r.many.members({ from: r.spaces.id, to: r.members.spaceId }),
-      projects: r.many.projects({ from: r.spaces.id, to: r.projects.spaceId }),
-    },
-    members: {
-      space: r.one.spaces({ from: r.members.spaceId, to: r.spaces.id }),
-    },
-    goals: {
-      projects: r.many.projects({ from: r.goals.id, to: r.projects.goalId }),
-    },
-    projects: {
-      space: r.one.spaces({ from: r.projects.spaceId, to: r.spaces.id, optional: false }),
-      goal: r.one.goals({ from: r.projects.goalId, to: r.goals.id }),
-      sections: r.many.sections({ from: r.projects.id, to: r.sections.projectId }),
-      tasks: r.many.tasks({ from: r.projects.id, to: r.tasks.projectId }),
-      updates: r.many.project_updates({ from: r.projects.id, to: r.project_updates.projectId }),
-      views: r.many.views({ from: r.projects.id, to: r.views.projectId }),
-      forms: r.many.forms({ from: r.projects.id, to: r.forms.projectId }),
-    },
-    sections: {
-      project: r.one.projects({ from: r.sections.projectId, to: r.projects.id, optional: false }),
-      tasks: r.many.tasks({ from: r.sections.id, to: r.tasks.sectionId }),
-    },
-    tasks: {
-      space: r.one.spaces({ from: r.tasks.spaceId, to: r.spaces.id, optional: false }),
-      project: r.one.projects({ from: r.tasks.projectId, to: r.projects.id }),
-      section: r.one.sections({ from: r.tasks.sectionId, to: r.sections.id }),
-      parent: r.one.tasks({ from: r.tasks.parentId, to: r.tasks.id }),
-      assignees: r.many.task_assignees({ from: r.tasks.id, to: r.task_assignees.taskId }),
-      followers: r.many.task_followers({ from: r.tasks.id, to: r.task_followers.taskId }),
-      comments: r.many.comments({ from: r.tasks.id, to: r.comments.taskId }),
-      tags: r.many.task_tags({ from: r.tasks.id, to: r.task_tags.taskId }),
-    },
-    task_assignees: {
-      task: r.one.tasks({ from: r.task_assignees.taskId, to: r.tasks.id, optional: false }),
-    },
-    comments: {
-      task: r.one.tasks({ from: r.comments.taskId, to: r.tasks.id, optional: false }),
-    },
-    forms: {
-      project: r.one.projects({ from: r.forms.projectId, to: r.projects.id, optional: false }),
-      submissions: r.many.form_submissions({ from: r.forms.id, to: r.form_submissions.formId }),
-    },
-    form_submissions: {
-      form: r.one.forms({ from: r.form_submissions.formId, to: r.forms.id, optional: false }),
-      task: r.one.tasks({ from: r.form_submissions.taskId, to: r.tasks.id }),
-    },
-  }),
-);
+  members: {
+    space: r.one.spaces({ from: r.members.spaceId, to: r.spaces.id }),
+  },
+  goals: {
+    projects: r.many.projects({ from: r.goals.id, to: r.projects.goalId }),
+  },
+  projects: {
+    space: r.one.spaces({ from: r.projects.spaceId, to: r.spaces.id, optional: false }),
+    goal: r.one.goals({ from: r.projects.goalId, to: r.goals.id }),
+    sections: r.many.sections({ from: r.projects.id, to: r.sections.projectId }),
+    tasks: r.many.tasks({ from: r.projects.id, to: r.tasks.projectId }),
+    updates: r.many.project_updates({ from: r.projects.id, to: r.project_updates.projectId }),
+    views: r.many.views({ from: r.projects.id, to: r.views.projectId }),
+    forms: r.many.forms({ from: r.projects.id, to: r.forms.projectId }),
+  },
+  sections: {
+    project: r.one.projects({ from: r.sections.projectId, to: r.projects.id, optional: false }),
+    tasks: r.many.tasks({ from: r.sections.id, to: r.tasks.sectionId }),
+  },
+  tasks: {
+    space: r.one.spaces({ from: r.tasks.spaceId, to: r.spaces.id, optional: false }),
+    project: r.one.projects({ from: r.tasks.projectId, to: r.projects.id }),
+    section: r.one.sections({ from: r.tasks.sectionId, to: r.sections.id }),
+    parent: r.one.tasks({ from: r.tasks.parentId, to: r.tasks.id }),
+    assignees: r.many.task_assignees({ from: r.tasks.id, to: r.task_assignees.taskId }),
+    followers: r.many.task_followers({ from: r.tasks.id, to: r.task_followers.taskId }),
+    comments: r.many.comments({ from: r.tasks.id, to: r.comments.taskId }),
+    tags: r.many.task_tags({ from: r.tasks.id, to: r.task_tags.taskId }),
+  },
+  task_assignees: {
+    task: r.one.tasks({ from: r.task_assignees.taskId, to: r.tasks.id, optional: false }),
+  },
+  comments: {
+    task: r.one.tasks({ from: r.comments.taskId, to: r.tasks.id, optional: false }),
+  },
+  forms: {
+    project: r.one.projects({ from: r.forms.projectId, to: r.projects.id, optional: false }),
+    submissions: r.many.form_submissions({ from: r.forms.id, to: r.form_submissions.formId }),
+  },
+  form_submissions: {
+    form: r.one.forms({ from: r.form_submissions.formId, to: r.forms.id, optional: false }),
+    task: r.one.tasks({ from: r.form_submissions.taskId, to: r.tasks.id }),
+  },
+}));

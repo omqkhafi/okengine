@@ -267,13 +267,21 @@ export interface ConsoleState {
       readonly revealPii?: boolean;
       readonly tenant?: string;
       readonly asGate?: string;
+      readonly asUserId?: string;
+      readonly rls?: import("../../drivers/pg-rls.ts").RlsIdentity;
     },
   ) => Promise<{
     readonly rows: readonly Record<string, unknown>[];
     readonly masked: boolean;
     readonly routedRole: "primary" | "replica";
     readonly asGate: string | null;
+    readonly asUserId: string | null;
     readonly gateApplied: boolean;
+    readonly rls: {
+      readonly gate: string | null;
+      readonly userId: string;
+      readonly applied: boolean;
+    };
   }>;
   /** Engine-native pg_stat_statements + KPIs. */
   queryStoreSqlStats: (ref: ResourceRef) => Promise<import("./store-stats.ts").StoreSqlStatsResult>;
