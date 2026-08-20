@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.14.1 — 2026-08-20
+
 ### 🐛 Fixed
 
 #### Runtime
