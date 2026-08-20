@@ -1,7 +1,7 @@
 /**
  * Module-evaluation registries for `store.sql` / `store.files`, `vault.secret`,
  * `vault.env.required`, `signal()`, `channel.<medium>().template()`, and
- * `ai.model` / `.prompt` / `ai.embed` / `ai.agent` — the plain arrays behind
+ * `ai.model` / `.prompt` / `ai.embed` / `ai.agent` / `ai.mcpServer` — the plain arrays behind
  * each declare module's `listX()` / `resetX()` pair (mirrors `on.ts`'s
  * trigger-drain `bindings` array).
  *
@@ -16,6 +16,7 @@
 import type {
   AiAgentDecl,
   AiEmbedDecl,
+  AiMcpServerDecl,
   AiModelDecl,
   AiPromptDecl,
 } from "../elements/ai/declare.ts";
@@ -42,3 +43,5 @@ export const aiPromptRegistry: AiPromptDecl[] = [];
 export const aiEmbedRegistry: AiEmbedDecl[] = [];
 /** `ai.agent` declarations since the last reset. */
 export const aiAgentRegistry: AiAgentDecl[] = [];
+/** `ai.mcpServer` declarations since the last reset. */
+export const aiMcpServerRegistry: AiMcpServerDecl[] = [];

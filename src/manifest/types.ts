@@ -303,6 +303,8 @@ export interface AiModel {
   provider?: string;
   tier?: string;
   model?: string;
+  /** Protocol driver override for this logical binding. */
+  driverId?: string;
 }
 
 /** Prompt / agent budget. */
@@ -333,11 +335,29 @@ export interface AiAgent {
   budget?: AiBudget;
 }
 
+/**
+ * External MCP server the app consumes — tools join the existing `fx.call`
+ * / `toolLoop` path as `mcp:<server>/<tool>` capability refs.
+ */
+export interface AiMcpServer {
+  /** Streamable HTTP endpoint. */
+  url?: string;
+  /** stdio executable (no shell string). */
+  command?: string;
+  /** Arguments for {@link command}. */
+  args?: string[];
+  /** Bearer secret contract name (never the value). */
+  auth?: SecretRef;
+  /** Required allowlist — never trust whatever `tools/list` exposes. */
+  tools: string[];
+}
+
 /** AI element catalogue. */
 export interface Ai {
   models?: Record<string, AiModel>;
   prompts?: Record<string, AiPrompt>;
   agents?: Record<string, AiAgent>;
+  mcpServers?: Record<string, AiMcpServer>;
 }
 
 /** Per-table metadata on a Manifest {@link Plugin}. */

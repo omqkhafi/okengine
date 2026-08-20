@@ -51,6 +51,21 @@ describe("ai declaration", () => {
     });
     expect(embed.into).toBe("kb");
   });
+
+  test("mcpServer requires allowlist and .tool() NamedRef", () => {
+    const github = ai.mcpServer("github", {
+      url: "https://mcp.example/github",
+      tools: ["create_issue"],
+    });
+    expect(github.kind).toBe("mcp-server");
+    expect(github.tools).toEqual(["create_issue"]);
+    expect(github.tool("create_issue")).toEqual({ name: "mcp:github/create_issue" });
+    expect(() => github.tool("delete_repo")).toThrow(/not in the allowlist/);
+    expect(() => ai.mcpServer("broken", { url: "https://x" } as never)).toThrow(/allowlist/);
+    expect(() => ai.mcpServer("both", { url: "https://x", command: "npx", tools: ["a"] })).toThrow(
+      /exactly one/,
+    );
+  });
 });
 
 describe("agent gate denial is recorded", () => {
@@ -574,5 +589,129 @@ describe("ask journal tokens", () => {
     expect(entry.inputTokens).toBe(12);
     expect(entry.outputTokens).toBe(7);
     expect(entry.cost).toBe(0);
+  });
+});
+
+describe("ask budget and cancel", () => {
+  test("maxCostPerCall stops a successful over-budget ask", async () => {
+    const smart = ai.model("smart", { provider: "mock" });
+    const prompt = smart.prompt("pricey", { budget: { maxCostPerCall: 0.01 } });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [prompt],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return {
+              text: "{}",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              usage: { cost: 0.5 },
+            };
+          },
+        },
+      },
+    });
+    await expect(runtime.ask("pricey", {})).rejects.toThrow(/maxCostPerCall/);
+    expect(runtime.journal[0]!.outcome).toBe("budget_exceeded");
+  });
+
+  test("disconnect AbortError does not advance via", async () => {
+    let localCalls = 0;
+    const smart = ai.model("smart", { provider: "mock" });
+    const local = ai.model("local", { provider: "mock" });
+    const prompt = smart.prompt("cancel-me", { via: ["smart", "local"] });
+    const runtime = createAiRuntime({
+      models: [smart, local],
+      prompts: [prompt],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            throw err;
+          },
+        },
+        local: {
+          driverId: "mock",
+          model: "local",
+          async complete() {
+            localCalls++;
+            return { text: "{}", raw: {}, model: "local", driverId: "mock" };
+          },
+        },
+      },
+    });
+    await expect(runtime.ask("cancel-me", {})).rejects.toThrow(/aborted/);
+    expect(localCalls).toBe(0);
+  });
+
+  test("driverId opens the matching protocol driver", async () => {
+    let opened = "";
+    const local = ai.model("local", { driverId: "ollama", model: "llama" });
+    const prompt = local.prompt("ping");
+    const runtime = createAiRuntime({
+      models: [local],
+      prompts: [prompt],
+      drivers: {
+        ollama: {
+          id: "ollama",
+          async open() {
+            opened = "ollama";
+            return {
+              driverId: "ollama",
+              model: "llama",
+              async complete() {
+                return { text: "{}", raw: {}, model: "llama", driverId: "ollama" };
+              },
+            };
+          },
+        },
+      },
+    });
+    await runtime.ask("ping", {});
+    expect(opened).toBe("ollama");
+  });
+});
+
+describe("stream via", () => {
+  test("advances to the next model when the first stream fails before a chunk", async () => {
+    const smart = ai.model("smart");
+    const local = ai.model("local");
+    const runtime = createAiRuntime({
+      models: [smart, local],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return { text: "", model: "smart", driverId: "mock" };
+          },
+          async *stream() {
+            throw new Error("smart stream down");
+          },
+        },
+        local: {
+          driverId: "mock",
+          model: "local",
+          async complete() {
+            return { text: "", model: "local", driverId: "mock" };
+          },
+          async *stream() {
+            yield { text: "ok" };
+          },
+        },
+      },
+    });
+    const parts: string[] = [];
+    for await (const c of runtime.stream("smart", { prompt: "hi", via: ["local"] })) {
+      parts.push(c);
+    }
+    expect(parts.join("")).toBe("ok");
   });
 });

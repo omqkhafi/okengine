@@ -12,6 +12,90 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.14.0 — 2026-08-20
+
+### ✨ Added
+
+#### Runtime
+
+- `fx.json.stream(chunks)` returns HTTP `text/event-stream` (`data:` frames,
+  then `data: [DONE]`). Pass `fx.stream(...)` so tokens reach the client.
+  JSON flows stay `{ data, error }`.
+
+- HTTP requests install `request.signal` as the ambient abort. `fx.ask`,
+  `fx.stream`, and `fx.run` cancel the provider fetch on client disconnect.
+  Anthropic `complete` now forwards `signal`.
+
+- `ai.model({ driverId })` opens that protocol instead of the app default.
+  `fx.stream(model, { via })` advances after a retryable failure before the
+  first chunk.
+
+- `ai.mcpServer(name, { url | command, auth, tools })` consumes an external
+  MCP server. Allowlisted tools join `fx.ask` / `ai.agent` on the same
+  `fx.call` path as `mcp:<server>/<tool>` (OKE1007 when undeclared).
+
+#### Console — Flows & traces
+
+- `mcp:<server>/<tool>` calls draw one AI node per server and a call-blue
+  edge. Trace events label them **MCP call**.
+
+#### Console — Observability
+
+- The AI rail counts `call` effects on `mcp:` resources next to asks.
+
+#### Console — Units & Call API
+
+- Units chips for MCP tools read `Call github → create_issue` and use the
+  AI icon.
+
+### ♻️ Changed
+
+#### Runtime
+
+- Prompt `budget.maxCostPerCall` and agent `maxCostPerRun` are enforced at
+  runtime. Over-budget asks journal `budget_exceeded` and do not advance
+  `via`. Disconnect `AbortError` is not retryable.
+
+- Clock next-run math uses crontab (`*/15`, `@hourly`, IANA `timezone`).
+  Leader instances wake in-process; store, lease, catch-up, and Console
+  pause stay source of truth. Fall-back overlap fires once.
+
+- SSE responses disable the 10s idle timeout so a quiet token stream is
+  not reset. Ollama NDJSON and prompt eval files parse via native JSONL.
+
+- Cloud AI drivers preconnect the provider origin. Memory pressure
+  closes idle keep-alive sockets, not in-flight requests.
+
+- Redis KV and signal bind typed `eval` / `xadd` / `xreadgroup` /
+  `xack` / `xgroup`.
+
+#### Dev, Keel & create-oke
+
+- Minimum Bun is ≥ 1.4.0. Generated Dockerfiles pin `oven/bun:1.4`.
+
+#### Docs
+
+- AI and fx pages document `fx.json.stream`, HTTP disconnect abort, runtime
+  budget enforcement, and `ai.model({ driverId })`.
+
+- AI and MCP pages document `ai.mcpServer` consume vs the served `:6535`
+  endpoint, plus Console graph / Units / traces surfaces.
+
+- Signal once / broadcast / live examples now split writer (`fx.emit` in a Flow)
+  from listener (`on(signal, flow)` vs `bus.live()`), and Flow no longer claims
+  there is no subscribe for live replay.
+
+- Installation, Store Image, and Clock pages match Bun ≥ 1.4.0. Clock DST
+  follows crontab (once on overlap, shifted on a spring gap).
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Streaming HTTP runs record duration at stream close, not at handler
+  return. Traces stay empty while the stream is open; the completed row
+  covers the full generation, not time-to-first-byte.
+
 ## v0.13.2 — 2026-08-19
 
 ### ✨ Added

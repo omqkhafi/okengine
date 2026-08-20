@@ -504,7 +504,7 @@ export function TraceDetailSheet({
                               )}
                             />
                             <div className="flex items-center gap-2">
-                              <EffectKindGlyph kind={effect.kind} />
+                              <EffectKindGlyph kind={effect.kind} resource={effect.resource} />
                               <span className="w-[4.5rem] shrink-0 font-medium text-foreground/90">
                                 {effectEventLabel(effect)}
                               </span>
@@ -565,11 +565,17 @@ export function TraceDetailSheet({
  *
  * @param props - Effect kind
  */
-function EffectKindGlyph({ kind }: { readonly kind: RunEffectKind }): JSX.Element {
+function EffectKindGlyph({
+  kind,
+  resource,
+}: {
+  readonly kind: RunEffectKind;
+  readonly resource?: string;
+}): JSX.Element {
   const color = effectBarColor(kind);
   return (
     <span className={EXPLORER_ICON_CLASS} style={{ color }} aria-hidden>
-      <HugeiconsIcon icon={effectKindIcon(kind)} className="size-3.5" />
+      <HugeiconsIcon icon={effectKindIcon(kind, resource)} className="size-3.5" />
     </span>
   );
 }

@@ -4,6 +4,7 @@
  */
 
 import type { Flow, Manifest } from "../../../../../../manifest/types.ts";
+import { mcpServerNodeId, parseMcpToolRef } from "../../../../../../manifest/mcp-ref.ts";
 import { unitOfFlowId } from "./build-flow-graph.ts";
 
 /** Focus that expands the detailed graph (not the bipartite map). */
@@ -29,13 +30,17 @@ export function sliceManifestForFocus(manifest: Manifest, focus: NeighborhoodFoc
     }
     const callees: string[] = [];
     for (const flowId of keep) {
-      for (const callee of flows[flowId]?.effects?.calls ?? []) callees.push(callee);
+      for (const callee of flows[flowId]?.effects?.calls ?? []) {
+        if (!parseMcpToolRef(callee)) callees.push(callee);
+      }
     }
     for (const callee of callees) keep.add(callee);
   } else if (focus.kind === "flow") {
     keep.add(focus.flowId);
     const flow = flows[focus.flowId];
-    for (const callee of flow?.effects?.calls ?? []) keep.add(callee);
+    for (const callee of flow?.effects?.calls ?? []) {
+      if (!parseMcpToolRef(callee)) keep.add(callee);
+    }
     for (const [id, other] of Object.entries(flows)) {
       if (other.effects?.calls?.includes(focus.flowId)) keep.add(id);
     }
@@ -77,6 +82,14 @@ export function flowTouchesNode(flow: Flow, flowId: string, nodeId: string): boo
   if (effects.sends?.some((name) => nodeId === `channel:${name}`)) return true;
   if (effects.asks?.some((name) => nodeId === `ai:${name}`)) return true;
   if (effects.secrets?.some((name) => nodeId === `vault:${name}`)) return true;
-  if (effects.calls?.some((callee) => nodeId === `flow:${callee}`)) return true;
+  if (
+    effects.calls?.some((callee) => {
+      const mcp = parseMcpToolRef(callee);
+      if (mcp) return nodeId === mcpServerNodeId(mcp.server);
+      return nodeId === `flow:${callee}`;
+    })
+  ) {
+    return true;
+  }
   return false;
 }

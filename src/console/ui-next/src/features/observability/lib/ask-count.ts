@@ -3,6 +3,7 @@
  */
 
 import type { RunRow } from "@/client.ts";
+import { parseMcpToolRef } from "../../../../../../manifest/mcp-ref.ts";
 import { runsInWindow } from "./window-stats.ts";
 
 /** Honest empty — no ask effects in the window. */
@@ -36,7 +37,9 @@ export function askCountInWindow(
   let asks = 0;
   for (const run of inWindow) {
     for (const effect of run.effects) {
-      if (effect.kind === "ask") asks += 1;
+      if (effect.kind === "ask" || (effect.kind === "call" && parseMcpToolRef(effect.resource))) {
+        asks += 1;
+      }
     }
   }
   if (asks === 0) return { kind: "empty" };

@@ -57,6 +57,8 @@ export interface InferBinding {
     | "flow"
     | "embed"
     | "table"
+    | "mcp-server"
+    | "mcp-tool"
     | "unknown";
   /** Resolved resource / name. */
   readonly ref: string;
@@ -210,7 +212,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     }
 
     if (chain.rootMethod === "call" && call === chain.rootCall) {
-      const ref = resolveNamed(call.arguments[0], options.bindings, "flow");
+      const ref = resolveCallTarget(call.arguments[0], options.bindings);
       if (ref) calls.add(ref);
       continue;
     }
@@ -548,10 +550,56 @@ function toolsFromAskOptions(
   );
   const out: FlowRef[] = [];
   for (const el of els) {
-    const ref = resolveNamed(el, bindings, "flow");
+    const ref = resolveCallTarget(el, bindings);
     if (ref) out.push(ref as FlowRef);
   }
   return out;
+}
+
+/**
+ * Resolve `fx.call` / ask-tools: flow name, `mcp:` ref, or `server.tool("x")`.
+ *
+ * @param node - Argument AST
+ * @param bindings - Known bindings
+ */
+export function resolveCallTarget(
+  node: AstNode | undefined,
+  bindings: ReadonlyMap<string, InferBinding>,
+): string | undefined {
+  const mcp = resolveMcpToolExpr(node, bindings);
+  if (mcp) return mcp;
+  return resolveNamed(node, bindings, "flow");
+}
+
+/**
+ * Resolve `server.tool("name")` or a bound `mcp-tool` identifier.
+ *
+ * @param node - AST
+ * @param bindings - Known bindings
+ */
+export function resolveMcpToolExpr(
+  node: AstNode | undefined,
+  bindings: ReadonlyMap<string, InferBinding>,
+): string | undefined {
+  if (!node) return undefined;
+  if (node.type === "CallExpression") {
+    const callee = (node as CallExpression).callee;
+    if (callee.type === "MemberExpression") {
+      const member = callee as AstNode & { object: AstNode; property: AstNode };
+      const obj = identifierName(member.object);
+      const prop = identifierName(member.property);
+      const tool = stringArg((node as CallExpression).arguments[0]);
+      if (obj && prop === "tool" && tool) {
+        const server = bindings.get(obj);
+        if (server?.kind === "mcp-server") {
+          return `mcp:${server.ref}/${tool}`;
+        }
+      }
+    }
+  }
+  const binding = resolveBinding(node, bindings);
+  if (binding?.kind === "mcp-tool") return binding.ref;
+  return undefined;
 }
 
 /**

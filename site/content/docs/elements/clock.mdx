@@ -95,7 +95,7 @@ difference.
 
 | Option        | Type    | Default | Meaning                                                        |
 | ------------- | ------- | ------- | -------------------------------------------------------------- |
-| `cron`        | string  | —       | Cron expression `m h dom mon dow` (this or `every` required)   |
+| `cron`        | string  | —       | Five-field crontab (`m h dom mon dow`), plus steps, ranges, lists, names, `@hourly`, `@daily` (this or `every` required) |
 | `every`       | string  | —       | Fixed interval: `"30s"` · `"10m"` · `"1h"` · `"7d"`            |
 | `timezone`    | string  | `"UTC"` | IANA timezone for cron evaluation                              |
 | `overridable` | boolean | `false` | Allow the Console to **edit** the schedule (pause is separate) |
@@ -151,7 +151,7 @@ Simple daily crons (`M H * * *`) in a DST-observing zone can hit a **gap** (spri
 
 Detection attaches `dstAmbiguity` on the cron row and the Console shows it. `oke doctor` does not check DST. The scheduler does not rewrite the expression.
 
-**Consequence:** fall-back days can list two civil instants an hour apart. The default leader lease (30s) is shorter than that gap, so a lease alone is not a “fire once on overlap” policy. Prefer UTC, or a wall time outside the transition window, when double-fire would hurt.
+**Consequence:** firing follows crontab. A spring gap runs at the next valid instant (shifted). A fall overlap fires **once** (first occurrence). Prefer UTC when a shifted spring fire would hurt.
 
 ## Per-environment drivers
 

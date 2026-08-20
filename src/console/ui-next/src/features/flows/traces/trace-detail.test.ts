@@ -2,7 +2,7 @@
  * Unit tests for effect summary chips and request metadata helpers.
  */
 
-import { effectSummaryChips, effectEventLabel } from "./effect-summary.ts";
+import { effectSummaryChips, effectEventLabel, mcpCallChipLabel } from "./effect-summary.ts";
 import { effectBarColor, effectKindIcon, effectKindSummaryLabel } from "./effect-kind.ts";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { EDGE_STROKE } from "../graph/flow-graph-theme.ts";
@@ -305,6 +305,13 @@ describe("effectEventLabel", () => {
     expect(effectEventLabel({ kind: "read", resource: "sql:bookings" })).toBe("DB query");
     expect(effectEventLabel({ kind: "write", resource: "sql:bookings" })).toBe("DB write");
     expect(effectEventLabel({ kind: "emit", resource: "order-placed" })).toBe("Emit");
+    expect(effectEventLabel({ kind: "call", resource: "mcp:github/create_issue" })).toBe("MCP call");
+  });
+
+  test("mcp call chips and glyphs", () => {
+    expect(mcpCallChipLabel("mcp:github/create_issue")).toBe("Call github → create_issue");
+    expect(effectKindIcon("call", "mcp:github/create_issue")).toBe(ELEMENT_ICONS.ai.icon);
+    expect(effectKindIcon("call")).toBe(ELEMENT_ICONS.flow.icon);
   });
 
   test("labels computed: cache keys as Cache read, not DB query", () => {

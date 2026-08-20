@@ -457,6 +457,9 @@ describe("fx — wholesale swap", () => {
         withQuery(rows) {
           return { [jsonResultBrand]: true, status: 200, value: [...rows], meta: {} };
         },
+        stream(chunks) {
+          return { [jsonResultBrand]: true, kind: "stream" as const, status: 200 as const, chunks };
+        },
       },
       async step(_name, fn) {
         return fn();

@@ -466,8 +466,9 @@ describe("DST ambiguity", () => {
     expect(doctorSrc).not.toMatch(/detectDstAmbiguity/);
   });
 
-  test("overlap day: two civil instants; lease does not span the gap; stub isDue avoids walk", async () => {
-    // US fall-back 2026-11-01: 01:30 local occurs twice (~1h apart in UTC).
+  test("overlap day: crontab fires once; next slot is the following day", async () => {
+    // US fall-back 2026-11-01: 01:30 local occurs twice. Bun.cron.parse
+    // matches crontab — a fixed wall time fires at the first occurrence only.
     const from = Date.UTC(2026, 10, 1, 0, 0, 0);
     const until = Date.UTC(2026, 10, 2, 0, 0, 0);
     const fires = nextOccurrences(
@@ -481,13 +482,11 @@ describe("DST ambiguity", () => {
       from,
       until,
     );
-    expect(fires.length).toBe(2);
-    expect(fires[1]! - fires[0]!).toBe(3_600_000);
+    expect(fires).toHaveLength(1);
+    expect(fires[0]).toBe(Date.UTC(2026, 10, 1, 5, 30, 0));
 
-    // Stub isDue (nextRunAt unset after first fire): does not walk civil fires →
-    // advancing across the overlap gap does not double-fire.
     const store = createMemoryCronStore();
-    const rt = createTestClockRuntime(0, {
+    const rt = createTestClockRuntime(fires[0]! - 1, {
       store,
       instanceId: "dst-fire",
       leaseMs: 1_000,
@@ -503,43 +502,13 @@ describe("DST ambiguity", () => {
     rt.onCron("ambig", () => {
       ran.push(rt.now());
     });
+    rt.advance(2);
     expect((await rt.tick()).ran).toEqual(["ambig"]);
     rt.advance(3_600_000);
     expect((await rt.tick()).ran).toEqual([]);
     expect(ran).toHaveLength(1);
-
-    // Lease TTL << 1h overlap gap: if nextRunAt is driven to the second civil
-    // instant, a second fire CAN occur. Leader lease is not a DST policy.
-    const store2 = createMemoryCronStore();
-    const rt2 = createTestClockRuntime(fires[0]! - 1, {
-      store: store2,
-      instanceId: "dst-risk",
-      leaseMs: 1_000,
-    });
-    rt2.register(
-      clock("ambig2", {
-        cron: "30 1 * * *",
-        timezone: "America/New_York",
-      }),
-    );
-    await rt2.reconcile();
-    await store2.put({
-      ...(await store2.get("ambig2"))!,
-      nextRunAt: fires[0],
-    });
-    const ran2: number[] = [];
-    rt2.onCron("ambig2", () => {
-      ran2.push(rt2.now());
-    });
-    rt2.advance(2);
-    expect((await rt2.tick()).ran).toEqual(["ambig2"]);
-    rt2.advance(fires[1]! - rt2.now());
-    await store2.put({
-      ...(await store2.get("ambig2"))!,
-      nextRunAt: fires[1],
-    });
-    expect((await rt2.tick()).ran).toEqual(["ambig2"]);
-    expect(ran2).toHaveLength(2);
+    const after = await store.get("ambig");
+    expect(after?.nextRunAt).toBeGreaterThan(fires[0]! + 3_600_000);
   });
 });
 

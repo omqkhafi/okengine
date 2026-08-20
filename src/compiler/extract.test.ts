@@ -795,3 +795,35 @@ export const create = on(
     expect(manifest.gates?.WRITE).toBeUndefined();
   });
 });
+
+describe("extractManifest — ai.mcpServer", () => {
+  test("stamps mcpServers and infers mcp: calls from .tool()", async () => {
+    const source = `
+import { ai, flow, on, http, vault } from "okengine";
+
+export const token = vault.secret("GITHUB_TOKEN");
+export const github = ai.mcpServer("github", {
+  url: "https://mcp.example/github",
+  auth: { bearer: token },
+  tools: ["create_issue"],
+});
+
+export const triage = on(
+  http.post("/triage"),
+  flow("support.triage", {
+    do: async (input, fx) => {
+      await fx.ask("ticket-triage", input, { tools: [github.tool("create_issue")] });
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/ai.ts": source });
+    expect(manifest.ai?.mcpServers?.github).toEqual({
+      url: "https://mcp.example/github",
+      auth: "GITHUB_TOKEN",
+      tools: ["create_issue"],
+    });
+    expect(manifest.flows?.["support.triage"]?.effects?.calls).toEqual(["mcp:github/create_issue"]);
+  });
+});
+

@@ -11,6 +11,7 @@ import type { ClockDecl } from "./declare.ts";
 import { detectDstAmbiguity } from "./dst.ts";
 import { parseDurationMs } from "./duration.ts";
 import { tryAcquireLease } from "./leader.ts";
+import { nextCronFireAt } from "./schedule.ts";
 import {
   createMemoryCronStore,
   effectiveSchedule,
@@ -98,6 +99,13 @@ export interface ClockRuntime {
    * @param name - Cron name
    */
   dstAmbiguity(name: string): Promise<ReturnType<typeof detectDstAmbiguity>>;
+  /**
+   * Register in-process {@link Bun.cron} wakes for declared cron expressions.
+   * No-op on a frozen / time-travel runtime (tests drive {@link tick}).
+   */
+  startWakes(): void;
+  /** Stop every in-process {@link Bun.cron} wake registered by {@link startWakes}. */
+  stopWakes(): void;
 }
 
 /**
@@ -115,6 +123,8 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
   const handlers = new Map<string, CronHandler>();
   /** The 1s boot scheduler must not stack ticks while a handler is still running. */
   let ticking = false;
+  /** In-process {@link Bun.cron} jobs — precise wake; {@link tick} still owns the lease. */
+  const wakes: Array<{ stop(): void }> = [];
   const driverId: ClockRuntime["driverId"] = timeTravel
     ? "frozen"
     : store.kind === "file"
@@ -154,11 +164,18 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
 
     // Claim the slot before the handler so a stacked 1s tick cannot re-enter.
     const ranAt = now();
-    const interval = fresh.effectiveEvery ? parseDurationMs(fresh.effectiveEvery) : 0;
+    const sched = effectiveSchedule(fresh);
+    let nextRunAt = fresh.nextRunAt;
+    if (sched.every) {
+      const interval = parseDurationMs(sched.every);
+      if (interval > 0) nextRunAt = ranAt + interval;
+    } else if (sched.cron) {
+      nextRunAt = nextCronFireAt(sched.cron, ranAt, fresh.timezone) ?? fresh.nextRunAt;
+    }
     await store.put({
       ...fresh,
       lastRunAt: ranAt,
-      nextRunAt: interval > 0 ? ranAt + interval : fresh.nextRunAt,
+      nextRunAt,
     });
 
     const handler = handlers.get(name);
@@ -249,6 +266,38 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
       const row = await store.get(name);
       if (!row?.effectiveCron) return null;
       return detectDstAmbiguity(row.effectiveCron, row.timezone, now());
+    },
+    startWakes() {
+      runtime.stopWakes();
+      if (timeTravel) return;
+      for (const decl of declarations.values()) {
+        if (!decl.cron) continue;
+        try {
+          const job = (
+            Bun.cron as (
+              schedule: string,
+              handler: () => unknown,
+              options?: { readonly tz?: string },
+            ) => { stop(): void; unref(): void }
+          )(decl.cron, () => {
+            void runtime.tick();
+          }, { tz: decl.timezone });
+          job.unref();
+          wakes.push(job);
+        } catch {
+          /* invalid expression — 1s tick remains the fallback */
+        }
+      }
+    },
+    stopWakes() {
+      for (const job of wakes) {
+        try {
+          job.stop();
+        } catch {
+          /* already stopped */
+        }
+      }
+      wakes.length = 0;
     },
   };
 

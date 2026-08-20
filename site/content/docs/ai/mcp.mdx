@@ -1,11 +1,13 @@
 ---
 title: "MCP"
-description: "The runtime MCP server on :6535 — read tools for Manifest, schemas, effects, and traces, write actions gated by per-call human confirmation — plus the read-only docs MCP on :6536."
+description: "OKE serves MCP on :6535 so agents can operate a running app, and apps consume external MCP servers as allowlisted tools on the same fx.call path."
 icon: "Plug"
 source: "docs/spec/unified-theory.md"
 ---
 
-OKE serves an [MCP](https://modelcontextprotocol.io) endpoint on port **6535** so an AI agent can operate your running app: read its Manifest and traces, and take a small set of safe actions. It speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead.
+Two directions, same protocol. **Serve:** OKE exposes your running app on port **6535** so an agent can read the Manifest and take confirmed actions. **Consume:** your Flows call *external* MCP servers as tools — declared on `ai.mcpServer`, dispatched through `fx.call`.
+
+The server on **6535** speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead.
 
 <Callout title="The one rule">
   MCP inherits the operator's capability and can never exceed it. Server-level controls alone are
@@ -95,6 +97,29 @@ Consumed tokens cannot be replayed; the next write needs a new confirmation. A m
 ```
 
 The docs content ships inside the `okengine` package, so the index your agent searches is exactly the version you have installed. If the surface cannot boot (missing content, busy port), `oke dev` prints `Docs MCP skipped — …` and continues — docs search never takes your dev session down.
+
+## Consume — `ai.mcpServer`
+
+Your app can *call* other MCP servers. Those tools are not a second loop — they join `fx.ask` / `ai.agent` the same way a Flow tool does.
+
+```typescript
+export const github = ai.mcpServer("github", {
+  url: "https://mcp.example/github",
+  auth: { bearer: githubToken },
+  tools: ["create_issue"], // required allowlist
+});
+
+await fx.ask(triage, input, { tools: [github.tool("create_issue")] });
+```
+
+| Rule | Meaning |
+| ---- | ------- |
+| Allowlist | `tools` is required. Extra names from `tools/list` are dropped. |
+| Capability | `mcp:<server>/<tool>` on `effects.calls` — undeclared throws **OKE1007**. |
+| Transport | `url` (Streamable HTTP) **or** `command` + `args` (stdio). Not both. |
+| Cancel | HTTP aborts the fetch / SSE stream. stdio sends `notifications/cancelled` then kills the process. |
+
+Console draws each declared server as one **AI** node on the flow graph; Units chips read `Call github → create_issue`; traces label the effect **MCP call**. There is no separate MCP page or connect UI.
 
 ## Learn more
 

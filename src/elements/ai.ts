@@ -19,6 +19,10 @@ export type {
   AiBudgetDecl,
   AiEmbedDecl,
   AiEmbedOptions,
+  AiMcpServerAuthOptions,
+  AiMcpServerDecl,
+  AiMcpServerOptions,
+  AiMcpToolRef,
   AiModelDecl,
   AiModelOptions,
   AiPromptDecl,
@@ -57,6 +61,18 @@ export type {
   AiStreamOptions,
   CreateAiRuntimeOptions,
 } from "./ai/runtime.ts";
+
+export { createMcpClient } from "./ai/mcp-client.ts";
+export type { CreateMcpClientOptions, McpClient, McpResolvedTool } from "./ai/mcp-client.ts";
+export { createMockMcpTransport } from "./ai/mcp-mock.ts";
+export type { CreateMockMcpTransportOptions, MockMcpTool } from "./ai/mcp-mock.ts";
+export {
+  MCP_CLIENT_PROTOCOL_VERSION,
+  MCP_LEGACY_PROTOCOL_VERSION,
+  mcpClientMeta,
+  parseJsonRpcResponse,
+} from "./ai/mcp-protocol.ts";
+export type { McpListedTool, McpProtocolEra } from "./ai/mcp-protocol.ts";
 
 export { AI_RATE_PRESETS, aiRateGate, createAiRateGates } from "./ai/rate.ts";
 export type { AiRatePreset } from "./ai/rate.ts";

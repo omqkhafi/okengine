@@ -52,6 +52,23 @@ describe("sliceManifestForFocus", () => {
     expect(Object.keys(sliced.flows ?? {})).toEqual(["fulfillment.onOrder"]);
   });
 
+  test("mcp: callees are not treated as flow ids", () => {
+    const manifest = {
+      ...FLOWS_TEST_MANIFEST,
+      flows: {
+        ...FLOWS_TEST_MANIFEST.flows,
+        "support.triage": {
+          effects: { calls: ["mcp:github/create_issue"] },
+        },
+      },
+    };
+    const sliced = sliceManifestForFocus(manifest, { kind: "unit", unit: "support" });
+    expect(Object.keys(sliced.flows ?? {})).toEqual(["support.triage"]);
+    expect(flowTouchesNode(manifest.flows!["support.triage"]!, "support.triage", "mcp:github")).toBe(
+      true,
+    );
+  });
+
   test("sliced Manifest lays out a small graph", () => {
     const sliced = sliceManifestForFocus(FLOWS_TEST_MANIFEST, {
       kind: "unit",

@@ -244,7 +244,12 @@ export async function serveConsole(
           new Response("WebSocket upgrade failed", { status: 400 }),
         );
       }
-      return fetchHandler(req);
+      return (async () => {
+        const res = await fetchHandler(req);
+        const ct = (res.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
+        if (/^text\/event-stream$/i.test(ct)) srv.timeout(req, 0);
+        return res;
+      })();
     },
     websocket: {
       open: live.open,
@@ -259,6 +264,15 @@ export async function serveConsole(
     boundHost.includes(":") && !boundHost.startsWith("[") ? `[${boundHost}]` : boundHost;
   const url = new URL(`http://${hostForUrl}:${boundPort}/`);
 
+  const closeIdle = (
+    server as typeof server & { closeIdleConnections(): void }
+  ).closeIdleConnections.bind(server);
+  const onPressure = (): void => {
+    closeIdle();
+  };
+  const proc = process as NodeJS.EventEmitter;
+  proc.on("memoryPressure", onPressure);
+
   return {
     console: handle,
     url,
@@ -266,9 +280,10 @@ export async function serveConsole(
     hostname: boundHost,
     fetch: fetchHandler,
     stop(closeActive = false) {
-      server.stop(closeActive);
+      proc.off("memoryPressure", onPressure);
       void handle.app.stop();
       void persistence?.close();
+      return server.stop(closeActive);
     },
   };
 }

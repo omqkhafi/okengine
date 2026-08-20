@@ -5,7 +5,7 @@
  */
 
 import type { FlowFailure } from "../kernel/errors.ts";
-import { isJsonResult } from "../kernel/fx.ts";
+import { isJsonResult, isJsonStreamResult, type JsonStreamResult } from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
 
@@ -53,6 +53,9 @@ export function statusForFailure(failure: FlowFailure): number {
  * @param output - Handler output (`undefined` → 204)
  */
 export function encodeSuccess(output: unknown): Response {
+  if (isJsonStreamResult(output)) {
+    return encodeSseStream(output);
+  }
   if (isJsonResult(output)) {
     if (output.status === 204) {
       return new Response(null, { status: 204 });
@@ -109,4 +112,45 @@ export function encodeExecuteResult(result: {
     );
   }
   return encodeSuccess(result.output);
+}
+
+/**
+ * Encode {@link JsonStreamResult} as SSE (`text/event-stream`).
+ *
+ * @param carrier - Stream carrier from `fx.json.stream`
+ */
+function encodeSseStream(carrier: JsonStreamResult): Response {
+  const encoder = new TextEncoder();
+  let finalized = false;
+  const finish = async (): Promise<void> => {
+    if (finalized) return;
+    finalized = true;
+    await carrier.finalize?.();
+  };
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const chunk of carrier.chunks) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        }
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (err) {
+        controller.error(err);
+      } finally {
+        await finish();
+      }
+    },
+    cancel() {
+      void finish();
+    },
+  });
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    },
+  });
 }

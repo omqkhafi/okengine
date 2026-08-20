@@ -130,7 +130,9 @@ export const findOrder = on(
 
 ### signal — another flow emits
 
-The producer emits through `fx` (transactionally with its writes); the consumer is the same species — no `subscribe()`, no listener registration:
+The producer emits through `fx`. For `once` and `broadcast` the consumer is the same species —
+`on(signal, flow)`, no `subscribe()` registration. `live` replay is the exception: `bus.live()` on
+the server, not a Flow.
 
 ```typescript
 await fx.emit(orderPlaced, { orderId: id }); // inside the producing flow

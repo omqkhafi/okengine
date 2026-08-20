@@ -197,4 +197,29 @@ describe("formatModelRow", () => {
     expect(row).toContain("text · code");
     expect(row).not.toContain("  ·  ≈");
   });
+
+  test("Arabic and CJK labels keep Caps aligned", () => {
+    const header = formatModelTableHeader();
+    const capsWidth = Bun.stringWidth(header.slice(0, header.indexOf("Caps")));
+    const ar = formatModelRow({
+      id: "ar",
+      label: "مرحبا بالعالم",
+      hint: "",
+      role: "chat",
+      ramGb: 8,
+      tier: "fast",
+      modalities: ["text"],
+    });
+    const cjk = formatModelRow({
+      id: "cjk",
+      label: "你好世界模型",
+      hint: "",
+      role: "chat",
+      ramGb: 8,
+      tier: "fast",
+      modalities: ["text"],
+    });
+    expect(Bun.stringWidth(ar.slice(0, ar.indexOf("text")))).toBe(capsWidth);
+    expect(Bun.stringWidth(cjk.slice(0, cjk.indexOf("text")))).toBe(capsWidth);
+  });
 });

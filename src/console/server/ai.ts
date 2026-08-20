@@ -459,7 +459,7 @@ function buildVersionMetrics(input: {
         costs: [],
         latencies: [],
         evals: [],
-        outcomes: { ok: 0, provider_error: 0, schema_invalid: 0 },
+        outcomes: { ok: 0, provider_error: 0, schema_invalid: 0, budget_exceeded: 0 },
         overBudget: 0,
         budget: meta?.budget ?? null,
       };
@@ -514,7 +514,10 @@ function buildVersionMetrics(input: {
   const out: PromptVersionMetrics[] = [];
   for (const acc of map.values()) {
     const totalOutcomes =
-      acc.outcomes.ok + acc.outcomes.provider_error + acc.outcomes.schema_invalid;
+      acc.outcomes.ok +
+      acc.outcomes.provider_error +
+      acc.outcomes.schema_invalid +
+      acc.outcomes.budget_exceeded;
     out.push({
       prompt: acc.prompt,
       version: acc.version,

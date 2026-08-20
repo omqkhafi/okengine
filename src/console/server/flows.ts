@@ -834,6 +834,7 @@ const AiListOut = z.object({
         ok: z.number(),
         provider_error: z.number(),
         schema_invalid: z.number(),
+        budget_exceeded: z.number(),
       }),
     }),
   ),

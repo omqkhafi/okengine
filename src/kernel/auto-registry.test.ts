@@ -205,6 +205,10 @@ describe("oke() auto-registry — stores/secrets/signals/channel.templates/ai", 
     const summarizeNote = smart.prompt("summarize-note", {
       version: 1,
     });
+    ai.mcpServer("github", {
+      url: "https://mcp.example/github",
+      tools: ["create_issue"],
+    });
 
     const ping = flow("ai.ping", {
       effects: { asks: ["summarize-note"] },
@@ -221,6 +225,7 @@ describe("oke() auto-registry — stores/secrets/signals/channel.templates/ai", 
 
     expect(app.$options.ai?.models?.some((m) => m.name === "smart")).toBe(true);
     expect(app.$options.ai?.prompts?.some((p) => p.name === "summarize-note")).toBe(true);
+    expect(app.$options.ai?.mcpServers?.some((s) => s.name === "github")).toBe(true);
 
     const runtime = createAiRuntime({
       models: [smart],

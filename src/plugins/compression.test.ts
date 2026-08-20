@@ -122,4 +122,25 @@ describe("compression plugin", () => {
     );
     expect(nt.headers.get("content-encoding")).toBeNull();
   });
+
+  test("skips text/event-stream even when Accept-Encoding is gzip", async () => {
+    on(
+      http.get("/sse"),
+      flow("sse.get", {
+        do: (_input, fx) =>
+          fx.json.stream(
+            (async function* () {
+              yield "hello";
+            })(),
+          ),
+      }),
+    );
+    const app = oke({ autoBoot: false, name: "zip-sse" }).plug(compression({ minSize: 0 }));
+    const res = await app.fetch(
+      new Request("http://localhost/sse", { headers: { "accept-encoding": "gzip" } }),
+    );
+    expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+    expect(res.headers.get("content-encoding")).toBeNull();
+    expect(await res.text()).toContain("data: \"hello\"");
+  });
 });

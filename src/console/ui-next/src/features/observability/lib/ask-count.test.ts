@@ -44,4 +44,29 @@ describe("askCountInWindow", () => {
       windowMs: 60_000,
     });
   });
+
+  test("counts MCP call effects next to asks", () => {
+    const now = 1_000;
+    const runs = [
+      monitoringRun({
+        id: "a",
+        flow: "x",
+        startedAt: now - 10,
+        effects: [
+          {
+            kind: "call",
+            resource: "mcp:github/create_issue",
+            timestamp: now - 10,
+            duration: 8,
+            reversibility: "irreversible",
+          },
+        ],
+      }),
+    ];
+    expect(askCountInWindow(runs, now, 60_000)).toEqual({
+      kind: "summary",
+      asks: 1,
+      windowMs: 60_000,
+    });
+  });
 });

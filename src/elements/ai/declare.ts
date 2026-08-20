@@ -7,9 +7,12 @@
 import {
   aiAgentRegistry,
   aiEmbedRegistry,
+  aiMcpServerRegistry,
   aiModelRegistry,
   aiPromptRegistry,
 } from "../../kernel/element-registries.ts";
+import { mcpToolRef, type McpToolRef } from "../../manifest/mcp-ref.ts";
+import type { VaultSecretDecl } from "../vault/declare.ts";
 
 /** Budget for a prompt or agent. */
 export interface AiBudgetDecl {
@@ -30,6 +33,11 @@ export interface AiModelOptions {
   readonly baseUrl?: string;
   /** Optional API key override for this binding (cloud providers). */
   readonly apiKey?: string;
+  /**
+   * Protocol driver for this binding (`anthropic`, `ollama`, …).
+   * When omitted, the app-level default driver is used.
+   */
+  readonly driverId?: string;
 }
 
 /**
@@ -77,6 +85,7 @@ export interface AiModelDecl {
   readonly model?: string;
   readonly baseUrl?: string;
   readonly apiKey?: string;
+  readonly driverId?: string;
   /**
    * Declare a versioned prompt artifact on this model.
    *
@@ -118,6 +127,54 @@ export interface AiAgentDecl {
   readonly budget?: AiBudgetDecl;
 }
 
+/** Bearer auth for {@link ai.mcpServer} — secret contract, never a token literal. */
+export interface AiMcpServerAuthOptions {
+  readonly bearer: VaultSecretDecl | string;
+}
+
+/** Options for {@link ai.mcpServer}. */
+export interface AiMcpServerOptions {
+  /** Streamable HTTP endpoint. */
+  readonly url?: string;
+  /** stdio executable (no shell string). */
+  readonly command?: string;
+  /** Arguments for {@link command}. */
+  readonly args?: readonly string[];
+  /** Bearer secret contract (`vault.secret` handle or name). */
+  readonly auth?: AiMcpServerAuthOptions;
+  /**
+   * Required allowlist of tool names on this server.
+   * The runtime never offers whatever `tools/list` happens to expose.
+   */
+  readonly tools: readonly string[];
+}
+
+/** Named capability ref returned by {@link AiMcpServerDecl.tool}. */
+export interface AiMcpToolRef {
+  readonly name: McpToolRef;
+}
+
+/**
+ * Declared external MCP server — tools join `fx.call` / `toolLoop` as
+ * `mcp:<server>/<tool>`.
+ */
+export interface AiMcpServerDecl {
+  readonly kind: "mcp-server";
+  readonly name: string;
+  readonly url?: string;
+  readonly command?: string;
+  readonly args?: readonly string[];
+  /** Secret contract name when bearer auth is declared. */
+  readonly auth?: string;
+  readonly tools: readonly string[];
+  /**
+   * Capability ref for one allowlisted tool (`mcp:<server>/<tool>`).
+   *
+   * @param tool - Tool name on this server
+   */
+  tool(tool: string): AiMcpToolRef;
+}
+
 /**
  * Resolve a tool ref to a flow name.
  *
@@ -152,6 +209,13 @@ export interface AiNamespace {
    * @param options - Tools / maxSteps / model / budget
    */
   agent(name: string, options?: AiAgentOptions): AiAgentDecl;
+  /**
+   * Declare an external MCP server whose allowlisted tools join `fx.call`.
+   *
+   * @param name - Server id (`github`, `linear`, …)
+   * @param options - Transport + required tool allowlist
+   */
+  mcpServer(name: string, options: AiMcpServerOptions): AiMcpServerDecl;
 }
 
 /**
@@ -162,12 +226,14 @@ export function listAiDecls(): {
   readonly prompts: readonly AiPromptDecl[];
   readonly embeds: readonly AiEmbedDecl[];
   readonly agents: readonly AiAgentDecl[];
+  readonly mcpServers: readonly AiMcpServerDecl[];
 } {
   return {
     models: aiModelRegistry.slice(),
     prompts: aiPromptRegistry.slice(),
     embeds: aiEmbedRegistry.slice(),
     agents: aiAgentRegistry.slice(),
+    mcpServers: aiMcpServerRegistry.slice(),
   };
 }
 
@@ -179,6 +245,7 @@ export function resetAiDecls(): void {
   aiPromptRegistry.length = 0;
   aiEmbedRegistry.length = 0;
   aiAgentRegistry.length = 0;
+  aiMcpServerRegistry.length = 0;
 }
 
 /**
@@ -201,6 +268,7 @@ export const ai: AiNamespace = {
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
       ...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
+      ...(options.driverId !== undefined ? { driverId: options.driverId } : {}),
       prompt(promptName, promptOpts = {}) {
         const promptDecl: AiPromptDecl = {
           kind: "prompt",
@@ -261,6 +329,49 @@ export const ai: AiNamespace = {
           : {}),
     };
     aiAgentRegistry.push(decl);
+    return decl;
+  },
+
+  /**
+   * Declare an external MCP server whose allowlisted tools join `fx.call`.
+   *
+   * @param name - Server id
+   * @param options - Transport + required tool allowlist
+   */
+  mcpServer(name: string, options: AiMcpServerOptions): AiMcpServerDecl {
+    if (!name) throw new TypeError("ai.mcpServer: name is required");
+    if (name.includes("/") || name.includes("__")) {
+      throw new TypeError(`ai.mcpServer: name "${name}" must not contain "/" or "__"`);
+    }
+    if (!options.tools || !Array.isArray(options.tools)) {
+      throw new TypeError("ai.mcpServer: tools allowlist is required");
+    }
+    const hasUrl = typeof options.url === "string" && options.url.length > 0;
+    const hasCommand = typeof options.command === "string" && options.command.length > 0;
+    if (hasUrl === hasCommand) {
+      throw new TypeError("ai.mcpServer: declare exactly one of url or command");
+    }
+    const allow = new Set(options.tools);
+    const authName =
+      typeof options.auth?.bearer === "string"
+        ? options.auth.bearer
+        : options.auth?.bearer?.name;
+    const decl: AiMcpServerDecl = {
+      kind: "mcp-server",
+      name,
+      ...(hasUrl ? { url: options.url } : {}),
+      ...(hasCommand ? { command: options.command } : {}),
+      ...(options.args !== undefined ? { args: options.args } : {}),
+      ...(authName !== undefined ? { auth: authName } : {}),
+      tools: options.tools,
+      tool(tool: string): AiMcpToolRef {
+        if (!allow.has(tool)) {
+          throw new TypeError(`ai.mcpServer("${name}"): tool "${tool}" is not in the allowlist`);
+        }
+        return { name: mcpToolRef(name, tool) };
+      },
+    };
+    aiMcpServerRegistry.push(decl);
     return decl;
   },
 };

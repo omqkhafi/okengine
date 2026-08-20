@@ -150,6 +150,24 @@ describe("buildFlowGraph", () => {
     expect(callersOfFlow(GRAPH_MANIFEST, "payments.chargeBooking")).toEqual([]);
   });
 
+  test("mcp: calls become one AI node per server with a call edge", () => {
+    const manifest: Manifest = {
+      ...GRAPH_MANIFEST,
+      flows: {
+        "support.triage": {
+          effects: { calls: ["mcp:github/create_issue"], asks: ["ticket-triage"] },
+        },
+      },
+    };
+    const { nodes, edges } = buildFlowGraph(manifest);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    expect(byId.get("mcp:github")?.data).toMatchObject({ kind: "ai", label: "github" });
+    const edge = edges.find((e) => e.id === "e:flow:support.triage->mcp:github");
+    expect(edge?.data?.kind).toBe("calls");
+    expect(edge?.animated).toBe(true);
+    expect(nodes.some((n) => n.id === "flow:mcp:github/create_issue")).toBe(false);
+  });
+
   test("unit groups hug content bounds instead of a fixed dead-space box", () => {
     const unit = nodes.find((n) => n.id === "unit:fulfillment");
     const flow = nodes.find((n) => n.id === "flow:fulfillment.onOrder");

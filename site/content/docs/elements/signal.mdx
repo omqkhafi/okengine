@@ -71,7 +71,8 @@ export const sendConfirmation = on(
 
 </Steps>
 
-That's the loop: declare → `fx.emit` → `on(signal, flow)`. The runtime handles routing, retries, and dead-lettering.
+That's the loop for `once` and `broadcast`: declare → `fx.emit` → `on(signal, flow)`.
+`live` keeps the same emit; the listener is `bus.live()`, not a Flow.
 
 ## The three delivery physics
 
@@ -96,7 +97,7 @@ One placed order can need all three physics at once — pick a signal per job, n
 
 | Signal          | Mode        | Job                                                         |
 | --------------- | ----------- | ----------------------------------------------------------- |
-| `order-placed`  | `once`      | Fulfillment job — competing workers, retries, DLQ           |
+| `order-placed`  | `once`      | One job — competing workers, retries, DLQ           |
 | `order-changed` | `broadcast` | Fan-out — cache invalidation **and** customer notification  |
 | `order-status`  | `live`      | Status feed — retained history a late subscriber can replay |
 
@@ -107,7 +108,7 @@ import { z } from "zod";
 export const orderPlaced = signal("order-placed", {
   schema: z.object({ orderId: z.string(), total: z.number() }),
   delivery: "once",
-  retries: 2,
+  retries: 3,
   deadLetter: true,
 });
 
@@ -126,25 +127,43 @@ export const orderStatus = signal("order-status", {
 });
 ```
 
-`once` — two fulfillment workers compete; **exactly one** claims each message (at-least-once; make the handler idempotent):
+A Flow **writes** all three tapes. `once` / `broadcast` **listen** with `on(signal, flow)`. `live` does not.
 
-```typescript title="src/flows/fulfillment/on-order.ts"
-on(
-  orderPlaced,
-  flow("fulfillment.onOrder", {
-    do: async ({ orderId }, fx) => {
-      await fx.emit(orderChanged, { orderId, kind: "placed" });
-      await fx.emit(orderStatus, { orderId, status: "fulfilling" });
-      await fx.emit(orderStatus, { orderId, status: "shipped" });
+```typescript title="src/flows/orders/place.ts"
+export const placeOrder = on(
+  http.post("/orders").gate.public,
+  flow("orders.place", {
+    in: z.object({ id: z.string(), total: z.number() }),
+    do: async (input, fx) => {
+      await fx.emit(orderPlaced, { orderId: input.id, total: input.total });
+      await fx.emit(orderChanged, { orderId: input.id, kind: "placed" });
+      await fx.emit(orderStatus, { orderId: input.id, status: "placed" });
+      await fx.emit(orderStatus, { orderId: input.id, status: "fulfilling" });
+      await fx.emit(orderStatus, { orderId: input.id, status: "shipped" });
     },
   }),
 );
 ```
 
-`broadcast` — every subscriber gets its own copy of the same domain event:
+Stacked status emits are so replay is visible in one request. A real app emits as the order moves.
+
+`once` — the listener is `on(orderPlaced, flow)`. Two workers compete; **exactly one** claims each message (at-least-once; make the handler idempotent):
+
+```typescript title="src/flows/orders/send-confirmation.ts"
+export const sendConfirmation = on(
+  orderPlaced,
+  flow("orders.sendConfirmation", {
+    do: async (input, fx) => {
+      await fx.send(orderConfirmed, { to: "user-1", data: input });
+    },
+  }),
+);
+```
+
+`broadcast` — every `on(orderChanged, flow)` gets its own copy. Neither Flow knows the other exists:
 
 ```typescript title="src/flows/orders/side-effects.ts"
-on(
+export const invalidateCache = on(
   orderChanged,
   flow("cache.onOrderChanged", {
     do: async ({ orderId }, fx) => {
@@ -153,7 +172,7 @@ on(
   }),
 );
 
-on(
+export const notifyCustomer = on(
   orderChanged,
   flow("notify.onOrderChanged", {
     do: async ({ orderId }, fx) => {
@@ -163,20 +182,20 @@ on(
 );
 ```
 
-`live` — retain status updates and replay the **full history** to a late `bus.live()` subscriber (tracking UI, ops feed).
+`live` — retain the tape. A late subscriber replays **full history** (`placed → fulfilling → shipped`), then keeps going.
 
-Today that subscription is a **server-side** bus API. `createClient` does not yet expose SSE / WebSocket / `client.live` — see [Client](/docs/reference/client#signal-and-live-queries).
+The listener is **`bus.live()`**, not `on(orderStatus, flow)`. `on(signal, flow)` does not replay retained live payloads. Today that API is server-side; `createClient` has no SSE / WebSocket / `client.live` yet — see [Client](/docs/reference/client#signal-and-live-queries).
 
 ```typescript
-await fx.emit(orderStatus, { orderId, status: "placed" });
+const bus = app.bootResult?.signal?.bus;
+if (!bus) throw new Error("signal runtime not booted");
 
-// Late subscriber (server / test harness) receives placed → fulfilling → shipped.
 const unsub = await bus.live("order-status", (payload) => {
-  /* push to UI */
+  /* placed → fulfilling → shipped */
 });
 ```
 
-**Why separate signals:** delivery is fixed per declaration. Competing work stays on `once`; fan-out stays on `broadcast`; the client-visible timeline stays on `live`. Switching a word later is cheap; mixing physics on one name is not.
+**Why separate signals:** delivery is fixed per declaration. Competing work stays on `once`; fan-out stays on `broadcast`; the timeline stays on `live`. Switching a word later is cheap; mixing physics on one name is not.
 
 ## When delivery fails
 
@@ -236,9 +255,9 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 `live` retains every delivered message and replays the **full history** to a late `bus.live()` subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display).
 
 <Callout title="Client subscription is not shipped yet">
-  `delivery: "live"` means the **driver** retains and replays. `createClient` has no SSE / WebSocket
-  / `client.live` yet — poll an HTTP Flow or use `bus.live()` server-side. See [Client · Signal and
-  live queries](/docs/reference/client#signal-and-live-queries).
+  `delivery: "live"` means the **driver** retains and replays. Listen with `bus.live()` on the
+  server — not `on(signal, flow)`. `createClient` has no SSE / WebSocket / `client.live` yet — poll
+  an HTTP Flow. See [Client · Signal and live queries](/docs/reference/client#signal-and-live-queries).
 </Callout>
 
 ## Orphaned signal config
@@ -269,7 +288,10 @@ Pairing an arbitrary Store insert with emit inside **one** shared SQL transactio
 <Accordions>
 <Accordion title="Emit fails with OKE1042 (no subscriber)">
 
-You emitted a signal that nobody currently subscribes to. Wire a consumer with `on(signal, flow)` before emit, or set `optional: true` when zero-subscriber emits are intentional.
+You emitted a signal that nobody currently subscribes to. For `once` and `broadcast`, wire
+`on(signal, flow)` before emit.
+
+`live` listeners are `bus.live()`, not a Flow — set `optional: true` when they may connect later.
 
 </Accordion>
 <Accordion title="Emit fails with OKE1043 (schema)">
@@ -285,6 +307,12 @@ When `attempts > retries` the message moves to the DLQ (if `deadLetter: true`) �
 <Accordion title="fx.deadLetters throws OKE1001">
 
 The flow read a signal it did not declare. The compiler infers `reads: ["signal:<name>"]` from `fx.deadLetters(signal)`. A different handle needs its own read.
+
+</Accordion>
+<Accordion title="on(liveSignal, flow) never replays history">
+
+`on(signal, flow)` listens for `once` and `broadcast`. `live` replay is `bus.live()` on the Signal
+bus — a Flow trigger does not replay retained payloads.
 
 </Accordion>
 <Accordion title="once vs broadcast vs live — how do I choose?">

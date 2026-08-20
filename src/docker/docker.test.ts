@@ -957,7 +957,7 @@ describe("deriveInfrastructure", () => {
   test("Dockerfile CMD is oke start", () => {
     const df = emitDockerfile();
     expect(df).toContain('CMD ["oke", "start"]');
-    expect(df).toContain("oven/bun:1.3");
+    expect(df).toContain("oven/bun:1.4");
   });
 
   test("writeDerivedFiles never writes compose.override.yml", async () => {

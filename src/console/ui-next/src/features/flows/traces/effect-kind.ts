@@ -9,6 +9,7 @@
  */
 
 import type { RunEffect } from "@/client.ts";
+import { parseMcpToolRef } from "../../../../../../manifest/mcp-ref.ts";
 import { ELEMENT_ICONS, type ElementHugeIcon } from "@/lib/element-icons.ts";
 import { EDGE_STROKE } from "../graph/flow-graph-theme.ts";
 
@@ -87,7 +88,8 @@ export function effectBarColor(kind: RunEffectKind): string {
  *
  * @param kind - Effect kind
  */
-export function effectKindIcon(kind: RunEffectKind): ElementHugeIcon {
+export function effectKindIcon(kind: RunEffectKind, resource?: string): ElementHugeIcon {
+  if (resource && parseMcpToolRef(resource)) return ELEMENT_ICONS.ai.icon;
   switch (kind) {
     case "read":
     case "write":

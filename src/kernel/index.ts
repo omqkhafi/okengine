@@ -137,6 +137,7 @@ export {
   createFxContext,
   freezePrincipal,
   isJsonResult,
+  isJsonStreamResult,
   jsonResultBrand,
   resolveName,
   resolveStoreRef,
@@ -160,6 +161,7 @@ export {
   type FxThunk,
   type JsonPage,
   type JsonResult,
+  type JsonStreamResult,
   type NamedRef,
   type StepOptions,
 } from "./fx.ts";

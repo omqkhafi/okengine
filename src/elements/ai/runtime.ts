@@ -8,11 +8,26 @@
  */
 
 import type { AiDriver, AiMessage, AiModelClient, AiToolDef } from "../../drivers/ai-types.ts";
+import { currentAbortSignal, withAbortSignal } from "../../kernel/abort-scope.ts";
+import {
+  mcpCapabilityRefFromName,
+  mcpModelToolName,
+  parseMcpToolRef,
+} from "../../manifest/mcp-ref.ts";
+import { createMcpClient, type McpClient } from "./mcp-client.ts";
+import type { McpTransport } from "./mcp-transport.ts";
 import type { IndexStore } from "../../drivers/types.ts";
 import { maskRedactedDeep } from "../../kernel/redacted.ts";
 import type { GatePolicyContext } from "../gate/declare.ts";
 import type { GateRuntime } from "../gate/runtime.ts";
-import type { AiAgentDecl, AiEmbedDecl, AiModelDecl, AiPromptDecl, AiTimeout } from "./declare.ts";
+import type {
+  AiAgentDecl,
+  AiEmbedDecl,
+  AiMcpServerDecl,
+  AiModelDecl,
+  AiPromptDecl,
+  AiTimeout,
+} from "./declare.ts";
 import {
   isRetryableAiError,
   mergeAskAbortSignal,
@@ -102,7 +117,7 @@ export interface AiFallbackAttempt {
 }
 
 /** Ask outcome class — schema failure is not a provider error. */
-export type AiAskOutcome = "ok" | "provider_error" | "schema_invalid";
+export type AiAskOutcome = "ok" | "provider_error" | "schema_invalid" | "budget_exceeded";
 
 /** Journal entry for a nondeterministic ask. */
 export interface AiJournalEntry {
@@ -171,6 +186,11 @@ export interface CreateAiRuntimeOptions {
   readonly clients?: Readonly<Record<string, AiModelClient>>;
   /** Default driver when a model has no client (usually mock in dev). */
   readonly defaultDriver?: AiDriver;
+  /**
+   * Protocol drivers keyed by id — used when a logical model sets
+   * {@link AiModelDecl.driverId} instead of the app default.
+   */
+  readonly drivers?: Readonly<Record<string, AiDriver>>;
   /** Gate runtime for agent tool calls. */
   readonly gates?: GateRuntime;
   /**
@@ -208,6 +228,12 @@ export interface CreateAiRuntimeOptions {
    * Nondeterministic contract.
    */
   readonly forceJournal?: boolean;
+  /** Declared external MCP servers. */
+  readonly mcpServers?: readonly AiMcpServerDecl[];
+  /** Resolve a vault secret by contract name (MCP bearer). */
+  readonly resolveSecret?: (name: string) => string | Promise<string>;
+  /** Injected MCP transports keyed by server name (tests). */
+  readonly mcpTransports?: Readonly<Record<string, McpTransport>>;
 }
 
 /** Ask options. */
@@ -242,6 +268,8 @@ export interface AiStreamOptions {
   readonly prompt?: string;
   readonly data?: unknown;
   readonly signal?: AbortSignal;
+  /** Ordered fallback models after the primary `stream(model)` name. */
+  readonly via?: readonly string[];
 }
 
 /** AI runtime surface. */
@@ -292,6 +320,14 @@ export interface AiRuntime {
    */
   stream(model: string, options?: AiStreamOptions): AsyncIterable<string>;
   /**
+   * Call an allowlisted MCP tool (`mcp:<server>/<tool>`).
+   *
+   * @param ref - Capability ref
+   * @param input - Tool arguments
+   * @param signal - Cancel
+   */
+  callMcp(ref: string, input: unknown, signal?: AbortSignal): Promise<unknown>;
+  /**
    * Embed text into the configured index store.
    *
    * @param embed - Embed name
@@ -341,6 +377,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   for (const m of options.models ?? []) models.set(m.name, m);
 
   const clients = new Map<string, AiModelClient>(Object.entries(options.clients ?? {}));
+  const mcpClient: McpClient = createMcpClient({
+    servers: options.mcpServers,
+    ...(options.resolveSecret !== undefined ? { resolveSecret: options.resolveSecret } : {}),
+    ...(options.mcpTransports !== undefined ? { transports: options.mcpTransports } : {}),
+  });
   const denials: AgentDenial[] = [];
   const agentRuns: AgentRunRecord[] = [];
   const journal: AiJournalEntry[] = [];
@@ -351,11 +392,18 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   async function clientFor(name: string): Promise<AiModelClient> {
     const existing = clients.get(name);
     if (existing) return existing;
-    if (!options.defaultDriver) {
-      throw new Error(`ai: no client for model "${name}" and no defaultDriver`);
-    }
     const model = models.get(name);
-    const opened = await options.defaultDriver.open({
+    const driver =
+      (model?.driverId !== undefined ? options.drivers?.[model.driverId] : undefined) ??
+      options.defaultDriver;
+    if (!driver) {
+      throw new Error(
+        model?.driverId
+          ? `ai: no driver "${model.driverId}" for model "${name}" and no defaultDriver`
+          : `ai: no client for model "${name}" and no defaultDriver`,
+      );
+    }
+    const opened = await driver.open({
       model: model?.model ?? name,
       ...(model?.baseUrl !== undefined ? { baseUrl: model.baseUrl } : {}),
       ...(model?.apiKey !== undefined ? { apiKey: model.apiKey } : {}),
@@ -373,12 +421,26 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     return options.effectsForFlow?.(tool) ?? [];
   }
 
-  function toolDefsFor(toolNames: readonly string[]): AiToolDef[] {
-    return toolNames.map((name) => ({
-      name,
-      description: `Flow tool: ${name}`,
-      parameters: options.toolSchemaForFlow?.(name) ?? { type: "object", properties: {} },
-    }));
+  async function toolDefsFor(toolNames: readonly string[]): Promise<AiToolDef[]> {
+    const defs: AiToolDef[] = [];
+    for (const name of toolNames) {
+      const mcp = parseMcpToolRef(name);
+      if (mcp) {
+        const listed = await mcpClient.listedTool(mcp);
+        defs.push({
+          name: mcpModelToolName(mcp.server, mcp.tool),
+          description: listed?.description ?? `MCP tool: ${mcp.server}/${mcp.tool}`,
+          parameters: listed?.inputSchema ?? { type: "object", properties: {} },
+        });
+        continue;
+      }
+      defs.push({
+        name,
+        description: `Flow tool: ${name}`,
+        parameters: options.toolSchemaForFlow?.(name) ?? { type: "object", properties: {} },
+      });
+    }
+    return defs;
   }
 
   async function dispatchTool(opts: {
@@ -392,6 +454,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly meta?: GatePolicyContext["meta"];
     readonly trail: AgentToolStep[];
     readonly runDenials: AgentDenial[];
+    readonly signal?: AbortSignal;
   }): Promise<unknown> {
     const {
       tool,
@@ -404,10 +467,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       meta,
       trail,
       runDenials,
+      signal,
     } = opts;
-    const effects = effectsFor(tool);
+    const capability = mcpCapabilityRefFromName(tool) ?? tool;
+    const effects = effectsFor(capability);
 
-    if (!allowedTools.has(tool)) {
+    if (!allowedTools.has(tool) && !allowedTools.has(capability)) {
       const denial: AgentDenial = {
         agent: agentLabel,
         tool,
@@ -421,7 +486,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       throw new Error(`ai: model requested unknown tool "${tool}"`);
     }
 
-    const requiredGates = options.gatesForFlow?.(tool) ?? [];
+    const requiredGates = options.gatesForFlow?.(capability) ?? [];
     if (requiredGates.length > 0 && options.gates) {
       const ctx: GatePolicyContext = {
         auth: auth ?? { userId: null, scopes: new Set() },
@@ -460,8 +525,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       return { error: denial.reason, denied: true };
     }
 
-    const output = await invoke(tool, args);
-    trail.push({ tool, status: "ok", effects, at: now() });
+    const invokeSignal = signal ?? currentAbortSignal();
+    const output = await withAbortSignal(invokeSignal, () => invoke(capability, args));
+    trail.push({ tool: capability, status: "ok", effects, at: now() });
     return output;
   }
 
@@ -491,8 +557,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly outputTokens?: number;
   }> {
     const messages = [...opts.messages];
-    const defs = toolDefsFor(opts.tools);
+    const defs = await toolDefsFor(opts.tools);
     const allowed = new Set(opts.tools);
+    for (const name of opts.tools) {
+      const mcp = parseMcpToolRef(name);
+      if (mcp) allowed.add(mcpModelToolName(mcp.server, mcp.tool));
+    }
     const trail: AgentToolStep[] = [];
     const runDenials: AgentDenial[] = [];
     let steps = 0;
@@ -551,6 +621,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           meta: opts.meta,
           trail,
           runDenials,
+          ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
         });
         lastToolResult = toolResult;
         messages.push({
@@ -594,7 +665,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const version = decl.version;
       const started = now();
       const tools = opts?.tools ?? [];
-      const signal = mergeAskAbortSignal(resolveTimeoutMs(opts?.timeout ?? decl.timeout));
+      const signal = mergeAskAbortSignal(
+        resolveTimeoutMs(opts?.timeout ?? decl.timeout),
+        currentAbortSignal(),
+      );
 
       // Replay from journal when input matches (nondeterministic contract)
       if (journalingForced && tools.length === 0) {
@@ -628,6 +702,28 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         });
       };
 
+      const assertAskBudget = (spent: number): void => {
+        const cap = decl.budget?.maxCostPerCall;
+        if (cap === undefined || spent <= cap) return;
+        const message = `ai: prompt "${prompt}" exceeded maxCostPerCall ${cap}`;
+        if (journalingForced) {
+          pushJournal({
+            prompt,
+            ...(version !== undefined ? { version } : {}),
+            input,
+            output: { error: message },
+            attempts: [...attempts],
+            outcome: "budget_exceeded",
+            cost: spent,
+            latencyMs: Math.max(0, now() - started),
+            at: now(),
+          });
+        }
+        const err = new Error(message);
+        err.name = "AiBudgetExceededError";
+        throw err;
+      };
+
       for (const modelName of via) {
         let sameModelTries = 0;
         let advance = true;
@@ -656,6 +752,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               attemptCost = loop.cost;
               totalCost += attemptCost;
               addUsageTokens(totalTokens, loop);
+              assertAskBudget(totalCost);
               if (loop.denials.length > 0 && loop.trail.every((t) => t.status === "denied")) {
                 throw new Error(
                   `ai: all tool calls denied for prompt "${prompt}": ${loop.denials[0]?.reason}`,
@@ -671,6 +768,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               attemptCost = result.usage?.cost ?? 0;
               totalCost += attemptCost;
               addUsageTokens(totalTokens, result.usage);
+              assertAskBudget(totalCost);
               // Prefer assistant text — `raw` is often the transport envelope
               // (OpenAI chat.completion object), which must not shadow the content.
               raw =
@@ -815,7 +913,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         auth: runOpts.auth,
         operator: runOpts.operator,
         meta: runOpts.meta,
+        signal: currentAbortSignal(),
       });
+      const runCap = decl.budget?.maxCostPerRun;
+      if (runCap !== undefined && loop.cost > runCap) {
+        const err = new Error(`ai: agent "${agent}" exceeded maxCostPerRun ${runCap}`);
+        err.name = "AiBudgetExceededError";
+        throw err;
+      }
 
       const record: AgentRunRecord = {
         id: `agent-run-${++runSeq}`,
@@ -842,21 +947,46 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     },
 
     async *stream(model, streamOpts) {
-      const client = await clientFor(model);
-      if (!client.stream) {
-        throw new Error(`ai: model "${model}" (driver ${client.driverId}) does not support stream`);
-      }
+      const via = [model, ...(streamOpts?.via ?? []).filter((name) => name !== model)];
       const content =
         streamOpts?.data !== undefined
           ? promptContentFromInput(streamOpts.data)
           : promptContentFromInput(streamOpts?.prompt ?? "");
-      for await (const chunk of client.stream({
-        model: wireModel(model, client),
-        messages: [{ role: "user", content }],
-        signal: streamOpts?.signal,
-      })) {
-        if (chunk.text) yield chunk.text;
+      let lastError: unknown;
+      for (const modelName of via) {
+        let yielded = false;
+        try {
+          const client = await clientFor(modelName);
+          if (!client.stream) {
+            throw new Error(
+              `ai: model "${modelName}" (driver ${client.driverId}) does not support stream`,
+            );
+          }
+          for await (const chunk of client.stream({
+            model: wireModel(modelName, client),
+            messages: [{ role: "user", content }],
+            signal: streamOpts?.signal,
+          })) {
+            if (chunk.text) {
+              yielded = true;
+              yield chunk.text;
+            }
+          }
+          return;
+        } catch (err) {
+          lastError = err;
+          if (yielded || !isRetryableAiError(err)) {
+            throw err instanceof Error ? err : new Error(String(err));
+          }
+        }
       }
+      throw lastError instanceof Error
+        ? lastError
+        : new Error(`ai: all models failed to stream: ${String(lastError)}`);
+    },
+
+    async callMcp(ref, input, signal) {
+      return mcpClient.call(ref, input, signal ?? currentAbortSignal());
     },
 
     async embed(embedName, id, text) {

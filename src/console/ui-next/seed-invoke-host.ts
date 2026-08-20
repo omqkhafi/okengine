@@ -17,6 +17,7 @@ import type { Manifest } from "../../manifest/types.ts";
 import {
   aiAgentRegistry,
   aiEmbedRegistry,
+  aiMcpServerRegistry,
   aiModelRegistry,
   aiPromptRegistry,
   channelTemplateRegistry,
@@ -92,6 +93,7 @@ function clearElementRegistries(): void {
   aiPromptRegistry.length = 0;
   aiEmbedRegistry.length = 0;
   aiAgentRegistry.length = 0;
+  aiMcpServerRegistry.length = 0;
 }
 
 const SeedIn = z.record(z.string(), z.unknown()).optional();

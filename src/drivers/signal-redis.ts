@@ -7,7 +7,7 @@
  * exactly-once / fan-out physics stay correct under `drain()`.
  *
  * Production bind: {@link createBunSignalRedisClient} (typed `publish` /
- * `subscribe`; Streams via `send` — Bun 1.3.14 has no typed `xadd` yet).
+ * `subscribe` / `xadd` / `xreadgroup` / `xack` / `xgroup` on Bun ≥1.4).
  */
 
 import { createSignalEngine } from "./signal-engine.ts";
@@ -18,12 +18,23 @@ import type {
   SignalRedisClientLike,
 } from "./signal-types.ts";
 
+/** Bun 1.4 typed stream methods — `@types/bun` may lag the runtime. */
+interface BunRedisStreams {
+  xadd(key: string, ...args: (string | number)[]): Promise<unknown>;
+  xreadgroup(...args: (string | number)[]): Promise<unknown>;
+  xack(key: string, group: string, id: string): Promise<unknown>;
+  xgroup(subcommand: string, ...args: (string | number)[]): Promise<unknown>;
+}
+
+function typedStreams(redis: Bun.RedisClient): Bun.RedisClient & BunRedisStreams {
+  return redis as Bun.RedisClient & BunRedisStreams;
+}
+
 /**
  * Bind {@link Bun.RedisClient} to {@link SignalRedisClientLike}.
  *
- * Streams (`XADD` / `XGROUP` / `XREADGROUP` / `XACK`) use `send` because
- * Bun 1.3.14 still lacks typed stream helpers — that is a Bun limitation.
- * Pub/sub uses typed `publish` / `subscribe` (gap closed vs earlier fake-only).
+ * Streams use typed `xadd` / `xgroup` / `xreadgroup` / `xack` (Bun ≥1.4).
+ * Pub/sub uses typed `publish` / `subscribe`.
  *
  * @param url - Optional Redis URL
  */
@@ -41,37 +52,36 @@ export function createBunSignalRedisClient(url?: string): SignalRedisClientLike 
 
   return {
     async xadd(key, id, fields) {
-      const args: string[] = [key, id];
+      const pairs: string[] = [];
       for (const [k, v] of Object.entries(fields)) {
-        args.push(k, v);
+        pairs.push(k, v);
       }
-      return String(await redis.send("XADD", args));
+      return String(await typedStreams(redis).xadd(key, id, ...pairs));
     },
     async xgroupCreate(key, group, id, opts) {
-      const args = ["CREATE", key, group, id];
-      if (opts?.mkstream) args.push("MKSTREAM");
+      const extra = opts?.mkstream ? (["MKSTREAM"] as const) : [];
       try {
-        await redis.send("XGROUP", args);
+        await typedStreams(redis).xgroup("CREATE", key, group, id, ...extra);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (!/BUSYGROUP/i.test(msg)) throw err;
       }
     },
     async xreadgroup(group, consumer, key, count) {
-      const reply = await redis.send("XREADGROUP", [
+      const reply = await typedStreams(redis).xreadgroup(
         "GROUP",
         group,
         consumer,
         "COUNT",
-        String(count),
+        count,
         "STREAMS",
         key,
         ">",
-      ]);
+      );
       return parseXreadgroupReply(reply);
     },
     async xack(key, group, id) {
-      return Number(await redis.send("XACK", [key, group, id]));
+      return Number(await typedStreams(redis).xack(key, group, id));
     },
     async publish(channel, message) {
       return redis.publish(channel, message);

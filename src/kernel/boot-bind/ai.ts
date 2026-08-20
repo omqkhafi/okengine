@@ -18,6 +18,7 @@ import { openaiCompatibleAiDriver } from "../../drivers/ai-openai-compatible.ts"
 import type { AiDriver, AiOpenOptions } from "../../drivers/ai-types.ts";
 import { createAiRuntime, type AiRuntime } from "../../elements/ai.ts";
 import type { GateRuntime } from "../../elements/gate.ts";
+import type { VaultRuntime } from "../../elements/vault.ts";
 import type { BootOptions } from "../boot.ts";
 
 /**
@@ -28,6 +29,7 @@ import type { BootOptions } from "../boot.ts";
  * @param now - Clock
  * @param env - Active environment
  * @param docker - Prefer compose AI URL when active
+ * @param vault - Optional vault for MCP bearer secrets
  */
 export function bindAi(
   options: BootOptions,
@@ -35,13 +37,21 @@ export function bindAi(
   now: () => number,
   env: ConfigEnv = "test",
   docker = false,
+  vault?: VaultRuntime,
 ): AiRuntime {
   const id = resolveAiDriverId(options, env, docker);
   const driver =
     options.ai?.defaultDriver ?? withOpenDefaults(aiDriverFor(id), openDefaultsFor(id, docker));
   return createAiRuntime({
     ...(options.ai ?? {}),
+    ...(vault ? { resolveSecret: (name: string) => vault.read(name) } : undefined),
     defaultDriver: driver,
+    drivers: {
+      mock: lazyDriver("mock", docker),
+      anthropic: lazyDriver("anthropic", docker),
+      "openai-compatible": lazyDriver("openai-compatible", docker),
+      ollama: lazyDriver("ollama", docker),
+    },
     gates: options.ai?.gates ?? gate,
     now,
   });
@@ -156,6 +166,20 @@ export function aiUrlFor(docker = false): string {
  * @param driver - Base driver
  * @param defaults - Env-derived open options
  */
+/**
+ * Open a protocol driver with env defaults only when a model actually uses it.
+ *
+ * @param id - Driver id
+ * @param docker - Docker mode
+ */
+function lazyDriver(id: string, docker: boolean): AiDriver {
+  const base = aiDriverFor(id);
+  return {
+    id: base.id,
+    open: (opts = {}) => base.open({ ...openDefaultsFor(id, docker), ...opts }),
+  };
+}
+
 function withOpenDefaults(driver: AiDriver, defaults: AiOpenOptions): AiDriver {
   if (Object.keys(defaults).length === 0) return driver;
   return {

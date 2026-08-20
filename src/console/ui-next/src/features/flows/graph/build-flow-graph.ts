@@ -10,6 +10,7 @@
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { Flow, Manifest } from "../../../../../../manifest/types.ts";
+import { mcpServerNodeId, parseMcpToolRef } from "../../../../../../manifest/mcp-ref.ts";
 import type { OkeElement } from "@/lib/element-icons.ts";
 import {
   EDGE_STROKE,
@@ -270,6 +271,14 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
         edges.push(styledEdge(`e:flow:${flowId}->${ref}`, `flow:${flowId}`, ref, "secrets"));
       }
       for (const callee of e.calls ?? []) {
+        const mcp = parseMcpToolRef(callee);
+        if (mcp) {
+          const id = mcpServerNodeId(mcp.server);
+          targets.set(id, { id, kind: "ai", label: mcp.server });
+          effectCount.set(id, (effectCount.get(id) ?? 0) + 1);
+          edges.push(styledEdge(`e:flow:${flowId}->${id}`, `flow:${flowId}`, id, "calls", true));
+          continue;
+        }
         edges.push(
           styledEdge(
             `e:flow:${flowId}->flow:${callee}`,
@@ -349,7 +358,11 @@ function layoutWithDagre(
       for (const a of e.asks ?? []) link(`flow:${flowId}`, `ai:${a}`);
       for (const s of e.sends ?? []) link(`flow:${flowId}`, `channel:${s}`);
       for (const s of e.secrets ?? []) link(`flow:${flowId}`, `vault:${s}`);
-      for (const callee of e.calls ?? []) link(`flow:${flowId}`, `flow:${callee}`);
+      for (const callee of e.calls ?? []) {
+        const mcp = parseMcpToolRef(callee);
+        if (mcp) link(`flow:${flowId}`, mcpServerNodeId(mcp.server));
+        else link(`flow:${flowId}`, `flow:${callee}`);
+      }
     }
   }
 

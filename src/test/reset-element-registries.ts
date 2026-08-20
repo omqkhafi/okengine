@@ -19,6 +19,7 @@ import { afterEach } from "bun:test";
 import {
   aiAgentRegistry,
   aiEmbedRegistry,
+  aiMcpServerRegistry,
   aiModelRegistry,
   aiPromptRegistry,
   channelTemplateRegistry,
@@ -38,4 +39,5 @@ afterEach(() => {
   aiPromptRegistry.length = 0;
   aiEmbedRegistry.length = 0;
   aiAgentRegistry.length = 0;
+  aiMcpServerRegistry.length = 0;
 });

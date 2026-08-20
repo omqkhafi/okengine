@@ -8,6 +8,7 @@
  */
 
 import type { RunEffect, RunRow } from "@/client.ts";
+import { parseMcpToolRef } from "../../../../../../manifest/mcp-ref.ts";
 import { formatDuration } from "./format-duration.ts";
 import { effectKindSummaryLabel, type RunEffectKind } from "./effect-kind.ts";
 
@@ -164,12 +165,35 @@ export function effectSummaryChips(
  *
  * @param effect - Ledger entry
  */
+/**
+ * Units / graph chip label for an `mcp:<server>/<tool>` call.
+ *
+ * @param ref - Effect resource
+ */
+export function mcpCallChipLabel(ref: string): string | null {
+  const mcp = parseMcpToolRef(ref);
+  if (!mcp) return null;
+  return `Call ${mcp.server} → ${mcp.tool}`;
+}
+
+/**
+ * True when an effect targets an MCP tool (`mcp:…`).
+ *
+ * @param resource - Effect resource ref
+ */
+export function isMcpResource(resource: string): boolean {
+  return parseMcpToolRef(resource) !== null;
+}
+
 export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): string {
   if (isComputedCacheKey(effect.resource)) {
     return "Cache read";
   }
   if (isSqlResource(effect.resource)) {
     return effect.kind === "write" ? "DB write" : "DB query";
+  }
+  if (effect.kind === "call" && isMcpResource(effect.resource)) {
+    return "MCP call";
   }
   const labels: Record<RunEffectKind, string> = {
     read: "Read",

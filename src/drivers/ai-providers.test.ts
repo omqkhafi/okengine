@@ -43,12 +43,14 @@ describe("anthropic driver", () => {
       model: "claude-test",
       fetch: fetchFn,
     });
+    const ac = new AbortController();
     const result = await client.complete({
       messages: [
         { role: "system", content: "be brief" },
         { role: "user", content: "hi" },
       ],
       maxTokens: 64,
+      signal: ac.signal,
     });
 
     expect(result.driverId).toBe("anthropic");
@@ -62,6 +64,7 @@ describe("anthropic driver", () => {
     };
     expect(body.system).toBe("be brief");
     expect(body.messages).toEqual([{ role: "user", content: "hi" } as { role: string }]);
+    expect(calls[0]!.init?.signal).toBe(ac.signal);
   });
 
   test("HTTP error surfaces provider message", async () => {

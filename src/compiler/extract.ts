@@ -11,6 +11,7 @@ import { parseSync } from "oxc-parser";
 import type {
   Ai,
   AiAgent,
+  AiMcpServer,
   AiModel,
   AiPrompt,
   Channel,
@@ -35,6 +36,7 @@ import { sqlTableRef } from "../manifest/sql-resource.ts";
 import {
   identifierName,
   inferEffects,
+  resolveCallTarget,
   stringArg,
   walk,
   type AstNode,
@@ -177,11 +179,12 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   if (Object.keys(gates).length > 0) manifest.gates = gates;
   if (Object.keys(vault).length > 0) manifest.vault = vault;
   if (Object.keys(channels).length > 0) manifest.channels = channels;
-  if (scope.ai.models || scope.ai.prompts || scope.ai.agents) {
+  if (scope.ai.models || scope.ai.prompts || scope.ai.agents || scope.ai.mcpServers) {
     manifest.ai = {
       ...(scope.ai.models ? { models: sortRecord(scope.ai.models) } : {}),
       ...(scope.ai.prompts ? { prompts: sortRecord(scope.ai.prompts) } : {}),
       ...(scope.ai.agents ? { agents: sortRecord(scope.ai.agents) } : {}),
+      ...(scope.ai.mcpServers ? { mcpServers: sortRecord(scope.ai.mcpServers) } : {}),
     };
   }
   if (Object.keys(journeys).length > 0) manifest.journeys = journeys;
@@ -299,6 +302,13 @@ function finalizeRefs(scope: ProjectScope): void {
       agent.tools = agent.tools.map(
         (id) => scope.flowExports.get(id) ?? scope.bindings.get(id)?.ref ?? id,
       );
+    }
+  }
+  if (scope.ai.mcpServers) {
+    for (const server of Object.values(scope.ai.mcpServers)) {
+      if (!server.auth) continue;
+      const binding = scope.bindings.get(server.auth);
+      if (binding?.kind === "secret") server.auth = binding.ref;
     }
   }
   for (const journey of Object.values(scope.journeys)) {
@@ -816,6 +826,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const model: AiModel = {
           ...(stringProp(opts, "provider") ? { provider: stringProp(opts, "provider") } : {}),
           ...(stringProp(opts, "tier") ? { tier: stringProp(opts, "tier") } : {}),
+          ...(stringProp(opts, "driverId") ? { driverId: stringProp(opts, "driverId") } : {}),
         };
         scope.ai.models = scope.ai.models ?? {};
         scope.ai.models[modelName] = model;
@@ -831,6 +842,24 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
 
     if (obj === "ai" && prop === "agent") {
       collectAgent(call, scope);
+    }
+
+    if (obj === "ai" && prop === "mcpServer") {
+      collectMcpServer(call, program, scope);
+    }
+
+    if (prop === "tool" && obj) {
+      const toolName = stringArg(call.arguments[0]);
+      const server = scope.bindings.get(obj);
+      if (server?.kind === "mcp-server" && toolName) {
+        const bindingName = enclosingConstName(call, program);
+        if (bindingName) {
+          scope.bindings.set(bindingName, {
+            kind: "mcp-tool",
+            ref: `mcp:${server.ref}/${toolName}`,
+          });
+        }
+      }
     }
 
     if (obj === "ai" && prop === "embed") {
@@ -1026,7 +1055,11 @@ function collectAgent(call: CallExpression, scope: ProjectScope): void {
   if (!agentName || !opts) return;
   const toolsArr = arrayProp(opts, "tools");
   const tools = toolsArr
-    ?.map((el) => identifierName(el) ?? stringArg(el))
+    ?.map((el) => {
+      const resolved = resolveCallTarget(el, scope.bindings);
+      if (resolved) return resolved;
+      return identifierName(el) ?? stringArg(el);
+    })
     .filter((x): x is string => typeof x === "string")
     .map((id) => scope.flowExports.get(id) ?? scope.bindings.get(id)?.ref ?? id);
   const agent: AiAgent = {
@@ -1037,6 +1070,36 @@ function collectAgent(call: CallExpression, scope: ProjectScope): void {
   };
   scope.ai.agents = scope.ai.agents ?? {};
   scope.ai.agents[agentName] = agent;
+}
+
+function collectMcpServer(call: CallExpression, program: AstNode, scope: ProjectScope): void {
+  const serverName = stringArg(call.arguments[0]);
+  const opts = objectArg(call.arguments[1]);
+  if (!serverName || !opts) return;
+  const tools = stringArrayProp(opts, "tools") ?? [];
+  const url = stringProp(opts, "url");
+  const command = stringProp(opts, "command");
+  const args = stringArrayProp(opts, "args");
+  const authObj = objectProp(opts, "auth");
+  const bearerNode = authObj ? objectProp(authObj, "bearer") : undefined;
+  const bearerLit = stringArg(bearerNode);
+  const bearerId = identifierName(bearerNode);
+  const auth =
+    bearerLit ??
+    (bearerId ? (scope.bindings.get(bearerId)?.kind === "secret" ? scope.bindings.get(bearerId)?.ref : bearerId) : undefined);
+  const server: AiMcpServer = {
+    tools,
+    ...(url ? { url } : {}),
+    ...(command ? { command } : {}),
+    ...(args && args.length > 0 ? { args } : {}),
+    ...(auth ? { auth } : {}),
+  };
+  scope.ai.mcpServers = scope.ai.mcpServers ?? {};
+  scope.ai.mcpServers[serverName] = server;
+  const bindingName = enclosingConstName(call, program);
+  if (bindingName) {
+    scope.bindings.set(bindingName, { kind: "mcp-server", ref: serverName });
+  }
 }
 
 function collectConfig(opts: AstNode | undefined, scope: ProjectScope): void {

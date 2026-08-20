@@ -89,6 +89,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
   const model = options.model ?? "gpt-4o-mini";
   const fetchFn = options.fetch ?? globalThis.fetch;
   const extraHeaders = options.headers;
+  preconnectFetch(fetchFn, baseUrl);
 
   return {
     driverId: "openai-compatible",
@@ -162,10 +163,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
         const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
         throwHttp(`openai-compatible: ${msg}`, res.status);
       }
-      if (!res.body) {
-        throw new Error("openai-compatible: stream response has no body");
-      }
-      yield* readOpenaiSse(res.body, opts.signal);
+      yield* readOpenaiSse(res, opts.signal);
     },
     async embed(opts: AiEmbedOptions): Promise<AiEmbedResult> {
       const resolvedModel = opts.model ?? model;
@@ -262,57 +260,70 @@ function parseToolCalls(
 /**
  * Parse OpenAI SSE chat.completion.chunk stream.
  *
- * @param body - Response body
+ * @param res - Streaming response
  * @param signal - Optional abort
  */
-async function* readOpenaiSse(
-  body: ReadableStream<Uint8Array>,
-  signal?: AbortSignal,
-): AsyncGenerator<AiStreamChunk> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
+async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerator<AiStreamChunk> {
   let buffer = "";
-  try {
-    while (true) {
-      if (signal?.aborted) {
-        throw abortAsError(signal.reason);
+  for await (const piece of responseTextStream(res)) {
+    if (signal?.aborted) throw abortAsError(signal.reason);
+    buffer += piece;
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === "[DONE]") {
+        yield { text: "", done: true };
+        return;
       }
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === "[DONE]") {
+      try {
+        const chunk = JSON.parse(data) as {
+          choices?: readonly {
+            delta?: { content?: string | null };
+            finish_reason?: string | null;
+          }[];
+        };
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === "string" && delta.length > 0) {
+          yield { text: delta };
+        }
+        if (chunk.choices?.[0]?.finish_reason) {
           yield { text: "", done: true };
           return;
         }
-        try {
-          const chunk = JSON.parse(data) as {
-            choices?: readonly {
-              delta?: { content?: string | null };
-              finish_reason?: string | null;
-            }[];
-          };
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            yield { text: delta };
-          }
-          if (chunk.choices?.[0]?.finish_reason) {
-            yield { text: "", done: true };
-            return;
-          }
-        } catch {
-          // ignore malformed SSE lines
-        }
+      } catch {
+        // ignore malformed SSE lines
       }
     }
-    yield { text: "", done: true };
-  } finally {
-    reader.releaseLock();
+  }
+  yield { text: "", done: true };
+}
+
+/**
+ * UTF-8 text chunks from a Response (`textStream` on Bun ≥1.4).
+ *
+ * @param res - HTTP response
+ */
+function responseTextStream(res: Response): AsyncIterable<string> {
+  const stream = (res as Response & { textStream?: () => AsyncIterable<string> }).textStream;
+  if (typeof stream !== "function") {
+    throw new Error("openai-compatible: Response.textStream is required (Bun >= 1.4.0)");
+  }
+  return stream.call(res);
+}
+
+/**
+ * Warm DNS+TCP+TLS for a cloud origin. No-op when `fetch` is a test stub.
+ *
+ * @param fetchFn - Fetch implementation
+ * @param url - Provider base URL
+ */
+function preconnectFetch(fetchFn: typeof fetch, url: string): void {
+  const preconnect = (fetchFn as { preconnect?: (href: string) => void }).preconnect;
+  if (typeof preconnect === "function") {
+    preconnect(url);
   }
 }
 

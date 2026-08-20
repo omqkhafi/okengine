@@ -140,11 +140,19 @@ function ttlToSeconds(ttl: string): number {
   }
 }
 
+/** Bun 1.4 typed methods — `@types/bun` may lag the runtime. */
+interface BunRedisEval {
+  eval(script: string, numkeys: number, ...keysAndArgs: string[]): Promise<unknown>;
+}
+
+function typedRedis(redis: Bun.RedisClient): Bun.RedisClient & BunRedisEval {
+  return redis as Bun.RedisClient & BunRedisEval;
+}
+
 /**
  * Bind {@link Bun.RedisClient} / {@link Bun.redis} to {@link KvClientLike}.
  *
- * Uses typed `scan` (Bun ≥1.3). `EVAL` still goes through `send` — Bun 1.3.14
- * has no typed `eval` yet (platform limitation, not an OKE stub).
+ * Uses typed `scan` / `eval` (Bun ≥1.4). `send` remains the escape hatch.
  *
  * @param url - Optional Redis URL
  */
@@ -174,8 +182,7 @@ export function createBunRedisClient(url?: string): KvClientLike {
       return redis.scan(cursor);
     },
     async eval(script, numkeys, ...keysAndArgs) {
-      // Bun 1.3.14: no typed eval — raw send remains the native path.
-      return redis.send("EVAL", [script, String(numkeys), ...keysAndArgs]);
+      return typedRedis(redis).eval(script, numkeys, ...keysAndArgs);
     },
     send: (command, args) => redis.send(command, args),
   };

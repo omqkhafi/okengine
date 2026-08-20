@@ -100,4 +100,52 @@ describe("nextOccurrences", () => {
     expect(fires.length).toBeGreaterThanOrEqual(1);
     expect(fires.every((t) => t >= from && t < until)).toBe(true);
   });
+
+  test("*/15 and @hourly via Bun.cron.parse", () => {
+    const from = Date.UTC(2024, 0, 1, 0, 0, 0);
+    const until = from + 60 * 60_000;
+    const quarters = nextOccurrences(
+      row({
+        name: "quarters",
+        effectiveCron: "*/15 * * * *",
+        timezone: "UTC",
+      }),
+      from,
+      until,
+    );
+    expect(quarters).toEqual([
+      from,
+      from + 15 * 60_000,
+      from + 30 * 60_000,
+      from + 45 * 60_000,
+    ]);
+
+    const hours = nextOccurrences(
+      row({
+        name: "hourly",
+        effectiveCron: "@hourly",
+        timezone: "UTC",
+      }),
+      from,
+      from + 3 * 3_600_000,
+    );
+    expect(hours).toEqual([from, from + 3_600_000, from + 2 * 3_600_000]);
+  });
+
+  test("cron timezone is the declared IANA zone", () => {
+    const from = Date.UTC(2024, 0, 1, 0, 0, 0);
+    const until = from + 36 * 3_600_000;
+    const fires = nextOccurrences(
+      row({
+        name: "ny",
+        effectiveCron: "0 9 * * *",
+        timezone: "America/New_York",
+      }),
+      from,
+      until,
+    );
+    expect(fires).toHaveLength(1);
+    // 09:00 America/New_York on 2024-01-01 is 14:00 UTC (EST).
+    expect(fires[0]).toBe(Date.UTC(2024, 0, 1, 14, 0, 0));
+  });
 });

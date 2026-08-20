@@ -29,6 +29,10 @@ export async function openAnthropic(options: AiOpenOptions = {}): Promise<AiMode
   const model = options.model ?? "claude-sonnet-4-20250514";
   const baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
   const fetchFn = options.fetch ?? globalThis.fetch;
+  const preconnect = (fetchFn as { preconnect?: (href: string) => void }).preconnect;
+  if (typeof preconnect === "function") {
+    preconnect(baseUrl);
+  }
 
   return {
     driverId: "anthropic",
@@ -50,6 +54,7 @@ export async function openAnthropic(options: AiOpenOptions = {}): Promise<AiMode
           ...(system !== undefined ? { system } : {}),
           messages,
         }),
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
       const raw = (await res.json().catch(() => ({}))) as AnthropicMessagesResponse;
       if (!res.ok) {

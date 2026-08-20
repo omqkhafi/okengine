@@ -195,9 +195,14 @@ const MODEL_COL_RAM = 7;
  * @param width - Fixed width
  */
 function clipPad(value: string, width: number): string {
-  if (value.length === width) return value;
-  if (value.length < width) return value.padEnd(width);
-  return `${value.slice(0, Math.max(0, width - 1))}…`;
+  const bunAnsi = Bun as typeof Bun & {
+    stringWidth(text: string): number;
+    sliceAnsi(text: string, start: number, end: number, omission?: string): string;
+  };
+  const display = bunAnsi.stringWidth(value);
+  if (display === width) return value;
+  if (display < width) return value + " ".repeat(width - display);
+  return bunAnsi.sliceAnsi(value, 0, width, "…");
 }
 
 /**

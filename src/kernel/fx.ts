@@ -10,6 +10,7 @@
  */
 
 import type { Effects, ResourceRef, SignalResourceRef } from "../manifest/types.ts";
+import { isMcpToolRef } from "../manifest/mcp-ref.ts";
 import type { QueryPageSpec } from "./list-page.ts";
 import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type {
@@ -353,12 +354,36 @@ export interface JsonResult<T = unknown> {
   readonly status: number;
   readonly value?: T;
   readonly meta?: Record<string, unknown>;
+  readonly kind?: undefined;
 }
 
-/** True when `value` is an {@link FxJson} carrier. */
+/** SSE carrier from {@link FxJson.stream}. */
+export interface JsonStreamResult {
+  readonly [jsonResultBrand]: true;
+  readonly kind: "stream";
+  readonly status: 200;
+  readonly chunks: AsyncIterable<string>;
+  /** Set by the kernel to commit journal / Runs after the stream settles. */
+  finalize?: () => Promise<void>;
+}
+
+/** True when `value` is an {@link FxJson} JSON-envelope carrier. */
 export function isJsonResult(value: unknown): value is JsonResult {
   return (
-    typeof value === "object" && value !== null && (value as JsonResult)[jsonResultBrand] === true
+    typeof value === "object" &&
+    value !== null &&
+    (value as JsonResult)[jsonResultBrand] === true &&
+    (value as JsonStreamResult).kind !== "stream"
+  );
+}
+
+/** True when `value` is an SSE stream carrier from {@link FxJson.stream}. */
+export function isJsonStreamResult(value: unknown): value is JsonStreamResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as JsonStreamResult)[jsonResultBrand] === true &&
+    (value as JsonStreamResult).kind === "stream"
   );
 }
 
@@ -393,6 +418,11 @@ export interface FxJson {
    * every string field; extra keys auto-eq except `id`.
    */
   withQuery<T>(rows: readonly T[], input: unknown, spec?: QueryPageSpec<T>): JsonResult<T[]>;
+  /**
+   * 200 — `text/event-stream` of JSON `data:` frames, then `data: [DONE]`.
+   * Pass {@link Fx.stream} or any async iterable of token strings.
+   */
+  stream(chunks: AsyncIterable<string>): JsonStreamResult;
 }
 
 /**
@@ -690,7 +720,11 @@ export interface Fx {
    */
   stream(
     model: NamedRef,
-    opts?: { readonly prompt?: string; readonly data?: unknown },
+    opts?: {
+      readonly prompt?: string;
+      readonly data?: unknown;
+      readonly via?: readonly NamedRef[];
+    },
   ): AsyncIterable<string>;
   /** Logger. */
   readonly log: FxLog;
@@ -1651,6 +1685,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     call(flow, input) {
       const name = resolveName(flow);
       return gated("call", name, async () => {
+        if (isMcpToolRef(name)) {
+          if (!options.aiRuntime) {
+            throw new Error(`fx.call: AI runtime is not configured for MCP tool "${name}"`);
+          }
+          return options.aiRuntime.callMcp(name, input, currentAbortSignal());
+        }
         if (options.callHandler) {
           return options.callHandler(name, input);
         }
@@ -1842,6 +1882,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             prompt: opts?.prompt,
             data: opts?.data,
             signal: local.signal,
+            via: opts?.via?.map(resolveName),
           })) {
             if (local.signal.aborted) break;
             yield text;
@@ -1889,6 +1930,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       },
       with: jsonWith,
       withQuery: jsonWithQuery,
+      stream(chunks) {
+        return {
+          [jsonResultBrand]: true,
+          kind: "stream" as const,
+          status: 200 as const,
+          chunks,
+        };
+      },
     },
     async step<T>(name: string, fn: () => T | Promise<T>, opts?: StepOptions<T>): Promise<T> {
       if (journal) {

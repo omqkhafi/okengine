@@ -268,7 +268,7 @@ export async function serveMcp(options: ServeMcpOptions): Promise<McpServerHandl
     hostname: boundHost,
     fetch: mcp.fetch,
     stop(closeActive = false) {
-      server.stop(closeActive);
+      return server.stop(closeActive);
     },
   };
 }

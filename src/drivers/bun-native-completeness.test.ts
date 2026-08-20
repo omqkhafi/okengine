@@ -1,8 +1,8 @@
 /**
  * Bun native-client completeness — gaps closed vs platform limitations.
  *
- * Checked against Bun 1.3.14 (runtime + bun-types). Do not invent custom
- * protocol clients where Bun still lacks an API.
+ * Checked against Bun 1.4 (runtime). Do not invent custom protocol clients
+ * where Bun still lacks an API.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -46,7 +46,7 @@ export function bunNativeCompletenessReport(): readonly BunNativeGapRow[] {
       status: hasTypedEval ? "closed" : "bun_limitation",
       note: hasTypedEval
         ? "typed eval bound"
-        : "Bun 1.3.14 has no typed eval — driver uses send(EVAL)",
+        : "Bun.RedisClient.eval unavailable — would keep send(EVAL)",
     },
     {
       surface: "redis signal",
@@ -63,7 +63,7 @@ export function bunNativeCompletenessReport(): readonly BunNativeGapRow[] {
       status: hasTypedXadd ? "closed" : "bun_limitation",
       note: hasTypedXadd
         ? "typed stream helpers bound"
-        : "Bun 1.3.14 has no typed xadd — Streams use send (native, not a custom client)",
+        : "Bun.RedisClient.xadd unavailable — Streams would keep send",
     },
     {
       surface: "redis signal",
@@ -95,23 +95,21 @@ export function bunNativeCompletenessReport(): readonly BunNativeGapRow[] {
 }
 
 describe("Bun native client completeness", () => {
-  test("report table is exact and matches runtime Bun 1.3.x", () => {
+  test("report table is exact and matches runtime Bun 1.4", () => {
     const rows = bunNativeCompletenessReport();
     expect(rows.length).toBe(8);
 
     const closed = rows.filter((r) => r.status === "closed").map((r) => r.capability);
     const limited = rows.filter((r) => r.status === "bun_limitation").map((r) => r.capability);
 
-    // Closed on Bun 1.3.14
     expect(closed).toContain("SCAN (typed)");
+    expect(closed).toContain("EVAL (typed)");
     expect(closed).toContain("native Bun bind (publish/subscribe)");
+    expect(closed).toContain("XADD / XREADGROUP (typed)");
     expect(closed).toContain("send escape hatch");
     expect(closed).toContain("Bun.SQL.unsafe query/exec");
     expect(closed).toContain("Bun.S3Client file/list");
 
-    // Genuine Bun platform limitations (do not invent workarounds)
-    expect(limited).toContain("EVAL (typed)");
-    expect(limited).toContain("XADD / XREADGROUP (typed)");
     expect(limited).toContain("LISTEN / NOTIFY on Bun.SQL");
   });
 

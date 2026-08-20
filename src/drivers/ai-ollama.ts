@@ -156,10 +156,7 @@ export async function openOllama(options: AiOpenOptions = {}): Promise<AiModelCl
         const msg = raw.error ?? `ollama HTTP ${res.status}`;
         throw new OllamaUnavailableError(`ollama: ${msg}`);
       }
-      if (!res.body) {
-        throw new OllamaUnavailableError("ollama: stream response has no body");
-      }
-      yield* readOllamaNdjson(res.body, opts.signal);
+      yield* readOllamaNdjson(res, opts.signal);
     },
     async embed(opts: AiEmbedOptions): Promise<AiEmbedResult> {
       const resolvedModel = resolveOllamaModel(options, opts.model);
@@ -265,50 +262,66 @@ function parseOllamaToolCalls(
 }
 
 /**
- * Parse Ollama NDJSON stream lines.
+ * Parse Ollama NDJSON stream lines via {@link Bun.JSONL.parseChunk}.
  *
- * @param body - Response body
+ * @param res - Streaming response
  * @param signal - Optional abort
  */
-async function* readOllamaNdjson(
-  body: ReadableStream<Uint8Array>,
-  signal?: AbortSignal,
-): AsyncGenerator<AiStreamChunk> {
-  const reader = body.getReader();
+async function* readOllamaNdjson(res: Response, signal?: AbortSignal): AsyncGenerator<AiStreamChunk> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new OllamaUnavailableError("ollama: stream response has no body");
+  }
   const decoder = new TextDecoder();
-  let buffer = "";
+  let pending = "";
   try {
     while (true) {
-      if (signal?.aborted) {
-        throw abortAsError(signal.reason);
-      }
+      if (signal?.aborted) throw abortAsError(signal.reason);
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        try {
-          const chunk = JSON.parse(trimmed) as OllamaChatResponse;
-          const delta = chunk.message?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            yield { text: delta };
-          }
-          if (chunk.done) {
-            yield { text: "", done: true };
-            return;
-          }
-        } catch {
-          // ignore malformed lines
+      pending += decoder.decode(value, { stream: true });
+      const parsed = bunJsonl().parseChunk(pending);
+      pending = pending.slice(parsed.read);
+      for (const row of parsed.values) {
+        const chunk = row as OllamaChatResponse;
+        const delta = chunk.message?.content;
+        if (typeof delta === "string" && delta.length > 0) {
+          yield { text: delta };
         }
+        if (chunk.done) {
+          yield { text: "", done: true };
+          return;
+        }
+      }
+      if (parsed.error) {
+        const nl = pending.indexOf("\n");
+        if (nl === -1) continue;
+        pending = pending.slice(nl + 1);
       }
     }
     yield { text: "", done: true };
   } finally {
     reader.releaseLock();
   }
+}
+
+interface BunJsonlParse {
+  readonly values: readonly unknown[];
+  readonly read: number;
+  readonly done: boolean;
+  readonly error: unknown;
+}
+
+function bunJsonl(): {
+  parse(text: string): unknown[];
+  parseChunk(text: string): BunJsonlParse;
+} {
+  const jsonl = (Bun as typeof Bun & { JSONL?: { parse: (t: string) => unknown[]; parseChunk: (t: string) => BunJsonlParse } })
+    .JSONL;
+  if (!jsonl) {
+    throw new Error("ollama: Bun.JSONL is required (Bun >= 1.4.0)");
+  }
+  return jsonl;
 }
 
 /**

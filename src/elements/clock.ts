@@ -50,7 +50,12 @@ export { runDurable, type DurableResult, type RunDurableOptions } from "./clock/
 
 export { cronHealth, type CatchUpPolicy, type CronHealth } from "./clock/health.ts";
 
-export { nextOccurrences, previousOccurrence, countMissedOccurrences } from "./clock/schedule.ts";
+export {
+  nextOccurrences,
+  previousOccurrence,
+  countMissedOccurrences,
+  nextCronFireAt,
+} from "./clock/schedule.ts";
 
 export {
   pauseCron,

@@ -124,11 +124,9 @@ export async function runPromptEvals(options: RunPromptEvalsOptions): Promise<Ev
  * @param text - File text
  */
 export function parseEvalJsonl(text: string): EvalCase[] {
-  const cases: EvalCase[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    cases.push(JSON.parse(trimmed) as EvalCase);
+  const jsonl = (Bun as typeof Bun & { JSONL?: { parse: (t: string) => unknown[] } }).JSONL;
+  if (!jsonl) {
+    throw new Error("ai.eval: Bun.JSONL is required (Bun >= 1.4.0)");
   }
-  return cases;
+  return jsonl.parse(text) as EvalCase[];
 }

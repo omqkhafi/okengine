@@ -6,6 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { JSX } from "react";
 import type { Effects } from "../../../../../../manifest/types.ts";
 import { SectionHead } from "@/components/explorer/section-head.tsx";
+import { mcpCallChipLabel } from "@/features/flows/traces/effect-summary.ts";
 import {
   effectBarColor,
   effectKindIcon,
@@ -38,17 +39,24 @@ export function EffectsSummary({ effects }: EffectsSummaryProps): JSX.Element | 
       <ul className="flex flex-wrap gap-1.5">
         {chips.map((c) => {
           const color = effectBarColor(c.kind);
-          const Icon = effectKindIcon(c.kind);
+          const Icon = effectKindIcon(c.kind, c.ref);
+          const mcpLabel = c.kind === "call" ? mcpCallChipLabel(c.ref) : null;
           return (
             <li
               key={`${c.kind}:${c.ref}`}
               className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px]"
               style={{ borderColor: `${color}55`, color }}
-              title={`${EFFECT_KIND_LABEL[c.kind]} ${c.ref}`}
+              title={mcpLabel ?? `${EFFECT_KIND_LABEL[c.kind]} ${c.ref}`}
             >
               <HugeiconsIcon icon={Icon} className="size-3" />
-              <span className="text-muted-foreground">{EFFECT_KIND_LABEL[c.kind]}</span>
-              <span className="text-foreground/90">{c.ref}</span>
+              {mcpLabel ? (
+                <span className="text-foreground/90">{mcpLabel}</span>
+              ) : (
+                <>
+                  <span className="text-muted-foreground">{EFFECT_KIND_LABEL[c.kind]}</span>
+                  <span className="text-foreground/90">{c.ref}</span>
+                </>
+              )}
             </li>
           );
         })}

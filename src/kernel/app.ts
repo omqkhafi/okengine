@@ -37,10 +37,12 @@ import { runWithLocale } from "../i18n/locale-context.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
+import { withAbortSignal } from "./abort-scope.ts";
 import { fxRetry } from "./concurrency.ts";
 import {
   createFxContext,
   freezePrincipal,
+  isJsonStreamResult,
   resolveName,
   type CreateFxOptions,
   type Fx,
@@ -85,6 +87,7 @@ import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
   aiAgentRegistry,
   aiEmbedRegistry,
+  aiMcpServerRegistry,
   aiModelRegistry,
   aiPromptRegistry,
   channelTemplateRegistry,
@@ -531,18 +534,21 @@ function mergeAiOptions(
     readonly prompts: NonNullable<BootOptions["ai"]>["prompts"];
     readonly embeds: NonNullable<BootOptions["ai"]>["embeds"];
     readonly agents: NonNullable<BootOptions["ai"]>["agents"];
+    readonly mcpServers: NonNullable<BootOptions["ai"]>["mcpServers"];
   },
 ): BootOptions["ai"] | undefined {
   const models = mergeUnique(explicit?.models, fromRegistry.models ?? []);
   const prompts = mergeUnique(explicit?.prompts, fromRegistry.prompts ?? []);
   const embeds = mergeUnique(explicit?.embeds, fromRegistry.embeds ?? []);
   const agents = mergeUnique(explicit?.agents, fromRegistry.agents ?? []);
+  const mcpServers = mergeUnique(explicit?.mcpServers, fromRegistry.mcpServers ?? []);
   if (
     explicit === undefined &&
     models.length === 0 &&
     prompts.length === 0 &&
     embeds.length === 0 &&
-    agents.length === 0
+    agents.length === 0 &&
+    mcpServers.length === 0
   ) {
     return undefined;
   }
@@ -552,6 +558,7 @@ function mergeAiOptions(
     ...(prompts.length > 0 ? { prompts } : {}),
     ...(embeds.length > 0 ? { embeds } : {}),
     ...(agents.length > 0 ? { agents } : {}),
+    ...(mcpServers.length > 0 ? { mcpServers } : {}),
   };
 }
 
@@ -570,7 +577,7 @@ export function oke(options: OkeOptions): OkeApp {
   if (registry === "consume") resetBindings();
 
   // Same registry mode drains store.sql/store.files, vault.secret, signal(),
-  // channel.<medium>().template(), and ai.model/prompt/embed/agent —
+  // channel.<medium>().template(), and ai.model/prompt/embed/agent/mcpServer —
   // module-evaluation registries that mirror `on`'s trigger drain
   // (`listBindings`/`resetBindings` above). Explicit `options.stores` /
   // `secrets` / `signals` / `channel.templates` / `ai` are additive, never
@@ -588,6 +595,7 @@ export function oke(options: OkeOptions): OkeApp {
           aiPrompts: [],
           aiEmbeds: [],
           aiAgents: [],
+          aiMcpServers: [],
         }
       : {
           stores: storeRegistry.slice(),
@@ -599,6 +607,7 @@ export function oke(options: OkeOptions): OkeApp {
           aiPrompts: aiPromptRegistry.slice(),
           aiEmbeds: aiEmbedRegistry.slice(),
           aiAgents: aiAgentRegistry.slice(),
+          aiMcpServers: aiMcpServerRegistry.slice(),
         };
   if (registry === "consume") {
     storeRegistry.length = 0;
@@ -610,6 +619,7 @@ export function oke(options: OkeOptions): OkeApp {
     aiPromptRegistry.length = 0;
     aiEmbedRegistry.length = 0;
     aiAgentRegistry.length = 0;
+    aiMcpServerRegistry.length = 0;
   }
   const effectiveStores = mergeUnique(options.stores, registrySnapshot.stores);
   const effectiveSecrets = mergeUnique(options.secrets, registrySnapshot.secrets);
@@ -643,6 +653,7 @@ export function oke(options: OkeOptions): OkeApp {
     prompts: registrySnapshot.aiPrompts,
     embeds: registrySnapshot.aiEmbeds,
     agents: registrySnapshot.aiAgents,
+    mcpServers: registrySnapshot.aiMcpServers,
   });
 
   // Resolve Gate bag early so auth HTTP Bindings join `adopted` + the router
@@ -1149,16 +1160,19 @@ export function oke(options: OkeOptions): OkeApp {
       defaultLocale,
     );
 
-    return runWithLocale({ locale: resolvedLocale, defaultLocale }, () =>
-      executeInLocale({
-        flowDef,
-        input,
-        trigger,
-        extras,
-        resolvedLocale,
-        defaultLocale,
-      }),
-    );
+    return runWithLocale({ locale: resolvedLocale, defaultLocale }, () => {
+      const run = () =>
+        executeInLocale({
+          flowDef,
+          input,
+          trigger,
+          extras,
+          resolvedLocale,
+          defaultLocale,
+        });
+      const signal = extras?.request?.signal;
+      return signal ? withAbortSignal(signal, run) : run();
+    });
   }
 
   async function executeInLocale(args: {
@@ -1451,7 +1465,7 @@ export function oke(options: OkeOptions): OkeApp {
                   durable: flowDef.durable,
                   effects: putEffects,
                 });
-              if (storeAfter && output !== undefined) {
+              if (storeAfter && output !== undefined && !isJsonStreamResult(output)) {
                 const ttlMs =
                   typeof flowDef.cache === "string" ? cache.parseTtlMs(flowDef.cache) : undefined;
                 storeRt.putTier1(
@@ -1499,60 +1513,79 @@ export function oke(options: OkeOptions): OkeApp {
 
     const endedAt = now();
     const durationMs = resolveDurationMs(endedAt - startedAt, performance.now() - startedHr);
+    const streamOut = isJsonStreamResult(result.output) ? result.output : undefined;
 
-    if (journalSession) {
-      inflightRuns.delete(journalSession.runId);
-      const sleeping = ctx.state.sleeping as
-        | { readonly wakeAt: number; readonly label: string; readonly runId: string }
-        | undefined;
-      // Lease-capable stores make the shared row the wake schedule; the
-      // in-process map is only for custom stores without the lease surface.
-      if (sleeping && !hasJournalLease(activeJournal().store)) {
-        sleepingRuns.set(sleeping.runId, {
-          flow: flowDef,
-          input: ctx.input,
-          wakeAt: sleeping.wakeAt,
-        });
-      } else if (!sleeping && isTerminalFailure(result)) {
-        const terminalErr = result.failure ?? result.ctx.error;
-        await runCompensationPhase({
-          flow: flowDef,
-          input: ctx.input,
-          session: journalSession,
-          fx,
-          error: terminalErr,
-        });
-      } else if (!sleeping) {
-        await journalSession.commit("completed", { output: result.output });
+    const finalizeRun = async (): Promise<void> => {
+      // Stream rows land in Traces only after close. Measure wall time then
+      // so duration / waterfall cover the open stream, not just TTFB.
+      const recordEndedAt = streamOut ? now() : endedAt;
+      const recordDurationMs = streamOut
+        ? resolveDurationMs(recordEndedAt - startedAt, performance.now() - startedHr)
+        : durationMs;
+      if (journalSession) {
+        inflightRuns.delete(journalSession.runId);
+        const sleeping = ctx.state.sleeping as
+          | { readonly wakeAt: number; readonly label: string; readonly runId: string }
+          | undefined;
+        // Lease-capable stores make the shared row the wake schedule; the
+        // in-process map is only for custom stores without the lease surface.
+        if (sleeping && !hasJournalLease(activeJournal().store)) {
+          sleepingRuns.set(sleeping.runId, {
+            flow: flowDef,
+            input: ctx.input,
+            wakeAt: sleeping.wakeAt,
+          });
+        } else if (!sleeping && isTerminalFailure(result)) {
+          const terminalErr = result.failure ?? result.ctx.error;
+          await runCompensationPhase({
+            flow: flowDef,
+            input: ctx.input,
+            session: journalSession,
+            fx,
+            error: terminalErr,
+          });
+        } else if (!sleeping) {
+          await journalSession.commit("completed", {
+            output: streamOut ? { streamed: true } : result.output,
+          });
+        }
       }
-    }
 
-    const runsRuntime =
-      booted?.runs ?? (isRunsRuntimeLike(options.runs) ? options.runs : undefined);
-    if (runsRuntime) {
-      const archiveCleartext = archiveFromInput(ctx.input, options.archiveInputFields);
-      const replayInput = redactArchivedFields(ctx.input, options.archiveInputFields);
-      const recordFailure =
-        result.failure ??
-        (isTerminalFailure(result) ? failureFromUnknown(result.ctx.error) : undefined);
-      await runsRuntime.record(
-        {
-          flow: flowDef,
-          trigger,
-          fx,
-          ledger,
-          telemetry,
-          startedAt,
-          endedAt,
-          durationMs,
-          failure: recordFailure,
-          id: runId,
-          input: replayInput,
-          ...(result.output !== undefined && !recordFailure ? { output: result.output } : {}),
-          ...(parentId !== undefined ? { parentId } : {}),
-        },
-        archiveCleartext,
-      );
+      const runsRuntime =
+        booted?.runs ?? (isRunsRuntimeLike(options.runs) ? options.runs : undefined);
+      if (runsRuntime) {
+        const archiveCleartext = archiveFromInput(ctx.input, options.archiveInputFields);
+        const replayInput = redactArchivedFields(ctx.input, options.archiveInputFields);
+        const recordFailure =
+          result.failure ??
+          (isTerminalFailure(result) ? failureFromUnknown(result.ctx.error) : undefined);
+        await runsRuntime.record(
+          {
+            flow: flowDef,
+            trigger,
+            fx,
+            ledger,
+            telemetry,
+            startedAt,
+            endedAt: recordEndedAt,
+            durationMs: recordDurationMs,
+            failure: recordFailure,
+            id: runId,
+            input: replayInput,
+            ...(result.output !== undefined && !recordFailure
+              ? { output: streamOut ? { streamed: true } : result.output }
+              : {}),
+            ...(parentId !== undefined ? { parentId } : {}),
+          },
+          archiveCleartext,
+        );
+      }
+    };
+
+    if (streamOut && !isTerminalFailure(result)) {
+      streamOut.finalize = finalizeRun;
+    } else {
+      await finalizeRun();
     }
 
     return {

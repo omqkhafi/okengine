@@ -73,6 +73,7 @@ export function compression(
     if (cacheControl !== null && /\bno-transform\b/i.test(cacheControl)) return;
 
     const contentType = headers.get("content-type") ?? "";
+    if (/^text\/event-stream\b/i.test(contentType.split(";")[0]?.trim() ?? "")) return;
     if (!match.test(contentType)) return;
 
     const body = await ctx.response.arrayBuffer();

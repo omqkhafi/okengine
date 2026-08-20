@@ -81,7 +81,29 @@ export function isBunNativeMethod(method: string): boolean {
   );
 }
 
-type MethodHandlers = Partial<Record<string, (req: Request) => Response | Promise<Response>>>;
+/** Bun.serve `fetch` / route handler — second arg is the live server. */
+type ServeFetch = (
+  req: Request,
+  server: { timeout(request: Request, seconds: number): void },
+) => Response | Promise<Response>;
+
+type MethodHandlers = Partial<Record<string, ServeFetch>>;
+
+/**
+ * Disable the 10s idle timeout for SSE so a quiet token stream is not reset.
+ *
+ * @param inner - App fetch
+ */
+function holdSseIdle(inner: (request: Request) => Promise<Response>): ServeFetch {
+  return async (req, server) => {
+    const res = await inner(req);
+    const ct = (res.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
+    if (/^text\/event-stream$/i.test(ct)) {
+      server.timeout(req, 0);
+    }
+    return res;
+  };
+}
 
 /**
  * Build Bun.serve `routes` from app HTTP bindings.
@@ -103,7 +125,7 @@ export function buildBunRoutes(
     if (typeof path !== "string" || typeof method !== "string") continue;
     if (!isBunNativePath(path) || !isBunNativeMethod(method)) continue;
     const methods = routes[path] ?? (routes[path] = {});
-    methods[method] = (req) => fetchHandler(req);
+    methods[method] = holdSseIdle(fetchHandler);
   }
   return routes;
 }
@@ -128,10 +150,15 @@ export function serveBunHttp(options: {
   readonly routes?: Record<string, MethodHandlers>;
   readonly id?: string;
 }): ReturnType<typeof Bun.serve> {
+  const fetch = holdSseIdle(
+    typeof options.fetch === "function"
+      ? (req: Request) => Promise.resolve(options.fetch(req))
+      : options.fetch,
+  );
   const base = {
     port: options.port,
     hostname: options.hostname,
-    fetch: options.fetch,
+    fetch,
     ...(options.id !== undefined ? { id: options.id } : {}),
   };
   const table = options.routes;
@@ -160,6 +187,15 @@ function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
     ...(options?.id !== undefined ? { id: options.id } : {}),
   });
 
+  const closeIdle = (
+    server as typeof server & { closeIdleConnections(): void }
+  ).closeIdleConnections.bind(server);
+  const onPressure = (): void => {
+    closeIdle();
+  };
+  const proc = process as NodeJS.EventEmitter;
+  proc.on("memoryPressure", onPressure);
+
   const boundPort = server.port ?? port;
   const boundHost = server.hostname ?? hostname;
   const url = new URL(`http://${formatHostForUrl(boundHost)}:${boundPort}/`);
@@ -170,7 +206,8 @@ function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
     hostname: boundHost,
     fetch: fetchHandler,
     stop(closeActiveConnections = false) {
-      server.stop(closeActiveConnections);
+      proc.off("memoryPressure", onPressure);
+      return server.stop(closeActiveConnections);
     },
   };
 }

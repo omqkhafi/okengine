@@ -22,7 +22,11 @@ describe("isRetryableAiError", () => {
     expect(isRetryableAiError(new Error("openai-compatible HTTP 401"))).toBe(false);
     const abort = new Error("aborted");
     abort.name = "AbortError";
-    expect(isRetryableAiError(abort)).toBe(true);
+    expect(isRetryableAiError(abort)).toBe(false);
+    const timeout = new Error("deadline");
+    timeout.name = "TimeoutError";
+    expect(isRetryableAiError(timeout)).toBe(true);
+    expect(isRetryableAiError(new Error("request timeout"))).toBe(true);
   });
 });
 

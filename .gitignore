@@ -77,3 +77,5 @@ reports/
 
 # Local Taqnyat scratch script (never commit)
 src/plugins/__taqnyat-final.ts
+
+.cursor/plans/

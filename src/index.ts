@@ -145,6 +145,8 @@ export {
   type AiModelDecl,
   type AiPromptDecl,
   type AiAgentDecl,
+  type AiMcpServerDecl,
+  type AiMcpServerOptions,
   type AiRuntime,
 } from "./elements/ai.ts";
 

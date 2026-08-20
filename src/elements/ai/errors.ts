@@ -74,8 +74,10 @@ export function isRetryableAiError(err: unknown): boolean {
     if (code >= 400 && code <= 499) return false;
   }
 
-  if (name === "AbortError" || name === "TimeoutError") return true;
-  if (lower.includes("aborterror") || lower.includes("timeout")) return true;
+  if (name === "TimeoutError" || isTimeoutAbort(err)) return true;
+  // Client disconnect / explicit cancel must not retry or advance `via`.
+  if (name === "AbortError") return false;
+  if (name === "AiBudgetExceededError") return false;
   if (
     lower.includes("econnreset") ||
     lower.includes("econnrefused") ||
@@ -101,6 +103,29 @@ export function aiHttpError(message: string, status: number): Error {
   const err = new Error(message) as Error & { status: number };
   err.status = status;
   return err;
+}
+
+/**
+ * True when an abort came from a deadline (`AbortSignal.timeout`), not a
+ * client disconnect / explicit cancel.
+ *
+ * @param err - Thrown value
+ */
+function isTimeoutAbort(err: unknown): boolean {
+  if (err == null || typeof err !== "object") return false;
+  const name = err instanceof Error ? err.name : "";
+  const message = err instanceof Error ? err.message.toLowerCase() : "";
+  if (name === "TimeoutError") return true;
+  if (message.includes("timeout")) return true;
+  const cause = "cause" in err ? (err as { cause: unknown }).cause : undefined;
+  if (cause instanceof Error && (cause.name === "TimeoutError" || /timeout/i.test(cause.message))) {
+    return true;
+  }
+  const reason = "reason" in err ? (err as { reason: unknown }).reason : undefined;
+  if (reason instanceof Error && (reason.name === "TimeoutError" || /timeout/i.test(reason.message))) {
+    return true;
+  }
+  return false;
 }
 
 function readStatus(err: unknown): number | undefined {

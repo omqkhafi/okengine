@@ -176,6 +176,8 @@ export type {
   AiModelDecl,
   AiPromptDecl,
   AiAgentDecl,
+  AiMcpServerDecl,
+  AiMcpServerOptions,
   AiEmbedDecl,
   AiRuntime,
   AgentDenial,

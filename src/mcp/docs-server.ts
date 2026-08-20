@@ -197,7 +197,7 @@ export async function serveDocsMcp(
     hostname: boundHost,
     fetch: mcp.fetch,
     stop(closeActive = false) {
-      server.stop(closeActive);
+      return server.stop(closeActive);
     },
   };
 }

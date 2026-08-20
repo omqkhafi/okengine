@@ -124,5 +124,7 @@ export async function bindClock(
     }
   }
 
+  clock.startWakes();
+
   return { clock, clockDecls };
 }

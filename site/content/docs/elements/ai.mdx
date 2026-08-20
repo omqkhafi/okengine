@@ -68,14 +68,15 @@ export const triage = smart.prompt("ticket-triage", {
 
 </Steps>
 
-## The four building blocks
+## The building blocks
 
 | Declaration                | Produces                                                           |
 | -------------------------- | ------------------------------------------------------------------ |
-| `ai.model(name, opts)`     | Logical model binding — provider / tier / concrete model id        |
+| `ai.model(name, opts)`     | Logical model binding — provider / tier / model id / optional `driverId` |
 | `model.prompt(name, opts)` | Versioned prompt with typed in/out, evals, budget                  |
 | `ai.embed(name, opts)`     | Embedding pipeline into a `store.index` (searched via `fx.search`) |
 | `ai.agent(name, opts)`     | Bounded agent whose tools are **your own flows**                   |
+| `ai.mcpServer(name, opts)` | External MCP server — allowlisted tools join `fx.call` as `mcp:<server>/<tool>` |
 
 <AiBlocks />
 
@@ -105,9 +106,11 @@ const out = await fx.ask(summarizeNote, { title, body });
 // out.via is the logical model that answered
 ```
 
-Resolution: `fx.ask(…, { via })` overrides `prompt.via`, else the prompt’s bound model. On each model the runtime retries **once** for retryable failures (timeout / 429 / 5xx / network), then advances. Permanent failures (401 / other 4xx / schema invalid) stop the chain. When every eligible attempt fails, `fx.ask` throws — map that to a typed error in the flow (no silent text excerpt).
+Resolution: `fx.ask(…, { via })` overrides `prompt.via`, else the prompt’s bound model. On each model the runtime retries **once** for retryable failures (timeout / 429 / 5xx / network), then advances.
 
-`timeout` uses the same duration vocabulary as Clock (`"30s"`, `"2m"`, or a millisecond number). Ask-time `fx.ask(…, { timeout: "10s" })` overrides the prompt. Omit = no artificial cap. Cost caps stay on `budget`.
+Permanent failures (401 / other 4xx / schema invalid / client disconnect / `maxCostPerCall` exceeded) stop the chain. When every eligible attempt fails, `fx.ask` throws — map that to a typed error in the flow (no silent text excerpt).
+
+`timeout` uses the same duration vocabulary as Clock (`"30s"`, `"2m"`, or a millisecond number). Ask-time `fx.ask(…, { timeout: "10s" })` overrides the prompt. Omit = no artificial cap. `budget.maxCostPerCall` is enforced at runtime (not just observed). Set `driverId` on a model to open a different protocol than the app default.
 
 ## Declared guardrails
 
@@ -126,6 +129,22 @@ const result = await fx.ask(triage, input, {
 });
 ```
 
+External MCP tools take the same path. Declare a server with a **required** allowlist, then pass `server.tool("…")` — never whatever `tools/list` happens to expose:
+
+```typescript
+export const github = ai.mcpServer("github", {
+  url: "https://mcp.example/github",
+  auth: { bearer: githubToken },
+  tools: ["create_issue"],
+});
+
+await fx.ask(triage, input, {
+  tools: [github.tool("create_issue")],
+});
+```
+
+Capability refs are `mcp:<server>/<tool>`. An undeclared call throws **OKE1007**. See [MCP](/docs/ai/mcp).
+
 ## Agents with real guardrails
 
 An agent's tools are your flows — each carrying its own gates, effects, and typed errors, so the agent can never do anything a flow couldn't:
@@ -139,7 +158,7 @@ export const support = ai.agent("support", {
 });
 ```
 
-`maxSteps` bounds the loop; `budget.maxCostPerRun` bounds the spend. Both are declared, so "the agent ran away" is a violated contract, not a surprise. `fx.run(support, { message })` uses the same tool loop and the same `fx.call` dispatch as `fx.ask(…, { tools })`.
+`maxSteps` bounds the loop; `budget.maxCostPerRun` is enforced after the run. Both are declared, so "the agent ran away" is a violated contract, not a surprise. `fx.run(support, { message })` uses the same tool loop and the same `fx.call` dispatch as `fx.ask(…, { tools })`.
 
 ## Rate limits via Gate
 
@@ -157,7 +176,20 @@ Use `keyBy: "ip"` on public unauthenticated AI edges. Cost caps stay on prompt/a
 
 ## Streaming
 
-`fx.stream(model, { prompt })` yields real provider tokens (Ollama NDJSON, OpenAI-compatible SSE). Cancel by aborting the ambient signal — the same one `fx.all` / `fx.race` already use. Drivers without `stream` fail loud (no stub echo).
+`fx.stream(model, { prompt, via? })` yields real provider tokens (Ollama NDJSON, OpenAI-compatible SSE). Cancel by aborting the ambient signal — the same one `fx.all` / `fx.race` already use. Drivers without `stream` fail loud (no stub echo).
+
+Return those chunks on HTTP with `fx.json.stream(...)`. The kernel answers `text/event-stream` (`data:` frames, then `data: [DONE]`). JSON flows stay buffered `{ data, error }`.
+
+```typescript
+on(
+  http.post("/complete").gate.public,
+  flow("chat.complete", {
+    do: (input, fx) => fx.json.stream(fx.stream(smart, { prompt: input.prompt })),
+  }),
+);
+```
+
+Disconnect cancels the provider call automatically (`request.signal` → ambient abort). An `AbortError` from hang-up does not retry or advance `via`. Console Traces stay empty until the stream closes — then the run is one completed row whose duration covers the open stream, not just time-to-first-byte.
 
 ## PII cannot leak by accident
 
@@ -306,6 +338,11 @@ prompt id. A pin that does not match `prompt.version` throws
 `ai: unknown prompt "name@version"`.
 
 </Accordion>
+<Accordion title="OKE1007 when the model calls an MCP tool">
+
+Add `mcp:<server>/<tool>` to that flow’s `effects.calls` — the same token as `fx.call`. The allowlist on `ai.mcpServer` is not a capability grant.
+
+</Accordion>
 <Accordion title="An agent looped and burned budget">
 
 Bound it at declaration: `maxSteps` caps iterations, `budget.maxCostPerRun` caps spend.
@@ -314,12 +351,22 @@ Bound it at declaration: `maxSteps` caps iterations, `budget.maxCostPerRun` caps
 driver reports `usage.cost` — tokens land on the ask journal either way.
 
 </Accordion>
+<Accordion title="The client hung up but the model kept generating">
+
+HTTP flows install `request.signal` as the ambient abort. `fx.ask` / `fx.stream` /
+`fx.run` cancel the provider fetch. Return tokens with `fx.json.stream(fx.stream(...))`
+so disconnect is observable.
+
+A hang-up is `AbortError` — it does not retry or advance `via`.
+
+</Accordion>
 </Accordions>
 
 ## Learn more
 
 - [Flow](/docs/elements/flow) — `fx.ask` and `fx.search` inside `do`
 - [Store](/docs/elements/store) — `store.index`, the home of embeddings
+- [MCP](/docs/ai/mcp) — serve the app to agents, or consume external servers as tools
 
 ## Next
 

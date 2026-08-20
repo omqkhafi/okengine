@@ -550,7 +550,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   // 6. AI
   let ai = pre.ai;
   if (needs.ai && !ai) {
-    ai = aiBind!.bindAi(options, gate, now, env, docker);
+    ai = aiBind!.bindAi(options, gate, now, env, docker, vault);
   }
 
   // 7. Runs
@@ -607,12 +607,14 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
         clearInterval(schedulerTimer);
         schedulerTimer = undefined;
       }
+      clock?.stopWakes();
     },
     async close() {
       if (schedulerTimer !== undefined) {
         clearInterval(schedulerTimer);
         schedulerTimer = undefined;
       }
+      clock?.stopWakes();
       await signal?.close();
       await vault?.close();
       await runs?.flush();
