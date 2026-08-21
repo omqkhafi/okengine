@@ -12,14 +12,41 @@ export const FEATURED_SPACES = [
   { id: "space_gtm", key: "GTM", name: "Go-to-market", color: "#059669", createdAt: T0 },
 ] as const;
 
-/** Featured workspace members. */
+/**
+ * Featured workspace members — ten rungs, owner → guest.
+ * Demo User and Member keep the Console invoke-as emails.
+ */
 export const FEATURED_MEMBERS = [
+  {
+    id: "mem_demo",
+    spaceId: "space_eng",
+    name: "Demo User",
+    email: "demo@example.com",
+    role: "owner",
+    createdAt: T0,
+  },
+  {
+    id: "mem_admin",
+    spaceId: "space_eng",
+    name: "Avery Cole",
+    email: "admin@keel.dev",
+    role: "admin",
+    createdAt: T0,
+  },
   {
     id: "mem_aria",
     spaceId: "space_eng",
     name: "Aria Chen",
     email: "aria@keel.dev",
     role: "project_manager",
+    createdAt: T0,
+  },
+  {
+    id: "mem_lead",
+    spaceId: "space_eng",
+    name: "Jules Hart",
+    email: "jules@keel.dev",
+    role: "lead",
     createdAt: T0,
   },
   {
@@ -31,6 +58,14 @@ export const FEATURED_MEMBERS = [
     createdAt: T0,
   },
   {
+    id: "mem_eli",
+    spaceId: "space_eng",
+    name: "Eli Park",
+    email: "eli@keel.dev",
+    role: "contributor",
+    createdAt: T0,
+  },
+  {
     id: "mem_cai",
     spaceId: "space_des",
     name: "Cai Moreno",
@@ -39,19 +74,27 @@ export const FEATURED_MEMBERS = [
     createdAt: T0,
   },
   {
+    id: "mem_member",
+    spaceId: "space_des",
+    name: "Member",
+    email: "member@example.com",
+    role: "member",
+    createdAt: T0,
+  },
+  {
+    id: "mem_commenter",
+    spaceId: "space_gtm",
+    name: "Kit Rowe",
+    email: "kit@keel.dev",
+    role: "commenter",
+    createdAt: T0,
+  },
+  {
     id: "mem_dia",
     spaceId: "space_gtm",
     name: "Dia Farouk",
     email: "dia@keel.dev",
     role: "guest",
-    createdAt: T0,
-  },
-  {
-    id: "mem_eli",
-    spaceId: "space_eng",
-    name: "Eli Park",
-    email: "eli@keel.dev",
-    role: "developer",
     createdAt: T0,
   },
 ] as const;

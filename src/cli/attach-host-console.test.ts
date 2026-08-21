@@ -123,6 +123,43 @@ export const app = oke({
     await attached!.stop();
   });
 
+  test("Console Access uses the host apiKeyStore instance (not Console SQL)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-attach-keys-"));
+    const entry = join(dir, "app.ts");
+    await writeFile(
+      entry,
+      `
+import { oke, on, flow, http, gate, store } from ${JSON.stringify(OKE)};
+const db = store.sql("db");
+const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const ping = on(
+  http.get("/ping").gate(member),
+  flow("main.ping", { do: () => ({ ok: true }) }),
+);
+export const app = oke({
+  name: "attach-keys",
+  stores: [db],
+  gate: {
+    auth: { secret: "attach-host-key-pepper", http: false },
+    policies: [member],
+  },
+}).adopt({ ping });
+`,
+    );
+
+    const consoleKeys = { keys: new Map(), persist: async () => {} };
+    const state = {
+      invokeUserFlow: null,
+      storeRuntime: null,
+      apiKeys: consoleKeys,
+    } as unknown as ConsoleState;
+    const attached = await attachHostToConsole({ entry, cwd: dir, state });
+    expect(attached).not.toBeNull();
+    expect(state.apiKeys).not.toBe(consoleKeys);
+    expect(state.apiKeys.persist).not.toBe(consoleKeys.persist);
+    await attached!.stop();
+  });
+
   test("returns null when the entry is not a bootable app", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-attach-empty-"));
     const entry = join(dir, "app.ts");

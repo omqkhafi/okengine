@@ -78,6 +78,14 @@ async function liveRuntime(): Promise<{
   };
 }
 
+describe("createDefaultGateAuthStores", () => {
+  test("user roles grant member only — no leftover app catalog", () => {
+    const auth = createDefaultGateAuthStores();
+    expect([...(auth.roles.grants.get("role_member") ?? [])]).toEqual(["member"]);
+    expect([...(auth.roles.grants.get("role_staff") ?? [])]).toEqual(["member"]);
+  });
+});
+
 describe("isApplicationScope", () => {
   test("console:* is not application; everything else is", () => {
     expect(isApplicationScope("console:store.sql:write")).toBe(false);
@@ -333,6 +341,7 @@ describe("simulateGates — evaluate only", () => {
   test("role principal resolves scopes from RoleStore", async () => {
     const { runtime, close } = await liveRuntime();
     const auth = createDefaultGateAuthStores();
+    setRoleGrants(auth.roles, "role_member", ["member", "booking:create"]);
     try {
       const ok = await simulateGates({
         flowId: "bookings.create",

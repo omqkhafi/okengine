@@ -91,22 +91,17 @@ Install reviews the `CREATE EXTENSION` SQL; **Advanced** can set `SCHEMA`,
 When a newer packaged version exists, the name chip shows **Upgrade**
 (`ALTER EXTENSION … UPDATE`). Names link to the project or Postgres docs.
 
-Each SQL table row shows whether Postgres RLS is on (emerald shield)
-or off (muted shield). The resource header repeats that as an **RLS**
-chip before **PII** — **N RLS** when enabled and policies exist. KV,
-files, and index have no badge. Enabling RLS on create flips that
-shield.
+SQL table rows and the resource header show RLS (emerald / muted shield;
+**N RLS** when policies exist) before **PII**. KV, files, and index have
+no badge — enabling RLS on create flips the shield.
 
-**RLS Policies** lists `pg_policies` plus Manifest policies (`declared` /
-`live`). Two-finger click a row to open its sheet (Edit / Save on editable
-columns); two-finger click empty grid to create. Create policy pins
-SQL | Code (`store.schema.policy` + `pgPolicy`); drag the handle to
-resize the preview.
+**RLS Policies** lists `pg_policies` plus Manifest `declared` / `live`.
+Two-finger click a row for its sheet, or empty grid to create. Create
+pins SQL | Code (`store.schema.policy` + `pgPolicy`); drag to resize.
+
 **Templates** use `oke.user()` / `oke.gate()` / `oke.has_scope()`.
-Owner cards open a **Column** select of the table fields (guessed
-`creator_email` / `owner_email` when present) with the same PK / FK
-marks as schema cards. Create stays blocked until a real column is
-picked.
+Owner cards pick a **Column** (guess `creator_email` / `owner_email`)
+with PK / FK marks. Create stays blocked until a column is picked.
 
 Create policy picks a Gate posture (Read / Write / Both), or **Policy &
 scope**. Those picks fill `USING` / `WITH CHECK`. `TO` stays `public` —

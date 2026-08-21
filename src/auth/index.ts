@@ -162,6 +162,7 @@ export {
 
 export {
   AUTH_API_KEYS_RESOURCE,
+  allowlistAllowsIp,
   authenticateApiKey,
   clientIpFromRequest,
   createApiKey,
@@ -173,6 +174,7 @@ export {
   rotateApiKey,
   toApiKeyPublicRow,
   updateApiKey,
+  type AllowlistLookup,
   type ApiKeyPublicRow,
   type ApiKeyStore,
   type AuthenticateApiKeyOptions,
@@ -183,10 +185,15 @@ export {
 } from "./api-keys.ts";
 
 export {
+  apiKeySqlExec,
   bindApiKeySqlPersist,
+  bindHostApiKeySql,
+  bindHostApiKeySqlFromStore,
+  ensureApiKeyTable,
   hydrateApiKeyStore,
   persistApiKeyRow,
   type ApiKeySqlExec,
+  type HostApiKeySqlRuntime,
 } from "./api-key-sql.ts";
 
 export {

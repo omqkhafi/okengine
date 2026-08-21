@@ -8,8 +8,8 @@
 import type { WideEvent } from "../../runs/types.ts";
 import { projectRun } from "./flows.ts";
 import { piiFieldNamesFromManifest } from "./runs-pii.ts";
-import type { ConsoleLiveMessage, ConsoleState } from "./state.ts";
-import { publishLive } from "./state.ts";
+import { isKeelManifest, refreshSeededIdentities, seedKeelAccessRoles } from "./dev-identities.ts";
+import { publishLive, type ConsoleLiveMessage, type ConsoleState } from "./state.ts";
 
 /** WebSocket data bag for Console live clients. */
 export interface ConsoleLiveData {
@@ -97,6 +97,8 @@ export function feedManifest(
 ): void {
   const before = state.manifest;
   state.manifest = manifest;
+  refreshSeededIdentities(state.identities, manifest);
+  if (isKeelManifest(manifest)) seedKeelAccessRoles(state.roles, state.roleMembers);
   publishLive(state, { type: "manifest", manifest });
   if (before) {
     publishLive(state, { type: "manifest.diff", before, after: manifest });

@@ -240,6 +240,13 @@ export interface StoreRuntime {
    */
   kvNamespace(ref: ResourceRef): Promise<KvNamespace>;
   /**
+   * Shared primary SQL connection (`sharedSqlConn`).
+   *
+   * Host auth persist (`oke_api_keys`) and durable KV borrow this same
+   * connection — never a second open against `store.sql()` / `DATABASE_URL`.
+   */
+  primarySql(): Promise<SqlConnection | undefined>;
+  /**
    * Register a declaration (usually done at module load).
    *
    * @param decl - Declaration to register
@@ -544,6 +551,13 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       const ns = kvNs.get(decl.name);
       if (!ns) throw new Error(`Unknown kv ref: ${ref}`);
       return ns;
+    },
+    async primarySql() {
+      const sqlDriver = options.drivers.sql;
+      if (!sqlDriver) return undefined;
+      const firstSql = Object.values(options.sql ?? [])[0];
+      const url = options.sqlUrl ?? firstSql?.primary.url;
+      return sharedSqlConn(sqlDriver, "primary", { url });
     },
     onWriteEffects(effects) {
       return cache.invalidateFromEffects(effects);

@@ -5,8 +5,8 @@
 import {
   AccessIcon,
   Archive02Icon,
+  BiometricAccessIcon,
   ChartAnalysisIcon,
-  Key01Icon,
   Shapes01Icon,
   WorkflowSquare08Icon,
 } from "@hugeicons/core-free-icons";
@@ -50,7 +50,7 @@ const navItems: ReadonlyArray<{
     shortcut: "observability",
   },
   { title: "Vault", to: "/vault", icon: AccessIcon, shortcut: "vault" },
-  { title: "Access", to: "/access", icon: Key01Icon, shortcut: "access" },
+  { title: "Access", to: "/access", icon: BiometricAccessIcon, shortcut: "access" },
 ];
 
 /**

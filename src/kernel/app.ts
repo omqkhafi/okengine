@@ -1179,6 +1179,10 @@ export function oke(options: OkeOptions): OkeApp {
     };
     const result = await bootApplication(merged);
     bootResult = result;
+    if (gateConfig.auth?.apiKeyStore && result.store) {
+      const { bindHostApiKeySqlFromStore } = await import("../auth/api-key-sql.ts");
+      await bindHostApiKeySqlFromStore(result.store, gateConfig.auth.apiKeyStore);
+    }
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");

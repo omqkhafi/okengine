@@ -272,6 +272,12 @@ Bearer secrets authenticate as the creator; `fx.auth.scopes` shrink to the key.
 `gate.auth` always creates a shared key store (HMAC-SHA-256 with `gate.auth.secret`).
 Do not pass `apiKeyStore` unless you are injecting a test Map.
 
+<Callout title="Keys live on the app database">
+  With `store.sql()`, boot hydrates public `oke_api_keys` on that connection (`DATABASE_URL`) and
+  write-through persists create / rotate / revoke. Console **Access** attaches this host store — it
+  does not keep a second key database.
+</Callout>
+
 Session Flows manage keys via [fx](/docs/reference/fx) (`createApiKey`, `listApiKeys`,
 `revokeApiKey`, `rotateApiKey`, `updateApiKey`). A key-authenticated caller cannot.
 
@@ -340,8 +346,17 @@ Keying an authenticated endpoint by IP punishes shared NAT.
 <Accordion title="API key Bearer returns 401">
 
 Expired, revoked, allowlist miss, or over the key's `rateLimit`. Check
-`ipAllowlist` against the same X-Forwarded-For hop as `ip-allowlist`, and
-rotate if the secret was shown once and then lost.
+`ipAllowlist` against the same X-Forwarded-For hop as `ip-allowlist`.
+Entries are IPs or hostnames — a host resolves at verify time and must
+include the client IP (lookup failure is closed). Rotate if the secret
+was shown once and then lost.
+
+</Accordion>
+<Accordion title="Keys vanish after an app restart">
+
+No SQL store, or a new `gate.auth.secret`. Declare `store.sql()`, keep
+`DATABASE_URL` (or the same PGlite datadir) and the auth secret stable.
+Console does not persist keys in `oke_console`.
 
 </Accordion>
 <Accordion title="Key can call a route the issuer cannot">

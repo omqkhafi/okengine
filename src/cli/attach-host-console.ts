@@ -70,7 +70,11 @@ export async function attachHostToConsole(
   const ai = host.elements?.ai ?? host.bootResult?.ai;
   if (ai) bindAiRuntime(options.state, ai);
   const hostKeys = host.apiKeys;
-  if (hostKeys) options.state.apiKeys = hostKeys;
+  if (hostKeys) {
+    // Host `gate.auth.apiKeyStore` is the durable store (`oke_api_keys` on
+    // `store.sql()`). Console displays that instance — never the reverse.
+    options.state.apiKeys = hostKeys;
+  }
 
   return {
     stop: async () => {

@@ -2,8 +2,10 @@
  * Flat, full-bleed form primitives for Console sheets.
  */
 
+import { HugeiconsIcon } from "@hugeicons/react";
 import { Children, type ComponentProps, type JSX, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils.ts";
 
 /** Borderless control inside a {@link SheetField}. */
@@ -184,25 +186,28 @@ export interface SheetChoiceProps {
   readonly active: boolean;
   readonly onClick: () => void;
   readonly children: string;
+  /** Optional leading glyph — plane, kind. Durations stay text. */
+  readonly icon?: ElementHugeIcon;
 }
 
 /**
  * One option in a {@link SheetChoiceRow}.
  *
- * @param props - Active state + label
+ * @param props - Active state + label + optional icon
  */
-export function SheetChoice({ active, onClick, children }: SheetChoiceProps): JSX.Element {
+export function SheetChoice({ active, onClick, icon, children }: SheetChoiceProps): JSX.Element {
   return (
     <button
       type="button"
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 min-w-0 flex-1 items-center justify-center px-2 font-mono text-[10px] font-semibold outline-none select-none",
+        "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 font-mono text-[10px] font-semibold outline-none select-none",
         "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
         active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
+      {icon ? <HugeiconsIcon icon={icon} className="size-3 shrink-0" aria-hidden /> : null}
       {children}
     </button>
   );

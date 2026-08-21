@@ -33,6 +33,7 @@ import { statusForFailure } from "../../compiler/response.ts";
 import { gateDenialFailure } from "../../kernel/index.ts";
 import { diffManifest } from "../../manifest/diff.ts";
 import type { Gate as ManifestGate, Manifest, ManifestChange } from "../../manifest/types.ts";
+import { defaultMemberIdentityIds } from "./dev-identities.ts";
 
 /** Identity slice needed for Gates (avoids circular import with state). */
 export interface GatesIdentity {
@@ -413,8 +414,8 @@ export function createDefaultGateAuthStores(): {
     plane: "operator",
     description: "Console operators",
   });
-  setRoleGrants(roles, "role_member", ["member", "booking:create"]);
-  setRoleGrants(roles, "role_staff", ["member", "booking:create", "staff", "reports:export"]);
+  setRoleGrants(roles, "role_member", ["member"]);
+  setRoleGrants(roles, "role_staff", ["member"]);
   setRoleGrants(roles, "role_ops", [
     "console:store.sql:read",
     "console:store.sql:write",
@@ -424,7 +425,7 @@ export function createDefaultGateAuthStores(): {
   const apiKeys = createApiKeyStore();
 
   const roleMembers = new Map<string, string[]>([
-    ["role_member", ["user_demo", "user_member"]],
+    ["role_member", defaultMemberIdentityIds()],
     ["role_staff", []],
     ["role_ops", []],
   ]);

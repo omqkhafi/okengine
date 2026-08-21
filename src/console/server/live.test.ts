@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { feedManifest, feedRun, subscribeLive } from "./live.ts";
-import { createConsoleState, type ConsoleLiveMessage } from "./state.ts";
+import { createConsoleState, setManifest, type ConsoleLiveMessage } from "./state.ts";
 
 describe("console live Manifest feed", () => {
   test("pushes manifest and diff to subscribers", () => {
@@ -27,6 +27,31 @@ describe("console live Manifest feed", () => {
 
     expect(messages.some((m) => m.type === "manifest")).toBe(true);
     expect(messages.some((m) => m.type === "manifest.diff")).toBe(true);
+  });
+
+  test("seeded identities follow the Manifest — no invented booking:create", () => {
+    const state = createConsoleState({ silentClaim: true, secret: "x" });
+    expect(state.identities).toHaveLength(10);
+    expect(state.identities[0]?.id).toBe("user_demo");
+    expect(state.identities.find((row) => row.id === "user_member")?.scopes).toEqual(["member"]);
+    expect(state.identities.find((row) => row.id === "user_guest")?.scopes).toEqual([]);
+    expect(state.identities.find((row) => row.id === "user_demo")?.scopes).toEqual(["member"]);
+
+    setManifest(state, {
+      oke: "1.0",
+      app: "keel-like",
+      gates: {
+        member: { kind: "policy", scopes: ["member"] },
+        "task:write": { kind: "policy", scopes: ["task:write"] },
+      },
+    });
+    expect(state.identities.find((row) => row.id === "user_demo")?.scopes).toEqual([
+      "member",
+      "task:write",
+    ]);
+    expect(state.identities.find((row) => row.id === "user_demo")?.scopes).not.toContain(
+      "booking:create",
+    );
   });
 });
 

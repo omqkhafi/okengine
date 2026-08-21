@@ -12,13 +12,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.16.0 — 2026-08-21
+
 ### ✨ Added
 
 #### Console — Auth & shell
 
-- Access (`/access`) manages API keys: create, edit, revoke, rotate,
-  reveal-once secret, usage from Runs, and a working Bearer call
-  example. Sidebar, command palette, and ⌘6.
+- Access (`/access`) manages API keys: create, edit, refresh expiry
+  (same secret), revoke, rotate, reveal-once secret, usage from Runs,
+  and a Bearer call example.
+  Sidebar, command palette, and ⌘6. Session `?next=` may restore
+  `/access`.
 
 #### Runtime
 
@@ -51,18 +55,68 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Console — Chrome
+
+- Access sidebar and command-palette mark is BiometricAccessIcon so it
+  no longer shares Vault's key glyph.
+
+#### Console — Auth & shell
+
+- Access create sheet uses plane / issuer / scope chips and expiry
+  presets (never · 30d · 90d · custom `7d` / `12h`). Issuer and scopes
+  have in-header search. Scopes group by Module:Action prefix.
+  User / Operator bands and the create-sheet Plane choices use
+  UserIcon and CrownIcon. Rotate
+  requires typed ROTATE. The inspector matches Vault: identity strip,
+  usage tokens, ExplorerEmpty.
+- Access key inspector groups scopes by Module:Action, lists allow
+  entries as IP/Host rows, frames the Bearer call like a Trace
+  request, and labels past expiry as `expired`. Revoked / unused /
+  expired keys get a posture strip. Refresh resets the deadline from
+  now (snaps 30d / 90d) without rotating the secret.
+- Access create and edit share expiry, an add-one allow list (IPv4,
+  IPv6, localhost, or FQDN — junk is dropped), and a split rate
+  (max / every / s·m·h·d·ms). Allow rows show IP vs Host. Edit can
+  still change them after mint.
+- Console default roles grant `member` only. Demo User scopes follow
+  the live Manifest (no leftover Skyport `booking:create` /
+  `reports:export` on every app).
+- Invoke-as seeds ten identities from owner to guest. Demo User
+  (`user_demo`) and Member (`user_member`) keep their ids. Guest
+  has no scopes. A Keel Manifest always seeds every Keel Gate
+  scope (`member`, `task:write`, `comment:write`, `files:write`,
+  `project:admin`, `member:admin`, `webhook:admin`) onto owner
+  and the Access role ladder.
+
+#### Runtime
+
+- API key `ipAllowlist` entries may be hostnames. Verify resolves them
+  and matches the client IP (lookup failure is closed).
+
 #### Dev, Keel & create-oke
 
 - Keel flow helpers (`nextIdentifier`, `writeActivity`, `pushInbox`,
   `upsertTask`) take the exported `Fx` type — no hand-rolled `fx`
   shape and no `as never` at the call site.
+- Keel seed featured members are a ten-rung owner → guest ladder
+  and include `demo@example.com` and `member@example.com`.
 
 #### Docs
 
 - Flow and fx pages call out typing extracted helpers as `Fx`.
   Store documents inferred `select().from(table)` rows.
+- Gate documents API keys (issuer identity, `fx.auth` methods, Access).
+  fx lists the methods and `apiKeyId`. Vault points keys to `/access`.
 
 ### 🐛 Fixed
+
+#### Console — Auth & shell
+
+- Access create uses the issuer's identity plus role grants, and only
+  offers scopes that exist in the app catalog.
+- Access edit shows the frozen issuer and lists that principal's
+  grantable scopes — not only the actor's user-plane ceiling.
+  The sheet stays editable while the key list refreshes.
 
 #### Runtime
 
@@ -73,6 +127,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Edge `createFx` and Store-only `oke()` load `fx.auth` key methods
   only via computed `import.meta.require`, so graphs that never
   manage keys stay under the existing bundle budgets.
+- API keys persist in public `oke_api_keys` on the app `store.sql()`
+  connection (`DATABASE_URL`). A standalone restart hydrates a fresh
+  `gate.auth.apiKeyStore` and Bearer still verifies — no Console.
+  Access attaches that host instance, not `oke_console.oke_api_keys`.
 
 ## v0.15.2 — 2026-08-21
 

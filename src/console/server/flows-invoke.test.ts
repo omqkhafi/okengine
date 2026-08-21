@@ -15,11 +15,28 @@ import { http } from "../../kernel/triggers.ts";
 import { field, store } from "../../elements/store.ts";
 import { PII_MASK } from "../../elements/store/classify.ts";
 import { createTestApp } from "../../test/create-test-app.ts";
+import type { Manifest } from "../../manifest/types.ts";
 import { FLOWS_TEST_MANIFEST } from "../ui-next/src/features/flows/fixture.ts";
 import { bindHostInvokeUserFlow } from "./invoke-user-flow.ts";
 import { startConsoleApp } from "./serve.ts";
 import { setManifest } from "./state.ts";
 import type { InvokeUserFlowInput } from "./invoke-user-flow.ts";
+
+/** Fixture plus the booking gate the host actually enforces. */
+const BOOKING_INVOKE_MANIFEST: Manifest = {
+  ...FLOWS_TEST_MANIFEST,
+  gates: {
+    member: { kind: "policy", scopes: ["member"] },
+    "booking:create": { kind: "policy", scopes: ["booking:create"] },
+  },
+  flows: {
+    ...FLOWS_TEST_MANIFEST.flows,
+    "bookings.create": {
+      ...FLOWS_TEST_MANIFEST.flows!["bookings.create"]!,
+      gates: ["member", "booking:create"],
+    },
+  },
+};
 
 const memoryDrivers = {
   store: { kv: { dev: "memory", test: "memory", prod: "memory" } },
@@ -147,11 +164,11 @@ describe("console flows invoke", () => {
       secret: "test-secret-flows",
       silentClaim: true,
       production: false,
-      manifest: FLOWS_TEST_MANIFEST,
+      manifest: BOOKING_INVOKE_MANIFEST,
     });
     const host = await bootInvokeHost();
     try {
-      setManifest(handle.state, FLOWS_TEST_MANIFEST);
+      setManifest(handle.state, BOOKING_INVOKE_MANIFEST);
       handle.state.invokeUserFlow = bindHostInvokeUserFlow(host);
       const auth = await claimOperator(handle);
 
@@ -214,12 +231,12 @@ describe("console flows invoke", () => {
       secret: "test-secret-flows-adv",
       silentClaim: true,
       production: false,
-      manifest: FLOWS_TEST_MANIFEST,
+      manifest: BOOKING_INVOKE_MANIFEST,
     });
     const host = await bootInvokeHost();
     const seen: InvokeUserFlowInput[] = [];
     try {
-      setManifest(handle.state, FLOWS_TEST_MANIFEST);
+      setManifest(handle.state, BOOKING_INVOKE_MANIFEST);
       const bound = bindHostInvokeUserFlow(host);
       handle.state.invokeUserFlow = async (input) => {
         seen.push(input);

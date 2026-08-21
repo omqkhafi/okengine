@@ -82,6 +82,10 @@ export interface AccessKeyRow {
   readonly id: string;
   readonly name: string;
   readonly plane: "user" | "operator";
+  /** Stored issuer — user id or operator id. Frozen after mint. */
+  readonly creatorId: string;
+  /** Issuer ceiling stored on the key — edit scopes stay at or under this. */
+  readonly creatorScopes: readonly string[];
   readonly scopes: readonly string[];
   readonly createdAt: number;
   readonly lastUsedAt: number | null;
@@ -206,7 +210,7 @@ export function projectAccessPanel(options: ProjectAccessOptions): AccessPanelPr
   });
 
   const operators = projectOperators(options);
-  const users = projectUsers(options);
+  const users = projectUsers(options, catalog);
   const roles = projectRoles(options);
   const keys = projectKeys(options, now);
   const invites = projectInvites(options, now);
@@ -594,14 +598,35 @@ function projectOperators(options: ProjectAccessOptions): AccessOperatorRow[] {
   return rows.sort((a, b) => a.email.localeCompare(b.email));
 }
 
-function projectUsers(options: ProjectAccessOptions): AccessUserRow[] {
+/**
+ * User-plane issuer ceiling — identity scopes plus role grants.
+ * Create must use this union; the list already did.
+ *
+ * @param options - User + roles
+ */
+export function accessUserCeiling(options: {
+  readonly userId: string;
+  readonly identityScopes?: Iterable<string>;
+  readonly roles: RoleStore;
+  readonly roleMembers: ReadonlyMap<string, readonly string[]>;
+}): string[] {
+  const roleIds = roleIdsForMember(options.roleMembers, options.userId);
+  const fromRoles = [...scopesForRoles(options.roles, roleIds, "user")];
+  const fromIdentity = [...(options.identityScopes ?? [])];
+  return [...new Set([...fromRoles, ...fromIdentity])].sort((a, b) => a.localeCompare(b));
+}
+
+function projectUsers(options: ProjectAccessOptions, catalog: readonly string[]): AccessUserRow[] {
+  const allowed = new Set(catalog);
   return options.identities
     .map((identity) => {
       const roleIds = roleIdsForMember(options.roleMembers, identity.id);
-      const fromRoles = [...scopesForRoles(options.roles, roleIds, "user")];
-      const scopes = [...new Set([...fromRoles, ...identity.scopes])].sort((a, b) =>
-        a.localeCompare(b),
-      );
+      const scopes = accessUserCeiling({
+        userId: identity.id,
+        identityScopes: identity.scopes,
+        roles: options.roles,
+        roleMembers: options.roleMembers,
+      }).filter((scope) => allowed.has(scope));
       return {
         id: identity.id,
         email: identity.email,
@@ -657,6 +682,8 @@ function toKeyRow(
     readonly id: string;
     readonly name: string;
     readonly plane: "user" | "operator";
+    readonly creatorId: string;
+    readonly creatorScopes: readonly string[];
     readonly scopes: readonly string[];
     readonly createdAt: number;
     readonly lastUsedAt: number | null;
@@ -672,6 +699,8 @@ function toKeyRow(
     id: key.id,
     name: key.name,
     plane: key.plane,
+    creatorId: key.creatorId,
+    creatorScopes: [...key.creatorScopes].sort((a, b) => a.localeCompare(b)),
     scopes: [...key.scopes].sort((a, b) => a.localeCompare(b)),
     createdAt: key.createdAt,
     lastUsedAt: key.lastUsedAt,

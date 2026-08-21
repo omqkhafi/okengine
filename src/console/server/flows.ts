@@ -36,6 +36,7 @@ import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 import { resolveInvokeAs } from "./invoke-user-flow.ts";
 import { resolveRlsIdentity } from "../../elements/store.ts";
 import type { RlsIdentity } from "../../drivers/pg-rls.ts";
+import { accessUserCeiling } from "./access.ts";
 import { isKnownConsoleSqlGate, StoreFileNotFoundError, tenancyDeclared } from "./store.ts";
 import {
   PG_STAT_STATEMENTS_NOT_CREATED,
@@ -1164,6 +1165,22 @@ const GatesPowersOut = z.object({
   deniedFlowIds: z.array(z.string()),
 });
 
+const AccessKeyRowOut = z.object({
+  id: z.string(),
+  name: z.string(),
+  plane: z.enum(["user", "operator"]),
+  creatorId: z.string(),
+  creatorScopes: z.array(z.string()),
+  scopes: z.array(z.string()),
+  createdAt: z.number(),
+  lastUsedAt: z.number().nullable(),
+  expiresAt: z.number().nullable(),
+  revokedAt: z.number().nullable(),
+  rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
+  ipAllowlist: z.array(z.string()),
+  unused90d: z.boolean(),
+});
+
 const AccessPlaneSection = z.object({
   plane: z.enum(["user", "operator"]),
   operators: z
@@ -1202,21 +1219,7 @@ const AccessPlaneSection = z.object({
       memberCount: z.number(),
     }),
   ),
-  keys: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      plane: z.enum(["user", "operator"]),
-      scopes: z.array(z.string()),
-      createdAt: z.number(),
-      lastUsedAt: z.number().nullable(),
-      expiresAt: z.number().nullable(),
-      revokedAt: z.number().nullable(),
-      rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
-      ipAllowlist: z.array(z.string()),
-      unused90d: z.boolean(),
-    }),
-  ),
+  keys: z.array(AccessKeyRowOut),
   invites: z
     .array(
       z.object({
@@ -1236,21 +1239,7 @@ const AccessListOut = z.object({
   operatorPlane: AccessPlaneSection,
   userPlane: AccessPlaneSection,
   hygiene: z.object({
-    unusedKeys: z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        plane: z.enum(["user", "operator"]),
-        scopes: z.array(z.string()),
-        createdAt: z.number(),
-        lastUsedAt: z.number().nullable(),
-        expiresAt: z.number().nullable(),
-        revokedAt: z.number().nullable(),
-        rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
-        ipAllowlist: z.array(z.string()),
-        unused90d: z.boolean(),
-      }),
-    ),
+    unusedKeys: z.array(AccessKeyRowOut),
     neverSignedInOperators: z.array(
       z.object({
         id: z.string(),
@@ -1334,35 +1323,11 @@ const AccessUpdateKeyIn = z.object({
 });
 
 const AccessUpdateKeyOut = z.object({
-  key: z.object({
-    id: z.string(),
-    name: z.string(),
-    plane: z.enum(["user", "operator"]),
-    scopes: z.array(z.string()),
-    createdAt: z.number(),
-    lastUsedAt: z.number().nullable(),
-    expiresAt: z.number().nullable(),
-    revokedAt: z.number().nullable(),
-    rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
-    ipAllowlist: z.array(z.string()),
-    unused90d: z.boolean(),
-  }),
+  key: AccessKeyRowOut,
 });
 
 const AccessCreateKeyOut = z.object({
-  key: z.object({
-    id: z.string(),
-    name: z.string(),
-    plane: z.enum(["user", "operator"]),
-    scopes: z.array(z.string()),
-    createdAt: z.number(),
-    lastUsedAt: z.number().nullable(),
-    expiresAt: z.number().nullable(),
-    revokedAt: z.number().nullable(),
-    rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
-    ipAllowlist: z.array(z.string()),
-    unused90d: z.boolean(),
-  }),
+  key: AccessKeyRowOut,
   /** Raw secret — returned exactly once. */
   secret: z.string(),
 });
@@ -1374,19 +1339,7 @@ const AccessRevokeKeyIn = z.object({
 });
 
 const AccessRevokeKeyOut = z.object({
-  key: z.object({
-    id: z.string(),
-    name: z.string(),
-    plane: z.enum(["user", "operator"]),
-    scopes: z.array(z.string()),
-    createdAt: z.number(),
-    lastUsedAt: z.number().nullable(),
-    expiresAt: z.number().nullable(),
-    revokedAt: z.number().nullable(),
-    rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
-    ipAllowlist: z.array(z.string()),
-    unused90d: z.boolean(),
-  }),
+  key: AccessKeyRowOut,
   blastRadius: AccessKeyBlastOut,
 });
 
@@ -3908,17 +3861,21 @@ export function resolveAccessKeyIssuer(
     return { error: "creatorUserId is required for user-plane keys" };
   }
   const identity = state.identities.find((row) => row.id === userId);
-  if (identity) {
-    return { creatorId: userId, creatorScopes: [...identity.scopes] };
-  }
   const roleIds = [...state.roleMembers.entries()]
     .filter(([, members]) => members.includes(userId))
     .map(([id]) => id);
-  const scopes = [...scopesForRoles(state.roles, roleIds, "user")];
-  if (scopes.length === 0 && roleIds.length === 0) {
+  if (!identity && roleIds.length === 0) {
     return { error: `unknown user: ${userId}` };
   }
-  return { creatorId: userId, creatorScopes: scopes };
+  return {
+    creatorId: userId,
+    creatorScopes: accessUserCeiling({
+      userId,
+      identityScopes: identity?.scopes,
+      roles: state.roles,
+      roleMembers: state.roleMembers,
+    }),
+  };
 }
 
 function createAccessList(state: ConsoleState) {

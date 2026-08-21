@@ -57,6 +57,12 @@ import type { CronStore } from "../../elements/clock/reconcile.ts";
 import type { ResourceRef } from "../../manifest/types.ts";
 import type { ConsoleClockList } from "./clock.ts";
 import {
+  defaultDevIdentities,
+  isKeelManifest,
+  refreshSeededIdentities,
+  seedKeelAccessRoles,
+} from "./dev-identities.ts";
+import {
   createDefaultGateAuthStores,
   createManifestGateRuntime,
   type GatesPanelProjection,
@@ -88,6 +94,8 @@ import {
   rejectConsoleAuthMutation,
   requireConsoleAuthStore,
 } from "./auth-store.ts";
+
+export { refreshSeededIdentities } from "./dev-identities.ts";
 
 /** How long a built-in Vault backend probe is reused across list polls. */
 const VAULT_BACKEND_TTL_MS = 15_000;
@@ -1277,6 +1285,8 @@ export function setManifest(state: ConsoleState, manifest: Manifest): void {
   const before = state.manifest;
   if (before) state.previousManifest = before;
   state.manifest = manifest;
+  refreshSeededIdentities(state.identities, manifest);
+  if (isKeelManifest(manifest)) seedKeelAccessRoles(state.roles, state.roleMembers);
   publishLive(state, { type: "manifest", manifest });
   if (before) {
     publishLive(state, { type: "manifest.diff", before, after: manifest });
@@ -1399,39 +1409,6 @@ export async function bindManifestGateRuntime(state: ConsoleState): Promise<void
   if (!hasGates) return;
   const { runtime } = await createManifestGateRuntime(state.manifest, state.now);
   state.gateRuntime = runtime;
-}
-
-/**
- * Default development identities for the invoke-as picker.
- * Demo scopes follow Manifest gate `scopes` when present so Call API
- * matches the seeded app (keel `issue:write`, skyport `booking:create`).
- *
- * @param manifest - Optional Manifest used to derive application scopes
- */
-function defaultDevIdentities(manifest?: Manifest | null): ConsoleIdentity[] {
-  const scopes = new Set<string>(["member"]);
-  for (const gate of Object.values(manifest?.gates ?? {})) {
-    for (const scope of gate.scopes ?? []) {
-      scopes.add(scope);
-    }
-  }
-  if (scopes.size === 1) scopes.add("booking:create");
-  return [
-    {
-      id: "user_demo",
-      email: "demo@example.com",
-      name: "Demo User",
-      status: "active",
-      scopes: [...scopes].sort(),
-    },
-    {
-      id: "user_member",
-      email: "member@example.com",
-      name: "Member",
-      status: "active",
-      scopes: ["member"],
-    },
-  ];
 }
 
 function accessCatalog(state: ConsoleState): string[] {

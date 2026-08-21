@@ -21,6 +21,7 @@ const FEATURES_ROOT = `${UI_ROOT}/features`;
  * already covers it; the list makes coverage explicit in CI output.
  */
 export const CONSOLE_UI_FEATURE_DIRS = [
+  "access",
   "auth",
   "flows",
   "not-found",

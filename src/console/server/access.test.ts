@@ -132,6 +132,10 @@ describe("projectAccessPanel", () => {
     expect(projection.userPlane.grantableScopes.every((s) => !s.startsWith("console:"))).toBe(true);
 
     expect(projection.hygiene.unusedKeys.some((k) => k.id === "key_stale")).toBe(true);
+    expect(projection.userPlane.keys.find((k) => k.id === "key_stale")?.creatorId).toBe("op1");
+    expect(projection.userPlane.keys.find((k) => k.id === "key_stale")?.creatorScopes).toEqual([
+      "member",
+    ]);
     expect(projection.hygiene.neverSignedInOperators.some((o) => o.id === "op_never")).toBe(true);
     expect(projection.hygiene.expiredInvitations.some((i) => i.id === "inv1")).toBe(true);
   });
@@ -153,6 +157,40 @@ describe("projectAccessPanel", () => {
     expect(projection.userPlane.grantableScopes).not.toContain("booking:create");
     expect(projection.operatorPlane.grantableScopes).toContain("console:store.sql:read");
     expect(projection.operatorPlane.grantableScopes).not.toContain("console:store.sql:write");
+  });
+
+  test("issuer scopes drop role grants that are not in the catalog", () => {
+    const auth = createDefaultGateAuthStores();
+    setRoleGrants(auth.roles, "role_member", ["member", "booking:create"]);
+    const projection = projectAccessPanel({
+      manifest: {
+        oke: "1.0",
+        app: "keel-like",
+        flows: {},
+        gates: {
+          member: { kind: "policy", scopes: ["member"] },
+          "task:write": { kind: "policy", scopes: ["task:write"] },
+        },
+      },
+      roles: auth.roles,
+      apiKeys: auth.apiKeys,
+      operators: createOperatorStore(),
+      invites: createOperatorInviteStore(),
+      identities: [
+        {
+          id: "user_demo",
+          email: "demo@example.com",
+          name: "Demo",
+          status: "active",
+          scopes: ["member", "task:write"],
+        },
+      ],
+      roleMembers: auth.roleMembers,
+      actorScopes: ["console:*"],
+      now: () => 0,
+    });
+    expect(projection.userPlane.users?.[0]?.scopes).toEqual(["member", "task:write"]);
+    expect(projection.userPlane.users?.[0]?.scopes).not.toContain("booking:create");
   });
 });
 
@@ -347,6 +385,37 @@ describe("resolveAccessKeyIssuer", () => {
       creatorUserId: "user_u",
     });
     expect(issued).toEqual({ creatorId: "user_u", creatorScopes: ["member"] });
+  });
+
+  test("user-plane ceiling includes role grants, not only identity.scopes", async () => {
+    const { resolveAccessKeyIssuer } = await import("./flows.ts");
+    const roles = createRoleStore();
+    upsertRole(roles, {
+      id: "role_member",
+      name: "member",
+      plane: "user",
+      description: "",
+    });
+    setRoleGrants(roles, "role_member", ["member", "task:write"]);
+    const issued = resolveAccessKeyIssuer(
+      {
+        identities: [
+          {
+            id: "user_u",
+            email: "u@example.com",
+            name: "U",
+            status: "active" as const,
+            scopes: ["member"],
+          },
+        ],
+        roleMembers: new Map([["role_member", ["user_u"]]]),
+        roles,
+        operators: { roles: new Map() },
+      } as never,
+      "op1",
+      { plane: "user", creatorUserId: "user_u" },
+    );
+    expect(issued).toEqual({ creatorId: "user_u", creatorScopes: ["member", "task:write"] });
   });
 });
 

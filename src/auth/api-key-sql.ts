@@ -1,8 +1,14 @@
 /**
  * SQL persist / hydrate for {@link ApiKeyRow} on `oke_api_keys`.
+ *
+ * Host path: public schema on the app `store.sql()` connection
+ * (`sharedSqlConn` / `DATABASE_URL`). Console attaches that same
+ * {@link ApiKeyStore} — it does not own a second key table.
  */
 
+import type { SqlConnection } from "../drivers/types.ts";
 import type { ApiKeyRow } from "./tables.ts";
+import { AUTH_TABLES } from "./tables.ts";
 import type { ApiKeyStore } from "./api-keys.ts";
 
 /** Minimal SQL executor for the auth key table. */
@@ -16,10 +22,15 @@ export interface ApiKeySqlExec {
  *
  * @param sql - Executor
  * @param row - Key row
+ * @param table - Physical table (`oke_api_keys` or schema-qualified)
  */
-export async function persistApiKeyRow(sql: ApiKeySqlExec, row: ApiKeyRow): Promise<void> {
+export async function persistApiKeyRow(
+  sql: ApiKeySqlExec,
+  row: ApiKeyRow,
+  table: string = AUTH_TABLES.apiKeys,
+): Promise<void> {
   await sql.execute(
-    `INSERT INTO oke_api_keys (
+    `INSERT INTO ${table} (
       id, plane, hash, name, scopes, expires_at, rate_limit, ip_allowlist,
       creator_id, creator_scopes, created_at, last_used_at, revoked_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -30,6 +41,8 @@ export async function persistApiKeyRow(sql: ApiKeySqlExec, row: ApiKeyRow): Prom
       expires_at = excluded.expires_at,
       rate_limit = excluded.rate_limit,
       ip_allowlist = excluded.ip_allowlist,
+      creator_id = excluded.creator_id,
+      creator_scopes = excluded.creator_scopes,
       last_used_at = excluded.last_used_at,
       revoked_at = excluded.revoked_at`,
     [
@@ -55,9 +68,14 @@ export async function persistApiKeyRow(sql: ApiKeySqlExec, row: ApiKeyRow): Prom
  *
  * @param sql - Executor
  * @param store - Destination store
+ * @param table - Physical table
  */
-export async function hydrateApiKeyStore(sql: ApiKeySqlExec, store: ApiKeyStore): Promise<void> {
-  const rows = await sql.all(`SELECT * FROM oke_api_keys`);
+export async function hydrateApiKeyStore(
+  sql: ApiKeySqlExec,
+  store: ApiKeyStore,
+  table: string = AUTH_TABLES.apiKeys,
+): Promise<void> {
+  const rows = await sql.all(`SELECT * FROM ${table}`);
   for (const raw of rows) {
     const row = rowFromSql(raw);
     if (row) store.keys.set(row.id, row);
@@ -69,9 +87,99 @@ export async function hydrateApiKeyStore(sql: ApiKeySqlExec, store: ApiKeyStore)
  *
  * @param store - Key store
  * @param sql - Executor
+ * @param table - Physical table
  */
-export function bindApiKeySqlPersist(store: ApiKeyStore, sql: ApiKeySqlExec): void {
-  store.persist = (row) => persistApiKeyRow(sql, row);
+export function bindApiKeySqlPersist(
+  store: ApiKeyStore,
+  sql: ApiKeySqlExec,
+  table: string = AUTH_TABLES.apiKeys,
+): void {
+  store.persist = (row) => persistApiKeyRow(sql, row, table);
+}
+
+/** Runtime that can open the app's shared primary SQL connection. */
+export interface HostApiKeySqlRuntime {
+  primarySql(): Promise<SqlConnection | undefined>;
+}
+
+/**
+ * Adapt a driver connection to {@link ApiKeySqlExec}.
+ *
+ * @param conn - Shared `store.sql()` connection
+ */
+export function apiKeySqlExec(conn: SqlConnection): ApiKeySqlExec {
+  return {
+    execute: async (sql, params) => {
+      await conn.exec(sql, params);
+    },
+    all: async (sql) => conn.query(sql),
+  };
+}
+
+/**
+ * Create public `oke_api_keys` when missing (host schema, not `oke_console`).
+ *
+ * @param conn - Shared SQL connection
+ * @param table - Physical table
+ */
+export async function ensureApiKeyTable(
+  conn: SqlConnection,
+  table: string = AUTH_TABLES.apiKeys,
+): Promise<void> {
+  await conn.exec(`
+    CREATE TABLE IF NOT EXISTS ${table} (
+      id TEXT PRIMARY KEY NOT NULL,
+      plane TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      scopes TEXT NOT NULL DEFAULT '[]',
+      expires_at BIGINT,
+      rate_limit TEXT,
+      ip_allowlist TEXT NOT NULL DEFAULT '[]',
+      creator_id TEXT NOT NULL,
+      creator_scopes TEXT NOT NULL DEFAULT '[]',
+      created_at BIGINT NOT NULL,
+      last_used_at BIGINT,
+      revoked_at BIGINT
+    )
+  `);
+}
+
+/**
+ * Hydrate and write-through-persist a host {@link ApiKeyStore} on `conn`.
+ *
+ * Leaves an already-bound `persist` hook in place (injected test stores).
+ *
+ * @param conn - App SQL connection (`sharedSqlConn`)
+ * @param store - `gate.auth.apiKeyStore`
+ * @param table - Physical table (`oke_api_keys` in `public`)
+ */
+export async function bindHostApiKeySql(
+  conn: SqlConnection,
+  store: ApiKeyStore,
+  table: string = AUTH_TABLES.apiKeys,
+): Promise<void> {
+  await ensureApiKeyTable(conn, table);
+  const exec = apiKeySqlExec(conn);
+  await hydrateApiKeyStore(exec, store, table);
+  if (!store.persist) bindApiKeySqlPersist(store, exec, table);
+}
+
+/**
+ * Bind host key persist through {@link HostApiKeySqlRuntime.primarySql}.
+ *
+ * No-ops when the store runtime has no SQL driver (in-memory-only apps).
+ *
+ * @param runtime - Booted `store` element
+ * @param store - `gate.auth.apiKeyStore`
+ */
+export async function bindHostApiKeySqlFromStore(
+  runtime: HostApiKeySqlRuntime,
+  store: ApiKeyStore,
+): Promise<void> {
+  const conn = await runtime.primarySql();
+  if (!conn) return;
+  await bindHostApiKeySql(conn, store);
 }
 
 function rowFromSql(raw: Record<string, unknown>): ApiKeyRow | null {

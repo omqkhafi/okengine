@@ -11,6 +11,8 @@
  * Spec: wizard closes permanently once the first operator exists (console §2.5).
  * Claim codes stay out of Postgres (optional local DX mirror: `.oke/claim-code`);
  * operators, sessions, and the signing secret must survive restarts.
+ * API keys persist on the host `store.sql()` connection (`public.oke_api_keys`),
+ * not in this schema — Console attaches that store via `attachHostToConsole`.
  */
 
 import { mkdirSync } from "node:fs";

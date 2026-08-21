@@ -15,12 +15,31 @@ describe("keel volume seed", () => {
   test("featured story keeps ENG-12 and Harbor spaces", () => {
     expect(FEATURED_TASKS.some((task) => task.id === "tsk_eng_12")).toBe(true);
     expect(FEATURED_MEMBERS.map((m) => m.id)).toEqual([
+      "mem_demo",
+      "mem_admin",
       "mem_aria",
+      "mem_lead",
       "mem_ben",
-      "mem_cai",
-      "mem_dia",
       "mem_eli",
+      "mem_cai",
+      "mem_member",
+      "mem_commenter",
+      "mem_dia",
     ]);
+    expect(FEATURED_MEMBERS.map((m) => m.role)).toEqual([
+      "owner",
+      "admin",
+      "project_manager",
+      "lead",
+      "developer",
+      "contributor",
+      "member",
+      "member",
+      "commenter",
+      "guest",
+    ]);
+    expect(FEATURED_MEMBERS.find((m) => m.id === "mem_demo")?.email).toBe("demo@example.com");
+    expect(FEATURED_MEMBERS.find((m) => m.id === "mem_member")?.email).toBe("member@example.com");
     expect(FEATURED_SPACES.map((s) => s.key)).toEqual(["ENG", "DES", "GTM"]);
     const projectIds = new Set<string>(FEATURED_PROJECTS.map((project) => project.id));
     expect(FEATURED_SECTIONS.length).toBeGreaterThan(0);

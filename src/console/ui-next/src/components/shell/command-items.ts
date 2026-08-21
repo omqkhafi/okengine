@@ -5,6 +5,7 @@
 import {
   AccessIcon,
   Archive02Icon,
+  BiometricAccessIcon,
   ChartAnalysisIcon,
   ComputerIcon,
   Logout03Icon,
@@ -12,7 +13,6 @@ import {
   Settings01Icon,
   Shapes01Icon,
   Sun03Icon,
-  Key01Icon,
   WorkflowSquare08Icon,
 } from "@hugeicons/core-free-icons";
 import type { CommandItem } from "@/components/shell/command-palette.tsx";
@@ -69,7 +69,7 @@ const MODULES: ReadonlyArray<{
   {
     title: "Access",
     to: "/access",
-    icon: Key01Icon,
+    icon: BiometricAccessIcon,
     keywords: ["keys", "api", "scopes"],
     shortcut: "access",
   },

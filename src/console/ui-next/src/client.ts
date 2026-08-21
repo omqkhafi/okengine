@@ -1411,6 +1411,10 @@ export type AccessKeyRow = {
   readonly id: string;
   readonly name: string;
   readonly plane: "user" | "operator";
+  /** Stored issuer — user id or operator id. Frozen after mint. */
+  readonly creatorId: string;
+  /** Issuer ceiling stored on the key. */
+  readonly creatorScopes: readonly string[];
   readonly scopes: readonly string[];
   readonly createdAt: number;
   readonly lastUsedAt: number | null;
@@ -1431,10 +1435,21 @@ export type AccessUserRow = {
   readonly scopes: readonly string[];
 };
 
+/** One Access operator row. */
+export type AccessOperatorRow = {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string;
+  readonly status: "active" | "suspended" | "invited";
+  readonly roles: readonly string[];
+  readonly scopes: readonly string[];
+};
+
 /** Access plane section. */
 export type AccessPlaneSection = {
   readonly keys: readonly AccessKeyRow[];
   readonly users?: readonly AccessUserRow[];
+  readonly operators?: readonly AccessOperatorRow[];
   readonly grantableScopes: readonly string[];
 };
 

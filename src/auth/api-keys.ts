@@ -8,6 +8,7 @@
  * @see docs/spec/console.md §3.3 · §9.14
  */
 
+import { lookup as dnsLookup } from "node:dns/promises";
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import { assertAttenuated } from "./attenuation.ts";
 import type { AuthPlane } from "./planes.ts";
@@ -168,11 +169,16 @@ export async function createApiKey(
   return { row, secret };
 }
 
+/** Resolve a stored hostname to addresses (injected in tests). */
+export type AllowlistLookup = (host: string) => Promise<readonly string[]>;
+
 /** Options for {@link authenticateApiKey}. */
 export interface AuthenticateApiKeyOptions {
   readonly now?: () => number;
   /** Client IP for allowlist enforcement. */
   readonly ip?: string;
+  /** Hostname → A/AAAA (defaults to system DNS). */
+  readonly lookup?: AllowlistLookup;
 }
 
 /**
@@ -197,8 +203,8 @@ export async function authenticateApiKey(
     if (row.revokedAt !== null) return null;
     if (row.expiresAt !== null && row.expiresAt <= now()) return null;
     if (row.ipAllowlist.length > 0) {
-      const ip = options.ip;
-      if (ip === undefined || !row.ipAllowlist.includes(ip)) return null;
+      const allowed = await allowlistAllowsIp(row.ipAllowlist, options.ip, options.lookup);
+      if (!allowed) return null;
     }
     if (row.rateLimit && !takeKeyRate(store, row.id, row.rateLimit, now())) return null;
     row.lastUsedAt = now();
@@ -318,6 +324,60 @@ export function toApiKeyPublicRow(row: ApiKeyRow): ApiKeyPublicRow {
     rateLimit: row.rateLimit,
     ipAllowlist: [...row.ipAllowlist],
   };
+}
+
+/**
+ * Whether the client IP matches an allowlist entry.
+ * Literals compare exactly. Hostnames resolve at verify time (fail closed).
+ *
+ * @param entries - IPs and/or hostnames
+ * @param ip - Client IP
+ * @param lookup - Hostname resolver
+ */
+export async function allowlistAllowsIp(
+  entries: readonly string[],
+  ip: string | undefined,
+  lookup: AllowlistLookup = lookupAllowlistHost,
+): Promise<boolean> {
+  if (entries.length === 0) return true;
+  if (ip === undefined) return false;
+  const client = ip.trim().toLowerCase();
+  for (const raw of entries) {
+    const entry = normalizeAllowlistEntry(raw);
+    if (entry.length === 0) continue;
+    if (isIpLiteral(entry)) {
+      if (entry === client) return true;
+      continue;
+    }
+    try {
+      const addrs = await lookup(entry);
+      if (addrs.some((addr) => addr.trim().toLowerCase() === client)) return true;
+    } catch {
+      // This host fails closed; other entries may still match.
+    }
+  }
+  return false;
+}
+
+function normalizeAllowlistEntry(raw: string): string {
+  let entry = raw.trim().toLowerCase();
+  entry = entry.replace(/^https?:\/\//, "");
+  const slash = entry.indexOf("/");
+  if (slash >= 0) entry = entry.slice(0, slash);
+  if (entry.endsWith(".")) entry = entry.slice(0, -1);
+  return entry;
+}
+
+function isIpLiteral(entry: string): boolean {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(entry)) {
+    return entry.split(".").every((octet) => Number(octet) <= 255);
+  }
+  return entry.includes(":") && /^[0-9a-f:.]+$/.test(entry);
+}
+
+async function lookupAllowlistHost(host: string): Promise<readonly string[]> {
+  const rows = await dnsLookup(host, { all: true, verbatim: true });
+  return rows.map((row) => row.address);
 }
 
 /**

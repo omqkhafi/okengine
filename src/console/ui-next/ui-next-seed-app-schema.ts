@@ -7,6 +7,7 @@
 import { AUTH_TABLES } from "../../auth/tables.ts";
 import { resolveAuthSchema } from "../../auth/schema.ts";
 import type { DeclaredColumn, Table } from "../../manifest/types.ts";
+import { KEEL_LADDER_GRANTS, KEEL_SCOPES } from "../server/dev-identities.ts";
 
 const PII_COLUMNS = new Set([
   "email",
@@ -163,9 +164,63 @@ export const UI_NEXT_SEED_APP_SYSTEM_TABLES: Record<string, Table> = {
 const NOW = 1_723_622_400_000;
 const LATER = NOW + 30 * 24 * 60 * 60 * 1000;
 
-const PEOPLE = [
-  { id: "user_demo", email: "demo@example.com", name: "Demo User", status: "active" },
-  { id: "user_member", email: "member@example.com", name: "Member", status: "active" },
+/** Ten-rung owner → guest ladder (demo + member keep historic ids). */
+const LADDER = [
+  {
+    id: "user_demo",
+    email: "demo@example.com",
+    name: "Demo User",
+    status: "active",
+    role: "owner",
+  },
+  { id: "user_admin", email: "admin@example.com", name: "Admin", status: "active", role: "admin" },
+  {
+    id: "user_workspace",
+    email: "workspace@example.com",
+    name: "Workspace Admin",
+    status: "active",
+    role: "workspace_admin",
+  },
+  {
+    id: "user_pm",
+    email: "pm@example.com",
+    name: "Project Manager",
+    status: "active",
+    role: "project_manager",
+  },
+  { id: "user_lead", email: "lead@example.com", name: "Lead", status: "active", role: "lead" },
+  {
+    id: "user_dev",
+    email: "developer@example.com",
+    name: "Developer",
+    status: "active",
+    role: "developer",
+  },
+  {
+    id: "user_writer",
+    email: "writer@example.com",
+    name: "Contributor",
+    status: "active",
+    role: "contributor",
+  },
+  {
+    id: "user_member",
+    email: "member@example.com",
+    name: "Member",
+    status: "active",
+    role: "member",
+  },
+  {
+    id: "user_commenter",
+    email: "commenter@example.com",
+    name: "Commenter",
+    status: "active",
+    role: "commenter",
+  },
+  { id: "user_guest", email: "guest@example.com", name: "Guest", status: "active", role: "guest" },
+] as const;
+
+const STORY = [
   { id: "idn_aria", email: "aria@keel.dev", name: "Aria Chen", status: "active" },
   { id: "idn_ben", email: "ben@keel.dev", name: "Ben Okonkwo", status: "active" },
   { id: "idn_cai", email: "cai@keel.dev", name: "Cai Moreno", status: "active" },
@@ -184,6 +239,8 @@ const PEOPLE = [
   { id: "idn_yael", email: "yael@keel.dev", name: "Yael Cohen", status: "active" },
   { id: "idn_zio", email: "zio@keel.dev", name: "Zio Hart", status: "active" },
 ] as const;
+
+const PEOPLE = [...LADDER, ...STORY];
 
 /**
  * Seeded rows for app-plane system tables (never secret values).
@@ -209,49 +266,43 @@ export const UI_NEXT_SEED_APP_SYSTEM_ROWS: Readonly<Record<string, readonly obje
     updated_at: NOW,
   })),
   [AUTH_TABLES.identityRoles]: [
-    ...PEOPLE.map((p) => ({
+    ...LADDER.filter((p) => p.role !== "guest").map((p) => ({
+      id: `ir_${p.id}_${p.role}`,
+      identity_id: p.id,
+      role_id: `role_${p.role}`,
+    })),
+    ...STORY.map((p) => ({
       id: `ir_${p.id}_member`,
       identity_id: p.id,
       role_id: "role_member",
     })),
-    { id: "ir_idn_aria_staff", identity_id: "idn_aria", role_id: "role_staff" },
-    { id: "ir_user_demo_staff", identity_id: "user_demo", role_id: "role_staff" },
+    { id: "ir_idn_aria_pm", identity_id: "idn_aria", role_id: "role_project_manager" },
   ],
-  [AUTH_TABLES.roles]: [
-    { id: "role_member", name: "member", plane: "user", description: "Signed-in workspace member" },
-    { id: "role_staff", name: "staff", plane: "user", description: "May accept triage" },
-    {
-      id: "role_issue_write",
-      name: "issue:write",
-      plane: "user",
-      description: "May create and update issues",
-    },
-    {
-      id: "role_team_admin",
-      name: "team:admin",
-      plane: "user",
-      description: "May create teams and close cycles",
-    },
-  ],
-  [AUTH_TABLES.roleGrants]: [
-    { id: "rg_1", role_id: "role_member", action: "member" },
-    { id: "rg_2", role_id: "role_staff", action: "member" },
-    { id: "rg_3", role_id: "role_staff", action: "triage:accept" },
-    { id: "rg_4", role_id: "role_issue_write", action: "issue:write" },
-    { id: "rg_5", role_id: "role_issue_write", action: "project:admin" },
-    { id: "rg_6", role_id: "role_issue_write", action: "comment:write" },
-    { id: "rg_7", role_id: "role_issue_write", action: "files:write" },
-    { id: "rg_8", role_id: "role_team_admin", action: "team:admin" },
-    { id: "rg_9", role_id: "role_team_admin", action: "member:admin" },
-    { id: "rg_10", role_id: "role_team_admin", action: "webhook:admin" },
-  ],
+  [AUTH_TABLES.roles]: Object.keys(KEEL_LADDER_GRANTS).map((role) => ({
+    id: `role_${role}`,
+    name: role,
+    plane: "user",
+    description:
+      role === "owner"
+        ? "Full workspace authorization"
+        : role === "guest"
+          ? "Least authorization — no write scopes"
+          : `Keel ${role.replaceAll("_", " ")}`,
+  })),
+  [AUTH_TABLES.roleGrants]: Object.entries(KEEL_LADDER_GRANTS).flatMap(([role, actions]) =>
+    actions.map((action, i) => ({
+      id: `rg_${role}_${i + 1}`,
+      role_id: `role_${role}`,
+      action,
+    })),
+  ),
   [AUTH_TABLES.apiKeys]: [
     {
       id: "key_keel_ci",
       plane: "user",
       hash: "sha256$keel_ci",
       name: "Keel CI",
-      scopes: "member,issue:write",
+      scopes: "member,task:write",
       expires_at: null,
       created_at: NOW,
       last_used_at: NOW - 3_600_000,
@@ -279,7 +330,7 @@ export const UI_NEXT_SEED_APP_SYSTEM_ROWS: Readonly<Record<string, readonly obje
       created_at: NOW,
       expires_at: LATER,
       last_active_at: NOW,
-      scopes: "member,issue:write",
+      scopes: KEEL_LADDER_GRANTS.project_manager.join(","),
       audience: "oke-app",
     },
     {
@@ -291,7 +342,7 @@ export const UI_NEXT_SEED_APP_SYSTEM_ROWS: Readonly<Record<string, readonly obje
       created_at: NOW,
       expires_at: LATER,
       last_active_at: NOW,
-      scopes: "member,issue:write",
+      scopes: KEEL_SCOPES.join(","),
       audience: "oke-app",
     },
   ],

@@ -79,7 +79,7 @@ describe("boot — lazy element needs", () => {
     expect(needs.signal).toBe(false);
   });
 
-  test("oke() Store-only graph stays under the prior 48 kB baseline", async () => {
+  test("oke() Store-only graph stays under the prior 50 kB baseline", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
     const entry = join(dir, "entry.ts");
     const appPath = join(import.meta.dir, "app.ts");
@@ -116,9 +116,9 @@ describe("boot — lazy element needs", () => {
         if (raw.byteLength === 0) continue;
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
-      // Rebased after clock / gate / kv / index auto-drain on `oke()`.
-      // (~48.3 kB gzip with export externals).
-      expect(total).toBeLessThan(49_000);
+      // Rebased after host API-key persist + allowlist on `oke()`.
+      // (~50.3 kB gzip with export externals).
+      expect(total).toBeLessThan(51_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

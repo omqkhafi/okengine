@@ -43,12 +43,12 @@ export function AccessSecretSheet({
       <SheetContent
         side="right"
         showOverlay={false}
-        className="sm:max-w-md"
+        className="gap-0 p-0 data-[side=right]:sm:max-w-md"
         data-slot="access-secret-sheet"
       >
-        <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
-          <SheetDescription>
+        <SheetHeader className="gap-1 border-b border-border/50">
+          <SheetTitle className="text-sm">{title}</SheetTitle>
+          <SheetDescription className="text-[11px]">
             Shown once. Store it offline. This Console process does not keep it for you.
           </SheetDescription>
         </SheetHeader>

@@ -42,11 +42,32 @@ const SEED_SPACES = [
 
 const SEED_MEMBERS = [
   {
+    id: "mem_demo",
+    space_id: "space_eng",
+    name: "Demo User",
+    email: "demo@example.com",
+    role: "owner",
+  },
+  {
+    id: "mem_admin",
+    space_id: "space_eng",
+    name: "Avery Cole",
+    email: "admin@keel.dev",
+    role: "admin",
+  },
+  {
     id: "mem_aria",
     space_id: "space_eng",
     name: "Aria Chen",
     email: "aria@keel.dev",
     role: "project_manager",
+  },
+  {
+    id: "mem_lead",
+    space_id: "space_eng",
+    name: "Jules Hart",
+    email: "jules@keel.dev",
+    role: "lead",
   },
   {
     id: "mem_ben",
@@ -56,6 +77,13 @@ const SEED_MEMBERS = [
     role: "developer",
   },
   {
+    id: "mem_eli",
+    space_id: "space_eng",
+    name: "Eli Park",
+    email: "eli@keel.dev",
+    role: "contributor",
+  },
+  {
     id: "mem_cai",
     space_id: "space_des",
     name: "Cai Moreno",
@@ -63,18 +91,25 @@ const SEED_MEMBERS = [
     role: "member",
   },
   {
+    id: "mem_member",
+    space_id: "space_des",
+    name: "Member",
+    email: "member@example.com",
+    role: "member",
+  },
+  {
+    id: "mem_commenter",
+    space_id: "space_gtm",
+    name: "Kit Rowe",
+    email: "kit@keel.dev",
+    role: "commenter",
+  },
+  {
     id: "mem_dia",
     space_id: "space_gtm",
     name: "Dia Farouk",
     email: "dia@keel.dev",
     role: "guest",
-  },
-  {
-    id: "mem_eli",
-    space_id: "space_eng",
-    name: "Eli Park",
-    email: "eli@keel.dev",
-    role: "developer",
   },
 ] as const;
 
@@ -640,14 +675,7 @@ function generateKeelVolume(): {
     email: `${p.id}@keel.dev`,
     role: "member",
   }));
-  const emails = [
-    "aria@keel.dev",
-    "ben@keel.dev",
-    "cai@keel.dev",
-    "dia@keel.dev",
-    "eli@keel.dev",
-    ...members.map((m) => m.email),
-  ];
+  const emails = [...SEED_MEMBERS.map((m) => m.email), ...members.map((m) => m.email)];
 
   const projects = Array.from({ length: GENERATED.projects }, (_, i) => ({
     id: `proj_g_${String(i + 1).padStart(2, "0")}`,

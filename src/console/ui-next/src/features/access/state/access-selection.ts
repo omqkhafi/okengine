@@ -6,7 +6,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
 
 /** Sheet opened from the URL. */
-export type AccessAction = "create" | "edit" | "revoke" | "rotate";
+export type AccessAction = "create" | "edit" | "refresh" | "revoke" | "rotate";
 
 /** Search params for `/access`. */
 export interface AccessSearch {
@@ -26,6 +26,7 @@ export function validateAccessSearch(search: Record<string, unknown>): AccessSea
   const action =
     search.action === "create" ||
     search.action === "edit" ||
+    search.action === "refresh" ||
     search.action === "revoke" ||
     search.action === "rotate"
       ? search.action

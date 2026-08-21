@@ -180,6 +180,9 @@ React: `useSession(api, session)` from `okengine/client-react`.
 | HTTP **401**           | `refresh()` runs **once**, then the same call retries            |
 | HTTP **403** / **429** | No refresh — decode the failure envelope as usual                |
 
+`getToken` may return a session access token or an API key secret — both are Bearer.
+See [Gate](/docs/elements/gate#api-keys). `refresh` applies to sessions only.
+
 **Consequence:** `refresh` must mutate whatever `getToken` reads. Returning a new string alone does
 nothing if storage was not updated.
 

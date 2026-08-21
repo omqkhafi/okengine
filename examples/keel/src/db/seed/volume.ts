@@ -266,14 +266,7 @@ export function generateKeelVolume(): {
     role: p.role,
     createdAt: T0,
   }));
-  const emails = [
-    "aria@keel.dev",
-    "ben@keel.dev",
-    "cai@keel.dev",
-    "dia@keel.dev",
-    "eli@keel.dev",
-    ...members.map((m) => m.email),
-  ];
+  const emails = [...FEATURED_MEMBERS.map((m) => m.email), ...members.map((m) => m.email)];
 
   const projects = Array.from({ length: GENERATED.projects }, (_, i) => ({
     id: `proj_g_${String(i + 1).padStart(2, "0")}`,

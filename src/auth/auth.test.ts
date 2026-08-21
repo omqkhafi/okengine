@@ -114,6 +114,62 @@ describe("auth plugin", () => {
   });
 });
 
+describe("API key allowlist", () => {
+  test("hostname entry matches the resolved client IP", async () => {
+    const { authenticateApiKey } = await import("./api-keys.ts");
+    const store = createApiKeyStore();
+    const created = await createApiKey(store, {
+      plane: "user",
+      name: "ci",
+      scopes: ["member"],
+      creatorId: "u1",
+      creatorScopes: ["member"],
+      ipAllowlist: ["ci.example.com"],
+    });
+    const lookup = async (host: string) => (host === "ci.example.com" ? ["203.0.113.10"] : []);
+    expect(
+      await authenticateApiKey(store, created.secret, {
+        ip: "203.0.113.10",
+        lookup,
+      }),
+    ).not.toBeNull();
+    expect(
+      await authenticateApiKey(store, created.secret, {
+        ip: "198.51.100.7",
+        lookup,
+      }),
+    ).toBeNull();
+  });
+
+  test("hostname lookup failure is closed", async () => {
+    const { authenticateApiKey } = await import("./api-keys.ts");
+    const store = createApiKeyStore();
+    const created = await createApiKey(store, {
+      plane: "user",
+      name: "ci",
+      scopes: ["member"],
+      creatorId: "u1",
+      creatorScopes: ["member"],
+      ipAllowlist: ["ci.example.com", "203.0.113.10"],
+    });
+    const lookup = async () => {
+      throw new Error("nxdomain");
+    };
+    expect(
+      await authenticateApiKey(store, created.secret, {
+        ip: "203.0.113.10",
+        lookup,
+      }),
+    ).not.toBeNull();
+    expect(
+      await authenticateApiKey(store, created.secret, {
+        ip: "198.51.100.7",
+        lookup,
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("API key attenuation", () => {
   test("key cannot be created with a scope its creator lacks", async () => {
     const store = createApiKeyStore();

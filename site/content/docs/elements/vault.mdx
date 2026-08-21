@@ -201,6 +201,9 @@ The **Console** (`:6533`) **Vault** page (`/vault`) groups **Secrets** and
 **Config**. Secrets are write-only: a salted fingerprint (`sha256:…`), never
 the cleartext. Config rows show the value — that is `vault.config()`.
 
+API keys are principals — mint them on **Access** (`/access`), not Vault.
+See [Gate](/docs/elements/gate#api-keys).
+
 Add (`+`) creates a contract from Console as well as from source. Those rows
 show `console` until you declare the same name in the Manifest.
 
