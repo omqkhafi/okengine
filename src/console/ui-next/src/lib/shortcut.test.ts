@@ -21,6 +21,7 @@ describe("consoleShortcut", () => {
     expect(consoleShortcut("store")).toEqual(modChord("3"));
     expect(consoleShortcut("observability")).toEqual(modChord("4"));
     expect(consoleShortcut("vault")).toEqual(modChord("5"));
+    expect(consoleShortcut("access")).toEqual(modChord("6"));
   });
 
   test("digits map to module paths", () => {
@@ -29,6 +30,7 @@ describe("consoleShortcut", () => {
     expect(MODULE_DIGIT_PATH["3"]).toBe("/store");
     expect(MODULE_DIGIT_PATH["4"]).toBe("/observability");
     expect(MODULE_DIGIT_PATH["5"]).toBe("/vault");
+    expect(MODULE_DIGIT_PATH["6"]).toBe("/access");
   });
 });
 

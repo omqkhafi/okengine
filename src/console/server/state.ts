@@ -125,8 +125,8 @@ export interface ConsoleState {
   readonly constructedPanels: ReadonlySet<ConsolePanelId>;
   /** Role store (data, not code) — Gates · Access. */
   readonly roles: RoleStore;
-  /** API key store — first-class principals. */
-  readonly apiKeys: ApiKeyStore;
+  /** API key store — first-class principals. Shared with the host when attached. */
+  apiKeys: ApiKeyStore;
   /** Operator invitations — Access hygiene. */
   readonly invites: OperatorInviteStore;
   /** Access-token TTL (ms) from auth config — residual revoke delay. */
@@ -159,6 +159,15 @@ export interface ConsoleState {
   accessRotateKey: (
     keyId: string,
   ) => Promise<{ readonly row: AccessKeyRow; readonly secret: string } | null>;
+  /** Update key metadata (name, scopes, expiry, allowlist, rate). */
+  accessUpdateKey: (input: {
+    readonly keyId: string;
+    readonly name?: string;
+    readonly scopes?: readonly string[];
+    readonly expiresAt?: number | null;
+    readonly rateLimit?: { max: number; per: string } | null;
+    readonly ipAllowlist?: readonly string[];
+  }) => Promise<AccessKeyRow | null>;
   /** Replace role grants (grantable scopes only). */
   accessSetRoleGrants: (input: {
     readonly roleId: string;
@@ -585,6 +594,8 @@ export interface CreateConsoleStateOptions {
   readonly persistOperator?: (operatorId: string) => void | Promise<void>;
   /** Persist hook after session issue / revoke. */
   readonly persistSessions?: () => void | Promise<void>;
+  /** Shared host API key store (`oke dev` attach). */
+  readonly apiKeys?: ApiKeyStore;
   /**
    * Shared secret for host → Console runs ingest (`oke dev` bridge).
    * When omitted, ingest is disabled (404).
@@ -652,7 +663,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       return constructed;
     },
     roles: gateAuth.roles,
-    apiKeys: gateAuth.apiKeys,
+    apiKeys: options.apiKeys ?? gateAuth.apiKeys,
     invites,
     accessTtlMs: options.accessTtlMs ?? ACCESS_TTL_MS,
     roleMembers: gateAuth.roleMembers,
@@ -716,6 +727,10 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
     accessRotateKey: async (keyId) => {
       const access = await markPanel<typeof import("./access.ts")>("access");
       return access.accessRotateKey(state.apiKeys, keyId);
+    },
+    accessUpdateKey: async (input) => {
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      return access.accessUpdateKey(state.apiKeys, input);
     },
     accessSetRoleGrants: async (input) => {
       const access = await markPanel<typeof import("./access.ts")>("access");
@@ -1436,29 +1451,11 @@ function accessCatalog(state: ConsoleState): string[] {
  * Never-signed-in operators appear once real invites land with lastSeenAt null.
  */
 function seedAccessDemoData(
-  apiKeys: ApiKeyStore,
+  _apiKeys: ApiKeyStore,
   invites: OperatorInviteStore,
   now: () => number,
 ): void {
   const t = now();
-  const staleCreated = t - 100 * 24 * 60 * 60 * 1000;
-  if (!apiKeys.keys.has("key_stale")) {
-    apiKeys.keys.set("key_stale", {
-      id: "key_stale",
-      plane: "user",
-      hash: "stale",
-      name: "Stale unused key",
-      scopes: ["member"],
-      expiresAt: null,
-      rateLimit: null,
-      ipAllowlist: [],
-      creatorId: "user_demo",
-      creatorScopes: ["member"],
-      createdAt: staleCreated,
-      lastUsedAt: null,
-      revokedAt: null,
-    });
-  }
   if (!invites.invites.has("invite_expired")) {
     invites.invites.set("invite_expired", {
       id: "invite_expired",

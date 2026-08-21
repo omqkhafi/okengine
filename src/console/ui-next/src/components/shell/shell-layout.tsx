@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 /**
  * Shell chrome around authenticated panel routes.
  *
- * `/overview`, `/flows`, `/store`, `/vault`, and `/observability` render full-bleed
+ * `/overview`, `/flows`, `/store`, `/vault`, `/access`, and `/observability` render full-bleed
  * (no padding / gap); other sections keep the padded inset. Desktop sidebar
  * stays icon-collapsed; mobile still uses the sheet trigger.
  *
@@ -38,6 +38,7 @@ export function ShellLayout({ operator }: { readonly operator: SessionOperator }
     pathname === "/flows" ||
     pathname === "/store" ||
     pathname === "/vault" ||
+    pathname === "/access" ||
     pathname === "/observability";
 
   const logout = useCallback(() => {

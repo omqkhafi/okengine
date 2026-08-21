@@ -20,6 +20,7 @@ describe("consoleCommandItems", () => {
       "go:/store",
       "go:/observability",
       "go:/vault",
+      "go:/access",
       "theme:light",
       "theme:dark",
       "theme:system",

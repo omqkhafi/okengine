@@ -7,6 +7,7 @@
  */
 
 import type {
+  AuthApiKeysResourceRef,
   Effects,
   PromptRef,
   ResourceRef,
@@ -145,8 +146,8 @@ const TABLE_ARG_METHODS = new Set([
  * @param options - Handler AST, bindings, and annotation flag
  */
 export function inferEffects(options: InferEffectsOptions): InferredEffects {
-  const reads = new Set<ResourceRef | SignalResourceRef>();
-  const writes = new Set<ResourceRef>();
+  const reads = new Set<ResourceRef | SignalResourceRef | AuthApiKeysResourceRef>();
+  const writes = new Set<ResourceRef | AuthApiKeysResourceRef>();
   const emits = new Set<SignalRef>();
   const sends = new Set<TemplateRef>();
   const asks = new Set<PromptRef>();
@@ -214,6 +215,20 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     if (chain.rootMethod === "call" && call === chain.rootCall) {
       const ref = resolveCallTarget(call.arguments[0], options.bindings);
       if (ref) calls.add(ref);
+      continue;
+    }
+
+    if (chain.rootMethod === "auth" && call === chain.rootCall) {
+      const method = chain.methods[1];
+      if (method === "listApiKeys") reads.add("auth:api-keys");
+      if (
+        method === "createApiKey" ||
+        method === "revokeApiKey" ||
+        method === "rotateApiKey" ||
+        method === "updateApiKey"
+      ) {
+        writes.add("auth:api-keys");
+      }
       continue;
     }
 

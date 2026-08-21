@@ -25,6 +25,7 @@ describe("consoleDocumentTitle", () => {
       `Observability · ${CONSOLE_DOCUMENT_TITLE}`,
     );
     expect(consoleDocumentTitle("/vault")).toBe(`Vault · ${CONSOLE_DOCUMENT_TITLE}`);
+    expect(consoleDocumentTitle("/access")).toBe(`Access · ${CONSOLE_DOCUMENT_TITLE}`);
     expect(consoleDocumentTitle("/monitoring")).toBe(`Observability · ${CONSOLE_DOCUMENT_TITLE}`);
   });
 

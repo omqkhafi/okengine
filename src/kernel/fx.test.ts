@@ -432,7 +432,23 @@ describe("fx — wholesale swap", () => {
       t: (key) => key,
       locale: "en",
       id: () => "fixed-id",
-      auth: { userId: "u1", scopes: new Set(["a"]) },
+      auth: {
+        userId: "u1",
+        scopes: new Set(["a"]),
+        createApiKey: async () => {
+          throw new Error("auth.createApiKey must not be used");
+        },
+        listApiKeys: async () => [],
+        revokeApiKey: async () => {
+          throw new Error("auth.revokeApiKey must not be used");
+        },
+        rotateApiKey: async () => {
+          throw new Error("auth.rotateApiKey must not be used");
+        },
+        updateApiKey: async () => {
+          throw new Error("auth.updateApiKey must not be used");
+        },
+      },
       operator: { id: null },
       principal: { userId: "u1", operatorId: null, scopes: new Set(["a"]) },
       tenant: { id: "t1" },

@@ -38,8 +38,12 @@ export interface ColumnReference {
  * `getSQL` is a structural bridge so drizzle-orm operators (`eq`, `isNull`, …)
  * accept abstract columns in TypeScript. OKE’s SQL compiler never calls it —
  * it reads {@link SchemaColumnDecl.sqlName} / metadata directly.
+ *
+ * `TData` / `TNotNull` are type-level only (`$infer` is a phantom). They let
+ * {@link InferColumnJs} / table `$inferSelect` resolve real row shapes.
  */
-export interface SchemaColumnDecl extends ColumnDef {
+export interface SchemaColumnDecl<TData = unknown, TNotNull extends boolean = boolean>
+  extends ColumnDef {
   /** JS object key (e.g. `createdAt`). */
   readonly key: string;
   /** Database column name (e.g. `created_at`). */
@@ -47,7 +51,12 @@ export interface SchemaColumnDecl extends ColumnDef {
   /** Declared SQL type. */
   readonly sqlType: FieldSqlType;
   readonly primaryKey: boolean;
-  readonly notNull: boolean;
+  readonly notNull: TNotNull;
+  /**
+   * Phantom JS value type — not present at runtime. Distinguishes `string`
+   * vs `number` so structural typing does not collapse column data types.
+   */
+  readonly $infer?: TData;
   readonly unique: boolean;
   /** Literal `.default(v)` when set. */
   readonly defaultValue?: string | number | boolean | null;
@@ -120,33 +129,38 @@ export interface SchemaTableDecl extends TableHandle {
   readonly policies?: readonly SchemaPolicyDecl[];
 }
 
-/** Fluent field builder before key finalization. */
-export interface FieldBuilder {
-  primaryKey(): FieldBuilder;
-  notNull(): FieldBuilder;
-  unique(): FieldBuilder;
-  default(value: string | number | boolean | null): FieldBuilder;
-  defaultFn(fn: () => unknown): FieldBuilder;
-  pii(): FieldBuilder;
-  sensitive(): FieldBuilder;
-  retain(duration: string): FieldBuilder;
+/**
+ * Fluent field builder before key finalization.
+ *
+ * `TData` is the JS value type (`string` / `number`). `TNotNull` is `true`
+ * after `.notNull()` or `.primaryKey()` — matching runtime finalize.
+ */
+export interface FieldBuilder<TData = unknown, TNotNull extends boolean = false> {
+  primaryKey(): FieldBuilder<TData, true>;
+  notNull(): FieldBuilder<TData, true>;
+  unique(): FieldBuilder<TData, TNotNull>;
+  default(value: string | number | boolean | null): FieldBuilder<TData, TNotNull>;
+  defaultFn(fn: () => unknown): FieldBuilder<TData, TNotNull>;
+  pii(): FieldBuilder<TData, TNotNull>;
+  sensitive(): FieldBuilder<TData, TNotNull>;
+  retain(duration: string): FieldBuilder<TData, TNotNull>;
   /** Override snake_case SQL name. */
-  as(sqlName: string): FieldBuilder;
+  as(sqlName: string): FieldBuilder<TData, TNotNull>;
   /** Optional human description for Console / docs (falls back to the JS key). */
-  describe(description: string): FieldBuilder;
+  describe(description: string): FieldBuilder<TData, TNotNull>;
   /**
    * Declare a foreign key to another column (dialect-agnostic).
    *
    * @param ref - Lazy target column (`() => links.code`)
    * @param actions - Optional ON DELETE / ON UPDATE
    */
-  references(ref: () => SchemaColumnDecl, actions?: ReferenceActions): FieldBuilder;
+  references(ref: () => SchemaColumnDecl, actions?: ReferenceActions): FieldBuilder<TData, TNotNull>;
   /**
    * Bind the JS key and produce a {@link SchemaColumnDecl}.
    *
    * @param key - Object key in the table column map
    */
-  finalize(key: string): SchemaColumnDecl;
+  finalize(key: string): SchemaColumnDecl<TData, TNotNull>;
 }
 
 interface FieldState {
@@ -186,31 +200,39 @@ function mergeClassification(
   return { ...(current ?? {}), ...patch };
 }
 
-function createBuilder(state: FieldState): FieldBuilder {
-  const next = (patch: Partial<FieldState>): FieldBuilder => createBuilder({ ...state, ...patch });
+function createBuilder<TData, TNotNull extends boolean>(
+  state: FieldState,
+): FieldBuilder<TData, TNotNull> {
+  const next = <N extends boolean>(patch: Partial<FieldState>): FieldBuilder<TData, N> =>
+    createBuilder<TData, N>({ ...state, ...patch });
 
   return {
-    primaryKey: () => next({ primaryKey: true, notNull: true }),
-    notNull: () => next({ notNull: true }),
-    unique: () => next({ unique: true }),
-    default: (value) => next({ defaultValue: value }),
+    primaryKey: () => next<true>({ primaryKey: true, notNull: true }),
+    notNull: () => next<true>({ notNull: true }),
+    unique: () => next<TNotNull>({ unique: true }),
+    default: (value) => next<TNotNull>({ defaultValue: value }),
     defaultFn: (fn) =>
-      next({
+      next<TNotNull>({
         defaultFn: fn,
         defaultFnKind: defaultFnKindOf(fn),
       }),
-    pii: () => next({ classification: mergeClassification(state.classification, { pii: true }) }),
+    pii: () =>
+      next<TNotNull>({ classification: mergeClassification(state.classification, { pii: true }) }),
     sensitive: () =>
-      next({ classification: mergeClassification(state.classification, { sensitive: true }) }),
+      next<TNotNull>({
+        classification: mergeClassification(state.classification, { sensitive: true }),
+      }),
     retain: (duration) =>
-      next({ classification: mergeClassification(state.classification, { retain: duration }) }),
-    as: (sqlName) => next({ sqlName }),
-    describe: (description) => next({ description }),
+      next<TNotNull>({
+        classification: mergeClassification(state.classification, { retain: duration }),
+      }),
+    as: (sqlName) => next<TNotNull>({ sqlName }),
+    describe: (description) => next<TNotNull>({ description }),
     references: (ref, actions) =>
-      next({
+      next<TNotNull>({
         references: actions ? { ref, actions } : { ref },
       }),
-    finalize(key: string): SchemaColumnDecl {
+    finalize(key: string): SchemaColumnDecl<TData, TNotNull> {
       const sqlName = state.sqlName ?? camelToSnake(key);
       return {
         key,
@@ -218,7 +240,7 @@ function createBuilder(state: FieldState): FieldBuilder {
         sqlName,
         sqlType: state.sqlType,
         primaryKey: state.primaryKey,
-        notNull: state.notNull || state.primaryKey,
+        notNull: (state.notNull || state.primaryKey) as TNotNull,
         unique: state.unique,
         ...(state.defaultValue !== undefined ? { defaultValue: state.defaultValue } : {}),
         ...(state.defaultFn ? { defaultFn: state.defaultFn } : {}),
@@ -240,15 +262,15 @@ function createBuilder(state: FieldState): FieldBuilder {
  * Field builders — `field.text()` / `field.integer()`.
  */
 export const field = {
-  text: (): FieldBuilder =>
-    createBuilder({
+  text: (): FieldBuilder<string, false> =>
+    createBuilder<string, false>({
       sqlType: "text",
       primaryKey: false,
       notNull: false,
       unique: false,
     }),
-  integer: (): FieldBuilder =>
-    createBuilder({
+  integer: (): FieldBuilder<number, false> =>
+    createBuilder<number, false>({
       sqlType: "integer",
       primaryKey: false,
       notNull: false,
@@ -256,8 +278,19 @@ export const field = {
     }),
 } as const;
 
-/** Column map input for {@link schemaTable}. */
-export type SchemaColumnInput = FieldBuilder | SchemaColumnDecl;
+/**
+ * Column map input for {@link schemaTable}.
+ *
+ * Explicit `string` / `number` × nullability variants so `field.text()`
+ * (`FieldBuilder<string, false>`) remains assignable — methodful builders
+ * are invariant in their type parameters.
+ */
+export type SchemaColumnInput =
+  | FieldBuilder<string, false>
+  | FieldBuilder<string, true>
+  | FieldBuilder<number, false>
+  | FieldBuilder<number, true>
+  | SchemaColumnDecl;
 
 /**
  * Whether a value is a finalized {@link SchemaColumnDecl}.
@@ -301,7 +334,7 @@ export function finalizeColumnMap(
 ): Record<string, SchemaColumnDecl> {
   const out: Record<string, SchemaColumnDecl> = {};
   for (const [key, value] of Object.entries(columns)) {
-    out[key] = isFieldBuilder(value) ? value.finalize(key) : value;
+    out[key] = isFieldBuilder(value) ? value.finalize(key) : (value as SchemaColumnDecl);
   }
   return out;
 }
@@ -334,13 +367,35 @@ export function schemaTableSqlName(table: SchemaTableDecl): string | undefined {
 }
 
 /**
+ * JS value type for a finalized column (`string` / `number`, plus `| null`
+ * when the column is nullable).
+ */
+export type InferColumnJs<C> = C extends SchemaColumnDecl<infer D, infer N>
+  ? N extends true
+    ? D
+    : D | null
+  : unknown;
+
+/**
+ * Finalize a {@link schemaTable} column input into a typed decl.
+ */
+export type FinalizeColumn<T> = T extends FieldBuilder<infer D, infer N>
+  ? SchemaColumnDecl<D, N>
+  : T extends SchemaColumnDecl<infer D, infer N>
+    ? SchemaColumnDecl<D, N>
+    : SchemaColumnDecl;
+
+/**
  * Table decl with columns as own properties (`links.code`) for FK / relations.
+ *
+ * `$inferSelect` is type-level only (Drizzle's own alias) — not set at runtime.
  */
 export type SchemaTableWithColumns<
   C extends Record<string, SchemaColumnDecl> = Record<string, SchemaColumnDecl>,
 > = Omit<SchemaTableDecl, "columns"> & {
   readonly columns: Readonly<C>;
-} & Omit<C, "kind" | "tableName">;
+  readonly $inferSelect: { [K in keyof C]: InferColumnJs<C[K]> };
+} & Omit<C, "kind" | "tableName" | "$inferSelect">;
 
 /**
  * Declare an abstract schema table (ORM-agnostic).
@@ -356,7 +411,7 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
   name: string,
   columns: C,
   extras: readonly SchemaTableExtra[] = [],
-): SchemaTableWithColumns<{ [K in keyof C]: SchemaColumnDecl }> {
+): SchemaTableWithColumns<{ [K in keyof C]: FinalizeColumn<C[K]> }> {
   const finalized = finalizeColumnMap(columns);
   const stamped: Record<string, SchemaColumnDecl> = {};
   for (const [key, col] of Object.entries(finalized)) {
@@ -377,7 +432,7 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
   // the table discriminant / SQL name).
   Object.defineProperty(table, "kind", { value: "schema-table", enumerable: false });
   Object.defineProperty(table, "tableName", { value: name, enumerable: false });
-  return table as SchemaTableWithColumns<{ [K in keyof C]: SchemaColumnDecl }>;
+  return table as SchemaTableWithColumns<{ [K in keyof C]: FinalizeColumn<C[K]> }>;
 }
 
 /**

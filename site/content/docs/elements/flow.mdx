@@ -104,6 +104,12 @@ Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); 
   [Store](/docs/elements/store#handwritten-http-lists).
 </Callout>
 
+<Callout title="Helpers take the real Fx">
+  Type a helper's `fx` as the exported `Fx` (`import type { Fx } from
+  "okengine"`). A narrower `{ store: … }` will not match `store()` overloads
+  — that is the `as never` trap. See [fx](/docs/reference/fx).
+</Callout>
+
 ## The five triggers
 
 <FlowTriggers />

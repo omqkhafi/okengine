@@ -1,4 +1,4 @@
-import { on, flow, http, fail } from "okengine";
+import { on, flow, http, fail, type Fx } from "okengine";
 
 import { db, member, openaiKey, publicDocsUrl, taskIndex } from "@/core";
 import { comments, tasks } from "@/db/schema.decl";
@@ -19,15 +19,7 @@ const SearchHit = tasksZod.select.pick({
 const SearchIn = listIn({ mode: "offset", maxLimit: 50 });
 const SearchOut = pageOut(SearchHit);
 
-async function upsertTask(
-  fx: {
-    store: (ref: unknown) => {
-      driverId?: string;
-      upsert: (...args: never[]) => Promise<void>;
-    };
-  },
-  row: Record<string, unknown>,
-): Promise<void> {
+async function upsertTask(fx: Fx, row: Record<string, unknown>): Promise<void> {
   const idx = fx.store(taskIndex) as {
     driverId: string;
     upsert: (id: string, doc: unknown, meta?: Record<string, unknown>) => Promise<void>;
@@ -133,7 +125,7 @@ export const embedTask = flow("search.embedTask", {
     await fx.vault.get(openaiKey);
     const row = await fx.store(db).findById(tasks, input.id);
     if (!row) return fail("NotFound", { id: input.id });
-    await upsertTask(fx as never, row as Record<string, unknown>);
+    await upsertTask(fx, row as Record<string, unknown>);
     return { ok: true as const };
   },
 });
@@ -145,7 +137,7 @@ export const indexOnCreate = on(
     plane: "operator",
     do: async (payload, fx) => {
       const row = await fx.store(db).findById(tasks, payload.id);
-      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+      if (row) await upsertTask(fx, row as Record<string, unknown>);
     },
   }),
 );
@@ -158,7 +150,7 @@ export const onComment = on(
     do: async (payload, fx) => {
       await fx.store(db).findById(comments, payload.id);
       const row = await fx.store(db).findById(tasks, payload.taskId);
-      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+      if (row) await upsertTask(fx, row as Record<string, unknown>);
     },
   }),
 );
@@ -170,7 +162,7 @@ export const onComplete = on(
     plane: "operator",
     do: async (payload, fx) => {
       const row = await fx.store(db).findById(tasks, payload.id);
-      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+      if (row) await upsertTask(fx, row as Record<string, unknown>);
     },
   }),
 );
@@ -182,7 +174,7 @@ export const onForm = on(
     plane: "operator",
     do: async (payload, fx) => {
       const row = await fx.store(db).findById(tasks, payload.taskId);
-      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+      if (row) await upsertTask(fx, row as Record<string, unknown>);
     },
   }),
 );
@@ -196,7 +188,7 @@ export const onProject = on(
       const rows = await fx.store(db).select().from(tasks);
       for (const row of rows) {
         if (String(row.projectId) !== payload.projectId) continue;
-        await upsertTask(fx as never, row as Record<string, unknown>);
+        await upsertTask(fx, row as Record<string, unknown>);
       }
     },
   }),

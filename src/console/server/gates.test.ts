@@ -91,6 +91,21 @@ describe("projectGatesPanel", () => {
     const auth = createDefaultGateAuthStores();
     // Poison an operator role with an application scope.
     setRoleGrants(auth.roles, "role_ops", ["console:store.sql:read", "booking:create"]);
+    auth.apiKeys.keys.set("key_fixture", {
+      id: "key_fixture",
+      plane: "user",
+      hash: "fixture",
+      name: "Fixture",
+      scopes: ["member"],
+      expiresAt: null,
+      rateLimit: null,
+      ipAllowlist: [],
+      creatorId: "user_demo",
+      creatorScopes: ["member"],
+      createdAt: 0,
+      lastUsedAt: null,
+      revokedAt: null,
+    });
 
     const projection = projectGatesPanel({
       manifest: MANIFEST,

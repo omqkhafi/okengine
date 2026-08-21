@@ -62,6 +62,7 @@ export {
   type StoreDecl,
   type StoreRuntime,
   type SqlStoreHandle,
+  type InferSelectRow,
   type TableHandle,
   type SchemaTableDecl,
   type SchemaColumnDecl,

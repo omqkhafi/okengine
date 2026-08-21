@@ -256,6 +256,32 @@ Customize tables, then `oke schema generate` (`.oke/schema/oke.ts`; `--check` in
 sign-in shapes: [Plugins](/docs/plugins). Call auth from
 [createClient](/docs/reference/client) — helpers in `okengine/client/auth`.
 
+## API keys
+
+A key is the **issuer with fewer gates** — not a second permission system.
+Bearer secrets authenticate as the creator; `fx.auth.scopes` shrink to the key.
+
+| Field | Session | API key |
+| --- | --- | --- |
+| `fx.auth.userId` / `fx.operator.id` | subject | creator (`creatorId`) |
+| `fx.auth.scopes` | session scopes | key scopes (attenuated) |
+| `fx.auth.apiKeyId` | `null` | key id |
+| WideEvent `principal` | subject | issuer |
+| `dimensions.api_key` | absent | key id |
+
+`gate.auth` always creates a shared key store (HMAC-SHA-256 with `gate.auth.secret`).
+Do not pass `apiKeyStore` unless you are injecting a test Map.
+
+Session Flows manage keys via [fx](/docs/reference/fx) (`createApiKey`, `listApiKeys`,
+`revokeApiKey`, `rotateApiKey`, `updateApiKey`). A key-authenticated caller cannot.
+
+Declare `effects.reads: ["auth:api-keys"]` / `effects.writes: ["auth:api-keys"]` — never
+`sql:oke_api_keys`. Console **Access** (`:6533` → `/access`) mints operator keys as the
+operator, and user-plane keys only as a picked issuer (`creatorUserId`).
+
+Verify rejects expired, revoked, allowlist-miss, and over-rate secrets with `401`
+and no `api_key` dimension.
+
 ## Identity and decisions
 
 Gates decide on principals that already exist. `gate.auth` issues hybrid sessions onto
@@ -309,6 +335,20 @@ character classes.
 
 `"ip"` for public surfaces (sign-up, password reset), `"user"` for authenticated quotas.
 Keying an authenticated endpoint by IP punishes shared NAT.
+
+</Accordion>
+<Accordion title="API key Bearer returns 401">
+
+Expired, revoked, allowlist miss, or over the key's `rateLimit`. Check
+`ipAllowlist` against the same X-Forwarded-For hop as `ip-allowlist`, and
+rotate if the secret was shown once and then lost.
+
+</Accordion>
+<Accordion title="Key can call a route the issuer cannot">
+
+That is a bug in the mint. `createApiKey` / `fx.auth.createApiKey` re-run
+`assertAttenuated` against the issuer's live scopes. Custom `gate.policy`
+predicates that ignore scopes still see `verified: true`.
 
 </Accordion>
 </Accordions>

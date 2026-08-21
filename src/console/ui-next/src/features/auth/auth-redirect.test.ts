@@ -18,6 +18,7 @@ describe("sanitizeReturnTo", () => {
     expect(sanitizeReturnTo("/vault?name=STRIPE_KEY&action=rotate")).toBe(
       "/vault?name=STRIPE_KEY&action=rotate",
     );
+    expect(sanitizeReturnTo("/access?key=key_1")).toBe("/access?key=key_1");
     expect(sanitizeReturnTo("/observability?window=7d")).toBe("/observability?window=7d");
     expect(sanitizeReturnTo("/monitoring?window=7d")).toBe("/observability?window=7d");
   });
@@ -106,6 +107,10 @@ describe("afterAuthLocation", () => {
     expect(afterAuthLocation("/vault?name=STRIPE_KEY&action=rotate-master")).toEqual({
       to: "/vault",
       search: { name: "STRIPE_KEY", action: "rotate-master" },
+    });
+    expect(afterAuthLocation("/access?key=key_1")).toEqual({
+      to: "/access",
+      search: { key: "key_1" },
     });
     expect(afterAuthLocation("/observability?window=7d&run=r1")).toEqual({
       to: "/observability",

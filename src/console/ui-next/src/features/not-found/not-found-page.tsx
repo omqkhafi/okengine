@@ -6,7 +6,7 @@ import { authLabelClassName } from "@/components/auth-card";
 import { ConsoleChrome } from "@/components/console-chrome";
 
 /**
- * 404 for any path that is not `/`, `/overview`, `/flows`, `/store`, `/vault`, or `/observability`.
+ * 404 for any path that is not `/`, `/overview`, `/flows`, `/store`, `/vault`, `/access`, or `/observability`.
  */
 export function NotFoundPage() {
   return (

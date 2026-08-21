@@ -1317,9 +1317,36 @@ const AccessCreateKeyIn = z.object({
   plane: z.enum(["user", "operator"]),
   name: z.string().min(1),
   scopes: z.array(z.string()),
+  /** Required for user-plane keys — issuer whose grants are the ceiling. */
+  creatorUserId: z.string().min(1).optional(),
   expiresAt: z.number().nullable().optional(),
   rateLimit: z.object({ max: z.number(), per: z.string() }).nullable().optional(),
   ipAllowlist: z.array(z.string()).optional(),
+});
+
+const AccessUpdateKeyIn = z.object({
+  keyId: z.string().min(1),
+  name: z.string().min(1).optional(),
+  scopes: z.array(z.string()).optional(),
+  expiresAt: z.number().nullable().optional(),
+  rateLimit: z.object({ max: z.number(), per: z.string() }).nullable().optional(),
+  ipAllowlist: z.array(z.string()).optional(),
+});
+
+const AccessUpdateKeyOut = z.object({
+  key: z.object({
+    id: z.string(),
+    name: z.string(),
+    plane: z.enum(["user", "operator"]),
+    scopes: z.array(z.string()),
+    createdAt: z.number(),
+    lastUsedAt: z.number().nullable(),
+    expiresAt: z.number().nullable(),
+    revokedAt: z.number().nullable(),
+    rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
+    ipAllowlist: z.array(z.string()),
+    unused90d: z.boolean(),
+  }),
 });
 
 const AccessCreateKeyOut = z.object({
@@ -1855,6 +1882,7 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly createKey: AnyFlowDef;
       readonly revokeKey: AnyFlowDef;
       readonly rotateKey: AnyFlowDef;
+      readonly updateKey: AnyFlowDef;
       readonly setRoleGrants: AnyFlowDef;
     };
     readonly diff: {
@@ -1928,6 +1956,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const accessCreateKeyFlow = createAccessCreateKey(state);
   const accessRevokeKeyFlow = createAccessRevokeKey(state);
   const accessRotateKeyFlow = createAccessRotateKey(state);
+  const accessUpdateKeyFlow = createAccessUpdateKey(state);
   const accessSetRoleGrantsFlow = createAccessSetRoleGrants(state);
   const diffList = createDiffList(state);
   const pluginsList = createPluginsList(state);
@@ -1990,6 +2019,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/access/keys"), accessCreateKeyFlow),
     bindHttp(http.post("/console/access/keys/revoke"), accessRevokeKeyFlow),
     bindHttp(http.post("/console/access/keys/rotate"), accessRotateKeyFlow),
+    bindHttp(http.post("/console/access/keys/update"), accessUpdateKeyFlow),
     bindHttp(http.post("/console/access/roles/grants"), accessSetRoleGrantsFlow),
     bindHttp(http.get("/console/diff"), diffList),
     bindHttp(http.get("/console/plugins"), pluginsList),
@@ -2059,6 +2089,7 @@ export function createConsoleBindings(state: ConsoleState): {
         createKey: accessCreateKeyFlow,
         revokeKey: accessRevokeKeyFlow,
         rotateKey: accessRotateKeyFlow,
+        updateKey: accessUpdateKeyFlow,
         setRoleGrants: accessSetRoleGrantsFlow,
       },
       diff: { list: diffList },
@@ -3854,6 +3885,40 @@ function actorScopesOf(state: ConsoleState, operatorId: string): string[] {
   return [...new Set([...fromRoles, "console:*"])];
 }
 
+/**
+ * Derive the issuer for a Console-minted key.
+ * Operator-plane: the acting operator. User-plane: required `creatorUserId`.
+ *
+ * @param state - Console state
+ * @param operatorId - Acting operator
+ * @param input - Create payload
+ */
+export function resolveAccessKeyIssuer(
+  state: ConsoleState,
+  operatorId: string,
+  input: { readonly plane: "user" | "operator"; readonly creatorUserId?: string },
+): { readonly creatorId: string; readonly creatorScopes: readonly string[] } | { readonly error: string } {
+  if (input.plane === "operator") {
+    return { creatorId: operatorId, creatorScopes: actorScopesOf(state, operatorId) };
+  }
+  const userId = input.creatorUserId;
+  if (!userId) {
+    return { error: "creatorUserId is required for user-plane keys" };
+  }
+  const identity = state.identities.find((row) => row.id === userId);
+  if (identity) {
+    return { creatorId: userId, creatorScopes: [...identity.scopes] };
+  }
+  const roleIds = [...state.roleMembers.entries()]
+    .filter(([, members]) => members.includes(userId))
+    .map(([id]) => id);
+  const scopes = [...scopesForRoles(state.roles, roleIds, "user")];
+  if (scopes.length === 0 && roleIds.length === 0) {
+    return { error: `unknown user: ${userId}` };
+  }
+  return { creatorId: userId, creatorScopes: scopes };
+}
+
 function createAccessList(state: ConsoleState) {
   return flow("console.access.list", {
     plane: "operator",
@@ -3916,12 +3981,16 @@ function createAccessCreateKey(state: ConsoleState) {
     do: async (input: z.infer<typeof AccessCreateKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
+        const issued = resolveAccessKeyIssuer(state, fx.operator.id, input);
+        if ("error" in issued) {
+          return fail("AccessGrantDenied", { reason: issued.error });
+        }
         const created = await state.accessCreateKey({
           plane: input.plane,
           name: input.name,
           scopes: input.scopes,
-          creatorId: fx.operator.id,
-          creatorScopes: actorScopesOf(state, fx.operator.id),
+          creatorId: issued.creatorId,
+          creatorScopes: issued.creatorScopes,
           expiresAt: input.expiresAt,
           rateLimit: input.rateLimit,
           ipAllowlist: input.ipAllowlist,
@@ -4000,6 +4069,33 @@ function createAccessRotateKey(state: ConsoleState) {
         secret: rotated.secret,
         blastRadius,
       };
+    },
+  });
+}
+
+function createAccessUpdateKey(state: ConsoleState) {
+  return flow("console.access.updateKey", {
+    plane: "operator",
+    in: AccessUpdateKeyIn,
+    out: AccessUpdateKeyOut,
+    errors: { AuthFailed, AccessKeyNotFound, AccessGrantDenied },
+    do: async (input: z.infer<typeof AccessUpdateKeyIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const key = await state.accessUpdateKey(input);
+        if (!key) {
+          return fail("AccessKeyNotFound", { keyId: input.keyId });
+        }
+        fx.log.info("console.access.updateKey", {
+          keyId: key.id,
+          operatorId: fx.operator.id,
+        });
+        return { key: { ...key } };
+      } catch (err) {
+        return fail("AccessGrantDenied", {
+          reason: err instanceof Error ? err.message : "grant denied",
+        });
+      }
     },
   });
 }

@@ -34,6 +34,15 @@ import {
 
 export type { WhereMap } from "./sql-condition.ts";
 
+/**
+ * Inferred select-row shape for a table handle.
+ *
+ * Uses `$inferSelect` when present (OKE `store.schema.table()` and Drizzle
+ * `pgTable()` / `sqliteTable()`). Bare {@link TableHandle} / `unknown` stay
+ * {@link SqlRow}.
+ */
+export type InferSelectRow<T> = T extends { readonly $inferSelect: infer R } ? R : SqlRow;
+
 /** Serialize stamp frames on a shared connection so concurrent identities cannot interleave. */
 const rlsStampTails = new WeakMap<SqlConnection, Promise<unknown>>();
 
@@ -97,44 +106,44 @@ export interface SqlSessionOptions {
  * Continuations after `.orderBy(...)` — awaitable, optional `.limit` /
  * `.offset`.
  */
-export interface SelectOrderBuilder extends PromiseLike<SqlRow[]> {
+export interface SelectOrderBuilder<TRow = SqlRow> extends PromiseLike<TRow[]> {
   /**
    * Cap the number of returned rows.
    *
    * @param n - Max rows
    */
-  limit(n: number): Promise<SqlRow[]>;
+  limit(n: number): Promise<TRow[]>;
   /**
    * Skip the first `n` rows (`LIMIT … OFFSET …`).
    *
    * @param n - Rows to skip
    */
-  offset(n: number): Promise<SqlRow[]>;
+  offset(n: number): Promise<TRow[]>;
 }
 
 /**
  * Continuations after `.where(...)` on a select — awaitable, optional
  * `.orderBy(...)` / `.limit(...)` / `.offset(...)`.
  */
-export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
+export interface SelectWhereBuilder<TRow = SqlRow> extends PromiseLike<TRow[]> {
   /**
    * Order rows with Drizzle `asc()` / `desc()` terms.
    *
    * @param orders - Order terms
    */
-  orderBy(...orders: readonly unknown[]): SelectOrderBuilder;
+  orderBy(...orders: readonly unknown[]): SelectOrderBuilder<TRow>;
   /**
    * Cap the number of returned rows.
    *
    * @param n - Max rows
    */
-  limit(n: number): Promise<SqlRow[]>;
+  limit(n: number): Promise<TRow[]>;
   /**
    * Skip the first `n` rows.
    *
    * @param n - Rows to skip
    */
-  offset(n: number): Promise<SqlRow[]>;
+  offset(n: number): Promise<TRow[]>;
 }
 
 /**
@@ -142,42 +151,49 @@ export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
  * `.where(...)` / `.orderBy(...)` / `.limit(...)` / `.offset(...)` in any
  * order.
  */
-export interface SelectFromBuilder extends PromiseLike<SqlRow[]> {
+export interface SelectFromBuilder<TRow = SqlRow> extends PromiseLike<TRow[]> {
   /**
    * Filter with a plain equality map or a Drizzle SQL condition
    * (`eq`, `and`, `or`, `lt`, `like`, …).
    *
    * @param where - Condition
    */
-  where(where: unknown): SelectWhereBuilder;
+  where(where: unknown): SelectWhereBuilder<TRow>;
   /**
    * Order rows with Drizzle `asc()` / `desc()` terms.
    *
    * @param orders - Order terms
    */
-  orderBy(...orders: readonly unknown[]): SelectOrderBuilder;
+  orderBy(...orders: readonly unknown[]): SelectOrderBuilder<TRow>;
   /**
    * Cap the number of returned rows.
    *
    * @param n - Max rows
    */
-  limit(n: number): Promise<SqlRow[]>;
+  limit(n: number): Promise<TRow[]>;
   /**
    * Skip the first `n` rows.
    *
    * @param n - Rows to skip
    */
-  offset(n: number): Promise<SqlRow[]>;
+  offset(n: number): Promise<TRow[]>;
 }
 
-/** Fluent select builder. */
-export interface SelectBuilder {
+/**
+ * Fluent select builder.
+ *
+ * `TLocked` is `undefined` for `select()` (row type inferred from `.from`)
+ * and {@link SqlRow} for `select({ alias: col })` projections.
+ */
+export interface SelectBuilder<TLocked extends SqlRow | undefined = undefined> {
   /**
    * Choose the source table.
    *
    * @param table - Table handle or Drizzle table
    */
-  from(table: TableHandle | unknown): SelectFromBuilder;
+  from<TTable>(
+    table: TTable,
+  ): SelectFromBuilder<TLocked extends undefined ? InferSelectRow<TTable> : TLocked>;
 }
 
 /** Fluent insert builder. */
@@ -244,12 +260,13 @@ export interface SqlStoreHandle {
   /** Underlying driver id. */
   readonly driverId: SqlConnection["driverId"];
   /**
-   * Start a select. Optional column map projects / aliases columns
-   * (`select({ clicks: links.clicks })`).
+   * Start a select. No-arg form infers the row from `.from(table)`.
+   * A column map (`select({ clicks: links.clicks })`) stays {@link SqlRow}.
    *
    * @param columns - Optional `{ alias: drizzleColumn }` map
    */
-  select(columns?: unknown): SelectBuilder;
+  select(): SelectBuilder<undefined>;
+  select(columns: unknown): SelectBuilder<SqlRow>;
   /**
    * Start an insert into `table`.
    *
@@ -600,20 +617,20 @@ export function createSqlStoreHandle(
     };
   }
 
-  const handle: SqlStoreHandle = {
+  const handle = {
     ref,
     routedRole: options.routedRole,
     driverId: connection.driverId,
 
-    select(columns?) {
+    select(columns?: unknown) {
       return {
-        from(table) {
+        from(table: TableHandle | unknown) {
           return selectFrom(table, columns);
         },
       };
     },
 
-    insert(table): InsertBuilder {
+    insert(table: TableHandle | unknown): InsertBuilder {
       const name = resolveTableName(table);
       return {
         values(row) {
@@ -648,7 +665,7 @@ export function createSqlStoreHandle(
       };
     },
 
-    update(table): UpdateBuilder {
+    update(table: TableHandle | unknown): UpdateBuilder {
       const name = resolveTableName(table);
       return {
         set(row) {
@@ -675,7 +692,7 @@ export function createSqlStoreHandle(
       };
     },
 
-    async findById(table, idValue) {
+    async findById(table: TableHandle | unknown, idValue: string) {
       await ensureFromMeta(table);
       const name = resolveTableName(table);
       const pk = resolvePkColumn(table);
@@ -716,7 +733,7 @@ export function createSqlStoreHandle(
       return builder;
     }) as SqlStoreHandle["delete"],
 
-    async exists(table, idOrWhere) {
+    async exists(table: TableHandle | unknown, idOrWhere: string | WhereMap) {
       await ensureFromMeta(table);
       const name = resolveTableName(table);
       const where: WhereMap =
@@ -734,7 +751,12 @@ export function createSqlStoreHandle(
       return rows.length > 0;
     },
 
-    async upsert(table, matchOn, values, upsertOptions) {
+    async upsert(
+      table: TableHandle | unknown,
+      matchOn: WhereMap | unknown,
+      values: SqlRow,
+      upsertOptions?: { readonly onExisting?: "update" },
+    ) {
       await ensureFromMeta(table);
       const name = resolveTableName(table);
       const compiled = compileTableWhere(table, matchOn);
@@ -766,7 +788,7 @@ export function createSqlStoreHandle(
       return { status: "changed" as const };
     },
 
-    async increment(table, idValue, column, by = 1) {
+    async increment(table: TableHandle | unknown, idValue: string, column: string, by = 1) {
       await ensureFromMeta(table);
       const name = resolveTableName(table);
       const pk = resolvePkColumn(table);
@@ -785,7 +807,7 @@ export function createSqlStoreHandle(
       return asNumber(row[sqlCol], sqlCol);
     },
 
-    async raw(sql, params = []) {
+    async raw(sql: string, params: readonly unknown[] = []) {
       const table = tableFromSql(sql);
       // Memory SQL (console-next seed) implements DML on `exec`, not `query`.
       // SELECT / RETURNING still go through `query` so callers get rows.
@@ -797,7 +819,7 @@ export function createSqlStoreHandle(
       return mask(rows, table);
     },
 
-    async count(table, where) {
+    async count(table: TableHandle | unknown, where?: unknown) {
       await ensureFromMeta(table);
       const name = resolveTableName(table);
       let sql = `SELECT COUNT(*) AS "count" FROM ${quoteIdent(name)}`;
@@ -813,7 +835,7 @@ export function createSqlStoreHandle(
       return asNumber(rows[0]?.count ?? rows[0]?.COUNT ?? 0, "count");
     },
 
-    async page(table, options) {
+    async page(table: TableHandle | unknown, options: SqlPageOptions) {
       if (options.after !== undefined && options.before !== undefined) {
         throw new Error("page(): after and before (keyset) cannot combine");
       }
@@ -838,7 +860,7 @@ export function createSqlStoreHandle(
       });
     },
 
-    async ensureTable(table) {
+    async ensureTable(table: TableHandle) {
       const cols = Object.values(table.columns);
       const pk = resolvePkColumn(table);
       const intType =
@@ -863,7 +885,7 @@ export function createSqlStoreHandle(
     },
   };
 
-  return handle;
+  return handle as SqlStoreHandle;
 }
 
 /**

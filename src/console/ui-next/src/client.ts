@@ -1405,3 +1405,155 @@ export type VaultAuditVerifyResult = {
 export async function vaultAuditVerify(): Promise<ConsoleApiResult<VaultAuditVerifyResult>> {
   return consoleFetch<VaultAuditVerifyResult>("/console/vault/audit/verify");
 }
+
+/** One Access API key row (`GET /console/access`). */
+export type AccessKeyRow = {
+  readonly id: string;
+  readonly name: string;
+  readonly plane: "user" | "operator";
+  readonly scopes: readonly string[];
+  readonly createdAt: number;
+  readonly lastUsedAt: number | null;
+  readonly expiresAt: number | null;
+  readonly revokedAt: number | null;
+  readonly rateLimit: { max: number; per: string } | null;
+  readonly ipAllowlist: readonly string[];
+  readonly unused90d: boolean;
+};
+
+/** One Access user row. */
+export type AccessUserRow = {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string;
+  readonly status: "active" | "disabled";
+  readonly roles: readonly string[];
+  readonly scopes: readonly string[];
+};
+
+/** Access plane section. */
+export type AccessPlaneSection = {
+  readonly keys: readonly AccessKeyRow[];
+  readonly users?: readonly AccessUserRow[];
+  readonly grantableScopes: readonly string[];
+};
+
+/** Access list payload (`GET /console/access`). */
+export type AccessListPayload = {
+  readonly operatorPlane: AccessPlaneSection;
+  readonly userPlane: AccessPlaneSection;
+  readonly catalog: readonly string[];
+  readonly accessTtlMs: number;
+};
+
+/**
+ * GET /console/access — keys, users, grantable scopes.
+ */
+export async function accessList(): Promise<ConsoleApiResult<AccessListPayload>> {
+  return consoleFetch<AccessListPayload>("/console/access");
+}
+
+/** Blast radius for one key. */
+export type AccessKeyBlastPayload = {
+  readonly callVolume: number;
+  readonly lastUsedAt: number | null;
+  readonly sourceAddresses: readonly string[];
+  readonly accessTtlMs: number;
+  readonly residualAccessNote: string;
+};
+
+/**
+ * POST /console/access/key-blast — usage from Runs.
+ *
+ * @param keyId - Key id
+ */
+export async function accessKeyBlast(
+  keyId: string,
+): Promise<ConsoleApiResult<AccessKeyBlastPayload>> {
+  return consoleFetch<AccessKeyBlastPayload>("/console/access/key-blast", {
+    method: "POST",
+    body: JSON.stringify({ keyId }),
+  });
+}
+
+/** Create-key request. */
+export type AccessCreateKeyInput = {
+  readonly plane: "user" | "operator";
+  readonly name: string;
+  readonly scopes: readonly string[];
+  readonly creatorUserId?: string;
+  readonly expiresAt?: number | null;
+  readonly rateLimit?: { max: number; per: string } | null;
+  readonly ipAllowlist?: readonly string[];
+};
+
+/** Create / rotate success — secret once. */
+export type AccessSecretOnceResult = {
+  readonly key: AccessKeyRow;
+  readonly secret: string;
+};
+
+/**
+ * POST /console/access/keys — mint an attenuated key (secret once).
+ *
+ * @param body - Create payload
+ */
+export async function accessCreateKey(
+  body: AccessCreateKeyInput,
+): Promise<ConsoleApiResult<AccessSecretOnceResult>> {
+  return consoleFetch<AccessSecretOnceResult>("/console/access/keys", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/access/keys/rotate — new secret once.
+ *
+ * @param body - Key id + ROTATE confirm
+ */
+export async function accessRotateKey(body: {
+  readonly keyId: string;
+  readonly confirmation: "ROTATE";
+  readonly reason: string;
+}): Promise<ConsoleApiResult<AccessSecretOnceResult>> {
+  return consoleFetch<AccessSecretOnceResult>("/console/access/keys/rotate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/access/keys/revoke — irreversible.
+ *
+ * @param body - Key id + REVOKE confirm
+ */
+export async function accessRevokeKey(body: {
+  readonly keyId: string;
+  readonly confirmation: "REVOKE";
+  readonly reason: string;
+}): Promise<ConsoleApiResult<{ readonly key: AccessKeyRow }>> {
+  return consoleFetch<{ readonly key: AccessKeyRow }>("/console/access/keys/revoke", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/access/keys/update — metadata + scopes.
+ *
+ * @param body - Patch
+ */
+export async function accessUpdateKey(body: {
+  readonly keyId: string;
+  readonly name?: string;
+  readonly scopes?: readonly string[];
+  readonly expiresAt?: number | null;
+  readonly rateLimit?: { max: number; per: string } | null;
+  readonly ipAllowlist?: readonly string[];
+}): Promise<ConsoleApiResult<{ readonly key: AccessKeyRow }>> {
+  return consoleFetch<{ readonly key: AccessKeyRow }>("/console/access/keys/update", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

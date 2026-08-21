@@ -6,7 +6,7 @@
 
 import type { PasswordHashOptions } from "../runtime/types.ts";
 import type { SessionStore } from "./sessions.ts";
-import type { ApiKeyStore } from "./api-keys.ts";
+import { createApiKeyStore, type ApiKeyStore } from "./api-keys.ts";
 import type { BreachCheckFn } from "./breach-check.ts";
 import type { PasswordPolicyOptions } from "./password-policy.ts";
 import {
@@ -111,8 +111,8 @@ export interface GateAuthOptions extends AuthSchemaOptions {
    */
   readonly sessions?: SessionStore;
   /**
-   * In-memory API key store for Bearer key auth (tests / embedding).
-   * Distinct from schema `apiKeys` table options.
+   * Shared API key store. Created automatically when omitted
+   * (`gate.auth.secret` is the HMAC pepper).
    */
   readonly apiKeyStore?: ApiKeyStore;
   /** Injectable clock. */
@@ -170,7 +170,7 @@ export interface ResolvedGateAuth {
   };
   readonly hooks: AuthDatabaseHooks | undefined;
   readonly sessions: SessionStore | undefined;
-  readonly apiKeyStore: ApiKeyStore | undefined;
+  readonly apiKeyStore: ApiKeyStore;
   readonly now: (() => number) | undefined;
 }
 
@@ -278,7 +278,7 @@ export function resolveGateAuth(options: ResolveGateAuthOptions): ResolvedGateAu
     },
     hooks: auth.hooks,
     sessions: auth.sessions,
-    apiKeyStore: auth.apiKeyStore,
+    apiKeyStore: auth.apiKeyStore ?? createApiKeyStore({ pepper: secret }),
     now: auth.now,
   };
 }

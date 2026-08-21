@@ -24,6 +24,7 @@ export interface PrincipalBag {
     userId: string | null;
     scopes: Set<string>;
     verified?: boolean;
+    apiKeyId?: string | null;
   };
   readonly operator: {
     id: string | null;
@@ -53,7 +54,7 @@ export interface PipelineDeps {
    * @returns Principal on success
    * @throws On forge / expiry / revoke — pipeline maps to `Unauthorized`
    */
-  readonly verifyBearer?: (token: string) => Promise<ResolvedPrincipal>;
+  readonly verifyBearer?: (token: string, request?: Request) => Promise<ResolvedPrincipal>;
   /**
    * Optional token extraction (e.g. cookie → Bearer when cookies enabled).
    * When omitted, only `Authorization: Bearer` is read.
@@ -155,6 +156,7 @@ export function applyPrincipal(bag: PrincipalBag, resolved: ResolvedPrincipal | 
       for (const s of resolved.scopes) bag.auth.scopes.add(s);
     }
     if (resolved.verified !== undefined) bag.auth.verified = resolved.verified;
+    bag.auth.apiKeyId = resolved.apiKeyId ?? null;
   }
 }
 
@@ -192,7 +194,7 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
         return fail("Unauthorized", {});
       }
       try {
-        const principal = await deps.verifyBearer(token);
+        const principal = await deps.verifyBearer(token, ctx.request);
         applyPrincipal(deps.principals, principal);
         if (principal.apiKeyId) {
           deps.telemetry.dimensions.api_key = principal.apiKeyId;

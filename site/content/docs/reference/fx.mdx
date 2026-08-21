@@ -14,11 +14,17 @@ flow("orders.example", {
 });
 ```
 
+<Callout title="Extracted helpers">
+  Type a helper's `fx` parameter as `Fx` (`import type { Fx } from "okengine"`).
+  A narrower structural type will not match `store()` overloads. See
+  [Flow](/docs/elements/flow).
+</Callout>
+
 ## Stores
 
 | Signature                                                           | Records      | Returns                                                                                     |
 | ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------- |
-| `fx.store(sqlDecl).select().from(t)…`                               | `read`       | rows (`where` · `orderBy` · `limit` · `offset` chainable)                                   |
+| `fx.store(sqlDecl).select().from(t)…`                               | `read`       | inferred rows (`where` · `orderBy` · `limit` · `offset` chainable)                          |
 | `fx.store(sqlDecl).insert(t).values(v)`                             | `write`      | `Promise<void>`                                                                             |
 | `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`      | `Promise<void>`                                                                             |
 | `fx.store(sqlDecl).delete(t).where(…)`                              | `write`      | `Promise<void>`                                                                             |
@@ -82,6 +88,11 @@ on(
 | `fx.using(acq, rel, use)`    | —       | `release` runs once on settle or ambient abort        |
 | `fx.signal`                  | —       | Ambient `AbortSignal` for the current branch          |
 | `fx.fail(code, data, opts?)` | —       | Typed failure value (`opts.message` overrides)        |
+| `fx.auth.createApiKey({ name, scopes, expiresIn? })` | `write` `auth:api-keys` | Secret once. Creator is live `userId` / `scopes`. Session only. |
+| `fx.auth.listApiKeys()` | `read` `auth:api-keys` | Keys this session minted |
+| `fx.auth.revokeApiKey(id)` | `write` `auth:api-keys` | Owner only |
+| `fx.auth.rotateApiKey(id)` | `write` `auth:api-keys` | New secret once. Owner only |
+| `fx.auth.updateApiKey(id, …)` | `write` `auth:api-keys` | Name / scopes / expiry. Re-attenuates |
 
 `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed for authorization). For
 audit/attribution only, read `fx.principal` — it propagates the originating identity without
@@ -267,13 +278,14 @@ Built-in `errors.*` / `oke.*` catalogs localize `fx.fail` messages and thrown
 
 | Property       | Shape                                                                     |
 | -------------- | ------------------------------------------------------------------------- |
-| `fx.auth`      | `{ userId: string \| null, scopes: Set<string>, verified?: boolean }`     |
+| `fx.auth`      | `{ userId, scopes, verified?, apiKeyId? }` plus key methods (session only) |
 | `fx.operator`  | `{ id: string \| null }` — Console plane                                  |
 | `fx.principal` | Read-only origin: `userId`, `operatorId`, `scopes`, `verified?`, `plane?` |
 | `fx.tenant`    | `{ id: string \| null }` — active tenant                                  |
 
 **Consequence:** use `fx.auth` / gates for authorization; use `fx.principal` only when a callee
-must log who started the call chain.
+must log who started the call chain. A key Bearer sets `userId` to the issuer and `apiKeyId`
+to the key — see [Gate](/docs/elements/gate#api-keys).
 
 ## Not on `fx`
 

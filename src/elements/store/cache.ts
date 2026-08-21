@@ -63,7 +63,7 @@ export function tier1KeysForReads(
  * @param effects - Write flow effects
  */
 export function resourcesTouchedByWrites(effects: Effects): ResourceRef[] {
-  return [...(effects.writes ?? [])];
+  return (effects.writes ?? []).filter((r): r is ResourceRef => isStoreResourceRef(r));
 }
 
 /**

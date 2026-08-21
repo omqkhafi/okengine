@@ -47,6 +47,12 @@ export type ResourceRef = `${StoreFacet}:${string}`;
 export type RunsResourceRef = "runs";
 
 /**
+ * Auth key-management capability for `fx.auth` list/create/revoke/rotate/update.
+ * Not a store facet — do not declare `sql:oke_api_keys`.
+ */
+export type AuthApiKeysResourceRef = "auth:api-keys";
+
+/**
  * Dead-letter read capability for `fx.deadLetters` — not a store facet.
  * Declare on `effects.reads` (never `writes`).
  */
@@ -81,9 +87,9 @@ export type JsonSchema = string | Record<string, unknown>;
  */
 export interface Effects {
   /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters`. */
-  reads?: Array<ResourceRef | RunsResourceRef | SignalResourceRef>;
-  /** Store writes. */
-  writes?: ResourceRef[];
+  reads?: Array<ResourceRef | RunsResourceRef | SignalResourceRef | AuthApiKeysResourceRef>;
+  /** Store writes, plus `"auth:api-keys"` for `fx.auth` mutations. */
+  writes?: Array<ResourceRef | AuthApiKeysResourceRef>;
   /** Emitted signals. */
   emits?: SignalRef[];
   /** Channel template sends (irreversible). */

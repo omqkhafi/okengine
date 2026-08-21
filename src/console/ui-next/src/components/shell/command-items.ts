@@ -12,6 +12,7 @@ import {
   Settings01Icon,
   Shapes01Icon,
   Sun03Icon,
+  Key01Icon,
   WorkflowSquare08Icon,
 } from "@hugeicons/core-free-icons";
 import type { CommandItem } from "@/components/shell/command-palette.tsx";
@@ -64,6 +65,13 @@ const MODULES: ReadonlyArray<{
     icon: AccessIcon,
     keywords: ["secrets", "contracts"],
     shortcut: "vault",
+  },
+  {
+    title: "Access",
+    to: "/access",
+    icon: Key01Icon,
+    keywords: ["keys", "api", "scopes"],
+    shortcut: "access",
   },
 ];
 

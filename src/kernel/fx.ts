@@ -20,6 +20,7 @@ import type {
   IndexStoreFxHandle,
   KvStoreDecl,
   KvStoreFxHandle,
+  SelectFromBuilder,
   SelectOrderBuilder,
   SqlStoreDecl,
   StoreDecl,
@@ -36,6 +37,13 @@ import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.t
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
+import type { ApiKeyStore } from "../auth/api-keys.ts";
+import { AUTH_API_KEYS_RESOURCE } from "../auth/api-keys.ts";
+import {
+  attachAuthKeyMethods,
+  type FxAuthIdentity,
+  type FxAuthKeyMethods,
+} from "./fx-auth-keys.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
 import { createEffectLedger, recordEffect, reversibilityOf, type EffectLedger } from "./effects.ts";
 import { resolveDurationMs } from "./elapsed.ts";
@@ -76,6 +84,9 @@ async function loadRunsWindow(): Promise<typeof import("../runs/window.ts")> {
 /** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
 export const RUNS_RESOURCE = "runs";
 
+/** Resource ref Flows declare for {@link Fx.auth} key management. */
+export { AUTH_API_KEYS_RESOURCE };
+
 /**
  * Capability ref for {@link Fx.deadLetters} — `signal:<name>`, never a store facet.
  *
@@ -103,13 +114,10 @@ export function resolveStoreRef(ref: NamedRef | { readonly ref: ResourceRef }): 
   return ref.name as ResourceRef;
 }
 
+export type { FxAuthIdentity } from "./fx-auth-keys.ts";
+
 /** Auth principal on the user plane. */
-export interface FxAuth {
-  readonly userId: string | null;
-  readonly scopes: ReadonlySet<string>;
-  /** Whether the identity has completed verification (email / MFA). */
-  readonly verified?: boolean;
-}
+export interface FxAuth extends FxAuthIdentity, FxAuthKeyMethods {}
 
 /** Operator principal on the Console plane. */
 export interface FxOperator {
@@ -837,8 +845,10 @@ export interface CreateFxOptions {
   readonly capability?: CapabilityToken;
   /** Injectable clock for timestamps / `fx.clock.now`. */
   readonly now?: () => number;
-  /** Auth principal. */
-  readonly auth?: FxAuth;
+  /** Auth principal bag (methods attach at create time). */
+  readonly auth?: FxAuthIdentity;
+  /** Shared API key store for {@link Fx.auth} key methods. */
+  readonly apiKeyStore?: ApiKeyStore;
   /** Operator principal. */
   readonly operator?: FxOperator;
   /**
@@ -1001,10 +1011,17 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   }
   const cacheStore = new Map<string, unknown>();
 
-  const auth: FxAuth = options.auth ?? {
+  const authBag = options.auth ?? {
     userId: null,
     scopes: new Set(),
+    apiKeyId: null,
   };
+  const auth: FxAuth = attachAuthKeyMethods({
+    auth: authBag,
+    store: options.apiKeyStore,
+    now,
+    gated: (kind, resource, body) => gated(kind, resource, body),
+  });
   const operator: FxOperator = options.operator ?? { id: null };
   const tenant: FxTenant = options.tenant ?? { id: null };
   const defaultLocale = options.i18n?.defaultLocale ?? "en";
@@ -1171,9 +1188,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       get driverId() {
         return cached?.driverId ?? "memory";
       },
-      select(columns?) {
+      select: ((columns?: unknown) => {
         return {
-          from(table) {
+          from(table: unknown) {
             const run = (plan: {
               where?: unknown;
               orders?: readonly unknown[];
@@ -1182,7 +1199,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             }): Promise<SqlRow[]> =>
               gatedTable("read", table, async () => {
                 const h = await ensure();
-                const from = h.select(columns).from(table);
+                const from = h.select(columns).from(table) as SelectFromBuilder;
                 const filtered = plan.where === undefined ? from : from.where(plan.where);
                 const ordered =
                   plan.orders === undefined ? filtered : filtered.orderBy(...plan.orders);
@@ -1206,7 +1223,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             });
 
             return {
-              where(where) {
+              where(where: unknown) {
                 return {
                   ...tail({ where }),
                   orderBy: (...orders: readonly unknown[]) => tail({ where, orders }),
@@ -1219,13 +1236,16 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               offset(n: number) {
                 return run({ offset: n });
               },
-              then(onfulfilled, onrejected) {
+              then(
+                onfulfilled: (value: SqlRow[]) => unknown,
+                onrejected?: (reason: unknown) => unknown,
+              ) {
                 return run({}).then(onfulfilled, onrejected);
               },
             };
           },
         };
-      },
+      }) as SqlStoreHandle["select"],
       insert(table) {
         return {
           values(row) {

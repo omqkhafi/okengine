@@ -19,6 +19,7 @@ import {
   revokeApiKey,
   revokeFamily,
   rotateApiKey,
+  updateApiKey,
   setRoleGrants,
   scopesForRoles,
   type ApiKeyStore,
@@ -498,6 +499,36 @@ export async function accessRotateKey(
 }
 
 /**
+ * Update key metadata. Scope changes re-attenuate against stored creatorScopes.
+ *
+ * @param store - API key store
+ * @param input - Patch
+ */
+export function accessUpdateKey(
+  store: ApiKeyStore,
+  input: {
+    readonly keyId: string;
+    readonly name?: string;
+    readonly scopes?: readonly string[];
+    readonly expiresAt?: number | null;
+    readonly rateLimit?: { max: number; per: string } | null;
+    readonly ipAllowlist?: readonly string[];
+  },
+): AccessKeyRow | null {
+  const existing = store.keys.get(input.keyId);
+  if (!existing) return null;
+  const row = updateApiKey(store, input.keyId, {
+    ceiling: existing.creatorScopes,
+    name: input.name,
+    scopes: input.scopes,
+    expiresAt: input.expiresAt,
+    rateLimit: input.rateLimit,
+    ipAllowlist: input.ipAllowlist,
+  });
+  return row ? toKeyRow(row, () => Date.now()) : null;
+}
+
+/**
  * Create an operator invitation.
  *
  * @param store - Invite store
@@ -528,10 +559,9 @@ export class AccessGrantError extends Error {
 /**
  * Expand held scopes for Access administration.
  *
- * `console:*` covers every `console:…` pair and, for the Access admin
- * surface, every application scope in the catalog so operators can manage
- * the user plane without holding application scopes on their own principal
- * (which Gates would flag as a plane violation).
+ * `console:*` covers every `console:…` pair in the catalog. Application
+ * scopes are never added — user-plane keys are attenuated to the issuer's
+ * own grants (`scopesForRoles`), not the operator catalog.
  *
  * @param held - Actor scopes
  * @param catalog - Manifest Module:Action pairs
@@ -540,17 +570,7 @@ export function expandAccessCeiling(
   held: Iterable<string>,
   catalog: readonly string[],
 ): Set<string> {
-  const out = expandHeldScopes(held, catalog);
-  let star = false;
-  for (const s of held) {
-    if (s === "console:*") star = true;
-  }
-  if (star) {
-    for (const scope of catalog) {
-      if (isApplicationScope(scope)) out.add(scope);
-    }
-  }
-  return out;
+  return expandHeldScopes(held, catalog);
 }
 
 function projectOperators(options: ProjectAccessOptions): AccessOperatorRow[] {
@@ -717,9 +737,7 @@ function roleIdsForMember(
 }
 
 function runTouchesKey(run: WideEvent, keyId: string): boolean {
-  if (run.principal === keyId) return true;
   const dims = run.dimensions;
-  if (dims.principal === keyId) return true;
   if (dims.api_key === keyId || dims.apiKey === keyId || dims.key === keyId) {
     return true;
   }

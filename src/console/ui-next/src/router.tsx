@@ -1,6 +1,6 @@
 /**
  * Console router — code-based TanStack Router (Vite SPA).
- * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault` | `/observability`.
+ * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault` | `/access` | `/observability`.
  * `/monitoring` is a one-shot search-preserving redirect to `/observability`.
  * Authenticated pages are `lazyRouteComponent` so Vite splits them out of the entry.
  * Any other path is a 404 — no legacy rewrites.
@@ -30,6 +30,7 @@ import { validateStoreSearch } from "./features/store/state/store-selection.ts";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
 import { validateObservabilitySearch } from "./features/observability/state/observability-selection.ts";
 import { validateVaultSearch } from "./features/vault/state/vault-selection.ts";
+import { validateAccessSearch } from "./features/access/state/access-selection.ts";
 import { DocumentTitle } from "./components/document-title.tsx";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
@@ -120,6 +121,13 @@ const vaultRoute = createRoute({
   component: lazyRouteComponent(() => import("./features/vault/vault-page.tsx"), "VaultPage"),
 });
 
+const accessRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/access",
+  validateSearch: validateAccessSearch,
+  component: lazyRouteComponent(() => import("./features/access/access-page.tsx"), "AccessPage"),
+});
+
 const observabilityRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/observability",
@@ -146,6 +154,7 @@ const routeTree = rootRoute.addChildren([
     flowsRoute,
     storeRoute,
     vaultRoute,
+    accessRoute,
     observabilityRoute,
     monitoringRedirectRoute,
   ]),

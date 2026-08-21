@@ -63,6 +63,7 @@ export type ConsoleShortcutId =
   | "flows"
   | "store"
   | "vault"
+  | "access"
   | "observability";
 
 const MODULE_DIGIT: Readonly<
@@ -73,6 +74,7 @@ const MODULE_DIGIT: Readonly<
   store: "3",
   observability: "4",
   vault: "5",
+  access: "6",
 };
 
 /**
@@ -94,6 +96,7 @@ export const MODULE_DIGIT_PATH: Readonly<Record<string, ConsoleModulePath>> = {
   "3": "/store",
   "4": "/observability",
   "5": "/vault",
+  "6": "/access",
 };
 
 /**

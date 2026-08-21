@@ -12,6 +12,7 @@ describe("last-module-search", () => {
     expect(isConsoleModulePath("/overview")).toBe(true);
     expect(isConsoleModulePath("/flows")).toBe(true);
     expect(isConsoleModulePath("/observability")).toBe(true);
+    expect(isConsoleModulePath("/access")).toBe(true);
     expect(isConsoleModulePath("/monitoring")).toBe(false);
     expect(isConsoleModulePath("/units")).toBe(false);
     expect(isConsoleModulePath("/")).toBe(false);

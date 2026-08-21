@@ -12,6 +12,65 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Console — Auth & shell
+
+- Access (`/access`) manages API keys: create, edit, revoke, rotate,
+  reveal-once secret, usage from Runs, and a working Bearer call
+  example. Sidebar, command palette, and ⌘6.
+
+#### Runtime
+
+- `fx.auth.createApiKey` / `listApiKeys` / `revokeApiKey` /
+  `rotateApiKey` / `updateApiKey` — session-only, issuer derived from
+  the live principal. Effects `auth:api-keys`.
+- `gate.auth` always creates a shared API key store (HMAC-SHA-256 with
+  `gate.auth.secret`). Host and Console share it via `attachHostToConsole`.
+- `fx.store(db).select().from(table)` infers the declared row from
+  `store.schema.table()` / Drizzle `$inferSelect`. `select({ … })`
+  projections stay `SqlRow[]`. Export `InferSelectRow`.
+
+### 💥 Breaking Changes
+
+#### Runtime
+
+- API key Bearer is the issuer: `fx.auth.userId` / `fx.operator.id` and
+  WideEvent `principal` are `creatorId`. The credential is
+  `fx.auth.apiKeyId` and `dimensions.api_key`.
+- Key secrets hash with HMAC-SHA-256 (`gate.auth.secret`). Stolen table
+  rows are not portable across apps.
+- Per-key `ipAllowlist` and `rateLimit` are enforced on the HTTP Bearer
+  path (401, no `api_key` dimension).
+
+#### Console — Auth & shell
+
+- User-plane Access create requires `creatorUserId`. The ceiling is that
+  user's grants — `console:*` no longer adds application scopes.
+- Production no longer seeds a demo API key.
+
+### ♻️ Changed
+
+#### Dev, Keel & create-oke
+
+- Keel flow helpers (`nextIdentifier`, `writeActivity`, `pushInbox`,
+  `upsertTask`) take the exported `Fx` type — no hand-rolled `fx`
+  shape and no `as never` at the call site.
+
+#### Docs
+
+- Flow and fx pages call out typing extracted helpers as `Fx`.
+  Store documents inferred `select().from(table)` rows.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- `FxAuth` identity (userId / scopes / apiKeyId) is distinct from
+  key-management methods, so `createFx` and wholesale `Fx` mocks
+  typecheck. Store cache invalidation ignores `auth:api-keys`. SQL
+  `select` overloads keep inferred rows without implicit-any.
+
 ## v0.15.2 — 2026-08-21
 
 ### 🐛 Fixed

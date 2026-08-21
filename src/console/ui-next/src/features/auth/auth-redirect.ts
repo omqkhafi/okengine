@@ -2,7 +2,7 @@
  * Post-auth return path — keep the operator on the module they were in
  * after a session expires, instead of always landing on `/overview`.
  *
- * Only `/overview`, `/flows`, `/store`, `/vault`, and `/observability` (plus their
+ * Only `/overview`, `/flows`, `/store`, `/vault`, `/access`, and `/observability` (plus their
  * search) are legal. `/monitoring` is rewritten to `/observability`. Anything else
  * is dropped so `?next=` cannot be an open redirect.
  */
@@ -15,12 +15,20 @@ import {
   type ObservabilitySearch,
 } from "../observability/state/observability-selection.ts";
 import { validateVaultSearch, type VaultSearch } from "../vault/state/vault-selection.ts";
+import { validateAccessSearch, type AccessSearch } from "../access/state/access-selection.ts";
 
 /** Default shell module when no safe return path is present. */
 export const DEFAULT_AFTER_AUTH = "/overview" as const;
 
 /** Shell pathnames that may be restored after login. */
-const SHELL_PATHS = new Set(["/overview", "/flows", "/store", "/vault", "/observability"]);
+const SHELL_PATHS = new Set([
+  "/overview",
+  "/flows",
+  "/store",
+  "/vault",
+  "/access",
+  "/observability",
+]);
 
 /** Retired live module — rewritten to {@link CANONICAL_OBSERVABILITY}. */
 const LEGACY_MONITORING = "/monitoring";
@@ -40,6 +48,7 @@ export type AfterAuthLocation =
   | { readonly to: "/flows"; readonly search: UnitsSearch }
   | { readonly to: "/store"; readonly search: StoreSearch }
   | { readonly to: "/vault"; readonly search: VaultSearch }
+  | { readonly to: "/access"; readonly search: AccessSearch }
   | { readonly to: "/observability"; readonly search: ObservabilitySearch };
 
 /**
@@ -111,6 +120,9 @@ export function afterAuthLocation(value: unknown): AfterAuthLocation {
   if (url.pathname === "/vault") {
     return { to: "/vault", search: validateVaultSearch(raw) };
   }
+  if (url.pathname === "/access") {
+    return { to: "/access", search: validateAccessSearch(raw) };
+  }
   if (url.pathname === CANONICAL_OBSERVABILITY) {
     return { to: "/observability", search: validateObservabilitySearch(raw) };
   }
@@ -123,6 +135,7 @@ export type AfterAuthNavigate = {
   (opts: { to: "/flows"; search: UnitsSearch }): unknown;
   (opts: { to: "/store"; search: StoreSearch }): unknown;
   (opts: { to: "/vault"; search: VaultSearch }): unknown;
+  (opts: { to: "/access"; search: AccessSearch }): unknown;
   (opts: { to: "/observability"; search: ObservabilitySearch }): unknown;
 };
 
@@ -143,6 +156,9 @@ export function goAfterAuth(navigate: AfterAuthNavigate, value: unknown): void {
       return;
     case "/vault":
       void navigate({ to: "/vault", search: dest.search });
+      return;
+    case "/access":
+      void navigate({ to: "/access", search: dest.search });
       return;
     case "/observability":
       void navigate({ to: "/observability", search: dest.search });

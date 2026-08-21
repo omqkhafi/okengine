@@ -161,16 +161,33 @@ export {
 } from "./attenuation.ts";
 
 export {
+  AUTH_API_KEYS_RESOURCE,
+  authenticateApiKey,
+  clientIpFromRequest,
   createApiKey,
   createApiKeyStore,
-  authenticateApiKey,
+  getApiKey,
   hashApiKeySecret,
+  listApiKeys,
   revokeApiKey,
   rotateApiKey,
+  toApiKeyPublicRow,
+  updateApiKey,
+  type ApiKeyPublicRow,
   type ApiKeyStore,
+  type AuthenticateApiKeyOptions,
   type CreateApiKeyOptions,
+  type CreateApiKeyStoreOptions,
   type CreatedApiKey,
+  type UpdateApiKeyOptions,
 } from "./api-keys.ts";
+
+export {
+  bindApiKeySqlPersist,
+  hydrateApiKeyStore,
+  persistApiKeyRow,
+  type ApiKeySqlExec,
+} from "./api-key-sql.ts";
 
 export {
   createOperatorInviteStore,

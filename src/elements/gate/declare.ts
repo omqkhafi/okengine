@@ -19,6 +19,8 @@ export interface GatePolicyContext {
     readonly userId: string | null;
     readonly scopes: ReadonlySet<string>;
     readonly verified?: boolean;
+    /** Authenticating API key id when the principal is a key; otherwise omitted. */
+    readonly apiKeyId?: string | null;
   };
   /** Operator-plane principal (`fx.operator`). */
   readonly operator: {

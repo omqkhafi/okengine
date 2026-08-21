@@ -137,6 +137,7 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
         accessCreateKey: routes.access.createKey,
         accessRevokeKey: routes.access.revokeKey,
         accessRotateKey: routes.access.rotateKey,
+        accessUpdateKey: routes.access.updateKey,
         accessSetRoleGrants: routes.access.setRoleGrants,
         diffList: routes.diff.list,
         clockList: routes.clock.list,

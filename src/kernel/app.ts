@@ -24,6 +24,7 @@ import {
 import type { BootOptions, BootResult, ElementRuntimes } from "./boot.ts";
 import type { CapabilityToken } from "./capability.ts";
 import type { AppAuthBinding } from "./auth-resolve.ts";
+import { clientIpFromRequest, type ApiKeyStore } from "../auth/api-keys.ts";
 import type { AuthHttpMaterialization } from "../auth/bindings.ts";
 import type { WiredGateAuth } from "./app-auth.ts";
 import {
@@ -371,6 +372,8 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
    * Builtin auth binding after boot (session store + secret), when configured.
    */
   readonly authBinding: AppAuthBinding | undefined;
+  /** Shared API key store when `gate.auth` is enabled. */
+  readonly apiKeys: ApiKeyStore | undefined;
   /**
    * Attach a plugin app-wide. Scope is the attachment point.
    * Types accumulate — decorations are visible on downstream handlers.
@@ -1365,6 +1368,7 @@ export function oke(options: OkeOptions): OkeApp {
           userId: options.fx?.auth?.userId ?? null,
           scopes: new Set(options.fx?.auth?.scopes ?? []),
           verified: options.fx?.auth?.verified,
+          apiKeyId: options.fx?.auth?.apiKeyId ?? null,
         },
         operator: { id: options.fx?.operator?.id ?? null },
       };
@@ -1393,7 +1397,13 @@ export function oke(options: OkeOptions): OkeApp {
           : {}),
         verifyBearer:
           binding && wiredAuth
-            ? async (token) => wiredAuth.verifyBearerOrApiKey(binding, token, apiKeyStore)
+            ? async (token, request) =>
+                wiredAuth.verifyBearerOrApiKey(
+                  binding,
+                  token,
+                  apiKeyStore,
+                  request ? clientIpFromRequest(request) : undefined,
+                )
             : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
         resolveToken:
@@ -1450,7 +1460,8 @@ export function oke(options: OkeOptions): OkeApp {
         catalogs: loadMessages().getMessageCatalogs(),
         ...options.fx?.i18n,
       },
-      ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
+      ...(principals ? { auth: principals.auth, operator: principals.operator } : {}),
+      ...(gateConfig.auth?.apiKeyStore ? { apiKeyStore: gateConfig.auth.apiKeyStore } : {}),
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(extras?.trustedInvoke === true && extras.revealPii === true ? { revealPii: true } : {}),
       rlsGateNames: gateNamesOf(trigger),
@@ -1604,6 +1615,7 @@ export function oke(options: OkeOptions): OkeApp {
           }
           return await invoke(ctx.input);
         } catch (err) {
+          if (isFlowFailure(err)) return err;
           // A durable sleep that has not yet elapsed suspends the run — this
           // is a park, not a pipeline failure, so it must not throw upward.
           if (flowDef.durable && journalSession && isJournalSuspend(err)) {
@@ -1779,6 +1791,9 @@ export function oke(options: OkeOptions): OkeApp {
     },
     get authBinding() {
       return authBinding;
+    },
+    get apiKeys() {
+      return gateConfig.auth?.apiKeyStore;
     },
     async resumeDurable(now) {
       const t = now ?? bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();

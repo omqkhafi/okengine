@@ -69,6 +69,8 @@ export async function attachHostToConsole(
   if (vault) options.state.vaultRuntime = vault;
   const ai = host.elements?.ai ?? host.bootResult?.ai;
   if (ai) bindAiRuntime(options.state, ai);
+  const hostKeys = host.apiKeys;
+  if (hostKeys) options.state.apiKeys = hostKeys;
 
   return {
     stop: async () => {

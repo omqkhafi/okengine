@@ -89,7 +89,9 @@ export function claimsToPrincipal(claims: AccessClaims): ResolvedPrincipal {
 
 /**
  * Map an authenticated API key row to the pipeline principal shape.
- * Uses the bare key id so Access `runTouchesKey` matches `WideEvent.principal`.
+ *
+ * The key is the issuer with fewer gates: `userId` / `operatorId` is
+ * {@link ApiKeyRow.creatorId}. The credential id is {@link ResolvedPrincipal.apiKeyId}.
  *
  * @param row - Authenticated key
  */
@@ -97,7 +99,7 @@ export function apiKeyRowToPrincipal(row: ApiKeyRow): ResolvedPrincipal {
   if (row.plane === "operator") {
     return {
       plane: "operator",
-      operatorId: row.id,
+      operatorId: row.creatorId,
       userId: null,
       scopes: row.scopes,
       verified: true,
@@ -106,7 +108,7 @@ export function apiKeyRowToPrincipal(row: ApiKeyRow): ResolvedPrincipal {
   }
   return {
     plane: "user",
-    userId: row.id,
+    userId: row.creatorId,
     scopes: row.scopes,
     verified: true,
     apiKeyId: row.id,
@@ -124,12 +126,13 @@ export async function verifyBearerOrApiKey(
   auth: AppAuthBinding,
   token: string,
   apiKeys?: ApiKeyStore,
+  ip?: string,
 ): Promise<ResolvedPrincipal> {
   try {
     return await verifyBearerToken(auth, token);
   } catch (err) {
     if (apiKeys) {
-      const row = await authenticateApiKey(apiKeys, token, auth.now);
+      const row = await authenticateApiKey(apiKeys, token, { now: auth.now, ip });
       if (row) return apiKeyRowToPrincipal(row);
     }
     throw err;

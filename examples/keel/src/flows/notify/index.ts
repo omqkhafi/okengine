@@ -1,4 +1,4 @@
-import { on, flow } from "okengine";
+import { on, flow, type Fx } from "okengine";
 
 import { db, formReceivedMail, goalAtRiskMail, mentionReplyMail, taskAssignedMail } from "@/core";
 import { comments, inbox, taskAssignees } from "@/db/schema.decl";
@@ -10,13 +10,7 @@ import { projectUpdated } from "@/flows/projects/signals";
 import { taskChanged, taskCompleted } from "@/flows/tasks/signals";
 
 async function pushInbox(
-  fx: {
-    id: () => string;
-    clock: { now: () => number };
-    store: (ref: unknown) => {
-      insert: (t: unknown) => { values: (row: Record<string, unknown>) => Promise<unknown> };
-    };
-  },
+  fx: Fx,
   memberEmail: string,
   kind: string,
   title: string,
@@ -50,7 +44,7 @@ export const onTask = on(
           email,
         },
       });
-      await pushInbox(fx as never, email, "task-created", payload.title, payload.id);
+      await pushInbox(fx, email, "task-created", payload.title, payload.id);
     },
   }),
 );
@@ -67,7 +61,7 @@ export const onComment = on(
         to,
         data: { id: payload.id, taskId: payload.taskId, body: payload.body },
       });
-      await pushInbox(fx as never, to, "mention", payload.body.slice(0, 80), payload.taskId);
+      await pushInbox(fx, to, "mention", payload.body.slice(0, 80), payload.taskId);
     },
   }),
 );
@@ -86,7 +80,7 @@ export const onForm = on(
         },
       });
       await pushInbox(
-        fx as never,
+        fx,
         "aria@keel.dev",
         "form-submitted",
         payload.customerName,
@@ -118,7 +112,7 @@ export const onGoalChanged = on(
   goalChanged,
   flow("notify.onGoalChanged", {
     do: async (payload, fx) => {
-      await pushInbox(fx as never, "ops@keel.dev", "goal-changed", payload.name, payload.goalId);
+      await pushInbox(fx, "ops@keel.dev", "goal-changed", payload.name, payload.goalId);
     },
   }),
 );
@@ -131,7 +125,7 @@ export const onComplete = on(
       const rows = await fx.store(db).select().from(taskAssignees);
       const email =
         rows.find((r) => String(r.taskId) === payload.id)?.assigneeEmail ?? "ops@keel.dev";
-      await pushInbox(fx as never, String(email), "task-completed", payload.title, payload.id);
+      await pushInbox(fx, String(email), "task-completed", payload.title, payload.id);
     },
   }),
 );
@@ -142,7 +136,7 @@ export const onProject = on(
   flow("notify.onProject", {
     do: async (payload, fx) => {
       await pushInbox(
-        fx as never,
+        fx,
         payload.actorEmail ?? "ops@keel.dev",
         "project-updated",
         payload.name,
@@ -157,7 +151,7 @@ export const onDraft = on(
   draftExpired,
   flow("notify.onDraft", {
     do: async (payload, fx) => {
-      await pushInbox(fx as never, "ops@keel.dev", "draft-expired", payload.id, payload.id);
+      await pushInbox(fx, "ops@keel.dev", "draft-expired", payload.id, payload.id);
     },
   }),
 );

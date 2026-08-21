@@ -6,6 +6,7 @@ export {
   accessCreateKey,
   accessRevokeKey,
   accessRotateKey,
+  accessUpdateKey,
   accessSetRoleGrants,
   effectivePermissions,
   expandAccessCeiling,

@@ -296,6 +296,9 @@ await fx.store(db).update(notes).set({ title: input.title }).where(eq(notes.id, 
 await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 ```
 
+`select().from(notes)` infers the declared row (`string` / `number` / `null` from
+`field.*`). A `select({ title: notes.title })` projection stays untyped.
+
 <Callout title="One table per call — no relational with:">
   `fx.store` is deliberately **single-table**: Drizzle's relational `findMany({ with: … })` is not
   available through `fx`. Compose joins as separate single-table reads (or `fx.call`) so every

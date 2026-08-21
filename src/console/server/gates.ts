@@ -422,21 +422,6 @@ export function createDefaultGateAuthStores(): {
   ]);
 
   const apiKeys = createApiKeyStore();
-  apiKeys.keys.set("key_demo", {
-    id: "key_demo",
-    plane: "user",
-    hash: "demo",
-    name: "Demo key",
-    scopes: ["member", "booking:create"],
-    expiresAt: null,
-    rateLimit: null,
-    ipAllowlist: [],
-    creatorId: "user_demo",
-    creatorScopes: ["member", "booking:create"],
-    createdAt: 0,
-    lastUsedAt: null,
-    revokedAt: null,
-  });
 
   const roleMembers = new Map<string, string[]>([
     ["role_member", ["user_demo", "user_member"]],
@@ -706,7 +691,7 @@ function resolvePrincipalContext(options: SimulateGatesOptions): {
     return {
       ctx: {
         auth: { userId: null, scopes: new Set(), verified: false },
-        operator: { id: `key:${id}` },
+        operator: { id: key.creatorId },
         meta: { ip: options.meta?.ip },
       },
     };
@@ -714,12 +699,13 @@ function resolvePrincipalContext(options: SimulateGatesOptions): {
   return {
     ctx: {
       auth: {
-        userId: `key:${id}`,
+        userId: key.creatorId,
         scopes: new Set(key.scopes),
         verified: true,
+        apiKeyId: key.id,
       },
       operator: { id: null },
-      meta: { ip: options.meta?.ip, userId: `key:${id}` },
+      meta: { ip: options.meta?.ip, userId: key.creatorId },
     },
   };
 }

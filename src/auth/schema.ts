@@ -105,6 +105,10 @@ export const AUTH_MODEL_DEFAULT_FIELDS: Readonly<
     name: "name",
     scopes: "scopes",
     expiresAt: "expires_at",
+    rateLimit: "rate_limit",
+    ipAllowlist: "ip_allowlist",
+    creatorId: "creator_id",
+    creatorScopes: "creator_scopes",
     createdAt: "created_at",
     lastUsedAt: "last_used_at",
     revokedAt: "revoked_at",
@@ -190,6 +194,10 @@ const CORE_SQL_TYPES: Readonly<Record<string, AuthColumnSqlType>> = {
   scopes: "TEXT",
   audience: "TEXT",
   lastUsedAt: "INTEGER",
+  rateLimit: "TEXT",
+  ipAllowlist: "TEXT",
+  creatorId: "TEXT",
+  creatorScopes: "TEXT",
 };
 
 /**

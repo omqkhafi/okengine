@@ -1,4 +1,4 @@
-import { on, flow, http, fail, table } from "okengine";
+import { on, flow, http, fail, table, type Fx } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -33,37 +33,29 @@ import "./signals";
 
 type TaskRow = z.infer<typeof TaskOut>;
 
-function asTask(row: Record<string, unknown>): TaskRow {
+function asTask(row: object): TaskRow {
+  const rec = row as Record<string, unknown>;
   return TaskOut.parse({
-    id: String(row.id),
-    identifier: String(row.identifier),
-    title: String(row.title),
-    description: row.description == null ? null : String(row.description),
-    kind: String(row.kind ?? "task"),
-    priority: Number(row.priority),
-    estimate: row.estimate == null ? null : Number(row.estimate),
-    status: String(row.status),
-    spaceId: String(row.spaceId),
-    projectId: row.projectId == null ? null : String(row.projectId),
-    sectionId: row.sectionId == null ? null : String(row.sectionId),
-    parentId: row.parentId == null ? null : String(row.parentId),
-    dueDate: row.dueDate == null ? null : String(row.dueDate),
-    completedAt: row.completedAt == null ? null : String(row.completedAt),
-    archivedAt: row.archivedAt == null ? null : String(row.archivedAt),
-    roleNeeded: row.roleNeeded == null ? null : String(row.roleNeeded),
+    id: String(rec.id),
+    identifier: String(rec.identifier),
+    title: String(rec.title),
+    description: rec.description == null ? null : String(rec.description),
+    kind: String(rec.kind ?? "task"),
+    priority: Number(rec.priority),
+    estimate: rec.estimate == null ? null : Number(rec.estimate),
+    status: String(rec.status),
+    spaceId: String(rec.spaceId),
+    projectId: rec.projectId == null ? null : String(rec.projectId),
+    sectionId: rec.sectionId == null ? null : String(rec.sectionId),
+    parentId: rec.parentId == null ? null : String(rec.parentId),
+    dueDate: rec.dueDate == null ? null : String(rec.dueDate),
+    completedAt: rec.completedAt == null ? null : String(rec.completedAt),
+    archivedAt: rec.archivedAt == null ? null : String(rec.archivedAt),
+    roleNeeded: rec.roleNeeded == null ? null : String(rec.roleNeeded),
   });
 }
 
-async function nextIdentifier(
-  fx: {
-    store: typeof db extends infer _D
-      ? (ref: unknown) => {
-          select: () => { from: (t: unknown) => Promise<Record<string, unknown>[]> };
-        }
-      : never;
-  },
-  spaceKey: string,
-): Promise<string> {
+async function nextIdentifier(fx: Fx, spaceKey: string): Promise<string> {
   const existing = await fx.store(db).select().from(tasks);
   const prefix = `${spaceKey}-`;
   const next =
@@ -77,13 +69,7 @@ async function nextIdentifier(
 }
 
 async function writeActivity(
-  fx: {
-    id: () => string;
-    auth: { userId: string | null };
-    store: (ref: unknown) => {
-      insert: (t: unknown) => { values: (row: Record<string, unknown>) => Promise<unknown> };
-    };
-  },
+  fx: Fx,
   parentId: string,
   kind: string,
   body: string,
@@ -110,7 +96,7 @@ export const create = on(
       const spaceRows = await fx.store(db).select().from(spaces);
       const space = spaceRows.find((r) => String(r.key) === input.spaceKey);
       if (!space) return fail("NotFound", { id: input.spaceKey });
-      const identifier = await nextIdentifier(fx as never, input.spaceKey);
+      const identifier = await nextIdentifier(fx, input.spaceKey);
       const id = fx.id();
       await fx
         .store(db)
@@ -142,7 +128,7 @@ export const create = on(
           assigneeEmail: input.assigneeEmail,
         });
       }
-      await writeActivity(fx as never, id, "created", input.title);
+      await writeActivity(fx, id, "created", input.title);
       const created = {
         id,
         identifier,
@@ -184,8 +170,9 @@ export const update = on(
       if (input.roleNeeded !== undefined) patch.roleNeeded = input.roleNeeded;
       await fx.store(db).update(tasks).set(patch).where(eq(tasks.id, input.id));
       const next = await fx.store(db).findById(tasks, input.id);
-      const task = asTask(next as Record<string, unknown>);
-      await writeActivity(fx as never, task.id, "updated", task.title);
+      if (!next) return fail("NotFound", { id: input.id });
+      const task = asTask(next);
+      await writeActivity(fx, task.id, "updated", task.title);
       return task;
     },
   }),
@@ -209,7 +196,7 @@ export const list = on(
       if (input.status) rows = rows.filter((i) => String(i.status) === input.status);
       const items = rows
         .filter((r) => r.archivedAt == null)
-        .map((r) => asTask(r as Record<string, unknown>));
+        .map((r) => asTask(r));
       return fx.json.with(
         queryPage(items, input, {
           mode: "offset",
@@ -233,7 +220,7 @@ export const get = on(
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      return asTask(row as Record<string, unknown>);
+      return asTask(row);
     },
   }),
 );
@@ -253,8 +240,8 @@ export const assign = on(
         taskId: input.id,
         assigneeEmail: input.assigneeEmail,
       });
-      const task = asTask(row as Record<string, unknown>);
-      await writeActivity(fx as never, task.id, "assigned", input.assigneeEmail);
+      const task = asTask(row);
+      await writeActivity(fx, task.id, "assigned", input.assigneeEmail);
       await fx.send(taskAssignedMail, {
         to: input.assigneeEmail,
         data: {
@@ -300,8 +287,8 @@ export const complete = on(
         .update(tasks)
         .set({ status: "done", completedAt, updatedAt: fx.clock.now() })
         .where(eq(tasks.id, input.id));
-      const task = asTask(row as Record<string, unknown>);
-      await writeActivity(fx as never, task.id, "completed", task.title);
+      const task = asTask(row);
+      await writeActivity(fx, task.id, "completed", task.title);
       await fx.emit(taskCompleted, {
         id: task.id,
         identifier: task.identifier,
@@ -383,7 +370,7 @@ export const duplicate = on(
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      const task = asTask(row as Record<string, unknown>);
+      const task = asTask(row);
       const spaceRows = await fx.store(db).select().from(spaces);
       const space = spaceRows.find((t) => String(t.id) === task.spaceId);
       return (await fx.call(create, {
@@ -417,7 +404,7 @@ export const move = on(
         patch.spaceId = String(space.id);
       }
       await fx.store(db).update(tasks).set(patch).where(eq(tasks.id, input.id));
-      const task = asTask(row as Record<string, unknown>);
+      const task = asTask(row);
       return { id: task.id, identifier: task.identifier, userId: fx.auth.userId ?? null };
     },
   }),
@@ -491,7 +478,7 @@ export const onStatus = on(
       if (!id) return;
       const row = await fx.store(db).findById(tasks, id);
       if (!row) return;
-      await writeActivity(fx as never, id, "status", String(row.status));
+      await writeActivity(fx, id, "status", String(row.status));
     },
   }),
 );

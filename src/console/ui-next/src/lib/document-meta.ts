@@ -7,7 +7,7 @@ export const CONSOLE_DOCUMENT_TITLE = "okengine Console";
 
 /** Operator-facing `meta name="description"` / Open Graph copy. */
 export const CONSOLE_DOCUMENT_DESCRIPTION =
-  "Operator Console for okengine — Flows, Store, Observability, and Vault.";
+  "Operator Console for okengine — Flows, Store, Observability, Vault, and Access.";
 
 const PAGE_TITLES: Record<string, string> = {
   "/overview": "Overview",
@@ -15,6 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/store": "Store",
   "/observability": "Observability",
   "/vault": "Vault",
+  "/access": "Access",
   "/monitoring": "Observability",
 };
 

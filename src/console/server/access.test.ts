@@ -213,7 +213,7 @@ describe("keyBlastRadius", () => {
         flow: "bookings.create",
         trigger: "http",
         plane: "user",
-        principal: "key_demo",
+        principal: "u",
         gates: [],
         cache: "none",
         effects: [],
@@ -221,14 +221,14 @@ describe("keyBlastRadius", () => {
         durationMs: 10,
         startedAt: 100,
         endedAt: 110,
-        dimensions: { ip: "203.0.113.10" },
+        dimensions: { api_key: "key_demo", ip: "203.0.113.10" },
       },
       {
         id: "r2",
         flow: "bookings.create",
         trigger: "http",
         plane: "user",
-        principal: "key_demo",
+        principal: "u",
         gates: [],
         cache: "none",
         effects: [],
@@ -236,7 +236,7 @@ describe("keyBlastRadius", () => {
         durationMs: 10,
         startedAt: 200,
         endedAt: 210,
-        dimensions: { source_ip: "198.51.100.7" },
+        dimensions: { api_key: "key_demo", source_ip: "198.51.100.7" },
       },
     ];
     const ttl = 7 * 60 * 1000;
@@ -262,13 +262,24 @@ describe("accessCreateKey / revoke", () => {
       plane: "user",
       name: "k",
       scopes: ["member"],
-      creatorId: "op1",
-      creatorScopes: ["console:*"],
+      creatorId: "user_demo",
+      creatorScopes: ["member"],
       catalog: ["member", "booking:create", "console:store.sql:read"],
       now: () => 1,
     });
     expect(created.secret.startsWith("oke_")).toBe(true);
     expect(created.row.scopes).toEqual(["member"]);
+
+    await expect(
+      accessCreateKey(store, {
+        plane: "user",
+        name: "wide",
+        scopes: ["booking:create"],
+        creatorId: "user_demo",
+        creatorScopes: ["member"],
+        catalog: ["member", "booking:create"],
+      }),
+    ).rejects.toThrow();
 
     await expect(
       accessCreateKey(store, {
@@ -311,11 +322,39 @@ describe("accessCreateKey / revoke", () => {
   });
 });
 
+describe("resolveAccessKeyIssuer", () => {
+  test("user-plane create without creatorUserId fails; scopes cannot exceed the user", async () => {
+    const { resolveAccessKeyIssuer } = await import("./flows.ts");
+    const state = {
+      identities: [
+        {
+          id: "user_u",
+          email: "u@example.com",
+          name: "U",
+          status: "active" as const,
+          scopes: ["member"],
+        },
+      ],
+      roleMembers: new Map<string, string[]>(),
+      roles: createRoleStore(),
+      operators: { roles: new Map() },
+    };
+    expect(
+      resolveAccessKeyIssuer(state as never, "op1", { plane: "user" }),
+    ).toEqual({ error: "creatorUserId is required for user-plane keys" });
+    const issued = resolveAccessKeyIssuer(state as never, "op1", {
+      plane: "user",
+      creatorUserId: "user_u",
+    });
+    expect(issued).toEqual({ creatorId: "user_u", creatorScopes: ["member"] });
+  });
+});
+
 describe("helpers", () => {
-  test("expandAccessCeiling adds application scopes for console:*", () => {
+  test("expandAccessCeiling expands console:* to console catalog only", () => {
     const held = expandAccessCeiling(["console:*"], ["console:store.sql:read", "booking:create"]);
     expect(held.has("console:store.sql:read")).toBe(true);
-    expect(held.has("booking:create")).toBe(true);
+    expect(held.has("booking:create")).toBe(false);
   });
 
   test("isKeyUnused90d", () => {
