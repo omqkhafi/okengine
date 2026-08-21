@@ -12,6 +12,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.15.2 — 2026-08-21
+
+### 🐛 Fixed
+
+- oxfmt ignores generated emit (`oke-client.d.ts`, `schema.drizzle.ts`,
+  `flows/generated.ts`) so `oke dev` no longer fails Format on CI.
+
 ## v0.15.1 — 2026-08-21
 
 ### 🐛 Fixed
