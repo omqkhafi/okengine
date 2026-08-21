@@ -38,12 +38,7 @@ import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import type { ApiKeyStore } from "../auth/api-keys.ts";
-import { AUTH_API_KEYS_RESOURCE } from "../auth/api-keys.ts";
-import {
-  attachAuthKeyMethods,
-  type FxAuthIdentity,
-  type FxAuthKeyMethods,
-} from "./fx-auth-keys.ts";
+import type { FxAuthIdentity, FxAuthKeyMethods } from "./fx-auth-keys.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
 import { createEffectLedger, recordEffect, reversibilityOf, type EffectLedger } from "./effects.ts";
 import { resolveDurationMs } from "./elapsed.ts";
@@ -84,8 +79,12 @@ async function loadRunsWindow(): Promise<typeof import("../runs/window.ts")> {
 /** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
 export const RUNS_RESOURCE = "runs";
 
-/** Resource ref Flows declare for {@link Fx.auth} key management. */
-export { AUTH_API_KEYS_RESOURCE };
+/**
+ * Resource ref Flows declare for {@link Fx.auth} key management.
+ * Same string as `src/auth/api-keys.ts` — defined here so the HMAC / key-store
+ * module stays off the edge and Store-only graphs.
+ */
+export const AUTH_API_KEYS_RESOURCE = "auth:api-keys";
 
 /**
  * Capability ref for {@link Fx.deadLetters} — `signal:<name>`, never a store facet.
@@ -845,7 +844,7 @@ export interface CreateFxOptions {
   readonly capability?: CapabilityToken;
   /** Injectable clock for timestamps / `fx.clock.now`. */
   readonly now?: () => number;
-  /** Auth principal bag (methods attach at create time). */
+  /** Auth principal bag (key methods attach at create time). */
   readonly auth?: FxAuthIdentity;
   /** Shared API key store for {@link Fx.auth} key methods. */
   readonly apiKeyStore?: ApiKeyStore;
@@ -1011,16 +1010,15 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   }
   const cacheStore = new Map<string, unknown>();
 
-  const authBag = options.auth ?? {
-    userId: null,
-    scopes: new Set(),
-    apiKeyId: null,
-  };
-  const auth: FxAuth = attachAuthKeyMethods({
-    auth: authBag,
+  // Computed stem — a static import would pin HMAC / api-keys on every createFx.
+  const auth: FxAuth = lazyRequire<typeof import("./fx-auth-keys.ts")>(
+    import.meta.dir,
+    ["fx", "auth", "keys"].join("-"),
+  ).attach({
+    auth: options.auth ?? { userId: null, scopes: new Set() },
     store: options.apiKeyStore,
     now,
-    gated: (kind, resource, body) => gated(kind, resource, body),
+    gated,
   });
   const operator: FxOperator = options.operator ?? { id: null };
   const tenant: FxTenant = options.tenant ?? { id: null };

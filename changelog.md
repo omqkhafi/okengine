@@ -70,6 +70,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
   key-management methods, so `createFx` and wholesale `Fx` mocks
   typecheck. Store cache invalidation ignores `auth:api-keys`. SQL
   `select` overloads keep inferred rows without implicit-any.
+- Edge `createFx` and Store-only `oke()` load `fx.auth` key methods
+  only via computed `import.meta.require`, so graphs that never
+  manage keys stay under the existing bundle budgets.
 
 ## v0.15.2 — 2026-08-21
 

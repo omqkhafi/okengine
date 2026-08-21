@@ -26,6 +26,7 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   // when the feature actually runs (auth, list page, auto-cache).
   { src: "src/kernel/app-auth.ts", out: "dist/app-auth.js" },
   { src: "src/auth/config.ts", out: "dist/auth-config.js" },
+  { src: "src/kernel/fx-auth-keys.ts", out: "dist/fx-auth-keys.js" },
   { src: "src/kernel/list-page.ts", out: "dist/list-page.js" },
   { src: "src/kernel/http-resource.ts", out: "dist/http-resource.js" },
   { src: "src/elements/store/cache.ts", out: "dist/store-cache.js" },

@@ -24,7 +24,7 @@ import {
 import type { BootOptions, BootResult, ElementRuntimes } from "./boot.ts";
 import type { CapabilityToken } from "./capability.ts";
 import type { AppAuthBinding } from "./auth-resolve.ts";
-import { clientIpFromRequest, type ApiKeyStore } from "../auth/api-keys.ts";
+import type { ApiKeyStore } from "../auth/api-keys.ts";
 import type { AuthHttpMaterialization } from "../auth/bindings.ts";
 import type { WiredGateAuth } from "./app-auth.ts";
 import {
@@ -1368,7 +1368,7 @@ export function oke(options: OkeOptions): OkeApp {
           userId: options.fx?.auth?.userId ?? null,
           scopes: new Set(options.fx?.auth?.scopes ?? []),
           verified: options.fx?.auth?.verified,
-          apiKeyId: options.fx?.auth?.apiKeyId ?? null,
+          apiKeyId: options.fx?.auth?.apiKeyId,
         },
         operator: { id: options.fx?.operator?.id ?? null },
       };
@@ -1397,13 +1397,8 @@ export function oke(options: OkeOptions): OkeApp {
           : {}),
         verifyBearer:
           binding && wiredAuth
-            ? async (token, request) =>
-                wiredAuth.verifyBearerOrApiKey(
-                  binding,
-                  token,
-                  apiKeyStore,
-                  request ? clientIpFromRequest(request) : undefined,
-                )
+            ? (token, request) =>
+                wiredAuth.verifyBearerOrApiKey(binding, token, apiKeyStore, request)
             : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
         resolveToken:
@@ -1461,7 +1456,7 @@ export function oke(options: OkeOptions): OkeApp {
         ...options.fx?.i18n,
       },
       ...(principals ? { auth: principals.auth, operator: principals.operator } : {}),
-      ...(gateConfig.auth?.apiKeyStore ? { apiKeyStore: gateConfig.auth.apiKeyStore } : {}),
+      apiKeyStore: gateConfig.auth?.apiKeyStore,
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(extras?.trustedInvoke === true && extras.revealPii === true ? { revealPii: true } : {}),
       rlsGateNames: gateNamesOf(trigger),
@@ -1792,9 +1787,7 @@ export function oke(options: OkeOptions): OkeApp {
     get authBinding() {
       return authBinding;
     },
-    get apiKeys() {
-      return gateConfig.auth?.apiKeyStore;
-    },
+    apiKeys: gateConfig.auth?.apiKeyStore,
     async resumeDurable(now) {
       const t = now ?? bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();
       const { store, instanceId, leaseMs } = activeJournal();

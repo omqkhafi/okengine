@@ -82,7 +82,8 @@ export function AccessPage(): JSX.Element {
     );
   }, [keys, query]);
 
-  const selected = filtered.find((row) => row.id === selectedKey) ?? keys.find((row) => row.id === selectedKey);
+  const selected =
+    filtered.find((row) => row.id === selectedKey) ?? keys.find((row) => row.id === selectedKey);
 
   const blast = useQuery({
     queryKey: ["console.access.blast", selected?.id],
@@ -102,7 +103,8 @@ export function AccessPage(): JSX.Element {
   const create = useMutation({
     mutationFn: accessCreateKey,
     onSuccess: (res) => {
-      if (res.error || !res.data) throw new Error(res.error ? clientErrorText(res.error) : "create failed");
+      if (res.error || !res.data)
+        throw new Error(res.error ? clientErrorText(res.error) : "create failed");
       setSecretTitle("New API key");
       setSecret(res.data.secret);
       setSelectedKey(res.data.key.id);
@@ -119,7 +121,8 @@ export function AccessPage(): JSX.Element {
         reason: "Console rotate",
       }),
     onSuccess: (res) => {
-      if (res.error || !res.data) throw new Error(res.error ? clientErrorText(res.error) : "rotate failed");
+      if (res.error || !res.data)
+        throw new Error(res.error ? clientErrorText(res.error) : "rotate failed");
       setSecretTitle("Rotated API key");
       setSecret(res.data.secret);
       setAction(null);
@@ -135,7 +138,8 @@ export function AccessPage(): JSX.Element {
         reason,
       }),
     onSuccess: (res) => {
-      if (res.error || !res.data) throw new Error(res.error ? clientErrorText(res.error) : "revoke failed");
+      if (res.error || !res.data)
+        throw new Error(res.error ? clientErrorText(res.error) : "revoke failed");
       setAction(null);
       invalidate();
     },
@@ -144,7 +148,8 @@ export function AccessPage(): JSX.Element {
   const update = useMutation({
     mutationFn: accessUpdateKey,
     onSuccess: (res) => {
-      if (res.error || !res.data) throw new Error(res.error ? clientErrorText(res.error) : "update failed");
+      if (res.error || !res.data)
+        throw new Error(res.error ? clientErrorText(res.error) : "update failed");
       setAction(null);
       invalidate();
     },
@@ -187,7 +192,11 @@ export function AccessPage(): JSX.Element {
                     </button>
                   </ToolbarTip>
                 </div>
-                <div id="access-list" data-slot="access-list" className="min-h-0 flex-1 overflow-y-auto">
+                <div
+                  id="access-list"
+                  data-slot="access-list"
+                  className="min-h-0 flex-1 overflow-y-auto"
+                >
                   <AccessBand
                     label="User"
                     rows={filtered.filter((k) => k.plane === "user")}
@@ -269,11 +278,7 @@ export function AccessPage(): JSX.Element {
           onSubmit={(reason) => revoke.mutate(reason)}
         />
       ) : null}
-      <AccessSecretSheet
-        secret={secret}
-        title={secretTitle}
-        onDismiss={() => setSecret(null)}
-      />
+      <AccessSecretSheet secret={secret} title={secretTitle} onDismiss={() => setSecret(null)} />
     </div>
   );
 }
@@ -338,7 +343,10 @@ function AccessDetail(props: {
           <Fact label="Id" value={row.id} />
           <Fact label="Plane" value={row.plane} />
           <Fact label="Scopes" value={row.scopes.join(", ") || "—"} />
-          <Fact label="Expires" value={row.expiresAt ? new Date(row.expiresAt).toISOString() : "never"} />
+          <Fact
+            label="Expires"
+            value={row.expiresAt ? new Date(row.expiresAt).toISOString() : "never"}
+          />
           <Fact label="Allowlist" value={row.ipAllowlist.join(", ") || "any"} />
           <Fact
             label="Rate"
@@ -366,7 +374,9 @@ function AccessDetail(props: {
             Revoke
           </button>
         </div>
-        {props.rotateError ? <p className="mt-2 text-[11px] text-destructive">{props.rotateError}</p> : null}
+        {props.rotateError ? (
+          <p className="mt-2 text-[11px] text-destructive">{props.rotateError}</p>
+        ) : null}
       </section>
       <section className="border-b border-border/60 px-4 py-3">
         <h2 className={SECTION_HEAD_CLASS}>Usage</h2>
@@ -430,13 +440,16 @@ function AccessCreateSheet(props: {
 
   const grantable = plane === "user" ? props.userScopes : props.operatorScopes;
   const ready =
-    name.trim().length > 0 &&
-    !props.pending &&
-    (plane === "operator" || creatorUserId.length > 0);
+    name.trim().length > 0 && !props.pending && (plane === "operator" || creatorUserId.length > 0);
 
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
-      <SheetContent side="right" showOverlay={false} className="sm:max-w-md" data-slot="access-create-sheet">
+      <SheetContent
+        side="right"
+        showOverlay={false}
+        className="sm:max-w-md"
+        data-slot="access-create-sheet"
+      >
         <SheetHeader>
           <SheetTitle>Create API key</SheetTitle>
           <SheetDescription>
@@ -472,7 +485,11 @@ function AccessCreateSheet(props: {
             </SheetField>
           ) : null}
           <SheetField label="Name">
-            <Input className={SHEET_CONTROL} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input
+              className={SHEET_CONTROL}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </SheetField>
           <SheetField label="Scopes">
             <Input
@@ -521,17 +538,32 @@ function AccessEditSheet(props: {
 
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
-      <SheetContent side="right" showOverlay={false} className="sm:max-w-md" data-slot="access-edit-sheet">
+      <SheetContent
+        side="right"
+        showOverlay={false}
+        className="sm:max-w-md"
+        data-slot="access-edit-sheet"
+      >
         <SheetHeader>
           <SheetTitle>Edit key</SheetTitle>
-          <SheetDescription>Scopes re-attenuate against the stored issuer ceiling.</SheetDescription>
+          <SheetDescription>
+            Scopes re-attenuate against the stored issuer ceiling.
+          </SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
           <SheetField label="Name">
-            <Input className={SHEET_CONTROL} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input
+              className={SHEET_CONTROL}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </SheetField>
           <SheetField label="Scopes">
-            <Input className={SHEET_CONTROL} value={scopes} onChange={(e) => setScopes(e.target.value)} />
+            <Input
+              className={SHEET_CONTROL}
+              value={scopes}
+              onChange={(e) => setScopes(e.target.value)}
+            />
           </SheetField>
           {props.error ? <SheetError slot="access-edit-error">{props.error}</SheetError> : null}
         </div>
@@ -568,17 +600,30 @@ function AccessRevokeSheet(props: {
   const [reason, setReason] = useState("");
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
-      <SheetContent side="right" showOverlay={false} className="sm:max-w-md" data-slot="access-revoke-sheet">
+      <SheetContent
+        side="right"
+        showOverlay={false}
+        className="sm:max-w-md"
+        data-slot="access-revoke-sheet"
+      >
         <SheetHeader>
           <SheetTitle>Revoke {props.name}</SheetTitle>
           <SheetDescription>Type REVOKE and a reason. Irreversible.</SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
           <SheetField label="Confirm">
-            <Input className={SHEET_CONTROL} value={phrase} onChange={(e) => setPhrase(e.target.value)} />
+            <Input
+              className={SHEET_CONTROL}
+              value={phrase}
+              onChange={(e) => setPhrase(e.target.value)}
+            />
           </SheetField>
           <SheetField label="Reason">
-            <Input className={SHEET_CONTROL} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Input
+              className={SHEET_CONTROL}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </SheetField>
           {props.error ? <SheetError slot="access-revoke-error">{props.error}</SheetError> : null}
         </div>

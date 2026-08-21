@@ -6,7 +6,7 @@
  * separately in the pipeline (`allowTestPrincipals`).
  */
 
-import { authenticateApiKey, type ApiKeyStore } from "../auth/api-keys.ts";
+import { authenticateApiKey, clientIpFromRequest, type ApiKeyStore } from "../auth/api-keys.ts";
 import type { ApiKeyRow } from "../auth/tables.ts";
 import {
   createSessionStore,
@@ -121,17 +121,19 @@ export function apiKeyRowToPrincipal(row: ApiKeyRow): ResolvedPrincipal {
  * @param auth - Session binding
  * @param token - Raw Bearer token
  * @param apiKeys - Optional key store
+ * @param request - Incoming request (allowlist IP is read here, not in `oke()`)
  */
 export async function verifyBearerOrApiKey(
   auth: AppAuthBinding,
   token: string,
   apiKeys?: ApiKeyStore,
-  ip?: string,
+  request?: Request,
 ): Promise<ResolvedPrincipal> {
   try {
     return await verifyBearerToken(auth, token);
   } catch (err) {
     if (apiKeys) {
+      const ip = request ? clientIpFromRequest(request) : undefined;
       const row = await authenticateApiKey(apiKeys, token, { now: auth.now, ip });
       if (row) return apiKeyRowToPrincipal(row);
     }

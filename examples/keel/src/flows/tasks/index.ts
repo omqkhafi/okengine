@@ -68,12 +68,7 @@ async function nextIdentifier(fx: Fx, spaceKey: string): Promise<string> {
   return `${spaceKey}-${next}`;
 }
 
-async function writeActivity(
-  fx: Fx,
-  parentId: string,
-  kind: string,
-  body: string,
-): Promise<void> {
+async function writeActivity(fx: Fx, parentId: string, kind: string, body: string): Promise<void> {
   await fx.store(db).insert(activity).values({
     id: fx.id(),
     parentKind: "task",
@@ -194,9 +189,7 @@ export const list = on(
       }
       if (input.projectId) rows = rows.filter((i) => String(i.projectId) === input.projectId);
       if (input.status) rows = rows.filter((i) => String(i.status) === input.status);
-      const items = rows
-        .filter((r) => r.archivedAt == null)
-        .map((r) => asTask(r));
+      const items = rows.filter((r) => r.archivedAt == null).map((r) => asTask(r));
       return fx.json.with(
         queryPage(items, input, {
           mode: "offset",

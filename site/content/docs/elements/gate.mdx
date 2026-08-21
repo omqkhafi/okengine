@@ -261,13 +261,13 @@ sign-in shapes: [Plugins](/docs/plugins). Call auth from
 A key is the **issuer with fewer gates** — not a second permission system.
 Bearer secrets authenticate as the creator; `fx.auth.scopes` shrink to the key.
 
-| Field | Session | API key |
-| --- | --- | --- |
-| `fx.auth.userId` / `fx.operator.id` | subject | creator (`creatorId`) |
-| `fx.auth.scopes` | session scopes | key scopes (attenuated) |
-| `fx.auth.apiKeyId` | `null` | key id |
-| WideEvent `principal` | subject | issuer |
-| `dimensions.api_key` | absent | key id |
+| Field                               | Session        | API key                 |
+| ----------------------------------- | -------------- | ----------------------- |
+| `fx.auth.userId` / `fx.operator.id` | subject        | creator (`creatorId`)   |
+| `fx.auth.scopes`                    | session scopes | key scopes (attenuated) |
+| `fx.auth.apiKeyId`                  | `null`         | key id                  |
+| WideEvent `principal`               | subject        | issuer                  |
+| `dimensions.api_key`                | absent         | key id                  |
 
 `gate.auth` always creates a shared key store (HMAC-SHA-256 with `gate.auth.secret`).
 Do not pass `apiKeyStore` unless you are injecting a test Map.

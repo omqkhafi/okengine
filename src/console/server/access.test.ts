@@ -339,9 +339,9 @@ describe("resolveAccessKeyIssuer", () => {
       roles: createRoleStore(),
       operators: { roles: new Map() },
     };
-    expect(
-      resolveAccessKeyIssuer(state as never, "op1", { plane: "user" }),
-    ).toEqual({ error: "creatorUserId is required for user-plane keys" });
+    expect(resolveAccessKeyIssuer(state as never, "op1", { plane: "user" })).toEqual({
+      error: "creatorUserId is required for user-plane keys",
+    });
     const issued = resolveAccessKeyIssuer(state as never, "op1", {
       plane: "user",
       creatorUserId: "user_u",

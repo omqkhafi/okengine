@@ -79,13 +79,7 @@ export const onForm = on(
           customerName: payload.customerName,
         },
       });
-      await pushInbox(
-        fx,
-        "aria@keel.dev",
-        "form-submitted",
-        payload.customerName,
-        payload.taskId,
-      );
+      await pushInbox(fx, "aria@keel.dev", "form-submitted", payload.customerName, payload.taskId);
     },
   }),
 );

@@ -3897,7 +3897,9 @@ export function resolveAccessKeyIssuer(
   state: ConsoleState,
   operatorId: string,
   input: { readonly plane: "user" | "operator"; readonly creatorUserId?: string },
-): { readonly creatorId: string; readonly creatorScopes: readonly string[] } | { readonly error: string } {
+):
+  | { readonly creatorId: string; readonly creatorScopes: readonly string[] }
+  | { readonly error: string } {
   if (input.plane === "operator") {
     return { creatorId: operatorId, creatorScopes: actorScopesOf(state, operatorId) };
   }

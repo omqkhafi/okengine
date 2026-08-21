@@ -42,8 +42,10 @@ export interface ColumnReference {
  * `TData` / `TNotNull` are type-level only (`$infer` is a phantom). They let
  * {@link InferColumnJs} / table `$inferSelect` resolve real row shapes.
  */
-export interface SchemaColumnDecl<TData = unknown, TNotNull extends boolean = boolean>
-  extends ColumnDef {
+export interface SchemaColumnDecl<
+  TData = unknown,
+  TNotNull extends boolean = boolean,
+> extends ColumnDef {
   /** JS object key (e.g. `createdAt`). */
   readonly key: string;
   /** Database column name (e.g. `created_at`). */
@@ -154,7 +156,10 @@ export interface FieldBuilder<TData = unknown, TNotNull extends boolean = false>
    * @param ref - Lazy target column (`() => links.code`)
    * @param actions - Optional ON DELETE / ON UPDATE
    */
-  references(ref: () => SchemaColumnDecl, actions?: ReferenceActions): FieldBuilder<TData, TNotNull>;
+  references(
+    ref: () => SchemaColumnDecl,
+    actions?: ReferenceActions,
+  ): FieldBuilder<TData, TNotNull>;
   /**
    * Bind the JS key and produce a {@link SchemaColumnDecl}.
    *
@@ -370,20 +375,18 @@ export function schemaTableSqlName(table: SchemaTableDecl): string | undefined {
  * JS value type for a finalized column (`string` / `number`, plus `| null`
  * when the column is nullable).
  */
-export type InferColumnJs<C> = C extends SchemaColumnDecl<infer D, infer N>
-  ? N extends true
-    ? D
-    : D | null
-  : unknown;
+export type InferColumnJs<C> =
+  C extends SchemaColumnDecl<infer D, infer N> ? (N extends true ? D : D | null) : unknown;
 
 /**
  * Finalize a {@link schemaTable} column input into a typed decl.
  */
-export type FinalizeColumn<T> = T extends FieldBuilder<infer D, infer N>
-  ? SchemaColumnDecl<D, N>
-  : T extends SchemaColumnDecl<infer D, infer N>
+export type FinalizeColumn<T> =
+  T extends FieldBuilder<infer D, infer N>
     ? SchemaColumnDecl<D, N>
-    : SchemaColumnDecl;
+    : T extends SchemaColumnDecl<infer D, infer N>
+      ? SchemaColumnDecl<D, N>
+      : SchemaColumnDecl;
 
 /**
  * Table decl with columns as own properties (`links.code`) for FK / relations.

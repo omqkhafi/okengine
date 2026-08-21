@@ -16,11 +16,12 @@ import {
   type CreatedApiKey,
 } from "../auth/api-keys.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
+import type { EffectKind } from "./effects.ts";
 import { fail, type FlowFailure } from "./errors.ts";
 
 /**
  * Identity bag on {@link FxAuth} before key-management methods attach.
- * Passed into {@link createFx} / {@link attachAuthKeyMethods}.
+ * Passed into {@link createFx} / {@link attach}.
  */
 export interface FxAuthIdentity {
   /** User-plane subject id, or null when unauthenticated. */
@@ -69,16 +70,12 @@ export interface FxAuthKeyMethods {
   updateApiKey(id: string, input: FxUpdateApiKeyInput): Promise<ApiKeyPublicRow>;
 }
 
-/** Dependencies for {@link attachAuthKeyMethods}. */
+/** Dependencies for {@link attach}. */
 export interface AttachAuthKeyMethodsOptions {
   readonly auth: FxAuthIdentity;
   readonly store: ApiKeyStore | undefined;
   readonly now: () => number;
-  readonly gated: <T>(
-    kind: "read" | "write",
-    resource: string,
-    body: () => T | Promise<T>,
-  ) => Promise<T>;
+  readonly gated: <T>(kind: EffectKind, resource: string, body: () => T | Promise<T>) => Promise<T>;
 }
 
 function sessionOnly(auth: FxAuthIdentity): FlowFailure | null {
@@ -120,9 +117,7 @@ function expiresAtFrom(expiresIn: string | undefined, now: () => number): number
  *
  * @param options - Auth bag + store + capability gate
  */
-export function attachAuthKeyMethods(
-  options: AttachAuthKeyMethodsOptions,
-): FxAuthIdentity & FxAuthKeyMethods {
+export function attach(options: AttachAuthKeyMethodsOptions): FxAuthIdentity & FxAuthKeyMethods {
   const { auth, now, gated } = options;
 
   const methods: FxAuthKeyMethods = {
