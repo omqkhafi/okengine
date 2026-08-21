@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /** First-run welcome — visit :6530/ after `oke dev` (browser code block; curl stays JSON). */
 export const root = on(
-  http.get("/").gate.public,
+  http.get("/").public(),
   flow("main.root", {
     out: z.object({
       ok: z.literal(true),
@@ -22,7 +22,7 @@ export const root = on(
 
 /** Liveness for probes and `bun test`. */
 export const health = on(
-  http.get("/health").gate.public,
+  http.get("/health").public(),
   flow("main.health", {
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),

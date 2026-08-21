@@ -29,6 +29,7 @@ import {
   FEATURED_TASK_TAGS,
   FEATURED_UPDATES,
   FEATURED_VIEWS,
+  FEATURED_WEBHOOKS,
 } from "./featured.ts";
 
 /** Extra generated volume on top of the featured Harbor story. */
@@ -577,6 +578,8 @@ export const KEEL_SEED_COUNTS = {
   fileObjects: FEATURED_FILES.length + KEEL_VOLUME.files.length,
   drafts: FEATURED_DRAFTS.length + KEEL_VOLUME.drafts.length,
   reminders: FEATURED_REMINDERS.length + KEEL_VOLUME.reminders.length,
+  viewPrefs: FEATURED_VIEWS.length + KEEL_VOLUME.views.length,
+  webhooks: FEATURED_WEBHOOKS.length,
   index: FEATURED_INDEX.length + KEEL_VOLUME.index.length,
   indexDocuments: FEATURED_DOCUMENTS.length + KEEL_VOLUME.documents.length,
   indexComments: FEATURED_COMMENTS.length + KEEL_VOLUME.comments.length,

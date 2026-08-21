@@ -89,7 +89,7 @@ describe("boot-level: stale barrel through a real oke() boot", () => {
         effects: {},
         do: () => ({ ok: true as const }),
       });
-      on(http.get("/health").gate.public, mainFlow);
+      on(http.get("/health").public(), mainFlow);
       const app = oke({ name: "stale-barrel", gate: { unguardedHttp: "allow" } });
 
       await expect(

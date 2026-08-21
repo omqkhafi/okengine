@@ -92,12 +92,21 @@ When a newer packaged version exists, the name chip shows **Upgrade**
 (`ALTER EXTENSION … UPDATE`). Names link to the project or Postgres docs.
 
 Each SQL table row shows whether Postgres RLS is on (emerald shield)
-or off (muted shield). KV, files, and index have no badge. Enabling
-RLS on create flips that shield.
+or off (muted shield). The resource header repeats that as an **RLS**
+chip before **PII** — **N RLS** when enabled and policies exist. KV,
+files, and index have no badge. Enabling RLS on create flips that
+shield.
 
 **RLS Policies** lists `pg_policies` plus Manifest policies (`declared` /
-`live`). Create policy pins SQL | Code (`store.schema.policy` + `pgPolicy`).
+`live`). Two-finger click a row to open its sheet (Edit / Save on editable
+columns); two-finger click empty grid to create. Create policy pins
+SQL | Code (`store.schema.policy` + `pgPolicy`); drag the handle to
+resize the preview.
 **Templates** use `oke.user()` / `oke.gate()` / `oke.has_scope()`.
+Owner cards open a **Column** select of the table fields (guessed
+`creator_email` / `owner_email` when present) with the same PK / FK
+marks as schema cards. Create stays blocked until a real column is
+picked.
 
 Create policy picks a Gate posture (Read / Write / Both), or **Policy &
 scope**. Those picks fill `USING` / `WITH CHECK`. `TO` stays `public` —
@@ -195,7 +204,7 @@ const notesR = store.resource(db, notes, {
   },
 });
 
-const mounted = on(http.resource("/notes", notesR.all()).gate.public.live());
+const mounted = on(http.resource("/notes", notesR.all()).public().live());
 ```
 
 `.gate(...)` / `.live()` chain like `http.get` — gates on every verb, live on list and get.
@@ -243,7 +252,7 @@ list: { mode: "offset", filter: "none", limit: 20 },
 
 ```typescript
 export const list = on(
-  http.get("/notes").gate.public,
+  http.get("/notes").public(),
   flow("notes.list", {
     out: z.array(Note),
     do: async (input, fx) => {
@@ -253,6 +262,8 @@ export const list = on(
   }),
 );
 ```
+
+`list.ts` + `http.get()` fills `GET /notes` named `notes.list` — explicit strings still win. See [Project structure](/docs/get-started/project-structure).
 
 Zero-config: `?q=` searches every string field, extra keys auto-eq except path `id`, and PostgREST `?col=op.value` / `?order=` / `?select=` are open. Nested lists filter the parent in the load — `input.id` is not a column eq.
 
@@ -675,7 +686,11 @@ Default `store.kv("sessions")` is cache-shaped — a Redis recreate drops keys.
 ```typescript
 export const sessions = store.kv("sessions", { description: "Session cache" });
 export const ledger = store.kv("ledger", { durable: true, description: "Idempotency keys" });
+export const drafts = store.kv("drafts", { durable: true, description: "Compose drafts" });
 ```
+
+**Consequence:** `oke db seed` into cache Redis looks fine until compose recreates the
+container — Console Store then shows **No rows.** Seeded namespaces need `{ durable: true }`.
 
 Gate rates and Signal stay on `REDIS_URL`. Missing `DATABASE_URL` with the postgres driver
 fails boot: `oke boot: durable store.kv needs DATABASE_URL`.
@@ -1098,10 +1113,16 @@ Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` 
 `.oke/state.json` stores `seededAt` plus this app's `defineSeed({ name })` — notes vs keel are different ids. A new name re-asks. Clear those keys to prompt again.
 
 </Accordion>
+<Accordion title="Console KV shows No rows after oke db seed">
+
+Default `store.kv` is cache Redis with no AOF — a recreate drops keys. SQL seed still looks full. Mark seeded namespaces `{ durable: true }` so they live in `oke_kv`, then restart and seed again.
+
+</Accordion>
 </Accordions>
 
 ## Learn more
 
+- [Project structure](/docs/get-started/project-structure) — `list.ts` + `http.get()` is `GET /notes` named `notes.list`
 - [Flow](/docs/elements/flow) — the `fx.store` session inside `do`
 - [AI](/docs/elements/ai) — `ai.embed` into a vector `store.index`, searched via `fx.search`
 - [Gate](/docs/elements/gate) — `pii:reveal` and other permissions on flows

@@ -1,0 +1,908 @@
+---
+title: "Project structure"
+description: "Folder and file conventions for an OKE app — how the tree becomes URLs, Flow names, and the generated barrel."
+icon: "FolderTree"
+source: "docs/spec/unified-theory.md"
+---
+
+The standard Notes starter is a folder tree. Put a file at `flows/notes/[id]/get.ts`, export `get`, and you get `GET /notes/:id` named `notes.get` — still `on(http.get(), flow({…}))`.
+
+<Callout title="The one rule">
+  Folders are the URL. The first-level folder plus the export name is the Flow name. Import the
+  generated barrel, then `oke({ name })`.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Write a tree file
+
+```typescript title="flows/notes/[id]/get.ts"
+import { on, flow, http } from "okengine";
+
+export const get = on(
+  http.get().public(),
+  flow({
+    in: NoteIdIn,
+    out: NoteOut,
+    do: async (input, fx) => fx.store(db).findById(notes, input.id),
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Load the generated barrel
+
+```typescript title="app.ts"
+import "@/core";
+import "@/flows/generated";
+import { oke } from "okengine/http";
+
+export const app = oke({ name: "notes" });
+export type App = typeof app;
+```
+
+`.adopt({ notes })` is optional and additive.
+
+</Step>
+
+<Step>
+### Call it
+
+`oke dev` regenerates the barrel. The client key is the export:
+
+```typescript
+const { data } = await api.notes.get({ id });
+```
+
+</Step>
+
+</Steps>
+
+## Folder and file conventions
+
+### Top-level folders
+
+The app source folder holds behavior. Config and the Vite SPA sit beside it.
+
+| Folder | Role |
+| ------ | ---- |
+| `app.ts` | `import "@/core"` + `import "@/flows/generated"` + `oke({ name })` |
+| `core.ts` / `core/` | Store, gate, vault, channel, clock, AI decls — auto-register before `oke()` |
+| `flows/<unit>/` | One client unit per first-level folder (`notes`, `main`) |
+| `flows/generated.ts` | Regenerated barrel — do not edit |
+| `db/` | `schema.decl.ts`, seed, and the Drizzle file `oke db` emits |
+| `locales/` | Message catalogs (`import "@/locales"` from core) |
+| `web/` | Vite SPA — `createClient` and proxies `/notes` · `/health` to **6530** |
+| `tests/` | `oke test` / `bun:test` against the same `App` type |
+| `docker/` | Compose from `oke docker` / `oke dev` (not in the clean template) |
+| `.oke/` | Machine state — gitignored |
+
+`core/` is a split of the same decls (`store.ts`, `gate.ts`, …) with `core.ts` as the barrel. Not a ninth element. Load order in the starter: locales → store → gate → vault → channel → AI.
+
+<Tabs items={["core.ts", "schema.decl.ts", "locales", "web", "tests"]}>
+<Tab value="core.ts">
+
+```typescript title="core.ts"
+import "@/locales";
+import { channel, gate, store, vault } from "okengine";
+import { z } from "zod";
+import * as schema from "@/db/schema.decl";
+
+export const db = store.sql("app", { schema });
+export const notesWrite = gate.policy("notes:write", () => true);
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", { dev: "dev-webhook-secret-change-me" });
+export const noteCreatedMail = channel.email({ from: "Notes <notes@localhost>" }).template("note-created", {
+  locales: ["en"],
+  schema: z.object({ id: z.string(), title: z.string() }),
+});
+```
+
+</Tab>
+<Tab value="schema.decl.ts">
+
+```typescript title="db/schema.decl.ts"
+import { store, field, id, now } from "okengine";
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey().defaultFn(id),
+  title: field.text().notNull(),
+  body: field.text().notNull(),
+  archivedAt: field.integer(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+```
+
+</Tab>
+<Tab value="locales">
+
+```typescript title="locales/en.ts"
+import { defineMessages, defineLocale } from "okengine";
+
+export const en = defineMessages({
+  notes: { created: "Note “{title}” was created." },
+});
+defineLocale("en", en);
+```
+
+</Tab>
+<Tab value="web">
+
+```typescript title="web/src/client.ts"
+import { createClient } from "okengine/client";
+
+export const api = createClient<App>(import.meta.env.VITE_API_URL ?? "");
+const { data } = await api.notes.get({ id });
+```
+
+</Tab>
+<Tab value="tests">
+
+```typescript title="tests/standard.test.ts"
+import { createTestApp } from "okengine/test";
+import { app } from "@/app";
+
+const t = await createTestApp(app);
+const { data } = await t.api.main.health({});
+```
+
+</Tab>
+</Tabs>
+
+### Top-level files
+
+| File | Role |
+| ---- | ---- |
+| `oke.config.ts` | Drivers, image pins, `db.declare` / `db.generated`, `i18n` |
+| `package.json` | `oke dev` · `oke test` · `bun run web` |
+| `drizzle.config.ts` | drizzle-kit — `oke db push` / `generate` / `migrate` |
+| `tsconfig.json` | `@/*` → the app source folder |
+| `.env.example` | Tracked sample keys |
+| `.env` / `.env.local` | Local secrets — gitignored |
+| `.gitignore` | Ignores `.oke/`, env files, `node_modules/` |
+| `AGENTS.md` | Agent contract written by `create-oke` |
+| `.github/workflows/ci.yml` | Template CI |
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  db: {
+    declare: "src/db/schema.decl.ts",
+    generated: "src/db/schema.drizzle.ts",
+  },
+  i18n: { locales: ["en"], default: "en" },
+});
+```
+
+See [Configuration](/docs/reference/configuration) and [Environment variables](/docs/reference/environment-variables).
+
+### Notes starter tree
+
+Standard create-oke layout. Advanced adds `digest.ts`, `[id]/attach.ts`, and `[id]/summarize.ts`. `oke dev` writes the barrel — do not edit it.
+
+<Tabs items={["Tree", "generated.ts"]}>
+<Tab value="Tree">
+
+```text
+app.ts
+core.ts
+flows/
+  generated.ts
+  main/
+    health.ts      GET /health     main.health
+    route.ts       GET /           main.root
+    shapes.ts
+    signals.ts
+  notes/
+    list.ts        GET /notes      notes.list
+    create.ts      POST /notes     notes.create
+    on-created.ts  (signal)        notes.onCreated
+    shapes.ts
+    signals.ts
+    [id]/
+      get.ts       GET /notes/:id          notes.get
+      archive.ts   POST /notes/:id/archive notes.archive
+db/
+  schema.decl.ts
+  seed/
+locales/
+web/
+tests/
+oke.config.ts
+```
+
+</Tab>
+<Tab value="generated.ts">
+
+```typescript title="flows/generated.ts"
+import { registerFlowUnits, stampFlowName, stampHttpPath } from "okengine";
+import * as notes_list from "./notes/list.ts";
+import * as notes_$id$_get from "./notes/[id]/get.ts";
+
+const notes = {
+  list: stampHttpPath(stampFlowName(notes_list.list, "notes.list"), "/notes"),
+  get: stampHttpPath(stampFlowName(notes_$id$_get.get, "notes.get"), "/notes/:id"),
+};
+export { notes };
+registerFlowUnits({ notes });
+```
+
+</Tab>
+</Tabs>
+
+## Routing files
+
+A folder is a URL segment. A route exists when a walked `.ts` file exports a Flow — `shapes.ts` alone does not publish a path.
+
+### Reserved leaves
+
+These names do **not** add a segment. Same five ops as `http.resource`, plus `index` / `route`.
+
+| Leaf | Typical method | URL if under `notes/` |
+| ---- | -------------- | --------------------- |
+| `list` | `http.get()` | `/notes` |
+| `create` | `http.post()` | `/notes` |
+| `get` | `http.get()` | `/notes` or `/notes/:id` when nested |
+| `update` | `http.patch()` | `/notes` or `/notes/:id` |
+| `remove` | `http.delete()` | `/notes` or `/notes/:id` |
+| `index` | any | `/notes` — reserved leaf, not a barrel |
+| `route` | any | `/notes` — several exports may share this path |
+
+Any other leaf **does** add a segment (`archive.ts` → `/archive`). Method always comes from `http.get` / `http.post` / … — never from the filename.
+
+Several Flow exports in one `route.ts` share the inferred path; different methods are OK. The same method twice fails boot (**OKE1011**).
+
+<Tabs items={["list", "create", "get", "archive", "route.ts"]}>
+<Tab value="list">
+
+```typescript title="flows/notes/list.ts"
+export const list = on(
+  http.get().public(),
+  flow({
+    out: NoteListOut,
+    do: async (input, fx) => fx.json.withQuery(await fx.store(db).select().from(notes), input),
+  }),
+);
+```
+
+</Tab>
+<Tab value="create">
+
+```typescript title="flows/notes/create.ts"
+export const create = on(
+  http.post().gate(notesMutate),
+  flow({
+    in: NoteCreateIn,
+    out: NoteOut,
+    do: async (input, fx) => {
+      const id = fx.id();
+      const createdAt = fx.clock.now();
+      await fx.store(db).insert(notes).values({ id, ...input, archivedAt: null, createdAt });
+      await fx.emit(noteCreated, { id, title: input.title }, { key: id });
+      return { id, ...input, archivedAt: null, createdAt };
+    },
+  }),
+);
+```
+
+</Tab>
+<Tab value="get">
+
+```typescript title="flows/notes/[id]/get.ts"
+export const get = on(
+  http.get().public(),
+  flow({
+    in: NoteIdIn,
+    out: NoteOut,
+    errors: { NotFound },
+    do: async ({ id }, fx) => {
+      const row = await fx.store(db).findById(notes, id);
+      if (!row) return fail("NotFound", { id });
+      return { id: String(row.id), title: String(row.title), body: String(row.body), archivedAt: null, createdAt: Number(row.createdAt) };
+    },
+  }),
+);
+```
+
+</Tab>
+<Tab value="archive">
+
+```typescript title="flows/notes/[id]/archive.ts"
+export const archive = on(
+  http.post().gate(notesMutate),
+  flow({
+    in: NoteIdIn,
+    out: NoteOut,
+    do: async ({ id }, fx) => {
+      await fx.store(db).update(notes).set({ archivedAt: fx.clock.now() }).where(eq(notes.id, id));
+      return fx.store(db).findById(notes, id);
+    },
+  }),
+);
+```
+
+</Tab>
+<Tab value="route.ts">
+
+```typescript title="flows/notes/route.ts"
+export const list = on(http.get().public(), flow({ do: async () => [] }));
+export const create = on(http.post().gate(notesMutate), flow({ do: async (input) => input }));
+```
+
+</Tab>
+</Tabs>
+
+### Skip list
+
+Never routes. Safe to colocate next to walked files.
+
+| Pattern | Why |
+| ------- | --- |
+| `generated.ts` | The barrel itself |
+| `shapes.ts` | Zod contracts |
+| `signals.ts` | Signal decls |
+| `*.test.ts` | Tests |
+| `_` prefix | Private — file or folder, and every nested file |
+
+<Tabs items={["shapes.ts", "signals.ts"]}>
+<Tab value="shapes.ts">
+
+```typescript title="flows/notes/shapes.ts"
+import { z } from "zod";
+
+export const NoteIdIn = z.object({ id: z.string().min(1) });
+export const NoteOut = z.object({ id: z.string(), title: z.string() });
+```
+
+</Tab>
+<Tab value="signals.ts">
+
+```typescript title="flows/notes/signals.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const noteCreated = signal("note-created", {
+  delivery: "once",
+  retries: 3,
+  deadLetter: true,
+  schema: z.object({ id: z.string(), title: z.string() }),
+});
+```
+
+</Tab>
+</Tabs>
+
+### On disk → URL → name
+
+| On disk | URL | Flow name |
+| ------- | --- | --------- |
+| `notes/list.ts` + `export const list` | `GET /notes` | `notes.list` |
+| `notes/create.ts` + `export const create` | `POST /notes` | `notes.create` |
+| `notes/[id]/get.ts` + `export const get` | `GET /notes/:id` | `notes.get` |
+| `notes/[id]/archive.ts` + `export const archive` | `POST /notes/:id/archive` | `notes.archive` |
+| `notes/on-created.ts` | (signal — no URL) | `notes.onCreated` |
+| `notes/digest.ts` + `on(every("1d"), …)` | (clock — no URL) | `notes.digest` |
+
+`[id]` / `(group)` never enter the Flow name. Renaming an export renames the Flow (`fx.call`, agent tools, Console).
+
+<Tabs items={["signal", "clock"]}>
+<Tab value="signal">
+
+```typescript title="flows/notes/on-created.ts"
+export const onCreated = on(
+  noteCreated,
+  flow({
+    do: async (payload, fx) => {
+      await fx.send(noteCreatedMail, { to: "you@localhost", data: payload });
+    },
+  }),
+);
+```
+
+</Tab>
+<Tab value="clock">
+
+```typescript title="flows/notes/digest.ts"
+export const digest = on(
+  every("1d"),
+  flow({
+    out: z.object({ active: z.number(), at: z.number() }),
+    do: async (_input, fx) => ({
+      active: (await fx.store(db).select().from(notes)).length,
+      at: fx.clock.now(),
+    }),
+  }),
+);
+```
+
+</Tab>
+</Tabs>
+
+## Nested routes
+
+Folders nest segments. A public HTTP path appears only when a walked file plus `http.*` sits at that depth.
+
+| On disk | URL | Name |
+| ------- | --- | ---- |
+| `notes/list.ts` | `/notes` | `notes.list` |
+| `notes/[id]/get.ts` | `/notes/:id` | `notes.get` |
+| `notes/[id]/comments.ts` + `export const comments` | `/notes/:id/comments` | `notes.comments` |
+| `comments/list.ts` | `/comments` | `comments.list` |
+
+Two files in one unit cannot both export `list`. Rename the nested export, or start a `comments/` unit.
+
+<Tabs items={["Action leaf", "New unit"]}>
+<Tab value="Action leaf">
+
+```typescript title="flows/notes/[id]/comments.ts"
+export const comments = on(
+  http.get().public(),
+  flow({
+    in: NoteIdIn,
+    do: async ({ id }, fx) =>
+      fx.store(db).select().from(noteComments).where(eq(noteComments.noteId, id)),
+  }),
+);
+```
+
+</Tab>
+<Tab value="New unit">
+
+```typescript title="flows/comments/list.ts"
+export const list = on(
+  http.get().public(),
+  flow({
+    out: z.array(CommentOut),
+    do: async (input, fx) => fx.json.withQuery(await fx.store(db).select().from(noteComments), input),
+  }),
+);
+```
+
+</Tab>
+</Tabs>
+
+## Dynamic segments
+
+| On disk | URL | Client fill |
+| ------- | --- | ----------- |
+| `notes/[id]/get.ts` | `/notes/:id` | `{ id }` |
+| `docs/[...slug]/get.ts` | `/docs/*` | `{ "*": "a/b/c" }` |
+
+`[id]` → `:id`. `[...slug]` → `*` (the router wildcard). `[[...slug]]` is not supported — generate fails.
+
+`restRequest` only substitutes `:name`. Call `api.docs.get({ "*": "a/b/c" })`, not `{ slug }`. Named rest is a later router change.
+
+Wildcards skip Bun.serve native `routes` (`*` is not a native path) and fall through to `app.fetch`.
+
+<Tabs items={["[id]", "[...slug]"]}>
+<Tab value="[id]">
+
+```typescript title="flows/notes/[id]/get.ts"
+export const get = on(
+  http.get().public(),
+  flow({
+    in: z.object({ id: z.string() }),
+    out: NoteOut,
+    do: async ({ id }, fx) => fx.store(db).findById(notes, id),
+  }),
+);
+```
+
+```typescript title="client"
+await api.notes.get({ id: "n1" });
+```
+
+</Tab>
+<Tab value="[...slug]">
+
+```typescript title="flows/docs/[...slug]/get.ts"
+export const get = on(
+  http.get().public(),
+  flow({
+    in: z.object({ "*": z.string() }),
+    out: z.object({ path: z.string() }),
+    do: async (input) => ({ path: input["*"] }),
+  }),
+);
+```
+
+```typescript title="client"
+const { data } = await api.docs.get({ "*": "getting-started/install" });
+```
+
+</Tab>
+</Tabs>
+
+## Route groups
+
+Wrap a folder in parentheses to organize without a URL segment.
+
+| On disk | URL | Notes |
+| ------- | --- | ----- |
+| `notes/(ops)/archive.ts` | `/notes/archive` | `(ops)` omitted |
+| `main/(public)/health.ts` | `/health` | `main` still omits its prefix |
+
+<Tabs items={["(ops)", "(public)"]}>
+<Tab value="(ops)">
+
+```typescript title="flows/notes/(ops)/archive.ts"
+export const archive = on(
+  http.post().gate(notesMutate),
+  flow({
+    in: NoteIdIn,
+    out: NoteOut,
+    do: async ({ id }, fx) => {
+      await fx.store(db).update(notes).set({ archivedAt: fx.clock.now() }).where(eq(notes.id, id));
+    },
+  }),
+);
+```
+
+</Tab>
+<Tab value="(public)">
+
+```typescript title="flows/main/(public)/health.ts"
+export const health = on(
+  http.get().public(),
+  flow({ out: z.object({ ok: z.literal(true) }), do: () => ({ ok: true as const }) }),
+);
+// still GET /health named main.health
+```
+
+</Tab>
+</Tabs>
+
+## Private files
+
+Prefix a file or folder with `_` to opt it — and every nested file — out of routing.
+
+| On disk | URL | Notes |
+| ------- | --- | ----- |
+| `notes/_lib.ts` | — | Ignored; siblings may `import { helper } from "./_lib"` |
+| `notes/_lib/query.ts` | — | The whole folder is skipped |
+| `_shared/` as a first-level unit | — | Not a client unit |
+
+`_` means private implementation. It will not appear in `generated.ts`. If you want it registered, do not prefix `_`.
+
+<Tabs items={["_lib.ts", "_lib/", "import"]}>
+<Tab value="_lib.ts">
+
+```typescript title="flows/notes/_lib.ts"
+export function titleOf(row: { title: string }): string {
+  return String(row.title);
+}
+```
+
+</Tab>
+<Tab value="_lib/">
+
+```typescript title="flows/notes/_lib/title.ts"
+export function titleOf(row: { title: string }): string {
+  return String(row.title);
+}
+```
+
+</Tab>
+<Tab value="import">
+
+```typescript title="flows/notes/[id]/get.ts"
+import { titleOf } from "../_lib";
+import { titleOf as fromFolder } from "../_lib/title";
+
+export const get = on(
+  http.get().public(),
+  flow({
+    in: NoteIdIn,
+    do: async ({ id }, fx) => {
+      const row = await fx.store(db).findById(notes, id);
+      return { id, title: titleOf(row!) ?? fromFolder(row!) };
+    },
+  }),
+);
+```
+
+</Tab>
+</Tabs>
+
+## `main` is the only first-level exception
+
+`main` is the starter's root unit (`main.health`, `main.root`). Every other first-level folder is both the client unit **and** the first URL segment (`notes` → `/notes`).
+
+If `main` followed that law, health would be `GET /main/health` and the app root `GET /main`. The exception exists so `main/health.ts` is `GET /health` and `main/route.ts` is `GET /`, while the Flow name stays `main.health` / `main.root`.
+
+Do not put `index.ts` next to `health.ts` — that mix is a generate error. Use `route.ts` for `/`. There is no `flows/index.ts` as the app root.
+
+<Tabs items={["health.ts", "route.ts"]}>
+<Tab value="health.ts">
+
+```typescript title="flows/main/health.ts"
+export const health = on(
+  http.get().public(),
+  flow({
+    out: z.object({ ok: z.literal(true) }),
+    do: () => ({ ok: true as const }),
+  }),
+);
+// GET /health   name main.health
+```
+
+</Tab>
+<Tab value="route.ts">
+
+```typescript title="flows/main/route.ts"
+export const root = on(
+  http.get().public(),
+  flow({
+    out: z.object({ ok: z.literal(true), app: z.string() }),
+    do: () => ({ ok: true as const, app: "notes" }),
+  }),
+);
+// GET /   name main.root
+```
+
+</Tab>
+</Tabs>
+
+## QUERY is a method, not a reserved leaf
+
+Reserved leaves are **resource op names** (`list` `create` `get` `update` `remove`) — the same five as `http.resource` — plus `index` / `route`. They are not HTTP verbs.
+
+`http.query()` is a verb (RFC 10008), like GET/POST. Put it on `list.ts` / `get.ts` / `route.ts`. A file named `query.ts` is an **action leaf** and adds `/query`. Not a router collision with GET `list` / `get`.
+
+<Tabs items={["http.query()", "query.ts"]}>
+<Tab value="http.query()">
+
+```typescript title="flows/notes/list.ts"
+export const list = on(
+  http.query().public(),
+  flow({ out: NoteListOut, do: async (input, fx) => fx.json.withQuery(rows, input) }),
+);
+// QUERY /notes
+```
+
+</Tab>
+<Tab value="query.ts">
+
+```typescript title="flows/notes/query.ts"
+export const query = on(http.get().public(), flow({ do: async () => ({}) }));
+// GET /notes/query — action leaf, not a reserved op
+```
+
+</Tab>
+</Tabs>
+
+## Escape hatch
+
+`http.get("/me/tasks")` and `flow("notes.get")` still win when the folder is not the URL. If `flow("tasks.get")` lives under `flows/notes/`, generate fails — drift, not a silent rename.
+
+Plugin `.binding()` is never inferred. File tree is app flows only.
+
+<Tabs items={["Explicit path", "Explicit name", "Drift"]}>
+<Tab value="Explicit path">
+
+```typescript title="flows/my/index.ts"
+export const tasks = on(
+  http.get("/me/tasks").gate(member).live(),
+  flow("my.tasks", {
+    do: async (_input, fx) => fx.store(db).select().from(tasks),
+  }),
+);
+```
+
+</Tab>
+<Tab value="Explicit name">
+
+```typescript title="flows/notes/[id]/get.ts"
+export const get = on(
+  http.get("/notes/:id").public(),
+  flow("notes.get", {
+    in: NoteIdIn,
+    do: async ({ id }, fx) => fx.store(db).findById(notes, id),
+  }),
+);
+```
+
+</Tab>
+<Tab value="Drift">
+
+```typescript title="flows/notes/get.ts"
+export const get = on(http.get().public(), flow("tasks.get", { do: async () => ({}) }));
+// generate error — unit prefix tasks ≠ folder notes
+```
+
+</Tab>
+</Tabs>
+
+## Organizing the tree
+
+The framework is opinionated about **where a unit lives**, not about how you split helpers inside it.
+
+### Barrel or tree — per unit
+
+| Shape | When | Emit |
+| ----- | ---- | ---- |
+| Barrel | The unit folder has only `index.ts` (+ skip-list) | `import * as notes from "./notes/index.ts"` |
+| Tree | `[id]/`, `(group)/`, or extra route files | Synthesized namespace + path/name stamps |
+
+Mixed barrel `index.ts` plus tree files is a generate error. `index` in a tree is also a reserved leaf (`/notes`), so barrel vs leaf would be ambiguous.
+
+Keel-style paths that are not the folder (`/me/tasks`) stay on a barrel with an explicit `http.get("/me/tasks")`.
+
+```typescript title="flows/my/index.ts"
+export const tasks = on(http.get("/me/tasks").gate(member), flow("my.tasks", { do: async () => [] }));
+```
+
+### Decls stay in core
+
+Stores, gates, vault contracts, channel templates, clocks, and AI models belong in `core.ts` (or `core/*.ts`). Flows import them. That is what `import "@/core"` loads before `oke()`.
+
+```typescript title="flows/notes/create.ts"
+import { db, notesMutate, webhookSecret } from "@/core";
+```
+
+### Colocate contracts next to the unit
+
+`shapes.ts` / `signals.ts` / `_lib/` sit beside the walked files and are not routes. A signal or clock flow in the tree gets a name, never a URL.
+
+```typescript title="flows/notes/create.ts"
+import { NoteCreateIn, NoteOut } from "./shapes";
+import { noteCreated } from "./signals";
+```
+
+### `http.resource` in a tree
+
+Five reserved leaves reproduce `GET|POST /notes` and `GET|PATCH|DELETE /notes/:id`, but not one shared `.gate()` / `.live()` and not `store.resource().all()` in a single declaration.
+
+Put `on(http.resource("/notes", ops).public().live())` in `route.ts`. Inference is skipped — the five verbs already declare those paths. Extra actions (`[id]/archive.ts`) sit beside it. Pathless `http.resource()` is not a thing.
+
+| Verb | Path |
+| ---- | ---- |
+| `list` | `GET /notes` |
+| `create` | `POST /notes` |
+| `get` | `GET /notes/:id` |
+| `update` | `PATCH /notes/:id` |
+| `remove` | `DELETE /notes/:id` |
+
+<Tabs items={["route.ts", "archive.ts"]}>
+<Tab value="route.ts">
+
+```typescript title="flows/notes/route.ts"
+const notesR = store.resource(db, notes, { in: NewNote, out: Note });
+export const mounted = on(http.resource("/notes", notesR.all()).public().live());
+```
+
+</Tab>
+<Tab value="archive.ts">
+
+```typescript title="flows/notes/[id]/archive.ts"
+export const archive = on(
+  http.post().gate(notesMutate),
+  flow({ in: NoteIdIn, do: async ({ id }, fx) => /* POST /notes/:id/archive beside the mount */ }),
+);
+```
+
+</Tab>
+</Tabs>
+
+### Match order
+
+The default router tries a **static** segment, then `:param`, then `*`. File name order does not decide the winner: `archive.ts` (`/notes/archive`) is not eaten by `[slug]/get.ts` (`/notes/:slug`).
+
+<Tabs items={["static", ":slug"]}>
+<Tab value="static">
+
+```typescript title="flows/notes/archive.ts"
+export const archive = on(http.post().gate(notesMutate), flow({ do: async () => ({}) }));
+// POST /notes/archive  — static wins
+```
+
+</Tab>
+<Tab value=":slug">
+
+```typescript title="flows/notes/[slug]/get.ts"
+export const bySlug = on(http.get().public(), flow({ in: z.object({ slug: z.string() }), do: async ({ slug }) => ({ slug }) }));
+// GET /notes/:slug  — does not match /notes/archive
+```
+
+</Tab>
+</Tabs>
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Mixed index.ts + [id]/">
+
+Generate fails when a unit `index.ts` (the barrel) sits next to tree files. Use only the barrel, or move the collection path to `route.ts` and keep `[id]/` beside it.
+
+<Tabs items={["route.ts", "[id]/get.ts"]}>
+<Tab value="route.ts">
+
+```typescript title="flows/notes/route.ts"
+export const list = on(http.get().public(), flow({ do: async () => [] }));
+```
+
+</Tab>
+<Tab value="[id]/get.ts">
+
+```typescript title="flows/notes/[id]/get.ts"
+export const get = on(http.get().public(), flow({ in: NoteIdIn, do: async ({ id }) => ({ id }) }));
+```
+
+</Tab>
+</Tabs>
+
+</Accordion>
+
+<Accordion title="Export collision">
+
+Two files in one unit exporting `get` is a generate error. Rename one export. Several Flow exports in one `route.ts` may share the inferred collection path; different methods are OK.
+
+</Accordion>
+
+<Accordion title="Unresolved http.get()">
+
+`http.get()` with no path is a sentinel, not `/`. Import the generated barrel so the stamp runs, or pass an explicit path. Boot fails with **OKE1010** if the sentinel is still there.
+
+</Accordion>
+
+<Accordion title="Duplicate method + path">
+
+Two bindings on the same method and path fail boot (**OKE1011**) — last-add-wins is refused. `list.ts` (`GET /notes`) plus a `GET` in `route.ts` is that collision. `list.ts` + `create.ts` share `/notes` on different methods and are fine.
+
+</Accordion>
+
+<Accordion title="Stale generated.ts">
+
+A unit folder on disk with no adopted flows is **OKE1009**. Run `oke dev` or `oke build`. The watcher regenerates on `flows/**` changes except `generated.ts` itself.
+
+</Accordion>
+
+<Accordion title='[...slug] client key is "*", not slug'>
+
+`restRequest` only substitutes `:name`. The router wildcard param is `*`. Call `api.docs.get({ "*": "a/b/c" })`, not `{ slug: "a/b/c" }`.
+
+</Accordion>
+
+<Accordion title="http.resource inside a tree unit">
+
+Mixed-barrel fires only for a barrel `index.ts` plus tree files — not because the mount exists. Keep the mount in `route.ts`. Shared posture plus `store.resource().all()` is why the helper stays useful next to extra action files.
+
+</Accordion>
+
+<Accordion title="Unnamed HTTP flow">
+
+`flow({ do })` outside a unit is `flow_1` until stamped. Adopted HTTP still unnamed is **OKE1012**. Export from `flows/<unit>/` or pass `flow("unit.export", {…})`.
+
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — one species, `on(trigger, flow)`
+- [Basic Usage](/docs/get-started/basic-usage) — health + notes from the starter
+- [Client](/docs/reference/client) — `createClient<App>` from `$routes`
+- [Configuration](/docs/reference/configuration) — `oke.config.ts`
+- [CLI Reference](/docs/reference/cli) — `oke dev` regenerates the barrel
+
+## Next
+
+<Cards>
+  <Card title="Flow" description="The one species of backend behavior." href="/docs/elements/flow" />
+  <Card
+    title="Basic Usage"
+    description="Scaffold Notes and call health."
+    href="/docs/get-started/basic-usage"
+  />
+  <Card
+    title="Console"
+    description="Panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
+</Cards>

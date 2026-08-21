@@ -275,10 +275,10 @@ export function createAuthHttpBindings(
   } = { refresh, revoke, me };
   const bindings: Binding[] = [
     bindAuthHttp(
-      http.post(`${base}/refresh`).gate.public.gate(...(refreshRate ? [refreshRate] : [])),
+      http.post(`${base}/refresh`).public().gate(...(refreshRate ? [refreshRate] : [])),
       refresh,
     ),
-    bindAuthHttp(http.post(`${base}/revoke`).gate.public, revoke),
+    bindAuthHttp(http.post(`${base}/revoke`).public(), revoke),
     bindAuthHttp(http.get(`${base}/me`).gate(AUTH_SESSION_GATE), me),
   ];
 
@@ -371,11 +371,11 @@ export function createAuthHttpBindings(
     flows.signUpEmail = signUpEmail;
     bindings.push(
       bindAuthHttp(
-        http.post(`${base}/sign-in/email`).gate.public.gate(...(signInRate ? [signInRate] : [])),
+        http.post(`${base}/sign-in/email`).public().gate(...(signInRate ? [signInRate] : [])),
         signInEmail,
       ),
       bindAuthHttp(
-        http.post(`${base}/sign-up/email`).gate.public.gate(...(signUpRate ? [signUpRate] : [])),
+        http.post(`${base}/sign-up/email`).public().gate(...(signUpRate ? [signUpRate] : [])),
         signUpEmail,
       ),
     );
@@ -406,7 +406,7 @@ export function isSessionFresh(
  * @param flowDef - Flow
  */
 export function bindAuthHttp(trigger: HttpTrigger, flowDef: AnyFlowDef): Binding {
-  const withPosture = trigger.gates.length > 0 ? trigger : trigger.gate.public;
+  const withPosture = trigger.gates.length > 0 ? trigger : trigger.public();
   const normalized = normalizeTrigger(withPosture);
   const list = flowDef.triggers as Trigger[];
   list.push(normalized);

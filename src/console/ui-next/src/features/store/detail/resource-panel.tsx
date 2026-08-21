@@ -9,6 +9,8 @@ import {
   CheckmarkCircle02Icon,
   Folder01Icon,
   SecurityCheckIcon,
+  ShieldEnergyIcon,
+  ShieldOff,
   Timer01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -24,8 +26,13 @@ import { formatDuration } from "@/features/flows/traces/format-duration.ts";
 import { cn } from "@/lib/utils";
 import { filesDriverLabel, filesDriverOrigin } from "../lib/files-origin.ts";
 import { latestReplicaLagFromRuns } from "../lib/replica-lag.ts";
-import { isSqlCatalogChild, storeChildLabel } from "../lib/sql-catalog.ts";
-import { STORE_FACET_SPECS } from "../lib/store-tree.ts";
+import {
+  isSqlCatalogChild,
+  storeChildLabel,
+  storeChildRlsPolicyCount,
+  storeChildShowsRls,
+} from "../lib/sql-catalog.ts";
+import { resourceHeaderChildRef, STORE_FACET_SPECS } from "../lib/store-tree.ts";
 import { BrowseSection } from "./browse-section.tsx";
 
 /** Props for {@link ResourcePanel}. */
@@ -77,7 +84,12 @@ export function ResourcePanel({
   const lagTone = lagMs != null ? durationTone(lagMs) : null;
 
   const files = store.facet === "files";
-  const showStatus = Boolean(drift || lagMs !== null || store.contentAddressed || piiCount > 0);
+  const showsRls = storeChildShowsRls(child);
+  const rlsOn = child.rls === true;
+  const rlsCount = storeChildRlsPolicyCount(child, manifest, store.name);
+  const showStatus = Boolean(
+    drift || lagMs !== null || store.contentAddressed || piiCount > 0 || showsRls,
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="resource-panel">
@@ -124,18 +136,7 @@ export function ResourcePanel({
                 <CopyInlineButton value={child.effectRef} label="Copy effect ref" />
               </>
             ) : (
-              <>
-                <span className="shrink-0 font-mono text-[11px] leading-none text-muted-foreground">
-                  {store.ref}
-                </span>
-                <span aria-hidden className="text-border">
-                  ·
-                </span>
-                <code className="min-w-0 truncate font-mono text-[11px] leading-none text-foreground/70">
-                  {child.effectRef}
-                </code>
-                <CopyInlineButton value={child.effectRef} label="Copy effect ref" />
-              </>
+              <ResourceRefSubtitle storeRef={store.ref} effectRef={child.effectRef} />
             )}
           </>
         }
@@ -154,6 +155,30 @@ export function ResourcePanel({
                 </StatusChip>
               ) : null}
               {store.contentAddressed ? <StatusChip>content-addressed</StatusChip> : null}
+              {showsRls ? (
+                <StatusChip
+                  tone={rlsOn ? "emerald" : "neutral"}
+                  icon={
+                    <HugeiconsIcon
+                      icon={rlsOn ? ShieldEnergyIcon : ShieldOff}
+                      className="size-3"
+                      aria-hidden
+                    />
+                  }
+                  title={
+                    rlsOn
+                      ? rlsCount > 0
+                        ? `Row-level security enabled · ${rlsCount} ${rlsCount === 1 ? "policy" : "policies"}`
+                        : "Row-level security enabled"
+                      : "Row-level security disabled"
+                  }
+                  role="status"
+                  data-slot="resource-rls"
+                  data-rls={rlsOn ? "on" : "off"}
+                >
+                  {rlsOn && rlsCount > 0 ? `${rlsCount} RLS` : "RLS"}
+                </StatusChip>
+              ) : null}
               {piiCount > 0 ? (
                 <StatusChip
                   tone={piiMasked ? "sky" : "amber"}
@@ -233,6 +258,34 @@ export function ResourcePanel({
   );
 }
 
+function ResourceRefSubtitle({
+  storeRef,
+  effectRef,
+}: {
+  readonly storeRef: string;
+  readonly effectRef: string;
+}): JSX.Element {
+  const childRef = resourceHeaderChildRef(storeRef, effectRef);
+  return (
+    <>
+      <span className="shrink-0 font-mono text-[11px] leading-none text-muted-foreground">
+        {storeRef}
+      </span>
+      {childRef ? (
+        <>
+          <span aria-hidden className="text-border">
+            ·
+          </span>
+          <code className="min-w-0 truncate font-mono text-[11px] leading-none text-foreground/70">
+            {childRef}
+          </code>
+        </>
+      ) : null}
+      <CopyInlineButton value={effectRef} label="Copy effect ref" />
+    </>
+  );
+}
+
 type ChipTone = "neutral" | "emerald" | "amber" | "sky";
 
 const CHIP_TONES: Record<ChipTone, string> = {
@@ -251,6 +304,7 @@ interface StatusChipProps {
   readonly role?: string;
   readonly "data-slot"?: string;
   readonly "data-drifted"?: string;
+  readonly "data-rls"?: string;
   readonly pressed?: boolean;
   readonly onClick?: () => void;
   readonly ariaLabel?: string;
@@ -270,6 +324,7 @@ function StatusChip({
   role,
   "data-slot": dataSlot,
   "data-drifted": dataDrifted,
+  "data-rls": dataRls,
   pressed,
   onClick,
   ariaLabel,
@@ -290,13 +345,20 @@ function StatusChip({
       aria-label={ariaLabel}
       data-slot={dataSlot}
       data-drifted={dataDrifted}
+      data-rls={dataRls}
       onClick={onClick}
     >
       {icon}
       {children}
     </button>
   ) : (
-    <span className={className} role={role} data-slot={dataSlot} data-drifted={dataDrifted}>
+    <span
+      className={className}
+      role={role}
+      data-slot={dataSlot}
+      data-drifted={dataDrifted}
+      data-rls={dataRls}
+    >
       {icon}
       {children}
     </span>

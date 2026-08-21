@@ -7,7 +7,7 @@
 
 import type { GateDecl } from "./declare.ts";
 
-/** Reserved policy name for `gate.public` / `.gate.public`. */
+/** Reserved policy name for `gate.public` / `.public()`. */
 export const GATE_PUBLIC_NAME = "public";
 
 /** Member of `gate.all` — a policy/rate or a nested `all` handle. */

@@ -10,7 +10,7 @@ burned its minute quota? Attach gates to the HTTP trigger — the pipeline check
 store write, emit, or channel send runs.
 
 <Callout title="The one rule">
-  Every HTTP trigger declares posture: attach a real gate, or attach `.gate.public`. Omitting both
+  Every HTTP trigger declares posture: attach a real gate, or attach `.public()`. Omitting both
   fails boot. Denial is a typed error value — never a thrown exception mid-`do`.
 </Callout>
 
@@ -54,14 +54,14 @@ export const app = oke({ name: "shop", env: "dev" });
 <Step>
 ### Attach them to triggers
 
-`.gate(...)` composes left to right — first denial wins. Public routes must say so explicitly:
+`.gate(...)` composes left to right — first denial wins. Public routes must say so explicitly. Path and name can come from the file tree — see [Project structure](/docs/get-started/project-structure).
 
 ```typescript title="src/flows/links/shorten.ts"
 import { on, flow, http, gate } from "okengine";
 import { member, canBook, fair } from "../../gates";
 
 export const health = on(
-  http.get("/health").gate.public,
+  http.get("/health").public(),
   flow("health.check", {
     out: HealthOut,
     do: () => ({ ok: true as const }),
@@ -84,8 +84,8 @@ export const shorten = on(
 ```
 
 A single gate stays `.gate(member)`. Reuse two or more with `gate.all` — `.gate(write)`
-flattens. `http.resource(path, ops).gate(...)` stamps every verb. Do **not** put
-`gate.public` in `gate.policies` — attach it on the trigger only.
+flattens. `http.resource(path, ops).gate(...)` stamps every verb. Public routes use
+`.public()` — do **not** put `gate.public` in `gate.policies`.
 
 </Step>
 
@@ -127,13 +127,13 @@ gates are skipped. `do` runs only when every gate passed.
 | ------------------------------------- | ------------------------------------------- | ---------------------------------- |
 | `gate.policy(name, check \| options)` | Is this principal allowed? (ABAC)           | auth / operator / request metadata |
 | `gate.scope(name)`                    | Does `auth.scopes` contain this exact name? | `auth.scopes`                      |
-| `gate.public` / `.gate.public`        | Intentionally unauthenticated surface       | always allows                      |
+| `gate.public` / `.public()`           | Intentionally unauthenticated surface       | always allows                      |
 | `gate.rate(options)`                  | Is there budget left for this subject?      | an atomic counter on the kv driver |
 | `gate.all(...members)`                | Reuse this chain on many triggers           | flattens; each member is evaluated |
 
 Pass `{ check, description }` on `gate.policy` when you want a human title in the Console (falls
-back to the policy name). The name `"public"` is reserved — use `gate.public`, not
-`gate.policy("public", …)`.
+back to the policy name). The name `"public"` is reserved — mark the trigger with
+`.public()`, not `gate.policy("public", …)`.
 
 `gate.all()` with no members throws. Nested `all` handles flatten.
 Members auto-register when declared; `oke({ gate: { policies: [write] } })` is additive.
@@ -174,11 +174,11 @@ driver in tests. Boot opens a dedicated `oke:gates` namespace on **`drivers.stor
 
 ## Auth posture at boot
 
-Every HTTP trigger must carry a gate or `.gate.public`. Omitting both fails boot with
+Every HTTP trigger must carry a gate or `.public()`. Omitting both fails boot with
 `GateBootError` — message starts with `gate boot failed —` and lists every gap.
 
 ```typescript
-on(http.get("/health").gate.public, flow("health.check", {/* … */}));
+on(http.get("/health").public(), flow("health.check", {/* … */}));
 on(http.post("/bookings").gate(member, canBook), flow("bookings.create", {/* … */}));
 ```
 
@@ -187,7 +187,7 @@ on(http.post("/bookings").gate(member, canBook), flow("bookings.create", {/* …
 posture but does **not** authenticate.
 
 `gate: { unguardedHttp: "allow" }` skips the audit **only** when `env === "test"`.
-In `dev` / `prod` migrate with per-trigger `.gate.public`.
+In `dev` / `prod` migrate with per-trigger `.public()`.
 
 ## Built-in auth (`gate.auth`)
 
@@ -277,7 +277,7 @@ edit live today.
 <Accordions>
 <Accordion title="Boot: gate boot failed — N HTTP trigger(s) missing auth posture">
 
-Empty `.gate(...)` chain. Attach a policy/rate gate, or `.gate.public`. First `fetch`
+Empty `.gate(...)` chain. Attach a policy/rate gate, or `.public()`. First `fetch`
 auto-boots — do not rely on `gate.unguardedHttp: "allow"` outside `env: "test"`.
 
 </Accordion>
@@ -315,6 +315,7 @@ Keying an authenticated endpoint by IP punishes shared NAT.
 
 ## Learn more
 
+- [Project structure](/docs/get-started/project-structure) — `http.get()` and `flow({…})` fill path and name from the file tree
 - [Flow](/docs/elements/flow) — the trigger pipeline gates plug into
 - [fx](/docs/reference/fx) — `fx.auth`, `fx.operator`, `fx.principal`
 - [Client](/docs/reference/client) — Bearer `createClient` + `okengine/client/auth`

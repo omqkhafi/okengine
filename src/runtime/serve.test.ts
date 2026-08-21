@@ -55,13 +55,13 @@ function rawHttp(port: number, payload: string): Promise<string> {
 
 function buildApp() {
   on(
-    http.get("/ping").gate.public,
+    http.get("/ping").public(),
     flow("ping", {
       do: () => ({ ok: true as const, n: 1 }),
     }),
   );
   on(
-    http.get("/notes/:id").gate.public,
+    http.get("/notes/:id").public(),
     flow("notes.get", {
       do: ({ id }: { id: string }) => ({ id }),
     }),
@@ -157,13 +157,13 @@ describe("Bun.serve — real HTTP", () => {
 
   test("QUERY is omitted from native routes so Bun.serve still boots", async () => {
     on(
-      http.query("/search").gate.public,
+      http.query("/search").public(),
       flow("search.query", {
         do: () => ({ hits: 1 }),
       }),
     );
     on(
-      http.get("/search/suggest").gate.public,
+      http.get("/search/suggest").public(),
       flow("search.suggest", {
         do: () => ({ hits: 0 }),
       }),

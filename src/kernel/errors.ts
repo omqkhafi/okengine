@@ -184,6 +184,30 @@ export const OKE_ERRORS = {
     fix: "Run `oke dev` or `oke build` to regenerate `src/flows/generated.ts`.",
   },
   /**
+   * `http.get()` was never stamped from the file tree — refuse a silent `/`.
+   */
+  HTTP_PATH_UNRESOLVED: {
+    code: 1010,
+    cause: 'Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.',
+    fix: "Put the file under `src/flows/<unit>/` and import `@/flows/generated`, or pass an explicit path to `http.{method}(\"/…\")`.",
+  },
+  /**
+   * Two HTTP bindings share method + path — last-add-wins is the opposite of this DX.
+   */
+  HTTP_ROUTE_DUPLICATE: {
+    code: 1011,
+    cause: "{method} {path} is bound twice (flow \"{flow}\").",
+    fix: "Give each HTTP flow a unique method + path.",
+  },
+  /**
+   * Adopted HTTP flow still has no name (`flow({ do })` outside a unit).
+   */
+  HTTP_FLOW_UNNAMED: {
+    code: 1012,
+    cause: "An HTTP flow on {method} {path} has no name.",
+    fix: "Use `flow(\"unit.export\", {…})` or export it from a `src/flows/<unit>/` file so the tree can stamp `unit.export`.",
+  },
+  /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */

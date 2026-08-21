@@ -1,9 +1,9 @@
 /**
  * Gate boot audit — every HTTP trigger must declare auth posture.
  *
- * Fail loud: missing gate and missing {@link gate.public} → {@link GateBootError}.
+ * Fail loud: missing gate and missing `.public()` → {@link GateBootError}.
  * `unguardedHttp: "allow"` is honoured **only** when `env === "test"` — never a
- * production-wide bypass. Migrate real apps with per-trigger `gate.public`.
+ * production-wide bypass. Migrate real apps with per-trigger `.public()`.
  */
 
 import { GATE_PUBLIC_NAME } from "./declare.ts";
@@ -19,7 +19,7 @@ export interface GatePostureGap {
 }
 
 /**
- * Thrown when HTTP triggers omit both a gate chain and {@link gate.public}.
+ * Thrown when HTTP triggers omit both a gate chain and `.public()`.
  * Lists every gap (Vault-style — fail once with the full set).
  */
 export class GateBootError extends Error {
@@ -28,7 +28,7 @@ export class GateBootError extends Error {
   constructor(gaps: readonly GatePostureGap[]) {
     const lines = gaps.map((g) => `  - ${g.flowId} ${g.method} ${g.path}`);
     super(
-      `gate boot failed — ${gaps.length} HTTP trigger(s) missing auth posture (attach a gate or gate.public):\n${lines.join("\n")}`,
+      `gate boot failed — ${gaps.length} HTTP trigger(s) missing auth posture (attach a gate or .public()):\n${lines.join("\n")}`,
     );
     this.name = "GateBootError";
     this.gaps = gaps;
@@ -84,7 +84,7 @@ export function hasHttpGatePosture(
 }
 
 /**
- * Collect HTTP triggers with neither a gate nor {@link gate.public}.
+ * Collect HTTP triggers with neither a gate nor `.public()`.
  *
  * @param bindings - Adopted / registered bindings
  */

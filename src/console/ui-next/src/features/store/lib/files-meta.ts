@@ -220,6 +220,18 @@ export function fileKindIsImage(kind: FileKind): boolean {
 }
 
 /**
+ * MIME type for a files-preview blob.
+ * PDF is always `application/pdf` so `nosniff` does not hide the viewer.
+ *
+ * @param mode - Inspector surface
+ * @param contentType - Catalog / inferred type
+ */
+export function previewBlobType(mode: FilePreviewMode, contentType: string): string {
+  if (mode === "pdf") return "application/pdf";
+  return contentType;
+}
+
+/**
  * Inspector surface for a kind (`none` → download fallback).
  *
  * @param kind - Inferred kind

@@ -23,18 +23,20 @@ shape. Learn the shape once; only the trigger changes.
 
 Four contracts plus a `do`. This is the standard starter's health check:
 
-```typescript title="health"
+```typescript title="flows/main/health.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const health = on(
-  http.get("/health"),
-  flow("health.check", {
+  http.get().public(),
+  flow({
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
   }),
 );
 ```
+
+`main` omits the URL prefix, so this file is `GET /health` named `main.health`. See [Project structure](/docs/get-started/project-structure). Explicit `http.get("/health")` and `flow("main.health")` still win.
 
 </Step>
 
@@ -162,6 +164,7 @@ and `okengine/full`.
 | Topic   | Page                                                                            |
 | ------- | ------------------------------------------------------------------------------- |
 | Why OKE | [Why OKE](/docs/get-started/why)                                                |
+| Folders | [Project structure](/docs/get-started/project-structure)                        |
 | Flow    | [Flow](/docs/elements/flow)                                                     |
 | `fx`    | [fx](/docs/reference/fx)                                                        |
 | Agents  | [MCP](/docs/ai/mcp) · [Skills](/docs/ai/skills) · [llms.txt](/docs/ai/llms-txt) |
@@ -183,5 +186,10 @@ and `okengine/full`.
     title="Basic Usage"
     description="Health Flow, typed client, and bun:test."
     href="/docs/get-started/basic-usage"
+  />
+  <Card
+    title="Project structure"
+    description="Folders are the URL; unit plus export is the name."
+    href="/docs/get-started/project-structure"
   />
 </Cards>

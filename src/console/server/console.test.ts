@@ -391,6 +391,9 @@ describe("console serve security", () => {
     expect(res.status).toBe(200);
     const csp = res.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("frame-src 'self' blob:");
+    expect(csp).toContain("img-src 'self' data: blob:");
+    expect(csp).toContain("media-src 'self' blob:");
     expect(csp).toBe(CONSOLE_CSP);
   });
 

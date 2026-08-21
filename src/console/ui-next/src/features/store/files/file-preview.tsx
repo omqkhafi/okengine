@@ -25,6 +25,7 @@ import {
   fileNameFromKey,
   filePreviewMode,
   formatFilePreviewText,
+  previewBlobType,
   type FileKind,
   type FilePreviewMode,
 } from "../lib/files-meta.ts";
@@ -82,7 +83,9 @@ export function FilePreview({
   const objectUrl = useMemo(() => {
     if (!object.data || !bytes || object.data.truncated) return null;
     if (mode !== "image" && mode !== "pdf" && mode !== "video" && mode !== "audio") return null;
-    const blob = new Blob([bytesToArrayBuffer(bytes)], { type: object.data.contentType });
+    const blob = new Blob([bytesToArrayBuffer(bytes)], {
+      type: previewBlobType(mode, object.data.contentType),
+    });
     return URL.createObjectURL(blob);
   }, [object.data, bytes, mode]);
 

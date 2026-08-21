@@ -8,6 +8,7 @@ import {
   fileNameFromKey,
   filePreviewMode,
   formatFilePreviewText,
+  previewBlobType,
   inferContentType,
   isAsciiObjectKey,
   safeFileObjectKey,
@@ -66,6 +67,8 @@ describe("fileKind helpers", () => {
     expect(fileKindIsText("code")).toBe(true);
     expect(fileKindIsText("image")).toBe(false);
     expect(fileKindIsImage("image")).toBe(true);
+    expect(previewBlobType("pdf", "application/octet-stream")).toBe("application/pdf");
+    expect(previewBlobType("image", "image/png")).toBe("image/png");
     expect(filePreviewMode("pdf")).toBe("pdf");
     expect(filePreviewMode("video")).toBe("video");
     expect(filePreviewMode("archive")).toBe("none");

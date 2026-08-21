@@ -1,8 +1,8 @@
 import "@/core";
+import "@/flows/generated";
 
 import { oke } from "okengine/http";
-import * as routes from "@/flows/generated";
 
-export const app = oke({ name: "notes" }).adopt(routes);
+export const app = oke({ name: "notes" });
 
 export type App = typeof app;

@@ -148,7 +148,7 @@ export default function HomePage() {
             <Reveal delay={0.08} className="min-h-0 lg:h-full">
               <CodePanel
                 code={starterSnippet}
-                title="src/flows/main/index.ts"
+                title="src/flows/main/route.ts"
                 footer="The standard starter is ordinary application code — no hidden runtime species."
               />
             </Reveal>

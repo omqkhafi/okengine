@@ -156,6 +156,17 @@ export function isSingletonStoreLeaf(store: StoreListStore): boolean {
 }
 
 /**
+ * Child ref in the resource header. Null when it repeats the store
+ * (`kv:reminders · kv:reminders`).
+ *
+ * @param storeRef - Store identity (`kv:reminders`)
+ * @param effectRef - Selected child (`kv:reminders` or `sql:tasks`)
+ */
+export function resourceHeaderChildRef(storeRef: string, effectRef: string): string | null {
+  return storeRef === effectRef ? null : effectRef;
+}
+
+/**
  * Open-state key for a facet band in {@link StoreTree}.
  *
  * @param facet - Band facet

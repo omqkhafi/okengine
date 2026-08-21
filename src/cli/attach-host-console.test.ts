@@ -28,7 +28,7 @@ describe("attachHostToConsole", () => {
 import { oke, on, flow, http, gate, store } from ${JSON.stringify(OKE)};
 const db = store.sql("db");
 export const ping = on(
-  http.get("/ping").gate.public,
+  http.get("/ping").public(),
   flow("main.ping", { do: () => ({ ok: true }) }),
 );
 export const app = oke({
@@ -81,7 +81,7 @@ import { oke, on, flow, http, gate, ai } from ${JSON.stringify(OKE)};
 const smart = ai.model("smart", { provider: "mock" });
 smart.prompt("ticket-triage", { version: 2 });
 export const ping = on(
-  http.get("/ping").gate.public,
+  http.get("/ping").public(),
   flow("main.ping", {
     effects: { asks: ["ticket-triage"] },
     do: (_input, fx) => fx.ask("ticket-triage", { subject: "hello" }),

@@ -46,6 +46,7 @@ import {
   type InferBinding,
   type Literal,
 } from "./effects-infer.ts";
+import { nameFromFlowFile, pathFromFlowFile } from "./flow-path.ts";
 
 /** One source file for extraction. */
 export interface SourceFile {
@@ -1417,7 +1418,7 @@ function registerFlow(args: {
   scope: ProjectScope;
   exportName: string | undefined;
 }): void {
-  const opts = objectArg(args.flowCall.arguments[1]);
+  const opts = flowOptionsArg(args.flowCall);
   if (!opts) return;
 
   // `flow(\`${unit}.list\`)` inside a helper — name is only known at the
@@ -1426,6 +1427,7 @@ function registerFlow(args: {
 
   const name =
     stringArg(args.flowCall.arguments[0]) ??
+    nameFromFlowFile(args.file.path, args.exportName) ??
     args.exportName ??
     `flow_${Object.keys(args.scope.flows).length + 1}`;
 
@@ -1473,7 +1475,9 @@ function registerFlow(args: {
     }
   }
 
-  const trigger = args.triggerNode ? parseTrigger(args.triggerNode, args.scope) : undefined;
+  const trigger = args.triggerNode
+    ? parseTrigger(args.triggerNode, args.scope, args.file.path)
+    : undefined;
 
   const gates = trigger?.gates;
   const liveFromTrigger = trigger?.live;
@@ -1577,8 +1581,8 @@ function registerFlow(args: {
 }
 
 /**
- * `http.resource(path, bag).gate(...).live()` — find the resource call and
- * collect the same chain {@link parseHttpTrigger} reads on a single verb.
+ * `http.resource(path, bag).gate(...).public().live()` — find the resource call
+ * and collect the same chain {@link parseHttpTrigger} reads on a single verb.
  *
  * @param node - First argument to `on(…)`
  * @param scope - Project scope (gate name expansion)
@@ -1609,19 +1613,8 @@ function unwrapResourceMount(
         }
         continue;
       }
+      if (prop === "public") gateNames.push("public");
       if (prop === "live") live = true;
-      continue;
-    }
-    if (item.type === "MemberExpression") {
-      const member = item as AstNode & { object: AstNode; property: AstNode };
-      if (identifierName(member.property) !== "public") continue;
-      const obj = member.object;
-      if (
-        obj.type === "MemberExpression" &&
-        identifierName((obj as AstNode & { property: AstNode }).property) === "gate"
-      ) {
-        gateNames.push("public");
-      }
     }
   }
   if (!httpCall) return undefined;
@@ -1781,7 +1774,11 @@ interface ParsedTrigger {
   live?: boolean;
 }
 
-function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undefined {
+function parseTrigger(
+  node: AstNode,
+  scope: ProjectScope,
+  filePath?: string,
+): ParsedTrigger | undefined {
   // every("10m")
   if (node.type === "CallExpression") {
     const call = node as CallExpression;
@@ -1794,8 +1791,8 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
       return { trigger: {} };
     }
 
-    // http.post("/x").gate(...).live() / http.get("/x").gate.public
-    const http = parseHttpTrigger(call, scope);
+    // http.post("/x").gate(...).live() / http.get("/x").public()
+    const http = parseHttpTrigger(call, scope, filePath);
     if (http) return http;
 
     // table("orders").changed("status") / db.table(orders).changed(...)
@@ -1806,7 +1803,7 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
   }
 
   if (node.type === "MemberExpression") {
-    const http = parseHttpTrigger(node, scope);
+    const http = parseHttpTrigger(node, scope, filePath);
     if (http) return http;
   }
 
@@ -1824,8 +1821,12 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
   return undefined;
 }
 
-function parseHttpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | undefined {
-  // Walk: http.METHOD(path).gate(...).live() / .gate.public
+function parseHttpTrigger(
+  leaf: AstNode,
+  scope: ProjectScope,
+  filePath?: string,
+): ParsedTrigger | undefined {
+  // Walk: http.METHOD(path).gate(...).live() / .public()
   const chain = flattenMemberCallChain(leaf);
   let method: string | undefined;
   let path: string | undefined;
@@ -1854,24 +1855,16 @@ function parseHttpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | u
         continue;
       }
 
+      if (prop === "public") gateNames.push("public");
       if (prop === "live") live = true;
-      continue;
-    }
-
-    if (node.type === "MemberExpression") {
-      const member = node as AstNode & { object: AstNode; property: AstNode };
-      if (identifierName(member.property) !== "public") continue;
-      const obj = member.object;
-      if (
-        obj.type === "MemberExpression" &&
-        identifierName((obj as AstNode & { property: AstNode }).property) === "gate"
-      ) {
-        gateNames.push("public");
-      }
     }
   }
 
-  if (!method || !path) return undefined;
+  if (!method) return undefined;
+  if (!path) {
+    path = filePath ? pathFromFlowFile(filePath) : undefined;
+  }
+  if (!path) return undefined;
 
   const httpMethods = [
     "GET",
@@ -2005,7 +1998,7 @@ function schemaProp(obj: AstNode | undefined, key: string): string | undefined {
 
 // ── AST helpers ────────────────────────────────────────────────────────────
 
-/** Leaf-to-root walk of `http.get("/x").gate.public.live()`. */
+/** Leaf-to-root walk of `http.get("/x").public().live()`. */
 function flattenMemberCallChain(leaf: AstNode): AstNode[] {
   const chain: AstNode[] = [];
   let current: AstNode = leaf;
@@ -2123,6 +2116,19 @@ function objectArg(node: AstNode | undefined): AstNode | undefined {
   if (!node) return undefined;
   if (node.type === "ObjectExpression") return node;
   return undefined;
+}
+
+/**
+ * `flow("name", { do })` options live in arg1; `flow({ do })` in arg0.
+ *
+ * @param flowCall - `flow(...)` AST node
+ */
+function flowOptionsArg(flowCall: CallExpression): AstNode | undefined {
+  const named = objectArg(flowCall.arguments[1]);
+  if (named) return named;
+  if (stringArg(flowCall.arguments[0]) !== undefined) return undefined;
+  if (isInterpolatedTemplate(flowCall.arguments[0])) return undefined;
+  return objectArg(flowCall.arguments[0]);
 }
 
 function objectProp(obj: AstNode | undefined, key: string): AstNode | undefined {

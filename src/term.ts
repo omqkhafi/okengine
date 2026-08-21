@@ -112,6 +112,32 @@ export type DevHeroElement = {
   readonly status?: DevStatus;
 };
 
+/** Name column for Ready / Docker / bind rows — fits `store.index`. */
+const HERO_NAME_MIN = 12;
+
+/**
+ * Widest name column that still fits every label (never below {@link HERO_NAME_MIN}).
+ *
+ * @param names - Row labels in the table
+ */
+function heroNameWidth(names: readonly string[]): number {
+  let width = HERO_NAME_MIN;
+  for (const name of names) {
+    if (name.length > width) width = name.length;
+  }
+  return width;
+}
+
+/**
+ * Left-align a table cell.
+ *
+ * @param value - Cell text
+ * @param width - Column width
+ */
+function padHeroCol(value: string, width: number): string {
+  return value.padEnd(width);
+}
+
 /** Shared options for the `oke dev` hero / banner. */
 export type DevHeroMeta = {
   /** `local` · `docker` · `test` · `production` */
@@ -158,18 +184,24 @@ export function formatOkeWordmark(color: boolean = termColorEnabled()): string {
 export function formatDevHeroDetails(options: DevHeroMeta = {}): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const bar = `${s.dim}│${s.reset}`;
-  const label = (name: string) => `${s.dim}${name.padEnd(9)}${s.reset}`;
+  const elements = options.elements ?? [];
+  const nameWidth = heroNameWidth([
+    ...(options.profile ? ["profile"] : []),
+    ...(options.runtimeEnv ? ["env"] : []),
+    ...(options.system ? ["system"] : []),
+    ...elements.map((row) => row.element),
+  ]);
+  const label = (name: string) => `${s.dim}${padHeroCol(name, nameWidth)}${s.reset}`;
   const lines: string[] = [];
   if (options.profile) {
-    lines.push(`${bar}  ${label("profile")} ${s.cyan}${options.profile}${s.reset}`);
+    lines.push(`${bar}  ${label("profile")}  ${s.cyan}${options.profile}${s.reset}`);
   }
   if (options.runtimeEnv) {
-    lines.push(`${bar}  ${label("env")} ${s.cyan}${options.runtimeEnv}${s.reset}`);
+    lines.push(`${bar}  ${label("env")}  ${s.cyan}${options.runtimeEnv}${s.reset}`);
   }
   if (options.system) {
-    lines.push(`${bar}  ${label("system")} ${s.dim}${options.system}${s.reset}`);
+    lines.push(`${bar}  ${label("system")}  ${s.dim}${options.system}${s.reset}`);
   }
-  const elements = options.elements ?? [];
   if (elements.length > 0) {
     lines.push(`${bar}  ${s.dim}elements${s.reset}`);
     const color = options.color ?? termColorEnabled();
@@ -182,8 +214,10 @@ export function formatDevHeroDetails(options: DevHeroMeta = {}): string {
           ? ""
           : `${s.dim}—${s.reset}`
         : `${s.cyan}${row.detail}${s.reset}`;
-      const detailPart = detail ? ` ${detail}` : "";
-      lines.push(`${bar}  ${dot} ${s.dim}${row.element.padEnd(9)}${s.reset}${detailPart}`);
+      const detailPart = detail ? `  ${detail}` : "";
+      lines.push(
+        `${bar}  ${dot}  ${s.dim}${padHeroCol(row.element, nameWidth)}${s.reset}${detailPart}`,
+      );
     }
   }
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
@@ -454,7 +488,19 @@ export function createAnchoredBoard(
 }
 
 /**
- * One service URL line (Console / MCP after bind).
+ * One-line purpose for each `oke dev` bind surface.
+ *
+ * Same wording as the site PORTS mnemonic — keep them in lockstep.
+ */
+export const DEV_SURFACE_DETAILS: Readonly<Record<string, string>> = {
+  Backend: "Your flows, served from the Manifest.",
+  Console: "Panels, traces, and the effect graph.",
+  MCP: "The same Manifest, for agents.",
+  "Docs MCP": "Read-only docs search for agents.",
+};
+
+/**
+ * One service URL line (Console / MCP after bind, before the ready board).
  *
  * @param label - Surface name
  * @param url - Absolute URL
@@ -466,19 +512,73 @@ export function formatServiceLine(
   color: boolean = termColorEnabled(),
 ): string {
   const s = termStyle(color);
-  const pad = label.padEnd(7);
+  const pad = padHeroCol(label, HERO_NAME_MIN);
   return `${s.dim}│${s.reset}  ${s.dim}${pad}${s.reset}  ${s.cyan}${url}${s.reset}\n`;
 }
 
 /**
  * Backend child ready line (`bun --hot` soft reload).
  *
+ * Stays one line so Logs do not fill with surface boxes on every reload.
+ *
  * @param url - Backend base URL
  * @param color - Color on/off
  */
 export function formatAppReadyLine(url: string, color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
-  return `${s.green}●${s.reset}  ${s.dim}${"Backend".padEnd(7)}${s.reset}  ${s.cyan}${url}${s.reset}\n`;
+  return `${s.green}●${s.reset}  ${s.dim}${padHeroCol("Backend", HERO_NAME_MIN)}${s.reset}  ${s.cyan}${url}${s.reset}\n`;
+}
+
+/**
+ * One bound-surface box on the ready board — title, URL, purpose.
+ *
+ * @param options - Label, URL, optional detail override
+ */
+export function formatSurfaceBox(options: {
+  readonly label: string;
+  readonly url: string;
+  readonly detail?: string;
+  readonly color?: boolean;
+}): string {
+  const s = termStyle(options.color ?? termColorEnabled());
+  const bar = `${s.dim}│${s.reset}`;
+  const detail = (options.detail ?? DEV_SURFACE_DETAILS[options.label] ?? "").trim();
+  const lines = [
+    `${s.green}●${s.reset}  ${s.bold}${options.label}${s.reset}`,
+    `${bar}  ${s.cyan}${options.url}${s.reset}`,
+  ];
+  if (detail.length > 0) {
+    lines.push(`${bar}  ${s.dim}${detail}${s.reset}`);
+  }
+  lines.push(bar);
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Backend · Console · MCP · Docs MCP boxes after bind.
+ *
+ * Pass `mcpUrl` / `docsMcpUrl` only when that surface came up — omitted
+ * URLs skip the box.
+ *
+ * @param options - Bound surface URLs
+ */
+export function formatBoundSurfaces(options: {
+  readonly appUrl: string;
+  readonly consoleUrl: string;
+  readonly mcpUrl?: string | null;
+  readonly docsMcpUrl?: string | null;
+  readonly color?: boolean;
+}): string {
+  const color = options.color ?? termColorEnabled();
+  let out = formatSurfaceBox({ label: "Backend", url: options.appUrl, color });
+  out += formatSurfaceBox({ label: "Console", url: options.consoleUrl, color });
+  if (options.mcpUrl) {
+    out += formatSurfaceBox({ label: "MCP", url: options.mcpUrl, color });
+  }
+  if (options.docsMcpUrl) {
+    out += formatSurfaceBox({ label: "Docs MCP", url: options.docsMcpUrl, color });
+  }
+  return out;
 }
 
 /**
@@ -499,6 +599,7 @@ export function formatDevHero(
     readonly appUrl: string;
     readonly consoleUrl: string;
     readonly mcpUrl: string;
+    readonly docsMcpUrl?: string;
   },
 ): string {
   const color = options.color ?? termColorEnabled();
@@ -511,9 +612,13 @@ export function formatDevHero(
     `\n${bar}\n` +
     formatDevHeroDetails({ ...options, color }) +
     `${bar}\n` +
-    formatAppReadyLine(options.appUrl, color) +
-    formatServiceLine("Console", options.consoleUrl, color) +
-    formatServiceLine("MCP", options.mcpUrl, color) +
+    formatBoundSurfaces({
+      appUrl: options.appUrl,
+      consoleUrl: options.consoleUrl,
+      mcpUrl: options.mcpUrl,
+      docsMcpUrl: options.docsMcpUrl,
+      color,
+    }) +
     formatDevLogSeparator(color)
   );
 }
@@ -767,25 +872,31 @@ export function formatStackSummary(options: {
 }): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const bar = `${s.dim}│${s.reset}`;
-  const pad = (label: string) => label.padEnd(8);
+  const nameWidth = heroNameWidth(["Docker", "app", ...options.services.map((svc) => svc.label)]);
+  const portWidth = Math.max(
+    6,
+    ...options.services.map((svc) => `:${svc.hostPort}`.length),
+  );
+  const pad = (label: string) => padHeroCol(label, nameWidth);
   const color = options.color ?? termColorEnabled();
   const lines: string[] = [
     `${s.dim}│${s.reset}`,
-    `${s.green}◇${s.reset}  ${s.bold}Docker${s.reset}     ${s.cyan}${options.project}${s.reset}`,
+    `${s.green}◇${s.reset}  ${s.bold}${pad("Docker")}${s.reset}  ${s.cyan}${options.project}${s.reset}`,
   ];
   for (const svc of options.services) {
     const detail = svc.detail?.trim();
     const status = svc.status ?? "pending";
     const dot = formatStatusDot(status, color);
+    const port = `:${svc.hostPort}`.padEnd(portWidth);
     lines.push(
-      `${bar}  ${dot} ${s.dim}${pad(svc.label)}${s.reset}  ${s.cyan}:${svc.hostPort}${s.reset}` +
+      `${bar}  ${dot}  ${s.dim}${pad(svc.label)}${s.reset}  ${s.cyan}${port}${s.reset}` +
         (detail ? `  ${s.dim}${detail}${s.reset}` : ""),
     );
   }
   const drivers = options.appDrivers ?? [];
   const appDetail = drivers.length > 0 ? `host Bun · ${drivers.join(" + ")}` : "host Bun";
   const appDot = formatStatusDot("ready", color);
-  lines.push(`${bar}  ${appDot} ${s.dim}${pad("app")}${s.reset}  ${s.dim}${appDetail}${s.reset}`);
+  lines.push(`${bar}  ${appDot}  ${s.dim}${pad("app")}${s.reset}  ${s.dim}${appDetail}${s.reset}`);
   lines.push(bar);
   return `${lines.join("\n")}\n`;
 }

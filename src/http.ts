@@ -8,7 +8,7 @@
  * ```ts
  * import { on, flow, http, gate, oke, createBunRuntime } from "okengine/http";
  *
- * on(http.get("/").gate.public, flow("ping", { do: () => "Hi" }));
+ * on(http.get("/").public(), flow("ping", { do: () => "Hi" }));
  * const app = oke({ name: "ping" });
  * createBunRuntime().serve(app);
  * ```
@@ -24,15 +24,32 @@ export { fail, type FlowFailure } from "./kernel/errors.ts";
 export { isFlowFailure } from "./kernel/hooks.ts";
 export { plugin, isPlugin, type PluginDef } from "./kernel/plugin.ts";
 export { createBunRuntime, APP_PORT, type Runtime, type ServeOptions } from "./runtime/index.ts";
-export type { OkeApp, OkeOptions, ReadyState } from "./kernel/app.ts";
+export type {
+  OkeApp,
+  OkeOptions,
+  ReadyState,
+  RegisteredFlowUnits,
+  RoutesFromRegisteredUnits,
+} from "./kernel/app.ts";
+export { registerFlowUnits } from "./kernel/flow-units.ts";
+export { stampFlowName, stampHttpPath } from "./kernel/stamp-http.ts";
 
-import { oke as okeCore, type OkeApp, type OkeOptions } from "./kernel/app.ts";
+import {
+  oke as okeCore,
+  type OkeApp,
+  type OkeOptions,
+  type RoutesFromRegisteredUnits,
+} from "./kernel/app.ts";
 
 /**
  * Create an HTTP-oriented app — defaults `router` to `"edge"` when omitted.
  *
  * @param options - Application options
  */
+export function oke(
+  options: OkeOptions & { readonly registry: "ignore" },
+): OkeApp<Record<string, never>, Record<string, never>>;
+export function oke(options: OkeOptions): OkeApp<{}, RoutesFromRegisteredUnits>;
 export function oke(options: OkeOptions): OkeApp {
   return okeCore({
     ...options,

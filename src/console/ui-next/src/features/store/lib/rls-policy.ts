@@ -2,6 +2,12 @@
  * Console helpers for RLS policy create (SQL preview + templates).
  */
 
+import type {
+  ColumnClassification,
+  DeclaredColumn,
+  Manifest,
+  Table,
+} from "../../../../../../manifest/types.ts";
 import {
   buildCreatePolicySql,
   buildRowSecuritySql,
@@ -14,6 +20,7 @@ import {
   type SqlPolicyCommand,
   type SqlPolicySpec,
 } from "../../../../../../drivers/pg-rls.ts";
+import { fkColumnStem } from "./schema-graph.ts";
 
 export { emitPgPolicySource, emitStoreSchemaPolicySource };
 
@@ -76,8 +83,7 @@ export const RLS_POLICY_TEMPLATES: readonly RlsPolicyTemplate[] = [
     title: "Enable read via a related table",
     detail: "SELECT with EXISTS against members — membership joins, not a column on this table.",
     command: "SELECT",
-    using:
-      "exists (select 1 from members m where m.user_id = oke.user() and m.team_id = team_id)",
+    using: "exists (select 1 from members m where m.user_id = oke.user() and m.team_id = team_id)",
   },
   {
     id: "insert-all",
@@ -296,6 +302,172 @@ export function rlsPolicyPreviewSql(spec: SqlPolicySpec, enableRls: boolean): st
   const create = formatCreatePolicyPreview(spec);
   if (!enableRls) return `${create};`;
   return `${buildRowSecuritySql(spec.table, true)};\n${create};`;
+}
+
+/** SQL names owner templates bind to, first match wins. */
+const OWNER_SQL_NAMES = [
+  "owner",
+  "owner_id",
+  "owner_email",
+  "user_id",
+  "created_by",
+  "creator",
+  "creator_id",
+  "creator_email",
+  "author",
+  "author_id",
+  "author_email",
+] as const;
+
+/** One Manifest column for the identity select (PK / FK / unique marks). */
+export type RlsTableColumn = {
+  readonly sqlName: string;
+  readonly primaryKey: boolean;
+  readonly foreignKey: boolean;
+  readonly unique: boolean;
+  /** FK inferred from `*_id` when Manifest omitted `.references()`. */
+  readonly inferred: boolean;
+};
+
+/**
+ * Manifest columns with PK / FK / unique marks (`sqlName`, else snake_case).
+ *
+ * @param manifest - Current Manifest, or null
+ * @param storeRef - Store effect ref (`sql:db`)
+ * @param table - Table name
+ */
+export function rlsTableColumns(
+  manifest: Manifest | null,
+  storeRef: string,
+  table: string,
+): readonly RlsTableColumn[] {
+  const cut = storeRef.indexOf(":");
+  const storeName = cut >= 0 ? storeRef.slice(cut + 1) : storeRef;
+  const cols = manifest?.stores?.[storeName]?.tables?.[table]?.columns ?? {};
+  return Object.entries(cols).map(([key, col]) => {
+    const sqlName = sqlNameOf(key, col);
+    const declared = isDeclaredColumn(col) ? col : null;
+    const primaryKey = declared?.primaryKey === true;
+    const declaredFk = declared?.references?.table !== undefined;
+    const inferred = !declaredFk && !primaryKey && fkColumnStem(sqlName) !== null;
+    return {
+      sqlName,
+      primaryKey,
+      foreignKey: declaredFk || inferred,
+      unique: declared?.unique === true && !primaryKey,
+      inferred,
+    };
+  });
+}
+
+/**
+ * SQL column names on a Manifest table (`sqlName`, else snake_case key).
+ *
+ * @param manifest - Current Manifest, or null
+ * @param storeRef - Store effect ref (`sql:db`)
+ * @param table - Table name
+ */
+export function rlsTableSqlColumns(
+  manifest: Manifest | null,
+  storeRef: string,
+  table: string,
+): readonly string[] {
+  return rlsTableColumns(manifest, storeRef, table).map((col) => col.sqlName);
+}
+
+function isDeclaredColumn(col: DeclaredColumn | ColumnClassification): col is DeclaredColumn {
+  return (
+    "type" in col ||
+    "nullable" in col ||
+    "primaryKey" in col ||
+    "unique" in col ||
+    "sqlName" in col ||
+    "description" in col ||
+    "references" in col ||
+    "default" in col
+  );
+}
+
+/**
+ * Best owner-like SQL column for owner templates, or null.
+ *
+ * @param sqlNames - Table SQL column names
+ */
+export function rlsOwnerColumn(sqlNames: readonly string[]): string | null {
+  const byLower = new Map(sqlNames.map((name) => [name.toLowerCase(), name]));
+  for (const name of OWNER_SQL_NAMES) {
+    const hit = byLower.get(name);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Replace the generic `owner` placeholder with the table's owner column.
+ *
+ * @param expr - USING / WITH CHECK body
+ * @param ownerCol - SQL column to bind
+ */
+export function rlsBindOwnerExpr(expr: string, ownerCol: string): string {
+  return expr.replace(/\bowner\b/g, ownerCol);
+}
+
+/**
+ * True when the expression still uses the unbound `owner` placeholder.
+ *
+ * @param expr - USING / WITH CHECK body
+ */
+export function rlsExprNeedsOwnerColumn(expr: string): boolean {
+  return /\bowner\b/.test(expr);
+}
+
+/**
+ * True when a template compares a row to `oke.user()` via `owner`.
+ *
+ * @param tpl - Policy template
+ */
+export function rlsTemplateUsesOwner(tpl: Pick<RlsPolicyTemplate, "using" | "withCheck">): boolean {
+  return rlsExprNeedsOwnerColumn(tpl.using ?? "") || rlsExprNeedsOwnerColumn(tpl.withCheck ?? "");
+}
+
+/**
+ * True when the expression is an owner / `oke.user()` identity check.
+ *
+ * @param expr - USING / WITH CHECK body
+ */
+export function rlsExprUsesUserIdentity(expr: string): boolean {
+  return rlsExprNeedsOwnerColumn(expr) || /oke\.user\(\)/.test(expr);
+}
+
+/**
+ * Rewrite `owner` or a previous identity column to `to`.
+ *
+ * @param expr - USING / WITH CHECK body
+ * @param from - Previous SQL column (or `owner`)
+ * @param to - Selected SQL column
+ */
+export function rlsRewriteIdentityColumn(expr: string, from: string, to: string): string {
+  if (!to || from === to) return expr;
+  let next = expr;
+  if (rlsExprNeedsOwnerColumn(next)) next = rlsBindOwnerExpr(next, to);
+  if (from !== "" && from !== "owner") {
+    next = next.replace(new RegExp(`\\b${escapeIdent(from)}\\b`, "g"), to);
+  }
+  return next;
+}
+
+function escapeIdent(name: string): string {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sqlNameOf(key: string, col: NonNullable<Table["columns"]>[string]): string {
+  if (col && typeof col === "object" && "sqlName" in col && typeof col.sqlName === "string") {
+    return col.sqlName;
+  }
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase();
 }
 
 function formatCreatePolicyPreview(spec: SqlPolicySpec): string {

@@ -227,7 +227,7 @@ describe("boot — HTTP gate wiring on the default path", () => {
     resetBindings();
     resetFlowSeq();
     on(
-      http.get("/ping").gate.public,
+      http.get("/ping").public(),
       flow("ping-public", {
         do: () => ({ ok: true }),
       }),

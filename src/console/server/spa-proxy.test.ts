@@ -61,6 +61,7 @@ describe("serveConsole spaProxy", () => {
     expect(html.status).toBe(200);
     expect(html.headers.get("content-security-policy")).toBe(CONSOLE_VITE_DEV_CSP);
     expect(html.headers.get("content-security-policy")).toContain("unsafe-inline");
+    expect(html.headers.get("content-security-policy")).toContain("frame-src 'self' blob:");
     expect(await html.text()).toContain("vite-spa");
 
     const client = await server.fetch(

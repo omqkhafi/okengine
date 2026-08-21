@@ -78,6 +78,10 @@ export interface TableProps<T> {
   readonly onDeleteColumn?: (columnKey: string, index: number) => void;
   /** Double-click a body row. */
   readonly onRowDoubleClick?: (row: T, id: string) => void;
+  /** Two-finger / right-click a body row (caller should `preventDefault`). */
+  readonly onRowContextMenu?: (row: T, id: string) => void;
+  /** Two-finger / right-click empty viewport (not a row). */
+  readonly onViewportContextMenu?: () => void;
   /** Controlled cell range (visible row index × column index). */
   readonly cellRange?: CellRange | null;
   /** Enables drag / Shift+click cell-range selection. */

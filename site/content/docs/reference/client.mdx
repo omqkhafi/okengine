@@ -5,7 +5,7 @@ icon: "MonitorSmartphone"
 source: "docs/spec/unified-theory.md"
 ---
 
-`okengine/client` is how a browser, CLI, or another service calls your app's flows. Adopt the unit, take `typeof app`, and `api.notes.get({ id })` is fully typed — same contracts the server already has, no separate schema project.
+`okengine/client` is how a browser, CLI, or another service calls your app's flows. Import the generated barrel, take `typeof app`, and `api.notes.get({ id })` is fully typed — same contracts the server already has, no separate schema project.
 
 <Callout title="The one rule">
   Treat every call as a result envelope: `{ data, error }`. Flow failures are values you switch on
@@ -21,19 +21,22 @@ source: "docs/spec/unified-theory.md"
 ### Adopt flows and export `App`
 
 ```typescript title="src/app.ts"
-import { oke } from "okengine";
-import * as main from "./flows/main";
+import "@/core";
+import "@/flows/generated";
+import { oke } from "okengine/http";
 
-export const app = oke({ name: "standard" }).adopt({ main });
+export const app = oke({ name: "notes" });
 export type App = typeof app;
 ```
+
+`.adopt({ notes })` is optional and additive.
 
 </Step>
 
 <Step>
 ### Create the client
 
-Same repo — pass the app value so HTTP triggers hit REST (method + path from adopt):
+Same repo — pass the app value so HTTP triggers hit REST (method + path from `$routes`):
 
 ```typescript title="client"
 import { createClient } from "okengine/client";
@@ -114,7 +117,7 @@ oke client add https://api.example.com --out ./types/oke-client.d.ts
 | Incomplete proxy path (`api.notes()` with no flow) | Result error: `Incomplete path: api.notes(…)`                                                                                                                  |
 
 ```typescript
-// REST — createClient(app, url) saw method/path from on(http.get("/notes/:id"), …)
+// REST — method/path from the bound HTTP trigger (file tree or explicit)
 await api.notes.get({ id: "n_1" }); // GET /notes/n_1
 
 // RPC — untriggered flow named notes.stats
@@ -214,7 +217,7 @@ core today: cookie jars or plugin `.client()` decorations. Browser apps: also se
 | --------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
 | [Flow](/docs/elements/flow)       | Direct        | `api.unit.flow(input)` — the only public surface                                        |
 | [Gate](/docs/elements/gate)       | Indirect      | Bearer via `auth`; denials as `Unauthorized` / `Forbidden` / `RateLimited`              |
-| [Store](/docs/elements/store)     | Via Flows     | `fx.store` inside Flows; `store.resource` + `on(http.resource…)` → five Flows you adopt |
+| [Store](/docs/elements/store)     | Via Flows     | `fx.store` inside Flows; `store.resource` + `on(http.resource…)` → five Flows on `$routes` |
 | [Signal](/docs/elements/signal)   | Via Flows     | Emit/consume server-side; no subscribe API on `okengine/client` yet                     |
 | [Clock](/docs/elements/clock)     | Via Flows     | Schedules fire on the server — the client never ticks a clock                           |
 | [Vault](/docs/elements/vault)     | Via Flows     | Secrets stay server-side; never ship them to the browser package                        |
@@ -227,7 +230,7 @@ Mount a resource, adopt the returned ops, then call the five Flows like any othe
 
 ```typescript
 const notesR = store.resource(db, notes, {/* in, out, list */});
-const mounted = on(http.resource("/notes", notesR.all()).gate.public.live());
+const mounted = on(http.resource("/notes", notesR.all()).public().live());
 // .adopt({ notes: mounted }) →
 const page = await api.notes.list({ limit: 20 });
 const more = await page.next();
@@ -280,9 +283,9 @@ Budget: the `./client` export stays under the measured client-runtime cap (hard 
 
 <Accordion title="api.main.health is not a function / type error">
 
-Confirm the flow is `export`ed from the module you `.adopt({ main })`, and that `createClient` is
-typed with that `App` (or ambient `Register` after `oke-client.d.ts` regenerates). Restart
-`oke dev` after renaming exports.
+Confirm the Flow is `export`ed from a generated unit (`import "@/flows/generated"` then `oke({ name })`), or from a module you still `.adopt({ main })`.
+
+Type `createClient` with that `App` (or ambient `Register` after `oke-client.d.ts` regenerates). Restart `oke dev` after renaming exports.
 
 </Accordion>
 
@@ -321,7 +324,8 @@ calls `api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no r
 
 ## Learn more
 
-- [Basic usage](/docs/get-started/basic-usage) — adopt → client → test loop
+- [Project structure](/docs/get-started/project-structure) — folders are the URL; `$routes` without `.adopt()`
+- [Basic usage](/docs/get-started/basic-usage) — generated barrel → client → test loop
 - [Gate](/docs/elements/gate) — policies, `gate.public`, denials
 - [Store](/docs/elements/store) — `store.resource` and list query language
 - [Flow](/docs/elements/flow) — `in` / `out` / `errors` and `fx.fail`

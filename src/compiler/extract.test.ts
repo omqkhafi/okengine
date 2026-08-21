@@ -495,6 +495,27 @@ export const remove = mounted.remove;
     expect(manifest.flows?.update?.live).toBeUndefined();
     expect(manifest.flows?.remove?.live).toBeUndefined();
   });
+
+  test("chains .public().live() onto the five verbs", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+const notesR = store.resource(db, {}, {});
+const mounted = on(http.resource("/notes", notesR.all()).public().live());
+
+export const list = mounted.list;
+export const create = mounted.create;
+export const get = mounted.get;
+export const update = mounted.update;
+export const remove = mounted.remove;
+`;
+    const manifest = await extractFromSources({ "src/flows/notes.ts": source });
+    expect(manifest.flows?.list?.gates).toEqual(["public"]);
+    expect(manifest.flows?.create?.gates).toEqual(["public"]);
+    expect(manifest.flows?.get?.live).toBe(true);
+    expect(manifest.flows?.create?.live).toBeUndefined();
+  });
 });
 
 describe("extractManifest — vault.config", () => {
@@ -539,7 +560,7 @@ import { on, flow, http, gate, store } from "okengine";
 export const files = store.files("uploads");
 
 export const attach = on(
-  http.post("/attach").gate.public,
+  http.post("/attach").public(),
   flow("notes.attach", {
     do: async (input, fx) => {
       await fx.store(files).put("key", input.text);
@@ -560,7 +581,7 @@ import { on, flow, http, gate, store } from "okengine";
 export const files = store.files("uploads");
 
 export const attach = on(
-  http.post("/attach").gate.public,
+  http.post("/attach").public(),
   flow("notes.attachImage", {
     do: async (input, fx) => {
       await fx.store(files).putImage("key", input.bytes);
@@ -636,7 +657,7 @@ import { on, flow, http, signal } from "okengine";
 export const notify = signal("notify", { delivery: "once" });
 
 export const failed = on(
-  http.get("/notifications/failed").gate.public,
+  http.get("/notifications/failed").public(),
   flow("notifications.failed", {
     do: async (input, fx) => fx.json.withQuery(await fx.deadLetters(notify), input),
   }),
@@ -659,7 +680,7 @@ export const noteCreatedMail = mail.template("note-created", {
 });
 
 export const onCreated = on(
-  http.post("/hook").gate.public,
+  http.post("/hook").public(),
   flow("notes.onCreated", {
     do: async (payload, fx) => {
       await fx.send(noteCreatedMail, { to: "you@localhost", data: payload });
@@ -682,7 +703,7 @@ const otp = channel.sms({});
 export const otpTemplate = otp.template("otp-code", {});
 
 export const send = on(
-  http.post("/otp").gate.public,
+  http.post("/otp").public(),
   flow("notes.sendOtp", {
     do: async (payload, fx) => {
       await fx.send(otpTemplate, { to: "+10000000000", data: payload });
@@ -765,8 +786,21 @@ export const decoy = flow("checkout.realName", {
   });
 });
 
-describe("extractManifest — .gate.public", () => {
-  test("reads the public sentinel from a member chain", async () => {
+describe("extractManifest — .public()", () => {
+  test("reads the public sentinel from .public()", async () => {
+    const source = `
+import { on, flow, http } from "okengine";
+
+export const health = on(
+  http.get("/health").public(),
+  flow("health.check", { do: () => ({ ok: true }) }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/health.ts": source });
+    expect(manifest.flows?.["health.check"]?.gates).toEqual(["public"]);
+  });
+
+  test("does not treat the removed .gate.public property as attach", async () => {
     const source = `
 import { on, flow, http } from "okengine";
 
@@ -776,7 +810,7 @@ export const health = on(
 );
 `;
     const manifest = await extractFromSources({ "src/flows/health.ts": source });
-    expect(manifest.flows?.["health.check"]?.gates).toEqual(["public"]);
+    expect(manifest.flows?.["health.check"]?.gates).toBeUndefined();
   });
 });
 
@@ -854,5 +888,74 @@ export const triage = on(
       tools: ["create_issue"],
     });
     expect(manifest.flows?.["support.triage"]?.effects?.calls).toEqual(["mcp:github/create_issue"]);
+  });
+});
+
+describe("extractManifest — file-tree stamps", () => {
+  test("pathless http.get() in notes/[id]/get.ts infers /notes/:id and notes.get", async () => {
+    const source = `
+import { on, flow, http } from "okengine";
+export const get = on(
+  http.get().public(),
+  flow({ do: (input) => input }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/notes/[id]/get.ts": source });
+    expect(manifest.flows?.["notes.get"]?.trigger).toEqual({
+      http: { method: "GET", path: "/notes/:id" },
+    });
+  });
+
+  test("nameless flow({ do }) still appears on the Manifest", async () => {
+    const source = `
+import { flow } from "okengine";
+export const ping = flow({ do: () => ({ ok: true }) });
+`;
+    const manifest = await extractFromSources({ "src/flows/notes/ping.ts": source });
+    expect(manifest.flows?.["notes.ping"]).toBeDefined();
+  });
+
+  test("effects are identical for the same do body in a tree file vs a barrel", async () => {
+    const doBody = `
+      const rows = await fx.store(db).select().from(notes);
+      await fx.emit(noteCreated, { id: "1" });
+      await fx.call("notes.ping");
+      return rows;
+    `;
+    const barrel = `
+import { on, flow, http, store, signal } from "okengine";
+export const db = store.sql("db");
+export const notes = { name: "notes" };
+export const noteCreated = signal("note-created");
+export const get = on(
+  http.get("/notes/:id").public(),
+  flow("notes.get", {
+    do: async (_input, fx) => {${doBody}},
+  }),
+);
+`;
+    const tree = `
+import { on, flow, http, store, signal } from "okengine";
+export const db = store.sql("db");
+export const notes = { name: "notes" };
+export const noteCreated = signal("note-created");
+export const get = on(
+  http.get().public(),
+  flow({
+    do: async (_input, fx) => {${doBody}},
+  }),
+);
+`;
+    const barrelManifest = await extractFromSources({ "src/flows/notes/index.ts": barrel });
+    const treeManifest = await extractFromSources({ "src/flows/notes/[id]/get.ts": tree });
+    const barrelFx = barrelManifest.flows?.["notes.get"]?.effects;
+    const treeFx = treeManifest.flows?.["notes.get"]?.effects;
+    expect(treeFx).toEqual(barrelFx);
+    expect(treeFx?.reads).toBeDefined();
+    expect(treeFx?.emits).toBeDefined();
+    expect(treeFx?.calls).toBeDefined();
+    expect(treeFx?.reads?.length).toBeGreaterThan(0);
+    expect(treeFx?.emits?.length).toBeGreaterThan(0);
+    expect(treeFx?.calls?.length).toBeGreaterThan(0);
   });
 });

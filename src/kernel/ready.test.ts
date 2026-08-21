@@ -38,7 +38,7 @@ describe("GET /_/ready", () => {
     });
     const bindings: Binding[] = [
       {
-        trigger: http.post("/charge").gate.public,
+        trigger: http.post("/charge").public(),
         flow: charge as AnyFlowDef,
       },
     ];
@@ -82,7 +82,7 @@ describe("GET /_oke/client.json", () => {
       startScheduler: false,
       env: "test",
       gate: { unguardedHttp: "allow" },
-      bindings: [{ trigger: http.get("/ping").gate.public, flow: ping as AnyFlowDef }],
+      bindings: [{ trigger: http.get("/ping").public(), flow: ping as AnyFlowDef }],
     });
     await app.boot();
     const res = await app.fetch(new Request("http://127.0.0.1/_oke/client.json"));

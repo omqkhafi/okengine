@@ -319,7 +319,7 @@ describe("interactive branches", () => {
       expect(config).not.toMatch(/^\s*sql:\s*\{/m);
       expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
       expect(existsSync(join(dir, "docker", "docker-compose.yml"))).toBe(true);
-      expect(existsSync(join(dir, "src", "flows", "notes", "index.ts"))).toBe(true);
+      expect(existsSync(join(dir, "src", "flows", "notes", "create.ts"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -336,9 +336,12 @@ describe("interactive branches", () => {
       });
       expect(code).toBe(0);
       expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
-      const notes = readFileSync(join(dir, "src", "flows", "notes", "index.ts"), "utf8");
-      expect(notes).toContain('flow("notes.digest"');
-      expect(notes).toContain('flow("notes.attach"');
+      expect(existsSync(join(dir, "src", "flows", "notes", "digest.ts"))).toBe(true);
+      expect(existsSync(join(dir, "src", "flows", "notes", "[id]", "attach.ts"))).toBe(true);
+      const digest = readFileSync(join(dir, "src", "flows", "notes", "digest.ts"), "utf8");
+      expect(digest).toContain("every(\"1d\")");
+      const attach = readFileSync(join(dir, "src", "flows", "notes", "[id]", "attach.ts"), "utf8");
+      expect(attach).toContain("export const attach");
       expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toMatch(
         /index:\s*\{\s*test:\s*"memory",\s*prod:\s*"meilisearch"/,
       );
@@ -668,7 +671,8 @@ describe("scaffold structure", () => {
         "src/locales/index.ts",
         "src/flows/main/shapes.ts",
         "src/flows/main/signals.ts",
-        "src/flows/notes/index.ts",
+        "src/flows/notes/create.ts",
+        "src/flows/notes/[id]/get.ts",
         "src/db/schema.decl.ts",
         "src/db/seed/index.ts",
         "src/app.ts",
@@ -676,10 +680,11 @@ describe("scaffold structure", () => {
       ]) {
         expect(result.files).toContain(path);
       }
-      const notes = readFileSync(join(result.targetDir, "src/flows/notes/index.ts"), "utf8");
-      expect(notes).toContain('flow("notes.create"');
-      expect(notes).toContain("fx.json.withQuery");
-      expect(notes).not.toContain('flow("notes.digest"');
+      const create = readFileSync(join(result.targetDir, "src/flows/notes/create.ts"), "utf8");
+      const list = readFileSync(join(result.targetDir, "src/flows/notes/list.ts"), "utf8");
+      expect(create).toContain("export const create");
+      expect(list).toContain("fx.json.withQuery");
+      expect(existsSync(join(result.targetDir, "src/flows/notes/digest.ts"))).toBe(false);
       expect(existsSync(join(result.targetDir, "src/locales/ar.ts"))).toBe(false);
       expect(readFileSync(join(result.targetDir, "oke.config.ts"), "utf8")).toContain(
         'locales: ["en"]',

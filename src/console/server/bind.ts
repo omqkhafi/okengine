@@ -10,7 +10,7 @@ import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 
 /**
  * Bind an HTTP trigger to a flow without registering on the global `on` list.
- * Attaches `.gate.public` or {@link consoleOperatorGate} when the trigger
+ * Attaches `.public()` or {@link consoleOperatorGate} when the trigger
  * has no declared auth posture yet.
  *
  * @param trigger - HTTP trigger
@@ -21,7 +21,7 @@ export function bindHttp(trigger: HttpTrigger, flowDef: AnyFlowDef): Binding {
     trigger.gates.length > 0
       ? trigger
       : PUBLIC_CONSOLE_FLOWS.has(flowDef.name)
-        ? trigger.gate.public
+        ? trigger.public()
         : trigger.gate(consoleOperatorGate);
   const normalized = normalizeTrigger(withPosture);
   const list = flowDef.triggers as Trigger[];

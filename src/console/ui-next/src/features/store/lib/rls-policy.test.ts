@@ -12,6 +12,14 @@ import {
   rlsPolicyCodeSource,
   rlsGatePredicateSql,
   rlsStoreGateActions,
+  rlsBindOwnerExpr,
+  rlsExprNeedsOwnerColumn,
+  rlsExprUsesUserIdentity,
+  rlsOwnerColumn,
+  rlsRewriteIdentityColumn,
+  rlsTableColumns,
+  rlsTableSqlColumns,
+  rlsTemplateUsesOwner,
 } from "./rls-policy.ts";
 
 describe("rlsPolicyPreviewSql", () => {
@@ -64,12 +72,12 @@ describe("RLS_POLICY_TEMPLATES", () => {
     expect(filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, "oke.gate").length).toBeGreaterThan(0);
     expect(filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, "owner").length).toBeGreaterThan(0);
     expect(filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, "missing")).toEqual([]);
-    expect(RLS_POLICY_TEMPLATES.some((tpl) => /\bcurrent_user\b/.test(`${tpl.using} ${tpl.withCheck}`))).toBe(
-      false,
-    );
-    expect(RLS_POLICY_TEMPLATES.some((tpl) => /oke\.user\(\)/.test(`${tpl.using} ${tpl.withCheck}`))).toBe(
-      true,
-    );
+    expect(
+      RLS_POLICY_TEMPLATES.some((tpl) => /\bcurrent_user\b/.test(`${tpl.using} ${tpl.withCheck}`)),
+    ).toBe(false);
+    expect(
+      RLS_POLICY_TEMPLATES.some((tpl) => /oke\.user\(\)/.test(`${tpl.using} ${tpl.withCheck}`)),
+    ).toBe(true);
   });
 });
 
@@ -103,6 +111,106 @@ describe("rlsPolicyPredicates", () => {
     expect(rlsPolicyPredicates("UPDATE")).toEqual({ using: true, withCheck: true });
     expect(rlsPolicyPredicates("DELETE")).toEqual({ using: true, withCheck: false });
     expect(rlsPolicyPredicates("ALL")).toEqual({ using: true, withCheck: true });
+  });
+});
+
+describe("rls owner column bind", () => {
+  test("picks creator_email when owner is missing", () => {
+    expect(rlsOwnerColumn(["id", "title", "creator_email"])).toBe("creator_email");
+    expect(rlsOwnerColumn(["id", "owner_email"])).toBe("owner_email");
+    expect(rlsOwnerColumn(["id", "title"])).toBeNull();
+    expect(rlsBindOwnerExpr("owner = oke.user()", "creator_email")).toBe(
+      "creator_email = oke.user()",
+    );
+    expect(rlsExprNeedsOwnerColumn("owner = oke.user()")).toBe(true);
+    expect(rlsExprNeedsOwnerColumn("creator_email = oke.user()")).toBe(false);
+  });
+
+  test("reads Manifest sqlName / snake_case keys", () => {
+    const cols = rlsTableSqlColumns(
+      {
+        oke: "1.0",
+        app: "keel",
+        stores: {
+          db: {
+            facet: "sql",
+            tables: {
+              tasks: {
+                columns: {
+                  creatorEmail: { type: "text", sqlName: "creator_email" },
+                  title: { type: "text" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "sql:db",
+      "tasks",
+    );
+    expect(cols).toEqual(["creator_email", "title"]);
+    expect(rlsOwnerColumn(cols)).toBe("creator_email");
+  });
+
+  test("marks PK / declared FK / inferred *_id", () => {
+    const cols = rlsTableColumns(
+      {
+        oke: "1.0",
+        app: "keel",
+        stores: {
+          db: {
+            facet: "sql",
+            tables: {
+              tasks: {
+                columns: {
+                  id: { type: "text", primaryKey: true, sqlName: "id" },
+                  identifier: { type: "text", unique: true, sqlName: "identifier" },
+                  spaceId: {
+                    type: "text",
+                    sqlName: "space_id",
+                    references: { table: "spaces", column: "id" },
+                  },
+                  parentId: { type: "text", sqlName: "parent_id" },
+                  title: { type: "text", sqlName: "title" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "sql:db",
+      "tasks",
+    );
+    expect(cols.find((c) => c.sqlName === "id")).toMatchObject({
+      primaryKey: true,
+      foreignKey: false,
+    });
+    expect(cols.find((c) => c.sqlName === "identifier")).toMatchObject({ unique: true });
+    expect(cols.find((c) => c.sqlName === "space_id")).toMatchObject({
+      foreignKey: true,
+      inferred: false,
+    });
+    expect(cols.find((c) => c.sqlName === "parent_id")).toMatchObject({
+      foreignKey: true,
+      inferred: true,
+    });
+    expect(cols.find((c) => c.sqlName === "title")).toMatchObject({
+      foreignKey: false,
+      primaryKey: false,
+    });
+  });
+
+  test("rewrites owner or a previous identity column", () => {
+    expect(rlsRewriteIdentityColumn("owner = oke.user()", "owner", "creator_email")).toBe(
+      "creator_email = oke.user()",
+    );
+    expect(
+      rlsRewriteIdentityColumn("creator_email = oke.user()", "creator_email", "owner_email"),
+    ).toBe("owner_email = oke.user()");
+    expect(rlsExprUsesUserIdentity("creator_email = oke.user()")).toBe(true);
+    expect(rlsExprUsesUserIdentity("true")).toBe(false);
+    expect(rlsTemplateUsesOwner({ using: "owner = oke.user()" })).toBe(true);
+    expect(rlsTemplateUsesOwner({ withCheck: "true" })).toBe(false);
   });
 });
 

@@ -63,6 +63,20 @@ describe("http.resource — gate / live", () => {
     expect(remove?.isLive).toBe(false);
   });
 
+  test(".public().live() stamps the sentinel on every verb", () => {
+    resetBindings();
+    resetFlowSeq();
+    on(http.resource("/notes", bag()).public().live());
+    expect(httpOf("/notes", "GET")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual([
+      "public",
+    ]);
+    expect(httpOf("/notes", "POST")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual([
+      "public",
+    ]);
+    expect(httpOf("/notes", "GET")?.isLive).toBe(true);
+    expect(httpOf("/notes", "POST")?.isLive).toBe(false);
+  });
+
   test(".live().gate(member) order does not matter", () => {
     resetBindings();
     resetFlowSeq();

@@ -131,7 +131,7 @@ A Flow **writes** all three tapes. `once` / `broadcast` **listen** with `on(sign
 
 ```typescript title="src/flows/orders/place.ts"
 export const placeOrder = on(
-  http.post("/orders").gate.public,
+  http.post("/orders").public(),
   flow("orders.place", {
     in: z.object({ id: z.string(), total: z.number() }),
     do: async (input, fx) => {
@@ -334,6 +334,7 @@ At-least-once: crash-after-claim reclaims when the lease expires, and a handler 
 
 ## Learn more
 
+- [Project structure](/docs/get-started/project-structure) — signal files get a name, never a URL; `http.get("/…")` still wins
 - [Flow](/docs/elements/flow) — `on(trigger, flow)` and `fx.emit`
 - [fx](/docs/reference/fx) — `fx.emit` and `fx.deadLetters`
 - [Clock](/docs/elements/clock) — scheduled and delayed work

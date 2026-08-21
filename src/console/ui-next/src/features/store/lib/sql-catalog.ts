@@ -3,6 +3,7 @@
  * extensions / RLS policies).
  */
 
+import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { StoreListChild } from "@/client.ts";
 
 /** Catalog kind on a SQL store child. */
@@ -62,6 +63,24 @@ export function isSqlPolicyChild(child: StoreListChild): boolean {
  */
 export function storeChildShowsRls(child: StoreListChild): boolean {
   return child.kind === "table" && typeof child.rls === "boolean";
+}
+
+/**
+ * Policy count for the resource-header RLS chip.
+ *
+ * Prefers the store-list stamp; falls back to Manifest `table.policies`.
+ *
+ * @param child - Store-list child
+ * @param manifest - Current Manifest, or null
+ * @param storeName - Manifest store key
+ */
+export function storeChildRlsPolicyCount(
+  child: StoreListChild,
+  manifest: Manifest | null,
+  storeName: string,
+): number {
+  if (typeof child.rlsPolicyCount === "number") return child.rlsPolicyCount;
+  return Object.keys(manifest?.stores?.[storeName]?.tables?.[child.name]?.policies ?? {}).length;
 }
 
 /**

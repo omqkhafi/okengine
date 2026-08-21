@@ -14,6 +14,8 @@ import {
   projectIndex,
   remindersKv,
   taskIndex,
+  viewPrefsKv,
+  webhooksKv,
 } from "@/core";
 import {
   activity,
@@ -67,6 +69,7 @@ import {
   FEATURED_TASK_TAGS,
   FEATURED_UPDATES,
   FEATURED_VIEWS,
+  FEATURED_WEBHOOKS,
 } from "./featured.ts";
 import { seedKeelVault } from "./vault.ts";
 import {
@@ -109,15 +112,24 @@ function payloadBytes(data: string | Uint8Array): number {
   return typeof data === "string" ? data.length : data.byteLength;
 }
 
-async function seedKv(fx: Fx, drafts: readonly SeedKvEntry[], reminders: readonly SeedKvEntry[]) {
-  const draftsHandle = fx.store(draftsKv);
-  for (const entry of drafts) {
-    await draftsHandle.set(entry.key, entry.value, entry.ttl);
+async function seedKvNamespace(
+  fx: Fx,
+  decl: typeof draftsKv,
+  entries: readonly SeedKvEntry[],
+): Promise<void> {
+  const handle = fx.store(decl);
+  for (const entry of entries) {
+    await handle.set(entry.key, entry.value, entry.ttl);
   }
-  const reminderHandle = fx.store(remindersKv);
-  for (const entry of reminders) {
-    await reminderHandle.set(entry.key, entry.value, entry.ttl);
-  }
+}
+
+function viewPrefEntries(
+  rows: ReadonlyArray<{ id: string; kind: string; projectId: string }>,
+): SeedKvEntry[] {
+  return rows.map((row) => ({
+    key: row.id,
+    value: { kind: row.kind, projectId: row.projectId },
+  }));
 }
 
 async function seedFiles(
@@ -217,11 +229,10 @@ async function volume(fx: Fx) {
     ...KEEL_VOLUME.files,
   ];
   await seedFiles(fx, allFiles);
-  await seedKv(
-    fx,
-    [...FEATURED_DRAFTS, ...KEEL_VOLUME.drafts],
-    [...FEATURED_REMINDERS, ...KEEL_VOLUME.reminders],
-  );
+  await seedKvNamespace(fx, draftsKv, [...FEATURED_DRAFTS, ...KEEL_VOLUME.drafts]);
+  await seedKvNamespace(fx, remindersKv, [...FEATURED_REMINDERS, ...KEEL_VOLUME.reminders]);
+  await seedKvNamespace(fx, viewPrefsKv, viewPrefEntries([...FEATURED_VIEWS, ...KEEL_VOLUME.views]));
+  await seedKvNamespace(fx, webhooksKv, FEATURED_WEBHOOKS);
   await seedIndex(fx, taskIndex, [...FEATURED_INDEX, ...KEEL_VOLUME.index]);
   await seedIndex(fx, documentIndex, [
     ...FEATURED_DOCUMENTS.map((row, i) =>

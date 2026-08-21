@@ -14,10 +14,19 @@
  * @module
  */
 
-export { oke, type OkeApp, type OkeOptions, type ReadyState } from "./kernel/app.ts";
+export {
+  oke,
+  type OkeApp,
+  type OkeOptions,
+  type ReadyState,
+  type RegisteredFlowUnits,
+  type RoutesFromRegisteredUnits,
+} from "./kernel/app.ts";
 export { on, type Binding } from "./kernel/on.ts";
 export { flow, isFlow, type FlowDef } from "./kernel/flow.ts";
 export { http, every, internal, table } from "./kernel/triggers.ts";
+export { registerFlowUnits } from "./kernel/flow-units.ts";
+export { stampFlowName, stampHttpPath } from "./kernel/stamp-http.ts";
 export { fail, type FlowFailure, type FlowErrorValue } from "./kernel/errors.ts";
 export { isFlowFailure } from "./kernel/hooks.ts";
 export { plugin, isPlugin, type PluginDef, type PluginCapabilities } from "./kernel/plugin.ts";

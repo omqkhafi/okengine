@@ -60,6 +60,7 @@ import { modChord, modShiftChord } from "@/lib/shortcut.ts";
 import { cn } from "@/lib/utils.ts";
 import { useStoreEdit } from "../data/use-store-edit.ts";
 import { JsonValueSheet } from "../detail/json-value-sheet.tsx";
+import { StoreRowDetailSheet } from "../detail/store-row-detail-sheet.tsx";
 import { RevealCell } from "../detail/reveal-cell.tsx";
 import { asInspectableJson, jsonValueEqual } from "../lib/json-value.ts";
 import { parseKvTtlDraft } from "../lib/kv-meta.ts";
@@ -135,11 +136,18 @@ export interface StoreDataGridProps {
   /** Gate identity for row DML (`oke.*` stamp). Catalog DDL ignores this. */
   readonly asGate?: string | null;
   readonly asUserId?: string | null;
+  /** Two-finger / right-click empty grid (Create policy / insert). */
+  readonly onViewportContextMenu?: () => void;
 }
 
 /** Row height presets (px) for the height menu. */
 const ROW_HEIGHTS = { short: 26, medium: 34, tall: 44, "extra-tall": 56 } as const;
 type RowHeight = keyof typeof ROW_HEIGHTS;
+
+/** Payload columns absorb leftover table width (SQL `comment`, KV `value`). */
+function isFillColumn(key: string): boolean {
+  return key === "comment" || key === "value";
+}
 
 /** Fixed column width (px) by cell variant. */
 function columnWidthPx(type: StoreGridColumn["type"], key: string): number {
@@ -236,6 +244,7 @@ export function StoreDataGrid({
   onDeleteRows,
   asGate = null,
   asUserId = null,
+  onViewportContextMenu,
 }: StoreDataGridProps): JSX.Element {
   const [findText, setFindText] = useState("");
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -255,6 +264,8 @@ export function StoreDataGrid({
     readonly rowId: string;
     readonly column: string;
   } | null>(null);
+  const [detailRow, setDetailRow] = useState<StoreGridRow | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(440);
@@ -765,8 +776,8 @@ export function StoreDataGrid({
         header: <StoreColumnHeader col={col} />,
         sortable: true,
         align: isNumericType(col.type) ? "right" : "left",
-        width: col.key === "comment" ? undefined : `${columnWidthPx(col.type, col.key)}px`,
-        fill: col.key === "comment",
+        width: isFillColumn(col.key) ? undefined : `${columnWidthPx(col.type, col.key)}px`,
+        fill: isFillColumn(col.key),
         sortValue: (row) => {
           const raw = overlayValue(row, col.key);
           if (typeof raw === "number") return raw;
@@ -1267,6 +1278,11 @@ export function StoreDataGrid({
                 }
               : undefined
           }
+          onRowContextMenu={(row) => {
+            setDetailRow(row);
+            setDetailOpen(true);
+          }}
+          onViewportContextMenu={onViewportContextMenu}
           cellRange={cellRange}
           onCellRangeChange={
             canInlineEdit
@@ -1346,6 +1362,28 @@ export function StoreDataGrid({
           existingKeys={model.rows.map((row) => row.id)}
         />
       ) : null}
+
+      <StoreRowDetailSheet
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        model={model}
+        row={detailRow ? (model.rows.find((row) => row.id === detailRow.id) ?? detailRow) : null}
+        facet={facet}
+        storeRef={storeRef}
+        childName={childName}
+        tenant={tenant}
+        masked={masked}
+        asGate={asGate}
+        asUserId={asUserId}
+        onDeleteRow={
+          onDeleteRows
+            ? (row) => {
+                setDetailOpen(false);
+                onDeleteRows([row]);
+              }
+            : undefined
+        }
+      />
 
       {inspect && inspectRow && inspectCol ? (
         <JsonValueSheet
@@ -1452,7 +1490,7 @@ export function StoreDataGrid({
           </span>
         ) : (
           <span className="ml-auto opacity-60">
-            Click to select · drag a range · click again or type to edit · Changes to review
+            Click to select · two-finger click opens sheet · drag a range · type to edit
           </span>
         )}
       </div>

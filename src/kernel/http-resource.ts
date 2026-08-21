@@ -3,6 +3,7 @@
  * apps do not pay for the five-verb CRUD helper.
  */
 
+import { GATE_PUBLIC_NAME } from "../elements/gate/flatten.ts";
 import {
   createGateAttach,
   createHttpTrigger,
@@ -47,6 +48,9 @@ export function httpResource<P extends string>(
       { trigger: verb("DELETE", id, false), flow: ops.remove },
     ],
     gate: createGateAttach((next) => httpResource(path, ops, next, isLive), gates),
+    public() {
+      return httpResource(path, ops, [...gates, GATE_PUBLIC_NAME], isLive);
+    },
     live() {
       return httpResource(path, ops, gates, true);
     },

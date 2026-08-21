@@ -7,6 +7,7 @@ import {
   FEATURED_SECTIONS,
   FEATURED_SPACES,
   FEATURED_TASKS,
+  FEATURED_VIEWS,
 } from "./featured.ts";
 import { GENERATED, generateKeelVolume, KEEL_SEED_COUNTS, KEEL_VOLUME } from "./volume.ts";
 
@@ -36,6 +37,8 @@ describe("keel volume seed", () => {
     expect(KEEL_VOLUME.tasks).toHaveLength(GENERATED.tasks);
     expect(KEEL_VOLUME.comments).toHaveLength(GENERATED.comments);
     expect(KEEL_VOLUME.drafts.length + KEEL_VOLUME.reminders.length).toBe(GENERATED.kvKeys);
+    expect(KEEL_SEED_COUNTS.viewPrefs).toBe(FEATURED_VIEWS.length + KEEL_VOLUME.views.length);
+    expect(KEEL_SEED_COUNTS.webhooks).toBeGreaterThan(0);
     expect(KEEL_VOLUME.files).toHaveLength(GENERATED.files);
     expect(KEEL_VOLUME.index).toHaveLength(GENERATED.index);
     expect(KEEL_SEED_COUNTS.indexDocuments).toBe(

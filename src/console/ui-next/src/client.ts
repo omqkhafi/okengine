@@ -726,6 +726,8 @@ export type StoreListChild = {
   readonly columnDescriptions: Readonly<Record<string, string>>;
   /** Live RLS when the engine reported `pg_class.relrowsecurity`. */
   readonly rls?: boolean;
+  /** Live + declared RLS policy count when the child is a SQL table. */
+  readonly rlsPolicyCount?: number;
 };
 
 /** One store row from `GET /console/store` (matches server `StoreListOut`). */

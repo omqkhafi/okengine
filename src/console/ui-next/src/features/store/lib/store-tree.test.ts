@@ -18,6 +18,7 @@ import {
   storeTreeIsOpen,
   storeTreeOpenKeys,
   isSingletonStoreLeaf,
+  resourceHeaderChildRef,
   storeTreeTablesKey,
   toggleHiddenFacet,
   visibleFacetBands,
@@ -141,6 +142,11 @@ describe("store-tree", () => {
     expect(isSingletonStoreLeaf(STORES[1]!)).toBe(false);
     expect(isSingletonStoreLeaf(STORES[0]!)).toBe(false);
     expect(storeTreeAncestorKeys(STORES, "index:comments")).toEqual(["facet:index"]);
+  });
+
+  test("resource header drops the child ref when it repeats the store", () => {
+    expect(resourceHeaderChildRef("kv:reminders", "kv:reminders")).toBeNull();
+    expect(resourceHeaderChildRef("sql:db", "sql:shipments")).toBe("sql:shipments");
   });
 
   test("ancestor keys open the facet, store, and Tables folder for a table", () => {

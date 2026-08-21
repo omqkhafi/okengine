@@ -86,9 +86,16 @@ export function assertCrossPlane(
 
 function inferFlowFromPath(path: string): string | undefined {
   // …/flows/bookings/create.ts → bookings.create
-  const m = /flows\/([^/]+)\/([^/]+)\.(ts|tsx|js)$/.exec(path.replace(/\\/g, "/"));
-  if (m) return `${m[1]}.${m[2]}`;
-  return undefined;
+  // …/flows/notes/[id]/get.ts → notes.get (never notes.id.get)
+  const posix = path.replace(/\\/g, "/");
+  const m = /(?:^|\/)flows\/([^/]+)\/(.+)\.(ts|tsx|js)$/.exec(posix);
+  if (!m) return undefined;
+  const unit = m[1]!;
+  const rest = m[2]!;
+  const leaf = rest.split("/").pop();
+  if (!leaf || leaf === "index" || leaf.startsWith("_")) return undefined;
+  if (leaf === "shapes" || leaf === "signals" || leaf.endsWith(".test")) return undefined;
+  return `${unit}.${leaf}`;
 }
 
 function inferPlaneFromSource(source: string): "user" | "operator" | undefined {

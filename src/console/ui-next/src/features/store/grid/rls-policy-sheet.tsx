@@ -17,6 +17,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AgentCode } from "@/components/agents/agent-code";
+import { EXPLORER_ICON_BUTTON_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { Input } from "@/components/ui/input";
 import {
   SHEET_CONTROL,
@@ -39,16 +40,19 @@ import {
 } from "@/components/motion/select.tsx";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Switch } from "@/components/motion/switch.tsx";
 import { LayoutGroup, motion, useReducedMotion } from "@/lib/motion.ts";
 import { SPRING_LAYOUT } from "@/lib/ease.ts";
 import { cn } from "@/lib/utils.ts";
+import { SchemaColumnMarks } from "../schema/schema-constraint-icon.tsx";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import { useGates } from "../data/use-gates.ts";
 import { useStoreEdit } from "../data/use-store-edit.ts";
@@ -70,13 +74,21 @@ import {
   parseSqlPolicySpec,
   RLS_POLICY_COMMANDS,
   RLS_POLICY_TEMPLATES,
+  rlsBindOwnerExpr,
   rlsCommandFromGateMode,
+  rlsExprNeedsOwnerColumn,
+  rlsExprUsesUserIdentity,
   rlsGateActionsForMode,
   rlsGateModeFromCommand,
+  rlsOwnerColumn,
   rlsPolicyPredicates,
   rlsPolicyPreviewSql,
   rlsPolicyCodeSource,
+  rlsRewriteIdentityColumn,
   rlsGatePredicateSql,
+  rlsTableColumns,
+  rlsTableSqlColumns,
+  rlsTemplateUsesOwner,
   type RlsGateMode,
   type RlsPolicyTemplate,
   type SqlPolicyBehavior,
@@ -121,6 +133,7 @@ export function RlsPolicySheet({
   const [name, setName] = useState("");
   const [dock, setDock] = useState<"sql" | "code">("sql");
   const [table, setTable] = useState(tables[0] ?? "");
+  const [identityCol, setIdentityCol] = useState("");
   const [command, setCommand] = useState<SqlPolicyCommand>("SELECT");
   const [behavior, setBehavior] = useState<SqlPolicyBehavior>("PERMISSIVE");
   const [using, setUsing] = useState("true");
@@ -138,6 +151,24 @@ export function RlsPolicySheet({
   );
   const gateMode = rlsGateModeFromCommand(command);
   const predicates = rlsPolicyPredicates(command);
+  const tableColumns = useMemo(
+    () => rlsTableColumns(manifest, storeRef, table),
+    [manifest, storeRef, table],
+  );
+  const sqlColumns = useMemo(() => tableColumns.map((col) => col.sqlName), [tableColumns]);
+  const suggestedCol = rlsOwnerColumn(sqlColumns);
+  const identityValue =
+    identityCol !== "" && sqlColumns.includes(identityCol) ? identityCol : (suggestedCol ?? "");
+  const ownerStyle =
+    (templateId !== null &&
+      rlsTemplateUsesOwner(RLS_POLICY_TEMPLATES.find((tpl) => tpl.id === templateId) ?? {})) ||
+    (predicates.using && rlsExprUsesUserIdentity(using)) ||
+    (predicates.withCheck && rlsExprUsesUserIdentity(withCheck));
+  const showIdentitySelect = sqlColumns.length > 0 && ownerStyle;
+  const ownerUnbound =
+    ((predicates.using && rlsExprNeedsOwnerColumn(using)) ||
+      (predicates.withCheck && rlsExprNeedsOwnerColumn(withCheck))) &&
+    identityValue === "";
   const catalog = useMemo(
     () => mergeRlsGateCatalog(rlsGateCatalog(manifest), gatesQuery.data ?? null),
     [manifest, gatesQuery.data],
@@ -167,14 +198,39 @@ export function RlsPolicySheet({
     }
   }, [name, table, command, behavior, predicates, using, withCheck, enableRls]);
 
+  const bindIdentity = (expr: string, col: string): string =>
+    col !== "" ? rlsBindOwnerExpr(expr, col) : expr;
+
   const applyTemplate = (tpl: RlsPolicyTemplate): void => {
+    const col = rlsTemplateUsesOwner(tpl) ? identityValue : "";
     setTemplateId(tpl.id);
     setName(tpl.name);
     setCommand(tpl.command);
     setBehavior(tpl.behavior ?? "PERMISSIVE");
     setSelectedActions((prev) => rlsSyncActionsForCommand(prev, tpl.command));
-    setUsing(tpl.using ?? "true");
-    setWithCheck(tpl.withCheck ?? "true");
+    setUsing(bindIdentity(tpl.using ?? "true", col));
+    setWithCheck(bindIdentity(tpl.withCheck ?? "true", col));
+    if (col !== "") setIdentityCol(col);
+  };
+
+  const setPolicyTable = (next: string): void => {
+    const nextCols = rlsTableSqlColumns(manifest, storeRef, next);
+    const nextCol =
+      (identityCol !== "" && nextCols.includes(identityCol) ? identityCol : null) ??
+      rlsOwnerColumn(nextCols) ??
+      "";
+    setTable(next);
+    setIdentityCol(nextCol);
+    const from = identityValue || "owner";
+    setUsing((prev) => rlsRewriteIdentityColumn(prev, from, nextCol));
+    setWithCheck((prev) => rlsRewriteIdentityColumn(prev, from, nextCol));
+  };
+
+  const setIdentityColumn = (next: string): void => {
+    const from = identityValue || "owner";
+    setIdentityCol(next);
+    setUsing((prev) => rlsRewriteIdentityColumn(prev, from, next));
+    setWithCheck((prev) => rlsRewriteIdentityColumn(prev, from, next));
   };
 
   const setGateMode = (next: RlsGateMode): void => {
@@ -201,6 +257,10 @@ export function RlsPolicySheet({
 
   const submit = async (): Promise<void> => {
     setError(null);
+    if (ownerUnbound) {
+      setError(`Pick a column on ${table} that stores the user id.`);
+      return;
+    }
     try {
       const spec = parseSqlPolicySpec({
         name,
@@ -244,6 +304,7 @@ export function RlsPolicySheet({
     >
       <SheetContent
         side="right"
+        showCloseButton={false}
         className="flex-col gap-0 overflow-hidden rounded-none bg-popover p-0 shadow-lg sm:flex-row sm:items-stretch data-[side=right]:w-auto data-[side=right]:max-w-[calc(100vw-1.5rem)] data-[side=right]:sm:max-w-none"
         data-slot="rls-policy-sheet"
       >
@@ -251,8 +312,8 @@ export function RlsPolicySheet({
           className="relative flex min-h-0 w-full flex-1 flex-col sm:w-[28rem] sm:flex-none"
           data-slot="rls-policy-form-sheet"
         >
-          <SheetHeader className="shrink-0 gap-2 border-b border-border/50">
-            <div className="flex items-start gap-3 pr-8">
+          <SheetHeader className="flex-row items-stretch gap-0 border-b border-border/60 p-0">
+            <div className="flex min-w-0 flex-1 items-start gap-3 p-4">
               <div className="flex size-9 items-center justify-center rounded-full border border-border/50 bg-muted/20">
                 <HugeiconsIcon icon={SecurityCheckIcon} className="size-4" aria-hidden />
               </div>
@@ -263,173 +324,229 @@ export function RlsPolicySheet({
                 </SheetDescription>
               </div>
             </div>
+            <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+            <SheetClose
+              className={cn(EXPLORER_ICON_BUTTON_CLASS, "min-w-11")}
+              data-slot="rls-policy-form-close"
+              aria-label="Close"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} className="size-4" aria-hidden />
+              <span className="sr-only">Close</span>
+            </SheetClose>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto" data-slot="rls-policy-form-scroll">
-            <div className="border-b border-border/50">
-              <div className="flex items-center justify-between gap-2 px-4 pt-2.5">
-                <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-                  Policy name
-                </p>
-                <SheetTextToggle
-                  active={templatesOpen}
-                  aria-expanded={templatesOpen}
-                  aria-controls={templatesOpen ? "rls-policy-templates-sheet" : undefined}
-                  onClick={() => setTemplatesOpen((open) => !open)}
-                >
-                  <HugeiconsIcon icon={LeftToRightListBulletIcon} className="size-3" aria-hidden />
-                  Templates
-                </SheetTextToggle>
+          <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
+            <ResizablePanel defaultSize="68%" minSize="28%" className="min-h-0">
+              <div className="h-full min-h-0 overflow-y-auto" data-slot="rls-policy-form-scroll">
+                <div className="border-b border-border/50">
+                  <div className="flex items-center justify-between gap-2 px-4 pt-2.5">
+                    <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                      Policy name
+                    </p>
+                    <SheetTextToggle
+                      active={templatesOpen}
+                      aria-expanded={templatesOpen}
+                      aria-controls={templatesOpen ? "rls-policy-templates-sheet" : undefined}
+                      onClick={() => setTemplatesOpen((open) => !open)}
+                    >
+                      <HugeiconsIcon
+                        icon={LeftToRightListBulletIcon}
+                        className="size-3"
+                        aria-hidden
+                      />
+                      Templates
+                    </SheetTextToggle>
+                  </div>
+                  <Input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="read_all"
+                    aria-label="Policy name"
+                    flat
+                    className={cn(SHEET_CONTROL, "font-mono")}
+                  />
+                </div>
+                <SheetPair>
+                  <SheetField label="Table" split="start">
+                    <Select value={table} onValueChange={setPolicyTable}>
+                      <SelectTrigger flat className={cn(SHEET_CONTROL, "font-mono")}>
+                        <SelectValue placeholder="Select a table" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tables.map((item) => (
+                          <SelectItem key={item} value={item} className="font-mono text-[12px]">
+                            {item}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SheetField>
+                  <SheetField label="Behavior" split="end">
+                    <Select
+                      value={behavior}
+                      onValueChange={(next) => setBehavior(next as SqlPolicyBehavior)}
+                    >
+                      <SelectTrigger flat className={SHEET_CONTROL}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PERMISSIVE">Permissive</SelectItem>
+                        <SelectItem value="RESTRICTIVE">Restrictive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </SheetField>
+                </SheetPair>
+                <SheetChapter label="Gate" hint="Who this policy pairs with" />
+                <GateSection
+                  advanced={advanced}
+                  onAdvancedChange={setAdvanced}
+                  mode={gateMode}
+                  onModeChange={setGateMode}
+                  catalog={catalog}
+                  query={gateQuery}
+                  onQueryChange={setGateQuery}
+                  selection={selection}
+                  onToggleGate={toggleGate}
+                />
+                {advanced || gateMode === "write" ? (
+                  <CommandRow
+                    commands={advanced ? RLS_POLICY_COMMANDS : WRITE_COMMANDS}
+                    value={command}
+                    onChange={setPolicyCommand}
+                  />
+                ) : null}
+                <SheetChapter
+                  label="Rows"
+                  hint={
+                    predicates.using && predicates.withCheck
+                      ? "Existing rows and new rows"
+                      : predicates.withCheck
+                        ? "New rows"
+                        : "Existing rows"
+                  }
+                />
+                {showIdentitySelect ? (
+                  <SheetField label="Column" hint="compared to oke.user()">
+                    <Select value={identityValue} onValueChange={setIdentityColumn}>
+                      <SelectTrigger
+                        flat
+                        className={cn(SHEET_CONTROL, "font-mono")}
+                        data-slot="rls-identity-column"
+                      >
+                        <SelectValue placeholder="Select a column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tableColumns.map((col) => (
+                          <SelectItem key={col.sqlName} value={col.sqlName}>
+                            <span className="flex min-w-0 items-center gap-2">
+                              <SchemaColumnMarks
+                                primaryKey={col.primaryKey}
+                                foreignKey={col.foreignKey}
+                                unique={col.unique}
+                                inferred={col.inferred}
+                              />
+                              <span className="min-w-0 truncate font-mono text-[12px]">
+                                {col.sqlName}
+                              </span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SheetField>
+                ) : null}
+                {predicates.using ? (
+                  <SheetField label="USING">
+                    <Input
+                      value={using}
+                      onChange={(event) => setUsing(event.target.value)}
+                      placeholder="true"
+                      flat
+                      className={cn(SHEET_CONTROL, "font-mono")}
+                    />
+                  </SheetField>
+                ) : null}
+                {predicates.withCheck ? (
+                  <SheetField label="WITH CHECK">
+                    <Input
+                      value={withCheck}
+                      onChange={(event) => setWithCheck(event.target.value)}
+                      placeholder="true"
+                      flat
+                      className={cn(SHEET_CONTROL, "font-mono")}
+                    />
+                  </SheetField>
+                ) : null}
               </div>
-              <Input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="read_all"
-                aria-label="Policy name"
-                flat
-                className={cn(SHEET_CONTROL, "font-mono")}
-              />
-            </div>
-            <SheetPair>
-              <SheetField label="Table" split="start">
-                <Select value={table} onValueChange={setTable}>
-                  <SelectTrigger flat className={cn(SHEET_CONTROL, "font-mono")}>
-                    <SelectValue placeholder="Select a table" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tables.map((item) => (
-                      <SelectItem key={item} value={item} className="font-mono text-[12px]">
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SheetField>
-              <SheetField label="Behavior" split="end">
-                <Select
-                  value={behavior}
-                  onValueChange={(next) => setBehavior(next as SqlPolicyBehavior)}
-                >
-                  <SelectTrigger flat className={SHEET_CONTROL}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PERMISSIVE">Permissive</SelectItem>
-                    <SelectItem value="RESTRICTIVE">Restrictive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SheetField>
-            </SheetPair>
-            <SheetChapter label="Gate" hint="Who this policy pairs with" />
-            <GateSection
-              advanced={advanced}
-              onAdvancedChange={setAdvanced}
-              mode={gateMode}
-              onModeChange={setGateMode}
-              catalog={catalog}
-              query={gateQuery}
-              onQueryChange={setGateQuery}
-              selection={selection}
-              onToggleGate={toggleGate}
-            />
-            {advanced || gateMode === "write" ? (
-              <CommandRow
-                commands={advanced ? RLS_POLICY_COMMANDS : WRITE_COMMANDS}
-                value={command}
-                onChange={setPolicyCommand}
-              />
-            ) : null}
-            <SheetChapter
-              label="Rows"
-              hint={
-                predicates.using && predicates.withCheck
-                  ? "Existing rows and new rows"
-                  : predicates.withCheck
-                    ? "New rows"
-                    : "Existing rows"
-              }
-            />
-            {predicates.using ? (
-              <SheetField label="USING">
-                <Input
-                  value={using}
-                  onChange={(event) => setUsing(event.target.value)}
-                  placeholder="true"
-                  flat
-                  className={cn(SHEET_CONTROL, "font-mono")}
-                />
-              </SheetField>
-            ) : null}
-            {predicates.withCheck ? (
-              <SheetField label="WITH CHECK">
-                <Input
-                  value={withCheck}
-                  onChange={(event) => setWithCheck(event.target.value)}
-                  placeholder="true"
-                  flat
-                  className={cn(SHEET_CONTROL, "font-mono")}
-                />
-              </SheetField>
-            ) : null}
-          </div>
-          <div
-            className="shrink-0 border-t border-border/50 bg-muted/15"
-            data-slot="rls-policy-sql-dock"
-          >
-            <div className="flex items-center justify-between gap-3 px-4 py-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={cn(
-                    "text-[10px] font-semibold tracking-[0.12em] uppercase",
-                    dock === "sql" ? "text-foreground" : "text-muted-foreground",
-                  )}
-                  onClick={() => setDock("sql")}
-                >
-                  SQL
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "text-[10px] font-semibold tracking-[0.12em] uppercase",
-                    dock === "code" ? "text-foreground" : "text-muted-foreground",
-                  )}
-                  onClick={() => setDock("code")}
-                >
-                  Code
-                </button>
+            </ResizablePanel>
+            <ResizableHandle withHandle data-slot="rls-policy-sql-handle" />
+            <ResizablePanel defaultSize="32%" minSize="16%" className="min-h-0">
+              <div
+                className="flex h-full min-h-0 flex-col bg-muted/15"
+                data-slot="rls-policy-sql-dock"
+              >
+                <div className="flex items-center justify-between gap-3 px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "text-[10px] font-semibold tracking-[0.12em] uppercase",
+                        dock === "sql" ? "text-foreground" : "text-muted-foreground",
+                      )}
+                      onClick={() => setDock("sql")}
+                    >
+                      SQL
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "text-[10px] font-semibold tracking-[0.12em] uppercase",
+                        dock === "code" ? "text-foreground" : "text-muted-foreground",
+                      )}
+                      onClick={() => setDock("code")}
+                    >
+                      Code
+                    </button>
+                  </div>
+                  <label className="inline-flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground">Enable RLS</span>
+                    <Switch
+                      size="sm"
+                      checked={enableRls}
+                      onCheckedChange={setEnableRls}
+                      ariaLabel="Enable RLS on this table"
+                    />
+                  </label>
+                </div>
+                {preview ? (
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+                    <AgentCode
+                      code={dock === "sql" ? preview.sql : preview.code}
+                      language={dock === "sql" ? "sql" : "typescript"}
+                      className="overflow-visible whitespace-pre-wrap break-words text-[11px] leading-relaxed"
+                    />
+                  </div>
+                ) : (
+                  <p className="min-h-0 flex-1 px-4 pb-3 text-[11px] text-muted-foreground">
+                    Fill name, table, and an expression.
+                  </p>
+                )}
+                {ownerUnbound ? (
+                  <SheetError slot="rls-owner-missing">
+                    Pick a column on {table} — this table has no owner / owner_email / creator_email
+                    guess.
+                  </SheetError>
+                ) : null}
+                {error ? <SheetError>{error}</SheetError> : null}
               </div>
-              <label className="inline-flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground">Enable RLS</span>
-                <Switch
-                  size="sm"
-                  checked={enableRls}
-                  onCheckedChange={setEnableRls}
-                  ariaLabel="Enable RLS on this table"
-                />
-              </label>
-            </div>
-            {preview ? (
-              <div className="max-h-28 overflow-y-auto px-4 pb-3">
-                <AgentCode
-                  code={dock === "sql" ? preview.sql : preview.code}
-                  language={dock === "sql" ? "sql" : "typescript"}
-                  className="overflow-visible whitespace-pre-wrap break-words text-[11px] leading-relaxed"
-                />
-              </div>
-            ) : (
-              <p className="px-4 pb-3 text-[11px] text-muted-foreground">
-                Fill name, table, and an expression.
-              </p>
-            )}
-            {error ? <SheetError>{error}</SheetError> : null}
-          </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
           <SheetFooter>
             <SheetFooterButton split onClick={() => onOpenChange(false)}>
               Cancel
             </SheetFooterButton>
             <SheetFooterButton
               variant="default"
-              disabled={edit.isPending || !preview}
+              disabled={edit.isPending || !preview || ownerUnbound}
               onClick={() => void submit()}
             >
               {edit.isPending ? "Creating…" : "Create policy"}
@@ -447,6 +564,7 @@ export function RlsPolicySheet({
               onQueryChange={setTemplateQuery}
               selectedId={templateId}
               onSelect={applyTemplate}
+              onClose={() => setTemplatesOpen(false)}
             />
           </aside>
         ) : null}
@@ -468,34 +586,48 @@ function PolicyTemplateLibrary({
   onQueryChange,
   selectedId,
   onSelect,
+  onClose,
 }: {
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
   readonly selectedId: string | null;
   readonly onSelect: (tpl: RlsPolicyTemplate) => void;
+  readonly onClose: () => void;
 }): JSX.Element {
   const visible = filterRlsPolicyTemplates(RLS_POLICY_TEMPLATES, query);
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-slot="rls-policy-templates">
-      <div className="shrink-0 border-b border-border/50">
-        <p className="px-3 pt-2.5 pr-10 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Templates
-        </p>
-        <label className="relative block">
-          <HugeiconsIcon
-            icon={Search01Icon}
-            className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search templates"
-            aria-label="Search templates"
-            flat
-            className={cn(SHEET_SEARCH, "font-mono")}
-          />
-        </label>
+      <div className="flex shrink-0 items-stretch border-b border-border/60">
+        <div className="min-w-0 flex-1">
+          <p className="px-3 pt-2.5 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+            Templates
+          </p>
+          <label className="relative block">
+            <HugeiconsIcon
+              icon={Search01Icon}
+              className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search templates"
+              aria-label="Search templates"
+              flat
+              className={cn(SHEET_SEARCH, "font-mono")}
+            />
+          </label>
+        </div>
+        <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+        <button
+          type="button"
+          className={cn(EXPLORER_ICON_BUTTON_CLASS, "min-w-11")}
+          onClick={onClose}
+          aria-label="Close templates"
+          data-slot="rls-policy-templates-close"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} className="size-4" aria-hidden />
+        </button>
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto p-2">
         {visible.length === 0 ? (

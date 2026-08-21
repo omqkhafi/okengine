@@ -83,12 +83,12 @@ describe("fx.json.stream HTTP SSE", () => {
   test("encodes token chunks as SSE and leaves JSON flows buffered", async () => {
     const smart = ai.model("smart");
     on(
-      http.get("/chat").gate.public,
+      http.get("/chat").public(),
       flow("chat.stream", {
         do: (_input, fx) => fx.json.stream(fx.stream(smart, { prompt: "hi" })),
       }),
     );
-    on(http.get("/ping").gate.public, flow("ping", { do: () => ({ ok: true as const }) }));
+    on(http.get("/ping").public(), flow("ping", { do: () => ({ ok: true as const }) }));
 
     const app = oke({
       name: "http-stream",
@@ -111,7 +111,7 @@ describe("fx.json.stream HTTP SSE", () => {
     let providerAborted = false;
     const smart = ai.model("smart");
     on(
-      http.get("/slow").gate.public,
+      http.get("/slow").public(),
       flow("chat.slow", {
         do: (_input, fx) => fx.json.stream(fx.stream(smart, { prompt: "long" })),
       }),
@@ -139,7 +139,7 @@ describe("fx.json.stream HTTP SSE", () => {
     await runs.open();
     const smart = ai.model("smart");
     on(
-      http.get("/chat").gate.public,
+      http.get("/chat").public(),
       flow("chat.stream", {
         do: (_input, fx) => fx.json.stream(fx.stream(smart, { prompt: "hi" })),
       }),

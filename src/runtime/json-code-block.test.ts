@@ -255,7 +255,7 @@ describe("httpGetNavPaths", () => {
 describe("asBrowserJsonCodeBlock — HTTP", () => {
   test("Chrome GET / becomes the code block; curl stays JSON", async () => {
     on(
-      http.get("/").gate.public,
+      http.get("/").public(),
       flow("main.root", {
         do: () => ({ ok: true as const, app: "keel" }),
       }),
@@ -286,7 +286,7 @@ describe("asBrowserJsonCodeBlock — HTTP", () => {
   });
 
   test("?raw=1 stays on the traces page; format=json and Accept stay the envelope", async () => {
-    on(http.get("/health").gate.public, flow("main.health", { do: () => ({ ok: true as const }) }));
+    on(http.get("/health").public(), flow("main.health", { do: () => ({ ok: true as const }) }));
     const app = oke({ autoBoot: false, name: "keel" });
 
     const raw = await app.fetch(

@@ -1431,6 +1431,7 @@ const StoreListOut = z.object({
           piiColumns: z.array(z.string()),
           columnDescriptions: z.record(z.string(), z.string()),
           rls: z.boolean().optional(),
+          rlsPolicyCount: z.number().int().nonnegative().optional(),
         }),
       ),
       replicaLagMs: z.number().nullable(),
@@ -2842,7 +2843,9 @@ function createStoreList(state: ConsoleState) {
 function consoleStoreRls(
   state: ConsoleState,
   input: { readonly asGate?: string; readonly asUserId?: string },
-): { readonly ok: true; readonly rls: RlsIdentity | null } | { readonly ok: false; readonly reason: string } {
+):
+  | { readonly ok: true; readonly rls: RlsIdentity | null }
+  | { readonly ok: false; readonly reason: string } {
   if (input.asGate !== undefined && !isKnownConsoleSqlGate(state.manifest, input.asGate)) {
     return { ok: false, reason: `unknown gate: ${input.asGate}` };
   }

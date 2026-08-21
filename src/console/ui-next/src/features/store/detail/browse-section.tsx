@@ -608,6 +608,21 @@ export function BrowseSection({
             onDeleteRows={
               authReadOnly || extensionCatalog ? undefined : (rows) => setDeleting(rows)
             }
+            onViewportContextMenu={
+              store.ref === "sql:oke_console"
+                ? undefined
+                : policyCatalog
+                  ? () => setPolicyOpen(true)
+                  : functionCatalog
+                    ? () => setFunctionOpen(true)
+                    : indexCatalog
+                      ? () => setIndexOpen(true)
+                      : triggerCatalog
+                        ? () => setTriggerOpen(true)
+                        : store.facet === "sql" && !isSqlCatalogChild(child)
+                          ? () => setInsertOpen(true)
+                          : undefined
+            }
           />
         </div>
       ) : null}

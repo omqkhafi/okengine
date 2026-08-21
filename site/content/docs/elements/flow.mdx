@@ -112,6 +112,8 @@ Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); 
 
 `http.get` · `http.post` · `http.put` · `http.patch` · `http.delete` · `http.head` · `http.options` · `http.query`. QUERY (RFC 10008) is a safe, idempotent read with a JSON body.
 
+`http.get()` with no path is filled from the file tree (`flows/notes/[id]/get.ts` → `/notes/:id`). `flow({ do })` is named `unit.export`. Explicit `http.get("/me/tasks")` and `flow("notes.get")` still win. Folder conventions live on [Project structure](/docs/get-started/project-structure).
+
 `Content-Type: application/json` is required — missing → **400** `InvalidQuery`, anything else → **415** `UnsupportedMediaType` with `Accept-Query: "application/json"`. Invalid JSON is **400** (no sniffing). Responses advertise `Accept-Query`. okengine does not assign `Location` / `Content-Location` result URIs.
 
 A browser `GET` (`Accept` prefers `text/html`) paints the `{ data, error }` envelope in traces chrome — status, latency, and cache, Routes rail (static GET links), copy, line numbers, Pretty / Raw, Console on **6533**. `curl`, `Accept: application/json`, and `?format=json` stay JSON.
@@ -369,6 +371,7 @@ a **hit**. A matching write turns the next read into a miss.
 
 ## Learn more
 
+- [Project structure](/docs/get-started/project-structure) — folders are the URL; `unit.export` is the name
 - [fx](/docs/reference/fx) — full `fx` surface, including ICU `fx.t` / `fx.locale`
 - [Signal](/docs/elements/signal) — delivery physics (`once` · `broadcast` · `live`)
 - [Clock](/docs/elements/clock) — schedules and durable sleep

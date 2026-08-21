@@ -55,6 +55,7 @@ import {
   dropSqlPolicy,
   applySqlTableRls,
   listSqlCatalog,
+  listSqlTablePolicyCounts,
   listSqlTableRls,
   setSqlExtension,
   setSqlRowSecurity,
@@ -108,6 +109,8 @@ export interface ConsoleStoreChild {
   readonly columnDescriptions: Readonly<Record<string, string>>;
   /** Live RLS (`pg_class.relrowsecurity`) when the engine can report it. */
   readonly rls?: boolean;
+  /** Live + declared RLS policy count when the child is a SQL table. */
+  readonly rlsPolicyCount?: number;
 }
 
 /** One row in `console.store.list`. */
@@ -296,14 +299,16 @@ async function withSqlTableRls(
   tables?: NonNullable<Manifest["stores"]>[string]["tables"],
 ): Promise<readonly ConsoleStoreChild[]> {
   const declared = declaredTableRls(tables);
+  const declaredCounts = declaredTablePolicyCounts(tables);
   if (facet !== "sql" || runtime === null) {
-    return applySqlTableRls(children, new Map(), declared);
+    return applySqlTableRls(children, new Map(), declared, declaredCounts);
   }
   try {
     const sql = (await runtime.openRef(ref, { effects: { reads: [ref] } })) as SqlStoreHandle;
-    return applySqlTableRls(children, await listSqlTableRls(sql), declared);
+    const policyCounts = mergePolicyCounts(await listSqlTablePolicyCounts(sql), declaredCounts);
+    return applySqlTableRls(children, await listSqlTableRls(sql), declared, policyCounts);
   } catch {
-    return applySqlTableRls(children, new Map(), declared);
+    return applySqlTableRls(children, new Map(), declared, declaredCounts);
   }
 }
 
@@ -315,6 +320,28 @@ function declaredTableRls(
     if (table.rls === true || Object.keys(table.policies ?? {}).length > 0) {
       out.set(name, true);
     }
+  }
+  return out;
+}
+
+function declaredTablePolicyCounts(
+  tables: NonNullable<Manifest["stores"]>[string]["tables"] | undefined,
+): ReadonlyMap<string, number> {
+  const out = new Map<string, number>();
+  for (const [name, table] of Object.entries(tables ?? {})) {
+    const n = Object.keys(table.policies ?? {}).length;
+    if (n > 0) out.set(name, n);
+  }
+  return out;
+}
+
+function mergePolicyCounts(
+  live: ReadonlyMap<string, number>,
+  declared: ReadonlyMap<string, number>,
+): Map<string, number> {
+  const out = new Map(declared);
+  for (const [name, n] of live) {
+    out.set(name, Math.max(n, out.get(name) ?? 0));
   }
   return out;
 }
@@ -882,7 +909,12 @@ export async function editStore(
     }
   }
 
-  const appliedRls = await applyEdit(runtime, input, { revealPii: false, persistMeta: true }, manifest);
+  const appliedRls = await applyEdit(
+    runtime,
+    input,
+    { revealPii: false, persistMeta: true },
+    manifest,
+  );
   // Direct edit: invalidate cache for written resource (effects-derived).
   runtime.onWriteEffects({ writes: [effectRef] });
   void options.production;

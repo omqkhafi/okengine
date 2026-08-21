@@ -70,7 +70,7 @@ export interface GateRuntime {
  */
 export function createGateRuntime(options: CreateGateRuntimeOptions = {}): GateRuntime {
   const map = new Map<string, GateDecl>();
-  // Built-in sentinel — `.gate.public` works without listing it in `oke({ gates })`.
+  // Built-in sentinel — `.public()` works without listing it in `oke({ gates })`.
   map.set(gate.public.name, gate.public);
   for (const g of options.gates ?? []) {
     if (isGateAllDecl(g)) {

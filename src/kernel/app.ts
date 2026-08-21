@@ -14,6 +14,7 @@ import {
   accumulateAdoptArgs,
   type AppRouteMap,
   type RoutesFromAdoptArgs,
+  type RoutesFromNamespace,
   type RuntimeRouteMap,
 } from "./adopt-routes.ts";
 // `./boot.ts` pulls in every element + driver module (vault, store, signal,
@@ -59,7 +60,8 @@ import {
 } from "../runtime/dev-request-log.ts";
 import { asBrowserJsonCodeBlock, httpNavGroups } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
-import { fail } from "./errors.ts";
+import { fail, throwOke } from "./errors.ts";
+import { consumeRegisteredFlowUnits, type FlowUnitBag } from "./flow-units.ts";
 import {
   isFlowFailure,
   mergeHooks,
@@ -121,6 +123,7 @@ import {
   type RouterPreset,
   type SmartRouter,
 } from "./router.ts";
+import { isPendingHttpPath } from "./http-path-pending.ts";
 import type {
   CdcTrigger,
   EveryTrigger,
@@ -301,6 +304,21 @@ export interface UnitHooks<D extends Record<string, unknown> = {}> {
    */
   plug<P extends PluginDef>(pluginDef: P): UnitHooks<AccumulateDecorations<D, P>>;
 }
+
+/**
+ * Module-augmentation slot filled by `src/flows/generated.ts`.
+ * Kernel tests do not import an app generated file, so this stays `{}`.
+ */
+export interface RegisteredFlowUnits {}
+
+/**
+ * `$routes` derived from {@link RegisteredFlowUnits} after `import generated`.
+ *
+ * @typeParam U - Augmented unit map
+ */
+export type RoutesFromRegisteredUnits<U = RegisteredFlowUnits> = {
+  [K in keyof U]: U[K] extends Record<string, unknown> ? RoutesFromNamespace<U[K]> : never;
+};
 
 /**
  * Application instance — adopts flows, routes HTTP, runs the pipeline.
@@ -568,10 +586,56 @@ function mergeAiOptions(
 }
 
 /**
+ * Refuse an unresolved path sentinel or a nameless HTTP flow.
+ *
+ * @param binding - HTTP binding
+ */
+function assertHttpBindingReady(binding: Binding): void {
+  const trigger = binding.trigger;
+  if (trigger.kind !== "http") return;
+  if (isPendingHttpPath(trigger.path)) {
+    throwOke("HTTP_PATH_UNRESOLVED", {
+      flow: binding.flow.name || "(unnamed)",
+      method: trigger.method,
+    });
+  }
+  if (!binding.flow.name || binding.flow.name.startsWith("flow_")) {
+    throwOke("HTTP_FLOW_UNNAMED", {
+      method: trigger.method,
+      path: trigger.path,
+    });
+  }
+}
+
+/**
+ * Fold `generated.ts` units into `$routes` and `flowsByName`.
+ *
+ * @param units - Drained {@link registerFlowUnits} bag
+ * @param routes - Runtime `$routes`
+ * @param registerFlow - App flow index
+ */
+function drainGeneratedUnits(
+  units: Record<string, FlowUnitBag>,
+  routes: RuntimeRouteMap,
+  registerFlow: (flowDef: AnyFlowDef) => void,
+): void {
+  if (Object.keys(units).length === 0) return;
+  const flows = accumulateAdoptArgs([units], routes);
+  for (const flowDef of flows) {
+    registerFlow(flowDef);
+  }
+}
+
+/**
  * Create an application. Adopts bindings registered via {@link on}.
+ * Drains {@link registerFlowUnits} into `$routes` unless `registry: "ignore"`.
  *
  * @param options - App name and router preset
  */
+export function oke(
+  options: OkeOptions & { readonly registry: "ignore" },
+): OkeApp<Record<string, never>, Record<string, never>>;
+export function oke(options: OkeOptions): OkeApp<{}, RoutesFromRegisteredUnits>;
 export function oke(options: OkeOptions): OkeApp {
   const aot = options.aot !== false;
   const registry = options.registry ?? "consume";
@@ -724,8 +788,19 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   const smart = createRouter<Binding>(options.router ?? "default");
+  const seenHttpRoutes = new Set<string>();
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
+      assertHttpBindingReady(b);
+      const key = `${b.trigger.method} ${b.trigger.path}`;
+      if (seenHttpRoutes.has(key)) {
+        throwOke("HTTP_ROUTE_DUPLICATE", {
+          method: b.trigger.method,
+          path: b.trigger.path,
+          flow: b.flow.name || "(unnamed)",
+        });
+      }
+      seenHttpRoutes.add(key);
       smart.add(b.trigger.method, b.trigger.path, b);
       compiled.set(b, compileHttpBinding(b, aot));
     }
@@ -738,6 +813,16 @@ export function oke(options: OkeOptions): OkeApp {
     adopted.push(b);
     registerFlow(b.flow);
     if (b.trigger.kind === "http") {
+      assertHttpBindingReady(b);
+      const key = `${b.trigger.method} ${b.trigger.path}`;
+      if (seenHttpRoutes.has(key)) {
+        throwOke("HTTP_ROUTE_DUPLICATE", {
+          method: b.trigger.method,
+          path: b.trigger.path,
+          flow: b.flow.name || "(unnamed)",
+        });
+      }
+      seenHttpRoutes.add(key);
       smart.add(b.trigger.method, b.trigger.path, b);
       compiled.set(b, compileHttpBinding(b, aot));
     }
@@ -809,6 +894,11 @@ export function oke(options: OkeOptions): OkeApp {
 
   for (const b of adopted) {
     registerFlow(b.flow);
+  }
+
+  if (registry !== "ignore") {
+    const generatedUnits = consumeRegisteredFlowUnits();
+    drainGeneratedUnits(generatedUnits, routes, registerFlow);
   }
 
   // --- boot (vault → store → signal → clock → channel → AI → runs → caps) ---

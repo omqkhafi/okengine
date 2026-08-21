@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   formatAppReadyLine,
   formatBootWarn,
+  formatBoundSurfaces,
   formatClaimNote,
   formatDevNote,
   formatCliChrome,
@@ -14,6 +15,7 @@ import {
   formatDevLogSeparator,
   formatOkeWordmark,
   formatServiceLine,
+  formatSurfaceBox,
   formatRequestLine,
   formatStackSummary,
   countTermLines,
@@ -61,8 +63,8 @@ describe("term", () => {
     expect(out).toContain("elements");
     expect(out).toContain("store");
     expect(out).toContain("postgres");
-    expect(out).toContain("● flow");
-    expect(out).toContain("● ai");
+    expect(out).toContain("●  flow");
+    expect(out).toContain("●  ai");
     expect(out).toContain("Starting");
     expect(out).not.toContain("Ready");
     expect(out).not.toContain("on(Trigger)");
@@ -134,6 +136,7 @@ describe("term", () => {
       appUrl: "http://127.0.0.1:6530",
       consoleUrl: "http://127.0.0.1:6533",
       mcpUrl: "http://127.0.0.1:6535",
+      docsMcpUrl: "http://127.0.0.1:6536",
       profile: "local",
       runtimeEnv: "local",
       system: "darwin 25.4.0 · bun 1.3.14",
@@ -145,9 +148,36 @@ describe("term", () => {
     expect(out).toContain("Backend");
     expect(out).toContain("Console");
     expect(out).toContain("MCP");
+    expect(out).toContain("Docs MCP");
     expect(out).toContain("http://127.0.0.1:6530");
+    expect(out).toContain("Your flows, served from the Manifest.");
     expect(out).toContain("└");
     expect(out).toContain("Logs");
+  });
+
+  test("formatSurfaceBox prints url and purpose", () => {
+    const out = formatSurfaceBox({
+      label: "Backend",
+      url: "http://127.0.0.1:6530",
+      color: false,
+    });
+    expect(out).toContain("Backend");
+    expect(out).toContain("http://127.0.0.1:6530");
+    expect(out).toContain("Your flows, served from the Manifest.");
+    expect(out).toMatch(/● {2}Backend\n│ {2}http:\/\/127\.0\.0\.1:6530\n│ {2}Your flows/);
+  });
+
+  test("formatBoundSurfaces skips unbound MCP and Docs MCP", () => {
+    const out = formatBoundSurfaces({
+      appUrl: "http://127.0.0.1:6530",
+      consoleUrl: "http://127.0.0.1:6533",
+      color: false,
+    });
+    expect(out).toContain("Backend");
+    expect(out).toContain("Console");
+    expect(out).toContain("Panels, traces, and the effect graph.");
+    expect(out).not.toContain("Docs MCP");
+    expect(out).not.toContain("The same Manifest, for agents.");
   });
 
   test("formatDevLogSeparator closes hero and titles Logs", () => {
@@ -280,10 +310,28 @@ describe("term", () => {
     expect(out).toContain("Docker");
     expect(out).toContain(":15975");
     expect(out).toContain("gemma4:e4b-q4_K_M");
-    expect(out).toContain("● postgres");
-    expect(out).toContain("● ai");
+    expect(out).toContain("●  postgres");
+    expect(out).toContain("●  ai");
     // Blank │ row separates the Docker header from whatever sits above.
     expect(out).toMatch(/│\n◇ {2}Docker/);
     expect(out).not.toMatch(/\u001b\[/);
+  });
+
+  test("formatStackSummary aligns name and port columns", () => {
+    const out = formatStackSummary({
+      project: "oke-dev-a3f791",
+      services: [
+        { label: "ai", hostPort: 23850, status: "ready" },
+        { label: "store.index", hostPort: 8550, status: "ready" },
+        { label: "postgres", hostPort: 15850, status: "ready" },
+      ],
+      color: false,
+    });
+    const portCols = out
+      .split("\n")
+      .filter((line) => /●\s+\S/.test(line) && line.includes(":"))
+      .map((line) => line.search(/:\d/));
+    expect(portCols.length).toBe(3);
+    expect(new Set(portCols).size).toBe(1);
   });
 });

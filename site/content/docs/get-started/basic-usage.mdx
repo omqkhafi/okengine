@@ -45,18 +45,20 @@ lists HTTP routes — static GET paths are links. `curl` still gets `{ data, err
 
 The standard starter already exports a named health Flow:
 
-```typescript title="flows/main"
-import { on, flow, http, gate } from "okengine/http";
+```typescript title="flows/main/health.ts"
+import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const health = on(
-  http.get("/health").gate.public,
-  flow("main.health", {
+  http.get().public(),
+  flow({
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
   }),
 );
 ```
+
+`main` omits the URL prefix, so this file is `GET /health` named `main.health`. See [Project structure](/docs/get-started/project-structure).
 
 Named flows show up as `main.health` (not `flow_1`) in `oke dev` logs, with the run id after the timestamp.
 Change the route or output and save — App and Console update together from the
@@ -67,15 +69,14 @@ same Manifest.
 <Step>
 ### Call it from a typed client
 
-Adopted modules become namespaces on the client:
+Generated units become namespaces on the client:
 
 ```typescript title="app"
 import "@/core";
-
+import "@/flows/generated";
 import { oke } from "okengine/http";
-import * as routes from "@/flows/generated";
 
-export const app = oke({ name: "notes" }).adopt(routes);
+export const app = oke({ name: "notes" });
 export type App = typeof app;
 ```
 
@@ -107,7 +108,7 @@ Every backend behavior has one shape:
 
 ## From Flow to client
 
-Export → adopt → call or test. Same App type — no separate codegen project.
+Export → generated barrel → call or test. Same App type — no separate codegen project.
 
 <ClientLoop />
 
@@ -137,8 +138,9 @@ bun test
 <Accordions>
 
 <Accordion title="api.main.health is not a function / type error">
-  Confirm the Flow is `export`ed from the module you `.adopt({main})`, and that `createClient` is
-  typed with your `App` type. Restart `oke dev` after renaming exports so the Manifest refreshes.
+  Confirm the Flow is `export`ed from a generated unit (`import "@/flows/generated"` then `oke({ name })`), or from a module you still `.adopt({ main })`.
+
+  Type `createClient` with your `App` type. Restart `oke dev` after renaming exports so the Manifest refreshes.
 </Accordion>
 
 <Accordion title="createTestApp fails to boot">
@@ -151,6 +153,7 @@ bun test
 
 ## Learn more
 
+- [Project structure](/docs/get-started/project-structure) — folders are the URL
 - [Flow](/docs/elements/flow) — triggers, contracts, effects, and composition
 - [Store](/docs/elements/store) — SQL, KV, files, index, and the preferred list envelope
 - [fx](/docs/reference/fx) — the full effect surface
@@ -158,6 +161,11 @@ bun test
 ## Next
 
 <Cards>
+  <Card
+    title="Project structure"
+    description="Folders are the URL; unit plus export is the name."
+    href="/docs/get-started/project-structure"
+  />
   <Card
     title="Flow"
     description="Triggers, contracts, effects, and composition."

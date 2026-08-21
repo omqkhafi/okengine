@@ -119,21 +119,51 @@ export async function listSqlTableRls(sql: SqlStoreHandle): Promise<ReadonlyMap<
 }
 
 /**
- * Copy RLS flags onto SQL table children. Catalog folders are unchanged.
+ * Live RLS policy counts (`pg_policies`) keyed by table name.
+ *
+ * Counts in process — memory SQL has no `GROUP BY` / `COUNT(*)::int`.
+ *
+ * @param sql - Open SQL handle
+ */
+export async function listSqlTablePolicyCounts(
+  sql: SqlStoreHandle,
+): Promise<ReadonlyMap<string, number>> {
+  try {
+    const rows = await sql.raw(`SELECT * FROM pg_policies`);
+    const out = new Map<string, number>();
+    for (const row of rows) {
+      if (!isAppCatalogSchema(row)) continue;
+      const name = stringOrNull(row.tablename ?? row.table);
+      if (name === null) continue;
+      out.set(name, (out.get(name) ?? 0) + 1);
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Copy RLS flags and policy counts onto SQL table children. Catalog folders
+ * are unchanged.
  *
  * @param children - Store list children
  * @param rlsByTable - Table name → RLS enabled
+ * @param declared - Manifest RLS when live catalog is empty
+ * @param policyCounts - Table name → live + declared policy count
  */
 export function applySqlTableRls(
   children: readonly ConsoleStoreChild[],
   rlsByTable: ReadonlyMap<string, boolean>,
   declared?: ReadonlyMap<string, boolean>,
+  policyCounts?: ReadonlyMap<string, number>,
 ): ConsoleStoreChild[] {
   return children.map((child) => {
     if (child.kind !== "table") return child;
     return {
       ...child,
       rls: rlsByTable.get(child.name) ?? declared?.get(child.name) ?? child.rls === true,
+      rlsPolicyCount: policyCounts?.get(child.name) ?? child.rlsPolicyCount ?? 0,
     };
   });
 }

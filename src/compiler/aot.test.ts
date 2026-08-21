@@ -129,7 +129,7 @@ describe("typed error narrowing end-to-end", () => {
     const FlightFull = z.object({ seatsLeft: z.number() });
 
     on(
-      http.post("/bookings").gate.public,
+      http.post("/bookings").public(),
       flow("bookings.create", {
         in: Booking,
         out: z.object({ id: z.string() }),

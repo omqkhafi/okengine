@@ -7,7 +7,10 @@
 
 import { flattenGateArgs, GATE_PUBLIC_NAME, type GateAllDecl } from "../elements/gate/flatten.ts";
 import type { NamedRef } from "./fx.ts";
+import { HTTP_PATH_PENDING, type HttpPathPending } from "./http-path-pending.ts";
 import { lazyRequire } from "./lazy-require.ts";
+
+export { HTTP_PATH_PENDING, isPendingHttpPath, type HttpPathPending } from "./http-path-pending.ts";
 
 /** HTTP methods accepted by {@link http}. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD" | "QUERY";
@@ -18,15 +21,8 @@ export type GateRef = NamedRef;
 /** One `.gate(...)` argument — a named ref, an `all` handle, or an array. */
 export type GateArg = GateRef | GateAllDecl | readonly GateArg[];
 
-/**
- * Attach function on an HTTP trigger / resource mount.
- * Call it with members, or use `.public` for the unauthenticated sentinel.
- */
-export interface GateAttach<T> {
-  (...gates: GateArg[]): T;
-  /** Attach {@link gate.public} — same as `.gate(gate.public)`. */
-  readonly public: T;
-}
+/** Attach gates on an HTTP trigger / resource mount. */
+export type GateAttach<T> = (...gates: GateArg[]) => T;
 
 /**
  * HTTP trigger value. Method and path are literal type parameters so
@@ -44,9 +40,12 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
   readonly isLive: boolean;
   /**
    * Attach gates (registration order). `gate.all` handles and arrays flatten.
-   * `.gate.public` is the unauthenticated sentinel.
    */
   readonly gate: GateAttach<HttpTrigger<M, P>>;
+  /**
+   * Attach the unauthenticated public sentinel.
+   */
+  public(): HttpTrigger<M, P>;
   /**
    * Mark the HTTP trigger as live (push result to subscribers).
    */
@@ -93,7 +92,7 @@ export type Trigger = HttpTrigger | EveryTrigger | SignalAsTrigger | CdcTrigger 
 export type TriggerKind = Trigger["kind"];
 
 /**
- * Callable `.gate(...)` plus `.gate.public` on a trigger or resource mount.
+ * Callable `.gate(...)` on a trigger or resource mount.
  *
  * @param apply - Rebuild the host with the flattened gate list
  * @param current - Gates already attached
@@ -102,19 +101,11 @@ export function createGateAttach<T>(
   apply: (next: readonly GateRef[]) => T,
   current: readonly GateRef[],
 ): GateAttach<T> {
-  const attach = ((...next: GateArg[]) =>
-    apply([...current, ...flattenGateArgs(next)])) as GateAttach<T>;
-  Object.defineProperty(attach, "public", {
-    get() {
-      return apply([...current, GATE_PUBLIC_NAME]);
-    },
-    enumerable: true,
-  });
-  return attach;
+  return (...next: GateArg[]) => apply([...current, ...flattenGateArgs(next)]);
 }
 
 /**
- * Build an HTTP trigger with `.gate` / `.live`.
+ * Build an HTTP trigger with `.gate` / `.public` / `.live`.
  *
  * @param method - HTTP verb
  * @param path - Route path
@@ -134,6 +125,9 @@ export function createHttpTrigger<M extends HttpMethod, P extends string>(
     gates,
     isLive,
     gate: createGateAttach((next) => createHttpTrigger(method, path, next, isLive), gates),
+    public() {
+      return createHttpTrigger(method, path, [...gates, GATE_PUBLIC_NAME], isLive);
+    },
     live() {
       return createHttpTrigger(method, path, gates, true);
     },
@@ -156,7 +150,7 @@ export interface ResourceFlowBag {
 /**
  * A mounted resource — the single argument to the `on(http.resource(…))`
  * overload. Branded so `on` can tell it apart from a plain trigger.
- * Same chain as {@link HttpTrigger}: `.gate(...)` / `.live()`.
+ * Same chain as {@link HttpTrigger}: `.gate(...)` / `.public()` / `.live()`.
  */
 export interface ResourceMount {
   readonly [resourceMountBrand]: true;
@@ -166,9 +160,12 @@ export interface ResourceMount {
   readonly isLive: boolean;
   /**
    * Attach gates to every verb (registration order). `gate.all` and arrays flatten.
-   * `.gate.public` is the unauthenticated sentinel.
    */
   readonly gate: GateAttach<ResourceMount>;
+  /**
+   * Attach the unauthenticated public sentinel to every verb.
+   */
+  public(): ResourceMount;
   /**
    * Mark list and get as live (GET mounts). Mutations stay request/response.
    */
@@ -201,33 +198,54 @@ function loadHttpResource(): typeof import("./http-resource.ts") {
  */
 export interface HttpTriggerNamespace {
   /**
+   * Pathless — file-tree stamp fills the URL. Unresolved sentinel fails boot.
+   */
+  get(): HttpTrigger<"GET", HttpPathPending>;
+  /**
    * @param path - Route path (`/:id` params supported)
    */
   get<P extends string>(path: P): HttpTrigger<"GET", P>;
+  /** Pathless — file-tree stamp fills the URL. */
+  post(): HttpTrigger<"POST", HttpPathPending>;
   /**
    * @param path - Route path
    */
   post<P extends string>(path: P): HttpTrigger<"POST", P>;
+  /** Pathless — file-tree stamp fills the URL. */
+  put(): HttpTrigger<"PUT", HttpPathPending>;
   /**
    * @param path - Route path
    */
   put<P extends string>(path: P): HttpTrigger<"PUT", P>;
+  /** Pathless — file-tree stamp fills the URL. */
+  patch(): HttpTrigger<"PATCH", HttpPathPending>;
   /**
    * @param path - Route path
    */
   patch<P extends string>(path: P): HttpTrigger<"PATCH", P>;
+  /** Pathless — file-tree stamp fills the URL. */
+  delete(): HttpTrigger<"DELETE", HttpPathPending>;
   /**
    * @param path - Route path
    */
   delete<P extends string>(path: P): HttpTrigger<"DELETE", P>;
+  /** Pathless — file-tree stamp fills the URL. */
+  options(): HttpTrigger<"OPTIONS", HttpPathPending>;
   /**
    * @param path - Route path
    */
   options<P extends string>(path: P): HttpTrigger<"OPTIONS", P>;
+  /** Pathless — file-tree stamp fills the URL. */
+  head(): HttpTrigger<"HEAD", HttpPathPending>;
   /**
    * @param path - Route path
    */
   head<P extends string>(path: P): HttpTrigger<"HEAD", P>;
+  /**
+   * Safe, idempotent read that carries a JSON body (RFC 10008).
+   * Pathless — file-tree stamp fills the URL.
+   */
+  query(): HttpTrigger<"QUERY", HttpPathPending>;
   /**
    * Safe, idempotent read that carries a JSON body (RFC 10008).
    *
@@ -236,8 +254,8 @@ export interface HttpTriggerNamespace {
   query<P extends string>(path: P): HttpTrigger<"QUERY", P>;
   /**
    * Mount a CRUD resource (list/create on `path`, get/update/remove on
-   * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`
-   * and `.live()` like {@link HttpTrigger}.
+   * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`,
+   * `.public()`, and `.live()` like {@link HttpTrigger}.
    */
   resource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount;
 }
@@ -245,8 +263,15 @@ export interface HttpTriggerNamespace {
 /** Bind an HTTP verb constructor (`http.get`, `http.query`, …). */
 function httpVerb<M extends HttpMethod>(
   method: M,
-): <P extends string>(path: P) => HttpTrigger<M, P> {
-  return (path) => createHttpTrigger(method, path);
+): {
+  (): HttpTrigger<M, HttpPathPending>;
+  <P extends string>(path: P): HttpTrigger<M, P>;
+} {
+  return ((path?: string) =>
+    createHttpTrigger(method, path === undefined ? HTTP_PATH_PENDING : path)) as {
+    (): HttpTrigger<M, HttpPathPending>;
+    <P extends string>(path: P): HttpTrigger<M, P>;
+  };
 }
 
 /**

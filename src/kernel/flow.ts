@@ -239,13 +239,34 @@ export const flowBrand: unique symbol = Symbol("oke.flow");
  * Input / output types are inferred from Standard Schema `in` / `out` when
  * present; otherwise from the `do` handler signature.
  *
+ * A nameless `flow({ do })` is stamped `unit.export` by the file-tree
+ * generator, {@link unit}, or `.adopt()`. Explicit `flow("notes.get", {…})`
+ * still wins.
+ *
+ * @param options - Contract and handler (name stamped later)
+ */
+export function flow<Opts extends FlowOptions<any, any, any>>(
+  options: Opts,
+): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>>;
+/**
  * @param name - Stable name (used by `fx.call` and the Manifest)
  * @param options - Contract and handler
  */
 export function flow<Opts extends FlowOptions<any, any, any>>(
   name: string,
   options: Opts & { readonly name?: never },
-): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>> {
+): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>>;
+export function flow(
+  nameOrOptions: string | FlowOptions<any, any, any>,
+  maybeOptions?: FlowOptions<any, any, any> & { readonly name?: never },
+): FlowDef {
+  const named = typeof nameOrOptions === "string";
+  const name = named ? nameOrOptions : "";
+  const options = (named ? maybeOptions : nameOrOptions) as FlowOptions<any, any, any> | undefined;
+  if (!options || typeof options.do !== "function") {
+    throw new TypeError("flow() expected an options bag with a do handler");
+  }
+
   const triggers: Trigger[] = [];
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
   const pendingPlugins: PluginDef[] = [];
@@ -253,13 +274,13 @@ export function flow<Opts extends FlowOptions<any, any, any>>(
   const dot = name.indexOf(".");
   const unit = dot > 0 ? name.slice(0, dot) : undefined;
 
-  const def: FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>> = {
+  const def: FlowDef = {
     [flowBrand]: true,
     name,
     unit,
     in: options.in,
     out: options.out,
-    errors: (options.errors ?? undefined) as InferFlowErrors<Opts> | undefined,
+    errors: (options.errors ?? undefined) as FlowErrorMap | undefined,
     effects: options.effects,
     durable: options.durable ?? false,
     retry: options.retry,
@@ -268,17 +289,8 @@ export function flow<Opts extends FlowOptions<any, any, any>>(
     slo: options.slo,
     plane: options.plane,
     breaking: options.breaking ?? false,
-    compensate: options.compensate as
-      | ((
-          ctx: {
-            readonly input: InferFlowIn<Opts>;
-            readonly error: unknown;
-            readonly completedSteps: readonly string[];
-          },
-          fx: import("./fx.ts").Fx,
-        ) => unknown | Promise<unknown>)
-      | undefined,
-    do: options.do as FlowHandler<InferFlowIn<Opts>, InferFlowOut<Opts>>,
+    compensate: options.compensate as FlowDef["compensate"],
+    do: options.do as FlowHandler,
     triggers,
     $trigger: undefined,
     hooks,
@@ -320,9 +332,9 @@ export function isFlow(value: unknown): value is AnyFlowDef {
 }
 
 /**
- * No-op. `name` is a required positional argument now, so there is no
- * auto-name sequence left to reset — kept so existing test `beforeEach`
- * blocks don't need touching.
+ * No-op. Nameless flows start as `""` and are stamped by unit / adopt /
+ * the file-tree generator — kept so existing test `beforeEach` blocks
+ * don't need touching.
  *
  * @internal
  */

@@ -31,8 +31,8 @@ import {
   createAnchoredBoard,
   createBootProgress,
   devStatusFromAiPhase,
-  formatAppReadyLine,
   formatBootWarn,
+  formatBoundSurfaces,
   formatClaimNote,
   formatCliChrome,
   formatDevBanner,
@@ -181,12 +181,9 @@ export interface DevOptions {
   /**
    * Injectable `.adopt()` barrel regeneration (tests). Default: real
    * `generateAdoptBarrel` + atomic write to `<cwd>/src/flows/generated.ts`
-   * (`generated.ts.tmp` → rename). Runs once per `oke dev` session, before
-   * the entry is resolved/imported — a real file on disk, so `oke dev`'s
-   * runtime `import()` and `oke build`'s `Bun.build()` resolve it
-   * identically (unlike a virtual-module Bun plugin, which does not — see
-   * `compiler/generate-adopt.ts`). Atomic so a concurrent import during
-   * `bun --hot` never sees a torn mid-write file.
+   * (`generated.ts.tmp` → rename). Runs at session start and again on
+   * `src/flows/**` changes except `generated.ts` itself. Write-if-changed
+   * so the `src/` watcher + bun `--hot` do not loop.
    *
    * @param cwd - Project root
    */
@@ -1316,14 +1313,14 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       write(formatBootWarn(notice));
     }
     bootNotices.length = 0;
-    write(formatAppReadyLine(`http://127.0.0.1:${boundAppPort}`));
-    write(formatServiceLine("Console", `http://127.0.0.1:${boundConsolePort}`));
-    if (mcpServer) {
-      write(formatServiceLine("MCP", `http://127.0.0.1:${boundMcpPort}`));
-    }
-    if (docsMcpServer) {
-      write(formatServiceLine("Docs MCP", `http://127.0.0.1:${boundDocsMcpPort}`));
-    }
+    write(
+      formatBoundSurfaces({
+        appUrl: `http://127.0.0.1:${boundAppPort}`,
+        consoleUrl: `http://127.0.0.1:${boundConsolePort}`,
+        mcpUrl: mcpServer ? `http://127.0.0.1:${boundMcpPort}` : null,
+        docsMcpUrl: docsMcpServer ? `http://127.0.0.1:${boundDocsMcpPort}` : null,
+      }),
+    );
     write(formatDevLogSeparator());
     chromeReady = true;
   };
@@ -1351,6 +1348,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const watchFs: DevWatchFn =
     options.watchFs ?? ((path, watchOptions, listener) => watch(path, watchOptions, listener));
   const watcher = watchFs(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
+    const rel = (filename?.toString() ?? "").replace(/\\/g, "/");
+    if (isFlowsTreeWatchPath(rel)) {
+      void syncAdoptBarrel(cwd);
+    }
     void regen(appUrl);
     // Only live-extract when the host did not pin a Manifest (tests).
     if (options.manifest === undefined) {
@@ -1599,6 +1600,20 @@ function isSchemaDeclDefinitionError(err: unknown, declarePath: string): boolean
     return true;
   }
   return declarePath.length > 0 && blob.includes(declarePath);
+}
+
+/**
+ * True when a `src/` watcher event is a flows tree change that should
+ * regenerate `generated.ts` (never the generated file itself).
+ *
+ * @param rel - Watcher filename (POSIX or Windows)
+ */
+export function isFlowsTreeWatchPath(rel: string): boolean {
+  const posix = rel.replace(/\\/g, "/");
+  if (!posix.includes("flows/")) return false;
+  const base = posix.split("/").pop() ?? posix;
+  if (base === "generated.ts" || base === "generated.ts.tmp") return false;
+  return true;
 }
 
 /**

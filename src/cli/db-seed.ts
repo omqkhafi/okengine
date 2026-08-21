@@ -1,6 +1,6 @@
 /**
  * `oke db seed` — load `defineSeed`, boot the app store, run essential +
- * env-selected category (`dev` | `prod`).
+ * env-selected category (`dev` | `prod`). Tallies SQL upserts and `kv.set`.
  */
 
 import { resolve } from "node:path";
@@ -25,11 +25,13 @@ import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 import { loadOkeConfig } from "./load-config.ts";
 import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
 
-/** Per-function upsert outcome counts. */
+/** Per-function upsert / KV-set outcome counts. */
 export interface SeedTally {
   upserted: number;
   changed: number;
   alreadyExisted: number;
+  /** `fx.store(kv).set` calls (cache or durable). */
+  keys: number;
 }
 
 /** Options for {@link runSeed}. */
@@ -132,12 +134,13 @@ export async function runSeedFns(
 ): Promise<void> {
   for (let i = 0; i < fns.length; i++) {
     const fn = fns[i]!;
-    const tally: SeedTally = { upserted: 0, changed: 0, alreadyExisted: 0 };
+    const tally: SeedTally = { upserted: 0, changed: 0, alreadyExisted: 0, keys: 0 };
     const instrumented = instrumentFxUpserts(fx, tally);
     await fn(instrumented);
     const label = fn.name.length > 0 ? fn.name : String(i);
+    const kv = tally.keys > 0 ? ` · keys ${tally.keys}` : "";
     write(
-      `oke db seed: ${category} ${label} — upserted ${tally.upserted} · changed ${tally.changed} · already-existed ${tally.alreadyExisted}\n`,
+      `oke db seed: ${category} ${label} — upserted ${tally.upserted} · changed ${tally.changed} · already-existed ${tally.alreadyExisted}${kv}\n`,
     );
   }
 }
@@ -393,14 +396,18 @@ function instrumentFxUpserts(fx: Fx, tally: SeedTally): Fx {
 
 function instrumentUpsertHandle<T>(handle: T, tally: SeedTally): T {
   if (!handle || typeof handle !== "object") return handle;
-  const h = handle as { upsert?: (...args: unknown[]) => Promise<{ status: UpsertStatus }> };
-  if (typeof h.upsert !== "function") return handle;
-  const orig = h.upsert.bind(h);
+  const h = handle as {
+    upsert?: (...args: unknown[]) => Promise<{ status: UpsertStatus }>;
+    set?: (...args: unknown[]) => Promise<unknown>;
+  };
+  const origUpsert = typeof h.upsert === "function" ? h.upsert.bind(h) : undefined;
+  const origSet = typeof h.set === "function" ? h.set.bind(h) : undefined;
+  if (!origUpsert && !origSet) return handle;
   return new Proxy(handle as object, {
     get(target, prop, receiver) {
-      if (prop === "upsert") {
+      if (prop === "upsert" && origUpsert) {
         return async (...args: unknown[]) => {
-          const result = await orig(...args);
+          const result = await origUpsert(...args);
           const status =
             result && typeof result === "object" && "status" in result
               ? (result as { status: UpsertStatus }).status
@@ -408,6 +415,13 @@ function instrumentUpsertHandle<T>(handle: T, tally: SeedTally): T {
           if (status === "upserted") tally.upserted += 1;
           else if (status === "changed") tally.changed += 1;
           else if (status === "already-existed") tally.alreadyExisted += 1;
+          return result;
+        };
+      }
+      if (prop === "set" && origSet) {
+        return async (...args: unknown[]) => {
+          const result = await origSet(...args);
+          tally.keys += 1;
           return result;
         };
       }

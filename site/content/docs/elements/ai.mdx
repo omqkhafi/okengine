@@ -182,7 +182,7 @@ Return those chunks on HTTP with `fx.json.stream(...)`. The kernel answers `text
 
 ```typescript
 on(
-  http.post("/complete").gate.public,
+  http.post("/complete").public(),
   flow("chat.complete", {
     do: (input, fx) => fx.json.stream(fx.stream(smart, { prompt: input.prompt })),
   }),
@@ -364,6 +364,7 @@ A hang-up is `AbortError` — it does not retry or advance `via`.
 
 ## Learn more
 
+- [Project structure](/docs/get-started/project-structure) — agent `tools` are Flow names (`notes.get`), not URLs
 - [Flow](/docs/elements/flow) — `fx.ask` and `fx.search` inside `do`
 - [Store](/docs/elements/store) — `store.index`, the home of embeddings
 - [MCP](/docs/ai/mcp) — serve the app to agents, or consume external servers as tools

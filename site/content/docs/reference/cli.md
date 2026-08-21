@@ -17,6 +17,7 @@ oke --help                       # command list (also what bare `oke` prints whe
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535 · docs MCP :6536
                                  #   → always Docker Compose under docker/ + host Bun
+                                 #   → regenerates flows/generated.ts when the flows tree changes
                                  #   → client types + domain schema push on save
                                  #   → Console UI hot-reloads from source (okengine checkout; no bun run build)
 oke dev --no-db-push             #     opt out of auto oke db push on schema input save
@@ -112,7 +113,8 @@ not spawn a second stack. Non-TTY / CI keeps the classic help listing
 `oke dev` always starts Compose (requires a running Docker daemon). Boot chrome
 prints immediately (wordmark + Starting + profile), then streams background work
 (compose up, vault, per-service health, AI probe). Status ● is green ready ·
-yellow pending/loading · red error · dim idle. Compose health keeps polling
+yellow pending/loading · red error · dim idle. After bind, Backend · Console ·
+MCP · Docs MCP each get a box (URL + one-line purpose). Compose health keeps polling
 (`docker compose ps -a`); AI ● tracks model phase while the AI container is up.
 Boot does not wait for the model to become ready. A successful session writes
 `.oke/dev.json` (pid · ports · startedAt) and clears it on stop. Durable local

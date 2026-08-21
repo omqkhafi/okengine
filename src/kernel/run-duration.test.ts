@@ -23,7 +23,7 @@ describe("execute run duration", () => {
     await runs.open();
 
     on(
-      http.get("/ping").gate.public,
+      http.get("/ping").public(),
       flow("demo.ping", {
         do: () => ({ ok: true }),
       }),
@@ -68,7 +68,7 @@ describe("execute run duration", () => {
     await runs.open();
     try {
       on(
-        http.get("/ping").gate.public,
+        http.get("/ping").public(),
         flow("demo.ping", {
           do: () => ({ ok: true }),
         }),

@@ -46,4 +46,15 @@ describe("applySqlTableRls", () => {
     const out = applySqlTableRls([child("bookings")], new Map(), new Map([["bookings", true]]));
     expect(out[0]?.rls).toBe(true);
   });
+
+  test("stamps policy counts on tables and leaves catalog folders alone", () => {
+    const out = applySqlTableRls(
+      [child("comments"), child("policies", "policy")],
+      new Map([["comments", true]]),
+      undefined,
+      new Map([["comments", 2]]),
+    );
+    expect(out.find((row) => row.name === "comments")?.rlsPolicyCount).toBe(2);
+    expect(out.find((row) => row.name === "policies")?.rlsPolicyCount).toBeUndefined();
+  });
 });

@@ -578,10 +578,11 @@ describe("queryStore SQL catalog", () => {
       declaredFingerprint: "x",
       appliedFingerprint: "x",
     });
-    expect(
-      listedOn.stores.find((s) => s.ref === "sql:db")?.children.find((c) => c.name === "bookings")
-        ?.rls,
-    ).toBe(true);
+    const listedBookings = listedOn.stores
+      .find((s) => s.ref === "sql:db")
+      ?.children.find((c) => c.name === "bookings");
+    expect(listedBookings?.rls).toBe(true);
+    expect(listedBookings?.rlsPolicyCount).toBe(1);
 
     await editStore(
       runtime,

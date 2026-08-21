@@ -551,6 +551,32 @@ describe("oke db seed", () => {
     expect(out.join("")).toContain("dev volume — upserted 0 · changed 1 · already-existed 0");
   });
 
+  test("runSeedFns tallies kv.set as keys", async () => {
+    const out: string[] = [];
+    const fx = {
+      store: () => ({
+        set: async () => undefined,
+      }),
+    } as unknown as ReturnType<typeof createFx>;
+    await runSeedFns(
+      "dev",
+      [
+        async function volume(seedFx) {
+          const kv = seedFx.store("kv" as never) as unknown as {
+            set: (key: string, value: unknown) => Promise<void>;
+          };
+          await kv.set("ENG-12", { title: "SSO" });
+          await kv.set("ENG-14", { title: "Polish" });
+        },
+      ],
+      fx,
+      (t) => out.push(t),
+    );
+    expect(out.join("")).toContain(
+      "dev volume — upserted 0 · changed 0 · already-existed 0 · keys 2",
+    );
+  });
+
   test("executeSeedDef is the category source of truth", async () => {
     const order: string[] = [];
     const out: string[] = [];

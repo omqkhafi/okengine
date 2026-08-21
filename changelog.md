@@ -19,11 +19,33 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - One Gate picker on SQL, browse, and grid edit. Policy sheet Code tab
   shows `store.schema.policy` plus `pgPolicy`. Policy grid marks
   `declared` vs `live`. Schema cards show Manifest RLS.
+- Resource header shows an RLS chip before PII for SQL tables
+  (on/off from live `relrowsecurity`, same shield language as the tree).
+  Enabled tables with policies show **N RLS**.
+- Owner policy templates open a Column select of the table fields
+  (preselect `creator_email` / `owner_email` when present) with PK / FK
+  marks, and rewrite USING / WITH CHECK. Create stays blocked until a
+  column is picked.
+- Two-finger click (right-click) a Store row opens the row sheet. Empty
+  grid opens Create policy / index / function / trigger or Insert.
+- Row sheet Edit / Save patches editable columns (policy roles, USING,
+  WITH CHECK, command, and table / KV cells).
+- Create policy: form X closes the sheet; templates X only closes the
+  templates dock (the shared X no longer sits on templates).
+- Create policy SQL / Code dock has the same drag handle as Query /
+  explorer splits so the preview can be resized.
 
 #### Runtime
 
 - `store.schema.policy.gate/owner/scope` and `store.schema.rls()`.
   `oke db push` installs `oke.*` helpers before drizzle-kit.
+- File-tree HTTP routes: `http.get()` plus nameless `flow({ do })` stamp
+  path and `unit.export` from `flows/<unit>/`. `oke()` drains
+  `generated.ts` into `$routes`. Unresolved path is OKE1010; duplicate
+  method+path is OKE1011; unnamed HTTP is OKE1012.
+- Tree generate fails when two files declare the same method + path
+  (`list.ts` + `route.ts` both `http.get()` → `GET /notes`). Different
+  methods on one path stay allowed. Boot still refuses leftovers (OKE1011).
 
 ### 💥 Breaking Changes
 
@@ -39,14 +61,30 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Linear / edge match order is static, then `:param`, then `*` — same as
+  Trie and RegExp. A first-registered `/notes/:slug` no longer eats
+  `/notes/archive`.
 - User-plane `fx.store` applies RLS on postgres / pglite. Apps that created
   Console policies and relied on the app role ignoring them now filter.
 - Public contract is `oke.gate()` / `oke.user()` / `oke.has_scope()`. Docs
   and templates no longer teach `current_setting` or `current_user`.
 - Special `TO` roles stay unquoted (`public`, `current_user`). Manifest
   `Table` gains `rls` + `policies`.
+- HTTP trigger `.gate.public` is gone. Mark a route open with
+  `.public()`, sibling of `.live()`. `gate.public` stays the
+  element sentinel.
 
 ### ♻️ Changed
+
+#### Dev, Keel & create-oke
+
+- create-oke Notes (standard / advanced) use the file tree. `app.ts` is
+  `import "@/flows/generated"` plus `oke({ name })` — `.adopt(routes)` is
+  optional. Keel `core.ts` splits by element; the barrel stays `@/core`.
+  `oke ai setup` prefers `src/core/ai.ts` when that file exists.
+- `oke dev` Ready board uses aligned name / port columns, and each
+  bound surface (Backend, Console, MCP, Docs MCP) is its own box
+  with the URL and a one-line purpose.
 
 #### Runtime
 
@@ -59,6 +97,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- New Get Started page: Project structure — folders are the URL,
+  reserved leaves, `main` prefix exception, QUERY vs leaves, `[...slug]`
+  client key `"*"`, and `http.resource` in a tree.
+- Introduction, Basic Usage, Client, CLI, and element pages point at
+  Project structure so `http.get("/…")` + `flow("unit.action")` is no
+  longer taught as the only identity.
+- Project structure: `_` files are importable but not routes; match
+  order is static → `:param` → `*`; generate-time method+path collision.
 - Bumped site dependencies: fumadocs to `16.14.5` / MDX `15.3.0`, Next to
   `16.3.1`, plus patch/minor updates for `@base-ui/react`, lucide, postcss,
   and `@types/node`.
@@ -102,9 +148,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Query console replaces a leftover default `SELECT` when that table is
   not in the live store, and seeds a random live table (not always the
   first).
+- KV browse `value` fills leftover grid width (same as SQL `comment`).
+- Files PDF preview was a blank iframe — CSP `frame-src 'self'`
+  blocked the blob URL. `frame-src` / `img-src` / `media-src` now
+  allow `blob:`.
+- Resource header no longer repeats a singleton ref
+  (`kv:reminders · kv:reminders` → `kv:reminders`). SQL still shows
+  `sql:db · sql:tasks`.
 
 #### Runtime
 
+- `$routes` from `generated.ts` accepts cron / signal / call-only
+  flows — `AppRouteMap` no longer requires `method`/`path` on every leaf.
+- Pathless `http.get()` types resolve `HttpPathPending` in the trigger
+  namespace (verbatim type import).
 - PGlite RLS stamp is split statements (`SET LOCAL ROLE oke_app`,
   `set_config`) — a multi-command batch is rejected by PGlite's prepared
   `query` path. Concurrent identities on the shared connection are serialized.
@@ -113,6 +170,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
   on that slot. `begin()` plus parent `unsafe()` was deadlocking PgDog
   (`checkout timeout`). Store, journal, clock, and instances share one pool
   of 8; PgDog `pool_size` is 20.
+
+#### Dev, Keel & create-oke
+
+- Keel KV (`drafts`, `reminders`, `view-prefs`, `webhooks`) is
+  `{ durable: true }` and seed writes all four, so Console Store browse
+  is not empty after Redis recreates. Seed logs `keys N` for `kv.set`.
+
+#### Docs
+
+- Homepage starter snippet reads `flows/main/route.ts` after the tree split
+  removed `main/index.ts`.
 
 
 ## v0.14.1 — 2026-08-20

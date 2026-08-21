@@ -167,6 +167,72 @@ export default defineConfig({
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("applyAiSetup prefers an existing src/core/ai.ts over a thin core.ts barrel", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-ai-setup-split-"));
+    try {
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `import { defineConfig } from "okengine/config";
+export default defineConfig({
+  drivers: {
+    channel: {
+      email: {
+        dev: "smtp",
+        test: "console",
+        prod: "smtp",
+      },
+    },
+  },
+  images: {
+    store: {
+      sql: "postgres:18-alpine",
+    },
+  },
+});
+`,
+        "utf8",
+      );
+      mkdirSync(join(dir, "src", "core"), { recursive: true });
+      writeFileSync(
+        join(dir, "src", "core.ts"),
+        `export * from "./core/store.ts";\nexport * from "./core/ai.ts";\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src", "core", "store.ts"),
+        `import { store } from "okengine";\n\nexport const db = store.sql("app");\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src", "core", "ai.ts"),
+        `import { ai } from "okengine";\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src", "app.ts"),
+        `import "@/core";\nexport const app = {};\n`,
+        "utf8",
+      );
+
+      applyAiSetup(dir, {
+        driver: "ollama",
+        baseUrl: "http://127.0.0.1:11434",
+        chatModel: "gemma4:e4b",
+        visionModel: "qwen3-vl:4b",
+        embedModel: "nomic-embed-text",
+      });
+
+      const barrel = readFileSync(join(dir, "src", "core.ts"), "utf8");
+      expect(barrel).not.toContain("ai.model");
+      expect(barrel).toContain('export * from "./core/ai.ts"');
+      const aiTs = readFileSync(join(dir, "src", "core", "ai.ts"), "utf8");
+      expect(aiTs).toContain("smart");
+      expect(aiTs).toContain('ai.model("vision"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("parseAiSetupArgs", () => {

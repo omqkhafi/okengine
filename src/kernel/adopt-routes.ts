@@ -39,10 +39,20 @@ export type AppFlowRoute<
       readonly path?: undefined;
     };
 
-/** Unit → flow → contract. */
+/**
+ * Unit → flow → contract. Leaf is the HTTP / call-only union — do not
+ * index with `AppFlowRoute<any, any, any, any, any>` (`any extends string`
+ * makes `method`/`path` required and rejects cron / signal flows).
+ */
 export type AppRouteMap = {
   readonly [unit: string]: {
-    readonly [flow: string]: AppFlowRoute<any, any, any, any, any>;
+    readonly [flow: string]: {
+      readonly in?: unknown;
+      readonly out?: unknown;
+      readonly errors?: unknown;
+      readonly method?: string;
+      readonly path?: string;
+    };
   };
 };
 
@@ -170,6 +180,7 @@ export function accumulateAdoptArgs(args: readonly unknown[], into: RuntimeRoute
       const unitBag = into[unit] ?? (into[unit] = {});
       for (const [flowName, flowDef] of Object.entries(value as Record<string, unknown>)) {
         if (!isFlow(flowDef)) continue;
+        stampAdoptedFlow(flowDef, unit, flowName);
         found.push(flowDef);
         unitBag[flowName] = runtimeRouteFromFlow(flowDef);
       }
@@ -177,4 +188,21 @@ export function accumulateAdoptArgs(args: readonly unknown[], into: RuntimeRoute
   }
 
   return found;
+}
+
+/**
+ * Stamp `unit.export` on nameless flows — same rule as {@link unit}.
+ *
+ * @param flowDef - Flow to stamp
+ * @param unit - Client unit (folder / adopt key)
+ * @param exportName - Namespace export
+ */
+function stampAdoptedFlow(flowDef: AnyFlowDef, unit: string, exportName: string): void {
+  const f = flowDef as { name: string; unit: string | undefined };
+  if (!f.name || f.name.startsWith("flow_")) {
+    f.name = `${unit}.${exportName}`;
+  }
+  if (!f.unit) {
+    f.unit = unit;
+  }
 }

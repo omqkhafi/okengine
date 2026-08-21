@@ -7,14 +7,16 @@ export const CONSOLE_CSP: string = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
   "font-src 'self'",
   "connect-src 'self' ws: wss:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "frame-src 'self'",
+  // Files preview mints blob: URLs for PDF iframes, images, and A/V.
+  "frame-src 'self' blob:",
 ].join("; ");
 
 /**
@@ -27,13 +29,14 @@ export const CONSOLE_VITE_DEV_CSP: string = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
   "font-src 'self'",
   "connect-src 'self' ws: wss: http://127.0.0.1:* ws://127.0.0.1:*",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "frame-src 'self'",
+  "frame-src 'self' blob:",
 ].join("; ");
 
 /** CSP for sandboxed plugin panel iframes (no operator session reach). */

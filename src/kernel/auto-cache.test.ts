@@ -44,7 +44,7 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").gate.public,
+      http.get("/notes").public(),
       flow("notes.list", {
         out: z.array(NoteOut),
         effects: { reads: ["sql:notes"] },
@@ -80,7 +80,7 @@ describe("automatic tier-1 cache from effects", () => {
     resetFlowSeq();
     const db = store.sql("app", { schema: { notes } });
     const list = on(
-      http.get("/notes").gate.public,
+      http.get("/notes").public(),
       flow("notes.list", {
         out: z.array(NoteOut),
         effects: { reads: ["sql:notes"] },
@@ -115,7 +115,7 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").gate.public,
+      http.get("/notes").public(),
       flow("notes.list", {
         cache: false,
         effects: { reads: ["sql:notes"] },
@@ -146,7 +146,7 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").gate.public,
+      http.get("/notes").public(),
       flow("notes.list", {
         out: z.array(NoteOut),
         do: async (_input, fx) => {
@@ -191,7 +191,7 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").gate.public,
+      http.get("/notes").public(),
       flow("notes.list", {
         effects: { reads: ["sql:notes"] },
         do: () => {
@@ -201,7 +201,7 @@ describe("automatic tier-1 cache from effects", () => {
       }),
     );
     const create = on(
-      http.post("/notes").gate.public,
+      http.post("/notes").public(),
       flow("notes.create", {
         in: z.object({ title: z.string() }),
         effects: { writes: ["sql:notes"] },
@@ -231,7 +231,7 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").gate.public,
+      http.get("/notes").public(),
       flow("notes.list", {
         out: z.array(NoteOut),
         do: async (_input, fx) => {
@@ -242,7 +242,7 @@ describe("automatic tier-1 cache from effects", () => {
       }),
     );
     const create = on(
-      http.post("/notes").gate.public,
+      http.post("/notes").public(),
       flow("notes.create", {
         in: z.object({ title: z.string() }),
         do: async (input, fx) => {

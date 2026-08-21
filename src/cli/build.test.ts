@@ -32,8 +32,10 @@ describe("oke build — .adopt() barrel regeneration", () => {
       expect(code).toBe(0);
 
       const after = await readFile(generatedPath, "utf8");
-      expect(after).toContain('export * as main from "./main/index.ts";');
-      expect(after).toContain('export * as notes from "./notes/index.ts";');
+      expect(after).toContain('import * as main from "./main/index.ts";');
+      expect(after).toContain('import * as notes from "./notes/index.ts";');
+      expect(after).toContain("export { main }");
+      expect(after).toContain("export { notes }");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

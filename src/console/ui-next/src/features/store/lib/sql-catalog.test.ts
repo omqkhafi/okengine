@@ -6,6 +6,7 @@ import {
   isSqlExtensionChild,
   isSqlPolicyChild,
   storeChildLabel,
+  storeChildRlsPolicyCount,
   storeChildShowsRls,
 } from "./sql-catalog.ts";
 
@@ -46,6 +47,29 @@ describe("sql catalog children", () => {
     expect(storeChildShowsRls({ ...child("bookings", "table"), rls: true })).toBe(true);
     expect(storeChildShowsRls(child("sessions", "table"))).toBe(false);
     expect(storeChildShowsRls(child("policies", "policy"))).toBe(false);
+  });
+
+  test("RLS policy count prefers the store-list stamp", () => {
+    const stamped = { ...child("bookings", "table"), rls: true, rlsPolicyCount: 2 };
+    expect(storeChildRlsPolicyCount(stamped, null, "db")).toBe(2);
+    expect(
+      storeChildRlsPolicyCount(
+        child("bookings", "table"),
+        {
+          oke: "1.0",
+          app: "t",
+          stores: {
+            db: {
+              facet: "sql",
+              tables: {
+                bookings: { policies: { mine: { using: "true" }, team: { using: "true" } } },
+              },
+            },
+          },
+        },
+        "db",
+      ),
+    ).toBe(2);
   });
 
   test("splits tables from catalog folders", () => {

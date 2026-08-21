@@ -19,7 +19,7 @@ import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
 import { mintMcpSession } from "../mcp/session.ts";
-import { runDev, type DevOptions, type DevSession } from "./dev.ts";
+import { isFlowsTreeWatchPath, runDev, type DevOptions, type DevSession } from "./dev.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 
 /** Repo public entry — absolute import so temp apps need no install. */
@@ -519,11 +519,11 @@ async function writePingApp(dir: string, version: string): Promise<void> {
     join(dir, "src/flows/ping.ts"),
     `import { on, flow, http, gate } from ${JSON.stringify(OKE_INDEX)};
 
-export const ping = on(http.get("/ping").gate.public, flow("ping", {
+export const ping = on(http.get("/ping").public(), flow("ping", {
   do: () => ({ version: ${JSON.stringify(version)} as const }),
 }));
 
-export const slow = on(http.get("/slow").gate.public, flow("slow", {
+export const slow = on(http.get("/slow").public(), flow("slow", {
   do: async () => {
     const started = ${JSON.stringify(version)};
     await Bun.sleep(800);
@@ -725,7 +725,8 @@ describe("oke dev syncAdoptBarrel atomic write", () => {
 
     const barrelPath = join(dir, "src/flows", ADOPT_BARREL_FILE);
     const text = await Bun.file(barrelPath).text();
-    expect(text).toContain('export * as notes from "./notes/index.ts";');
+    expect(text).toContain('import * as notes from "./notes/index.ts";');
+    expect(text).toContain("export { notes }");
     expect(text).not.toContain("stale stub");
     expect(await Bun.file(`${barrelPath}.tmp`).exists()).toBe(false);
     const leftovers = (await readdir(join(dir, "src/flows"))).filter((f) => f.includes(".tmp"));
@@ -786,6 +787,16 @@ describe("oke dev syncAdoptBarrel atomic write", () => {
     const { source } = await generateAdoptBarrel({ rootDir: dir });
     await writeAdoptBarrel(dir, source);
     expect(await Bun.file(target).text()).toBe(source);
+  });
+});
+
+describe("isFlowsTreeWatchPath", () => {
+  test("flows tree files trigger regen; generated.ts does not", () => {
+    expect(isFlowsTreeWatchPath("flows/notes/[id]/get.ts")).toBe(true);
+    expect(isFlowsTreeWatchPath("flows\\notes\\list.ts")).toBe(true);
+    expect(isFlowsTreeWatchPath("flows/generated.ts")).toBe(false);
+    expect(isFlowsTreeWatchPath("flows/generated.ts.tmp")).toBe(false);
+    expect(isFlowsTreeWatchPath("core.ts")).toBe(false);
   });
 });
 

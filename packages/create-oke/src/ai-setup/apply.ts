@@ -241,7 +241,9 @@ export function renderAiTs(input: AiSetupApplyInput): string {
 }
 
 /**
- * Write AI model declarations into `src/core.ts` (preferred) or legacy `src/core/ai.ts`.
+ * Write AI model declarations into `src/core/ai.ts` when that split exists
+ * (so a thin `src/core.ts` barrel stays a re-export), else `src/core.ts`,
+ * else legacy `src/core/index.ts` + sidecar.
  *
  * @param cwd - Project root
  * @param input - Setup choices
@@ -249,8 +251,24 @@ export function renderAiTs(input: AiSetupApplyInput): string {
  */
 function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
   const rendered = renderAiTs(input);
+  const coreAiPath = join(cwd, "src", "core", "ai.ts");
   const coreTsPath = join(cwd, "src", "core.ts");
   const legacyIndex = join(cwd, "src", "core", "index.ts");
+
+  if (existsSync(coreAiPath)) {
+    const existing = readFileSync(coreAiPath, "utf8");
+    if (hasAiModels(existing)) {
+      const withPrompt = ensureSummarizeNotePrompt(existing);
+      if (withPrompt !== existing) {
+        writeFileSync(coreAiPath, withPrompt, "utf8");
+      }
+    } else {
+      writeFileSync(coreAiPath, mergeAiIntoCore(existing, rendered), "utf8");
+    }
+    ensureCoreBarrelExportsAi(cwd);
+    ensureCoreImported(cwd);
+    return coreAiPath;
+  }
 
   // Folder layout still in the wild — keep writing a sidecar.
   if (!existsSync(coreTsPath) && existsSync(legacyIndex)) {
@@ -359,6 +377,19 @@ export function ensureNamedOkengineImport(source: string, name: string): string 
   if (names.includes(name)) return source;
   const sorted = [...names, name].sort((a, b) => a.localeCompare(b));
   return source.replace(re, `import { ${sorted.join(", ")} } from "okengine";`);
+}
+
+/**
+ * Keep a `src/core.ts` barrel re-exporting `./core/ai.ts` after a split write.
+ *
+ * @param cwd - Project root
+ */
+function ensureCoreBarrelExportsAi(cwd: string): void {
+  const coreTsPath = join(cwd, "src", "core.ts");
+  if (!existsSync(coreTsPath)) return;
+  const src = readFileSync(coreTsPath, "utf8");
+  if (/from\s+["']\.\/core\/ai/.test(src)) return;
+  writeFileSync(coreTsPath, `${src.trimEnd()}\nexport * from "./core/ai.ts";\n`, "utf8");
 }
 
 /**

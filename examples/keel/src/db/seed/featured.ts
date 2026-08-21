@@ -505,6 +505,28 @@ export const FEATURED_REMINDERS: ReadonlyArray<{
   },
 ];
 
+/** Featured outbound webhooks — Console `kv:webhooks` browse. */
+export const FEATURED_WEBHOOKS: ReadonlyArray<{
+  key: string;
+  value: unknown;
+  ttl?: string;
+}> = [
+  {
+    key: "wh_billing",
+    value: {
+      url: "https://hooks.keel.dev/billing",
+      events: ["invoice.settled", "task.created"],
+    },
+  },
+  {
+    key: "wh_slack",
+    value: {
+      url: "https://hooks.slack.com/services/T000/B000/KeelHarbor",
+      events: ["task.overdue"],
+    },
+  },
+];
+
 /** 1×1 PNG so Files browse can preview a real image. */
 export const SEED_PNG = Uint8Array.from(
   atob(

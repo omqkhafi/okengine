@@ -61,6 +61,8 @@ export function Table<T>({
   onInsertColumn,
   onDeleteColumn,
   onRowDoubleClick,
+  onRowContextMenu,
+  onViewportContextMenu,
   cellRange = null,
   onCellRangeChange,
   onCellActivate,
@@ -192,6 +194,13 @@ export function Table<T>({
         onPointerMove={cellSelect.onScrollerPointerMove}
         onPointerUp={cellSelect.onPointerUp}
         onPointerCancel={cellSelect.onPointerUp}
+        onContextMenu={(event) => {
+          if (!onViewportContextMenu) return;
+          const target = event.target;
+          if (target instanceof Element && target.closest("[data-slot='table-row']")) return;
+          event.preventDefault();
+          onViewportContextMenu();
+        }}
         className={cn("overflow-auto", onCellRangeChange ? "select-none" : undefined)}
         style={{ height }}
       >
@@ -273,12 +282,19 @@ export function Table<T>({
                       ref={(el) => {
                         rowRefs.current[entry.id] = el;
                       }}
+                      data-slot="table-row"
                       data-selected={isSelected}
                       style={{ height: rowHeight }}
                       onPointerEnter={
                         hasRowMenu ? () => activateRow(entry.id, vItem.index) : undefined
                       }
                       onPointerLeave={hasRowMenu ? deactivateRow : undefined}
+                      onContextMenu={(event) => {
+                        if (!onRowContextMenu) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onRowContextMenu(entry.row, entry.id);
+                      }}
                       onDoubleClick={(e) => {
                         if (!onRowDoubleClick) return;
                         const target = e.target;
