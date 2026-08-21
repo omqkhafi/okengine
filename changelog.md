@@ -182,6 +182,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   on that slot. `begin()` plus parent `unsafe()` was deadlocking PgDog
   (`checkout timeout`). Store, journal, clock, and instances share one pool
   of 8; PgDog `pool_size` is 20.
+- `fx.store(db).select().where()` / `.orderBy()` compile Drizzle
+  `eq` / `and` / `or` / `like` / `asc` again against the pinned
+  `drizzle-orm@1.0.0-rc.5-169397b` — that snapshot stores
+  `StringChunk.value` as a string, not `string[]`.
 
 #### Dev, Keel & create-oke
 

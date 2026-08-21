@@ -333,10 +333,33 @@ function chunksOf(node: unknown): readonly unknown[] {
   return (node as { queryChunks: unknown[] }).queryChunks;
 }
 
-/** Joined text of a Drizzle `StringChunk` (`{ value: string[] }`). */
-function chunkText(chunk: unknown): string | undefined {
-  if (!chunk || typeof chunk !== "object") return undefined;
+/**
+ * True when `chunk` is a Drizzle `StringChunk` (or the synthetic array-valued
+ * shape `resource.ts` still emits). `Param` also has a `value` field — never
+ * treat those as SQL text.
+ */
+function isStringChunk(chunk: object): boolean {
+  const ctor = (chunk as { constructor?: { name?: unknown } }).constructor?.name;
+  if (ctor === "StringChunk") return true;
   const value = (chunk as { value?: unknown }).value;
+  return (
+    Array.isArray(value) &&
+    value.every((part) => typeof part === "string") &&
+    !("encoder" in chunk) &&
+    !("name" in chunk)
+  );
+}
+
+/**
+ * Joined text of a Drizzle `StringChunk`.
+ *
+ * drizzle-orm `1.0.0-rc.5-169397b` stores `value` as a `string`. Earlier
+ * snapshots (and the synthetic chunks in `resource.ts`) store `string[]`.
+ */
+function chunkText(chunk: unknown): string | undefined {
+  if (!chunk || typeof chunk !== "object" || !isStringChunk(chunk)) return undefined;
+  const value = (chunk as { value?: unknown }).value;
+  if (typeof value === "string") return value;
   return Array.isArray(value) ? value.join("") : undefined;
 }
 
@@ -394,6 +417,7 @@ function asParamValue(chunk: unknown): { readonly found: boolean; readonly value
   if (chunk === undefined) return { found: false };
   if (chunk === null || typeof chunk !== "object") return { found: true, value: chunk };
   if (Array.isArray(chunk)) return { found: false };
+  if (isStringChunk(chunk)) return { found: false };
   if (!("value" in (chunk as object))) return { found: false };
   if (Array.isArray((chunk as { value: unknown }).value)) return { found: false };
   if ((chunk as { name?: unknown }).name) return { found: false };

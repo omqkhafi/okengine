@@ -86,6 +86,18 @@ describe("compileWhere", () => {
     expect(c.params).toEqual(["n1", "t"]);
   });
 
+  test("legacy array-valued StringChunk fragments still compile", () => {
+    const c = compileWhere({
+      queryChunks: [
+        notes.id,
+        { constructor: { name: "StringChunk" }, value: [" = "] },
+        { value: "n1" },
+      ],
+    });
+    expect(c.clause).toBe(`"id" = ?`);
+    expect(c.params).toEqual(["n1"]);
+  });
+
   test("inArray expands one placeholder per value", () => {
     const c = compileWhere(inArray(notes.id, ["a", "b", "c"]));
     expect(c.clause).toBe(`"id" in (?, ?, ?)`);
