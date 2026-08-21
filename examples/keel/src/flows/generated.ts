@@ -69,31 +69,7 @@ export { views };
 
 import * as webhooks from "./webhooks/index.ts";
 export { webhooks };
-registerFlowUnits({
-  attachments,
-  comments,
-  digest,
-  documents,
-  drafts,
-  forms,
-  github,
-  goals,
-  inbox,
-  main,
-  members,
-  my,
-  notify,
-  overdue,
-  projects,
-  recurring,
-  search,
-  slack,
-  spaces,
-  tags,
-  tasks,
-  views,
-  webhooks,
-});
+registerFlowUnits({ attachments, comments, digest, documents, drafts, forms, github, goals, inbox, main, members, my, notify, overdue, projects, recurring, search, slack, spaces, tags, tasks, views, webhooks });
 declare module "okengine" {
   interface RegisteredFlowUnits {
     readonly attachments: typeof attachments;

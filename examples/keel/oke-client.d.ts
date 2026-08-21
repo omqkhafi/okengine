@@ -7,796 +7,796 @@ declare module "okengine/client" {
   interface Register {
     app: {
       $routes: {
-        attachments: {
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/attachments/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/tasks/:id/attachments";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/attachments/:id";
-          };
-          upload: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/attachments";
-          };
+      "attachments": {
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/attachments/:id";
         };
-        comments: {
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/comments";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/comments/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/tasks/:id/comments";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/comments/:id";
-          };
-          resolve: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/comments/:id/resolve";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/comments/:id";
-          };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tasks/:id/attachments";
         };
-        digest: {
-          daily: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/attachments/:id";
         };
-        documents: {
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/documents/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/documents";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/documents/:id";
-          };
-          summarize: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/documents/:id/summarize";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/documents/:id";
-          };
-          upsert: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/documents";
-          };
+        "upload": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/attachments";
         };
-        drafts: {
-          discard: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/drafts/:id";
-          };
-          expire: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/drafts";
-          };
-          save: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PUT";
-            path: "/drafts/:id";
-          };
+      };
+      "comments": {
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/comments";
         };
-        forms: {
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/forms";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/forms/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/forms";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/forms/:id";
-          };
-          submit: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/forms/:id/submit";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/forms/:id";
-          };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/comments/:id";
         };
-        github: {
-          disconnect: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/integrations/github";
-          };
-          ingest: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/integrations/github";
-          };
-          status: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/integrations/github";
-          };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tasks/:id/comments";
         };
-        goals: {
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/goals";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/goals/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/goals";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/goals/:id";
-          };
-          rollup: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/goals/:id";
-          };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/comments/:id";
         };
-        inbox: {
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/inbox";
-          };
-          read: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/inbox/:id/read";
-          };
+        "resolve": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/comments/:id/resolve";
         };
-        main: {
-          health: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/health";
-          };
-          root: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/";
-          };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/comments/:id";
         };
-        members: {
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/members/:id";
-          };
-          invite: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/members/invite";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/members";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/members/:id";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/members/:id";
-          };
+      };
+      "digest": {
+        "daily": {
+          in: unknown;
+          out: unknown;
+          errors: {};
         };
-        my: {
-          plan: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/me/plan";
-          };
-          tasksMine: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/me/tasks";
-          };
+      };
+      "documents": {
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/documents/:id";
         };
-        notify: {
-          onComment: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onComplete: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onDraft: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onForm: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onGoal: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onGoalChanged: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onProject: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onTask: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/documents";
         };
-        overdue: {
-          watch: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/documents/:id";
         };
-        projects: {
-          addSection: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/projects/:id/sections";
-          };
-          archive: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/projects/:id/archive";
-          };
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/projects";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/projects/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/projects";
-          };
-          listSections: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/projects/:id/sections";
-          };
-          listUpdates: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/projects/:id/updates";
-          };
-          postUpdate: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/projects/:id/updates";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/projects/:id";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/projects/:id";
-          };
+        "summarize": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/documents/:id/summarize";
         };
-        recurring: {
-          spawn: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/documents/:id";
         };
-        search: {
-          embedTask: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          indexOnCreate: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onComment: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onComplete: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onForm: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          onProject: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          query: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "QUERY";
-            path: "/search";
-          };
-          reindex: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/search/reindex";
-          };
-          suggest: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/search/suggest";
-          };
+        "upsert": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/documents";
         };
-        slack: {
-          ingest: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/integrations/slack";
-          };
+      };
+      "drafts": {
+        "discard": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/drafts/:id";
         };
-        spaces: {
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/spaces";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/spaces/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/spaces";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/spaces/:id";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/spaces/:id";
-          };
+        "expire": {
+          in: unknown;
+          out: unknown;
+          errors: {};
         };
-        tags: {
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tags";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/tags/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/tags";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/tags/:id";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/tags/:id";
-          };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/drafts";
         };
-        tasks: {
-          addTag: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/tags";
-          };
-          archive: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/archive";
-          };
-          assign: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/assign";
-          };
-          complete: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/complete";
-          };
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks";
-          };
-          depend: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/depend";
-          };
-          duplicate: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/duplicate";
-          };
-          follow: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/follow";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/tasks/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/tasks";
-          };
-          move: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/move";
-          };
-          onStatus: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/tasks/:id";
-          };
-          unfollow: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/tasks/:id/unfollow";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/tasks/:id";
-          };
+        "save": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PUT";
+          path: "/drafts/:id";
         };
-        views: {
-          board: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/views/:id/board";
-          };
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/views";
-          };
-          get: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/views/:id";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/views";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/views/:id";
-          };
-          update: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "PATCH";
-            path: "/views/:id";
-          };
+      };
+      "forms": {
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/forms";
         };
-        webhooks: {
-          create: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/webhooks";
-          };
-          list: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "GET";
-            path: "/webhooks";
-          };
-          remove: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "DELETE";
-            path: "/webhooks/:id";
-          };
-          rotate: {
-            in: unknown;
-            out: unknown;
-            errors: {};
-            method: "POST";
-            path: "/webhooks/:id/rotate";
-          };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/forms/:id";
         };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/forms";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/forms/:id";
+        };
+        "submit": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/forms/:id/submit";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/forms/:id";
+        };
+      };
+      "github": {
+        "disconnect": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/integrations/github";
+        };
+        "ingest": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/integrations/github";
+        };
+        "status": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/integrations/github";
+        };
+      };
+      "goals": {
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/goals";
+        };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/goals/:id";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/goals";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/goals/:id";
+        };
+        "rollup": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/goals/:id";
+        };
+      };
+      "inbox": {
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/inbox";
+        };
+        "read": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/inbox/:id/read";
+        };
+      };
+      "main": {
+        "health": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/health";
+        };
+        "root": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/";
+        };
+      };
+      "members": {
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/members/:id";
+        };
+        "invite": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/members/invite";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/members";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/members/:id";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/members/:id";
+        };
+      };
+      "my": {
+        "plan": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/me/plan";
+        };
+        "tasksMine": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/me/tasks";
+        };
+      };
+      "notify": {
+        "onComment": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onComplete": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onDraft": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onForm": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onGoal": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onGoalChanged": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onProject": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onTask": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+      };
+      "overdue": {
+        "watch": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+      };
+      "projects": {
+        "addSection": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/projects/:id/sections";
+        };
+        "archive": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/projects/:id/archive";
+        };
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/projects";
+        };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/projects/:id";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/projects";
+        };
+        "listSections": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/projects/:id/sections";
+        };
+        "listUpdates": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/projects/:id/updates";
+        };
+        "postUpdate": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/projects/:id/updates";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/projects/:id";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/projects/:id";
+        };
+      };
+      "recurring": {
+        "spawn": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+      };
+      "search": {
+        "embedTask": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "indexOnCreate": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onComment": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onComplete": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onForm": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "onProject": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "query": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "QUERY";
+          path: "/search";
+        };
+        "reindex": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/search/reindex";
+        };
+        "suggest": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/search/suggest";
+        };
+      };
+      "slack": {
+        "ingest": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/integrations/slack";
+        };
+      };
+      "spaces": {
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/spaces";
+        };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/spaces/:id";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/spaces";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/spaces/:id";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/spaces/:id";
+        };
+      };
+      "tags": {
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tags";
+        };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tags/:id";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tags";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/tags/:id";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/tags/:id";
+        };
+      };
+      "tasks": {
+        "addTag": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/tags";
+        };
+        "archive": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/archive";
+        };
+        "assign": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/assign";
+        };
+        "complete": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/complete";
+        };
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks";
+        };
+        "depend": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/depend";
+        };
+        "duplicate": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/duplicate";
+        };
+        "follow": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/follow";
+        };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tasks/:id";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tasks";
+        };
+        "move": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/move";
+        };
+        "onStatus": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/tasks/:id";
+        };
+        "unfollow": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/tasks/:id/unfollow";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/tasks/:id";
+        };
+      };
+      "views": {
+        "board": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/views/:id/board";
+        };
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/views";
+        };
+        "get": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/views/:id";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/views";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/views/:id";
+        };
+        "update": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "PATCH";
+          path: "/views/:id";
+        };
+      };
+      "webhooks": {
+        "create": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/webhooks";
+        };
+        "list": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/webhooks";
+        };
+        "remove": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "DELETE";
+          path: "/webhooks/:id";
+        };
+        "rotate": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "POST";
+          path: "/webhooks/:id/rotate";
+        };
+      }
       };
     };
   }

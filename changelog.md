@@ -12,6 +12,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.15.1 — 2026-08-21
+
+### 🐛 Fixed
+
+- Compiler 200-flow extract budget test no longer dies on Bun's 5s default
+  timeout on GitHub Actions. CI still asserts under 4s after warmup.
+
 ## v0.15.0 — 2026-08-21
 
 ### ✨ Added

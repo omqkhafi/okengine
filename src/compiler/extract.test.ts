@@ -105,22 +105,24 @@ describe("extractManifest — fx.raw", () => {
 });
 
 describe("extractManifest — performance", () => {
-  test("200-flow synthetic app extracts in under 2s", async () => {
-    const sources: Record<string, string> = {};
-    const parts: string[] = [
-      `import { on, flow, http, store } from "okengine";`,
-      `export const db = store.sql("db");`,
-      `export const items = { name: "items" };`,
-      `export const app = { name: "synth" };`,
-    ];
-    // Declare oke name via a tiny app file pattern
-    sources["src/app.ts"] = `
+  test(
+    "200-flow synthetic app extracts in under 2s",
+    async () => {
+      const sources: Record<string, string> = {};
+      const parts: string[] = [
+        `import { on, flow, http, store } from "okengine";`,
+        `export const db = store.sql("db");`,
+        `export const items = { name: "items" };`,
+        `export const app = { name: "synth" };`,
+      ];
+      // Declare oke name via a tiny app file pattern
+      sources["src/app.ts"] = `
       import { oke } from "okengine";
       export const app = oke({ name: "synth200" });
     `;
 
-    for (let i = 0; i < 200; i++) {
-      parts.push(`
+      for (let i = 0; i < 200; i++) {
+        parts.push(`
 export const flow_${i} = on(
   http.get("/f/${i}"),
   flow("synth.flow_${i}", {
@@ -132,19 +134,22 @@ export const flow_${i} = on(
   }),
 );
 `);
-    }
-    sources["src/flows/all.ts"] = parts.join("\n");
+      }
+      sources["src/flows/all.ts"] = parts.join("\n");
 
-    await extractFromSources(sources);
-    const start = performance.now();
-    const manifest = await extractFromSources(sources);
-    const elapsed = performance.now() - start;
+      await extractFromSources(sources);
+      const start = performance.now();
+      const manifest = await extractFromSources(sources);
+      const elapsed = performance.now() - start;
 
-    expect(Object.keys(manifest.flows ?? {}).length).toBe(200);
-    // Local ~400ms after warmup. GHA shared runners measured ~2.9s cold.
-    const budgetMs = process.env.CI ? 4_000 : 2_000;
-    expect(elapsed).toBeLessThan(budgetMs);
-  });
+      expect(Object.keys(manifest.flows ?? {}).length).toBe(200);
+      // Local ~400ms after warmup. GHA shared runners measured ~2.9s cold.
+      // Warmup + extract exceeds Bun's 5s default (v0.15.0 tag timed out at 5.6s).
+      const budgetMs = process.env.CI ? 4_000 : 2_000;
+      expect(elapsed).toBeLessThan(budgetMs);
+    },
+    { timeout: 15_000 },
+  );
 });
 
 describe("serializeManifest stability", () => {
