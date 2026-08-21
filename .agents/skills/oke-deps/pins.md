@@ -6,8 +6,8 @@ Read from [SKILL.md](SKILL.md) when a bump looks suspicious. Update this file wh
 
 | Package               | Where                   | Pin / form                   | Why                                                            |
 | --------------------- | ----------------------- | ---------------------------- | -------------------------------------------------------------- |
-| `drizzle-orm`         | root, template          | `^1.0.0-rc.4` (RC line)      | Framework targets Drizzle 1 RC; npm `latest` is `0.45.x`       |
-| `drizzle-kit`         | root, template          | `^1.0.0-rc.4` (RC line)      | Must match orm channel; some canaries remove `drizzle-kit/cli` |
+| `drizzle-orm`         | root, template          | `1.0.0-rc.5-169397b` (npm `rc5`) | Framework targets Drizzle 1 RC; npm `latest` is `0.45.x`. There is no `1.0.0-rc.5`. |
+| `drizzle-kit`         | root, template          | `1.0.0-rc.5-ab785fc` (npm `rc5`) | Kit’s `rc5` tag (hash differs from orm). Confirm `drizzle-kit/cli` after install. |
 | `okengine`            | template                | `file:../..`                 | Local workspace link for scaffold tests                        |
 | `@types/bun`          | root, create-oke        | `"latest"`                   | Track Bun types with the toolchain                             |
 | `@fumadocs/base-ui`   | site                    | `^` aligned with core        | Real package name (not `fumadocs-ui` npm alias)                |

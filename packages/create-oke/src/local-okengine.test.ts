@@ -37,8 +37,8 @@ describe("materializeLocalOkengineDependency", () => {
       expect(pkg.peerDependencies).toBeUndefined();
       expect(pkg.dependencies?.["oxc-parser"]).toBeDefined();
       // Peers folded into dependencies so the out-of-tree stage can resolve them.
-      expect(pkg.dependencies?.["drizzle-orm"]).toBe("1.0.0-rc.4");
-      expect(pkg.dependencies?.["drizzle-kit"]).toBe("1.0.0-rc.4");
+      expect(pkg.dependencies?.["drizzle-orm"]).toBe("1.0.0-rc.5-169397b");
+      expect(pkg.dependencies?.["drizzle-kit"]).toBe("1.0.0-rc.5-ab785fc");
       expect(pkg.dependencies?.["zod"]).toBeDefined();
       expect(pkg.exports?.["./config"]).toBe("./src/config/index.ts");
       expect(pkg.trustedDependencies).toContain("@duckdb/node-api");

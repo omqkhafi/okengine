@@ -78,6 +78,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Keel and create-oke templates pin the same drizzle `rc5` pair as the
+  framework (`orm@1.0.0-rc.5-169397b`, `kit@1.0.0-rc.5-ab785fc`).
 - create-oke Notes (standard / advanced) use the file tree. `app.ts` is
   `import "@/flows/generated"` plus `oke({ name })` — `.adopt(routes)` is
   optional. Keel `core.ts` splits by element; the barrel stays `@/core`.
@@ -88,6 +90,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Drizzle pin: `drizzle-orm@1.0.0-rc.5-169397b` (npm `rc5`) and
+  `drizzle-kit@1.0.0-rc.5-ab785fc` (kit `rc5`). There is no
+  `1.0.0-rc.5` on the registry.
 - User-plane HTTP `fx.store` stamps Gate identity per statement on
   postgres / pglite. Cron / CDC / signal stay table-owner.
 - `oke()` auto-drains `store.kv` / `store.index`, `clock()`, and
@@ -155,6 +160,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Resource header no longer repeats a singleton ref
   (`kv:reminders · kv:reminders` → `kv:reminders`). SQL still shows
   `sql:db · sql:tasks`.
+
+#### Console — Units & Call API
+
+- Extract expands `z.object` and `drizzle-orm/zod` (`createSelectSchema` /
+  insert / update, `tableZod().select`) into Manifest JSON Schema so Call
+  API Fields and the contract Request / Response lists populate instead of
+  "Schema not expanded in Manifest."
 
 #### Runtime
 

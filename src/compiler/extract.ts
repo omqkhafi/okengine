@@ -22,6 +22,7 @@ import type {
   Flow,
   Gate,
   Journey,
+  JsonSchema,
   Manifest,
   RateStrategy,
   ResourceRef,
@@ -47,6 +48,11 @@ import {
   type Literal,
 } from "./effects-infer.ts";
 import { nameFromFlowFile, pathFromFlowFile } from "./flow-path.ts";
+import {
+  defaultListInSchema,
+  jsonSchemaFromAst,
+  type SchemaExpandContext,
+} from "./schema-from-ast.ts";
 
 /** One source file for extraction. */
 export interface SourceFile {
@@ -83,6 +89,10 @@ interface ProjectScope {
   stores: Record<string, Store>;
   /** Binding or table name → declared columns from `store.schema.table`. */
   schemaTables: Map<string, DeclaredSchemaTable>;
+  /** `const Name = <init>` per file — used to expand flow `in` / `out`. */
+  constInitsByFile: Map<string, Map<string, AstNode>>;
+  /** Unique project-wide const names (ambiguous names omitted). */
+  uniqueConstInits: Map<string, { node: AstNode; file: string }>;
   clocks: Record<string, Clock>;
   gates: Record<string, Gate>;
   /** Local binding name → gate manifest id (policy name or rate expression). */
@@ -125,6 +135,8 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
     signals: {},
     stores: {},
     schemaTables: new Map(),
+    constInitsByFile: new Map(),
+    uniqueConstInits: new Map(),
     clocks: {},
     gates: {},
     gateIds: new Map(),
@@ -150,8 +162,8 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   });
 
   // Pass 1 — declarations (elements, config, named bindings).
-  for (const { program } of parsed) {
-    collectDeclarations(program, scope);
+  for (const { file, program } of parsed) {
+    collectDeclarations(file.path, program, scope);
   }
 
   // Pass 2 — flows / on() bindings.
@@ -236,13 +248,13 @@ async function readSources(rootDir: string, pattern: string): Promise<SourceFile
   return files;
 }
 
-function collectDeclarations(program: AstNode, scope: ProjectScope): void {
+function collectDeclarations(filePath: string, program: AstNode, scope: ProjectScope): void {
   walk(program, (node) => {
     if (node.type === "CallExpression") {
       visitDeclarationCall(node as CallExpression, program, scope);
     }
     if (node.type === "VariableDeclarator") {
-      visitDeclarator(node as AstNode, scope);
+      visitDeclarator(node as AstNode, filePath, scope);
     }
   });
 
@@ -257,12 +269,13 @@ function collectDeclarations(program: AstNode, scope: ProjectScope): void {
   });
 }
 
-function visitDeclarator(decl: AstNode, scope: ProjectScope): void {
+function visitDeclarator(decl: AstNode, filePath: string, scope: ProjectScope): void {
   const id = (decl as AstNode & { id?: AstNode }).id;
   const init = (decl as AstNode & { init?: AstNode }).init;
   if (!id || !init) return;
   const name = identifierName(id);
   if (!name) return;
+  recordConstInit(scope, filePath, name, unwrapTsExpr(init));
 
   // export const x = on(...) / flow(...) — flow export alias
   if (init.type === "CallExpression") {
@@ -427,9 +440,7 @@ function attachSchemaOption(
   }
 }
 
-function parseInlineSchemaTable(
-  call: CallExpression,
-): DeclaredSchemaTable | undefined {
+function parseInlineSchemaTable(call: CallExpression): DeclaredSchemaTable | undefined {
   const callee = call.callee;
   if (callee.type !== "MemberExpression") return undefined;
   const member = callee as AstNode & { object: AstNode; property: AstNode };
@@ -508,7 +519,11 @@ function parseSchemaTableExtra(
     if (!key) return undefined;
     const opts = objectArg(call.arguments[1]);
     const command = (stringProp(opts, "for") ??
-      (method === "owner" ? "all" : method === "scope" ? "insert" : "select")) as TablePolicy["for"];
+      (method === "owner"
+        ? "all"
+        : method === "scope"
+          ? "insert"
+          : "select")) as TablePolicy["for"];
     const slug = key.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
     const name = `${method}_${slug}_${command}`;
     const lit = `'${key.replaceAll("'", "''")}'`;
@@ -599,6 +614,10 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
         }
         if (method === "describe") {
           description = stringArg(call.arguments[0]) ?? description;
+        }
+        if (method === "defaultFn") {
+          hasDefault = true;
+          defaultValue = defaultValue ?? null;
         }
         if (method === "default") {
           const lit = call.arguments[0];
@@ -1490,9 +1509,9 @@ function registerFlow(args: {
   }
   if (gates && gates.length > 0) flow.gates = gates;
 
-  const inSchema = schemaProp(opts, "in");
+  const inSchema = schemaProp(opts, "in", args.scope, args.file.path);
   if (inSchema !== undefined) flow.in = inSchema;
-  const outSchema = schemaProp(opts, "out");
+  const outSchema = schemaProp(opts, "out", args.scope, args.file.path);
   if (outSchema !== undefined) flow.out = outSchema;
 
   const errors = parseErrors(objectProp(opts, "errors"));
@@ -1735,32 +1754,86 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
   const idPath = `${path}/:id`;
   const line = lineAt(file.source, call.start ?? 0);
   const live = boolProp(opts, "liveList") === true;
+  const skipCreate = boolProp(opts, "skipCreate") === true;
+  const ctx = schemaExpandContext(scope, file.path);
+  const createIn = jsonSchemaFromAst(objectProp(opts, "createIn"), ctx);
+  const itemOut = jsonSchemaFromAst(objectProp(opts, "out"), ctx);
+  const updateIn = jsonSchemaFromAst(objectProp(opts, "updateIn"), ctx) ?? createIn;
+  const idSchema: JsonSchema = {
+    type: "object",
+    properties: { id: { type: "string" } },
+    required: ["id"],
+  };
+  const okSchema: JsonSchema = {
+    type: "object",
+    properties: { ok: { const: true, type: "boolean" } },
+    required: ["ok"],
+  };
 
-  const verbs = [
+  const verbs: readonly {
+    readonly op: string;
+    readonly method: string;
+    readonly p: string;
+    readonly eff: Effects | undefined;
+    readonly live?: boolean;
+    readonly in?: JsonSchema;
+    readonly out?: JsonSchema;
+  }[] = [
     {
       op: "list",
       method: "GET",
       p: path,
       eff: storeRef ? { reads: [storeRef] } : undefined,
       live,
+      in: defaultListInSchema(),
+      ...(itemOut ? { out: { type: "array", items: itemOut } } : {}),
     },
-    { op: "create", method: "POST", p: path, eff: storeRef ? { writes: [storeRef] } : undefined },
-    { op: "get", method: "GET", p: idPath, eff: storeRef ? { reads: [storeRef] } : undefined },
-    { op: "update", method: "PATCH", p: idPath, eff: both },
+    ...(skipCreate
+      ? []
+      : [
+          {
+            op: "create",
+            method: "POST",
+            p: path,
+            eff: storeRef ? { writes: [storeRef] } : undefined,
+            ...(createIn ? { in: createIn } : {}),
+            out: idSchema,
+          },
+        ]),
+    {
+      op: "get",
+      method: "GET",
+      p: idPath,
+      eff: storeRef ? { reads: [storeRef] } : undefined,
+      in: idSchema,
+      ...(itemOut ? { out: itemOut } : {}),
+    },
+    {
+      op: "update",
+      method: "PATCH",
+      p: idPath,
+      eff: both,
+      in: updateIn ? mergeIdIntoSchema(updateIn) : idSchema,
+      out: idSchema,
+    },
     {
       op: "delete",
       method: "DELETE",
       p: idPath,
       eff: storeRef ? { reads: [storeRef], writes: [storeRef] } : undefined,
+      in: idSchema,
+      out: okSchema,
     },
-  ] as const;
+  ];
 
   for (const v of verbs) {
     const name = `${unit}.${v.op}`;
     const flow: Flow = {
       trigger: { http: { method: v.method as never, path: v.p } },
       ...(v.eff ? { effects: v.eff as Effects } : {}),
-      ...("live" in v && v.live ? { live: true } : {}),
+      ...(v.live ? { live: true } : {}),
+      ...(v.in !== undefined ? { in: v.in } : {}),
+      ...(v.out !== undefined ? { out: v.out } : {}),
       source: `${file.path}:${line}`,
     };
     scope.flows[name] = flow;
@@ -1983,14 +2056,69 @@ function parseSlo(node: AstNode | undefined): Slo | undefined {
   };
 }
 
-function schemaProp(obj: AstNode | undefined, key: string): string | undefined {
+function recordConstInit(scope: ProjectScope, filePath: string, name: string, node: AstNode): void {
+  const byFile = scope.constInitsByFile.get(filePath) ?? new Map<string, AstNode>();
+  byFile.set(name, node);
+  scope.constInitsByFile.set(filePath, byFile);
+  const existing = scope.uniqueConstInits.get(name);
+  if (existing === undefined) {
+    scope.uniqueConstInits.set(name, { node, file: filePath });
+    return;
+  }
+  if (existing.file !== filePath) {
+    scope.uniqueConstInits.delete(name);
+  }
+}
+
+function schemaExpandContext(scope: ProjectScope, filePath: string): SchemaExpandContext {
+  return {
+    filePath,
+    resolveConst: (name, fromFile) => {
+      const local = scope.constInitsByFile.get(fromFile)?.get(name);
+      if (local) return { node: local, file: fromFile };
+      return scope.uniqueConstInits.get(name);
+    },
+    bindings: scope.bindings,
+    tableColumns: (name) => scope.schemaTables.get(name)?.columns,
+  };
+}
+
+function mergeIdIntoSchema(schema: JsonSchema): JsonSchema {
+  if (typeof schema === "string") {
+    return {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    };
+  }
+  const properties = {
+    ...((schema.properties as Record<string, unknown> | undefined) ?? {}),
+    id: { type: "string" },
+  };
+  const required = [
+    ...new Set([...(Array.isArray(schema.required) ? (schema.required as string[]) : []), "id"]),
+  ];
+  return { ...schema, type: "object", properties, required };
+}
+
+function schemaProp(
+  obj: AstNode | undefined,
+  key: string,
+  scope: ProjectScope,
+  filePath: string,
+): JsonSchema | undefined {
   const node = objectProp(obj, key);
   if (!node) return undefined;
-  // Identifier / member schemas → opaque placeholder matching the spec excerpt.
-  if (node.type === "Identifier" || node.type === "MemberExpression") {
+  const expanded = jsonSchemaFromAst(node, schemaExpandContext(scope, filePath));
+  if (expanded) return expanded;
+  // Identifier / member / call that we could not expand — spec excerpt placeholder.
+  if (
+    node.type === "Identifier" ||
+    node.type === "MemberExpression" ||
+    node.type === "CallExpression"
+  ) {
     return "…";
   }
-  if (node.type === "CallExpression") return "…";
   const lit = stringArg(node);
   if (lit) return lit;
   return "…";

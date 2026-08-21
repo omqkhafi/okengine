@@ -267,7 +267,6 @@ export const db = store.sql("app", { schema: { bookings } });
     expect(table?.policies?.owner_owner_all?.using).toContain("oke.user()");
   });
 
-
   test("extracts optional description fields additively", async () => {
     const source = `
 import { store, field, signal, channel, clock, gate, vault } from "okengine";
@@ -957,5 +956,247 @@ export const get = on(
     expect(treeFx?.reads?.length).toBeGreaterThan(0);
     expect(treeFx?.emits?.length).toBeGreaterThan(0);
     expect(treeFx?.calls?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("extractManifest — flow in/out schema expansion", () => {
+  test("expands z.object identifiers into JSON Schema fields", async () => {
+    const source = `
+import { flow } from "okengine";
+import { z } from "zod";
+
+export const TaskCreateIn = z.object({
+  title: z.string().min(1).max(500),
+  spaceKey: z.string().min(1),
+  priority: z.number().int().min(0).max(4).optional(),
+});
+
+export const TaskCreateOut = z.object({
+  id: z.string(),
+  identifier: z.string(),
+});
+
+export const create = flow("tasks.create", {
+  in: TaskCreateIn,
+  out: TaskCreateOut,
+  do: async () => ({ id: "1", identifier: "ENG-1" }),
+});
+`;
+    const manifest = await extractFromSources({ "src/flows/tasks/shapes.ts": source });
+    expect(manifest.flows?.["tasks.create"]?.in).toEqual({
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1, maxLength: 500 },
+        spaceKey: { type: "string", minLength: 1 },
+        priority: { type: "integer", minimum: 0, maximum: 4 },
+      },
+      required: ["title", "spaceKey"],
+    });
+    expect(manifest.flows?.["tasks.create"]?.out).toEqual({
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        identifier: { type: "string" },
+      },
+      required: ["id", "identifier"],
+    });
+  });
+
+  test("expands drizzle-orm/zod createSelect/Insert/UpdateSchema from table columns", async () => {
+    const schema = `
+import { store, field, id, now } from "okengine";
+
+export const users = store.schema.table("users", {
+  id: field.text().primaryKey().defaultFn(id),
+  name: field.text().notNull(),
+  age: field.integer().notNull(),
+  bio: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+`;
+    const flows = `
+import { flow } from "okengine";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
+import { users } from "../schema.decl.ts";
+
+export const userSelect = createSelectSchema(users);
+export const userInsert = createInsertSchema(users);
+export const userUpdate = createUpdateSchema(users);
+
+export const create = flow("users.create", {
+  in: userInsert,
+  out: userSelect,
+  do: async () => ({}),
+});
+
+export const patch = flow("users.patch", {
+  in: userUpdate,
+  do: async () => ({}),
+});
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": schema,
+      "src/flows/users.ts": flows,
+    });
+    const insert = manifest.flows?.["users.create"]?.in as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    expect(insert?.properties).toMatchObject({
+      name: { type: "string" },
+      age: { type: "integer" },
+      bio: { type: "string" },
+      createdAt: { type: "integer" },
+    });
+    expect(insert?.properties?.id).toBeUndefined();
+    expect(insert?.required).toEqual(["name", "age"]);
+
+    const select = manifest.flows?.["users.create"]?.out as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    expect(select?.properties?.id).toMatchObject({ type: "string", primaryKey: true });
+    expect(select?.required).toEqual(expect.arrayContaining(["id", "name", "age", "createdAt"]));
+    expect(select?.required).not.toContain("bio");
+
+    const update = manifest.flows?.["users.patch"]?.in as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    expect(update?.properties?.name).toMatchObject({ type: "string" });
+    expect(update?.properties?.id).toBeUndefined();
+    expect(update?.required).toBeUndefined();
+  });
+
+  test("expands tableZod(table).select / .insert and .pick()", async () => {
+    const schema = `
+import { store, field, id } from "okengine";
+export const spaces = store.schema.table("spaces", {
+  id: field.text().primaryKey().defaultFn(id),
+  key: field.text().notNull().unique(),
+  name: field.text().notNull(),
+  color: field.text(),
+});
+`;
+    const zod = `
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
+export function tableZod(table) {
+  return {
+    select: createSelectSchema(table),
+    insert: createInsertSchema(table),
+    update: createUpdateSchema(table),
+  };
+}
+export const spacesZod = tableZod(spaces);
+`;
+    const flows = `
+import { flow } from "okengine";
+export const create = flow("spaces.create", {
+  in: spacesZod.insert,
+  out: spacesZod.select.pick({ id: true, key: true }),
+  do: async () => ({}),
+});
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": schema,
+      "src/db/zod.ts": zod,
+      "src/flows/spaces.ts": flows,
+    });
+    expect(manifest.flows?.["spaces.create"]?.in).toMatchObject({
+      type: "object",
+      properties: {
+        key: { type: "string", unique: true },
+        name: { type: "string" },
+        color: { type: "string" },
+      },
+      required: ["key", "name"],
+    });
+    expect(manifest.flows?.["spaces.create"]?.out).toEqual({
+      type: "object",
+      properties: {
+        id: { type: "string", primaryKey: true },
+        key: { type: "string", unique: true },
+      },
+      required: ["id", "key"],
+    });
+  });
+
+  test("bindCrud stamps createIn / out onto CRUD flows", async () => {
+    const source = `
+import { store, field, id } from "okengine";
+import { z } from "zod";
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey().defaultFn(id),
+  title: field.text().notNull(),
+});
+
+const createIn = z.object({
+  title: z.string().min(1),
+});
+
+export const { list, create, get, update, remove } = bindCrud({
+  unit: "notes",
+  path: "/notes",
+  table: notes,
+  createIn,
+  out: createSelectSchema(notes),
+});
+`;
+    const manifest = await extractFromSources({ "src/flows/notes/index.ts": source });
+    expect(manifest.flows?.["notes.create"]?.in).toEqual({
+      type: "object",
+      properties: { title: { type: "string", minLength: 1 } },
+      required: ["title"],
+    });
+    expect(manifest.flows?.["notes.get"]?.out).toMatchObject({
+      type: "object",
+      properties: {
+        id: { type: "string", primaryKey: true },
+        title: { type: "string" },
+      },
+    });
+    expect(manifest.flows?.["notes.list"]?.in).toMatchObject({
+      type: "object",
+      properties: { q: { type: "string" }, limit: { type: "integer" } },
+    });
+    expect((manifest.flows?.["notes.update"]?.in as { required?: string[] }).required).toContain(
+      "id",
+    );
+  });
+
+  test("same-named createIn stays file-local (does not leak across units)", async () => {
+    const spaces = `
+import { flow } from "okengine";
+import { z } from "zod";
+const createIn = z.object({ key: z.string(), name: z.string() });
+export const create = flow("spaces.create", {
+  in: createIn,
+  do: async () => ({}),
+});
+`;
+    const views = `
+import { flow } from "okengine";
+import { z } from "zod";
+const createIn = z.object({ kind: z.enum(["list", "board"]) });
+export const create = flow("views.create", {
+  in: createIn,
+  do: async () => ({}),
+});
+`;
+    const manifest = await extractFromSources({
+      "src/flows/spaces/index.ts": spaces,
+      "src/flows/views/index.ts": views,
+    });
+    expect(manifest.flows?.["spaces.create"]?.in).toEqual({
+      type: "object",
+      properties: { key: { type: "string" }, name: { type: "string" } },
+      required: ["key", "name"],
+    });
+    expect(manifest.flows?.["views.create"]?.in).toEqual({
+      type: "object",
+      properties: { kind: { type: "string", enum: ["list", "board"] } },
+      required: ["kind"],
+    });
   });
 });

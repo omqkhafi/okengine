@@ -99,7 +99,7 @@ bun add <name>@<version>            # dependency
 bun add -d <name>@<version>         # devDependency
 ```
 
-Keep range style consistent with the file (`^` vs exact vs npm alias). Do not flip `^1.0.0-rc.4` → exact unless canary resolution broke the build — then pin exact and mention it.
+Keep range style consistent with the file (`^` vs exact vs npm alias). Do not flip `^1.0.0-rc.5` → exact unless canary resolution broke the build — then pin exact and mention it.
 
 ### 4. Install
 
