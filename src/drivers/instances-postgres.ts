@@ -40,13 +40,13 @@ const UPSERT_SQL = `INSERT INTO oke_instances (id, started_at, heartbeat_at, lea
 function wrapBunClient(client: BunInstanceClient): PostgresInstanceSql {
   return {
     async query(sql, params = []) {
-      const pg = toPostgresParams(sql);
+      const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (Array.isArray(result)) return result as Record<string, unknown>[];
       return Array.from(result as ArrayLike<Record<string, unknown>>);
     },
     async exec(sql, params = []) {
-      const pg = toPostgresParams(sql);
+      const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (
         result &&

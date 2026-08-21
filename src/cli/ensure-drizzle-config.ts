@@ -24,7 +24,8 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema.drizzle.ts",
   out: "./src/db/migrations",
-  // Core runtime tables (oke_crons, …) are created by drivers — not domain schema.
+  // Domain tables live in public. Schema \`oke\` (RLS) and \`oke_console\` are engine-owned.
+  schemaFilter: ["public"],
   tablesFilter: ["!oke_*"],
   dbCredentials: {
     url: process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL!,

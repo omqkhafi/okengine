@@ -202,7 +202,7 @@ export async function generateAdoptBarrel(
   }
   if (registerNames.length > 0) {
     parts.push(`registerFlowUnits({ ${registerNames.join(", ")} });`);
-    parts.push("declare module \"okengine\" {");
+    parts.push('declare module "okengine" {');
     parts.push("  interface RegisteredFlowUnits {");
     parts.push(...declareLines);
     parts.push("  }");
@@ -357,6 +357,9 @@ function assertUnitPrefix(unit: string, file: WalkedFlowFile): void {
  */
 export function importAlias(unit: string, relFromUnit: string): string {
   const posix = toPosixPath(relFromUnit).replace(/\.[^.]+$/, "");
-  const body = posix.replace(/\[/g, "$").replace(/\]/g, "$").replace(/[^\w$]/g, "_");
+  const body = posix
+    .replace(/\[/g, "$")
+    .replace(/\]/g, "$")
+    .replace(/[^\w$]/g, "_");
   return `${unit}_${body}`;
 }

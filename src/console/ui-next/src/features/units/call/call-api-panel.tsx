@@ -53,8 +53,10 @@ import { cn } from "@/lib/utils";
 import type { RunCache } from "@/features/flows/traces/cache-icon.ts";
 import { CacheGlyph } from "@/features/flows/traces/cache-glyph.tsx";
 import { formatDuration } from "@/features/flows/traces/format-duration.ts";
+import { httpMethodHasBody } from "@/features/flows/traces/http-method.ts";
 import { useStoreQuery } from "@/features/store/data/use-store-query.ts";
 import { useClockRunNow, useFlowsIdentities, useFlowsInvoke } from "../data/use-flows-invoke.ts";
+import { pickSeedFields, splitCallApiInput } from "../lib/contract-input.ts";
 import {
   fieldConstraintHint,
   fieldsFromSchema,
@@ -313,33 +315,41 @@ function InvokeBodyPanel({
     () => (kind === "http" && row.path ? pathParamNames(row.path) : []),
     [kind, row.path],
   );
+  const split = useMemo(
+    () =>
+      splitCallApiInput(fields, {
+        http: kind === "http",
+        method: row.method,
+        pathParams: params,
+      }),
+    [fields, kind, row.method, params],
+  );
+  const showBody = kind !== "http" || httpMethodHasBody(row.method);
 
   const [invokeAs, setInvokeAs] = useState<CallInvokeAs>({ asGate: null, asUserId: null });
   const [piiMasked, setPiiMasked] = useState(true);
   const [pathValues, setPathValues] = useState<Record<string, string>>(() =>
     seedPathValues(row.path, params),
   );
-  const [body, setBody] = useState<Record<string, unknown>>(
+  const seedAll = useMemo(
     () => (seedFromSchema(inSchema) as Record<string, unknown>) ?? {},
+    [inSchema],
   );
+  const seedQuery = useMemo(() => pickSeedFields(seedAll, split.query), [seedAll, split.query]);
+  const seedBody = useMemo(() => pickSeedFields(seedAll, split.body), [seedAll, split.body]);
+  const [query, setQuery] = useState<Record<string, unknown>>(seedQuery);
+  const [body, setBody] = useState<Record<string, unknown>>(seedBody);
   const [bodyView, setBodyView] = useState<BodyView>("fields");
-  const [rawText, setRawText] = useState(() =>
-    stringifyBody((seedFromSchema(inSchema) as Record<string, unknown>) ?? {}),
-  );
+  const [rawText, setRawText] = useState(() => stringifyBody(seedBody));
   const [rawError, setRawError] = useState<string | null>(null);
   const [localErrors, setLocalErrors] = useState<readonly { path: string; message: string }[]>([]);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
-  const seedBody = useMemo(
-    () => (seedFromSchema(inSchema) as Record<string, unknown>) ?? {},
-    [inSchema],
-  );
-
   useEffect(() => {
-    const next = (seedFromSchema(inSchema) as Record<string, unknown>) ?? {};
-    setBody(next);
-    setRawText(stringifyBody(next));
+    setQuery(seedQuery);
+    setBody(seedBody);
+    setRawText(stringifyBody(seedBody));
     setRawError(null);
     setBodyView("fields");
     setPathValues(seedPathValues(row.path, params));
@@ -388,8 +398,8 @@ function InvokeBodyPanel({
   }
 
   async function onCall(includePii = !piiMasked): Promise<void> {
-    let nextBody = body;
-    if (bodyView === "raw") {
+    let nextBody = showBody ? body : {};
+    if (showBody && bodyView === "raw") {
       if (!commitRawText(rawText)) return;
       try {
         nextBody = JSON.parse(rawText) as Record<string, unknown>;
@@ -397,7 +407,8 @@ function InvokeBodyPanel({
         return;
       }
     }
-    const local = validateContract(inSchema, nextBody);
+    const invokeBody = { ...query, ...nextBody };
+    const local = validateContract(inSchema, { ...pathValues, ...invokeBody });
     if (!local.ok) {
       setLocalErrors(local.errors);
       return;
@@ -408,7 +419,7 @@ function InvokeBodyPanel({
     try {
       await invoke.mutateAsync({
         flowId: row.id,
-        body: nextBody,
+        body: invokeBody,
         ...(invokeAs.asUserId ? { asUserId: invokeAs.asUserId } : {}),
         ...(invokeAs.asGate ? { asGate: invokeAs.asGate } : {}),
         ...(params.length > 0 ? { pathParams: pathValues } : {}),
@@ -420,6 +431,7 @@ function InvokeBodyPanel({
   }
 
   function onReset(): void {
+    setQuery(seedQuery);
     setBody(seedBody);
     setRawText(stringifyBody(seedBody));
     setRawError(null);
@@ -471,8 +483,12 @@ function InvokeBodyPanel({
               }
             }}
           />
-          <DockSep />
-          <BodyViewToggle view={bodyView} onChange={onBodyViewChange} />
+          {showBody ? (
+            <>
+              <DockSep />
+              <BodyViewToggle view={bodyView} onChange={onBodyViewChange} />
+            </>
+          ) : null}
           <DockSep />
           <Tooltip>
             <TooltipTrigger
@@ -492,7 +508,7 @@ function InvokeBodyPanel({
               )}
             />
             <TooltipContent side="bottom" className="text-[11px]">
-              Reset body to the schema example
+              {showBody ? "Reset body to the schema example" : "Reset to schema examples"}
             </TooltipContent>
           </Tooltip>
           <DockSep />
@@ -566,7 +582,7 @@ function InvokeBodyPanel({
           ) : null}
 
           {params.length > 0 ? (
-            <section className="min-w-0" aria-label="Path params">
+            <section className="min-w-0" aria-label="Path params" data-slot="call-api-path">
               <DockChapter title="Path params" hint={row.path ?? undefined} />
               {params.map((name) => (
                 <SheetField key={name} label={name} className="[&>span]:px-3">
@@ -583,67 +599,89 @@ function InvokeBodyPanel({
             </section>
           ) : null}
 
-          <section className="min-w-0" aria-label="Body">
-            <DockChapter
-              title="Body"
-              hint={bodyView === "raw" ? "raw JSON" : "seeded from schema"}
-            />
-            {bodyView === "raw" ? (
-              <div className="border-b border-border/50">
-                <textarea
-                  data-slot="call-api-body-raw"
-                  aria-label="Raw JSON body"
-                  spellCheck={false}
-                  value={rawText}
-                  onChange={(e) => {
-                    setRawText(e.target.value);
-                    if (rawError) setRawError(null);
-                  }}
-                  className={cn(
-                    "min-h-40 w-full resize-y rounded-none border-0 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-foreground outline-none",
-                    "placeholder:text-muted-foreground focus-visible:bg-muted/20",
-                    rawError && "text-destructive",
-                  )}
-                />
-                {rawError ? (
-                  <p
-                    role="alert"
-                    className="px-3 pb-2 text-xs text-destructive"
-                    data-slot="call-api-raw-error"
-                  >
-                    {rawError}
-                  </p>
-                ) : null}
-              </div>
-            ) : fields.length === 0 ? (
-              <p className="border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-                No body fields (empty object).
-              </p>
-            ) : (
+          {split.query.length > 0 ? (
+            <section className="min-w-0" aria-label="Query params" data-slot="call-api-query">
+              <DockChapter title="Query params" hint="seeded from schema" />
               <SheetGrid>
-                {fields.map((f) => (
+                {split.query.map((f) => (
                   <BodyField
                     key={f.path}
                     field={f}
-                    value={body[f.name]}
-                    onChange={(v) => setBody((prev) => ({ ...prev, [f.name]: v }))}
+                    idPrefix="query"
+                    value={query[f.name]}
+                    onChange={(v) => setQuery((prev) => ({ ...prev, [f.name]: v }))}
                     error={localErrors.find((e) => e.path === `/${f.name}` || e.path === f.path)}
                     wide={f.type === "object" || f.type === "array"}
                     manifest={manifest}
                   />
                 ))}
               </SheetGrid>
-            )}
-            {localErrors.length > 0 ? (
-              <p
-                role="alert"
-                className="px-3 py-2 text-xs text-destructive"
-                data-slot="call-api-validation"
-              >
-                Fix contract errors before sending.
-              </p>
-            ) : null}
-          </section>
+            </section>
+          ) : null}
+
+          {showBody ? (
+            <section className="min-w-0" aria-label="Body" data-slot="call-api-body">
+              <DockChapter
+                title="Body"
+                hint={bodyView === "raw" ? "raw JSON" : "seeded from schema"}
+              />
+              {bodyView === "raw" ? (
+                <div className="border-b border-border/50">
+                  <textarea
+                    data-slot="call-api-body-raw"
+                    aria-label="Raw JSON body"
+                    spellCheck={false}
+                    value={rawText}
+                    onChange={(e) => {
+                      setRawText(e.target.value);
+                      if (rawError) setRawError(null);
+                    }}
+                    className={cn(
+                      "min-h-40 w-full resize-y rounded-none border-0 bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-foreground outline-none",
+                      "placeholder:text-muted-foreground focus-visible:bg-muted/20",
+                      rawError && "text-destructive",
+                    )}
+                  />
+                  {rawError ? (
+                    <p
+                      role="alert"
+                      className="px-3 pb-2 text-xs text-destructive"
+                      data-slot="call-api-raw-error"
+                    >
+                      {rawError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : split.body.length === 0 ? (
+                <p className="border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
+                  No body fields (empty object).
+                </p>
+              ) : (
+                <SheetGrid>
+                  {split.body.map((f) => (
+                    <BodyField
+                      key={f.path}
+                      field={f}
+                      value={body[f.name]}
+                      onChange={(v) => setBody((prev) => ({ ...prev, [f.name]: v }))}
+                      error={localErrors.find((e) => e.path === `/${f.name}` || e.path === f.path)}
+                      wide={f.type === "object" || f.type === "array"}
+                      manifest={manifest}
+                    />
+                  ))}
+                </SheetGrid>
+              )}
+            </section>
+          ) : null}
+          {localErrors.length > 0 ? (
+            <p
+              role="alert"
+              className="px-3 py-2 text-xs text-destructive"
+              data-slot="call-api-validation"
+            >
+              Fix contract errors before sending.
+            </p>
+          ) : null}
         </div>
 
         <ResponseBlock
@@ -1057,6 +1095,7 @@ function BodyField({
   error,
   wide = false,
   manifest,
+  idPrefix = "body",
 }: {
   readonly field: FormField;
   readonly value: unknown;
@@ -1064,8 +1103,9 @@ function BodyField({
   readonly error?: { path: string; message: string };
   readonly wide?: boolean;
   readonly manifest: Manifest | null;
+  readonly idPrefix?: string;
 }): JSX.Element {
-  const id = `body-${field.name}`;
+  const id = `${idPrefix}-${field.name}`;
   const fk = useFkFieldOptions(field, manifest);
   const hint = [
     !field.required ? "optional" : null,

@@ -8,6 +8,7 @@ import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { EDGE_STROKE } from "../graph/flow-graph-theme.ts";
 import {
   httpMethodBadgeClass,
+  httpMethodHasBody,
   httpMethodIcon,
   httpMethodRailClass,
   httpMethodSortRank,
@@ -107,6 +108,23 @@ describe("effectKindIcon", () => {
     expect(effectKindIcon("ask")).toBe(ELEMENT_ICONS.ai.icon);
     expect(effectKindIcon("send")).toBe(ELEMENT_ICONS.channel.icon);
     expect(effectKindIcon("secret")).toBe(ELEMENT_ICONS.vault.icon);
+  });
+});
+
+describe("httpMethodHasBody", () => {
+  test("GET, HEAD, and DELETE are path/query only", () => {
+    expect(httpMethodHasBody("GET")).toBe(false);
+    expect(httpMethodHasBody("HEAD")).toBe(false);
+    expect(httpMethodHasBody("DELETE")).toBe(false);
+    expect(httpMethodHasBody("get")).toBe(false);
+  });
+
+  test("POST, PUT, PATCH, QUERY, and OPTIONS carry JSON", () => {
+    expect(httpMethodHasBody("POST")).toBe(true);
+    expect(httpMethodHasBody("PUT")).toBe(true);
+    expect(httpMethodHasBody("PATCH")).toBe(true);
+    expect(httpMethodHasBody("QUERY")).toBe(true);
+    expect(httpMethodHasBody("OPTIONS")).toBe(true);
   });
 });
 
@@ -352,7 +370,7 @@ describe("Sheet Replay path", () => {
           ok: true as const,
           rootId: run.id,
           dryRun: false,
-          at: 1,
+          at: "2026-08-21T09:36:51.525Z",
           flow: run.flow,
         },
         error: null,

@@ -8,6 +8,7 @@
  */
 
 import { resolve } from "node:path";
+import type { Hint as DrizzleKitHint } from "drizzle-kit/cli";
 import {
   dialectFromDriverId,
   maybeEmitDomainSchema,
@@ -91,7 +92,10 @@ export interface DbOptions {
   readonly config?: string;
   readonly write?: (text: string) => void;
   /** Injectable push (tests). */
-  readonly pushFn?: (opts: { config: string }) => Promise<DbKitResult>;
+  readonly pushFn?: (opts: {
+    config: string;
+    hints?: readonly DbKitHint[];
+  }) => Promise<DbKitResult>;
   /** Injectable generate (tests). */
   readonly generateFn?: (opts: {
     config: string;
@@ -130,11 +134,59 @@ export interface DbOptions {
   readonly stdinIsTTY?: boolean;
 }
 
+/** drizzle-kit SDK hint — create vs rename vs confirm data loss. */
+export type DbKitHint =
+  | {
+      readonly type: "create";
+      readonly kind: string;
+      readonly entity: readonly string[];
+    }
+  | {
+      readonly type: "rename";
+      readonly kind: string;
+      readonly from: readonly string[];
+      readonly to: readonly string[];
+    }
+  | {
+      readonly type: "confirm_data_loss";
+      readonly kind: string;
+      readonly entity: readonly string[];
+    };
+
 /** Minimal drizzle-kit envelope we handle. */
 export interface DbKitResult {
   readonly status: "ok" | "no_changes" | "missing_hints" | "error" | string;
-  readonly error?: { readonly code?: string; readonly message?: string };
+  readonly error?: {
+    readonly code?: string;
+    readonly message?: string;
+    readonly sql?: string;
+  };
   readonly unresolved?: readonly unknown[];
+}
+
+/**
+ * Auto-resolve drizzle-kit `rename_or_create` as create (dev push).
+ * Leaves `confirm_data_loss` for the caller to fail on.
+ *
+ * @param unresolved - Kit `missing_hints` payload
+ */
+export function createHintsForRenameOrCreate(
+  unresolved: readonly unknown[] | undefined,
+): DbKitHint[] {
+  const hints: DbKitHint[] = [];
+  if (!unresolved) return hints;
+  for (const item of unresolved) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    if (rec.type !== "rename_or_create") continue;
+    if (typeof rec.kind !== "string" || !Array.isArray(rec.entity)) continue;
+    hints.push({
+      type: "create",
+      kind: rec.kind,
+      entity: rec.entity.map((part) => String(part)),
+    });
+  }
+  return hints;
 }
 
 /**
@@ -296,11 +348,14 @@ export async function runPush(
 
   const pushFn =
     options.pushFn ??
-    (async (opts: { config: string }) => {
+    (async (opts: { config: string; hints?: readonly DbKitHint[] }) => {
       const { push } = await import("drizzle-kit/cli");
       return (await push({
         config: opts.config,
         ...(options.explain ? { explain: true } : {}),
+        ...(opts.hints && opts.hints.length > 0
+          ? { hints: [...opts.hints] as DrizzleKitHint[] }
+          : {}),
       })) as DbKitResult;
     });
 
@@ -308,7 +363,14 @@ export async function runPush(
   try {
     result = await withDrizzleKitEnv(cwd, loaded?.config, env, async () => {
       await installOkeRlsHelpers(write);
-      return pushFn({ config: configPath });
+      const first = await pushFn({ config: configPath });
+      if (options.explain || first.status !== "missing_hints") return first;
+      const createHints = createHintsForRenameOrCreate(first.unresolved);
+      if (createHints.length === 0) return first;
+      write(
+        `oke db push: creating ${createHints.length} new ${createHints.length === 1 ? "object" : "objects"}\n`,
+      );
+      return pushFn({ config: configPath, hints: createHints });
     });
   } catch (err) {
     write(`oke db push: ${err instanceof Error ? err.message : String(err)}\n`);
@@ -655,8 +717,19 @@ function reportKitResult(verb: string, result: DbKitResult, write: (text: string
     if (detail) write(detail);
     return EXIT_RUNTIME;
   }
-  write(
-    `oke db ${verb}: ${result.status}${result.error?.message ? ` — ${result.error.message}` : ""}\n`,
-  );
+  write(`oke db ${verb}: ${result.status}${formatKitError(result.error)}\n`);
   return EXIT_RUNTIME;
+}
+
+/**
+ * Format a drizzle-kit `error` object for the CLI line.
+ *
+ * @param error - Kit envelope error
+ */
+export function formatKitError(error: DbKitResult["error"] | undefined): string {
+  if (!error) return "";
+  const parts = [error.code, error.message, error.sql].filter(
+    (part): part is string => typeof part === "string" && part.length > 0,
+  );
+  return parts.length > 0 ? ` — ${parts.join(" — ")}` : "";
 }

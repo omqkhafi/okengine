@@ -5,6 +5,7 @@ import {
   buildRlsIdentityPreludeSql,
   emitPgPolicySource,
   formatPolicyRole,
+  OKE_RLS_HELPER_STATEMENTS,
   OKE_RLS_ROLE,
   parseSqlPolicySpec,
   rlsScopesJson,
@@ -137,5 +138,21 @@ describe("buildRlsIdentityPreludeSql", () => {
       expect(stmt.sql.includes(";")).toBe(false);
     }
     expect(stmts[2]?.params).toEqual(["member", "alice", '["member"]']);
+  });
+});
+
+describe("OKE_RLS_HELPER_STATEMENTS", () => {
+  test("has_scope uses jsonb_exists so ? is not a placeholder", () => {
+    const hasScope = OKE_RLS_HELPER_STATEMENTS.find((s) => s.includes("oke.has_scope"));
+    expect(hasScope).toBeDefined();
+    expect(hasScope).toContain("jsonb_exists(");
+    expect(hasScope).not.toMatch(/jsonb\s+\?/);
+  });
+
+  test("pins search_path to public so schema oke is not the table home", () => {
+    expect(OKE_RLS_HELPER_STATEMENTS).toContain("SET search_path TO public, oke");
+    expect(
+      OKE_RLS_HELPER_STATEMENTS.some((s) => s.includes("ALTER TABLE oke.%I SET SCHEMA public")),
+    ).toBe(true);
   });
 });

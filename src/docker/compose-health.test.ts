@@ -16,6 +16,12 @@ describe("compose-health", () => {
     expect(composeRowToStatus({ State: "stopped" })).toBe("error");
     expect(composeRowToStatus({ Status: "Exited (0) 3 seconds ago" })).toBe("error");
     expect(composeRowToStatus({ State: "running" })).toBe("ready");
+    expect(composeRowToStatus({ State: "restarting" })).toBe("pending");
+    expect(composeRowToStatus({ State: "running", Status: "Up Less than a second" })).toBe(
+      "pending",
+    );
+    expect(composeRowToStatus({ State: "running", Status: "Up 2 seconds" })).toBe("pending");
+    expect(composeRowToStatus({ State: "running", Status: "Up 2 minutes" })).toBe("ready");
     expect(composeRowToStatus({ Status: "Up 2 seconds (health: starting)" })).toBe("pending");
   });
 
@@ -58,6 +64,27 @@ describe("compose-health", () => {
     });
     expect(map.get("store-sql")).toBe("ready");
     expect(updates).toEqual(["store-sql:pending", "store-sql:ready"]);
+  });
+
+  test("watchComposeHealth waits through compose restarting", async () => {
+    let calls = 0;
+    const map = await watchComposeHealth({
+      files: ["compose.yml"],
+      cwd: "/tmp",
+      env: {},
+      intervalMs: 1,
+      timeoutMs: 5_000,
+      sleep: async () => {},
+      run: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return JSON.stringify([{ Service: "store-sql", State: "restarting" }]);
+        }
+        return JSON.stringify([{ Service: "store-sql", Health: "healthy", State: "running" }]);
+      },
+    });
+    expect(calls).toBe(2);
+    expect(map.get("store-sql")).toBe("ready");
   });
 
   test("readComposeHealth / watch use ps -a", async () => {

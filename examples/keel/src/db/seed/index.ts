@@ -231,7 +231,11 @@ async function volume(fx: Fx) {
   await seedFiles(fx, allFiles);
   await seedKvNamespace(fx, draftsKv, [...FEATURED_DRAFTS, ...KEEL_VOLUME.drafts]);
   await seedKvNamespace(fx, remindersKv, [...FEATURED_REMINDERS, ...KEEL_VOLUME.reminders]);
-  await seedKvNamespace(fx, viewPrefsKv, viewPrefEntries([...FEATURED_VIEWS, ...KEEL_VOLUME.views]));
+  await seedKvNamespace(
+    fx,
+    viewPrefsKv,
+    viewPrefEntries([...FEATURED_VIEWS, ...KEEL_VOLUME.views]),
+  );
   await seedKvNamespace(fx, webhooksKv, FEATURED_WEBHOOKS);
   await seedIndex(fx, taskIndex, [...FEATURED_INDEX, ...KEEL_VOLUME.index]);
   await seedIndex(fx, documentIndex, [

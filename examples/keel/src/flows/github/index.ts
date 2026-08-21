@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { githubToken, member, projectAdminWrite } from "@/core";
 import { Ok } from "@/lib/shapes";
-import { create as createTask } from "@/flows/tasks/index";
 import { TaskCreateOut } from "@/flows/tasks/shapes";
 
 const IngestIn = z.object({
@@ -22,7 +21,7 @@ export const ingest = on(
     out: TaskCreateOut.pick({ id: true, identifier: true }),
     do: async (input, fx) => {
       await fx.vault.get(githubToken);
-      const created = (await fx.call(createTask, {
+      const created = (await fx.call("tasks.create", {
         title: input.title ?? "GitHub issue",
         spaceKey: input.spaceKey ?? "ENG",
         description: input.body,

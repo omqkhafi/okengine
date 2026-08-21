@@ -289,11 +289,9 @@ describe("store.schema RLS extras", () => {
   });
 
   test("rls() without policies emits pgTable.withRLS", () => {
-    const notes = store.schema.table(
-      "notes",
-      { id: field.text().primaryKey() },
-      [store.schema.rls()],
-    );
+    const notes = store.schema.table("notes", { id: field.text().primaryKey() }, [
+      store.schema.rls(),
+    ]);
     expect(notes.rls).toBe(true);
     expect(notes.policies).toBeUndefined();
     expect(emitDrizzleSource([notes], "postgres")).toContain("pgTable.withRLS");

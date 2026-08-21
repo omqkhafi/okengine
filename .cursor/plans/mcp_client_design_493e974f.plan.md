@@ -12,27 +12,27 @@ overview: Promote MCP client support to a dedicated next implementation round. H
 todos:
 
 - id: declare-api
-content: Add ai.mcpServer(name, { url | command, auth, tools }) with required allowlist and .tool() NamedRef
-status: pending
+  content: Add ai.mcpServer(name, { url | command, auth, tools }) with required allowlist and .tool() NamedRef
+  status: pending
 - id: mcp-client-session
-content: "Build caller: per-request _meta (2026-07-28) + era fallback to initialize; Streamable HTTP + stdio; no SDK"
-status: pending
+  content: "Build caller: per-request _meta (2026-07-28) + era fallback to initialize; Streamable HTTP + stdio; no SDK"
+  status: pending
 - id: toolloop-unify
-content: Map mcp:server/tool ↔ server__tool into AiToolDef and dispatch through existing toolLoop / gated call
-status: pending
+  content: Map mcp:server/tool ↔ server__tool into AiToolDef and dispatch through existing toolLoop / gated call
+  status: pending
 - id: capability-compiler
-content: "Stamp manifest.ai.mcpServers; infer effects.calls mcp: refs; OKE1007 for undeclared MCP tools"
-status: pending
+  content: "Stamp manifest.ai.mcpServers; infer effects.calls mcp: refs; OKE1007 for undeclared MCP tools"
+  status: pending
 - id: abort
-content: Thread ALS into MCP transport; HTTP cancel = close fetch/SSE stream; stdio = notifications/cancelled then kill
-status: pending
+  content: Thread ALS into MCP transport; HTTP cancel = close fetch/SSE stream; stdio = notifications/cancelled then kill
+  status: pending
 - id: tests-docs
-content: Mock-transport tests (unified list, drop extras, OKE1007, abort, era fallback) + AI/MCP docs (incl. Console surfaces) + changelog when implementing
-status: pending
+  content: Mock-transport tests (unified list, drop extras, OKE1007, abort, era fallback) + AI/MCP docs (incl. Console surfaces) + changelog when implementing
+  status: pending
 - id: console-mcp-visibility
-content: "Parse mcp:server/tool in graph/Units/traces; AI node + call-edge; chip 'Call github → create_issue'; no dedicated MCP page"
-status: pending
-isProject: false
+  content: "Parse mcp:server/tool in graph/Units/traces; AI node + call-edge; chip 'Call github → create_issue'; no dedicated MCP page"
+  status: pending
+  isProject: false
 
 ---
 
@@ -46,13 +46,13 @@ Investigation and design only. No implementation in this round.
 
 **HTTP transport is blocked** until this amendment is the implementation source. stdio process-spawn plumbing and all non-transport design may proceed; stdio still needs per-request `_meta` and a `server/discover` probe (see §2.4) — the handshake is gone from the **protocol core**, not only HTTP.
 
-**Framing (competitor policy):** MCP is an open protocol ([modelcontextprotocol.io](https://modelcontextprotocol.io)), already named and linked from [site/content/docs/ai/mcp.mdx](site/content/docs/ai/mcp.mdx). That is fine. Naming real protocol servers in docs/examples (filesystem, GitHub official MCP, Playwright) is fine — they are not the gated peer frameworks (`Hono` / `Elysia` / `Encore` / `NestJS` / `Fastify` / `Express` / `iii.dev` in [src/cli/competitor-mention-removal.test.ts](src/cli/competitor-mention-removal.test.ts)).
+**Framing (competitor policy):** MCP is an open protocol ([modelcontextprotocol.io](https://modelcontextprotocol.io)), already named and linked from [site/content/docs/ai/mcp.mdx](site/content/docs/ai/mcp.mdx). That is fine. Naming real protocol servers in docs/examples (filesystem, GitHub official MCP, Playwright) is fine — they are not the gated peer frameworks listed in [src/cli/competitor-mention-removal.test.ts](src/cli/competitor-mention-removal.test.ts).
 
 ---
 
 ## 1. What actually exists in `src/mcp/` (reuse vs build)
 
-The prior “only shared JSON-RPC envelope types” finding is **directionally right, slightly understated**. There is a bit more than the envelope — and almost none of it is usable as a *caller*.
+The prior “only shared JSON-RPC envelope types” finding is **directionally right, slightly understated**. There is a bit more than the envelope — and almost none of it is usable as a _caller_.
 
 ### Reusable as-is (shared wire vocabulary)
 
@@ -72,7 +72,7 @@ That is the real shared surface.
 - `data.ts` (`McpDataEnvelope`, `asData`) — OKE confused-deputy wrapping. Third-party `tools/call` results are MCP content blocks.
 - `authorization.ts`, `session.ts`, `confirmation.ts`, `tools.ts`, `server.ts` — responder only.
 
-This project's MCP **server** speaks plain `POST /mcp` → one JSON body. It ignores `initialize` params, never requires `notifications/initialized`, never reads `Mcp-Session-Id`, and never returns SSE. It is closer to the *idea* of stateless POST than to 2025-11-25 sessions — and it is still **not** 2026-07-28 (no `_meta`, no `Mcp-Method` / `Mcp-Name`, no `server/discover`, no `resultType`). Do not treat it as the client target dialect.
+This project's MCP **server** speaks plain `POST /mcp` → one JSON body. It ignores `initialize` params, never requires `notifications/initialized`, never reads `Mcp-Session-Id`, and never returns SSE. It is closer to the _idea_ of stateless POST than to 2025-11-25 sessions — and it is still **not** 2026-07-28 (no `_meta`, no `Mcp-Method` / `Mcp-Name`, no `server/discover`, no `resultType`). Do not treat it as the client target dialect.
 
 ### Must be built fresh (caller direction)
 
@@ -102,8 +102,6 @@ sequenceDiagram
   Server-->>App: content blocks
 ```
 
-
-
 New types/modules (no `@modelcontextprotocol/sdk` — same “no SDK” rule as [src/mcp/protocol.ts](src/mcp/protocol.ts)):
 
 - Per-request `_meta` types: `io.modelcontextprotocol/protocolVersion`, `clientCapabilities`, `clientInfo`
@@ -131,7 +129,6 @@ Official sources: [changelog](https://modelcontextprotocol.io/specification/2026
 
 Terminology from the spec: **Modern** = `2026-07-28` and later (per-request metadata). **Legacy** = `2025-11-25` and earlier (`initialize` handshake). **Dual-era** = implements both.
 
-
 | Concern                   | 2025-11-25 (legacy)                                                                               | 2026-07-28 (modern)                                                                                                                                                                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Session                   | Optional `Mcp-Session-Id` on initialize; client MUST echo it; 404 → new initialize; DELETE to end | **Removed.** No protocol session. Any instance can serve any request.                                                                                                                                                               |
@@ -147,7 +144,6 @@ Terminology from the spec: **Modern** = `2026-07-28` and later (per-request meta
 | `ping`                    | Supported                                                                                         | **Removed.**                                                                                                                                                                                                                        |
 | Results                   | No `resultType`                                                                                   | Required `resultType`: `"complete"` or `"input_required"`. Clients MUST treat a missing field as `"complete"` (legacy servers). Unrecognized `resultType` is invalid.                                                               |
 | Cross-call app state      | Hidden in the transport session                                                                   | **Explicit-handle pattern** (below).                                                                                                                                                                                                |
-
 
 **Error-code correction (do not confuse these):**
 
@@ -168,7 +164,7 @@ Replace the approved design’s handshake Must list with this:
 - Must: one `POST` per JSON-RPC request to the MCP endpoint
 - Must: `Accept: application/json, text/event-stream` (both response shapes)
 - Must: every request body carries `_meta.io.modelcontextprotocol/protocolVersion` = `"2026-07-28"` and `clientCapabilities` (tools-only; **empty `extensions`** — see §2.3). `clientInfo` SHOULD be `{ name: "okengine", version }`
-- Must: headers `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` on `tools/call`, matching the body. Honor `x-mcp-header` → `Mcp-Param-*` (spec: HTTP clients MUST; drop a tool from the offer list if its annotation is invalid)
+- Must: headers `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` on `tools/call`, matching the body. Follow `x-mcp-header` → `Mcp-Param-*` (spec: HTTP clients MUST; drop a tool from the offer list if its annotation is invalid)
 - Must: treat HTTP cancel as **aborting the fetch / closing the SSE stream**. Do not POST `notifications/cancelled` on HTTP
 - Must: parse `resultType`; missing → `"complete"`; `"input_required"` → fail the tool call loud (v1 does not implement MRTR / elicitation / HITL); any other unrecognized value → invalid
 - Must: on a broken SSE stream, re-issue with a **new** request id (no `Last-Event-ID`)
@@ -188,8 +184,10 @@ We are a **dual-era client** (modern first, legacy fallback). Both eras are in p
 1. Attempt a **modern** request first (`server/discover` or `tools/list`) with 2026-07-28 `_meta` + required headers.
 2. On **HTTP 400**, inspect the JSON-RPC error **body** before doing anything else.
 3. **Recognized modern error** → the server is modern. **Do not fall back to `initialize`.**
-  - `-32022` `UnsupportedProtocolVersion` → pick a mutually supported version from `error.data.supported` and retry. If the only overlap is a legacy version listed there, use that version’s *modern* `_meta` path only if it is still modern; if `supported` is only pre-2026-07-28, that still identifies a modern-speaking server that chose not to implement 2026-07-28 — retry with that advertised version under the rules of that revision (for `2025-11-25` that means the initialize path). In practice a modern server listing `2025-11-25` in `supported` is dual-era and telling us to speak legacy *by version*, not by “unrecognized 400”.
-  - `-32020` HeaderMismatch / `-32021` MissingRequiredClientCapability → correct the request or fail. Still modern.
+
+- `-32022` `UnsupportedProtocolVersion` → pick a mutually supported version from `error.data.supported` and retry. If the only overlap is a legacy version listed there, use that version’s _modern_ `_meta` path only if it is still modern; if `supported` is only pre-2026-07-28, that still identifies a modern-speaking server that chose not to implement 2026-07-28 — retry with that advertised version under the rules of that revision (for `2025-11-25` that means the initialize path). In practice a modern server listing `2025-11-25` in `supported` is dual-era and telling us to speak legacy _by version_, not by “unrecognized 400”.
+- `-32020` HeaderMismatch / `-32021` MissingRequiredClientCapability → correct the request or fail. Still modern.
+
 4. **400 with empty body, or a body that is not a recognized modern JSON-RPC error** → the server is **legacy**. Fall back to `initialize` + `notifications/initialized`, then speak 2025-11-25 Streamable HTTP (echo `Mcp-Session-Id` if issued; 404 on that header → new initialize).
 5. Auth failures, 401/403, 5xx, timeouts, and network errors are **not** downgrade signals.
 6. Cache the era per **HTTP origin** for the process lifetime (spec SHOULD). Re-probe if a later request falsifies the cache.
@@ -207,8 +205,6 @@ flowchart TD
   fix --> modern
   legacy --> init[initialize plus optional Mcp-Session-Id]
 ```
-
-
 
 **stdio detection** (same era model, different probe — [stdio backward compatibility](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio#backward-compatibility)):
 
@@ -277,8 +273,6 @@ flowchart LR
   dispatch --> mcpCall["gated call mcp:server/tool"]
 ```
 
-
-
 **Name mapping** (two strings, one bijection):
 
 - Capability / Manifest / `effects.calls`: `mcp:<server>/<tool>` — same ResourceRef style as `sql:table`, `kv:namespace`
@@ -292,7 +286,7 @@ flowchart LR
 callTool: (tool, input) =>
   isMcpToolRef(tool)
     ? gated("call", tool, () => mcpRuntime.call(tool, input, currentAbortSignal()))
-    : fx.call(tool, input)
+    : fx.call(tool, input);
 ```
 
 `dispatchTool` already throws when the model asks for a name not in `allowedTools`. MCP does not weaken that.
@@ -319,7 +313,7 @@ Undeclared server: there is no handle, so there is nothing to pass into `tools`.
 
 ALS is already installed ([src/kernel/abort-scope.ts](src/kernel/abort-scope.ts) → [src/kernel/app.ts](src/kernel/app.ts) `request.signal` → `withAbortSignal`). `fx.ask` merges timeout + ambient into `toolLoop`’s `signal`; `fx.run` passes `currentAbortSignal()`.
 
-**Gap today:** that signal is only forwarded to `client.complete()`. `dispatchTool` → `invoke(tool, args)` does **not** take a signal. In-flight `fx.call` is not aborted; only the *next* model turn sees hang-up.
+**Gap today:** that signal is only forwarded to `client.complete()`. `dispatchTool` → `invoke(tool, args)` does **not** take a signal. In-flight `fx.call` is not aborted; only the _next_ model turn sees hang-up.
 
 MCP v1 must close that gap for MCP calls (not a general `fx.call` rewrite):
 
@@ -442,7 +436,6 @@ Zero special handling exists today. `mcp:` is not mentioned anywhere under `src/
 
 ### 10.1 How `mcp:` would render today (confirmed)
 
-
 | Surface                                                                                              | What happens                                                                                                                                                                                                                           | Special `mcp:` handling                                                                                                                                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [effect-kind.ts](src/console/ui-next/src/features/flows/traces/effect-kind.ts)                       | `kind: "call"` → label “Call”, `ELEMENT_ICONS.flow`, `EDGE_STROKE.calls` (`#60A5FA`)                                                                                                                                                   | None. Icon/color keyed only on EffectKind.                                                                                                                                                                                                                                |
@@ -453,13 +446,11 @@ Zero special handling exists today. `mcp:` is not mentioned anywhere under `src/
 | Flow graph [build-flow-graph.ts](src/console/ui-next/src/features/flows/graph/build-flow-graph.ts)   | **Every** `effects.calls` entry becomes an edge `flow:{caller}` → `flow:{callee}`. `targetFromRef` understands `sql:` / `kv:` / `files:` / `index:` / `signal:` / `ai:` / `vault:` / `channel:` / `gate:` / `clock:` — **not `mcp:`**. | None — and this is a defect: target `flow:mcp:github/create_issue` has **no node** (only real Manifest flows get nodes). Ranking `link()` skips missing nodes; the edge is still pushed. Dangling call edge. Neighborhood `keep.add(callee)` treats the ref as a flow id. |
 | Observability [AiRail](src/console/ui-next/src/features/observability/detail/ai-rail.tsx)            | Counts `kind === "ask"` only ([ask-count.ts](src/console/ui-next/src/features/observability/lib/ask-count.ts))                                                                                                                         | MCP `call`s are invisible here.                                                                                                                                                                                                                                           |
 
-
 Verdict: indistinguishable from `fx.call` on chips/traces; **broken** on the graph (missing-flow edge), not merely unlabeled.
 
 ### 10.2 What is worth surfacing
 
 Already on `EffectEntry`: `kind`, `resource` (`mcp:<server>/<tool>`), `duration`, `timestamp`.
-
 
 | Fact                    | v1 Console?                                                      | Why                                                                                                                                |
 | ----------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -468,7 +459,6 @@ Already on `EffectEntry`: `kind`, `resource` (`mcp:<server>/<tool>`), `duration`
 | Era (modern / legacy)   | **No**                                                           | Process-local transport cache. Not an operator decision. Surfacing it needs a new Console API. Failures already show on the trace. |
 | Last-successful-call    | **No** as a status card                                          | Traces already are that timeline.                                                                                                  |
 | Declared allowlist      | **Yes**, as Units chips / graph edges — not a separate inventory | Same as `effects.calls` for flows.                                                                                                 |
-
 
 ### 10.3 Visual distinction — reuse, do not invent
 

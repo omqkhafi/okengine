@@ -57,6 +57,36 @@ export type RlsIdentity = {
  */
 export const OKE_RLS_HELPER_STATEMENTS: readonly string[] = [
   "CREATE SCHEMA IF NOT EXISTS oke",
+  // DB user is often `oke` — default search_path `"$user", public` then
+  // creates unqualified tables in schema `oke`. Domain tables belong in public.
+  "SET search_path TO public, oke",
+  `DO $oke_search_path$
+BEGIN
+  EXECUTE 'ALTER ROLE CURRENT_USER SET search_path TO public, oke';
+EXCEPTION
+  WHEN others THEN NULL;
+END
+$oke_search_path$`,
+  `DO $oke_rehome$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT c.relname AS name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'oke' AND c.relkind = 'r'
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_class c2
+      JOIN pg_namespace n2 ON n2.oid = c2.relnamespace
+      WHERE n2.nspname = 'public' AND c2.relname = r.name AND c2.relkind = 'r'
+    ) THEN
+      EXECUTE format('ALTER TABLE oke.%I SET SCHEMA public', r.name);
+    END IF;
+  END LOOP;
+END
+$oke_rehome$`,
   `CREATE OR REPLACE FUNCTION oke.gate() RETURNS text
 LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.gate', true) $$`,
   `CREATE OR REPLACE FUNCTION oke.user() RETURNS text
@@ -65,7 +95,7 @@ LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.user', true) $$`,
 LANGUAGE sql STABLE AS $$
   SELECT CASE
     WHEN current_setting('oke.scopes', true) IN ('') THEN false
-    ELSE current_setting('oke.scopes', true)::jsonb ? p_scope
+    ELSE jsonb_exists(current_setting('oke.scopes', true)::jsonb, p_scope)
   END
 $$`,
   `DO $oke_rls_role$
@@ -81,6 +111,13 @@ $oke_rls_role$`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${OKE_RLS_ROLE}`,
   `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${OKE_RLS_ROLE}`,
   `GRANT ${OKE_RLS_ROLE} TO CURRENT_USER`,
+  `DO $oke_app_search_path$
+BEGIN
+  EXECUTE 'ALTER ROLE ${OKE_RLS_ROLE} SET search_path TO public, oke';
+EXCEPTION
+  WHEN others THEN NULL;
+END
+$oke_app_search_path$`,
 ];
 
 /**

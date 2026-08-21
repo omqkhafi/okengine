@@ -362,7 +362,9 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
   for (const [key, col] of Object.entries(finalized)) {
     stamped[key] = { ...col, tableName: name };
   }
-  const policies = extras.filter((extra): extra is SchemaPolicyDecl => extra.kind === "schema-policy");
+  const policies = extras.filter(
+    (extra): extra is SchemaPolicyDecl => extra.kind === "schema-policy",
+  );
   const rls = extras.some((extra) => extra.kind === "schema-rls") || policies.length > 0;
   const table = {
     name,
@@ -475,8 +477,15 @@ export function schemaPolicyScope(
   });
 }
 
+/** Callable `store.schema.policy` plus Gate helpers. */
+export type SchemaPolicyApi = typeof schemaPolicy & {
+  readonly gate: typeof schemaPolicyGate;
+  readonly owner: typeof schemaPolicyOwner;
+  readonly scope: typeof schemaPolicyScope;
+};
+
 /** `store.schema.policy` — raw + Gate helpers. */
-export const schemaPolicyApi = Object.assign(schemaPolicy, {
+export const schemaPolicyApi: SchemaPolicyApi = Object.assign(schemaPolicy, {
   gate: schemaPolicyGate,
   owner: schemaPolicyOwner,
   scope: schemaPolicyScope,

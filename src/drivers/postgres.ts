@@ -102,10 +102,14 @@ export async function withPinnedPostgres<T>(
 
 /**
  * Convert `?` placeholders to Postgres `$1…$n`.
+ * Leaves SQL unchanged when there are no bound values so operators
+ * like `jsonb ? key` are not rewritten.
  *
  * @param sql - SQL with `?` placeholders
+ * @param values - Bound values (empty skips conversion)
  */
-export function toPostgresParams(sql: string): string {
+export function toPostgresParams(sql: string, values: readonly unknown[] = []): string {
+  if (values.length === 0) return sql;
   let i = 0;
   return sql.replace(/\?/g, () => `$${++i}`);
 }
@@ -138,13 +142,13 @@ function wrapPostgresClient(
     driverId: "postgres",
     role,
     async query(sql, params = []) {
-      const pg = toPostgresParams(sql);
+      const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (Array.isArray(result)) return result as SqlRow[];
       return Array.from(result as ArrayLike<SqlRow>);
     },
     async exec(sql, params = []) {
-      const pg = toPostgresParams(sql);
+      const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (
         result &&

@@ -1063,6 +1063,11 @@ Inserts and selects now resolve it from the declaration. Keep the `name` column.
 Schema DDL never runs automatically in `prod`. Under `oke dev`, `db.autoPush` (default `true`) runs `oke db push`. For production use `oke db generate` + `oke db migrate`.
 
 </Accordion>
+<Accordion title="oke db push: missing_hints">
+
+New tables are created automatically. Push only manages `public` — it will not drop schema `oke` (RLS helpers) or `oke_console`. Remaining `missing_hints` are destructive (drop a non-empty public table, type change). Review with `oke db generate`.
+
+</Accordion>
 <Accordion title="I need a join — with: is not supported">
 
 `fx.store` is one table per call by design. Read each table separately and compose in the flow (or extract a shared flow and `fx.call` it). Every table then appears explicitly in the Manifest's effect graph — which is what powers cache invalidation and PII masking.

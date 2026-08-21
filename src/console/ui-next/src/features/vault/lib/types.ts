@@ -110,5 +110,5 @@ export interface VaultRotateMasterResult {
   readonly kekVersion: number;
   readonly remaining: number;
   readonly masterKey: string | null;
-  readonly at: number;
+  readonly at: string;
 }

@@ -51,8 +51,7 @@ export function resolveRlsIdentity(input: ResolveRlsIdentityInput): RlsIdentity 
 
   const declared = input.manifest?.gates?.[asGate];
   if (!declared || declared.kind === "rate" || asGate.startsWith("rate:")) return null;
-  const scopes =
-    declared.scopes && declared.scopes.length > 0 ? declared.scopes : [asGate];
+  const scopes = declared.scopes && declared.scopes.length > 0 ? declared.scopes : [asGate];
   return { gate: asGate, userId: "", scopes: [...scopes] };
 }
 

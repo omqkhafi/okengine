@@ -7,6 +7,7 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema.drizzle.ts",
   out: "./src/db/migrations",
+  schemaFilter: ["public"],
   tablesFilter: ["!oke_*"],
   dbCredentials: {
     url: process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL!,

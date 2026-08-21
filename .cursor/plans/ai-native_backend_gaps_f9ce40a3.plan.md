@@ -41,8 +41,6 @@ flowchart LR
   als --> fxStream
 ```
 
-
-
 - `**fx.stream` is real** — token-by-token from OpenAI-compatible SSE / Ollama NDJSON, cancelled via ambient ALS + a local `AbortController` (`[src/kernel/fx.ts](src/kernel/fx.ts)` ~1824–1854, `[src/drivers/ai-openai-compatible.ts](src/drivers/ai-openai-compatible.ts)` ~144–158).
 - **HTTP delivery is not** — `do` is awaited to completion, then `[encodeSuccess](src/compiler/response.ts)` builds a buffered `Response.json({ data, error: null })`. The client SDK always `decode()`s a JSON envelope (`[src/client/transport.ts](src/client/transport.ts)`).
 - `**fx.ask` already has a `via` fallback chain** — ordered logical models, same-model retry on 429/5xx, journaled attempts, Console projection. This is not a greenfield gap.
@@ -78,11 +76,14 @@ Dev pretty-print (`[asBrowserJsonCodeBlock](src/runtime/json-code-block.ts)`) on
 The existing HTTP-response convention is the branded carrier `[fx.json.ok` / `create` / `empty` / `with](src/kernel/fx.ts)` — not a flow-option enum, not a raw `Response`, and there is no `fx.http` namespace.
 
 ```ts
-on(http.post("/complete").gate.public, flow("chat.complete", {
-  do: async (input, fx) => {
-    return fx.json.stream(fx.stream(smart, { prompt: input.prompt }));
-  },
-}));
+on(
+  http.post("/complete").gate.public,
+  flow("chat.complete", {
+    do: async (input, fx) => {
+      return fx.json.stream(fx.stream(smart, { prompt: input.prompt }));
+    },
+  }),
+);
 ```
 
 - Add `fx.json.stream(iterable)` as a sibling carrier (same brand family, distinct kind).
@@ -104,7 +105,6 @@ Kernel changes that must accompany the carrier (otherwise the escape-hatch `retu
 
 ### Real current abort graph
 
-
 | Layer                                                 | Signal today                                                                                                                                                                  |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Bun `Request.signal`                                  | Exists on the Fetch `Request`. Never read in `[app.ts](src/kernel/app.ts)` / `[execute](src/kernel/app.ts)`.                                                                  |
@@ -113,7 +113,6 @@ Kernel changes that must accompany the carrier (otherwise the escape-hatch `retu
 | `[fx.ask](src/elements/ai/runtime.ts)`                | `mergeAskAbortSignal(timeout)` **only** — comment says “e.g. request cancel” but ambient is never passed (line 597).                                                          |
 | Drivers                                               | OpenAI-compatible / Ollama **do** pass `opts.signal` into `fetch`. **Anthropic `complete` ignores it** (`[src/drivers/ai-anthropic.ts](src/drivers/ai-anthropic.ts)` ~39–53). |
 | `fx.run` / `toolLoop`                                 | No `signal` forwarded today.                                                                                                                                                  |
-
 
 `[AiCompleteOptions.signal](src/drivers/ai-types.ts)` is the right plumbing. The missing link is HTTP → ALS → `fx.ask` / `fx.stream`. Bun `Request.signal` was verified locally: client abort during a slow handler fires the server request’s abort listener. The kernel never observes it.
 
@@ -152,12 +151,10 @@ This is the highest-leverage, lowest-effort fix: no new public API if done befor
 
 ### Tradeoff
 
-
 | Path                                 | Reality                                                                                                                                                                                                                                                                    |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | v1 “stream once, disconnect cancels” | Matches current Journal semantics. Pair with item 2. **Do this.**                                                                                                                                                                                                          |
 | Resumable reconnect                  | Needs a **new** journal kind (token prefix / event id), persist cadence, `Last-Event-ID` reconnect, and a client that is not `createClient` today (`[src/client/live-gap.test.ts](src/client/live-gap.test.ts)` documents no SSE). Not a Journal step-recording extension. |
-
 
 Do not overbuild. Treat resumable streams as a later round if product need appears.
 
@@ -234,7 +231,6 @@ High effort; do not block v1 streaming on it.
 
 ## Prioritized closure
 
-
 | Priority  | Item                                                          | Impact                                | Effort                                    | Verdict                                                                  |
 | --------- | ------------------------------------------------------------- | ------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
 | **P0**    | 2 — Wire `request.signal` → ALS → `fx.ask` / `fx.stream`      | Stops silent token burn on disconnect | Low                                       | Fix first. No new API.                                                   |
@@ -243,7 +239,6 @@ High effort; do not block v1 streaming on it.
 | **Later** | 4 — HITL `waiting` + explicit resume                          | Real interrupt-resume                 | High                                      | New journal status. Not `JournalSuspend` overloading.                    |
 | **Later** | 5 — MCP **client** as AI tool source                          | External tool ecosystem               | High                                      | Separate from MCP server. Reuse `toolLoop` + capability, not server ACL. |
 | **Defer** | 3 — Resumable reconnect                                       | Disconnect/reconnect mid-gen          | High                                      | Not a Journal extension. v1 = stream once + cancel.                      |
-
 
 ### Suggested first implementation slice (when leaving Plan)
 

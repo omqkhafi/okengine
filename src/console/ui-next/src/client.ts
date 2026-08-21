@@ -446,7 +446,7 @@ export type TracesReplayResult = {
   readonly ok: true;
   readonly rootId: string;
   readonly dryRun: boolean;
-  readonly at: number;
+  readonly at: string;
   readonly flow: string;
 };
 
@@ -679,7 +679,7 @@ export type ClockRunNowResult = {
   readonly ok: true;
   readonly name: string;
   readonly ran: boolean;
-  readonly at: number;
+  readonly at: string;
 };
 
 /**
@@ -836,7 +836,7 @@ export type StoreRevealInput = {
 export type StoreRevealResult = {
   readonly ok: true;
   readonly value: unknown;
-  readonly at: number;
+  readonly at: string;
 };
 
 /**
@@ -879,7 +879,7 @@ export type StoreEditResult = {
     readonly kind: "send" | "ask";
     readonly resource: string;
   }>;
-  readonly at: number;
+  readonly at: string;
   readonly rls?: {
     readonly gate: string | null;
     readonly userId: string;
@@ -928,7 +928,7 @@ export type StoreDeleteInput = {
 export type StoreDeleteResult = {
   readonly ok: true;
   readonly deleted: number;
-  readonly at: number;
+  readonly at: string;
 };
 
 /**
@@ -1295,7 +1295,7 @@ export type VaultWriteResult = {
   readonly ok: true;
   readonly name: string;
   readonly fingerprint: string | null;
-  readonly at: number;
+  readonly at: string;
 };
 
 /**
@@ -1359,7 +1359,7 @@ export type VaultRotateMasterResult = {
   readonly kekVersion: number;
   readonly remaining: number;
   readonly masterKey: string | null;
-  readonly at: number;
+  readonly at: string;
 };
 
 /**

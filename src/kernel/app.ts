@@ -737,9 +737,7 @@ export function oke(options: OkeOptions): OkeApp {
   // Resolve Gate bag early so auth HTTP Bindings join `adopted` + the router
   // before posture audit (same ensureBoot → doBoot path — never a side channel).
   const mergedGate: GateOptions | undefined =
-    effectivePolicies.length > 0
-      ? { ...options.gate, policies: effectivePolicies }
-      : options.gate;
+    effectivePolicies.length > 0 ? { ...options.gate, policies: effectivePolicies } : options.gate;
   const gateConfig: ResolvedGateConfig = resolveGateConfig({
     gate: mergedGate,
     env: options.env,

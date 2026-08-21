@@ -81,7 +81,7 @@ export async function connectPglite(options: SqlConnectOptions = {}): Promise<Sq
     driverId: "pglite",
     role,
     async query(sql, params = []) {
-      const rs = await db.query<SqlRow>(toPostgresParams(sql), [...params]);
+      const rs = await db.query<SqlRow>(toPostgresParams(sql, params), [...params]);
       return rs.rows;
     },
     async exec(sql, params = []) {
@@ -92,7 +92,7 @@ export async function connectPglite(options: SqlConnectOptions = {}): Promise<Sq
         const last = results[results.length - 1];
         return { changes: last?.affectedRows ?? 0 };
       }
-      const rs = await db.query<SqlRow>(toPostgresParams(sql), [...params]);
+      const rs = await db.query<SqlRow>(toPostgresParams(sql, params), [...params]);
       return { changes: rs.affectedRows ?? 0 };
     },
     async transaction(fn) {

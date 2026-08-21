@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/core";
 import { recurrence, spaces, tasks } from "@/db/schema.decl";
-import { create as createTask } from "@/flows/tasks/index";
 
 /** Spawn due recurring tasks — named clock `spawn-recurring`. */
 export const spawn = on(
@@ -20,7 +19,7 @@ export const spawn = on(
         const source = await fx.store(db).findById(tasks, String(rule.taskId));
         if (!source) continue;
         const space = spaceRows.find((s) => String(s.id) === String(source.spaceId));
-        await fx.call(createTask, {
+        await fx.call("tasks.create", {
           title: String(source.title),
           spaceKey: space ? String(space.key) : "ENG",
           description: source.description == null ? undefined : String(source.description),

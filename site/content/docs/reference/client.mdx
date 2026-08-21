@@ -213,16 +213,16 @@ core today: cookie jars or plugin `.client()` decorations. Browser apps: also se
   outcome by calling a Flow that uses it — or by handling a gate denial on that call.
 </Callout>
 
-| Element                           | On the client | How                                                                                     |
-| --------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
-| [Flow](/docs/elements/flow)       | Direct        | `api.unit.flow(input)` — the only public surface                                        |
-| [Gate](/docs/elements/gate)       | Indirect      | Bearer via `auth`; denials as `Unauthorized` / `Forbidden` / `RateLimited`              |
+| Element                           | On the client | How                                                                                        |
+| --------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| [Flow](/docs/elements/flow)       | Direct        | `api.unit.flow(input)` — the only public surface                                           |
+| [Gate](/docs/elements/gate)       | Indirect      | Bearer via `auth`; denials as `Unauthorized` / `Forbidden` / `RateLimited`                 |
 | [Store](/docs/elements/store)     | Via Flows     | `fx.store` inside Flows; `store.resource` + `on(http.resource…)` → five Flows on `$routes` |
-| [Signal](/docs/elements/signal)   | Via Flows     | Emit/consume server-side; no subscribe API on `okengine/client` yet                     |
-| [Clock](/docs/elements/clock)     | Via Flows     | Schedules fire on the server — the client never ticks a clock                           |
-| [Vault](/docs/elements/vault)     | Via Flows     | Secrets stay server-side; never ship them to the browser package                        |
-| [Channel](/docs/elements/channel) | Via Flows     | `fx.send` in a Flow — the client does not send email/SMS/push                           |
-| [AI](/docs/elements/ai)           | Via Flows     | `fx.ask` / `fx.run` inside a Flow; the client gets that Flow’s `out`                    |
+| [Signal](/docs/elements/signal)   | Via Flows     | Emit/consume server-side; no subscribe API on `okengine/client` yet                        |
+| [Clock](/docs/elements/clock)     | Via Flows     | Schedules fire on the server — the client never ticks a clock                              |
+| [Vault](/docs/elements/vault)     | Via Flows     | Secrets stay server-side; never ship them to the browser package                           |
+| [Channel](/docs/elements/channel) | Via Flows     | `fx.send` in a Flow — the client does not send email/SMS/push                              |
+| [AI](/docs/elements/ai)           | Via Flows     | `fx.ask` / `fx.run` inside a Flow; the client gets that Flow’s `out`                       |
 
 ### Store resources
 

@@ -35,6 +35,7 @@ describe("dev-controls", () => {
     expect(formatDevControlsHint(false)).not.toContain("services");
     expect(formatDevControlsHelp(false)).toContain("refresh");
     expect(formatDevControlsHint(false)).toContain("seed");
+    expect(formatDevControlsHint(false)).not.toContain("restart");
     expect(formatDevControlsHelp(false)).toContain("oke db seed");
     expect(formatDevControlsHelp(false)).not.toContain("select service");
   });

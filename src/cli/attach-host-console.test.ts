@@ -69,6 +69,7 @@ export const app = oke({
     expect(ingested.some((row) => row.event?.flow === "main.ping")).toBe(true);
     await attached!.stop();
     expect(state.invokeUserFlow).toBeNull();
+    expect(state.storeRuntime).toBeNull();
   });
 
   test("binds host aiRuntime so Console projection sees a journaled ask", async () => {

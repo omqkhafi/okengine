@@ -9,7 +9,7 @@ The standard Notes starter is a folder tree. Put a file at `flows/notes/[id]/get
 
 <Callout title="The one rule">
   Folders are the URL. The first-level folder plus the export name is the Flow name. Import the
-  generated barrel, then `oke({ name })`.
+  generated barrel, then `oke({name})`.
 </Callout>
 
 ## Quick start
@@ -69,18 +69,18 @@ const { data } = await api.notes.get({ id });
 
 The app source folder holds behavior. Config and the Vite SPA sit beside it.
 
-| Folder | Role |
-| ------ | ---- |
-| `app.ts` | `import "@/core"` + `import "@/flows/generated"` + `oke({ name })` |
-| `core.ts` / `core/` | Store, gate, vault, channel, clock, AI decls — auto-register before `oke()` |
-| `flows/<unit>/` | One client unit per first-level folder (`notes`, `main`) |
-| `flows/generated.ts` | Regenerated barrel — do not edit |
-| `db/` | `schema.decl.ts`, seed, and the Drizzle file `oke db` emits |
-| `locales/` | Message catalogs (`import "@/locales"` from core) |
-| `web/` | Vite SPA — `createClient` and proxies `/notes` · `/health` to **6530** |
-| `tests/` | `oke test` / `bun:test` against the same `App` type |
-| `docker/` | Compose from `oke docker` / `oke dev` (not in the clean template) |
-| `.oke/` | Machine state — gitignored |
+| Folder               | Role                                                                        |
+| -------------------- | --------------------------------------------------------------------------- |
+| `app.ts`             | `import "@/core"` + `import "@/flows/generated"` + `oke({ name })`          |
+| `core.ts` / `core/`  | Store, gate, vault, channel, clock, AI decls — auto-register before `oke()` |
+| `flows/<unit>/`      | One client unit per first-level folder (`notes`, `main`)                    |
+| `flows/generated.ts` | Regenerated barrel — do not edit                                            |
+| `db/`                | `schema.decl.ts`, seed, and the Drizzle file `oke db` emits                 |
+| `locales/`           | Message catalogs (`import "@/locales"` from core)                           |
+| `web/`               | Vite SPA — `createClient` and proxies `/notes` · `/health` to **6530**      |
+| `tests/`             | `oke test` / `bun:test` against the same `App` type                         |
+| `docker/`            | Compose from `oke docker` / `oke dev` (not in the clean template)           |
+| `.oke/`              | Machine state — gitignored                                                  |
 
 `core/` is a split of the same decls (`store.ts`, `gate.ts`, …) with `core.ts` as the barrel. Not a ninth element. Load order in the starter: locales → store → gate → vault → channel → AI.
 
@@ -95,11 +95,15 @@ import * as schema from "@/db/schema.decl";
 
 export const db = store.sql("app", { schema });
 export const notesWrite = gate.policy("notes:write", () => true);
-export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", { dev: "dev-webhook-secret-change-me" });
-export const noteCreatedMail = channel.email({ from: "Notes <notes@localhost>" }).template("note-created", {
-  locales: ["en"],
-  schema: z.object({ id: z.string(), title: z.string() }),
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
+  dev: "dev-webhook-secret-change-me",
 });
+export const noteCreatedMail = channel
+  .email({ from: "Notes <notes@localhost>" })
+  .template("note-created", {
+    locales: ["en"],
+    schema: z.object({ id: z.string(), title: z.string() }),
+  });
 ```
 
 </Tab>
@@ -155,17 +159,17 @@ const { data } = await t.api.main.health({});
 
 ### Top-level files
 
-| File | Role |
-| ---- | ---- |
-| `oke.config.ts` | Drivers, image pins, `db.declare` / `db.generated`, `i18n` |
-| `package.json` | `oke dev` · `oke test` · `bun run web` |
-| `drizzle.config.ts` | drizzle-kit — `oke db push` / `generate` / `migrate` |
-| `tsconfig.json` | `@/*` → the app source folder |
-| `.env.example` | Tracked sample keys |
-| `.env` / `.env.local` | Local secrets — gitignored |
-| `.gitignore` | Ignores `.oke/`, env files, `node_modules/` |
-| `AGENTS.md` | Agent contract written by `create-oke` |
-| `.github/workflows/ci.yml` | Template CI |
+| File                       | Role                                                       |
+| -------------------------- | ---------------------------------------------------------- |
+| `oke.config.ts`            | Drivers, image pins, `db.declare` / `db.generated`, `i18n` |
+| `package.json`             | `oke dev` · `oke test` · `bun run web`                     |
+| `drizzle.config.ts`        | drizzle-kit — `oke db push` / `generate` / `migrate`       |
+| `tsconfig.json`            | `@/*` → the app source folder                              |
+| `.env.example`             | Tracked sample keys                                        |
+| `.env` / `.env.local`      | Local secrets — gitignored                                 |
+| `.gitignore`               | Ignores `.oke/`, env files, `node_modules/`                |
+| `AGENTS.md`                | Agent contract written by `create-oke`                     |
+| `.github/workflows/ci.yml` | Template CI                                                |
 
 ```typescript title="oke.config.ts"
 import { defineConfig } from "okengine/config";
@@ -243,15 +247,15 @@ A folder is a URL segment. A route exists when a walked `.ts` file exports a Flo
 
 These names do **not** add a segment. Same five ops as `http.resource`, plus `index` / `route`.
 
-| Leaf | Typical method | URL if under `notes/` |
-| ---- | -------------- | --------------------- |
-| `list` | `http.get()` | `/notes` |
-| `create` | `http.post()` | `/notes` |
-| `get` | `http.get()` | `/notes` or `/notes/:id` when nested |
-| `update` | `http.patch()` | `/notes` or `/notes/:id` |
-| `remove` | `http.delete()` | `/notes` or `/notes/:id` |
-| `index` | any | `/notes` — reserved leaf, not a barrel |
-| `route` | any | `/notes` — several exports may share this path |
+| Leaf     | Typical method  | URL if under `notes/`                          |
+| -------- | --------------- | ---------------------------------------------- |
+| `list`   | `http.get()`    | `/notes`                                       |
+| `create` | `http.post()`   | `/notes`                                       |
+| `get`    | `http.get()`    | `/notes` or `/notes/:id` when nested           |
+| `update` | `http.patch()`  | `/notes` or `/notes/:id`                       |
+| `remove` | `http.delete()` | `/notes` or `/notes/:id`                       |
+| `index`  | any             | `/notes` — reserved leaf, not a barrel         |
+| `route`  | any             | `/notes` — several exports may share this path |
 
 Any other leaf **does** add a segment (`archive.ts` → `/archive`). Method always comes from `http.get` / `http.post` / … — never from the filename.
 
@@ -282,7 +286,10 @@ export const create = on(
     do: async (input, fx) => {
       const id = fx.id();
       const createdAt = fx.clock.now();
-      await fx.store(db).insert(notes).values({ id, ...input, archivedAt: null, createdAt });
+      await fx
+        .store(db)
+        .insert(notes)
+        .values({ id, ...input, archivedAt: null, createdAt });
       await fx.emit(noteCreated, { id, title: input.title }, { key: id });
       return { id, ...input, archivedAt: null, createdAt };
     },
@@ -303,7 +310,13 @@ export const get = on(
     do: async ({ id }, fx) => {
       const row = await fx.store(db).findById(notes, id);
       if (!row) return fail("NotFound", { id });
-      return { id: String(row.id), title: String(row.title), body: String(row.body), archivedAt: null, createdAt: Number(row.createdAt) };
+      return {
+        id: String(row.id),
+        title: String(row.title),
+        body: String(row.body),
+        archivedAt: null,
+        createdAt: Number(row.createdAt),
+      };
     },
   }),
 );
@@ -341,13 +354,13 @@ export const create = on(http.post().gate(notesMutate), flow({ do: async (input)
 
 Never routes. Safe to colocate next to walked files.
 
-| Pattern | Why |
-| ------- | --- |
-| `generated.ts` | The barrel itself |
-| `shapes.ts` | Zod contracts |
-| `signals.ts` | Signal decls |
-| `*.test.ts` | Tests |
-| `_` prefix | Private — file or folder, and every nested file |
+| Pattern        | Why                                             |
+| -------------- | ----------------------------------------------- |
+| `generated.ts` | The barrel itself                               |
+| `shapes.ts`    | Zod contracts                                   |
+| `signals.ts`   | Signal decls                                    |
+| `*.test.ts`    | Tests                                           |
+| `_` prefix     | Private — file or folder, and every nested file |
 
 <Tabs items={["shapes.ts", "signals.ts"]}>
 <Tab value="shapes.ts">
@@ -379,14 +392,14 @@ export const noteCreated = signal("note-created", {
 
 ### On disk → URL → name
 
-| On disk | URL | Flow name |
-| ------- | --- | --------- |
-| `notes/list.ts` + `export const list` | `GET /notes` | `notes.list` |
-| `notes/create.ts` + `export const create` | `POST /notes` | `notes.create` |
-| `notes/[id]/get.ts` + `export const get` | `GET /notes/:id` | `notes.get` |
-| `notes/[id]/archive.ts` + `export const archive` | `POST /notes/:id/archive` | `notes.archive` |
-| `notes/on-created.ts` | (signal — no URL) | `notes.onCreated` |
-| `notes/digest.ts` + `on(every("1d"), …)` | (clock — no URL) | `notes.digest` |
+| On disk                                          | URL                       | Flow name         |
+| ------------------------------------------------ | ------------------------- | ----------------- |
+| `notes/list.ts` + `export const list`            | `GET /notes`              | `notes.list`      |
+| `notes/create.ts` + `export const create`        | `POST /notes`             | `notes.create`    |
+| `notes/[id]/get.ts` + `export const get`         | `GET /notes/:id`          | `notes.get`       |
+| `notes/[id]/archive.ts` + `export const archive` | `POST /notes/:id/archive` | `notes.archive`   |
+| `notes/on-created.ts`                            | (signal — no URL)         | `notes.onCreated` |
+| `notes/digest.ts` + `on(every("1d"), …)`         | (clock — no URL)          | `notes.digest`    |
 
 `[id]` / `(group)` never enter the Flow name. Renaming an export renames the Flow (`fx.call`, agent tools, Console).
 
@@ -427,12 +440,12 @@ export const digest = on(
 
 Folders nest segments. A public HTTP path appears only when a walked file plus `http.*` sits at that depth.
 
-| On disk | URL | Name |
-| ------- | --- | ---- |
-| `notes/list.ts` | `/notes` | `notes.list` |
-| `notes/[id]/get.ts` | `/notes/:id` | `notes.get` |
+| On disk                                            | URL                   | Name             |
+| -------------------------------------------------- | --------------------- | ---------------- |
+| `notes/list.ts`                                    | `/notes`              | `notes.list`     |
+| `notes/[id]/get.ts`                                | `/notes/:id`          | `notes.get`      |
 | `notes/[id]/comments.ts` + `export const comments` | `/notes/:id/comments` | `notes.comments` |
-| `comments/list.ts` | `/comments` | `comments.list` |
+| `comments/list.ts`                                 | `/comments`           | `comments.list`  |
 
 Two files in one unit cannot both export `list`. Rename the nested export, or start a `comments/` unit.
 
@@ -458,7 +471,8 @@ export const list = on(
   http.get().public(),
   flow({
     out: z.array(CommentOut),
-    do: async (input, fx) => fx.json.withQuery(await fx.store(db).select().from(noteComments), input),
+    do: async (input, fx) =>
+      fx.json.withQuery(await fx.store(db).select().from(noteComments), input),
   }),
 );
 ```
@@ -468,10 +482,10 @@ export const list = on(
 
 ## Dynamic segments
 
-| On disk | URL | Client fill |
-| ------- | --- | ----------- |
-| `notes/[id]/get.ts` | `/notes/:id` | `{ id }` |
-| `docs/[...slug]/get.ts` | `/docs/*` | `{ "*": "a/b/c" }` |
+| On disk                 | URL          | Client fill        |
+| ----------------------- | ------------ | ------------------ |
+| `notes/[id]/get.ts`     | `/notes/:id` | `{ id }`           |
+| `docs/[...slug]/get.ts` | `/docs/*`    | `{ "*": "a/b/c" }` |
 
 `[id]` → `:id`. `[...slug]` → `*` (the router wildcard). `[[...slug]]` is not supported — generate fails.
 
@@ -522,10 +536,10 @@ const { data } = await api.docs.get({ "*": "getting-started/install" });
 
 Wrap a folder in parentheses to organize without a URL segment.
 
-| On disk | URL | Notes |
-| ------- | --- | ----- |
-| `notes/(ops)/archive.ts` | `/notes/archive` | `(ops)` omitted |
-| `main/(public)/health.ts` | `/health` | `main` still omits its prefix |
+| On disk                   | URL              | Notes                         |
+| ------------------------- | ---------------- | ----------------------------- |
+| `notes/(ops)/archive.ts`  | `/notes/archive` | `(ops)` omitted               |
+| `main/(public)/health.ts` | `/health`        | `main` still omits its prefix |
 
 <Tabs items={["(ops)", "(public)"]}>
 <Tab value="(ops)">
@@ -561,11 +575,11 @@ export const health = on(
 
 Prefix a file or folder with `_` to opt it — and every nested file — out of routing.
 
-| On disk | URL | Notes |
-| ------- | --- | ----- |
-| `notes/_lib.ts` | — | Ignored; siblings may `import { helper } from "./_lib"` |
-| `notes/_lib/query.ts` | — | The whole folder is skipped |
-| `_shared/` as a first-level unit | — | Not a client unit |
+| On disk                          | URL | Notes                                                   |
+| -------------------------------- | --- | ------------------------------------------------------- |
+| `notes/_lib.ts`                  | —   | Ignored; siblings may `import { helper } from "./_lib"` |
+| `notes/_lib/query.ts`            | —   | The whole folder is skipped                             |
+| `_shared/` as a first-level unit | —   | Not a client unit                                       |
 
 `_` means private implementation. It will not appear in `generated.ts`. If you want it registered, do not prefix `_`.
 
@@ -724,17 +738,20 @@ The framework is opinionated about **where a unit lives**, not about how you spl
 
 ### Barrel or tree — per unit
 
-| Shape | When | Emit |
-| ----- | ---- | ---- |
+| Shape  | When                                              | Emit                                        |
+| ------ | ------------------------------------------------- | ------------------------------------------- |
 | Barrel | The unit folder has only `index.ts` (+ skip-list) | `import * as notes from "./notes/index.ts"` |
-| Tree | `[id]/`, `(group)/`, or extra route files | Synthesized namespace + path/name stamps |
+| Tree   | `[id]/`, `(group)/`, or extra route files         | Synthesized namespace + path/name stamps    |
 
 Mixed barrel `index.ts` plus tree files is a generate error. `index` in a tree is also a reserved leaf (`/notes`), so barrel vs leaf would be ambiguous.
 
 Keel-style paths that are not the folder (`/me/tasks`) stay on a barrel with an explicit `http.get("/me/tasks")`.
 
 ```typescript title="flows/my/index.ts"
-export const tasks = on(http.get("/me/tasks").gate(member), flow("my.tasks", { do: async () => [] }));
+export const tasks = on(
+  http.get("/me/tasks").gate(member),
+  flow("my.tasks", { do: async () => [] }),
+);
 ```
 
 ### Decls stay in core
@@ -760,12 +777,12 @@ Five reserved leaves reproduce `GET|POST /notes` and `GET|PATCH|DELETE /notes/:i
 
 Put `on(http.resource("/notes", ops).public().live())` in `route.ts`. Inference is skipped — the five verbs already declare those paths. Extra actions (`[id]/archive.ts`) sit beside it. Pathless `http.resource()` is not a thing.
 
-| Verb | Path |
-| ---- | ---- |
-| `list` | `GET /notes` |
-| `create` | `POST /notes` |
-| `get` | `GET /notes/:id` |
-| `update` | `PATCH /notes/:id` |
+| Verb     | Path                |
+| -------- | ------------------- |
+| `list`   | `GET /notes`        |
+| `create` | `POST /notes`       |
+| `get`    | `GET /notes/:id`    |
+| `update` | `PATCH /notes/:id`  |
 | `remove` | `DELETE /notes/:id` |
 
 <Tabs items={["route.ts", "archive.ts"]}>
@@ -805,7 +822,10 @@ export const archive = on(http.post().gate(notesMutate), flow({ do: async () => 
 <Tab value=":slug">
 
 ```typescript title="flows/notes/[slug]/get.ts"
-export const bySlug = on(http.get().public(), flow({ in: z.object({ slug: z.string() }), do: async ({ slug }) => ({ slug }) }));
+export const bySlug = on(
+  http.get().public(),
+  flow({ in: z.object({ slug: z.string() }), do: async ({ slug }) => ({ slug }) }),
+);
 // GET /notes/:slug  — does not match /notes/archive
 ```
 
@@ -894,7 +914,11 @@ Mixed-barrel fires only for a barrel `index.ts` plus tree files — not because 
 ## Next
 
 <Cards>
-  <Card title="Flow" description="The one species of backend behavior." href="/docs/elements/flow" />
+  <Card
+    title="Flow"
+    description="The one species of backend behavior."
+    href="/docs/elements/flow"
+  />
   <Card
     title="Basic Usage"
     description="Scaffold Notes and call health."

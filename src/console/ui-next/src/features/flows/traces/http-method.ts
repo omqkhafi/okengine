@@ -19,6 +19,25 @@ import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "QUERY";
 
 /**
+ * Whether the verb carries a JSON request body on the wire.
+ *
+ * Matches the HTTP compiler (`GET` / `HEAD` / `DELETE` are path-or-query
+ * only) and the typed client (`GET` / `HEAD` leftover fields → query).
+ *
+ * @param method - HTTP method string (case-insensitive) or null
+ */
+export function httpMethodHasBody(method: string | null | undefined): boolean {
+  switch ((method ?? "").toUpperCase()) {
+    case "GET":
+    case "HEAD":
+    case "DELETE":
+      return false;
+    default:
+      return true;
+  }
+}
+
+/**
  * Units-tree display rank: GET → POST → QUERY → PATCH/PUT → DELETE.
  *
  * PATCH and PUT share a rank. Unknown verbs and missing methods sort last.

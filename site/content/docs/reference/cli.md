@@ -125,13 +125,14 @@ On a TTY, Ink keyboard controls stay active after boot (`useInput` — same
 shortcuts as before). Press `r` to clear the log pane and reprint the latest
 board.
 
-| Key       | Action                              |
-| --------- | ----------------------------------- |
-| `?`       | help                                |
-| `r`       | refresh — clear logs, show latest ● |
-| `s`       | `oke db seed`                       |
-| `q`       | quit `oke dev`                      |
-| `u` / `x` | compose up / stop (whole stack)     |
+| Key | Action                              |
+| --- | ----------------------------------- |
+| `?` | help                                |
+| `r` | refresh — clear logs, show latest ● |
+| `s` | `oke db seed`                       |
+| `q` | quit `oke dev`                      |
+| `u` | compose up (whole stack)            |
+| `x` | compose stop (whole stack)          |
 
 Compose stays quiet unless it fails. Process-local boot notices print once under
 the hero (not once per process).

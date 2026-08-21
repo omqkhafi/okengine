@@ -11,9 +11,11 @@ import { createFx } from "../kernel/fx.ts";
 import { defineSeed, type SeedFn } from "../elements/store/seed.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 import {
+  createHintsForRenameOrCreate,
   dbCli,
   emitAbstractSchemaPrestep,
   executeSeedDef,
+  formatKitError,
   runSeedFns,
   runDb,
   runGenerate,
@@ -116,6 +118,13 @@ describe("oke db", () => {
     expect(out.join("")).toContain("0001_init.sql");
   });
 
+  test("formatKitError joins code message and sql", () => {
+    expect(formatKitError({ code: "query_error", message: "boom", sql: "CREATE TABLE t" })).toBe(
+      " — query_error — boom — CREATE TABLE t",
+    );
+    expect(formatKitError(undefined)).toBe("");
+  });
+
   test("missing_hints exits runtime", async () => {
     const out: string[] = [];
     const code = await runDb("push", {
@@ -129,6 +138,75 @@ describe("oke db", () => {
     expect(code).toBe(EXIT_RUNTIME);
     expect(out.join("")).toContain("missing_hints");
     expect(out.join("")).toContain("DROP TABLE leftover");
+  });
+
+  test("createHintsForRenameOrCreate maps rename_or_create only", () => {
+    expect(
+      createHintsForRenameOrCreate([
+        { type: "rename_or_create", kind: "table", entity: ["public", "activity"] },
+        {
+          type: "confirm_data_loss",
+          kind: "table",
+          entity: ["public", "old"],
+          reason: "non_empty",
+        },
+      ]),
+    ).toEqual([{ type: "create", kind: "table", entity: ["public", "activity"] }]);
+  });
+
+  test("push retries rename_or_create as create", async () => {
+    const hints: unknown[] = [];
+    const out: string[] = [];
+    const code = await runPush("/tmp/drizzle.config.ts", (t) => out.push(t), {
+      skipEmit: true,
+      pushFn: async (opts) => {
+        hints.push(opts.hints);
+        if (!opts.hints) {
+          return {
+            status: "missing_hints",
+            unresolved: [{ type: "rename_or_create", kind: "table", entity: ["public", "notes"] }],
+          };
+        }
+        return { status: "ok" };
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(hints[1]).toEqual([{ type: "create", kind: "table", entity: ["public", "notes"] }]);
+    expect(out.join("")).toContain("creating 1 new object");
+    expect(out.join("")).toContain("oke db push: ok");
+  });
+
+  test("push does not retry confirm_data_loss-only missing_hints", async () => {
+    let calls = 0;
+    const code = await runPush("/tmp/drizzle.config.ts", () => {}, {
+      skipEmit: true,
+      pushFn: async () => {
+        calls += 1;
+        return {
+          status: "missing_hints",
+          unresolved: [{ type: "confirm_data_loss", kind: "table", entity: ["public", "notes"] }],
+        };
+      },
+    });
+    expect(code).toBe(EXIT_RUNTIME);
+    expect(calls).toBe(1);
+  });
+
+  test("explain does not auto-create on missing_hints", async () => {
+    let calls = 0;
+    const code = await runPush("/tmp/drizzle.config.ts", () => {}, {
+      skipEmit: true,
+      explain: true,
+      pushFn: async () => {
+        calls += 1;
+        return {
+          status: "missing_hints",
+          unresolved: [{ type: "rename_or_create", kind: "table", entity: ["public", "notes"] }],
+        };
+      },
+    });
+    expect(code).toBe(EXIT_RUNTIME);
+    expect(calls).toBe(1);
   });
 
   test("resolveDrizzleConfigPath uses db.config from oke.config", async () => {

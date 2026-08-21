@@ -204,11 +204,7 @@ export default defineConfig({
         `import { store } from "okengine";\n\nexport const db = store.sql("app");\n`,
         "utf8",
       );
-      writeFileSync(
-        join(dir, "src", "core", "ai.ts"),
-        `import { ai } from "okengine";\n`,
-        "utf8",
-      );
+      writeFileSync(join(dir, "src", "core", "ai.ts"), `import { ai } from "okengine";\n`, "utf8");
       writeFileSync(
         join(dir, "src", "app.ts"),
         `import "@/core";\nexport const app = {};\n`,

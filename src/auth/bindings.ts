@@ -275,7 +275,10 @@ export function createAuthHttpBindings(
   } = { refresh, revoke, me };
   const bindings: Binding[] = [
     bindAuthHttp(
-      http.post(`${base}/refresh`).public().gate(...(refreshRate ? [refreshRate] : [])),
+      http
+        .post(`${base}/refresh`)
+        .public()
+        .gate(...(refreshRate ? [refreshRate] : [])),
       refresh,
     ),
     bindAuthHttp(http.post(`${base}/revoke`).public(), revoke),
@@ -371,11 +374,17 @@ export function createAuthHttpBindings(
     flows.signUpEmail = signUpEmail;
     bindings.push(
       bindAuthHttp(
-        http.post(`${base}/sign-in/email`).public().gate(...(signInRate ? [signInRate] : [])),
+        http
+          .post(`${base}/sign-in/email`)
+          .public()
+          .gate(...(signInRate ? [signInRate] : [])),
         signInEmail,
       ),
       bindAuthHttp(
-        http.post(`${base}/sign-up/email`).public().gate(...(signUpRate ? [signUpRate] : [])),
+        http
+          .post(`${base}/sign-up/email`)
+          .public()
+          .gate(...(signUpRate ? [signUpRate] : [])),
         signUpEmail,
       ),
     );

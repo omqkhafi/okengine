@@ -873,10 +873,7 @@ export function formatStackSummary(options: {
   const s = termStyle(options.color ?? termColorEnabled());
   const bar = `${s.dim}│${s.reset}`;
   const nameWidth = heroNameWidth(["Docker", "app", ...options.services.map((svc) => svc.label)]);
-  const portWidth = Math.max(
-    6,
-    ...options.services.map((svc) => `:${svc.hostPort}`.length),
-  );
+  const portWidth = Math.max(6, ...options.services.map((svc) => `:${svc.hostPort}`.length));
   const pad = (label: string) => padHeroCol(label, nameWidth);
   const color = options.color ?? termColorEnabled();
   const lines: string[] = [

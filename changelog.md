@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.15.0 — 2026-08-21
+
 ### ✨ Added
 
 #### Console — Store
@@ -115,6 +117,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   and `@types/node`.
 
 #### Console — Store
+
 - Store tree toolbar shows SQL, KV, Files, and Index icons to show or hide each facet. The eye menu and per-band Hide control are gone.
 
 - Query Run is play + label only. ⌘ Enter stays on the tooltip and the
@@ -134,7 +137,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 #### Dev, Keel & create-oke
 
 - `oke db seed` is a separate command (`intro` / confirm / `outro`). `oke
-  dev` does not ask to seed — not every project has a seed. The live
+dev` does not ask to seed — not every project has a seed. The live
   controls add `s` to run that command as a child (`oke db seed --force`),
   not inside the `oke dev` process.
 - Keel (and store resource tests) generate Zod from tables via
@@ -167,6 +170,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
   insert / update, `tableZod().select`) into Manifest JSON Schema so Call
   API Fields and the contract Request / Response lists populate instead of
   "Schema not expanded in Manifest."
+- Mutation receipts (`clock.run-now`, store edit, vault write, replay,
+  channel send-test, …) return `at` as ISO-8601 UTC instead of epoch ms
+  (`1787305011525` → `2026-08-21T09:36:51.525Z`).
+- Call API no longer seeds a JSON body on GET / HEAD / DELETE. Path
+  tokens (`:id`) stay in Path params; leftover GET fields are Query
+  params. `GET /tasks/:id` is path-only — the duplicate Body `id` is
+  gone.
 
 #### Runtime
 
@@ -182,6 +192,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
   on that slot. `begin()` plus parent `unsafe()` was deadlocking PgDog
   (`checkout timeout`). Store, journal, clock, and instances share one pool
   of 8; PgDog `pool_size` is 20.
+- `oke.*` helpers install again: `toPostgresParams` no longer rewrites
+  `jsonb ?` into `$1` when there are no bound values, and `oke.has_scope`
+  uses `jsonb_exists`.
+- Creating schema `oke` no longer steals domain tables: search_path is
+  `public, oke`, and leftover `oke.<table>` rows move to `public`.
 - `fx.store(db).select().where()` / `.orderBy()` compile Drizzle
   `eq` / `and` / `or` / `like` / `asc` again against the pinned
   `drizzle-orm@1.0.0-rc.5-169397b` — that snapshot stores
@@ -192,12 +207,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Keel KV (`drafts`, `reminders`, `view-prefs`, `webhooks`) is
   `{ durable: true }` and seed writes all four, so Console Store browse
   is not empty after Redis recreates. Seed logs `keys N` for `kv.set`.
+- `recurring.spawn` (and GitHub / Slack / form intake) call
+  `tasks.create` by name so the Manifest stamps `effects.calls` —
+  aliased `fx.call(createTask)` was inferred as `createTask` and
+  threw OKE1007 every hour.
+- `oke db push` treats drizzle-kit `rename_or_create` as create and
+  retries, so a first-time Keel schema no longer fails
+  `missing_hints`. Destructive `confirm_data_loss` still stops.
+- `oke db push` only manages schema `public` (`schemaFilter`), so it
+  does not try to drop `oke` / `oke_console`.
 
 #### Docs
 
 - Homepage starter snippet reads `flows/main/route.ts` after the tree split
   removed `main/index.ts`.
-
 
 ## v0.14.1 — 2026-08-20
 

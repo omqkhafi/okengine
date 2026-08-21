@@ -67,12 +67,12 @@ describe("http.resource — gate / live", () => {
     resetBindings();
     resetFlowSeq();
     on(http.resource("/notes", bag()).public().live());
-    expect(httpOf("/notes", "GET")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual([
-      "public",
-    ]);
-    expect(httpOf("/notes", "POST")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual([
-      "public",
-    ]);
+    expect(httpOf("/notes", "GET")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(
+      ["public"],
+    );
+    expect(
+      httpOf("/notes", "POST")?.gates.map((g) => (typeof g === "string" ? g : g.name)),
+    ).toEqual(["public"]);
     expect(httpOf("/notes", "GET")?.isLive).toBe(true);
     expect(httpOf("/notes", "POST")?.isLive).toBe(false);
   });

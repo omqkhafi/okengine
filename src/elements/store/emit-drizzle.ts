@@ -189,12 +189,9 @@ export function emitDrizzleSource(
   );
   const pgIntImport = needsInteger ? "bigint" : null;
   const needsPolicy = tables.some((t) => (t.policies?.length ?? 0) > 0);
-  const coreNames = [
-    "pgTable",
-    "text",
-    pgIntImport,
-    needsPolicy ? "pgPolicy" : null,
-  ].filter((name): name is string => name !== null);
+  const coreNames = ["pgTable", "text", pgIntImport, needsPolicy ? "pgPolicy" : null].filter(
+    (name): name is string => name !== null,
+  );
   const coreImport = `import { ${coreNames.join(", ")} } from "drizzle-orm/pg-core";`;
   const sqlImport = needsPolicy ? `import { sql } from "drizzle-orm";\n` : "";
 

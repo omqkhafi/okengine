@@ -27,6 +27,7 @@ import { maskPiiValue, maskWideEventForConsole, piiFieldNamesFromManifest } from
 import { ConsoleRunsQueryError, RUNS_QUERY_PII_GAP, RUNS_QUERY_TIMEOUT_MS } from "./runs-query.ts";
 import { DuckQueryTimeoutError } from "../../runs/duckdb.ts";
 import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock.ts";
+import { isoAt } from "./iso-at.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
 import { consoleFailureMessage } from "./i18n.ts";
@@ -154,7 +155,7 @@ const TracesReplayOut = z.object({
   ok: z.literal(true),
   rootId: z.string(),
   dryRun: z.boolean(),
-  at: z.number(),
+  at: z.string(),
   flow: z.string(),
 });
 
@@ -262,7 +263,7 @@ const SignalsReplayOut = z.object({
       messageId: z.string().optional(),
     }),
   ),
-  at: z.number(),
+  at: z.string(),
 });
 
 const SignalsDiscardIn = z.object({
@@ -275,7 +276,7 @@ const SignalsDiscardIn = z.object({
 const SignalsDiscardOut = z.object({
   ok: z.literal(true),
   discarded: z.number(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const ActionPingIn = z.object({
@@ -285,7 +286,7 @@ const ActionPingIn = z.object({
 const ActionPingOut = z.object({
   ok: z.literal(true),
   note: z.string().optional(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const StructuralIn = z.object({
@@ -513,7 +514,7 @@ const ChannelRevealOut = z.object({
   ok: z.literal(true),
   id: z.string(),
   to: z.string(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const ChannelSendTestIn = z.object({
@@ -530,7 +531,7 @@ const ChannelSendTestOut = z.object({
   messageId: z.string(),
   status: z.string(),
   chain: z.string(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const VaultNotFound = z.object({
@@ -643,7 +644,7 @@ const ClockRunNowOut = z.object({
   ok: z.literal(true),
   name: z.string(),
   ran: z.boolean(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const ClockPauseIn = z.object({ name: z.string().min(1) });
@@ -651,7 +652,7 @@ const ClockPauseOut = z.object({
   ok: z.literal(true),
   name: z.string(),
   status: z.string(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const ClockEditIn = z.object({
@@ -665,7 +666,7 @@ const ClockEditOut = z.object({
   name: z.string(),
   effectiveCron: z.string().optional(),
   effectiveEvery: z.string().optional(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const ClockWakeEarlyIn = z.object({ runId: z.string().min(1) });
@@ -674,7 +675,7 @@ const ClockWakeEarlyOut = z.object({
   runId: z.string(),
   wakeAt: z.number(),
   resumed: z.boolean(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const VaultResolutionStepOut = z.object({
@@ -755,7 +756,7 @@ const VaultWriteOut = z.object({
   ok: z.literal(true),
   name: z.string(),
   fingerprint: z.string().nullable(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const VaultAuditRowOut = z.object({
@@ -789,7 +790,7 @@ const VaultRotateMasterOut = z.object({
   kekVersion: z.number(),
   remaining: z.number(),
   masterKey: z.string().nullable(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const AiMetricOut = z.object({
@@ -1519,7 +1520,7 @@ const StoreRevealIn = z.object({
 const StoreRevealOut = z.object({
   ok: z.literal(true),
   value: z.unknown(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const StoreFileGetIn = z.object({
@@ -1564,7 +1565,7 @@ const StoreEditOut = z.object({
       resource: z.string(),
     }),
   ),
-  at: z.number(),
+  at: z.string(),
   rls: StoreRlsOut.optional(),
 });
 
@@ -1581,7 +1582,7 @@ const StoreDeleteIn = z.object({
 const StoreDeleteOut = z.object({
   ok: z.literal(true),
   deleted: z.number(),
-  at: z.number(),
+  at: z.string(),
 });
 
 const StorePurgeIn = z.object({
@@ -1593,7 +1594,7 @@ const StorePurgeIn = z.object({
 const StorePurgeOut = z.object({
   ok: z.literal(true),
   keys: z.array(z.string()),
-  at: z.number(),
+  at: z.string(),
 });
 
 const StoreSqlIn = z.object({
@@ -1777,7 +1778,7 @@ const StorePreviewOut = z.object({
       resource: z.string(),
     }),
   ),
-  at: z.number(),
+  at: z.string(),
 });
 
 /**
@@ -2390,7 +2391,7 @@ function createTracesReplay(state: ConsoleState) {
         ok: true as const,
         rootId: input.rootId,
         dryRun,
-        at: Date.now(),
+        at: isoAt(Date.now()),
         flow: root.flow,
       };
     },
@@ -2471,7 +2472,7 @@ function createSignalsDiscard(state: ConsoleState) {
       return {
         ok: true as const,
         discarded: result.discarded,
-        at: state.now(),
+        at: isoAt(state.now()),
       };
     },
   });
@@ -2545,7 +2546,7 @@ async function runSignalReplay(
     dryRun: result.dryRun,
     results: [...result.results],
     wouldHaveFired: [...result.wouldHaveFired],
-    at: state.now(),
+    at: isoAt(state.now()),
   };
 }
 
@@ -2590,7 +2591,7 @@ function createActionPing(state: ConsoleState) {
         operatorId: fx.operator.id,
         note: input.note,
       });
-      return { ok: true as const, note: input.note, at: state.now() };
+      return { ok: true as const, note: input.note, at: isoAt(state.now()) };
     },
   });
 }
@@ -2934,7 +2935,7 @@ function createStoreReveal(state: ConsoleState) {
       return {
         ok: true as const,
         value: row[input.column],
-        at: state.now(),
+        at: isoAt(state.now()),
       };
     },
   });
@@ -3015,7 +3016,7 @@ function createStoreEdit(state: ConsoleState) {
           applied: false,
           willNotFire: preview.willNotFire,
           wouldHaveFired: [...preview.wouldHaveFired],
-          at: state.now(),
+          at: isoAt(state.now()),
           ...(preview.rls ? { rls: preview.rls } : {}),
         };
       }
@@ -3054,7 +3055,7 @@ function createStoreEdit(state: ConsoleState) {
         applied: result.applied,
         willNotFire: result.willNotFire,
         wouldHaveFired: [...result.wouldHaveFired],
-        at: state.now(),
+        at: isoAt(state.now()),
         ...(result.rls ? { rls: result.rls } : {}),
       };
     },
@@ -3095,7 +3096,7 @@ function createStoreDelete(state: ConsoleState) {
       return {
         ok: true as const,
         deleted: result.deleted,
-        at: state.now(),
+        at: isoAt(state.now()),
       };
     },
   });
@@ -3127,7 +3128,7 @@ function createStorePurgeCache(state: ConsoleState) {
       return {
         ok: true as const,
         keys: [...result.keys],
-        at: state.now(),
+        at: isoAt(state.now()),
       };
     },
   });
@@ -3391,7 +3392,7 @@ function createStorePreview(state: ConsoleState) {
           dryRun: true as const,
           willNotFire: preview.willNotFire,
           wouldHaveFired: [...preview.wouldHaveFired],
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         if (err instanceof DryRunWriteIsolationError) {
@@ -3447,7 +3448,7 @@ function createVaultCreate(state: ConsoleState) {
           ok: true as const,
           name: result.name,
           fingerprint: result.fingerprint,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -3487,7 +3488,7 @@ function createVaultSet(state: ConsoleState) {
           ok: true as const,
           name: result.name,
           fingerprint: result.fingerprint,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         return fail("VaultNotFound", {
@@ -3525,7 +3526,7 @@ function createVaultRotate(state: ConsoleState) {
           ok: true as const,
           name: result.name,
           fingerprint: result.fingerprint,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         return fail("VaultNotFound", {
@@ -3571,7 +3572,7 @@ function createVaultRotateMaster(state: ConsoleState) {
           kekVersion: result.kekVersion,
           remaining: result.remaining,
           masterKey: result.masterKey,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         return mapVaultOperatorError(err);
@@ -4089,7 +4090,7 @@ function createClockRunNow(state: ConsoleState) {
           ok: true as const,
           name: input.name,
           ran: result.ran,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         if (err instanceof ClockResourceNotFoundError) {
@@ -4119,7 +4120,7 @@ function createClockPause(state: ConsoleState) {
           ok: true as const,
           name: result.name,
           status: result.status,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         if (err instanceof ClockResourceNotFoundError) {
@@ -4154,7 +4155,7 @@ function createClockEditSchedule(state: ConsoleState) {
           name: result.name,
           effectiveCron: result.effectiveCron,
           effectiveEvery: result.effectiveEvery,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         if (err instanceof ScheduleNotOverridableError) {
@@ -4189,7 +4190,7 @@ function createClockWakeEarly(state: ConsoleState) {
           runId: result.runId,
           wakeAt: result.wakeAt,
           resumed: result.resumed,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         if (err instanceof ClockResourceNotFoundError) {
@@ -4266,7 +4267,7 @@ function createChannelReveal(state: ConsoleState) {
         ok: true as const,
         id: revealed.id,
         to: revealed.to,
-        at: state.now(),
+        at: isoAt(state.now()),
       };
     },
   });
@@ -4313,7 +4314,7 @@ function createChannelSendTest(state: ConsoleState) {
         });
         return {
           ...result,
-          at: state.now(),
+          at: isoAt(state.now()),
         };
       } catch (err) {
         return fail("ChannelNotFound", {

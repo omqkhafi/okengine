@@ -83,7 +83,7 @@ export interface DevSurfaceHandle {
 
 /** App surface returned by {@link DevOptions.startApp}. */
 export interface DevAppHandle {
-  readonly stop: () => void;
+  readonly stop: () => void | Promise<void>;
   /** Bound listen port (set when serve chooses an ephemeral port). */
   readonly port?: number;
   /** Base URL of the app server. */
@@ -478,6 +478,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     files: readonly string[];
     cwd: string;
     env: Record<string, string>;
+    aiServiceName?: string;
   } | null = null;
   let stackSqlDriver = "postgres";
   let stackKvDriver = "redis";
@@ -655,6 +656,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           files: composeFiles,
           cwd: dockerOut,
           env: { ...stackEnv! },
+          aiServiceName: derived.specs.find((s) => s.role === "ai")?.serviceName,
         };
 
         // Stream compose health until infra is up (AI may stay pending — model load).
@@ -1382,7 +1384,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const host = attachedHost;
     attachedHost = null;
     void host?.stop();
-    app.stop();
+    void Promise.resolve(app.stop());
     consoleServer.stop();
     mcpServer?.stop();
     docsMcpServer?.stop();
@@ -1483,6 +1485,25 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       await syncComposeBoard();
       paintReadyChrome();
     };
+    const waitComposeReady = async (): Promise<void> => {
+      const { watchComposeHealth } = await import("../docker/compose-health.ts");
+      const aiServiceName = started.aiServiceName;
+      liveComposeHealth = await watchComposeHealth({
+        files: started.files,
+        cwd: started.cwd,
+        env: started.env,
+        run: composeHealthRun,
+        timeoutMs: 20_000,
+        isDone: (map) => {
+          if (map.size === 0) return true;
+          return [...map.entries()].every(
+            ([name, s]) => name === aiServiceName || s === "ready" || s === "error",
+          );
+        },
+      });
+      if (liveComposeHealth.get("ai") === "error") heroAiStatus = "error";
+    };
+
     const composeAction = async (action: DevComposeControlAction): Promise<void> => {
       const files = started.files;
       const finalArgs =
@@ -1504,6 +1525,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
         throw new Error(`docker compose ${action} exited ${code}` + (detail ? `\n${detail}` : ""));
       }
+      if (action === "up") await waitComposeReady();
       await syncComposeBoard();
     };
 
@@ -1680,6 +1702,29 @@ async function tryLoadProjectManifest(cwd: string): Promise<Manifest | null | un
 }
 
 /**
+ * SIGKILL a pid and every child (`bun --hot` leaves a worker).
+ *
+ * @param pid - Root pid
+ */
+function killProcessTree(pid: number): void {
+  const listed = Bun.spawnSync(["pgrep", "-P", String(pid)], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (listed.exitCode === 0) {
+    for (const line of listed.stdout.toString().split("\n")) {
+      const child = Number(line.trim());
+      if (Number.isInteger(child) && child > 0) killProcessTree(child);
+    }
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // Already gone.
+  }
+}
+
+/**
  * Default app boot: `bun --hot` on the shipped runner (socket-preserving).
  *
  * @param cwd - Project root
@@ -1714,17 +1759,18 @@ async function startAppHot(
   });
 
   let stopped = false;
-  const stop = () => {
-    if (stopped) return;
+  const stop = (): Promise<void> => {
+    if (stopped) return proc.exited.then(() => {});
     stopped = true;
     try {
       // SIGKILL so `bun --hot` cannot linger and hold the project directory
       // open (create-oke afterEach `rmSync` otherwise races the child exit).
-      proc.kill("SIGKILL");
+      killProcessTree(proc.pid);
     } catch {
       // Inconsequential: process already exited — kill is idempotent best-effort.
     }
     void unlink(readyPath).catch(() => {});
+    return proc.exited.then(() => {});
   };
 
   try {

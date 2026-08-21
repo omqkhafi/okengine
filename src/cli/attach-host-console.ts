@@ -73,6 +73,9 @@ export async function attachHostToConsole(
   return {
     stop: async () => {
       options.state.invokeUserFlow = null;
+      options.state.storeRuntime = null;
+      options.state.vaultRuntime = null;
+      options.state.aiRuntime = null;
       await host.stop();
     },
   };

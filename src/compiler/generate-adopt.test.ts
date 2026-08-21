@@ -125,7 +125,9 @@ describe("generateAdoptBarrel", () => {
       await mkdir(join(root, "src/flows/notes/[id]"), { recursive: true });
       await writeFile(join(root, "src/flows/notes/index.ts"), "export const list = 1;\n");
       await writeFile(join(root, "src/flows/notes/[id]/get.ts"), "export const get = 1;\n");
-      await expect(generateAdoptBarrel({ rootDir: root })).rejects.toBeInstanceOf(GenerateAdoptError);
+      await expect(generateAdoptBarrel({ rootDir: root })).rejects.toBeInstanceOf(
+        GenerateAdoptError,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -151,7 +153,9 @@ describe("generateAdoptBarrel", () => {
         join(root, "src/flows/notes/get.ts"),
         'export const get = flow("tasks.get", { do: () => 1 });\n',
       );
-      await expect(generateAdoptBarrel({ rootDir: root })).rejects.toThrow(/does not match the folder/);
+      await expect(generateAdoptBarrel({ rootDir: root })).rejects.toThrow(
+        /does not match the folder/,
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

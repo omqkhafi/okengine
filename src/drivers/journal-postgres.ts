@@ -96,13 +96,13 @@ export interface BunJournalClient {
 function wrapBunClient(client: PostgresClientLike): PostgresJournalSql {
   const api: PostgresJournalSql = {
     async query(sql, params = []) {
-      const pg = toPostgresParams(sql);
+      const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (Array.isArray(result)) return result as Record<string, unknown>[];
       return Array.from(result as ArrayLike<Record<string, unknown>>);
     },
     async exec(sql, params = []) {
-      const pg = toPostgresParams(sql);
+      const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (
         result &&

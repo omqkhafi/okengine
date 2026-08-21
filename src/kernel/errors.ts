@@ -189,14 +189,14 @@ export const OKE_ERRORS = {
   HTTP_PATH_UNRESOLVED: {
     code: 1010,
     cause: 'Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.',
-    fix: "Put the file under `src/flows/<unit>/` and import `@/flows/generated`, or pass an explicit path to `http.{method}(\"/…\")`.",
+    fix: 'Put the file under `src/flows/<unit>/` and import `@/flows/generated`, or pass an explicit path to `http.{method}("/…")`.',
   },
   /**
    * Two HTTP bindings share method + path — last-add-wins is the opposite of this DX.
    */
   HTTP_ROUTE_DUPLICATE: {
     code: 1011,
-    cause: "{method} {path} is bound twice (flow \"{flow}\").",
+    cause: '{method} {path} is bound twice (flow "{flow}").',
     fix: "Give each HTTP flow a unique method + path.",
   },
   /**
@@ -205,7 +205,7 @@ export const OKE_ERRORS = {
   HTTP_FLOW_UNNAMED: {
     code: 1012,
     cause: "An HTTP flow on {method} {path} has no name.",
-    fix: "Use `flow(\"unit.export\", {…})` or export it from a `src/flows/<unit>/` file so the tree can stamp `unit.export`.",
+    fix: 'Use `flow("unit.export", {…})` or export it from a `src/flows/<unit>/` file so the tree can stamp `unit.export`.',
   },
   /**
    * Emit target has no subscriber (unified-theory §21).

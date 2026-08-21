@@ -20,22 +20,27 @@ export type ComposePsRow = {
 export function composeRowToStatus(row: ComposePsRow): DevStatus {
   const health = (row.Health ?? "").trim().toLowerCase();
   const state = (row.State ?? "").trim().toLowerCase();
+  const statusText = (row.Status ?? "").toLowerCase();
   if (health === "healthy") return "ready";
   if (health === "unhealthy") return "error";
   if (health === "starting") return "pending";
-  if (state === "running" || state === "up") return "ready";
+  if (state === "restarting") return "pending";
+  if (state === "running" || state === "up") {
+    // Right after `compose restart`, State is "running" before Health is
+    // "starting". Treat a fresh Up without (healthy) as still coming up.
+    if (isFreshComposeUp(statusText) && !statusText.includes("(healthy)")) return "pending";
+    return "ready";
+  }
   if (
     state === "exited" ||
     state === "dead" ||
     state === "stopped" ||
-    state === "restarting" ||
     state === "removing" ||
     state === "oomkilled"
   ) {
     return "error";
   }
   // Status text for stopped containers (`Exited (0) 2 seconds ago`).
-  const statusText = (row.Status ?? "").toLowerCase();
   if (statusText.startsWith("exited") || statusText.startsWith("dead")) return "error";
   if (state === "created" || state === "paused" || state.length === 0) return "pending";
   // Status text like "Up 3 seconds (healthy)"
@@ -46,6 +51,17 @@ export function composeRowToStatus(row: ComposePsRow): DevStatus {
   }
   if (statusText.startsWith("up")) return "ready";
   return "pending";
+}
+
+/**
+ * True when compose `Status` is a just-started container (health not reported yet).
+ *
+ * @param statusText - Lowercased `Status` from `docker compose ps`
+ */
+function isFreshComposeUp(statusText: string): boolean {
+  if (statusText.includes("less than a second")) return true;
+  const seconds = /up\s+(\d+)\s+seconds?/i.exec(statusText);
+  return seconds !== null && Number(seconds[1]) < 8;
 }
 
 /**
