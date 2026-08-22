@@ -9,6 +9,7 @@ import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
 import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
 import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
+import { LIVE_RESUME_GAP } from "../kernel/errors-live-resume.ts";
 import {
   SIGNAL_DEFAULT_LEASE_MS,
   validateSignalEmitPayload,
@@ -733,7 +734,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       }));
       const skipped = skipAfterId(history, afterId);
       if (afterId !== undefined && afterId.length > 0 && !skipped.found) {
-        throw new OkeError(OKE_ERRORS.LIVE_RESUME_GAP, { signal, afterId });
+        throw new OkeError(LIVE_RESUME_GAP, { signal, afterId });
       }
       let set = liveHandlers.get(signal);
       if (!set) {
@@ -761,7 +762,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       [signal],
     );
     if (!history.some((row) => String(row.id) === afterId)) {
-      throw new OkeError(OKE_ERRORS.LIVE_RESUME_GAP, { signal, afterId });
+      throw new OkeError(LIVE_RESUME_GAP, { signal, afterId });
     }
   }
 

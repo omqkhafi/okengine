@@ -217,14 +217,6 @@ export const OKE_ERRORS = {
     fix: "Use a different gate or path-param filter, or drop the extra route.",
   },
   /**
-   * Last-Event-ID is missing from the retained live tape (pruned, never existed, or bus restart).
-   */
-  LIVE_RESUME_GAP: {
-    code: 1014,
-    cause: 'Cursor "{afterId}" missing on "{signal}".',
-    fix: "Reconnect without Last-Event-ID.",
-  },
-  /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */
@@ -267,6 +259,12 @@ export function throwOke(key: keyof typeof OKE_ERRORS, params: OkeErrorParams = 
  * @param code - Permanent numeric code
  */
 export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefined {
+  if (code === 1014) {
+    return lazyRequire<typeof import("./errors-live-resume.ts")>(
+      import.meta.dir,
+      ["errors", "live", "resume"].join("-"),
+    ).LIVE_RESUME_GAP;
+  }
   for (const def of Object.values(OKE_ERRORS)) {
     if (def.code === code) return def;
   }

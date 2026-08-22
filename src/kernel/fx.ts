@@ -76,6 +76,15 @@ async function loadRunsWindow(): Promise<typeof import("../runs/window.ts")> {
   return import("../runs/window.ts");
 }
 
+/**
+ * Sync-load live SSE + Last-Event-ID resume only when `fx.live` runs.
+ * A static import would pin `checkLiveResume` / 410 encoding on every
+ * createFx — including Store-only `oke()` graphs.
+ */
+function loadFxLiveStream(): typeof import("./fx-live-stream.ts") {
+  return lazyRequire(import.meta.dir, ["fx", "live", "stream"].join("-"));
+}
+
 /** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
 export const RUNS_RESOURCE = "runs";
 
@@ -1782,49 +1791,13 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       signal: NamedRef,
       opts?: { readonly match?: (payload: unknown) => boolean; readonly afterId?: string },
     ) {
-      const name = resolveName(signal);
-      const afterId = opts?.afterId ?? options.lastEventId;
-      const bind = async (): Promise<boolean> => {
-        await gated("read", signalReadRef(name), async () => undefined);
-        if (isDryRun()) return false;
-        if (!options.signalRuntime) throw new Error("fx.live requires a bound signal runtime");
-        return true;
-      };
-      const chunks = (async function* () {
-        if (!(await bind())) return;
-        const ambient = currentAbortSignal();
-        const local = new AbortController();
-        const unlink = linkAbort(ambient, local);
-        const iter = options.signalRuntime!.live(name, { afterId })[Symbol.asyncIterator]();
-        const onAbort = (): void => {
-          void iter.return?.();
-        };
-        local.signal.addEventListener("abort", onAbort, { once: true });
-        try {
-          for (;;) {
-            if (local.signal.aborted) break;
-            const step = await iter.next();
-            if (step.done || local.signal.aborted) break;
-            if (opts?.match && !opts.match(step.value.payload)) continue;
-            yield sseFrame(step.value.payload, step.value.id);
-          }
-        } finally {
-          local.signal.removeEventListener("abort", onAbort);
-          unlink();
-          await iter.return?.();
-          if (!local.signal.aborted) local.abort();
-        }
-      })();
-      return {
-        [jsonResultBrand]: true,
-        kind: "stream" as const,
-        status: 200 as const,
-        chunks,
-        ready: async () => {
-          if (afterId && (await bind()))
-            await options.signalRuntime!.checkLiveResume(name, afterId);
-        },
-      } as JsonStreamResult;
+      return loadFxLiveStream().createLiveStream({
+        name: resolveName(signal),
+        afterId: opts?.afterId ?? options.lastEventId,
+        match: opts?.match,
+        gated,
+        signalRuntime: options.signalRuntime,
+      }) as JsonStreamResult;
     },
     call(flow, input) {
       const name = resolveName(flow);

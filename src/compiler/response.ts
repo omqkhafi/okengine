@@ -12,6 +12,7 @@ import {
   type JsonStreamResult,
 } from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
+import { lazyRequire } from "../kernel/lazy-require.ts";
 import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
 
 /** Successful envelope. */
@@ -32,7 +33,6 @@ export interface FailureEnvelope {
  *
  * Gate denials use the status the Gates simulator promises:
  * `Unauthorized` → 401 · `Forbidden` → 403 · `RateLimited` → 429.
- * Live resume gap (`LiveResumeGap`) → 410.
  *
  * @param failure - Typed failure
  */
@@ -46,8 +46,6 @@ export function statusForFailure(failure: FlowFailure): number {
       return 403;
     case "RateLimited":
       return 429;
-    case "LiveResumeGap":
-      return 410;
     default:
       return 400;
   }
@@ -89,16 +87,8 @@ export function encodeFailure(failure: FlowFailure): Response {
   });
 }
 
-function liveResumeGap(err: unknown): Response | undefined {
-  const o = err as { code?: unknown; params?: { signal?: string; afterId?: string } };
-  if (o?.code !== 1014) return;
-  return encodeFailure({
-    data: null,
-    error: {
-      code: "LiveResumeGap",
-      data: { signal: o.params?.signal ?? "", afterId: o.params?.afterId ?? "" },
-    },
-  });
+function loadFxLiveStream(): typeof import("../kernel/fx-live-stream.ts") {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["fx", "live", "stream"].join("-"));
 }
 
 /**
@@ -121,7 +111,13 @@ export async function encodeExecuteResult(result: {
     if (isFlowFailure(result.error)) {
       return encodeFailure(result.error);
     }
-    const gap = liveResumeGap(result.error);
+    const gap =
+      result.error !== null &&
+      typeof result.error === "object" &&
+      "code" in result.error &&
+      (result.error as { code: unknown }).code === 1014
+        ? loadFxLiveStream().encodeGap(result.error)
+        : undefined;
     if (gap) return gap;
     // Unhandled throws must never look like success (`undefined` → 204).
     return Response.json(
@@ -136,15 +132,9 @@ export async function encodeExecuteResult(result: {
       { status: 500 },
     );
   }
-  if (isJsonStreamResult(result.output)) {
-    try {
-      await result.output.ready?.();
-    } catch (err) {
-      await result.output.finalize?.();
-      const gap = liveResumeGap(err);
-      if (gap) return gap;
-      throw err;
-    }
+  if (isJsonStreamResult(result.output) && result.output.ready) {
+    const early = await loadFxLiveStream().awaitLiveReady(result.output);
+    if (early) return early;
   }
   return encodeSuccess(result.output);
 }

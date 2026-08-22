@@ -6,11 +6,12 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { OKE_ERRORS, OkeError, type OkeErrorDefinition } from "./errors.ts";
+import { OKE_ERRORS, OkeError, lookupOkeError, type OkeErrorDefinition } from "./errors.ts";
+import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
 
 describe("OKE error-code registry", () => {
   test("every code is unique", () => {
-    const codes = Object.values(OKE_ERRORS).map((d) => d.code);
+    const codes = [...Object.values(OKE_ERRORS).map((d) => d.code), LIVE_RESUME_GAP.code];
     expect(new Set(codes).size).toBe(codes.length);
   });
 
@@ -21,15 +22,21 @@ describe("OKE error-code registry", () => {
       expect(Number.isInteger(def.code), `${key}.code`).toBe(true);
       expect(def.code, `${key}.code`).toBeGreaterThan(0);
     }
+    expect(LIVE_RESUME_GAP.cause.trim().length).toBeGreaterThan(0);
+    expect(LIVE_RESUME_GAP.fix.trim().length).toBeGreaterThan(0);
   });
 
   test("OkeError docsUrl matches docs origin /e/{code}", () => {
-    for (const def of Object.values(OKE_ERRORS) as OkeErrorDefinition[]) {
+    for (const def of [...Object.values(OKE_ERRORS), LIVE_RESUME_GAP] as OkeErrorDefinition[]) {
       const err = new OkeError(def);
       expect(err.docsUrl).toBe(`https://oke.omqkhafi.dev/e/${def.code}`);
       expect(err.message).toContain(err.docsUrl);
       expect(err.message).toContain(`OKE${def.code}`);
       expect(err.message).toContain("→");
     }
+  });
+
+  test("lookupOkeError finds the lazy LIVE_RESUME_GAP entry", () => {
+    expect(lookupOkeError(1014)).toEqual(LIVE_RESUME_GAP);
   });
 });

@@ -27,6 +27,8 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   { src: "src/kernel/app-auth.ts", out: "dist/app-auth.js" },
   { src: "src/auth/config.ts", out: "dist/auth-config.js" },
   { src: "src/kernel/fx-auth-keys.ts", out: "dist/fx-auth-keys.js" },
+  { src: "src/kernel/fx-live-stream.ts", out: "dist/fx-live-stream.js" },
+  { src: "src/kernel/errors-live-resume.ts", out: "dist/errors-live-resume.js" },
   { src: "src/kernel/list-page.ts", out: "dist/list-page.js" },
   { src: "src/kernel/http-resource.ts", out: "dist/http-resource.js" },
   { src: "src/elements/store/cache.ts", out: "dist/store-cache.js" },

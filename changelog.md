@@ -54,6 +54,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Store-only `oke()` lazy-loads live SSE resume (OKE1014 / 410) so
+  apps that never declare Signal stay under the 51 kB gzip cap.
 - `autoResubscribe: true` waits with exponential backoff (500ms,
   doubling to 30s) before each reconnect so a closed SSE stream cannot
   tight-loop thousands of requests.
