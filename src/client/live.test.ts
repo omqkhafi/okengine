@@ -5,7 +5,13 @@
 import { describe, expect, test } from "bun:test";
 import { createClient } from "./create.ts";
 import * as client from "./index.ts";
-import { pickLiveExposure, type LiveExposure } from "./live.ts";
+import {
+  LIVE_RESUBSCRIBE_INITIAL_MS,
+  LIVE_RESUBSCRIBE_MAX_MS,
+  nextResubscribeDelay,
+  pickLiveExposure,
+  type LiveExposure,
+} from "./live.ts";
 import type { AppOf } from "./types.ts";
 
 type EventsApp = AppOf<{
@@ -172,13 +178,6 @@ describe("createClient — live", () => {
   test("autoResubscribe true delivers after a drop; false does not", async () => {
     let calls = 0;
     const payload = { orderId: "ord_1", status: "placed" };
-    const fetchFn = async (): Promise<Response> => {
-      calls += 1;
-      if (calls === 1) {
-        return new Response("nope", { status: 500, headers: { "content-type": "text/plain" } });
-      }
-      return sseResponse([payload]);
-    };
     const routes = {
       orders: {
         events: {
@@ -192,26 +191,17 @@ describe("createClient — live", () => {
     };
 
     const recovered: unknown[] = [];
-    const hanging = (): Response => {
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          const enc = new TextEncoder();
-          controller.enqueue(enc.encode(`data: ${JSON.stringify(payload)}\n\n`));
-        },
-      });
-      return new Response(stream, {
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-      });
-    };
-    const fetchOn = async (): Promise<Response> => {
+    const closingThenEvent = async (): Promise<Response> => {
       calls += 1;
       if (calls === 1) {
         return new Response("nope", { status: 500, headers: { "content-type": "text/plain" } });
       }
-      return hanging();
+      return sseResponse([payload]);
     };
-    const apiOn = createClient<EventsApp>("http://app.test", { fetch: fetchOn, $routes: routes });
+    const apiOn = createClient<EventsApp>("http://app.test", {
+      fetch: closingThenEvent,
+      $routes: routes,
+    });
     const stopOn = apiOn.live(
       orderStatus,
       { orderId: "ord_1" },
@@ -220,14 +210,19 @@ describe("createClient — live", () => {
         autoResubscribe: true,
       },
     );
-    await waitFor(() => recovered.length === 1);
+    await waitFor(() => recovered.length === 1, 2000);
     expect(recovered).toEqual([payload]);
+    expect(calls).toBe(2);
     stopOn();
 
     calls = 0;
     const later: unknown[] = [];
     let err: unknown;
-    const apiOff = createClient<EventsApp>("http://app.test", { fetch: fetchFn, $routes: routes });
+    const fetchOff = async (): Promise<Response> => {
+      calls += 1;
+      return new Response("nope", { status: 500, headers: { "content-type": "text/plain" } });
+    };
+    const apiOff = createClient<EventsApp>("http://app.test", { fetch: fetchOff, $routes: routes });
     const stopOff = apiOff.live(
       orderStatus,
       { orderId: "ord_1" },
@@ -243,6 +238,88 @@ describe("createClient — live", () => {
     expect(calls).toBe(1);
     stopOff();
   });
+
+  test("autoResubscribe backoff is exponential and capped", () => {
+    expect(LIVE_RESUBSCRIBE_INITIAL_MS).toBe(500);
+    expect(LIVE_RESUBSCRIBE_MAX_MS).toBe(30_000);
+    expect(nextResubscribeDelay(500)).toBe(1000);
+    expect(nextResubscribeDelay(1000)).toBe(2000);
+    expect(nextResubscribeDelay(16_000)).toBe(30_000);
+    expect(nextResubscribeDelay(30_000)).toBe(30_000);
+  });
+
+  test("autoResubscribe throttles immediately-closing streams (2s window)", async () => {
+    let calls = 0;
+    const api = createClient<EventsApp>("http://app.test", {
+      fetch: async () => {
+        calls += 1;
+        return new Response("data: [DONE]\n\n", {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      },
+      $routes: {
+        orders: {
+          events: {
+            method: "GET",
+            path: "/orders/:orderId/events",
+            live: "order-status",
+            matchKey: ["orderId"],
+            stream: true,
+          },
+        },
+      },
+    });
+    const stop = api.live(
+      orderStatus,
+      { orderId: "ord_1" },
+      {
+        onEvent: () => undefined,
+        autoResubscribe: true,
+      },
+    );
+    await new Promise((r) => setTimeout(r, 2000));
+    stop();
+    // Unthrottled: thousands. 500ms then 1s then 2s → 3 attempts in 2s.
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(calls).toBeLessThan(10);
+  }, 10_000);
+
+  test("unsubscribe during backoff does not open another request", async () => {
+    let calls = 0;
+    const api = createClient<EventsApp>("http://app.test", {
+      fetch: async () => {
+        calls += 1;
+        return new Response("data: [DONE]\n\n", {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      },
+      $routes: {
+        orders: {
+          events: {
+            method: "GET",
+            path: "/orders/:orderId/events",
+            live: "order-status",
+            matchKey: ["orderId"],
+            stream: true,
+          },
+        },
+      },
+    });
+    const stop = api.live(
+      orderStatus,
+      { orderId: "ord_1" },
+      {
+        onEvent: () => undefined,
+        autoResubscribe: true,
+      },
+    );
+    await waitFor(() => calls === 1);
+    stop();
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(calls).toBe(1);
+  }, 10_000);
 
   test("flow-scoped subscribe is unambiguous", async () => {
     const seen: unknown[] = [];

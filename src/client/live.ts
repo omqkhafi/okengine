@@ -116,6 +116,21 @@ export function pickLiveExposure(
   return top[0]!;
 }
 
+/** First wait after a drop when {@link LiveHandlers.autoResubscribe} is true. */
+export const LIVE_RESUBSCRIBE_INITIAL_MS = 500;
+
+/** Cap for autoResubscribe exponential backoff. */
+export const LIVE_RESUBSCRIBE_MAX_MS = 30_000;
+
+/**
+ * Next backoff after `delayMs` (`initial * 2^n`, capped).
+ *
+ * @param delayMs - Current delay
+ */
+export function nextResubscribeDelay(delayMs: number): number {
+  return Math.min(Math.max(delayMs, LIVE_RESUBSCRIBE_INITIAL_MS) * 2, LIVE_RESUBSCRIBE_MAX_MS);
+}
+
 /**
  * Open an SSE subscription. `unsubscribe` aborts and drops in-flight frames.
  *
@@ -154,8 +169,16 @@ async function pump(
   signal: AbortSignal,
 ): Promise<void> {
   const auto = handlers.autoResubscribe === true;
+  let delayMs = LIVE_RESUBSCRIBE_INITIAL_MS;
+  let attempt = 0;
   for (;;) {
     if (signal.aborted) return;
+    if (attempt > 0 && auto) {
+      await sleep(delayMs, signal);
+      if (signal.aborted) return;
+      delayMs = nextResubscribeDelay(delayMs);
+    }
+    attempt += 1;
     try {
       const res = await openSse(base, exposure, input, opts, signal);
       if (signal.aborted) return;
@@ -192,6 +215,26 @@ async function pump(
       return;
     }
   }
+}
+
+/**
+ * Abortable delay. Resolves immediately when `signal` is already aborted.
+ *
+ * @param ms - Duration
+ * @param signal - Unsubscribe / caller abort
+ */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted || ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    function finish(): void {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    }
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", finish, { once: true });
+    if (signal.aborted) finish();
+  });
 }
 
 async function openSse(

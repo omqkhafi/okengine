@@ -8,7 +8,7 @@
 import type { InferSchemaOutput } from "../validation/standard-schema.ts";
 import type { AnyFlowDef, FlowDef, FlowErrorMap } from "./flow.ts";
 import { isFlow } from "./flow.ts";
-import type { HttpTrigger, Trigger } from "./triggers.ts";
+import type { HttpTrigger, LiveHttpTrigger, Trigger } from "./triggers.ts";
 import { httpPathParams } from "./live-http.ts";
 
 /**
@@ -53,6 +53,10 @@ export type AppRouteMap = {
       readonly errors?: unknown;
       readonly method?: string;
       readonly path?: string;
+      readonly live?: string;
+      readonly matchKey?: readonly string[];
+      readonly gates?: readonly string[];
+      readonly stream?: true;
     };
   };
 };
@@ -75,15 +79,39 @@ export type ErrorDataOf<E extends FlowErrorMap> = {
 };
 
 /**
+ * HTTP live exposure on `$routes` so `createClient(app)` types
+ * `api.unit.flow(input, { onEvent })` as subscribe, not JSON RPC.
+ *
+ * @typeParam I - Input
+ * @typeParam O - Output
+ * @typeParam E - Error map
+ * @typeParam M - HTTP method
+ * @typeParam P - Path
+ */
+export type LiveAppFlowRoute<
+  I = unknown,
+  O = unknown,
+  E extends Record<string, unknown> = Record<string, unknown>,
+  M extends string = string,
+  P extends string = string,
+> = AppFlowRoute<I, O, E, M, P> & {
+  readonly live: string;
+  readonly stream: true;
+  readonly matchKey: readonly string[];
+};
+
+/**
  * Derive a client route contract from a {@link FlowDef} (trigger → REST).
  *
  * @typeParam F - Flow definition
  */
 export type RouteFromFlow<F> =
   F extends FlowDef<infer I, infer O, infer E, any, infer T>
-    ? [T] extends [HttpTrigger<infer M, infer P>]
-      ? AppFlowRoute<I, O, ErrorDataOf<E>, M, P>
-      : AppFlowRoute<I, O, ErrorDataOf<E>>
+    ? [T] extends [LiveHttpTrigger<infer M, infer P>]
+      ? LiveAppFlowRoute<I, O, ErrorDataOf<E>, M, P>
+      : [T] extends [HttpTrigger<infer M, infer P>]
+        ? AppFlowRoute<I, O, ErrorDataOf<E>, M, P>
+        : AppFlowRoute<I, O, ErrorDataOf<E>>
     : never;
 
 /**

@@ -40,6 +40,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Client gzip budget is 4 kB (was 3 kB) so `api.live` SSE subscribe
   fits the published cap.
 
+### 🐛 Fixed
+
+#### Runtime
+
+- `autoResubscribe: true` waits with exponential backoff (500ms,
+  doubling to 30s) before each reconnect so a closed SSE stream cannot
+  tight-loop thousands of requests.
+- `createClient(app)` types `.live(signal)` flows as subscribe
+  (`onEvent`), not JSON RPC — `$routes` now carries `live` / `stream`.
+
 ## v0.16.0 — 2026-08-21
 
 ### ✨ Added

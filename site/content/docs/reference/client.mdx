@@ -275,7 +275,7 @@ const stop = api.live(
     onError: (err) => {
       /* optional — 4xx, envelope, network drop */
     },
-    autoResubscribe: false, // default — set true to reopen after a drop (full replay)
+    autoResubscribe: false, // default — true reopens after a drop (500ms…30s backoff, full replay)
   },
 );
 stop(); // useEffect cleanup
@@ -287,6 +287,7 @@ The client picks the unique exposure whose `matchKey` fields are a subset of the
 the largest match (`{ orderId }` beats firehose). A tie needs `via: "unit.flow"`.
 
 v1 ignores SSE `id:` (no Last-Event-ID resume). Fetch carries Bearer auth; no timeout, no retry.
+`autoResubscribe: true` reopens after a drop with 500ms exponential backoff, capped at 30s.
 
 ## Exports
 

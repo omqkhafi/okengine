@@ -270,6 +270,8 @@ export interface LiveHandlers<T> {
   /**
    * Re-open the SSE request from scratch (full replay) after a drop.
    * Default false. Not Last-Event-ID resume.
+   * Backoff starts at 500ms and doubles to 30s so a closed stream cannot
+   * tight-loop reconnects.
    */
   readonly autoResubscribe?: boolean;
   /** Disambiguate when two exposures share a match shape. `unit.flow`. */
@@ -352,6 +354,10 @@ export type ClientFromRoutes<R extends ClientRouteMap> = {
 
 /**
  * Fully typed client for an App.
+ *
+ * `live` is always on the instance. Pass `typeof app` / `$routes` so unit
+ * bags exist on the type — an empty-`$routes` client cannot be asserted onto
+ * `{ console: … }` (TS2352).
  *
  * @typeParam App - App or route map
  */

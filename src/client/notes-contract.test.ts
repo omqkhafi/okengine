@@ -11,12 +11,14 @@ import { oke } from "../kernel/app.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
 import { http } from "../kernel/triggers.ts";
+import { resetSignals, signal } from "../elements/signal/declare.ts";
 import { createClient } from "./create.ts";
 import type { Client } from "./types.ts";
 
 beforeEach(() => {
   resetBindings();
   resetFlowSeq();
+  resetSignals();
 });
 
 /** Compile-time equality. */
@@ -275,5 +277,44 @@ describe("Notes — typeof app carries contracts", () => {
     await api.notes.stats({ id: "n_1" });
     expect(method).toBe("POST");
     expect(url).toBe("http://app.test/_oke/notes/stats");
+  });
+
+  test("typeof app live exposure is subscribe, not JSON RPC", () => {
+    const orderStatus = signal("order-status", {
+      delivery: "live",
+      optional: true,
+      schema: z.object({ orderId: z.string(), status: z.string() }),
+    });
+    const events = on(http.get("/orders/:orderId/events").live(orderStatus));
+    const app = oke({ name: "shop", autoBoot: false, registry: "ignore" }).adopt({
+      orders: { events },
+    });
+
+    type LiveFlag = typeof app.$routes.orders.events extends { readonly live: string }
+      ? true
+      : false;
+    type StreamFlag = typeof app.$routes.orders.events extends { readonly stream: true }
+      ? true
+      : false;
+    type _Live = Assert<Eq<LiveFlag, true>>;
+    type _Stream = Assert<Eq<StreamFlag, true>>;
+    const flags: [_Live, _Stream] = [true, true];
+    expect(flags).toEqual([true, true]);
+    expect(app.$routes.orders.events.live).toBe("order-status");
+    expect(app.$routes.orders.events.stream).toBe(true);
+
+    const api = createClient(app, "http://app.test", {
+      fetch: async () =>
+        new Response("data: [DONE]\n\n", {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }),
+    });
+    const stop = api.orders.events({ orderId: "ord_1" }, { onEvent: () => undefined });
+    type _Unsub = Assert<Eq<typeof stop, () => void>>;
+    const unsub: _Unsub = true;
+    expect(unsub).toBe(true);
+    expect(typeof stop).toBe("function");
+    stop();
   });
 });

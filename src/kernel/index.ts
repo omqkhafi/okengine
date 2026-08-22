@@ -78,6 +78,7 @@ export type {
   AppFlowRoute,
   AppRouteMap,
   FlowNamespace,
+  LiveAppFlowRoute,
   RouteFromFlow,
   RoutesFromAdoptArgs,
 } from "./adopt-routes.ts";

@@ -207,7 +207,7 @@ Same signal, two audiences: member filter on `:orderId`, admin firehose. Duplica
 
 Firehose default: `on(http.live(orderStatus).gate(member))` → `GET /_oke/live/order-status`.
 
-Server-side `fx.live` **is** the SSE carrier (`JsonStreamResult`). Custom `do` is allowed; authors do not wrap `fx.json.stream`. v1 replays the **full** retained tape (no Last-Event-ID resume, no TTL). `autoResubscribe: true` opens a new request after a drop — not cursor resume.
+Server-side `fx.live` **is** the SSE carrier (`JsonStreamResult`). Custom `do` is allowed; authors do not wrap `fx.json.stream`. v1 replays the **full** retained tape (no Last-Event-ID resume, no TTL). `autoResubscribe: true` opens a new request after a drop (500ms exponential backoff, 30s cap) — not cursor resume.
 
 **Why separate signals:** delivery is fixed per declaration. Competing work stays on `once`; fan-out stays on `broadcast`; the timeline stays on `live`. Switching a word later is cheap; mixing physics on one name is not.
 

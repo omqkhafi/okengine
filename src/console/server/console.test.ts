@@ -42,6 +42,11 @@ describe("console kernel", () => {
       expect(error).toBeNull();
       expect(data?.setupClosed).toBe(false);
       expect(data?.claimRequired).toBe(true);
+      if (data) {
+        type _Closed = typeof data.setupClosed extends boolean ? true : false;
+        const closed: _Closed = true;
+        expect(closed).toBe(true);
+      }
     } finally {
       await handle.app.stop();
     }
