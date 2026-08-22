@@ -28,7 +28,6 @@ export const { list, get, update, remove } = bindCrud({
   table: projects,
   read: member,
   write: projectAdminWrite,
-  liveList: true,
   createIn,
   out: projectsZod.select,
   defaults: { status: "planned" },

@@ -257,7 +257,7 @@ describe("diffManifest — additional branches", () => {
       properties: { id: { type: "number" } },
     };
     flow.durable = true;
-    flow.live = true;
+    flow.live = "order-status";
     flow.plane = "operator";
     flow.cost = { estimatePerCall: 1, budget: 2 };
     flow.pii = "allow";
@@ -598,7 +598,7 @@ describe("diffManifest — line coverage sweep", () => {
     after.flows!["orders.create"]!.steps = ["a"];
     after.flows!["orders.create"]!.nondeterministic = false;
     after.flows!["orders.create"]!.cost = { budget: 1 };
-    after.flows!["orders.create"]!.live = false;
+    delete after.flows!["orders.create"]!.live;
     after.flows!["orders.create"]!.durable = false;
     after.flows!["orders.create"]!.in = "CreateOrderV2";
     after.flows!["orders.create"]!.out = {

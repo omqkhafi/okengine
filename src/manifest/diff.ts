@@ -218,7 +218,7 @@ function diffFlow(before: Flow, after: Flow, path: string, out: ManifestChange[]
     out.push(
       change(
         `${path}/live`,
-        after.live === true ? "effect-widening" : "no-impact",
+        after.live !== undefined && after.live !== before.live ? "effect-widening" : "no-impact",
         kindOf(before.live, after.live),
         before.live,
         after.live,

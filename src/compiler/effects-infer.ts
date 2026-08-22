@@ -183,6 +183,12 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
       continue;
     }
 
+    if (chain.rootMethod === "live" && call === chain.rootCall) {
+      const ref = resolveNamed(call.arguments[0], options.bindings, "signal");
+      if (ref) reads.add(`signal:${ref}`);
+      continue;
+    }
+
     if (chain.rootMethod === "send" && call === chain.rootCall) {
       const ref = resolveNamed(call.arguments[0], options.bindings, "template");
       if (ref) sends.add(ref);

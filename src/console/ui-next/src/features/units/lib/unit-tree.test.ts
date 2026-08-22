@@ -63,7 +63,11 @@ const TREE: readonly UnitGroup[] = [
     }),
   ]),
   group("orders", [
-    row("orders.onPlaced", { trigger: { signal: "order-placed" }, live: true }, "once"),
+    row("orders.onPlaced", { trigger: { signal: "order-placed" } }, "once"),
+    row("orders.events", {
+      trigger: { http: { method: "GET", path: "/orders/:orderId/events" } },
+      live: "order-status",
+    }),
     row("orders.sync", { trigger: { cdc: { table: "orders" } }, plane: "operator" }),
     row("orders.helper", {}),
   ]),
@@ -100,14 +104,19 @@ describe("filterUnitsAdvanced", () => {
     const operators = filterUnitsAdvanced(TREE, { planes: ["operator"] });
     expect(flowIds(operators)).toEqual(["billing.reconcile", "orders.sync"]);
     const users = filterUnitsAdvanced(TREE, { planes: ["user"] });
-    expect(flowIds(users)).toEqual(["billing.charge", "orders.onPlaced", "orders.helper"]);
+    expect(flowIds(users)).toEqual([
+      "billing.charge",
+      "orders.onPlaced",
+      "orders.events",
+      "orders.helper",
+    ]);
   });
 
   test("durable / live flags keep only flagged flows", () => {
     expect(flowIds(filterUnitsAdvanced(TREE, { durableOnly: true }))).toEqual([
       "billing.reconcile",
     ]);
-    expect(flowIds(filterUnitsAdvanced(TREE, { liveOnly: true }))).toEqual(["orders.onPlaced"]);
+    expect(flowIds(filterUnitsAdvanced(TREE, { liveOnly: true }))).toEqual(["orders.events"]);
   });
 
   test("facet dimensions AND together", () => {
@@ -218,8 +227,9 @@ describe("bandUnitTree", () => {
   test("returns only populated trigger kind bands", () => {
     const bands = bandUnitTree(TREE);
     expect(bands.map((b) => b.id)).toEqual(["http", "signal", "cron", "cdc", "internal"]);
-    expect(bands[0]!.groups.map((g) => g.unit)).toEqual(["billing"]);
+    expect(bands[0]!.groups.map((g) => g.unit)).toEqual(["billing", "orders"]);
     expect(bands[0]!.groups[0]!.flows.map((f) => f.id)).toEqual(["billing.charge"]);
+    expect(bands[0]!.groups[1]!.flows.map((f) => f.id)).toEqual(["orders.events"]);
     expect(bands[1]!.groups.map((g) => g.unit)).toEqual(["orders"]);
     expect(bands[1]!.groups[0]!.flows.map((f) => f.id)).toEqual(["orders.onPlaced"]);
     expect(bands[2]!.groups.map((g) => g.unit)).toEqual(["billing"]);
@@ -254,6 +264,7 @@ describe("bandUnitTree", () => {
     expect(unitTreeOpenKeys(bands)).toEqual([
       "band:http",
       "unit:http:billing",
+      "unit:http:orders",
       "band:signal",
       "unit:signal:orders",
       "band:cron",

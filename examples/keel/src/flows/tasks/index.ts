@@ -175,7 +175,7 @@ export const update = on(
 
 /** List tasks (live) — filter in SQL when project/status given. */
 export const list = on(
-  http.get("/tasks").gate(member).live(),
+  http.get("/tasks").gate(member),
   flow("tasks.list", {
     in: TaskListIn,
     out: TaskListOut,

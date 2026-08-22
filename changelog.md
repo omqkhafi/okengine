@@ -12,6 +12,34 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Runtime
+
+- `api.live(signal, input?, { onEvent })` subscribes to `delivery: "live"`
+  HTTP SSE (callback + unsubscribe). Same handlers on exposing flows.
+  Opt-in `autoResubscribe` replays the full tape after a drop.
+- `http.get(path).live(signal)` / `http.live(signal)` expose a live
+  signal as GET SSE. `fx.live` is the stream carrier. Multiple
+  audiences of one signal boot when gates or match shape differ.
+
+### 💥 Breaking Changes
+
+#### Runtime
+
+- No-arg `http.*.live()`, `flow({ live: true })`, resource `.live()`,
+  and Manifest `live: boolean` are gone. `live` is the signal name.
+- `SignalBus.live()` is an `AsyncIterable` of `{ id, payload }` (not
+  callback + unsubscribe). Duplicate `(signal, gates, match)` is
+  **OKE1013**.
+
+### ♻️ Changed
+
+#### Runtime
+
+- Client gzip budget is 4 kB (was 3 kB) so `api.live` SSE subscribe
+  fits the published cap.
+
 ## v0.16.0 — 2026-08-21
 
 ### ✨ Added

@@ -17,7 +17,7 @@
       "slo": { "availability": "99.9%", "latency": { "p99": "200ms" } },
       "source": "src/flows/bookings/index.ts:18"
     },
-    "bookings.mine": { "live": true, "cacheKeys": "computed:sql:bookings/userId" },
+    "bookings.mine": { "cacheKeys": "computed:sql:bookings/userId" },
     "payments.chargeBooking": {
       "durable": true,
       "steps": ["create-intent", "confirm"],

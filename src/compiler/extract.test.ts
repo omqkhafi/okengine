@@ -362,7 +362,6 @@ export const { list, create, get, update, remove } = bindNamedTableCrud({
   unit: "cycles",
   path: "/cycles",
   table: cycles,
-  liveList: true,
 });
 `;
     const helper = `
@@ -379,7 +378,7 @@ export function bindNamedTableCrud(spec) {
     expect(manifest.flows?.["cycles.list"]?.trigger).toEqual({
       http: { method: "GET", path: "/cycles" },
     });
-    expect(manifest.flows?.["cycles.list"]?.live).toBe(true);
+    expect(manifest.flows?.["cycles.list"]?.live).toBeUndefined();
     expect(manifest.flows?.["cycles.create"]?.trigger).toEqual({
       http: { method: "POST", path: "/cycles" },
     });
@@ -469,7 +468,7 @@ export const remove = mounted.remove;
     expect(manifest.flows?.list?.breaking).toBe(true);
   });
 
-  test("chains .gate(...) and .live() onto the five verbs", async () => {
+  test("chains .gate(...) onto the five verbs", async () => {
     const source = `
 import { on, http, store, gate } from "okengine";
 
@@ -478,7 +477,7 @@ export const db = store.sql("notes", { schema: {} });
 
 const notesR = store.resource(db, {}, {});
 
-const mounted = on(http.resource("/notes", notesR.all()).gate(member).live());
+const mounted = on(http.resource("/notes", notesR.all()).gate(member));
 
 export const list = mounted.list;
 export const create = mounted.create;
@@ -493,20 +492,18 @@ export const remove = mounted.remove;
     expect(manifest.flows?.get?.gates).toEqual(["member"]);
     expect(manifest.flows?.update?.gates).toEqual(["member"]);
     expect(manifest.flows?.remove?.gates).toEqual(["member"]);
-    expect(manifest.flows?.list?.live).toBe(true);
-    expect(manifest.flows?.get?.live).toBe(true);
+    expect(manifest.flows?.list?.live).toBeUndefined();
+    expect(manifest.flows?.get?.live).toBeUndefined();
     expect(manifest.flows?.create?.live).toBeUndefined();
-    expect(manifest.flows?.update?.live).toBeUndefined();
-    expect(manifest.flows?.remove?.live).toBeUndefined();
   });
 
-  test("chains .public().live() onto the five verbs", async () => {
+  test("chains .public() onto the five verbs", async () => {
     const source = `
 import { on, http, store } from "okengine";
 
 export const db = store.sql("notes", { schema: {} });
 const notesR = store.resource(db, {}, {});
-const mounted = on(http.resource("/notes", notesR.all()).public().live());
+const mounted = on(http.resource("/notes", notesR.all()).public());
 
 export const list = mounted.list;
 export const create = mounted.create;
@@ -517,7 +514,7 @@ export const remove = mounted.remove;
     const manifest = await extractFromSources({ "src/flows/notes.ts": source });
     expect(manifest.flows?.list?.gates).toEqual(["public"]);
     expect(manifest.flows?.create?.gates).toEqual(["public"]);
-    expect(manifest.flows?.get?.live).toBe(true);
+    expect(manifest.flows?.get?.live).toBeUndefined();
     expect(manifest.flows?.create?.live).toBeUndefined();
   });
 });
@@ -669,6 +666,67 @@ export const failed = on(
 `;
     const manifest = await extractFromSources({ "src/flows/failed.ts": source });
     expect(manifest.flows?.["notifications.failed"]?.effects?.reads).toEqual(["signal:notify"]);
+  });
+});
+
+describe("extractManifest — fx.live / .live(signal)", () => {
+  test("one-arg on(http.get(path).live(signal)) stamps live + signal read", async () => {
+    const source = `
+import { on, http, gate, signal } from "okengine";
+import { z } from "zod";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const orderStatus = signal("order-status", {
+  delivery: "live",
+  optional: true,
+  schema: z.object({ orderId: z.string(), status: z.string() }),
+});
+
+export const events = on(http.get("/orders/:orderId/events").gate(member).live(orderStatus));
+`;
+    const manifest = await extractFromSources({ "src/flows/orders/index.ts": source });
+    const flow = manifest.flows?.["orders.events"];
+    expect(flow?.live).toBe("order-status");
+    expect(flow?.trigger).toEqual({
+      http: { method: "GET", path: "/orders/:orderId/events" },
+    });
+    expect(flow?.gates).toEqual(["member"]);
+    expect(flow?.effects?.reads).toEqual(["signal:order-status"]);
+  });
+
+  test("http.live(signal) uses GET /_oke/live/{name}", async () => {
+    const source = `
+import { on, http, gate, signal } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const orderStatus = signal("order-status", { delivery: "live", optional: true });
+
+export const firehose = on(http.live(orderStatus).gate(member));
+`;
+    const manifest = await extractFromSources({ "src/flows/orders/index.ts": source });
+    const flow = manifest.flows?.["orders.firehose"];
+    expect(flow?.live).toBe("order-status");
+    expect(flow?.trigger).toEqual({
+      http: { method: "GET", path: "/_oke/live/order-status" },
+    });
+  });
+
+  test("fx.live(signal) infers reads: [signal:<name>]", async () => {
+    const source = `
+import { on, flow, http, signal } from "okengine";
+
+export const orderStatus = signal("order-status", { delivery: "live", optional: true });
+
+export const events = on(
+  http.get("/feed").public().live(orderStatus),
+  flow("orders.events", {
+    do: (_input, fx) => fx.live(orderStatus),
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/orders.ts": source });
+    expect(manifest.flows?.["orders.events"]?.live).toBe("order-status");
+    expect(manifest.flows?.["orders.events"]?.effects?.reads).toEqual(["signal:order-status"]);
   });
 });
 

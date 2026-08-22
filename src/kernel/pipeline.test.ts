@@ -69,7 +69,7 @@ describe("http trigger — .public()", () => {
   test("attaches the public sentinel without calling gate()", () => {
     const trigger = http.get("/health").public();
     expect(trigger.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(["public"]);
-    expect(trigger.live().isLive).toBe(true);
+    expect(trigger.liveSignal).toBeUndefined();
   });
 });
 

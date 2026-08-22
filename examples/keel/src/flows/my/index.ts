@@ -7,7 +7,7 @@ import { TaskOut } from "@/flows/tasks/shapes";
 
 /** My Tasks — assigned to the caller, not completed. */
 export const tasksMine = on(
-  http.get("/me/tasks").gate(member).live(),
+  http.get("/me/tasks").gate(member),
   flow("my.tasks", {
     in: listIn({ mode: "offset" }),
     out: pageOut(TaskOut),

@@ -345,11 +345,9 @@ Keying an authenticated endpoint by IP punishes shared NAT.
 </Accordion>
 <Accordion title="API key Bearer returns 401">
 
-Expired, revoked, allowlist miss, or over the key's `rateLimit`. Check
-`ipAllowlist` against the same X-Forwarded-For hop as `ip-allowlist`.
-Entries are IPs or hostnames — a host resolves at verify time and must
-include the client IP (lookup failure is closed). Rotate if the secret
-was shown once and then lost.
+Expired, revoked, allowlist miss, or over `rateLimit`. `ipAllowlist` uses the
+same X-Forwarded-For hop as `ip-allowlist` (IP or hostname; lookup failure is closed).
+Rotate if the secret was shown once and then lost.
 
 </Accordion>
 <Accordion title="Keys vanish after an app restart">

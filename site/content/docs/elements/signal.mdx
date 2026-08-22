@@ -72,7 +72,7 @@ export const sendConfirmation = on(
 </Steps>
 
 That's the loop for `once` and `broadcast`: declare → `fx.emit` → `on(signal, flow)`.
-`live` keeps the same emit; the listener is `bus.live()`, not a Flow.
+`live` keeps the same emit; expose it over HTTP with `.live(signal)` and subscribe from `api.live`.
 
 ## The three delivery physics
 
@@ -184,16 +184,30 @@ export const notifyCustomer = on(
 
 `live` — retain the tape. A late subscriber replays **full history** (`placed → fulfilling → shipped`), then keeps going.
 
-The listener is **`bus.live()`**, not `on(orderStatus, flow)`. `on(signal, flow)` does not replay retained live payloads. Today that API is server-side; `createClient` has no SSE / WebSocket / `client.live` yet — see [Client](/docs/reference/client#signal-and-live-queries).
+The listener is **not** `on(orderStatus, flow)` — that trigger does not replay retained payloads. Expose GET SSE with `.live(signal)`, then subscribe from the typed client. `optional: true` is required so emits succeed before anyone is connected.
 
 ```typescript
-const bus = app.bootResult?.signal?.bus;
-if (!bus) throw new Error("signal runtime not booted");
+export const events = on(http.get("/orders/:orderId/events").gate(member).live(orderStatus));
 
-const unsub = await bus.live("order-status", (payload) => {
-  /* placed → fulfilling → shipped */
-});
+export const adminFeed = on(http.get("/admin/order-status").gate(admin).live(orderStatus));
+
+const stop = api.live(
+  orderStatus,
+  { orderId: "ord_1" },
+  {
+    onEvent: (event) => {
+      /* placed → fulfilling → shipped */
+    },
+  },
+);
+stop();
 ```
+
+Same signal, two audiences: member filter on `:orderId`, admin firehose. Duplicate `(signal, gates, match)` is **OKE1013**. Same HTTP path is still **OKE1011**.
+
+Firehose default: `on(http.live(orderStatus).gate(member))` → `GET /_oke/live/order-status`.
+
+Server-side `fx.live` **is** the SSE carrier (`JsonStreamResult`). Custom `do` is allowed; authors do not wrap `fx.json.stream`. v1 replays the **full** retained tape (no Last-Event-ID resume, no TTL). `autoResubscribe: true` opens a new request after a drop — not cursor resume.
 
 **Why separate signals:** delivery is fixed per declaration. Competing work stays on `once`; fan-out stays on `broadcast`; the timeline stays on `live`. Switching a word later is cheap; mixing physics on one name is not.
 
@@ -252,12 +266,12 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 
 <SignalLiveReplay />
 
-`live` retains every delivered message and replays the **full history** to a late `bus.live()` subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display).
+`live` retains every delivered message and replays the **full history** to a late subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display). Last-Event-ID resume is deferred — the wire already carries `id:`.
 
-<Callout title="Client subscription is not shipped yet">
-  `delivery: "live"` means the **driver** retains and replays. Listen with `bus.live()` on the
-  server — not `on(signal, flow)`. `createClient` has no SSE yet — poll HTTP. See
-  [Client](/docs/reference/client#signal-and-live-queries).
+<Callout title="HTTP live is GET SSE">
+  Expose with `http.get(path).live(signal)` or `http.live(signal)`. Subscribe with `api.live(signal,
+  input?, {onEvent})` — callback + unsubscribe, not `for await`. See
+  [Client](/docs/reference/client#live-signals).
 </Callout>
 
 ## Orphaned signal config
@@ -291,7 +305,7 @@ Pairing an arbitrary Store insert with emit inside **one** shared SQL transactio
 You emitted a signal that nobody currently subscribes to. For `once` and `broadcast`, wire
 `on(signal, flow)` before emit.
 
-`live` listeners are `bus.live()`, not a Flow — set `optional: true` when they may connect later.
+`live` listeners are HTTP SSE (`api.live` / `fx.live`), not a Flow — set `optional: true` when they may connect later.
 
 </Accordion>
 <Accordion title="Emit fails with OKE1043 (schema)">
@@ -306,13 +320,19 @@ When `attempts > retries` the message moves to the DLQ (if `deadLetter: true`) �
 </Accordion>
 <Accordion title="fx.deadLetters throws OKE1001">
 
-The flow read a signal it did not declare. The compiler infers `reads: ["signal:<name>"]` from `fx.deadLetters(signal)`. A different handle needs its own read.
+The flow read a signal it did not declare. The compiler infers `reads: ["signal:<name>"]` from `fx.deadLetters(signal)` and `fx.live(signal)`. A different handle needs its own read.
+
+</Accordion>
+<Accordion title="Boot fails with OKE1013 (live exposure duplicate)">
+
+Two GET routes expose the same live signal with the same gates and match.
+Change the gate or path-param filter, or drop the extra route (same path is **OKE1011**).
 
 </Accordion>
 <Accordion title="on(liveSignal, flow) never replays history">
 
-`on(signal, flow)` listens for `once` and `broadcast`. `live` replay is `bus.live()` on the Signal
-bus — a Flow trigger does not replay retained payloads.
+`on(signal, flow)` listens for `once` and `broadcast`. `live` replay is HTTP SSE (`api.live` /
+`fx.live`) — a Flow trigger does not replay retained payloads.
 
 </Accordion>
 <Accordion title="once vs broadcast vs live — how do I choose?">

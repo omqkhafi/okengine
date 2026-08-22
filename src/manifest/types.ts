@@ -53,7 +53,7 @@ export type RunsResourceRef = "runs";
 export type AuthApiKeysResourceRef = "auth:api-keys";
 
 /**
- * Dead-letter read capability for `fx.deadLetters` — not a store facet.
+ * Dead-letter / live-stream read capability — not a store facet.
  * Declare on `effects.reads` (never `writes`).
  */
 export type SignalResourceRef = `signal:${string}`;
@@ -86,7 +86,7 @@ export type JsonSchema = string | Record<string, unknown>;
  * `sends` / `asks` are irreversible (asks also nondeterministic + cost).
  */
 export interface Effects {
-  /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters`. */
+  /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters` / `fx.live`. */
   reads?: Array<ResourceRef | RunsResourceRef | SignalResourceRef | AuthApiKeysResourceRef>;
   /** Store writes, plus `"auth:api-keys"` for `fx.auth` mutations. */
   writes?: Array<ResourceRef | AuthApiKeysResourceRef>;
@@ -162,7 +162,8 @@ export interface Flow {
   source?: string;
   plane?: FlowPlane;
   durable?: boolean;
-  live?: boolean;
+  /** Live signal name when this flow streams `delivery: "live"` SSE. */
+  live?: string;
   cache?: boolean | string;
   cacheKeys?: string;
   slo?: Slo;

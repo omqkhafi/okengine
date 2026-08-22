@@ -364,6 +364,9 @@ describe("fx — wholesale swap", () => {
       async deadLetters() {
         return [];
       },
+      live() {
+        throw new Error("live must not be used");
+      },
       async call() {
         return null;
       },

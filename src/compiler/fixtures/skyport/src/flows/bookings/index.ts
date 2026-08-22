@@ -33,9 +33,8 @@ export const create = on(
 );
 
 export const mine = on(
-  http.get("/bookings").gate(member).live(),
+  http.get("/bookings").gate(member),
   flow("bookings.mine", {
-    live: true,
     do: (_, fx) =>
       fx
         .store(db)

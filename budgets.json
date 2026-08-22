@@ -16,7 +16,7 @@
       "id": "clientGzipBytes",
       "label": "Client runtime",
       "value": 2114,
-      "limit": 3072,
+      "limit": 4096,
       "unit": "bytes",
       "gate": "absolute",
       "group": "core",

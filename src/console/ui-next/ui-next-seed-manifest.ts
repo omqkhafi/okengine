@@ -114,7 +114,6 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
     },
     "tasks.list": {
       trigger: { http: { method: "GET", path: "/tasks" } },
-      live: true,
       plane: "user",
       gates: ["member"],
       in: KEEL_LIST_IN,

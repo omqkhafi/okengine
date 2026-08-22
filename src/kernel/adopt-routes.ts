@@ -9,6 +9,7 @@ import type { InferSchemaOutput } from "../validation/standard-schema.ts";
 import type { AnyFlowDef, FlowDef, FlowErrorMap } from "./flow.ts";
 import { isFlow } from "./flow.ts";
 import type { HttpTrigger, Trigger } from "./triggers.ts";
+import { httpPathParams } from "./live-http.ts";
 
 /**
  * One flow's route contract on `app.$routes` (compatible with client
@@ -130,6 +131,14 @@ export type RoutesFromAdoptArgs<Args extends readonly unknown[]> = Args extends 
 export interface RuntimeFlowRoute {
   readonly method?: string;
   readonly path?: string;
+  /** SSE live signal name when the trigger used `.live(signal)`. */
+  readonly live?: string;
+  /** Sorted auto-match path-param names (empty = firehose). */
+  readonly matchKey?: readonly string[];
+  /** Flattened gate names on the HTTP trigger. */
+  readonly gates?: readonly string[];
+  /** True when this flow returns `text/event-stream`. */
+  readonly stream?: true;
 }
 
 /** Runtime `$routes` table (values; types live on {@link OkeApp}). */
@@ -146,10 +155,21 @@ export type RuntimeRouteMap = {
  */
 export function runtimeRouteFromFlow(flowDef: AnyFlowDef): RuntimeFlowRoute {
   const trigger: Trigger | undefined = flowDef.$trigger ?? flowDef.triggers[0];
-  if (trigger?.kind === "http") {
-    return { method: trigger.method, path: trigger.path };
-  }
-  return {};
+  if (trigger?.kind !== "http") return {};
+  const liveName = trigger.liveSignal?.name ?? flowDef.live;
+  const gates = trigger.gates.map((g) => (typeof g === "string" ? g : g.name));
+  return {
+    method: trigger.method,
+    path: trigger.path,
+    ...(liveName !== undefined
+      ? {
+          live: liveName,
+          stream: true as const,
+          matchKey: httpPathParams(trigger.path),
+          ...(gates.length > 0 ? { gates } : {}),
+        }
+      : {}),
+  };
 }
 
 /**

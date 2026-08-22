@@ -17,6 +17,7 @@ import {
   type RoutesFromNamespace,
   type RuntimeRouteMap,
 } from "./adopt-routes.ts";
+import { liveExposureKey, liveGatesKey, liveMatchKeyFromPath } from "./live-http.ts";
 // `./boot.ts` pulls in every element + driver module (vault, store, signal,
 // clock, gate, channel, ai, runs) — a type-only import here keeps that whole
 // graph out of the cold-start path; `doBoot` below loads it lazily, only
@@ -611,6 +612,57 @@ function assertHttpBindingReady(binding: Binding): void {
 }
 
 /**
+ * Register one HTTP binding: unique method+path, unique live exposure key.
+ *
+ * @param binding - HTTP binding
+ * @param seenHttpRoutes - `METHOD path` keys
+ * @param seenLiveExposures - `(signal, gates, match)` keys
+ * @param smart - Router
+ * @param compiled - Compiled route map
+ * @param aot - AoT compile flag
+ */
+function registerHttpRoute(
+  binding: Binding,
+  seenHttpRoutes: Set<string>,
+  seenLiveExposures: Map<string, string>,
+  smart: { add(method: string, path: string, value: Binding): void },
+  compiled: WeakMap<Binding, CompiledRoute>,
+  aot: boolean,
+): void {
+  const trigger = binding.trigger;
+  if (trigger.kind !== "http") return;
+  const routeKey = `${trigger.method} ${trigger.path}`;
+  if (seenHttpRoutes.has(routeKey)) {
+    throwOke("HTTP_ROUTE_DUPLICATE", {
+      method: trigger.method,
+      path: trigger.path,
+      flow: binding.flow.name || "(unnamed)",
+    });
+  }
+  seenHttpRoutes.add(routeKey);
+  if (trigger.liveSignal !== undefined) {
+    const matchKey = binding.flow.liveCustomMatch
+      ? `custom:${binding.flow.name}`
+      : liveMatchKeyFromPath(trigger.path);
+    const exposure = liveExposureKey(
+      trigger.liveSignal.name,
+      liveGatesKey(trigger.gates),
+      matchKey,
+    );
+    if (seenLiveExposures.has(exposure)) {
+      throwOke("LIVE_EXPOSURE_DUPLICATE", {
+        signal: trigger.liveSignal.name,
+        gates: liveGatesKey(trigger.gates) || "(none)",
+        match: matchKey || "(firehose)",
+      });
+    }
+    seenLiveExposures.set(exposure, binding.flow.name);
+  }
+  smart.add(trigger.method, trigger.path, binding);
+  compiled.set(binding, compileHttpBinding(binding, aot));
+}
+
+/**
  * Fold `generated.ts` units into `$routes` and `flowsByName`.
  *
  * @param units - Drained {@link registerFlowUnits} bag
@@ -790,20 +842,11 @@ export function oke(options: OkeOptions): OkeApp {
 
   const smart = createRouter<Binding>(options.router ?? "default");
   const seenHttpRoutes = new Set<string>();
+  const seenLiveExposures = new Map<string, string>();
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
-      const key = `${b.trigger.method} ${b.trigger.path}`;
-      if (seenHttpRoutes.has(key)) {
-        throwOke("HTTP_ROUTE_DUPLICATE", {
-          method: b.trigger.method,
-          path: b.trigger.path,
-          flow: b.flow.name || "(unnamed)",
-        });
-      }
-      seenHttpRoutes.add(key);
-      smart.add(b.trigger.method, b.trigger.path, b);
-      compiled.set(b, compileHttpBinding(b, aot));
+      registerHttpRoute(b, seenHttpRoutes, seenLiveExposures, smart, compiled, aot);
     }
   }
   // Defer SmartRouter selection until first match so `.plug()` can still
@@ -815,17 +858,7 @@ export function oke(options: OkeOptions): OkeApp {
     registerFlow(b.flow);
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
-      const key = `${b.trigger.method} ${b.trigger.path}`;
-      if (seenHttpRoutes.has(key)) {
-        throwOke("HTTP_ROUTE_DUPLICATE", {
-          method: b.trigger.method,
-          path: b.trigger.path,
-          flow: b.flow.name || "(unnamed)",
-        });
-      }
-      seenHttpRoutes.add(key);
-      smart.add(b.trigger.method, b.trigger.path, b);
-      compiled.set(b, compileHttpBinding(b, aot));
+      registerHttpRoute(b, seenHttpRoutes, seenLiveExposures, smart, compiled, aot);
     }
   }
 

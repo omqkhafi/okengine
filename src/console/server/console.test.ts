@@ -37,14 +37,7 @@ describe("console kernel", () => {
           const req = new Request(String(input), init);
           return handle.app.fetch(req);
         },
-      }) as {
-        console: {
-          setupStatus: (input?: unknown) => Promise<{
-            data: { setupClosed: boolean; claimRequired: boolean } | null;
-            error: { code: string } | null;
-          }>;
-        };
-      };
+      });
       const { data, error } = await api.console.setupStatus({});
       expect(error).toBeNull();
       expect(data?.setupClosed).toBe(false);

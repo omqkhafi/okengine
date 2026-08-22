@@ -184,17 +184,16 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("live is client-subscribable", async () => {
-      const live = signal("seat-feed", { delivery: "live" });
+      const live = signal("seat-feed", { delivery: "live", optional: true });
       const bus = await openBus(driver, [live], setup?.() ?? {});
-      const frames: unknown[] = [];
-      await bus.live("seat-feed", (payload) => {
-        frames.push(payload);
-      });
-
+      const it = bus.live("seat-feed")[Symbol.asyncIterator]();
+      const pending = it.next();
       await bus.emit("seat-feed", { seat: "12A" });
       await bus.drain();
-
-      expect(frames).toEqual([{ seat: "12A" }]);
+      const step = await pending;
+      expect(step.done).toBe(false);
+      expect(step.value?.payload).toEqual({ seat: "12A" });
+      await it.return?.();
     });
 
     test("DLQ preserves typed failure reasons per attempt", async () => {

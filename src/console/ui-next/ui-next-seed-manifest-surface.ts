@@ -81,7 +81,7 @@ function httpFlow(spec: {
   path: string;
   gates?: readonly string[];
   plane?: "user" | "operator";
-  live?: boolean;
+  live?: string;
   durable?: boolean;
   cache?: boolean | string;
   in?: JsonSchema;
@@ -94,7 +94,7 @@ function httpFlow(spec: {
     trigger: { http: { method: spec.method, path: spec.path } },
     plane: spec.plane ?? "user",
     ...(spec.gates ? { gates: [...spec.gates] } : {}),
-    ...(spec.live ? { live: true } : {}),
+    ...(spec.live ? { live: spec.live } : {}),
     ...(spec.durable ? { durable: true } : {}),
     ...(spec.cache !== undefined ? { cache: spec.cache } : {}),
     ...(spec.in ? { in: spec.in } : {}),
@@ -118,7 +118,6 @@ function crud(spec: {
   readGates?: readonly string[];
   writeGates?: readonly string[];
   skip?: readonly ("list" | "get" | "create" | "update" | "delete")[];
-  liveList?: boolean;
   createIn?: JsonSchema;
   updateIn?: JsonSchema;
   createEmits?: readonly string[];
@@ -133,7 +132,6 @@ function crud(spec: {
       method: "GET",
       path: spec.collection,
       gates: read,
-      live: spec.liveList,
       in: KEEL_LIST_IN,
       out: KEEL_LIST_OUT,
       effects: { reads: [spec.table] },
@@ -365,7 +363,6 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     readGates: MEMBER,
     writeGates: COMMENT_WRITE,
     skip: ["create"],
-    liveList: true,
     updateIn: COMMENT_IN,
     sourceDir: "src/flows/comments",
   }),
@@ -386,7 +383,6 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     readGates: MEMBER,
     writeGates: PROJECT_ADMIN,
     skip: ["create"],
-    liveList: true,
     sourceDir: "src/flows/projects",
   }),
   "projects.archive": httpFlow({
@@ -491,7 +487,6 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     item: "/spaces/:id",
     readGates: MEMBER,
     writeGates: PROJECT_ADMIN,
-    liveList: true,
     createIn: {
       type: "object",
       required: ["key", "name"],
@@ -610,7 +605,6 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     readGates: MEMBER,
     writeGates: MEMBER,
     skip: ["create"],
-    liveList: true,
     sourceDir: "src/flows/inbox",
   }),
 
@@ -618,7 +612,6 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     method: "GET",
     path: "/me/tasks",
     gates: MEMBER,
-    live: true,
     in: KEEL_LIST_IN,
     out: KEEL_LIST_OUT,
     effects: { reads: ["sql:tasks", "sql:task_assignees"] },

@@ -199,10 +199,10 @@ const notesR = store.resource(db, notes, {
   },
 });
 
-const mounted = on(http.resource("/notes", notesR.all()).public().live());
+const mounted = on(http.resource("/notes", notesR.all()).public());
 ```
 
-`.gate(...)` / `.live()` chain like `http.get` — gates on every verb, live on list and get.
+`.gate(...)` / `.public()` chain like `http.get` — gates on every verb. Live SSE is `.live(signal)` on a GET, not on `http.resource`.
 
 The list endpoint's URL is the whole query language:
 

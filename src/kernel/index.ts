@@ -359,6 +359,7 @@ export {
   type HttpMethod,
   type HttpTrigger,
   type InternalTrigger,
+  type LiveHttpTrigger,
   type ResourceFlowBag,
   type ResourceMount,
   type SignalAsTrigger,

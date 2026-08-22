@@ -16,6 +16,7 @@ import {
   SIGNAL_DEFAULT_LEASE_MS,
   validateSignalEmitPayload,
   type DeadLetter,
+  type LiveEvent,
   type LiveHandler,
   type SignalBus,
   type SignalDiscardOptions,
@@ -31,6 +32,7 @@ import {
   type SignalTransaction,
   type SignalUnsubscribe,
 } from "./signal-types.ts";
+import { createLiveIterable } from "./signal-live-iter.ts";
 
 /** Internal mutable message. */
 interface MutMessage {
@@ -313,26 +315,30 @@ export async function createSignalEngine(
     };
   }
 
-  async function live(signal: string, handler: LiveHandler): Promise<SignalUnsubscribe> {
+  function live(signal: string): AsyncIterable<LiveEvent> {
     const decl = requireDecl(signal);
     if (decl.delivery !== "live") {
       throw new Error(`signal "${signal}" is not delivery: "live"`);
     }
-    let set = liveHandlers.get(signal);
-    if (!set) {
-      set = new Set();
-      liveHandlers.set(signal, set);
-    }
-    set.add(handler);
-    // Replay retained live messages to late subscribers.
-    for (const m of messages) {
-      if (m.signal === signal && m.delivery === "live") {
-        await handler(m.payload);
+    return createLiveIterable((emit) => {
+      let set = liveHandlers.get(signal);
+      if (!set) {
+        set = new Set();
+        liveHandlers.set(signal, set);
       }
-    }
-    return () => {
-      set!.delete(handler);
-    };
+      const handler: LiveHandler = (event) => {
+        emit(event);
+      };
+      set.add(handler);
+      for (const m of messages) {
+        if (m.signal === signal && m.delivery === "live") {
+          emit({ id: m.id, payload: m.payload });
+        }
+      }
+      return () => {
+        set.delete(handler);
+      };
+    });
   }
 
   function toPublic(m: MutMessage): SignalMessage {
@@ -469,8 +475,9 @@ export async function createSignalEngine(
       if (m.delivery !== "live" || m.status !== "pending") continue;
       const handlers = liveHandlers.get(m.signal);
       if (handlers && handlers.size > 0) {
+        const event: LiveEvent = { id: m.id, payload: m.payload };
         for (const h of handlers) {
-          await h(m.payload);
+          await h(event);
         }
       }
       pushLive(m.signal, m.payload);

@@ -40,6 +40,7 @@ export type {
   SignalDriverId,
   SignalDriver,
   SignalBus,
+  LiveEvent,
   SignalMessage,
   SignalEmitOptions,
   SignalFailureReason,

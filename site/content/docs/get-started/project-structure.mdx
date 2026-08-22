@@ -701,7 +701,7 @@ Plugin `.binding()` is never inferred. File tree is app flows only.
 
 ```typescript title="flows/my/index.ts"
 export const tasks = on(
-  http.get("/me/tasks").gate(member).live(),
+  http.get("/me/tasks").gate(member),
   flow("my.tasks", {
     do: async (_input, fx) => fx.store(db).select().from(tasks),
   }),
@@ -773,9 +773,9 @@ import { noteCreated } from "./signals";
 
 ### `http.resource` in a tree
 
-Five reserved leaves reproduce `GET|POST /notes` and `GET|PATCH|DELETE /notes/:id`, but not one shared `.gate()` / `.live()` and not `store.resource().all()` in a single declaration.
+Five reserved leaves reproduce `GET|POST /notes` and `GET|PATCH|DELETE /notes/:id`, but not one shared `.gate()` and not `store.resource().all()` in a single declaration.
 
-Put `on(http.resource("/notes", ops).public().live())` in `route.ts`. Inference is skipped — the five verbs already declare those paths. Extra actions (`[id]/archive.ts`) sit beside it. Pathless `http.resource()` is not a thing.
+Put `on(http.resource("/notes", ops).public())` in `route.ts`. Inference is skipped — the five verbs already declare those paths. Extra actions (`[id]/archive.ts`) sit beside it. Pathless `http.resource()` is not a thing.
 
 | Verb     | Path                |
 | -------- | ------------------- |
@@ -790,7 +790,7 @@ Put `on(http.resource("/notes", ops).public().live())` in `route.ts`. Inference 
 
 ```typescript title="flows/notes/route.ts"
 const notesR = store.resource(db, notes, { in: NewNote, out: Note });
-export const mounted = on(http.resource("/notes", notesR.all()).public().live());
+export const mounted = on(http.resource("/notes", notesR.all()).public());
 ```
 
 </Tab>

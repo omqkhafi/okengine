@@ -253,7 +253,7 @@ export async function openRedisSignal(options: SignalOpenOptions): Promise<Signa
       };
     },
     subscribe: (signal, subscriberId, handler) => outbox.subscribe(signal, subscriberId, handler),
-    live: (signal, handler) => outbox.live(signal, handler),
+    live: (signal) => outbox.live(signal),
     drain: () => outbox.drain(),
     deadLetters: (s) => outbox.deadLetters(s),
     inspect: (s) => outbox.inspect(s),

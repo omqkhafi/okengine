@@ -298,7 +298,10 @@
           "enum": ["user", "operator"]
         },
         "durable": { "type": "boolean" },
-        "live": { "type": "boolean" },
+        "live": {
+          "type": "string",
+          "description": "Live signal name when this flow streams delivery: live SSE."
+        },
         "cache": {
           "oneOf": [{ "type": "boolean" }, { "type": "string", "minLength": 1 }]
         },

@@ -208,6 +208,15 @@ export const OKE_ERRORS = {
     fix: 'Use `flow("unit.export", {…})` or export it from a `src/flows/<unit>/` file so the tree can stamp `unit.export`.',
   },
   /**
+   * Two live HTTP exposures of the same signal share gates + match shape.
+   */
+  LIVE_EXPOSURE_DUPLICATE: {
+    code: 1013,
+    cause:
+      'Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).',
+    fix: "Use a different gate or path-param filter, or drop the extra route.",
+  },
+  /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */

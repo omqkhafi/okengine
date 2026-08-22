@@ -20,6 +20,22 @@ import {
   type SignalDriver,
 } from "../../drivers/index.ts";
 import { signal, type SignalDecl } from "./declare.ts";
+import type { LiveEvent } from "../../drivers/signal-types.ts";
+
+async function takeLivePayloads(iter: AsyncIterable<LiveEvent>, n: number): Promise<unknown[]> {
+  const out: unknown[] = [];
+  const it = iter[Symbol.asyncIterator]();
+  try {
+    while (out.length < n) {
+      const step = await it.next();
+      if (step.done) break;
+      out.push(step.value.payload);
+    }
+  } finally {
+    await it.return?.();
+  }
+  return out;
+}
 
 const drivers: Array<{
   label: string;
@@ -167,10 +183,7 @@ for (const { label, driver, setup } of drivers) {
       await bus.emit("seat-feed", { seat: "12C" });
       await bus.drain();
 
-      const late: unknown[] = [];
-      await bus.live("seat-feed", (payload) => {
-        late.push(payload);
-      });
+      const late = await takeLivePayloads(bus.live("seat-feed"), 3);
 
       // All retained live messages replay — not the Console recentLive cap of 50.
       expect(late).toEqual([{ seat: "12A" }, { seat: "12B" }, { seat: "12C" }]);

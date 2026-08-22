@@ -160,7 +160,11 @@ export function FlowContractPanel({
           <MetaPill
             icon={InternetAntenna03Icon}
             label="live"
-            title="Live — subscribes to realtime updates"
+            title={
+              typeof row.flow.live === "string"
+                ? `Live — SSE for ${row.flow.live}`
+                : "Live — SSE signal feed"
+            }
           />
         ) : null}
       </FlowActivityStrip>

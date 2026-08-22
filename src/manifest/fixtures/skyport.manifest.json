@@ -34,7 +34,6 @@
     "bookings.mine": {
       "trigger": { "http": { "method": "GET", "path": "/bookings" } },
       "gates": ["member"],
-      "live": true,
       "cacheKeys": "computed:sql:bookings/userId",
       "effects": {
         "reads": ["sql:bookings"]

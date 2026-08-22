@@ -40,10 +40,30 @@ export interface CreateConsoleAppOptions extends CreateConsoleStateOptions {
   readonly name?: string;
 }
 
+/** Adopted `$routes` so `createClient(handle.app)` types `api.console.*`. */
+export type ConsoleAppRoutes = {
+  readonly console: {
+    readonly setupStatus: {
+      readonly in?: unknown;
+      readonly out?: { readonly setupClosed: boolean; readonly claimRequired: boolean };
+      readonly errors?: Record<string, unknown>;
+      readonly method?: string;
+      readonly path?: string;
+    };
+    readonly [flow: string]: {
+      readonly in?: unknown;
+      readonly out?: unknown;
+      readonly errors?: Record<string, unknown>;
+      readonly method?: string;
+      readonly path?: string;
+    };
+  };
+};
+
 /** Console application + shared state. */
 export interface ConsoleAppHandle {
-  /** Typed okengine app (`createClient<typeof app>`). */
-  readonly app: OkeApp;
+  /** Typed okengine app (`createClient(handle.app)`). */
+  readonly app: OkeApp<{}, ConsoleAppRoutes>;
   /** Shared operator / claim / Manifest state. */
   readonly state: ConsoleState;
   /** Adopted route map for `createClient`. */

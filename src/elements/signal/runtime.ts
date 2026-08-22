@@ -5,6 +5,7 @@
 
 import type {
   DeadLetter,
+  LiveEvent,
   SignalBus,
   SignalDriver,
   SignalEmitOptions,
@@ -59,6 +60,12 @@ export interface SignalRuntime {
    * @param name - Signal name
    */
   deadLetters(name: string): Promise<readonly DeadLetter[]>;
+  /**
+   * Live feed (auto-starts). Replays history then new events.
+   *
+   * @param name - Signal name
+   */
+  live(name: string): AsyncIterable<LiveEvent>;
   /** Close the bus. */
   close(): Promise<void>;
 }
@@ -101,6 +108,29 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
     async deadLetters(name) {
       const b = await this.start();
       return b.deadLetters(name);
+    },
+    live(name) {
+      return {
+        [Symbol.asyncIterator]() {
+          let inner: AsyncIterator<LiveEvent> | undefined;
+          return {
+            async next() {
+              if (!inner) {
+                const b = await runtime.start();
+                inner = b.live(name)[Symbol.asyncIterator]();
+              }
+              return inner.next();
+            },
+            async return() {
+              if (!inner) {
+                const b = await runtime.start();
+                inner = b.live(name)[Symbol.asyncIterator]();
+              }
+              return inner.return?.() ?? { done: true, value: undefined };
+            },
+          };
+        },
+      };
     },
     async close() {
       if (bus) {

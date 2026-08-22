@@ -1,6 +1,6 @@
 /**
  * Client runtime budget — AGENTS.md / unified-theory §24.
- * Limit: < 3 kB gzipped (minified bundle).
+ * Limit: gzipped minified bundle under {@link CLIENT_BUDGET_BYTES}.
  */
 
 import { describe, expect, test } from "bun:test";

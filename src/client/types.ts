@@ -27,6 +27,14 @@ export interface FlowContract<
   readonly method?: string;
   /** Optional HTTP path template (`/notes/:id`). */
   readonly path?: string;
+  /** Live signal name when this flow is an SSE exposure. */
+  readonly live?: string;
+  /** Auto-match path-param names (empty = firehose). */
+  readonly matchKey?: readonly string[];
+  /** Flattened gate names on the HTTP trigger. */
+  readonly gates?: readonly string[];
+  /** True when this flow returns `text/event-stream`. */
+  readonly stream?: true;
 }
 
 /**
@@ -248,6 +256,70 @@ type ClientCallFn<I, O, E extends Record<string, unknown>> = [I] extends [void]
  */
 export type ClientCall<I, O, E extends Record<string, unknown>> = ClientCallFn<I, O, E>;
 
+/** Unsubscribe a live SSE subscription. */
+export type LiveUnsubscribe = () => void;
+
+/**
+ * Callbacks for {@link ClientLive} / live-exposing flow calls.
+ *
+ * @typeParam T - Signal payload
+ */
+export interface LiveHandlers<T> {
+  readonly onEvent: (event: T) => void;
+  readonly onError?: (error: unknown) => void;
+  /**
+   * Re-open the SSE request from scratch (full replay) after a drop.
+   * Default false. Not Last-Event-ID resume.
+   */
+  readonly autoResubscribe?: boolean;
+  /** Disambiguate when two exposures share a match shape. `unit.flow`. */
+  readonly via?: string;
+  readonly signal?: AbortSignal;
+}
+
+/** Named live signal handle (`signal()`). */
+export type LiveSignalHandle<T = unknown> = {
+  readonly name: string;
+  readonly _payload?: T;
+};
+
+/** Filter fields for a live subscribe (path params / payload keys). */
+export type LiveInput<T> = T extends object
+  ? Partial<T> & Record<string, unknown>
+  : Record<string, unknown>;
+
+/**
+ * Root `api.live(signal, …)` — callback subscribe, not `for await`.
+ *
+ * @typeParam App - App brand (reserved; runtime uses `$routes`)
+ */
+export type ClientLive<App = never> = [App] extends [never]
+  ? ClientLiveOverloads
+  : ClientLiveOverloads;
+
+type ClientLiveOverloads = {
+  <T>(signal: LiveSignalHandle<T>, input: LiveInput<T>, handlers: LiveHandlers<T>): LiveUnsubscribe;
+  <T>(signal: LiveSignalHandle<T>, handlers: LiveHandlers<T>): LiveUnsubscribe;
+  (name: string, input: unknown, handlers: LiveHandlers<unknown>): LiveUnsubscribe;
+  (name: string, handlers: LiveHandlers<unknown>): LiveUnsubscribe;
+};
+
+type IsLiveContract<C> = C extends { readonly live: string } ? true : false;
+
+type ClientLiveFlowCall<I, O> = [I] extends [void]
+  ? (handlers: LiveHandlers<O>) => LiveUnsubscribe
+  : Partial<I> extends I
+    ? {
+        (handlers: LiveHandlers<O>): LiveUnsubscribe;
+        (input?: I, handlers?: LiveHandlers<O>): LiveUnsubscribe;
+      }
+    : (input: I, handlers: LiveHandlers<O>) => LiveUnsubscribe;
+
+type ClientCallFor<C> =
+  IsLiveContract<C> extends true
+    ? ClientLiveFlowCall<ContractIn<C>, ContractOut<C>>
+    : ClientCall<ContractIn<C>, ContractOut<C>, ContractErrors<C>>;
+
 /**
  * Pull input from a contract shape (supports required or phantom-optional `in`).
  */
@@ -274,11 +346,7 @@ type ContractErrors<C> = "errors" extends keyof C
  */
 export type ClientFromRoutes<R extends ClientRouteMap> = {
   readonly [U in keyof R]: {
-    readonly [F in keyof R[U]]: ClientCall<
-      ContractIn<R[U][F]>,
-      ContractOut<R[U][F]>,
-      ContractErrors<R[U][F]>
-    >;
+    readonly [F in keyof R[U]]: ClientCallFor<R[U][F]>;
   };
 };
 
@@ -287,7 +355,9 @@ export type ClientFromRoutes<R extends ClientRouteMap> = {
  *
  * @typeParam App - App or route map
  */
-export type Client<App = never> = ClientFromRoutes<RoutesOf<ResolveApp<App>>>;
+export type Client<App = never> = ClientFromRoutes<RoutesOf<ResolveApp<App>>> & {
+  readonly live: ClientLive<ResolveApp<App>>;
+};
 
 /**
  * Convenience: brand a route map as an App (`export type App = AppOf<…>`).

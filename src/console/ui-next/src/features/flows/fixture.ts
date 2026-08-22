@@ -39,7 +39,6 @@ export const FLOWS_TEST_MANIFEST: Manifest = {
     },
     "bookings.mine": {
       trigger: { http: { method: "GET", path: "/bookings" } },
-      live: true,
       effects: { reads: ["sql:bookings"] },
       source: "src/flows/bookings/index.ts:42",
     },

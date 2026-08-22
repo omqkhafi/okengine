@@ -36,8 +36,10 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
   readonly method: M;
   readonly path: P;
   readonly gates: readonly GateRef[];
-  /** Whether `.live()` was applied. */
-  readonly isLive: boolean;
+  /**
+   * Signal this GET exposes as a live SSE feed (`undefined` when not a live route).
+   */
+  readonly liveSignal?: SignalSource;
   /**
    * Attach gates (registration order). `gate.all` handles and arrays flatten.
    */
@@ -47,9 +49,29 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
    */
   public(): HttpTrigger<M, P>;
   /**
-   * Mark the HTTP trigger as live (push result to subscribers).
+   * Expose a `delivery: "live"` signal as SSE on this GET.
+   *
+   * @param signal - Live signal handle
    */
-  live(): HttpTrigger<M, P>;
+  live(signal: SignalSource): LiveHttpTrigger<M, P>;
+}
+
+/**
+ * HTTP GET trigger that exposes a live signal (`on(trigger)` synthesizes the Flow).
+ *
+ * `.gate` / `.public` keep {@link LiveHttpTrigger.liveSignal} so
+ * `on(http.live(signal).gate(member))` typechecks.
+ *
+ * @typeParam M - HTTP method literal
+ * @typeParam P - Path template literal
+ */
+export interface LiveHttpTrigger<
+  M extends HttpMethod = "GET",
+  P extends string = string,
+> extends HttpTrigger<M, P> {
+  readonly liveSignal: SignalSource;
+  readonly gate: GateAttach<LiveHttpTrigger<M, P>>;
+  public(): LiveHttpTrigger<M, P>;
 }
 
 /** Clock / interval trigger (`every("1h")`). */
@@ -105,31 +127,43 @@ export function createGateAttach<T>(
 }
 
 /**
- * Build an HTTP trigger with `.gate` / `.public` / `.live`.
+ * Build an HTTP trigger with `.gate` / `.public` / `.live(signal)`.
  *
  * @param method - HTTP verb
  * @param path - Route path
  * @param gates - Attached gate refs
- * @param isLive - Live flag
+ * @param liveSignal - Live signal when `.live(signal)` was applied
  */
 export function createHttpTrigger<M extends HttpMethod, P extends string>(
   method: M,
   path: P,
+  gates: readonly GateRef[],
+  liveSignal: SignalSource,
+): LiveHttpTrigger<M, P>;
+export function createHttpTrigger<M extends HttpMethod, P extends string>(
+  method: M,
+  path: P,
+  gates?: readonly GateRef[],
+  liveSignal?: SignalSource,
+): HttpTrigger<M, P>;
+export function createHttpTrigger<M extends HttpMethod, P extends string>(
+  method: M,
+  path: P,
   gates: readonly GateRef[] = [],
-  isLive = false,
+  liveSignal?: SignalSource,
 ): HttpTrigger<M, P> {
   const trigger: HttpTrigger<M, P> = {
     kind: "http",
     method,
     path,
     gates,
-    isLive,
-    gate: createGateAttach((next) => createHttpTrigger(method, path, next, isLive), gates),
+    ...(liveSignal !== undefined ? { liveSignal } : {}),
+    gate: createGateAttach((next) => createHttpTrigger(method, path, next, liveSignal), gates),
     public() {
-      return createHttpTrigger(method, path, [...gates, GATE_PUBLIC_NAME], isLive);
+      return createHttpTrigger(method, path, [...gates, GATE_PUBLIC_NAME], liveSignal);
     },
-    live() {
-      return createHttpTrigger(method, path, gates, true);
+    live(signal: SignalSource) {
+      return createHttpTrigger(method, path, gates, signal);
     },
   };
   return trigger;
@@ -150,14 +184,12 @@ export interface ResourceFlowBag {
 /**
  * A mounted resource — the single argument to the `on(http.resource(…))`
  * overload. Branded so `on` can tell it apart from a plain trigger.
- * Same chain as {@link HttpTrigger}: `.gate(...)` / `.public()` / `.live()`.
+ * Same chain as {@link HttpTrigger}: `.gate(...)` / `.public()`.
  */
 export interface ResourceMount {
   readonly [resourceMountBrand]: true;
   readonly mounts: ReadonlyArray<{ readonly trigger: HttpTrigger; readonly flow: unknown }>;
   readonly gates: readonly GateRef[];
-  /** Whether `.live()` was applied (GET list + get). */
-  readonly isLive: boolean;
   /**
    * Attach gates to every verb (registration order). `gate.all` and arrays flatten.
    */
@@ -166,10 +198,6 @@ export interface ResourceMount {
    * Attach the unauthenticated public sentinel to every verb.
    */
   public(): ResourceMount;
-  /**
-   * Mark list and get as live (GET mounts). Mutations stay request/response.
-   */
-  live(): ResourceMount;
 }
 /** Brand for {@link ResourceMount}. */
 export const resourceMountBrand: unique symbol = Symbol.for("oke.resource.mount");
@@ -254,10 +282,16 @@ export interface HttpTriggerNamespace {
   query<P extends string>(path: P): HttpTrigger<"QUERY", P>;
   /**
    * Mount a CRUD resource (list/create on `path`, get/update/remove on
-   * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`,
-   * `.public()`, and `.live()` like {@link HttpTrigger}.
+   * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`
+   * and `.public()` like {@link HttpTrigger}.
    */
   resource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount;
+  /**
+   * Default live firehose: `GET /_oke/live/{signal}`. Chain `.gate(...)`.
+   *
+   * @param signal - `delivery: "live"` handle
+   */
+  live(signal: SignalSource): LiveHttpTrigger<"GET">;
 }
 
 /** Bind an HTTP verb constructor (`http.get`, `http.query`, …). */
@@ -287,6 +321,10 @@ export const http: HttpTriggerNamespace = {
   head: httpVerb("HEAD"),
   query: httpVerb("QUERY"),
   resource: (path, ops) => loadHttpResource().httpResource(path, ops),
+  live(signal) {
+    const path = `/_oke/live/${encodeURIComponent(signal.name)}`;
+    return createHttpTrigger("GET", path, [], signal);
+  },
 };
 
 /**

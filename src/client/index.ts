@@ -5,6 +5,7 @@
  * @module
  */
 
+export { flattenLiveRoutes, isLiveHandlers, pickLiveExposure } from "./live.ts";
 export { createClient, flattenRoutes } from "./create.ts";
 export type { AppWithRoutes } from "./create.ts";
 export { isErrorCode, isFail, isOk, isTransportError } from "./errors.ts";
@@ -29,7 +30,12 @@ export type {
   ClientResult,
   ClientThenableIterable,
   ClientRouteMap,
+  ClientLive,
   FlowContract,
+  LiveHandlers,
+  LiveInput,
+  LiveSignalHandle,
+  LiveUnsubscribe,
   Register,
   ResolveApp,
   RoutesOf,

@@ -1363,8 +1363,9 @@ function collectFlows(file: SourceFile, program: AstNode, scope: ProjectScope): 
       const flowNode = call.arguments[1];
       if (!triggerNode) return;
 
-      // on(http.resource(path, bag)) — expand the mount into five bindings.
+      // on(http.resource(...)) or on(http.get(...).live(signal))
       if (!flowNode) {
+        if (registerLiveHttpMount(call, triggerNode, file, program, scope)) return;
         registerResourceMount(call, triggerNode, file, program, scope);
         return;
       }
@@ -1523,7 +1524,7 @@ function registerFlow(args: {
   flow.source = `${args.file.path}:${line}`;
 
   if (boolProp(opts, "durable")) flow.durable = true;
-  if (boolProp(opts, "live") || liveFromTrigger) flow.live = true;
+  if (typeof liveFromTrigger === "string") flow.live = liveFromTrigger;
   if (boolProp(opts, "breaking")) flow.breaking = true;
 
   const slo = parseSlo(objectProp(opts, "slo"));
@@ -1592,7 +1593,7 @@ function registerFlow(args: {
   const cacheKeys = stringProp(opts, "cacheKeys");
   if (cacheKeys) {
     flow.cacheKeys = cacheKeys;
-  } else if (flow.live && inferred.readsUserId && effects?.reads?.[0]) {
+  } else if (inferred.readsUserId && effects?.reads?.[0]) {
     flow.cacheKeys = `computed:${effects.reads[0]}/userId`;
   }
 
@@ -1600,7 +1601,50 @@ function registerFlow(args: {
 }
 
 /**
- * `http.resource(path, bag).gate(...).public().live()` — find the resource call
+ * Synthesize a Manifest flow for one-arg `on(http.get(path).live(signal))`.
+ *
+ * @param onCall - The outer `on(…)` call
+ * @param triggerNode - HTTP trigger expression
+ * @param file - Source file
+ * @param program - Program root (for export-name lookup)
+ * @param scope - Project scope
+ * @returns True when a live HTTP exposure was registered
+ */
+function registerLiveHttpMount(
+  onCall: CallExpression,
+  triggerNode: AstNode,
+  file: SourceFile,
+  program: AstNode,
+  scope: ProjectScope,
+): boolean {
+  const parsed = parseHttpTrigger(triggerNode, scope, file.path);
+  if (typeof parsed?.live !== "string" || parsed.trigger.http === undefined) {
+    return false;
+  }
+  const exportName = enclosingConstName(onCall, program);
+  const name =
+    nameFromFlowFile(file.path, exportName) ??
+    exportName ??
+    `flow_${Object.keys(scope.flows).length + 1}`;
+  if (exportName) {
+    scope.flowExports.set(exportName, name);
+    scope.bindings.set(exportName, { kind: "flow", ref: name });
+  }
+  scope.bindings.set(name, { kind: "flow", ref: name });
+  const line = lineAt(file.source, onCall.start ?? 0);
+  const flow: Flow = {
+    trigger: { http: parsed.trigger.http },
+    live: parsed.live,
+    effects: { reads: [`signal:${parsed.live}`] },
+    source: `${file.path}:${line}`,
+  };
+  if (parsed.gates && parsed.gates.length > 0) flow.gates = parsed.gates;
+  scope.flows[name] = flow;
+  return true;
+}
+
+/**
+ * `http.resource(path, bag).gate(...).public()` — find the resource call
  * and collect the same chain {@link parseHttpTrigger} reads on a single verb.
  *
  * @param node - First argument to `on(…)`
@@ -1609,11 +1653,10 @@ function registerFlow(args: {
 function unwrapResourceMount(
   node: AstNode,
   scope: ProjectScope,
-): { httpCall: CallExpression; gates?: string[]; live?: boolean } | undefined {
+): { httpCall: CallExpression; gates?: string[] } | undefined {
   const chain = flattenMemberCallChain(node);
   let httpCall: CallExpression | undefined;
   const gateNames: string[] = [];
-  let live = false;
   for (const item of chain) {
     if (item.type === "CallExpression") {
       const c = item as CallExpression;
@@ -1633,14 +1676,12 @@ function unwrapResourceMount(
         continue;
       }
       if (prop === "public") gateNames.push("public");
-      if (prop === "live") live = true;
     }
   }
   if (!httpCall) return undefined;
   return {
     httpCall,
     gates: gateNames.length > 0 ? gateNames : undefined,
-    live: live || undefined,
   };
 }
 
@@ -1666,7 +1707,7 @@ function registerResourceMount(
 ): void {
   const parsed = unwrapResourceMount(triggerNode, scope);
   if (!parsed) return;
-  const { httpCall, gates, live } = parsed;
+  const { httpCall, gates } = parsed;
 
   const path = stringArg(httpCall.arguments[0]);
   if (!path) return;
@@ -1713,7 +1754,6 @@ function registerResourceMount(
       trigger: { http: { method: v.method as never, path: v.p } },
       ...(v.eff ? { effects: v.eff as Effects } : {}),
       ...(gates && gates.length > 0 ? { gates } : {}),
-      ...(live && v.method === "GET" ? { live: true } : {}),
       ...(resource?.breaking ? { breaking: true } : {}),
       source: `${file.path}:${line}`,
     };
@@ -1753,7 +1793,6 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
     : undefined;
   const idPath = `${path}/:id`;
   const line = lineAt(file.source, call.start ?? 0);
-  const live = boolProp(opts, "liveList") === true;
   const skipCreate = boolProp(opts, "skipCreate") === true;
   const ctx = schemaExpandContext(scope, file.path);
   const createIn = jsonSchemaFromAst(objectProp(opts, "createIn"), ctx);
@@ -1775,7 +1814,6 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
     readonly method: string;
     readonly p: string;
     readonly eff: Effects | undefined;
-    readonly live?: boolean;
     readonly in?: JsonSchema;
     readonly out?: JsonSchema;
   }[] = [
@@ -1784,7 +1822,6 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
       method: "GET",
       p: path,
       eff: storeRef ? { reads: [storeRef] } : undefined,
-      live,
       in: defaultListInSchema(),
       ...(itemOut ? { out: { type: "array", items: itemOut } } : {}),
     },
@@ -1831,7 +1868,6 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
     const flow: Flow = {
       trigger: { http: { method: v.method as never, path: v.p } },
       ...(v.eff ? { effects: v.eff as Effects } : {}),
-      ...(v.live ? { live: true } : {}),
       ...(v.in !== undefined ? { in: v.in } : {}),
       ...(v.out !== undefined ? { out: v.out } : {}),
       source: `${file.path}:${line}`,
@@ -1844,7 +1880,8 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
 interface ParsedTrigger {
   trigger: Trigger;
   gates?: string[];
-  live?: boolean;
+  /** Live signal name from `.live(signal)` / `http.live(signal)`. */
+  live?: string;
 }
 
 function parseTrigger(
@@ -1864,7 +1901,7 @@ function parseTrigger(
       return { trigger: {} };
     }
 
-    // http.post("/x").gate(...).live() / http.get("/x").public()
+    // http.post("/x").gate(...) / http.get("/x").live(signal) / http.live(signal)
     const http = parseHttpTrigger(call, scope, filePath);
     if (http) return http;
 
@@ -1894,16 +1931,27 @@ function parseTrigger(
   return undefined;
 }
 
+function resolveSignalName(node: AstNode | undefined, scope: ProjectScope): string | undefined {
+  const lit = stringArg(node);
+  if (lit) return lit;
+  const id = identifierName(node);
+  if (!id) return undefined;
+  const binding = scope.bindings.get(id);
+  if (binding?.kind === "signal") return binding.ref;
+  if (scope.signals[id]) return id;
+  return id;
+}
+
 function parseHttpTrigger(
   leaf: AstNode,
   scope: ProjectScope,
   filePath?: string,
 ): ParsedTrigger | undefined {
-  // Walk: http.METHOD(path).gate(...).live() / .public()
+  // Walk: http.METHOD(path).gate(...).live(signal) / http.live(signal) / .public()
   const chain = flattenMemberCallChain(leaf);
   let method: string | undefined;
   let path: string | undefined;
-  let live = false;
+  let live: string | undefined;
   const gateNames: string[] = [];
 
   for (const node of chain) {
@@ -1916,6 +1964,15 @@ function parseHttpTrigger(
       const obj = member.object;
 
       if (obj.type === "Identifier" && (obj as Identifier).name === "http" && prop) {
+        if (prop === "live") {
+          method = "GET";
+          const signalName = resolveSignalName(c.arguments[0], scope);
+          if (signalName) {
+            live = signalName;
+            path = `/_oke/live/${encodeURIComponent(signalName)}`;
+          }
+          continue;
+        }
         method = prop.toUpperCase();
         path = stringArg(c.arguments[0]);
         continue;
@@ -1929,7 +1986,10 @@ function parseHttpTrigger(
       }
 
       if (prop === "public") gateNames.push("public");
-      if (prop === "live") live = true;
+      if (prop === "live") {
+        const signalName = resolveSignalName(c.arguments[0], scope);
+        if (signalName) live = signalName;
+      }
     }
   }
 
@@ -1959,7 +2019,7 @@ function parseHttpTrigger(
       },
     },
     gates: gateNames.length > 0 ? gateNames : undefined,
-    live: live || undefined,
+    ...(live !== undefined ? { live } : {}),
   };
 }
 
@@ -2126,7 +2186,7 @@ function schemaProp(
 
 // ── AST helpers ────────────────────────────────────────────────────────────
 
-/** Leaf-to-root walk of `http.get("/x").public().live()`. */
+/** Leaf-to-root walk of `http.get("/x").public().live(signal)`. */
 function flattenMemberCallChain(leaf: AstNode): AstNode[] {
   const chain: AstNode[] = [];
   let current: AstNode = leaf;

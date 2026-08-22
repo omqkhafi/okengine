@@ -221,7 +221,7 @@ core today: cookie jars or plugin `.client()` decorations. Browser apps: also se
 | [Flow](/docs/elements/flow)       | Direct        | `api.unit.flow(input)` — the only public surface                                           |
 | [Gate](/docs/elements/gate)       | Indirect      | Bearer via `auth`; denials as `Unauthorized` / `Forbidden` / `RateLimited`                 |
 | [Store](/docs/elements/store)     | Via Flows     | `fx.store` inside Flows; `store.resource` + `on(http.resource…)` → five Flows on `$routes` |
-| [Signal](/docs/elements/signal)   | Via Flows     | Emit/consume server-side; no subscribe API on `okengine/client` yet                        |
+| [Signal](/docs/elements/signal)   | Live SSE      | `api.live(signal, input?, { onEvent })` — HTTP GET, callback + unsubscribe                 |
 | [Clock](/docs/elements/clock)     | Via Flows     | Schedules fire on the server — the client never ticks a clock                              |
 | [Vault](/docs/elements/vault)     | Via Flows     | Secrets stay server-side; never ship them to the browser package                           |
 | [Channel](/docs/elements/channel) | Via Flows     | `fx.send` in a Flow — the client does not send email/SMS/push                              |
@@ -233,7 +233,7 @@ Mount a resource, adopt the returned ops, then call the five Flows like any othe
 
 ```typescript
 const notesR = store.resource(db, notes, {/* in, out, list */});
-const mounted = on(http.resource("/notes", notesR.all()).public().live());
+const mounted = on(http.resource("/notes", notesR.all()).public());
 // .adopt({ notes: mounted }) →
 const page = await api.notes.list({ limit: 20 });
 const more = await page.next();
@@ -259,24 +259,47 @@ See [Store](/docs/elements/store) for the list query language and schemas. Handw
 `fx.json.withQuery(rows, input)` for the same envelope. Auth posture for HTTP triggers is
 covered under [Gate](/docs/elements/gate).
 
-### Signal and live queries
+### Live signals
 
-`delivery: "live"` and `http.get(…).live()` are Manifest / driver flags today. `okengine/client`
-does **not** expose WebSocket, SSE, or `api.*.subscribe`. Until that ships, poll or call an HTTP
-Flow that returns the current state.
+`delivery: "live"` is HTTP SSE. Expose with `.live(signal)` on GET (or `http.live(signal)` for
+`GET /_oke/live/{name}`), then subscribe with a callback. `for await` stays on the server.
+
+```typescript
+const stop = api.live(
+  orderStatus,
+  { orderId: "ord_1" },
+  {
+    onEvent: (event) => {
+      /* event: { orderId, status } */
+    },
+    onError: (err) => {
+      /* optional — 4xx, envelope, network drop */
+    },
+    autoResubscribe: false, // default — set true to reopen after a drop (full replay)
+  },
+);
+stop(); // useEffect cleanup
+```
+
+`api.orders.events({ orderId }, { onEvent })` is the same shape on the exposing flow.
+
+The client picks the unique exposure whose `matchKey` fields are a subset of the input, preferring
+the largest match (`{ orderId }` beats firehose). A tie needs `via: "unit.flow"`.
+
+v1 ignores SSE `id:` (no Last-Event-ID resume). Fetch carries Bearer auth; no timeout, no retry.
 
 ## Exports
 
-| Export                                    | Kind      | Role                                               |
-| ----------------------------------------- | --------- | -------------------------------------------------- |
-| `createClient`                            | function  | Typed proxy `api.unit.flow(input?)`                |
-| `flattenRoutes`                           | function  | `$routes` → flat `unit.flow` REST table            |
-| `createTransport`                         | function  | Low-level HTTP transport (timeout / retry / auth)  |
-| `isOk` / `isFail`                         | function  | Envelope predicates                                |
-| `isErrorCode` / `isTransportError`        | function  | Error narrowing                                    |
-| `Client`, `ClientCall`, `ClientResult`, … | types     | Contracts, `page.next()` / `for await` of `list()` |
-| `Register`                                | interface | Module-augmentation slot for ambient App types     |
-| `AppOf`                                   | type      | Brand a bare route map as an App                   |
+| Export                                    | Kind      | Role                                                |
+| ----------------------------------------- | --------- | --------------------------------------------------- |
+| `createClient`                            | function  | Typed proxy `api.unit.flow(input?)` plus `api.live` |
+| `flattenRoutes`                           | function  | `$routes` → flat `unit.flow` REST table             |
+| `createTransport`                         | function  | Low-level HTTP transport (timeout / retry / auth)   |
+| `isOk` / `isFail`                         | function  | Envelope predicates                                 |
+| `isErrorCode` / `isTransportError`        | function  | Error narrowing                                     |
+| `Client`, `ClientCall`, `ClientResult`, … | types     | Contracts, `page.next()` / `for await` of `list()`  |
+| `Register`                                | interface | Module-augmentation slot for ambient App types      |
+| `AppOf`                                   | type      | Brand a bare route map as an App                    |
 
 Budget: the `./client` export stays under the measured client-runtime cap (hard gate in CI).
 
@@ -323,6 +346,13 @@ calls `api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no r
 
 </Accordion>
 
+<Accordion title="api.live throws Multiple live exposures">
+
+Two routes share the same match shape. Pass `via: "unit.flow"` or call the exposing flow
+(`api.orders.events(input, { onEvent })`).
+
+</Accordion>
+
 </Accordions>
 
 ## Learn more
@@ -332,6 +362,7 @@ calls `api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no r
 - [Gate](/docs/elements/gate) — policies, `gate.public`, denials
 - [Store](/docs/elements/store) — `store.resource` and list query language
 - [Flow](/docs/elements/flow) — `in` / `out` / `errors` and `fx.fail`
+- [Signal](/docs/elements/signal) — `api.live` for `delivery: "live"` SSE
 - [Errors](/docs/reference/errors) — framework codes vs failure values
 - [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) — browser callers
 - [CLI Reference](/docs/reference/cli) — `oke client add`, `oke dev`

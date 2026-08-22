@@ -16,7 +16,6 @@ export const { list, create, get, update, remove } = bindCrud({
   table: spaces,
   read: member,
   write: projectAdminWrite,
-  liveList: true,
   createIn,
   out: spacesZod.select,
   search: ["key", "name"],

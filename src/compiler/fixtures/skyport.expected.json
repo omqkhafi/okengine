@@ -32,7 +32,7 @@
       "effects": {
         "reads": ["sql:bookings"]
       },
-      "source": "src/flows/bookings/index.ts:48"
+      "source": "src/flows/bookings/index.ts:47"
     },
     "bookings.mine": {
       "trigger": {
@@ -46,7 +46,6 @@
         "reads": ["sql:bookings"]
       },
       "source": "src/flows/bookings/index.ts:37",
-      "live": true,
       "cacheKeys": "computed:sql:bookings/userId"
     },
     "bookings.refundBooking": {
@@ -54,7 +53,7 @@
         "reads": ["sql:bookings"],
         "writes": ["sql:bookings"]
       },
-      "source": "src/flows/bookings/index.ts:52"
+      "source": "src/flows/bookings/index.ts:51"
     },
     "payments.chargeBooking": {
       "effects": {

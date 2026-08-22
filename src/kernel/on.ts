@@ -7,15 +7,27 @@
  */
 
 import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
+import { lazyRequire } from "./lazy-require.ts";
 import {
   isResourceMount,
   normalizeTrigger,
   type BoundTriggerOf,
+  type HttpMethod,
+  type HttpTrigger,
+  type LiveHttpTrigger,
   type ResourceFlowBag,
   type ResourceMount,
   type SignalSource,
   type Trigger,
 } from "./triggers.ts";
+
+/**
+ * Sync-load live HTTP synthesis only when `on(http.*.live(signal))` runs.
+ * A static import would pin that graph on every `on` / edge ping bundle.
+ */
+function loadLiveHttp(): typeof import("./live-http.ts") {
+  return lazyRequire(import.meta.dir, ["live", "http"].join("-"));
+}
 
 /** One registered `on(trigger, flow)` binding. */
 export interface Binding {
@@ -43,6 +55,15 @@ export function on<
   trigger: T,
   flowDef: FlowDef<I, O, E, D, Trigger | undefined>,
 ): FlowDef<I, O, E, D, BoundTriggerOf<T>>;
+/**
+ * Expose a live signal: `on(http.get(path).gate(g).live(signal))`.
+ * Synthesizes the stream Flow (name stamped by `.adopt`).
+ *
+ * @param trigger - HTTP GET with `.live(signal)`
+ */
+export function on<T extends LiveHttpTrigger<HttpMethod, string>>(
+  trigger: T,
+): FlowDef<unknown, unknown, FlowErrorMap, {}, T>;
 /**
  * Mount a CRUD resource (`http.resource(path, ops)`): registers the five
  * verb bindings and returns the ops bag (unit keys `list` · `create` ·
@@ -81,10 +102,40 @@ export function on(
     }
     return ops as unknown as ResourceFlowBag;
   }
+  const asHttp =
+    typeof triggerOrMount === "object" &&
+    triggerOrMount !== null &&
+    "kind" in triggerOrMount &&
+    (triggerOrMount as HttpTrigger).kind === "http"
+      ? (triggerOrMount as HttpTrigger)
+      : undefined;
+  const liveSignal = asHttp?.liveSignal;
+  const synthesized = liveSignal !== undefined && flowDef === undefined;
+  if (synthesized && asHttp && liveSignal !== undefined) {
+    if (asHttp.method !== "GET") {
+      throw new TypeError("on(http.*.live(signal)): live exposure must be GET");
+    }
+    flowDef = loadLiveHttp().synthesizeLiveFlow(liveSignal, asHttp.path) as FlowDef<
+      any,
+      any,
+      any,
+      any,
+      Trigger | undefined
+    >;
+  }
   if (!isFlow(flowDef)) {
     throw new TypeError("on() expected a flow() definition as the second argument");
   }
   const normalized = normalizeTrigger(triggerOrMount as Trigger | SignalSource);
+  if (normalized.kind === "http" && normalized.liveSignal !== undefined) {
+    if (normalized.method !== "GET") {
+      throw new TypeError("on(http.*.live(signal)): live exposure must be GET");
+    }
+    (flowDef as { live: string | undefined }).live = normalized.liveSignal.name;
+    if (!synthesized) {
+      (flowDef as { liveCustomMatch: boolean }).liveCustomMatch = true;
+    }
+  }
   const list = flowDef.triggers as Trigger[];
   list.push(normalized);
   // Stamp runtime carrier for the first bound trigger (type follows BoundTriggerOf).

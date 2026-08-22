@@ -14,7 +14,22 @@
 
 import { createTransport, type Transport } from "./transport.ts";
 import { asThenableIterable, attachPager } from "./pager.ts";
-import type { Client, ClientOptions, ClientRouteMap, ResolveApp } from "./types.ts";
+import {
+  flattenLiveRoutes,
+  isLiveHandlers,
+  pickLiveExposure,
+  subscribeLive,
+  type LiveByFlow,
+  type LiveRouteTable,
+} from "./live.ts";
+import type {
+  Client,
+  ClientLive,
+  ClientOptions,
+  ClientRouteMap,
+  LiveHandlers,
+  ResolveApp,
+} from "./types.ts";
 
 /** App-shaped value that carries a runtime `$routes` table from typed adopt. */
 export interface AppWithRoutes {
@@ -80,9 +95,22 @@ export function createClient(
 function buildClient(url: string, opts: ClientOptions = {}): Client {
   const base = url.replace(/\/+$/, "");
   const routes = opts.routes ?? flattenRoutes(opts.$routes);
+  const live = flattenLiveRoutes(opts.$routes);
   const transport = createTransport(base, { ...opts, routes });
-  return proxy(transport, []) as Client;
+  return proxy(transport, [], {
+    base,
+    opts,
+    liveBySignal: live.bySignal,
+    liveByFlow: live.byFlow,
+  }) as Client;
 }
+
+type ProxyCtx = {
+  readonly base: string;
+  readonly opts: ClientOptions;
+  readonly liveBySignal: LiveRouteTable;
+  readonly liveByFlow: LiveByFlow;
+};
 
 /**
  * Flatten `app.$routes` into the transport REST table (`unit.flow` → method/path).
@@ -115,7 +143,7 @@ export function flattenRoutes(
  * @param transport - HTTP transport
  * @param path - Accumulated property path
  */
-function proxy(transport: Transport, path: readonly string[]): unknown {
+function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): unknown {
   const invoke = async (input?: unknown) => {
     if (path.length < 2) {
       return attachPager(
@@ -137,7 +165,18 @@ function proxy(transport: Transport, path: readonly string[]): unknown {
     const result = await transport.call(`${unit}/${flow}`, input);
     return attachPager(result, invoke, input);
   };
-  const call = (input?: unknown) => asThenableIterable(invoke, input);
+  const call = (a?: unknown, b?: unknown) => {
+    if (path.length >= 2) {
+      const key = `${path[0]}.${path.slice(1).join(".")}`;
+      const exposure = ctx.liveByFlow[key];
+      if (exposure && (isLiveHandlers(a) || isLiveHandlers(b))) {
+        const handlers = (isLiveHandlers(a) ? a : b) as LiveHandlers<unknown>;
+        const input = isLiveHandlers(a) ? undefined : a;
+        return subscribeLive(ctx.base, exposure, input, handlers, ctx.opts);
+      }
+    }
+    return asThenableIterable(invoke, a);
+  };
 
   return new Proxy(call, {
     get(_target, prop, receiver) {
@@ -145,7 +184,38 @@ function proxy(transport: Transport, path: readonly string[]): unknown {
         return Reflect.get(_target, prop, receiver);
       }
       if (prop === "then") return undefined;
-      return proxy(transport, [...path, prop]);
+      if (path.length === 0 && prop === "live") {
+        return makeLive(ctx);
+      }
+      return proxy(transport, [...path, prop], ctx);
     },
   });
+}
+
+function makeLive(ctx: ProxyCtx): ClientLive {
+  return ((signalOrName: unknown, inputOrHandlers: unknown, maybeHandlers?: unknown) => {
+    const name =
+      typeof signalOrName === "string"
+        ? signalOrName
+        : signalOrName !== null &&
+            typeof signalOrName === "object" &&
+            "name" in signalOrName &&
+            typeof (signalOrName as { name: unknown }).name === "string"
+          ? (signalOrName as { name: string }).name
+          : undefined;
+    if (!name) throw new Error("api.live requires a signal handle or name");
+    const handlers = isLiveHandlers(inputOrHandlers)
+      ? inputOrHandlers
+      : isLiveHandlers(maybeHandlers)
+        ? maybeHandlers
+        : undefined;
+    if (!handlers) throw new Error("api.live requires handlers with onEvent");
+    const input = isLiveHandlers(inputOrHandlers) ? undefined : inputOrHandlers;
+    const exposures = ctx.liveBySignal[name] ?? [];
+    if (exposures.length === 0) {
+      throw new Error(`No live HTTP exposure for signal "${name}"`);
+    }
+    const exposure = pickLiveExposure(exposures, input, handlers.via);
+    return subscribeLive(ctx.base, exposure, input, handlers, ctx.opts);
+  }) as ClientLive;
 }

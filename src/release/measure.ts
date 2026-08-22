@@ -5,7 +5,7 @@
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { createRouter } from "../kernel/router.ts";
+import { lazyRequire } from "../kernel/lazy-require.ts";
 import {
   type BudgetGroup,
   OFFICIAL_PLUGIN_BUDGETS,
@@ -228,6 +228,16 @@ export async function measureHttpPingAppBytes(): Promise<HttpPingBudgetSample> {
  * Gzip size of the kernel edge profile bundle.
  */
 export async function measureKernelEdgeGzipBytes(): Promise<number> {
+  try {
+    return await gzipKernelEdgeInProcess();
+  } catch {
+    // bun test's in-process Bun.build cannot always resolve the kernel graph.
+    return gzipKernelEdgeSpawn();
+  }
+}
+
+/** In-process edge gzip — used outside `bun test`. */
+async function gzipKernelEdgeInProcess(): Promise<number> {
   const entry = `${import.meta.dir}/../kernel/budget-entry.ts`;
   // Browser target matches the historical edge-profile gate.
   const result = await Bun.build({
@@ -244,6 +254,46 @@ export async function measureKernelEdgeGzipBytes(): Promise<number> {
   if (!artifact) throw new Error("kernel edge build produced no output");
   const raw = await artifact.arrayBuffer();
   return Bun.gzipSync(new Uint8Array(raw)).byteLength;
+}
+
+/** Subprocess edge gzip — bun test cannot always resolve this graph in-process. */
+async function gzipKernelEdgeSpawn(): Promise<number> {
+  const entry = resolve(ROOT, "src/kernel/budget-entry.ts");
+  const probe = `
+const result = await Bun.build({
+  entrypoints: ${JSON.stringify([entry])},
+  minify: true,
+  target: "browser",
+  format: "esm",
+  external: ${JSON.stringify([...BUILD_EXTERNALS])},
+});
+if (!result.success) {
+  console.error(result.logs.map(String).join("\\n"));
+  process.exit(1);
+}
+const artifact = result.outputs[0];
+if (!artifact) { console.error("no output"); process.exit(1); }
+const raw = await artifact.arrayBuffer();
+process.stdout.write(String(Bun.gzipSync(new Uint8Array(raw)).byteLength));
+`;
+  const proc = Bun.spawn(["bun", "-e", probe], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`kernel edge build failed:\n${stderr || stdout}`);
+  }
+  const n = Number(stdout.trim());
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`kernel edge measure produced ${stdout}`);
+  }
+  return n;
 }
 
 /**
@@ -418,6 +468,10 @@ export async function measureColdStartMedianMs(): Promise<number> {
  */
 export function measureRoutingP99Ms(): number {
   const N = 200;
+  const { createRouter } = lazyRequire<typeof import("../kernel/router.ts")>(
+    `${import.meta.dir}/../kernel`,
+    "router",
+  );
   const router = createRouter<number>("default");
   for (let i = 0; i < N; i++) {
     router.add("GET", `/r${i}/:id/leaf`, i);

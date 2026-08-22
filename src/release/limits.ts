@@ -8,7 +8,7 @@
 export const KERNEL_EDGE_BUDGET_BYTES = 15 * 1024;
 
 /** Client runtime — gzipped minified bundle. */
-export const CLIENT_BUDGET_BYTES = 3 * 1024;
+export const CLIENT_BUDGET_BYTES = 4 * 1024;
 
 /** Console initial load — gzipped html + entry js/css (ui-next SPA, no panel-* split). */
 export const CONSOLE_BUDGET_BYTES = 700 * 1024;

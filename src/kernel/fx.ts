@@ -87,7 +87,7 @@ export const RUNS_RESOURCE = "runs";
 export const AUTH_API_KEYS_RESOURCE = "auth:api-keys";
 
 /**
- * Capability ref for {@link Fx.deadLetters} — `signal:<name>`, never a store facet.
+ * Capability ref for {@link Fx.deadLetters} / {@link Fx.live} — `signal:<name>`, never a store facet.
  *
  * @param name - Signal name
  */
@@ -366,14 +366,42 @@ export interface JsonResult<T = unknown> {
   readonly kind?: undefined;
 }
 
-/** SSE carrier from {@link FxJson.stream}. */
+/** SSE carrier from {@link FxJson.stream} / {@link Fx.live}. */
 export interface JsonStreamResult {
   readonly [jsonResultBrand]: true;
   readonly kind: "stream";
   readonly status: 200;
-  readonly chunks: AsyncIterable<string>;
+  readonly chunks: AsyncIterable<unknown>;
   /** Set by the kernel to commit journal / Runs after the stream settles. */
   finalize?: () => Promise<void>;
+}
+
+const sseFrameBrand: unique symbol = Symbol.for("oke.sse.frame");
+
+/** One SSE frame — optional `id:` plus JSON `data:`. */
+export interface SseFrame {
+  readonly [sseFrameBrand]: true;
+  readonly data: unknown;
+  readonly id?: string;
+}
+
+/**
+ * Brand a stream chunk so {@link encodeSseStream} can emit `id:`.
+ *
+ * @param data - JSON payload
+ * @param id - Optional SSE id
+ */
+export function sseFrame(data: unknown, id?: string): SseFrame {
+  return id !== undefined ? { [sseFrameBrand]: true, data, id } : { [sseFrameBrand]: true, data };
+}
+
+/**
+ * True when `value` is a branded SSE frame.
+ *
+ * @param value - Unknown
+ */
+export function isSseFrame(value: unknown): value is SseFrame {
+  return typeof value === "object" && value !== null && (value as SseFrame)[sseFrameBrand] === true;
 }
 
 /** True when `value` is an {@link FxJson} JSON-envelope carrier. */
@@ -429,9 +457,9 @@ export interface FxJson {
   withQuery<T>(rows: readonly T[], input: unknown, spec?: QueryPageSpec<T>): JsonResult<T[]>;
   /**
    * 200 — `text/event-stream` of JSON `data:` frames, then `data: [DONE]`.
-   * Pass {@link Fx.stream} or any async iterable of token strings.
+   * Pass {@link Fx.stream} or any async iterable of chunks.
    */
-  stream(chunks: AsyncIterable<string>): JsonStreamResult;
+  stream(chunks: AsyncIterable<unknown>): JsonStreamResult;
 }
 
 /**
@@ -645,6 +673,20 @@ export interface Fx {
    */
   deadLetters<T>(signal: SignalDecl<T>): Promise<readonly DeadLetter<T>[]>;
   deadLetters(signal: NamedRef): Promise<readonly DeadLetter[]>;
+  /**
+   * Stream a `delivery: "live"` signal as SSE (records `read` on `signal:<name>`).
+   *
+   * @param signal - Signal name or handle
+   * @param opts - Optional payload filter
+   */
+  live<T>(
+    signal: SignalDecl<T>,
+    opts?: { readonly match?: (payload: T) => boolean },
+  ): JsonStreamResult;
+  live(
+    signal: NamedRef,
+    opts?: { readonly match?: (payload: unknown) => boolean },
+  ): JsonStreamResult;
   /**
    * Call another flow (records `call`). Stub returns `undefined`.
    *
@@ -1722,6 +1764,46 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         }
         return options.signalRuntime.deadLetters(name);
       });
+    },
+    live(signal: NamedRef, opts?: { readonly match?: (payload: unknown) => boolean }) {
+      const name = resolveName(signal);
+      const chunks = (async function* () {
+        await gated("read", signalReadRef(name), async () => undefined);
+        if (isDryRun()) {
+          return;
+        }
+        if (!options.signalRuntime) {
+          throw new Error("fx.live requires a bound signal runtime");
+        }
+        const ambient = currentAbortSignal();
+        const local = new AbortController();
+        const unlink = linkAbort(ambient, local);
+        const iter = options.signalRuntime.live(name)[Symbol.asyncIterator]();
+        const onAbort = (): void => {
+          void iter.return?.();
+        };
+        local.signal.addEventListener("abort", onAbort, { once: true });
+        try {
+          for (;;) {
+            if (local.signal.aborted) break;
+            const step = await iter.next();
+            if (step.done || local.signal.aborted) break;
+            if (opts?.match && !opts.match(step.value.payload)) continue;
+            yield sseFrame(step.value.payload, step.value.id);
+          }
+        } finally {
+          local.signal.removeEventListener("abort", onAbort);
+          unlink();
+          await iter.return?.();
+          if (!local.signal.aborted) local.abort();
+        }
+      })();
+      return {
+        [jsonResultBrand]: true,
+        kind: "stream" as const,
+        status: 200 as const,
+        chunks,
+      } as JsonStreamResult;
     },
     call(flow, input) {
       const name = resolveName(flow);

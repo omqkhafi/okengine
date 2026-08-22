@@ -45,7 +45,6 @@ export function bindCrud(spec: {
   readonly table: unknown;
   readonly read: GateAllDecl | GateDecl | readonly GateDecl[];
   readonly write: GateAllDecl | GateDecl | readonly GateDecl[];
-  readonly liveList?: boolean;
   readonly createIn: z.ZodType;
   readonly out: z.ZodType;
   readonly updateIn?: z.ZodType;
@@ -60,7 +59,7 @@ export function bindCrud(spec: {
   const readFx = tableRef ? { reads: [tableRef] } : undefined;
   const writeFx = tableRef ? { writes: [tableRef] } : undefined;
   const bothFx = tableRef ? { reads: [tableRef], writes: [tableRef] } : undefined;
-  const listTrigger = spec.liveList ? http.get(path).gate(read).live() : http.get(path).gate(read);
+  const listTrigger = http.get(path).gate(read);
   const resource = store.resource(db, table, {
     in: spec.createIn,
     out: spec.out,

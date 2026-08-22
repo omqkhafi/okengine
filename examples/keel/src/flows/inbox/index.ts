@@ -17,7 +17,7 @@ const InboxHit = inboxZod.select.pick({
 
 /** Inbox for the signed-in member. */
 export const list = on(
-  http.get("/inbox").gate(member).live(),
+  http.get("/inbox").gate(member),
   flow("inbox.list", {
     in: listIn({ mode: "offset" }),
     out: pageOut(InboxHit),

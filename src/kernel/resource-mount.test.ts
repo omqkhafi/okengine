@@ -1,5 +1,5 @@
 /**
- * `http.resource(path, ops).gate(...).live()` — same chain as `http.get`.
+ * `http.resource(path, ops).gate(...)` — same chain as `http.get`.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -28,21 +28,21 @@ function httpOf(path: string, method: string): HttpTrigger | undefined {
   return hit?.trigger.kind === "http" ? hit.trigger : undefined;
 }
 
-describe("http.resource — gate / live", () => {
-  test("bare mount has no gates and is not live", () => {
+describe("http.resource — gate", () => {
+  test("bare mount has no gates and is not a live exposure", () => {
     resetBindings();
     resetFlowSeq();
     on(http.resource("/notes", bag()));
     const list = httpOf("/notes", "GET");
     expect(list?.gates).toEqual([]);
-    expect(list?.isLive).toBe(false);
-    expect(httpOf("/notes", "POST")?.isLive).toBe(false);
+    expect(list?.liveSignal).toBeUndefined();
+    expect(httpOf("/notes", "POST")?.liveSignal).toBeUndefined();
   });
 
-  test(".gate(member).live() stamps every verb; live is GET only", () => {
+  test(".gate(member) stamps every verb", () => {
     resetBindings();
     resetFlowSeq();
-    on(http.resource("/notes", bag()).gate(member).live());
+    on(http.resource("/notes", bag()).gate(member));
 
     const list = httpOf("/notes", "GET");
     const create = httpOf("/notes", "POST");
@@ -55,35 +55,18 @@ describe("http.resource — gate / live", () => {
     expect(get?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(["member"]);
     expect(update?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(["member"]);
     expect(remove?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(["member"]);
-
-    expect(list?.isLive).toBe(true);
-    expect(get?.isLive).toBe(true);
-    expect(create?.isLive).toBe(false);
-    expect(update?.isLive).toBe(false);
-    expect(remove?.isLive).toBe(false);
+    expect(list?.liveSignal).toBeUndefined();
   });
 
-  test(".public().live() stamps the sentinel on every verb", () => {
+  test(".public() stamps the sentinel on every verb", () => {
     resetBindings();
     resetFlowSeq();
-    on(http.resource("/notes", bag()).public().live());
+    on(http.resource("/notes", bag()).public());
     expect(httpOf("/notes", "GET")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(
       ["public"],
     );
     expect(
       httpOf("/notes", "POST")?.gates.map((g) => (typeof g === "string" ? g : g.name)),
     ).toEqual(["public"]);
-    expect(httpOf("/notes", "GET")?.isLive).toBe(true);
-    expect(httpOf("/notes", "POST")?.isLive).toBe(false);
-  });
-
-  test(".live().gate(member) order does not matter", () => {
-    resetBindings();
-    resetFlowSeq();
-    on(http.resource("/notes", bag()).live().gate(member));
-    expect(httpOf("/notes", "GET")?.isLive).toBe(true);
-    expect(httpOf("/notes", "GET")?.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(
-      ["member"],
-    );
   });
 });

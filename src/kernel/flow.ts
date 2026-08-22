@@ -52,9 +52,11 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
    * Retry the whole `do` body on thrown errors (same journal session when
    * durable). Prefer {@link Fx.retry} inside {@link Fx.step} for fine control.
    */
+  /**
+   * Retry the whole `do` body on thrown errors (same journal session when
+   * durable). Prefer {@link Fx.retry} inside {@link Fx.step} for fine control.
+   */
   readonly retry?: FxRetryOptions;
-  /** Live-query / push result. */
-  readonly live?: boolean;
   /**
    * Cache policy. Read-only flows cache automatically from inferred
    * effects (`true` / omitted). `false` opts out; a duration string
@@ -171,8 +173,15 @@ export interface FlowDef<
   readonly durable: boolean;
   /** Whole-body retry policy (runtime). */
   readonly retry: FxRetryOptions | undefined;
-  /** Live flag. */
-  readonly live: boolean;
+  /**
+   * Live signal name when this HTTP flow streams {@link SignalDecl} SSE.
+   */
+  readonly live: string | undefined;
+  /**
+   * True when `.live(signal)` is bound to a custom `do` (not synthesized).
+   * Boot uniqueness uses `custom:{flowName}` instead of path-param match.
+   */
+  readonly liveCustomMatch: boolean;
   /** Cache option. */
   readonly cache: boolean | string | undefined;
   /** SLO. */
@@ -284,7 +293,8 @@ export function flow(
     effects: options.effects,
     durable: options.durable ?? false,
     retry: options.retry,
-    live: options.live ?? false,
+    live: undefined,
+    liveCustomMatch: false,
     cache: options.cache,
     slo: options.slo,
     plane: options.plane,

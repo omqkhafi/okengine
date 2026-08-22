@@ -25,7 +25,7 @@ const CommentIn = z.object({
 
 /** List comments on a task. */
 export const list = on(
-  http.get("/tasks/:id/comments").gate(member).live(),
+  http.get("/tasks/:id/comments").gate(member),
   flow("comments.list", {
     in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
     out: pageOut(CommentOut),

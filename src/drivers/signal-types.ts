@@ -189,8 +189,16 @@ export type SignalUnsubscribe = () => void | Promise<void>;
 /** Consumer handler for once / broadcast. */
 export type SignalHandler = (message: SignalMessage) => void | Promise<void>;
 
-/** Live client handler (payload only). */
-export type LiveHandler = (payload: unknown) => void | Promise<void>;
+/** One retained or live-pushed event from {@link SignalBus.live}. */
+export interface LiveEvent {
+  /** Durable message id (SSE `id:`). */
+  readonly id: string;
+  /** Signal payload. */
+  readonly payload: unknown;
+}
+
+/** Live subscriber (payload + id). */
+export type LiveHandler = (event: LiveEvent) => void | Promise<void>;
 
 /**
  * Transaction that enrols store writes and signal emits atomically.
@@ -313,10 +321,12 @@ export interface SignalBus {
   /**
    * Client-subscribable live feed.
    *
-   * @param signal - Signal name (`delivery: "live"`)
-   * @param handler - Payload handler
+   * Replays retained history, then yields new events until the iterator
+   * returns. `delivery` must be `"live"`.
+   *
+   * @param signal - Signal name
    */
-  live(signal: string, handler: LiveHandler): Promise<SignalUnsubscribe>;
+  live(signal: string): AsyncIterable<LiveEvent>;
   /**
    * Process pending work until idle (deterministic tests).
    */

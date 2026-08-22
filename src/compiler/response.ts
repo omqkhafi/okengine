@@ -5,7 +5,12 @@
  */
 
 import type { FlowFailure } from "../kernel/errors.ts";
-import { isJsonResult, isJsonStreamResult, type JsonStreamResult } from "../kernel/fx.ts";
+import {
+  isJsonResult,
+  isJsonStreamResult,
+  isSseFrame,
+  type JsonStreamResult,
+} from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
 
@@ -131,7 +136,13 @@ function encodeSseStream(carrier: JsonStreamResult): Response {
     async start(controller) {
       try {
         for await (const chunk of carrier.chunks) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          const frame = isSseFrame(chunk)
+            ? chunk
+            : { data: chunk as unknown, id: undefined as string | undefined };
+          const lines: string[] = [];
+          if (frame.id !== undefined) lines.push(`id: ${frame.id}`);
+          lines.push(`data: ${JSON.stringify(frame.data)}`);
+          controller.enqueue(encoder.encode(`${lines.join("\n")}\n\n`));
         }
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

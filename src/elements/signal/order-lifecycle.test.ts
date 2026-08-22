@@ -13,7 +13,23 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { memorySignalDriver, type SignalBus } from "../../drivers/index.ts";
+import type { LiveEvent } from "../../drivers/signal-types.ts";
 import { signal } from "./declare.ts";
+
+async function takeLivePayloads(iter: AsyncIterable<LiveEvent>, n: number): Promise<unknown[]> {
+  const out: unknown[] = [];
+  const it = iter[Symbol.asyncIterator]();
+  try {
+    while (out.length < n) {
+      const step = await it.next();
+      if (step.done) break;
+      out.push(step.value.payload);
+    }
+  } finally {
+    await it.return?.();
+  }
+  return out;
+}
 
 const openBuses: SignalBus[] = [];
 
@@ -89,10 +105,10 @@ describe("signal order lifecycle · once + broadcast + live", () => {
     expect(notifyHits).toEqual(["ord_42"]);
 
     // live: late subscriber replays the full retained status history
-    const feed: Array<{ orderId: string; status: string }> = [];
-    await bus.live("order-status", (payload) => {
-      feed.push(payload as { orderId: string; status: string });
-    });
+    const feed = (await takeLivePayloads(bus.live("order-status"), 3)) as Array<{
+      orderId: string;
+      status: string;
+    }>;
     expect(feed).toEqual([
       { orderId: "ord_42", status: "placed" },
       { orderId: "ord_42", status: "fulfilling" },

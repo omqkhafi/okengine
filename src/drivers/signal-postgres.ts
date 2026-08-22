@@ -13,6 +13,7 @@ import {
   SIGNAL_DEFAULT_LEASE_MS,
   validateSignalEmitPayload,
   type DeadLetter,
+  type LiveEvent,
   type LiveHandler,
   type SignalBus,
   type SignalDiscardOptions,
@@ -28,6 +29,7 @@ import {
   type SignalTransaction,
   type SignalUnsubscribe,
 } from "./signal-types.ts";
+import { createLiveIterable } from "./signal-live-iter.ts";
 
 /** Row shape in `oke_signal_messages`. */
 interface MsgRow {
@@ -687,27 +689,32 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     };
   }
 
-  async function live(signal: string, handler: LiveHandler): Promise<SignalUnsubscribe> {
+  function live(signal: string): AsyncIterable<LiveEvent> {
     const decl = requireDecl(signal);
     if (decl.delivery !== "live") {
       throw new Error(`signal "${signal}" is not delivery: "live"`);
     }
-    let set = liveHandlers.get(signal);
-    if (!set) {
-      set = new Set();
-      liveHandlers.set(signal, set);
-    }
-    set.add(handler);
-    const history = await sql.query(
-      `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'live' ORDER BY created_at ASC`,
-      [signal],
-    );
-    for (const row of history) {
-      await handler(JSON.parse(String(row.payload)));
-    }
-    return () => {
-      set!.delete(handler);
-    };
+    return createLiveIterable(async (emit) => {
+      let set = liveHandlers.get(signal);
+      if (!set) {
+        set = new Set();
+        liveHandlers.set(signal, set);
+      }
+      const handler: LiveHandler = (event) => {
+        emit(event);
+      };
+      set.add(handler);
+      const history = await sql.query(
+        `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'live' ORDER BY created_at ASC`,
+        [signal],
+      );
+      for (const row of history) {
+        emit({ id: String(row.id), payload: JSON.parse(String(row.payload)) });
+      }
+      return () => {
+        set.delete(handler);
+      };
+    });
   }
 
   async function deliverOnce(
@@ -830,7 +837,8 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       const handlers = liveHandlers.get(String(row.signal));
       const payload = JSON.parse(String(row.payload));
       if (handlers) {
-        for (const h of handlers) await h(payload);
+        const event: LiveEvent = { id: String(row.id), payload };
+        for (const h of handlers) await h(event);
       }
       const sig = String(row.signal);
       let list = recentLive.get(sig);

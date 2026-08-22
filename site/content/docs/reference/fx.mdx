@@ -42,6 +42,7 @@ See [Store](/docs/elements/store) for the query-builder surface.
 | ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fx.emit(signal, payload?, { key? })` | `emit`                 | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1042** (orphan) or **OKE1043** (schema) |
 | `fx.deadLetters(signal)`              | `read` `signal:<name>` | Dead-lettered messages for that signal. Payload typed from `SignalDecl<T>`. Page with `fx.json.withQuery`. Cross-signal throws **OKE1001**.                                                               |
+| `fx.live(signal, { match? })`         | `read` `signal:<name>` | Live tape as SSE. Returns `JsonStreamResult` (object chunks, `id:` on the wire). Cross-signal throws **OKE1001**. Do not wrap with `fx.json.stream`.                                                      |
 
 ## Runs (observability read)
 
@@ -214,6 +215,7 @@ keys. Use `cache: false` to opt out, or `cache: "30s"` for a TTL.
 | `fx.json.with(page)` / `with(data, meta)` | 200    | `{ data, meta, error: null }` — already-built pager            |
 | `fx.json.withQuery(rows, input, spec?)`   | 200    | In-memory list page — zero-config `q` / auto-eq / PostgREST    |
 | `fx.json.stream(chunks)`                  | 200    | `text/event-stream` — JSON `data:` frames, then `data: [DONE]` |
+| `fx.live(signal)`                         | 200    | Same SSE carrier for a live signal (payload frames + `id:`)    |
 
 Returning a plain value instead answers 200 with `{ data: value, error: null }` — the helpers exist for status and `meta` control. Pass `fx.stream(...)` into `fx.json.stream` to reach the HTTP client token-by-token.
 

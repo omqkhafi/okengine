@@ -139,7 +139,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.15.2",
+      "version": "0.16.0",
       "bin": {
         "create-oke": "src/index.ts",
       },
@@ -153,7 +153,7 @@
     },
     "site": {
       "name": "site",
-      "version": "0.15.2",
+      "version": "0.16.0",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
         "@fumadocs/base-ui": "^16.14.5",
