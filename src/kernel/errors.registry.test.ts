@@ -8,11 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { OKE_ERRORS, OkeError, lookupOkeError, type OkeErrorDefinition } from "./errors.ts";
 import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
-import {
-  TENANT_NOT_MEMBER,
-  TENANT_REQUIRED,
-  TENANT_UNKNOWN_SCOPE,
-} from "./errors-tenant.ts";
+import { TENANT_NOT_MEMBER, TENANT_REQUIRED, TENANT_UNKNOWN_SCOPE } from "./errors-tenant.ts";
 
 const LAZY_DEFS: readonly OkeErrorDefinition[] = [
   LIVE_RESUME_GAP,

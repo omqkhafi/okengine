@@ -33,10 +33,7 @@ function clock(
   };
 }
 
-function resume(auth: {
-  readonly tenant?: unknown;
-  readonly tenantStore?: TenantStore;
-}): {
+function resume(auth: { readonly tenant?: unknown; readonly tenantStore?: TenantStore }): {
   readonly tenantEnabled: boolean;
   readonly tenantStore: TenantStore | undefined;
 } {

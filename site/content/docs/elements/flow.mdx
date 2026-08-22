@@ -71,17 +71,17 @@ curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type
 
 ## Anatomy of a Flow
 
-| Part         | Role                                                                              |
-| ------------ | --------------------------------------------------------------------------------- |
-| trigger      | What starts the flow — `http`, a signal, `every`, a row change                    |
-| `in`         | Input contract — validated before `do` runs; bad input is a 422                   |
-| `out`        | Output contract — the return value is checked against it                          |
-| `errors`     | Typed failures — **returned** with `fx.fail`, never thrown                        |
-| `retry`      | Optional whole-`do` backoff on thrown errors (same journal)                       |
-| `cache`      | Optional — `false` opts out; `"30s"` adds a TTL. Read-only flows cache by default |
+| Part           | Role                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------ |
+| trigger        | What starts the flow — `http`, a signal, `every`, a row change                       |
+| `in`           | Input contract — validated before `do` runs; bad input is a 422                      |
+| `out`          | Output contract — the return value is checked against it                             |
+| `errors`       | Typed failures — **returned** with `fx.fail`, never thrown                           |
+| `retry`        | Optional whole-`do` backoff on thrown errors (same journal)                          |
+| `cache`        | Optional — `false` opts out; `"30s"` adds a TTL. Read-only flows cache by default    |
 | `tenantScoped` | Default `true` when `gate.auth.tenant` is on — set `false` to skip tenant-role union |
-| `do`         | The work — every read, write, emit, and call goes through `fx`                    |
-| `compensate` | Durable only — optional hook after auto per-step `{ undo }` (same journal)        |
+| `do`           | The work — every read, write, emit, and call goes through `fx`                       |
+| `compensate`   | Durable only — optional hook after auto per-step `{ undo }` (same journal)           |
 
 Failures are values, not exceptions:
 

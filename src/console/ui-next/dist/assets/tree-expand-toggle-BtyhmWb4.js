@@ -31,7 +31,8 @@ LANGUAGE sql STABLE AS $$
     WHEN current_setting('oke.scopes', true) IN ('') THEN false
     ELSE jsonb_exists(current_setting('oke.scopes', true)::jsonb, p_scope)
   END
-$$`,`DO $oke_rls_role$
+$$`,`CREATE OR REPLACE FUNCTION oke.tenant() RETURNS text
+LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.tenant', true) $$`,`DO $oke_rls_role$
 BEGIN
   CREATE ROLE ${wn} NOSUPERUSER NOBYPASSRLS NOLOGIN;
 EXCEPTION

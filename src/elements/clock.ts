@@ -10,7 +10,12 @@
  * @module
  */
 
-export { clock, perTenantCronName, parsePerTenantCronName, PER_TENANT_CRON_SEP } from "./clock/declare.ts";
+export {
+  clock,
+  perTenantCronName,
+  parsePerTenantCronName,
+  PER_TENANT_CRON_SEP,
+} from "./clock/declare.ts";
 export type { ClockDecl, ClockOptions } from "./clock/declare.ts";
 
 export { parseDurationMs } from "./clock/duration.ts";

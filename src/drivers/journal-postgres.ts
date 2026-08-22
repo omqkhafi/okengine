@@ -315,7 +315,8 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       const text = sql.trim();
       const state = view();
 
-      if (/^CREATE\s+(TABLE|INDEX)/i.test(text) || /^ALTER\s+TABLE/i.test(text)) return { changes: 0 };
+      if (/^CREATE\s+(TABLE|INDEX)/i.test(text) || /^ALTER\s+TABLE/i.test(text))
+        return { changes: 0 };
 
       const upsert =
         /^INSERT\s+INTO\s+oke_journal_runs\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*ON\s+CONFLICT\s*\(\s*id\s*\)\s*DO\s+UPDATE\s+SET\s+.+$/i.exec(

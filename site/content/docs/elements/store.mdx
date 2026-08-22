@@ -304,18 +304,18 @@ await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 
 The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle (`pgTable` for Postgres / PGLite) into `src/db/schema.drizzle.ts`.
 
-| Field API                                    | Meaning                                                          |
-| -------------------------------------------- | ---------------------------------------------------------------- |
-| `field.text()` / `field.integer()`           | v1 column primitives                                             |
-| `.primaryKey()` · `.notNull()` · `.unique()` | constraints                                                      |
-| `.default(v)` · `.defaultFn(id \| now)`      | defaults                                                         |
-| `.pii()` · `.sensitive()` · `.retain("30d")` | privacy classification                                           |
-| `.as("sql_name")`                            | override the automatic `camelCase → snake_case`                  |
-| `.describe("…")`                             | human title in the Console (falls back to key)                   |
-| `.references(() => col, { onDelete })`       | foreign key                                                      |
-| `store.schema.rls()`                         | `pgTable.withRLS` when there are no policies                     |
+| Field API                                     | Meaning                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------- |
+| `field.text()` / `field.integer()`            | v1 column primitives                                                              |
+| `.primaryKey()` · `.notNull()` · `.unique()`  | constraints                                                                       |
+| `.default(v)` · `.defaultFn(id \| now)`       | defaults                                                                          |
+| `.pii()` · `.sensitive()` · `.retain("30d")`  | privacy classification                                                            |
+| `.as("sql_name")`                             | override the automatic `camelCase → snake_case`                                   |
+| `.describe("…")`                              | human title in the Console (falls back to key)                                    |
+| `.references(() => col, { onDelete })`        | foreign key                                                                       |
+| `store.schema.rls()`                          | `pgTable.withRLS` when there are no policies                                      |
 | `store.schema.policy.gate/owner/scope/tenant` | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`) |
-| `store.schema.unscoped()`                    | Shared table — required when tenancy is on and there is no tenant policy          |
+| `store.schema.unscoped()`                     | Shared table — required when tenancy is on and there is no tenant policy          |
 
 Third argument on `store.schema.table` is Drizzle-shaped extras:
 

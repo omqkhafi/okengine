@@ -110,7 +110,9 @@ function mapTenantError(err: unknown): never {
  *
  * @param options - Auth bag + tenant store + session crypto
  */
-export function attach(options: AttachAuthTenantMethodsOptions): FxAuthIdentity & FxAuthTenantMethods {
+export function attach(
+  options: AttachAuthTenantMethodsOptions,
+): FxAuthIdentity & FxAuthTenantMethods {
   const { auth, now, gated } = options;
 
   const methods: FxAuthTenantMethods = {

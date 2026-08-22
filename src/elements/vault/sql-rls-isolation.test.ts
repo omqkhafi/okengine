@@ -75,9 +75,7 @@ describe("oke_vault_secrets tenant RLS (pglite)", () => {
   });
 
   test("sequential identities see own tenant plus global NULL rows", async () => {
-    const acme = await asAcme.raw(
-      `SELECT path, tenant_id FROM oke_vault_secrets ORDER BY path`,
-    );
+    const acme = await asAcme.raw(`SELECT path, tenant_id FROM oke_vault_secrets ORDER BY path`);
     const globex = await asGlobex.raw(
       `SELECT path, tenant_id FROM oke_vault_secrets ORDER BY path`,
     );
@@ -112,9 +110,7 @@ describe("oke_vault_secrets tenant RLS (pglite)", () => {
   });
 
   test("unstamped owner still sees every ciphertext row", async () => {
-    const rows = await asOwner.raw(
-      `SELECT path, tenant_id FROM oke_vault_secrets ORDER BY path`,
-    );
+    const rows = await asOwner.raw(`SELECT path, tenant_id FROM oke_vault_secrets ORDER BY path`);
     expect(rows).toEqual([
       { path: "GLOBAL_KEY", tenant_id: null },
       { path: "acme/stripe", tenant_id: "acme" },

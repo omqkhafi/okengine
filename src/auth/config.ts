@@ -297,9 +297,7 @@ export function resolveGateAuth(options: ResolveGateAuthOptions): ResolvedGateAu
     sessions: auth.sessions,
     apiKeyStore: auth.apiKeyStore ?? createApiKeyStore({ pepper: secret }),
     tenant: auth.tenant ? resolveTenantAuth(auth.tenant) : undefined,
-    tenantStore: auth.tenant
-      ? (auth.tenantStore ?? createTenantStore())
-      : auth.tenantStore,
+    tenantStore: auth.tenant ? (auth.tenantStore ?? createTenantStore()) : auth.tenantStore,
     now: auth.now,
   };
 }

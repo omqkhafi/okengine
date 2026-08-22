@@ -94,7 +94,11 @@ export type JsonSchema = string | Record<string, unknown>;
 export interface Effects {
   /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters` / `fx.live`. */
   reads?: Array<
-    ResourceRef | RunsResourceRef | SignalResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef
+    | ResourceRef
+    | RunsResourceRef
+    | SignalResourceRef
+    | AuthApiKeysResourceRef
+    | AuthTenantsResourceRef
   >;
   /** Store writes, plus `"auth:api-keys"` / `"auth:tenants"` for `fx.auth` mutations. */
   writes?: Array<ResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef>;

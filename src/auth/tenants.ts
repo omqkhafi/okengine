@@ -305,11 +305,7 @@ export function tenantRoleScopeFailure(
   const allowed = new Set(catalog.filter(isApplicationScope));
   for (const scope of scopes) {
     if (!allowed.has(scope)) {
-      return new TenantError(
-        "unknown_scope",
-        `unknown or operator-plane scope: ${scope}`,
-        scope,
-      );
+      return new TenantError("unknown_scope", `unknown or operator-plane scope: ${scope}`, scope);
     }
   }
   return null;

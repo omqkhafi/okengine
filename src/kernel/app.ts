@@ -1081,9 +1081,7 @@ export function oke(options: OkeOptions): OkeApp {
           now,
           fx: {
             ...durableResumeFx(),
-            ...(gateConfig.auth?.tenant
-              ? (loadAppTenant().w(5, gateConfig.auth) as object)
-              : {}),
+            ...(gateConfig.auth?.tenant ? (loadAppTenant().w(5, gateConfig.auth) as object) : {}),
             ...(existing?.tenant ? { tenant: { id: existing.tenant } } : {}),
           },
         });
@@ -1256,12 +1254,7 @@ export function oke(options: OkeOptions): OkeApp {
     const result = await bootApplication(merged);
     bootResult = result;
     if (gateConfig.auth?.tenantStore && result.clock) {
-      loadAppTenant().w(
-        2,
-        gateConfig.auth.tenantStore,
-        result.clock.store,
-        merged.clocks ?? [],
-      );
+      loadAppTenant().w(2, gateConfig.auth.tenantStore, result.clock.store, merged.clocks ?? []);
     }
     if (gateConfig.auth?.apiKeyStore && result.store) {
       const { bindHostApiKeySqlFromStore } = await import("../auth/api-key-sql.ts");

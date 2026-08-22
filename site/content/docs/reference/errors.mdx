@@ -29,25 +29,25 @@ string. Custom app codes stay message-less until registered.
 
 ## OKE numeric codes
 
-| Code   | Name              | Cause                                           | Fix                                                |
-| ------ | ----------------- | ----------------------------------------------- | -------------------------------------------------- |
-| `1001` | undeclared read   | Flow reads a resource not in `effects.reads`    | Add it to the flow's `effects.reads`               |
-| `1002` | undeclared write  | Flow writes a resource not in `effects.writes`  | Add it to the flow's `effects.writes`              |
-| `1003` | undeclared emit   | Flow emits a signal not in `effects.emits`      | Add it to the flow's `effects.emits`               |
-| `1004` | undeclared send   | Flow sends a template not in `effects.sends`    | Add it to the flow's `effects.sends`               |
-| `1005` | undeclared ask    | Flow asks a prompt not in `effects.asks`        | Add it to the flow's `effects.asks`                |
-| `1006` | undeclared secret | Flow reads a secret not in `effects.secrets`    | Add it to the flow's `effects.secrets`             |
-| `1007` | undeclared call   | Flow calls a flow not in `effects.calls`        | Add it to the flow's `effects.calls`               |
-| `1011` | HTTP route clash  | Two HTTP flows share the same method + path     | Give each flow a unique method + path              |
-| `1012` | HTTP flow unnamed | Adopted HTTP flow still has no `unit.export`    | Export from `flows/<unit>/` or pass a named `flow` |
-| `1013` | live exposure dup | Same signal, gates, and match on two GET routes | Change the gate or path-param filter               |
-| `1014` | live resume gap   | `Last-Event-ID` is not on the retained tape     | Reconnect without the cursor; remaining tape replays |
-| `1015` | tenant required   | Tenant-scoped op with no `fx.tenant.id`         | `switchTenant`, signed `tid`, or tenant header       |
-| `1016` | tenant not member | Client-supplied tenant id is not a membership   | Pick from `listTenants` or add the user as a member  |
-| `1017` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                  |
-| `1042` | orphan emit       | Emit with zero subscribers and `optional` false | Add `on(signal, …)` or declare `optional: true`    |
-| `1043` | signal schema     | Emit payload failed the signal's `schema`       | Pass a payload that matches `schema`, or remove it |
-| `1101` | schema missing    | Domain table absent in `prod` — no auto-DDL     | Run `oke db migrate` against this environment      |
+| Code   | Name                 | Cause                                             | Fix                                                  |
+| ------ | -------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+| `1001` | undeclared read      | Flow reads a resource not in `effects.reads`      | Add it to the flow's `effects.reads`                 |
+| `1002` | undeclared write     | Flow writes a resource not in `effects.writes`    | Add it to the flow's `effects.writes`                |
+| `1003` | undeclared emit      | Flow emits a signal not in `effects.emits`        | Add it to the flow's `effects.emits`                 |
+| `1004` | undeclared send      | Flow sends a template not in `effects.sends`      | Add it to the flow's `effects.sends`                 |
+| `1005` | undeclared ask       | Flow asks a prompt not in `effects.asks`          | Add it to the flow's `effects.asks`                  |
+| `1006` | undeclared secret    | Flow reads a secret not in `effects.secrets`      | Add it to the flow's `effects.secrets`               |
+| `1007` | undeclared call      | Flow calls a flow not in `effects.calls`          | Add it to the flow's `effects.calls`                 |
+| `1011` | HTTP route clash     | Two HTTP flows share the same method + path       | Give each flow a unique method + path                |
+| `1012` | HTTP flow unnamed    | Adopted HTTP flow still has no `unit.export`      | Export from `flows/<unit>/` or pass a named `flow`   |
+| `1013` | live exposure dup    | Same signal, gates, and match on two GET routes   | Change the gate or path-param filter                 |
+| `1014` | live resume gap      | `Last-Event-ID` is not on the retained tape       | Reconnect without the cursor; remaining tape replays |
+| `1015` | tenant required      | Tenant-scoped op with no `fx.tenant.id`           | `switchTenant`, signed `tid`, or tenant header       |
+| `1016` | tenant not member    | Client-supplied tenant id is not a membership     | Pick from `listTenants` or add the user as a member  |
+| `1017` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                     |
+| `1042` | orphan emit          | Emit with zero subscribers and `optional` false   | Add `on(signal, …)` or declare `optional: true`      |
+| `1043` | signal schema        | Emit payload failed the signal's `schema`         | Pass a payload that matches `schema`, or remove it   |
+| `1101` | schema missing       | Domain table absent in `prod` — no auto-DDL       | Run `oke db migrate` against this environment        |
 
 <Callout title="Effects are usually inferred">
   The 1001–1007 family exists for flows that declare effects explicitly. Most apps never write an
@@ -59,11 +59,11 @@ string. Custom app codes stay message-less until registered.
 
 Returned, not thrown — the request never reached `do`:
 
-| Code           | When                                         | Payload          |
-| -------------- | -------------------------------------------- | ---------------- |
-| `Unauthorized` | Policy denied, request not authenticated     | —                |
+| Code           | When                                         | Payload                                                                                    |
+| -------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `Unauthorized` | Policy denied, request not authenticated     | —                                                                                          |
 | `Forbidden`    | Policy denied, authenticated but not allowed | `gate`, `reason` (`tenant_required` · `not_member` · `unknown_scope` · `session_only` · …) |
-| `RateLimited`  | Rate gate budget exhausted                   | `retryAfterMs`   |
+| `RateLimited`  | Rate gate budget exhausted                   | `retryAfterMs`                                                                             |
 
 ## Framework validation failures
 

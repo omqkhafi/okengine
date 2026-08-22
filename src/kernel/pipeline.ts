@@ -266,10 +266,7 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
 function applyTenant(deps: PipelineDeps, ctx: InvocationContext): FlowFailure | undefined {
   if (!deps.tenant) return undefined;
   return lazyRequire<{
-    run: (
-      d: PipelineDeps,
-      c: InvocationContext,
-    ) => FlowFailure | undefined;
+    run: (d: PipelineDeps, c: InvocationContext) => FlowFailure | undefined;
   }>(import.meta.dir, ["pipeline", "tenant"].join("-")).run(deps, ctx);
 }
 

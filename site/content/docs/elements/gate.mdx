@@ -269,13 +269,13 @@ export const app = oke({
 });
 ```
 
-| Option          | Default   | Meaning                                                                                          |
-| --------------- | --------- | ------------------------------------------------------------------------------------------------ |
-| `required`      | `false`   | Pure B2B: authenticated user-plane requests without a tenant are `Forbidden` / `tenant_required` |
-| `source`        | `"claim"` | `"claim"` · `"header"` · `"subdomain"` · `"resolve"`                                             |
-| `header`        | `x-oke-tenant` | Header name when `source` is `"header"`                                                     |
-| `resolve`       | unset     | Callback that returns an id; membership is still checked unless `authoritative`                  |
-| `authoritative` | `false`   | Trust `resolve` without a membership query                                                       |
+| Option          | Default        | Meaning                                                                                          |
+| --------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `required`      | `false`        | Pure B2B: authenticated user-plane requests without a tenant are `Forbidden` / `tenant_required` |
+| `source`        | `"claim"`      | `"claim"` · `"header"` · `"subdomain"` · `"resolve"`                                             |
+| `header`        | `x-oke-tenant` | Header name when `source` is `"header"`                                                          |
+| `resolve`       | unset          | Callback that returns an id; membership is still checked unless `authoritative`                  |
+| `authoritative` | `false`        | Trust `resolve` without a membership query                                                       |
 
 Three tiers, fail-safe:
 
@@ -346,8 +346,8 @@ edit live today.
 
 <Callout title="RLS reads the stamped principal">
   After HTTP Gate passes, user-plane `fx.store` stamps `oke.gate()`, `oke.user()`, and
-  `oke.has_scope()`. With `gate.auth.tenant` on, a fourth GUC `oke.tenant()` is set.
-  Rate, cron, CDC, and signal stay unstamped. Helpers: [Store](/docs/elements/store).
+  `oke.has_scope()`. With `gate.auth.tenant` on, a fourth GUC `oke.tenant()` is set. Rate, cron,
+  CDC, and signal stay unstamped. Helpers: [Store](/docs/elements/store).
 </Callout>
 
 ## Troubleshooting

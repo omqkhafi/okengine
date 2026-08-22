@@ -511,7 +511,11 @@ function parseSchemaTableExtras(
 
 function parseSchemaTableExtra(
   call: CallExpression,
-): { kind: "rls" } | { kind: "unscoped" } | { kind: "policy"; name: string; policy: TablePolicy } | undefined {
+):
+  | { kind: "rls" }
+  | { kind: "unscoped" }
+  | { kind: "policy"; name: string; policy: TablePolicy }
+  | undefined {
   const callee = call.callee;
   if (callee.type !== "MemberExpression") return undefined;
   const member = callee as AstNode & { object: AstNode; property: AstNode };

@@ -351,8 +351,15 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "maxAge": { "type": "string", "description": "Drop events older than this duration (7d, 1h, 30s, …)." },
-            "maxCount": { "type": "integer", "minimum": 1, "description": "Keep only the newest N live events." }
+            "maxAge": {
+              "type": "string",
+              "description": "Drop events older than this duration (7d, 1h, 30s, …)."
+            },
+            "maxCount": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Keep only the newest N live events."
+            }
           }
         }
       }

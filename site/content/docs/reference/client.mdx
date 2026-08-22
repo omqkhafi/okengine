@@ -295,9 +295,14 @@ cursor is dropped, and `autoResubscribe` replays the remaining tape after backof
 ```typescript
 import { useLive } from "okengine/client-react";
 
-const { events, latest, error, isConnected } = useLive(api, orderStatus, { orderId: "ord_1" }, {
-  autoResubscribe: true,
-});
+const { events, latest, error, isConnected } = useLive(
+  api,
+  orderStatus,
+  { orderId: "ord_1" },
+  {
+    autoResubscribe: true,
+  },
+);
 ```
 
 ## Exports

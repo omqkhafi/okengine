@@ -131,7 +131,9 @@ export async function reconcileClocks(
     active.push(decl.name);
   }
 
-  const perTenantTemplates = new Set(declared.filter((d) => d.perTenant === true).map((d) => d.name));
+  const perTenantTemplates = new Set(
+    declared.filter((d) => d.perTenant === true).map((d) => d.name),
+  );
 
   for (const existing of await store.list()) {
     if (declaredByName.has(existing.name)) continue;
