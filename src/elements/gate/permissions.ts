@@ -92,6 +92,18 @@ function collectEffects(manifest: Manifest, kind: "reads" | "writes"): string[] 
 }
 
 /**
+ * Whether a Module:Action is an application (user-plane) scope.
+ *
+ * Console / operator scopes are `console:*` (Access · API-key plane split).
+ * Tenant roles may only grant application scopes.
+ *
+ * @param action - Module:Action pair
+ */
+export function isApplicationScope(action: string): boolean {
+  return !action.startsWith("console:");
+}
+
+/**
  * Format pairs for `oke gates list` stdout.
  *
  * @param pairs - Module:Action pairs

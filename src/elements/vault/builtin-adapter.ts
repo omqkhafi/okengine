@@ -204,6 +204,18 @@ export interface BuiltinVaultAdapter extends VaultAdapter {
 /** Numeric column as any supported driver may hand it back. */
 type SqlNumber = number | string | bigint;
 
+/**
+ * First path segment when the contract is stored as `{tenantId}/{name}`.
+ *
+ * @param path - Canonical vault path
+ */
+function tenantIdFromVaultPath(path: string): string | null {
+  const i = path.indexOf("/");
+  if (i <= 0) return null;
+  const id = path.slice(0, i);
+  return id.length > 0 ? id : null;
+}
+
 /** `oke_vault_secrets` row as returned by the driver. */
 interface SecretRow {
   id: string;
@@ -539,8 +551,8 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
       updated_at: Date | string;
     }>(
       `INSERT INTO oke_vault_secrets
-         (path, encrypted_value, iv, auth_tag, version, metadata, algorithm, kek_version, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+         (path, encrypted_value, iv, auth_tag, version, metadata, algorithm, kek_version, expires_at, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
        RETURNING id, created_at, updated_at`,
       [
         path,
@@ -552,6 +564,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
         ALGORITHM,
         kekVersion,
         expiresAt ?? null,
+        tenantIdFromVaultPath(path),
       ],
     );
     const row = inserted[0];

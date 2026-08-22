@@ -20,6 +20,10 @@ export const AUTH_TABLES = {
   roles: "oke_roles",
   roleGrants: "oke_role_grants",
   apiKeys: "oke_api_keys",
+  // Multi-tenancy (opt-in via `gate.auth.tenant`)
+  tenants: "oke_tenants",
+  tenantMembers: "oke_tenant_members",
+  tenantRoles: "oke_tenant_roles",
   // Session tables (auth element owns these)
   sessions: "oke_sessions",
   refreshTokens: "oke_refresh_tokens",
@@ -98,6 +102,8 @@ export interface ApiKeyRow {
   lastUsedAt: number | null;
   /** Epoch-ms when revoked; `null` while active. */
   revokedAt: number | null;
+  /** Optional tenant claim (tier-1 API-key tenancy). */
+  tenantId?: string | null;
 }
 
 /** Pending operator invitation (invite-only plane). */
@@ -136,4 +142,34 @@ export interface RefreshTokenRow {
   expiresAt: number;
   usedAt: number | null;
   revokedAt: number | null;
+  /** Tenant id stamped on this refresh row (request-scoped; not on the session). */
+  tid?: string | null;
+}
+
+/** Tenant registry row. */
+export interface TenantRow {
+  id: string;
+  name: string;
+  slug: string | null;
+  createdAt: number;
+  createdBy: string;
+}
+
+/** N:N membership — one user, many tenants; one tenant, many users. */
+export interface TenantMemberRow {
+  id: string;
+  tenantId: string;
+  userId: string;
+  /** Tenant role name (expanded via {@link TenantRoleRow}). */
+  role: string;
+  createdAt: number;
+}
+
+/** Tenant-scoped role → application scope names. */
+export interface TenantRoleRow {
+  tenantId: string;
+  roleName: string;
+  scopes: string[];
+  createdAt: number;
+  updatedAt: number;
 }

@@ -23,6 +23,7 @@ import {
   deriveModuleActions,
   gate,
   GATE_PUBLIC_NAME,
+  isApplicationScope,
   type GateDecl,
   type GateEvaluation,
   type GatePolicyContext,
@@ -176,15 +177,7 @@ export interface SimulateGatesOptions extends SimulateGatesInput {
   readonly now?: () => number;
 }
 
-/**
- * Whether a Module:Action is an application (user-plane) scope.
- * Console scopes are `console:*` (console §3.4 · §9.7 · §9.14).
- *
- * @param action - Module:Action pair
- */
-export function isApplicationScope(action: string): boolean {
-  return !action.startsWith("console:");
-}
+export { isApplicationScope } from "../../elements/gate.ts";
 
 /**
  * Project Manifest + auth data into the Gates panel.

@@ -93,3 +93,32 @@ describe("firstPolicyOrPublic", () => {
     expect(firstPolicyOrPublic(["public"])).toBe("public");
   });
 });
+
+describe("rlsIdentityFromAuth — tenant GUC", () => {
+  test("stamps tenantId only when the field is provided", () => {
+    expect(
+      rlsIdentityFromAuth({
+        userId: "u1",
+        scopes: new Set(["member"]),
+        gateNames: ["member"],
+        tenantId: "acme",
+      }),
+    ).toEqual({
+      gate: "member",
+      userId: "u1",
+      scopes: ["member"],
+      tenantId: "acme",
+    });
+    expect(
+      rlsIdentityFromAuth({
+        userId: "u1",
+        scopes: new Set(["member"]),
+        gateNames: ["member"],
+      }),
+    ).toEqual({
+      gate: "member",
+      userId: "u1",
+      scopes: ["member"],
+    });
+  });
+});

@@ -1280,3 +1280,60 @@ export const create = flow("views.create", {
     });
   });
 });
+
+describe("extractManifest — tenancy", () => {
+  test("oke({ gate: { auth: { tenant: true }}}) stamps tenancy.enabled", async () => {
+    const source = `
+import { oke, on, flow, http, store, field } from "okengine";
+
+export const bookings = store.schema.table("bookings", {
+  id: field.text().primaryKey(),
+  tenantId: field.text().notNull(),
+}, [
+  store.schema.policy.tenant("tenant_id"),
+]);
+
+export const db = store.sql("app", { schema: { bookings } });
+
+export const ping = on(
+  http.get("/ping").public(),
+  flow("health.ping", { do: () => ({ ok: true }) }),
+);
+
+export const app = oke({
+  name: "shop",
+  gate: { auth: { tenant: true } },
+});
+`;
+    const manifest = await extractFromSources({ "src/app.ts": source });
+    expect(manifest.tenancy).toMatchObject({
+      enabled: true,
+      isolation: "row",
+      membershipRequired: false,
+    });
+    expect(manifest.flows?.["health.ping"]?.tenantScoped).toBe(true);
+    expect(manifest.stores?.app?.tables?.bookings?.policies?.tenant_tenant_id_all?.using).toContain(
+      "oke.tenant()",
+    );
+  });
+
+  test("SQL table without tenant policy or unscoped() fails loud", async () => {
+    const source = `
+import { oke, store, field } from "okengine";
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey(),
+});
+
+export const db = store.sql("app", { schema: { notes } });
+
+export const app = oke({
+  name: "shop",
+  gate: { auth: { tenant: true } },
+});
+`;
+    await expect(extractFromSources({ "src/app.ts": source })).rejects.toThrow(
+      /needs store.schema.policy.tenant/,
+    );
+  });
+});

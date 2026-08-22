@@ -100,6 +100,45 @@ describe("sql-session RLS isolation (pglite)", () => {
       { id: "b", owner: "bob" },
     ]);
   });
+
+  test("tenant_id = oke.tenant() isolates concurrent tenants", async () => {
+    await conn.exec(`CREATE TABLE bookings (
+      id text PRIMARY KEY,
+      tenant_id text NOT NULL,
+      body text NOT NULL
+    )`);
+    await conn.exec(`INSERT INTO bookings VALUES ('1', 'acme', 'a'), ('2', 'globex', 'b')`);
+    await conn.exec(`ALTER TABLE bookings ENABLE ROW LEVEL SECURITY`);
+    await conn.exec(`GRANT SELECT, INSERT, UPDATE, DELETE ON bookings TO oke_app`);
+    await conn.exec(`CREATE POLICY tenant_all ON bookings
+      AS PERMISSIVE FOR ALL TO public
+      USING (tenant_id = oke.tenant())
+      WITH CHECK (tenant_id = oke.tenant())`);
+
+    const asAcme = createSqlStoreHandle("sql:app", {
+      connection: conn,
+      classifications: new Map(),
+      routedRole: "primary",
+      domainDdl: "off",
+      rls: { gate: "member", userId: "u1", scopes: ["member"], tenantId: "acme" },
+    });
+    const asGlobex = createSqlStoreHandle("sql:app", {
+      connection: conn,
+      classifications: new Map(),
+      routedRole: "primary",
+      domainDdl: "off",
+      rls: { gate: "member", userId: "u1", scopes: ["member"], tenantId: "globex" },
+    });
+
+    const [acme, globex, acmeAgain] = await Promise.all([
+      asAcme.raw(`SELECT id, tenant_id FROM bookings ORDER BY id`),
+      asGlobex.raw(`SELECT id, tenant_id FROM bookings ORDER BY id`),
+      asAcme.raw(`SELECT id, tenant_id FROM bookings ORDER BY id`),
+    ]);
+    expect(acme).toEqual([{ id: "1", tenant_id: "acme" }]);
+    expect(globex).toEqual([{ id: "2", tenant_id: "globex" }]);
+    expect(acmeAgain).toEqual([{ id: "1", tenant_id: "acme" }]);
+  });
 });
 
 const LIVE_PG =

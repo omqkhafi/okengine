@@ -27,6 +27,7 @@ import type { CapabilityToken } from "./capability.ts";
 import type { AppAuthBinding } from "./auth-resolve.ts";
 import type { ApiKeyStore } from "../auth/api-keys.ts";
 import type { AuthHttpMaterialization } from "../auth/bindings.ts";
+import type { TenantRow } from "../auth/tenants.ts";
 import type { WiredGateAuth } from "./app-auth.ts";
 import {
   resolveGateConfig,
@@ -466,6 +467,8 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
       readonly parentId?: string;
       /** Explicit run / WideEvent id (defaults to a new UUID). */
       readonly runId?: string;
+      /** Tenant identity for cron / `fx.call` (propagated, unlike auth). */
+      readonly tenant?: { readonly id: string | null };
     },
   ): Promise<ExecuteResult>;
   /**
@@ -499,8 +502,12 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
    * Invoke all flows bound to an `every` interval.
    *
    * @param interval - Interval string (e.g. `"1h"`)
+   * @param extras - Optional tenant / parent for per-tenant clocks
    */
-  dispatchEvery(interval: string): Promise<ExecuteResult[]>;
+  dispatchEvery(
+    interval: string,
+    extras?: { readonly tenant?: { readonly id: string | null } },
+  ): Promise<ExecuteResult[]>;
   /**
    * Invoke all flows bound to a CDC table change.
    *
@@ -977,12 +984,15 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   async function handleCronFire(name: string): Promise<void> {
-    await app.dispatchEvery(name);
+    const { parsePerTenantCronName } = await import("../elements/clock/declare.ts");
+    const parsed = parsePerTenantCronName(name);
+    const extras = parsed ? { tenant: { id: parsed.tenantId } } : undefined;
+    await app.dispatchEvery(name, extras);
     // Named clocks (e.g. `clock("expire-stale", { every: "1h" })`) reconcile
     // to a store row whose effective interval may differ from the cron name.
     const row = await bootResult?.clock?.store.get(name);
     if (row?.effectiveEvery && row.effectiveEvery !== name) {
-      await app.dispatchEvery(row.effectiveEvery);
+      await app.dispatchEvery(row.effectiveEvery, extras);
     }
   }
 
@@ -1037,6 +1047,7 @@ export function oke(options: OkeOptions): OkeApp {
         return;
       }
       const { store, instanceId, leaseMs } = activeJournal();
+      const existing = await store.get(runId);
       try {
         await runDurable({
           flow: flowDef,
@@ -1045,7 +1056,12 @@ export function oke(options: OkeOptions): OkeApp {
           runId,
           ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
           now,
-          fx: durableResumeFx(),
+          fx: {
+            ...durableResumeFx(),
+            tenantEnabled: gateConfig.auth?.tenant !== undefined,
+            tenantStore: gateConfig.auth?.tenantStore,
+            ...(existing?.tenant ? { tenant: { id: existing.tenant } } : {}),
+          },
         });
       } catch (err) {
         if (isJournalLeaseBusy(err)) return;
@@ -1209,9 +1225,25 @@ export function oke(options: OkeOptions): OkeApp {
       onCronFire: overrides?.onCronFire ?? handleCronFire,
       onSignal: overrides?.onSignal ?? handleSignalFire,
       onDurableResume: overrides?.onDurableResume ?? handleDurableResume,
+      tenantIds: gateConfig.auth?.tenantStore
+        ? () => [...gateConfig.auth!.tenantStore!.tenants.keys()]
+        : undefined,
     };
     const result = await bootApplication(merged);
     bootResult = result;
+    if (gateConfig.auth?.tenantStore && result.clock) {
+      const { putPerTenantCronRows, orphanPerTenantCronRows } = await import(
+        "../elements/clock/reconcile.ts"
+      );
+      const templates = merged.clocks ?? [];
+      const tenantStore = gateConfig.auth.tenantStore;
+      tenantStore.hooks = {
+        onCreate: (tenant: TenantRow) =>
+          putPerTenantCronRows(result.clock!.store, templates, tenant.id),
+        onDelete: (tenant: TenantRow) =>
+          orphanPerTenantCronRows(result.clock!.store, templates, tenant.id),
+      };
+    }
     if (gateConfig.auth?.apiKeyStore && result.store) {
       const { bindHostApiKeySqlFromStore } = await import("../auth/api-key-sql.ts");
       await bindHostApiKeySqlFromStore(result.store, gateConfig.auth.apiKeyStore);
@@ -1299,6 +1331,8 @@ export function oke(options: OkeOptions): OkeApp {
       readonly parentId?: string;
       /** Explicit run / WideEvent id (defaults to a new UUID). */
       readonly runId?: string;
+      /** Tenant identity for cron / `fx.call` (propagated, unlike auth). */
+      readonly tenant?: { readonly id: string | null };
     },
   ): Promise<ExecuteResult> {
     registerFlow(flowDef);
@@ -1347,12 +1381,15 @@ export function oke(options: OkeOptions): OkeApp {
       readonly locale?: string;
       readonly parentId?: string;
       readonly runId?: string;
+      readonly tenant?: { readonly id: string | null };
     };
     readonly resolvedLocale: string;
     readonly defaultLocale: string;
   }): Promise<ExecuteResult> {
     const { flowDef, input, trigger, extras, resolvedLocale, defaultLocale } = args;
     const booted = await ensureBoot();
+    const tenantEnabled = gateConfig.auth?.tenant !== undefined;
+    const flowTenantScoped = flowDef.tenantScoped ?? tenantEnabled;
 
     const unitBag = flowDef.unit !== undefined ? unitHooks.get(flowDef.unit) : undefined;
     // app (hooks + plugs) → unit (hooks + plugs) → flow (hooks + plugs)
@@ -1404,10 +1441,12 @@ export function oke(options: OkeOptions): OkeApp {
         auth: {
           userId: options.fx?.auth?.userId ?? null,
           scopes: new Set(options.fx?.auth?.scopes ?? []),
+          sessionScopes: new Set(options.fx?.auth?.sessionScopes ?? options.fx?.auth?.scopes ?? []),
           verified: options.fx?.auth?.verified,
           apiKeyId: options.fx?.auth?.apiKeyId,
         },
         operator: { id: options.fx?.operator?.id ?? null },
+        tenant: { id: extras?.tenant?.id ?? options.fx?.tenant?.id ?? null },
       };
 
       // Principal injection: test harness (`env: "test"`) OR console-trusted
@@ -1424,6 +1463,8 @@ export function oke(options: OkeOptions): OkeApp {
       const cookieOpts = gateConfig.auth?.cookies;
       const cookieToken = wiredAuth?.tokenFromCookieHeader;
       const apiKeyStore = gateConfig.auth?.apiKeyStore;
+      const tenantEnabled = gateConfig.auth?.tenant !== undefined;
+      const flowTenantScoped = flowDef.tenantScoped ?? tenantEnabled;
       const elementHooks = createElementPipelineHooks({
         gates: booted.gate,
         principals,
@@ -1448,13 +1489,30 @@ export function oke(options: OkeOptions): OkeApp {
                 return cookieToken(request.headers.get("cookie"), cookieOpts);
               }
             : undefined,
+        ...(gateConfig.auth?.tenant && gateConfig.auth.tenantStore
+          ? {
+              tenant: {
+                config: gateConfig.auth.tenant,
+                store: gateConfig.auth.tenantStore,
+                flowTenantScoped,
+                flowPlane: flowDef.plane,
+              },
+            }
+          : {}),
       });
 
       // Element hooks run first in the app-level onAuth/beforeHandle chain —
       // principal resolution and gate checks precede user-registered hooks.
       hooks = mergeHooks(
         {
-          onAuth: [elementHooks.onAuth],
+          onAuth: [
+            elementHooks.onAuth,
+            async () => {
+              if (journalSession && principals?.tenant.id) {
+                await journalSession.stampTenant(principals.tenant.id);
+              }
+            },
+          ],
           beforeHandle: [elementHooks.beforeHandle],
         },
         composedHooks,
@@ -1493,8 +1551,25 @@ export function oke(options: OkeOptions): OkeApp {
         catalogs: loadMessages().getMessageCatalogs(),
         ...options.fx?.i18n,
       },
-      ...(principals ? { auth: principals.auth, operator: principals.operator } : {}),
+      ...(principals
+        ? {
+            auth: principals.auth,
+            operator: principals.operator,
+            tenant: principals.tenant,
+          }
+        : extras?.tenant
+          ? { tenant: { id: extras.tenant.id } }
+          : {}),
       apiKeyStore: gateConfig.auth?.apiKeyStore,
+      tenantStore: gateConfig.auth?.tenantStore,
+      sessions: authBinding?.sessions,
+      sessionCrypto: authBinding
+        ? { secret: authBinding.secret, now: authBinding.now }
+        : undefined,
+      manifest: options.manifest,
+      tenantEnabled,
+      flowTenantScoped,
+      flowPlane: flowDef.plane,
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(extras?.trustedInvoke === true && extras.revealPii === true ? { revealPii: true } : {}),
       rlsGateNames: gateNamesOf(trigger),
@@ -1525,6 +1600,7 @@ export function oke(options: OkeOptions): OkeApp {
             originPrincipal: freezePrincipal(fx.principal),
             locale: resolvedLocale,
             parentId: runId,
+            tenant: { id: fx.tenant.id },
             ...(extras?.trustedInvoke === true && extras.revealPii === true
               ? { trustedInvoke: true, revealPii: true }
               : {}),
@@ -2102,11 +2178,11 @@ export function oke(options: OkeOptions): OkeApp {
       }
       return results;
     },
-    async dispatchEvery(interval) {
+    async dispatchEvery(interval, extras) {
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
         if (b.trigger.kind === "every" && b.trigger.interval === interval) {
-          results.push(await execute(b.flow, undefined, b.trigger as EveryTrigger));
+          results.push(await execute(b.flow, undefined, b.trigger as EveryTrigger, extras));
         }
       }
       return results;

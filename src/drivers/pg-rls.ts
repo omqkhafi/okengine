@@ -49,6 +49,11 @@ export type RlsIdentity = {
   readonly gate: string;
   readonly userId: string;
   readonly scopes: readonly string[];
+  /**
+   * When set, the prelude stamps `oke.tenant` (fourth GUC).
+   * Omit entirely when tenancy is off so the prelude stays three params.
+   */
+  readonly tenantId?: string;
 };
 
 /**
@@ -98,6 +103,8 @@ LANGUAGE sql STABLE AS $$
     ELSE jsonb_exists(current_setting('oke.scopes', true)::jsonb, p_scope)
   END
 $$`,
+  `CREATE OR REPLACE FUNCTION oke.tenant() RETURNS text
+LANGUAGE sql STABLE AS $$ SELECT current_setting('oke.tenant', true) $$`,
   `DO $oke_rls_role$
 BEGIN
   CREATE ROLE ${OKE_RLS_ROLE} NOSUPERUSER NOBYPASSRLS NOLOGIN;
@@ -449,12 +456,22 @@ export type RlsPreludeStatement = {
  * @param identity - Gate principal
  */
 export function buildRlsIdentityPreludeSql(identity: RlsIdentity): readonly RlsPreludeStatement[] {
+  const configs = [
+    "set_config('oke.gate', ?, true)",
+    "set_config('oke.user', ?, true)",
+    "set_config('oke.scopes', ?, true)",
+  ];
+  const params: string[] = [identity.gate, identity.userId, rlsScopesJson(identity.scopes)];
+  if (identity.tenantId !== undefined) {
+    configs.push("set_config('oke.tenant', ?, true)");
+    params.push(identity.tenantId);
+  }
   return [
     { sql: `SET LOCAL ROLE ${OKE_RLS_ROLE}` },
     { sql: "SET LOCAL row_security = on" },
     {
-      sql: `SELECT set_config('oke.gate', ?, true), set_config('oke.user', ?, true), set_config('oke.scopes', ?, true)`,
-      params: [identity.gate, identity.userId, rlsScopesJson(identity.scopes)],
+      sql: `SELECT ${configs.join(", ")}`,
+      params,
     },
   ];
 }

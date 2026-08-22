@@ -69,6 +69,15 @@ export function tenancyDeclared(manifest: Manifest | null): boolean {
   return manifest?.tenancy !== undefined;
 }
 
+/**
+ * True when `gate.auth.tenant` was extracted (`tenancy.enabled`).
+ *
+ * @param manifest - Current Manifest
+ */
+export function tenancyEnabled(manifest: Manifest | null): boolean {
+  return manifest?.tenancy?.enabled === true;
+}
+
 /** Cache projection for one resource. */
 export interface ConsoleStoreCacheView {
   /** Tier-1 key produced by a read of this resource. */
@@ -146,6 +155,11 @@ export interface ProjectStoresOptions {
    * `OKE_CONSOLE_AUTH_STORE=1`.
    */
   readonly includeAuthStore?: boolean;
+  /**
+   * Registry tenant ids when `tenancy.enabled` (from `oke_tenants`).
+   * Do not pass observational run-history strings.
+   */
+  readonly tenantIds?: readonly string[];
 }
 
 /**
@@ -160,7 +174,11 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
 }> {
   const manifest = options.manifest;
   const tenancy = tenancyDeclared(manifest);
-  const tenants = tenancy ? collectTenants(options.runs ?? []) : [];
+  const tenants = tenancyEnabled(manifest)
+    ? [...(options.tenantIds ?? (await collectRegistryTenants(options.runtime)))]
+    : tenancy
+      ? collectTenants(options.runs ?? [])
+      : [];
 
   let drift: ConsoleMigrationDrift | null = null;
   if (manifest) {
@@ -443,6 +461,30 @@ function collectTenants(runs: ReadonlyArray<{ readonly tenant?: string | null }>
     if (r.tenant) set.add(r.tenant);
   }
   return [...set].sort();
+}
+
+/**
+ * Membership-verified tenant ids from `oke_tenants` (Store picker).
+ *
+ * @param runtime - App store runtime
+ */
+async function collectRegistryTenants(runtime: StoreRuntime | null): Promise<string[]> {
+  if (!runtime) return [];
+  for (const decl of runtime.declarations.values()) {
+    if (decl.facet !== "sql") continue;
+    try {
+      const handle = (await runtime.open(decl, {
+        effects: { reads: [decl.ref] },
+      })) as SqlStoreHandle;
+      const rows = await handle.raw(`SELECT id FROM oke_tenants ORDER BY id`);
+      return rows
+        .map((row) => (typeof row.id === "string" ? row.id : null))
+        .filter((id): id is string => id !== null);
+    } catch {
+      continue;
+    }
+  }
+  return [];
 }
 
 /** Query / browse input. */

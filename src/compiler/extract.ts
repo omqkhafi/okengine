@@ -80,6 +80,7 @@ type DeclaredSchemaTable = {
   readonly columns: Record<string, DeclaredColumn>;
   readonly rls?: boolean;
   readonly policies?: Record<string, TablePolicy>;
+  readonly tenantScoped?: boolean;
 };
 
 interface ProjectScope {
@@ -212,6 +213,9 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   if (scope.topology) manifest.topology = scope.topology;
   if (scope.images) manifest.images = scope.images;
 
+  applyTenancyDefaults(manifest);
+  assertTenantSafeSchema(manifest);
+
   return manifest;
 }
 
@@ -258,7 +262,7 @@ function collectDeclarations(filePath: string, program: AstNode, scope: ProjectS
     }
   });
 
-  // oke({ name })
+  // oke({ name, gate: { auth: { tenant } } })
   walk(program, (node) => {
     if (node.type !== "CallExpression") return;
     const call = node as CallExpression;
@@ -266,6 +270,7 @@ function collectDeclarations(filePath: string, program: AstNode, scope: ProjectS
     const opts = objectArg(call.arguments[0]);
     const name = stringProp(opts, "name");
     if (name) scope.app = name;
+    applyOkeTenantConfig(opts, scope);
   });
 }
 
@@ -464,21 +469,24 @@ function tableFromDeclared(t: DeclaredSchemaTable): {
   columns: Record<string, DeclaredColumn>;
   rls?: boolean;
   policies?: Record<string, TablePolicy>;
+  tenantScoped?: boolean;
 } {
   return {
     columns: t.columns,
     ...(t.rls ? { rls: true } : {}),
     ...(t.policies ? { policies: t.policies } : {}),
+    ...(t.tenantScoped === false ? { tenantScoped: false } : {}),
   };
 }
 
 function parseSchemaTableExtras(
   node: AstNode | undefined,
-): Pick<DeclaredSchemaTable, "rls" | "policies"> {
+): Pick<DeclaredSchemaTable, "rls" | "policies" | "tenantScoped"> {
   if (!node || node.type !== "ArrayExpression") return {};
   const els = (node as AstNode & { elements?: AstNode[] }).elements ?? [];
   const policies: Record<string, TablePolicy> = {};
   let rls = false;
+  let tenantScoped: boolean | undefined;
   for (const el of els) {
     if (!el || el.type !== "CallExpression") continue;
     const extra = parseSchemaTableExtra(el as CallExpression);
@@ -487,18 +495,23 @@ function parseSchemaTableExtras(
       rls = true;
       continue;
     }
+    if (extra.kind === "unscoped") {
+      tenantScoped = false;
+      continue;
+    }
     policies[extra.name] = extra.policy;
     rls = true;
   }
   return {
     ...(rls ? { rls: true } : {}),
     ...(Object.keys(policies).length > 0 ? { policies } : {}),
+    ...(tenantScoped === false ? { tenantScoped: false } : {}),
   };
 }
 
 function parseSchemaTableExtra(
   call: CallExpression,
-): { kind: "rls" } | { kind: "policy"; name: string; policy: TablePolicy } | undefined {
+): { kind: "rls" } | { kind: "unscoped" } | { kind: "policy"; name: string; policy: TablePolicy } | undefined {
   const callee = call.callee;
   if (callee.type !== "MemberExpression") return undefined;
   const member = callee as AstNode & { object: AstNode; property: AstNode };
@@ -506,13 +519,16 @@ function parseSchemaTableExtra(
   if (method === "rls" && isStoreSchemaCallee(member.object)) {
     return { kind: "rls" };
   }
+  if (method === "unscoped" && isStoreSchemaCallee(member.object)) {
+    return { kind: "unscoped" };
+  }
   if (method === "policy" && isStoreSchemaCallee(member.object)) {
     const name = stringArg(call.arguments[0]);
     if (!name) return undefined;
     return { kind: "policy", name, policy: parseTablePolicyOptions(objectArg(call.arguments[1])) };
   }
   if (
-    (method === "gate" || method === "owner" || method === "scope") &&
+    (method === "gate" || method === "owner" || method === "scope" || method === "tenant") &&
     isStoreSchemaPolicyCallee(member.object)
   ) {
     const key = stringArg(call.arguments[0]);
@@ -521,9 +537,11 @@ function parseSchemaTableExtra(
     const command = (stringProp(opts, "for") ??
       (method === "owner"
         ? "all"
-        : method === "scope"
-          ? "insert"
-          : "select")) as TablePolicy["for"];
+        : method === "tenant"
+          ? "all"
+          : method === "scope"
+            ? "insert"
+            : "select")) as TablePolicy["for"];
     const slug = key.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
     const name = `${method}_${slug}_${command}`;
     const lit = `'${key.replaceAll("'", "''")}'`;
@@ -532,7 +550,9 @@ function parseSchemaTableExtra(
         ? `oke.gate() = ${lit}`
         : method === "owner"
           ? `${key} = oke.user()`
-          : `oke.has_scope(${lit})`;
+          : method === "tenant"
+            ? `${key} = oke.tenant()`
+            : `oke.has_scope(${lit})`;
     const policy: TablePolicy = {
       for: command,
       ...(command === "insert"
@@ -798,6 +818,8 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           namespaces.add(storeName);
           storeEntry.namespaces = [...namespaces].sort();
           if (boolProp(storeOpts, "durable")) storeEntry.durable = true;
+          if (boolProp(storeOpts, "tenantScoped") === false) storeEntry.tenantScoped = false;
+          else if (boolProp(storeOpts, "tenantScoped") === true) storeEntry.tenantScoped = true;
         } else if (facet === "files") {
           const buckets = new Set(storeEntry.buckets ?? []);
           buckets.add(storeName);
@@ -841,6 +863,24 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       const inner = member.object as AstNode & { object: AstNode; property: AstNode };
       if (identifierName(inner.object) === "store" && identifierName(inner.property) === "schema") {
         collectSchemaTable(call, program, scope);
+      }
+    }
+
+    if (obj === "clock" && prop === "perTenant") {
+      const name = stringArg(call.arguments[0]);
+      const opts = objectArg(call.arguments[1]);
+      if (name) {
+        scope.clocks[name] = {
+          ...(stringProp(opts, "every") ? { every: stringProp(opts, "every") } : {}),
+          ...(stringProp(opts, "cron") ? { cron: stringProp(opts, "cron") } : {}),
+          ...(boolProp(opts, "overridable") !== undefined
+            ? { overridable: boolProp(opts, "overridable") }
+            : {}),
+          ...(stringProp(opts, "description")
+            ? { description: stringProp(opts, "description") }
+            : {}),
+          perTenant: true,
+        };
       }
     }
 
@@ -1070,6 +1110,8 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
             : {}),
           ...(stringProp(opts, "rotate") ? { rotate: stringProp(opts, "rotate") } : {}),
           ...(prop === "config" ? { sensitive: false } : {}),
+          ...(boolProp(opts, "perTenant") === true ? { perTenant: true } : {}),
+          ...(boolProp(opts, "perTenant") === false ? { perTenant: false } : {}),
         };
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {
@@ -1138,6 +1180,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         ...(stringProp(opts, "description")
           ? { description: stringProp(opts, "description") }
           : {}),
+        ...(boolProp(opts, "perTenant") === true ? { perTenant: true } : {}),
       };
     }
   }
@@ -1188,6 +1231,8 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           ? { description: stringProp(opts, "description") }
           : {}),
         ...(stringProp(opts, "rotate") ? { rotate: stringProp(opts, "rotate") } : {}),
+        ...(boolProp(opts, "perTenant") === true ? { perTenant: true } : {}),
+        ...(boolProp(opts, "perTenant") === false ? { perTenant: false } : {}),
       };
       const bindingName = enclosingConstName(call, program);
       if (bindingName) {
@@ -1261,7 +1306,7 @@ function collectConfig(opts: AstNode | undefined, scope: ProjectScope): void {
   if (tenancy) {
     const isolation = stringProp(tenancy, "isolation");
     if (isolation === "row" || isolation === "schema" || isolation === "database") {
-      scope.tenancy = { isolation };
+      scope.tenancy = { ...scope.tenancy, isolation };
     }
   }
 
@@ -1585,6 +1630,8 @@ function registerFlow(args: {
 
   const plane = stringProp(opts, "plane");
   if (plane === "user" || plane === "operator") flow.plane = plane;
+  if (boolProp(opts, "tenantScoped") === false) flow.tenantScoped = false;
+  else if (boolProp(opts, "tenantScoped") === true) flow.tenantScoped = true;
 
   if (inferred.cacheIneligible) {
     flow.cache = false;
@@ -2403,6 +2450,64 @@ export function lineAt(source: string, offset: number): number {
     if (source.charCodeAt(i) === 10) line++;
   }
   return line;
+}
+
+function applyOkeTenantConfig(opts: AstNode | undefined, scope: ProjectScope): void {
+  const gate = objectProp(opts, "gate");
+  const auth = objectProp(gate, "auth");
+  const tenant = objectProp(auth, "tenant");
+  if (!tenant) return;
+  if (tenant.type === "Literal" && (tenant as Literal).value === true) {
+    scope.tenancy = {
+      ...scope.tenancy,
+      enabled: true,
+      isolation: scope.tenancy?.isolation ?? "row",
+      membershipRequired: false,
+    };
+    return;
+  }
+  if (tenant.type === "ObjectExpression") {
+    scope.tenancy = {
+      ...scope.tenancy,
+      enabled: true,
+      isolation: scope.tenancy?.isolation ?? "row",
+      membershipRequired: boolProp(tenant, "required") === true,
+    };
+  }
+}
+
+function applyTenancyDefaults(manifest: Manifest): void {
+  if (manifest.tenancy?.enabled !== true) return;
+  for (const flow of Object.values(manifest.flows ?? {})) {
+    if (flow.tenantScoped === undefined) flow.tenantScoped = true;
+  }
+  for (const store of Object.values(manifest.stores ?? {})) {
+    if (store.facet === "kv" && store.tenantScoped === undefined) store.tenantScoped = true;
+  }
+  for (const secret of Object.values(manifest.vault ?? {})) {
+    if (secret.perTenant === undefined) secret.perTenant = true;
+  }
+}
+
+function assertTenantSafeSchema(manifest: Manifest): void {
+  if (manifest.tenancy?.enabled !== true) return;
+  for (const [storeName, store] of Object.entries(manifest.stores ?? {})) {
+    if (store.facet !== "sql" || !store.tables) continue;
+    for (const [tableName, table] of Object.entries(store.tables)) {
+      if (table.tenantScoped === false) continue;
+      const policies = Object.values(table.policies ?? {});
+      const hasTenant = policies.some(
+        (p) =>
+          (typeof p.using === "string" && p.using.includes("oke.tenant()")) ||
+          (typeof p.withCheck === "string" && p.withCheck.includes("oke.tenant()")),
+      );
+      if (!hasTenant) {
+        throw new Error(
+          `extract: table "${storeName}.${tableName}" needs store.schema.policy.tenant(...) or store.schema.unscoped() when gate.auth.tenant is on`,
+        );
+      }
+    }
+  }
 }
 
 function sortRecord<T>(record: Record<string, T>): Record<string, T> {

@@ -31,6 +31,8 @@ export {
   schemaPolicyGate,
   schemaPolicyOwner,
   schemaPolicyScope,
+  schemaPolicyTenant,
+  schemaUnscoped,
   isSchemaTableDecl,
   isSchemaColumnDecl,
   isSchemaRelationsDecl,

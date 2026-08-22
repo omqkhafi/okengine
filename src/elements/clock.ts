@@ -10,7 +10,7 @@
  * @module
  */
 
-export { clock } from "./clock/declare.ts";
+export { clock, perTenantCronName, parsePerTenantCronName, PER_TENANT_CRON_SEP } from "./clock/declare.ts";
 export type { ClockDecl, ClockOptions } from "./clock/declare.ts";
 
 export { parseDurationMs } from "./clock/duration.ts";
@@ -27,6 +27,8 @@ export {
 
 export {
   reconcileClocks,
+  putPerTenantCronRows,
+  orphanPerTenantCronRows,
   effectiveSchedule,
   createMemoryCronStore,
   createFileCronStore,
@@ -34,6 +36,7 @@ export {
   type CronStatus,
   type CronStore,
   type ReconcileResult,
+  type ReconcileClocksOptions,
 } from "./clock/reconcile.ts";
 
 export { createTimeTravel, type TimeTravel } from "./clock/time-travel.ts";

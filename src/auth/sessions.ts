@@ -43,6 +43,11 @@ export interface AccessClaims {
    * Validated when the verifier supplies {@link VerifyAccessOptions.audience}.
    */
   readonly aud?: string;
+  /**
+   * Active tenant for this access token (request-scoped).
+   * Never stored on the session row — switching issues a new token pair.
+   */
+  readonly tid?: string;
 }
 
 /** Options for {@link createSessionStore}. */
@@ -106,6 +111,8 @@ export async function issueSession(
     readonly id: string;
     readonly plane: AuthPlane;
     readonly scopes: Iterable<string>;
+    /** Optional tenant claim (not stored on the session row). */
+    readonly tenantId?: string | null;
   },
 ): Promise<IssuedSession> {
   const now = crypto.now ?? (() => Date.now());
@@ -136,6 +143,7 @@ export async function issueSession(
   store.sessions.set(sessionId, session);
 
   const refreshRaw = `rt_${cryptoRandomId()}`;
+  const tid = principal.tenantId ?? undefined;
   const refreshRow: RefreshTokenRow = {
     id: cryptoRandomId(),
     sessionId,
@@ -144,6 +152,7 @@ export async function issueSession(
     expiresAt: t + refreshTtl,
     usedAt: null,
     revokedAt: null,
+    ...(tid !== undefined && tid !== "" ? { tid } : {}),
   };
   store.refresh.set(refreshRow.id, refreshRow);
 
@@ -156,6 +165,7 @@ export async function issueSession(
     iat: t,
     exp: accessExpiresAt,
     ...(crypto.audience !== undefined ? { aud: crypto.audience } : {}),
+    ...(tid !== undefined && tid !== "" ? { tid } : {}),
   });
 
   return { session, accessToken, refreshToken: refreshRaw, accessExpiresAt };
@@ -211,6 +221,7 @@ export async function rotateRefresh(
   const refreshTtl = crypto.refreshTtlMs ?? REFRESH_TTL_MS;
 
   const newRefreshRaw = `rt_${cryptoRandomId()}`;
+  const rotatedTid = existing.tid;
   const newRefresh: RefreshTokenRow = {
     id: cryptoRandomId(),
     sessionId: session.id,
@@ -219,6 +230,9 @@ export async function rotateRefresh(
     expiresAt: t + refreshTtl,
     usedAt: null,
     revokedAt: null,
+    ...(rotatedTid !== undefined && rotatedTid !== null && rotatedTid !== ""
+      ? { tid: rotatedTid }
+      : {}),
   };
   store.refresh.set(newRefresh.id, newRefresh);
 
@@ -231,6 +245,9 @@ export async function rotateRefresh(
     iat: t,
     exp: accessExpiresAt,
     ...(session.audience !== undefined ? { aud: session.audience } : {}),
+    ...(rotatedTid !== undefined && rotatedTid !== null && rotatedTid !== ""
+      ? { tid: rotatedTid }
+      : {}),
   });
 
   return {
@@ -291,6 +308,7 @@ export async function issueSessionWithScopes(
     readonly id: string;
     readonly plane: AuthPlane;
     readonly scopes: Iterable<string>;
+    readonly tenantId?: string | null;
   },
 ): Promise<IssuedSession> {
   return issueSession(store, crypto, principal);

@@ -31,6 +31,8 @@ export interface CreateApiKeyOptions {
   readonly expiresAt?: number | null;
   readonly rateLimit?: { max: number; per: string } | null;
   readonly ipAllowlist?: readonly string[];
+  /** Optional tenant claim copied onto the key principal. */
+  readonly tenantId?: string | null;
   /** Injectable id / secret / hash (tests). */
   readonly id?: string;
   readonly secret?: string;
@@ -163,6 +165,7 @@ export async function createApiKey(
     createdAt: now(),
     lastUsedAt: null,
     revokedAt: null,
+    ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
   };
   store.keys.set(id, row);
   await persistRow(store, row);

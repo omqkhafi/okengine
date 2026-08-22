@@ -15,6 +15,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { ClockDecl } from "./declare.ts";
+import { parsePerTenantCronName, perTenantCronName } from "./declare.ts";
 
 /** Cron lifecycle status in `oke_crons`. */
 export type CronStatus = "active" | "paused" | "orphaned";
@@ -86,54 +87,58 @@ export interface ReconcileResult {
   readonly rows: readonly CronRow[];
 }
 
+/** Extra inputs for {@link reconcileClocks}. */
+export interface ReconcileClocksOptions {
+  /** Tenant ids used to expand {@link ClockDecl.perTenant} templates. */
+  readonly tenantIds?: readonly string[];
+}
+
 /**
  * Reconcile declared clocks into the Store.
  *
  * - Declared schedules are upserted (`status: "active"`).
+ * - Per-tenant templates expand to `{template}#{tenantId}` before the orphan pass.
+ * - The bare template name is never put (never ticked).
  * - Overrides are preserved when `overridable`.
  * - Store rows missing from declarations are marked `orphaned` (not deleted).
  *
  * @param declared - Clocks from the Manifest / code
  * @param store - Cron store (`oke_crons`)
+ * @param options - Tenant expansion
  */
 export async function reconcileClocks(
   declared: readonly ClockDecl[],
   store: CronStore,
+  options: ReconcileClocksOptions = {},
 ): Promise<ReconcileResult> {
-  const declaredByName = new Map(declared.map((d) => [d.name, d]));
+  const tenantIds = options.tenantIds ?? [];
+  const declaredByName = new Map<string, ClockDecl>();
   const active: string[] = [];
   const orphaned: string[] = [];
 
   for (const decl of declared) {
-    const prev = await store.get(decl.name);
-    const overrideCron =
-      decl.overridable && prev?.overrideCron !== undefined ? prev.overrideCron : undefined;
-    const overrideEvery =
-      decl.overridable && prev?.overrideEvery !== undefined ? prev.overrideEvery : undefined;
-
-    const row: CronRow = {
-      name: decl.name,
-      declaredCron: decl.cron,
-      declaredEvery: decl.every,
-      overrideCron,
-      overrideEvery,
-      effectiveCron: overrideCron ?? decl.cron,
-      effectiveEvery: overrideEvery ?? decl.every,
-      timezone: decl.timezone,
-      overridable: decl.overridable,
-      status: "active",
-      leaderInstanceId: prev?.leaderInstanceId,
-      leaderLeaseUntil: prev?.leaderLeaseUntil,
-      lastRunAt: prev?.lastRunAt,
-      nextRunAt: prev?.nextRunAt,
-      dstAmbiguity: prev?.dstAmbiguity,
-    };
-    await store.put(row);
+    if (decl.perTenant === true) {
+      for (const tenantId of tenantIds) {
+        const name = perTenantCronName(decl.name, tenantId);
+        declaredByName.set(name, decl);
+        await putActiveRow(store, decl, name);
+        active.push(name);
+      }
+      continue;
+    }
+    declaredByName.set(decl.name, decl);
+    await putActiveRow(store, decl, decl.name);
     active.push(decl.name);
   }
 
+  const perTenantTemplates = new Set(declared.filter((d) => d.perTenant === true).map((d) => d.name));
+
   for (const existing of await store.list()) {
     if (declaredByName.has(existing.name)) continue;
+    const parsed = parsePerTenantCronName(existing.name, perTenantTemplates);
+    if (parsed && existing.status === "active") {
+      // Expansion already listed current tenants; leftover ids orphan.
+    }
     if (existing.status === "orphaned") {
       orphaned.push(existing.name);
       continue;
@@ -151,6 +156,72 @@ export async function reconcileClocks(
     orphaned,
     rows: await store.list(),
   };
+}
+
+/**
+ * Expand per-tenant templates for a newly created tenant (preserve lease).
+ *
+ * @param store - Cron store
+ * @param templates - Clock decls (`perTenant` only applied)
+ * @param tenantId - Tenant id
+ */
+export async function putPerTenantCronRows(
+  store: CronStore,
+  templates: readonly ClockDecl[],
+  tenantId: string,
+): Promise<void> {
+  for (const decl of templates) {
+    if (decl.perTenant !== true) continue;
+    await putActiveRow(store, decl, perTenantCronName(decl.name, tenantId));
+  }
+}
+
+/**
+ * Mark per-tenant rows orphaned when a tenant is deleted.
+ *
+ * @param store - Cron store
+ * @param templates - Clock decls
+ * @param tenantId - Tenant id
+ */
+export async function orphanPerTenantCronRows(
+  store: CronStore,
+  templates: readonly ClockDecl[],
+  tenantId: string,
+): Promise<void> {
+  for (const decl of templates) {
+    if (decl.perTenant !== true) continue;
+    const name = perTenantCronName(decl.name, tenantId);
+    const row = await store.get(name);
+    if (!row || row.status === "orphaned") continue;
+    await store.put({ ...row, status: "orphaned" });
+  }
+}
+
+async function putActiveRow(store: CronStore, decl: ClockDecl, name: string): Promise<void> {
+  const prev = await store.get(name);
+  const overrideCron =
+    decl.overridable && prev?.overrideCron !== undefined ? prev.overrideCron : undefined;
+  const overrideEvery =
+    decl.overridable && prev?.overrideEvery !== undefined ? prev.overrideEvery : undefined;
+
+  const row: CronRow = {
+    name,
+    declaredCron: decl.cron,
+    declaredEvery: decl.every,
+    overrideCron,
+    overrideEvery,
+    effectiveCron: overrideCron ?? decl.cron,
+    effectiveEvery: overrideEvery ?? decl.every,
+    timezone: decl.timezone,
+    overridable: decl.overridable,
+    status: "active",
+    leaderInstanceId: prev?.leaderInstanceId,
+    leaderLeaseUntil: prev?.leaderLeaseUntil,
+    lastRunAt: prev?.lastRunAt,
+    nextRunAt: prev?.nextRunAt,
+    dstAmbiguity: prev?.dstAmbiguity,
+  };
+  await store.put(row);
 }
 
 /**

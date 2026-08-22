@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS oke_vault_secrets (
   updated_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz,
   deleted_at timestamptz,
+  tenant_id text,
   CONSTRAINT oke_vault_secrets_path_version_key UNIQUE (path, version)
 )`;
 
@@ -168,6 +169,8 @@ const POST_DDL_STATEMENTS: readonly string[] = [
   `ALTER TABLE oke_vault_status ADD COLUMN IF NOT EXISTS rewrap_key_hash text`,
   `ALTER TABLE oke_vault_status ADD COLUMN IF NOT EXISTS rotate_locked_by text`,
   `ALTER TABLE oke_vault_status ADD COLUMN IF NOT EXISTS rotate_lease_expires_at bigint`,
+  `ALTER TABLE oke_vault_secrets ADD COLUMN IF NOT EXISTS tenant_id text`,
+  `CREATE INDEX IF NOT EXISTS oke_vault_secrets_tenant_idx ON oke_vault_secrets (tenant_id)`,
   `CREATE INDEX IF NOT EXISTS oke_vault_audit_seq_idx ON oke_vault_audit (seq)`,
   `CREATE INDEX IF NOT EXISTS oke_vault_audit_created_idx ON oke_vault_audit (created_at, id)`,
   `CREATE INDEX IF NOT EXISTS oke_vault_audit_path_idx ON oke_vault_audit (path)`,

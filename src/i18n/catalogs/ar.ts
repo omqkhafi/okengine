@@ -40,6 +40,18 @@ export const builtinAr = {
       cause: 'مؤشر البث "{afterId}" ليس على شريط "{signal}".',
       fix: "أعد الاتصال بدون Last-Event-ID لإعادة تشغيل الشريط المتبقي.",
     },
+    "1015": {
+      cause: "هذه العملية تحتاج مستأجراً، ولم يُحدَّد مستأجر لهذا الطلب.",
+      fix: "استدعِ fx.auth.switchTenant(id) أو أرسل مطالبة tid موقّعة أو رأس المستأجر.",
+    },
+    "1016": {
+      cause: 'المتصل ليس عضواً في المستأجر "{tenant}".',
+      fix: "اختر مستأجراً من fx.auth.listTenants() أو أضف المستخدم كعضو.",
+    },
+    "1017": {
+      cause: 'نطاق دور المستأجر "{scope}" ليس نطاقاً تطبيقياً معلناً.',
+      fix: "استخدم اسماً من كتالوج البيان لهذا التطبيق (وليس console:*).",
+    },
     "1101": {
       cause: "جدول النطاق غير موجود — لم تُطبَّق الترحيلات.",
       fix: "شغّل `oke db migrate` على هذه البيئة.",
@@ -66,6 +78,9 @@ export const builtinAr = {
     "Forbidden.ip_denied": "عنوان IP الخاص بك محظور.",
     "Forbidden.ip_not_allowed": "عنوان IP الخاص بك غير مسموح.",
     "Forbidden.policy_denied": "رفضت السياسة هذا الطلب.",
+    "Forbidden.tenant_required": "هذا الطلب يحتاج مستأجراً.",
+    "Forbidden.not_member": "لست عضواً في ذلك المستأجر.",
+    "Forbidden.unknown_scope": "نطاق دور المستأجر هذا ليس نطاقاً تطبيقياً معلناً.",
     "AuthRateLimited.rate_limited": "محاولات مصادقة كثيرة جداً. حاول لاحقاً.",
   },
 } as const;

@@ -60,12 +60,16 @@ export async function bindClock(
   if (prebuilt) {
     clock = prebuilt;
   } else if (clockDriver === "frozen" || env === "test") {
-    clock = createTestClockRuntime(now(), { instanceId: options.instanceId });
+    clock = createTestClockRuntime(now(), {
+      instanceId: options.instanceId,
+      ...(options.tenantIds ? { tenantIds: options.tenantIds } : {}),
+    });
   } else if (clockDriver === "memory") {
     clock = createClockRuntime({
       instanceId: options.instanceId,
       now,
       store: createMemoryCronStore(),
+      ...(options.tenantIds ? { tenantIds: options.tenantIds } : {}),
     });
   } else if (clockDriver === "file") {
     const path = resolve(process.cwd(), DEFAULT_FILE_CRON_PATH);
@@ -74,6 +78,7 @@ export async function bindClock(
       instanceId: options.instanceId,
       now,
       store: createFileCronStore(path),
+      ...(options.tenantIds ? { tenantIds: options.tenantIds } : {}),
     });
   } else if (clockDriver === "postgres") {
     const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL ?? undefined;
@@ -89,6 +94,7 @@ export async function bindClock(
       instanceId: options.instanceId,
       now,
       store,
+      ...(options.tenantIds ? { tenantIds: options.tenantIds } : {}),
     });
   } else {
     throw new Error(
@@ -118,8 +124,8 @@ export async function bindClock(
   if (options.onCronFire) {
     const fire = options.onCronFire;
     for (const name of clockDecls.keys()) {
-      clock.onCron(name, async () => {
-        await fire(name);
+      clock.onCron(name, async (row) => {
+        await fire(row.name);
       });
     }
   }

@@ -152,6 +152,8 @@ export interface BootOptions {
    * @param name - Cron name or every-interval
    */
   readonly onCronFire?: (name: string) => void | Promise<void>;
+  /** Tenant ids for per-tenant clock expansion at reconcile. */
+  readonly tenantIds?: () => readonly string[] | Promise<readonly string[]>;
   /**
    * Dispatch a signal message to bound flows.
    *

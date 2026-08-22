@@ -151,6 +151,7 @@ Every name passed to `vault.env.required` is registered, so boot reports missing
 | `schema`      | zod / Standard Schema | Validated at boot; a bad value fails boot like a missing one                                                                                     |
 | `dev`         | string                | Local-only fallback when no source provides a value (never used in prod)                                                                         |
 | `sensitive`   | boolean               | Override the default (`true` for secrets, `false` for config)                                                                                    |
+| `perTenant`   | boolean               | Resolve at request time under `{tenantId}/{contract}`. Default `true` when `gate.auth.tenant` is on. Boot skips these contracts.                 |
 
 ### Zero-setup Compose fallback
 
@@ -368,6 +369,7 @@ Schedule the live command with cron when you want automatic cleanup.
 
 - [Project structure](/docs/get-started/project-structure) — `flow({…})` names as `unit.export`; `flow("billing.charge")` still wins
 - [Flow](/docs/elements/flow) — how `fx.vault.get` reads secrets inside `do`
+- [Gate](/docs/elements/gate) — `perTenant` contracts when `gate.auth.tenant` is on
 - [CLI Reference](/docs/reference/cli) — `oke vault set` · `list` · `import`
 
 ## Next

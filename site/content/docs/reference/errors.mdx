@@ -42,6 +42,9 @@ string. Custom app codes stay message-less until registered.
 | `1012` | HTTP flow unnamed | Adopted HTTP flow still has no `unit.export`    | Export from `flows/<unit>/` or pass a named `flow` |
 | `1013` | live exposure dup | Same signal, gates, and match on two GET routes | Change the gate or path-param filter               |
 | `1014` | live resume gap   | `Last-Event-ID` is not on the retained tape     | Reconnect without the cursor; remaining tape replays |
+| `1015` | tenant required   | Tenant-scoped op with no `fx.tenant.id`         | `switchTenant`, signed `tid`, or tenant header       |
+| `1016` | tenant not member | Client-supplied tenant id is not a membership   | Pick from `listTenants` or add the user as a member  |
+| `1017` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                  |
 | `1042` | orphan emit       | Emit with zero subscribers and `optional` false | Add `on(signal, …)` or declare `optional: true`    |
 | `1043` | signal schema     | Emit payload failed the signal's `schema`       | Pass a payload that matches `schema`, or remove it |
 | `1101` | schema missing    | Domain table absent in `prod` — no auto-DDL     | Run `oke db migrate` against this environment      |
@@ -59,7 +62,7 @@ Returned, not thrown — the request never reached `do`:
 | Code           | When                                         | Payload          |
 | -------------- | -------------------------------------------- | ---------------- |
 | `Unauthorized` | Policy denied, request not authenticated     | —                |
-| `Forbidden`    | Policy denied, authenticated but not allowed | `gate`, `reason` |
+| `Forbidden`    | Policy denied, authenticated but not allowed | `gate`, `reason` (`tenant_required` · `not_member` · `unknown_scope` · `session_only` · …) |
 | `RateLimited`  | Rate gate budget exhausted                   | `retryAfterMs`   |
 
 ## Framework validation failures

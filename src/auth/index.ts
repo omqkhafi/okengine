@@ -260,4 +260,39 @@ export {
   type RoleRow,
   type SessionRow,
   type TablePlane,
+  type TenantMemberRow,
+  type TenantRoleRow,
+  type TenantRow,
 } from "./tables.ts";
+
+export {
+  AUTH_TENANTS_RESOURCE,
+  DEFAULT_TENANT_ROLE,
+  TenantError,
+  addMember,
+  createTenant,
+  createTenantStore,
+  deleteTenant,
+  getMember,
+  isMember,
+  listMembers,
+  listTenantIds,
+  listTenantsForUser,
+  removeMember,
+  tenantRoleScopeFailure,
+  tenantScopesForMember,
+  upsertTenantRole,
+  type CreateTenantOptions,
+  type TenantPublicRow,
+  type TenantStore,
+  type TenantStoreHooks,
+  type UpsertTenantRoleOptions,
+} from "./tenants.ts";
+
+export {
+  resolveTenantAuth,
+  type ResolvedTenantAuth,
+  type TenantAuthOptions,
+  type TenantResolveContext,
+  type TenantSource,
+} from "./tenant-config.ts";

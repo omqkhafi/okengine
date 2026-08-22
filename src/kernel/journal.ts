@@ -104,6 +104,8 @@ export interface JournalRun {
   leaseExpiresAt?: number;
   readonly createdAt: number;
   updatedAt: number;
+  /** Isolation context for resume (`fx.tenant`). */
+  tenant?: string | null;
 }
 
 /**
@@ -367,6 +369,12 @@ export interface JournalSession {
   /** Underlying run snapshot (mutated as entries append). */
   readonly run: JournalRun;
   /**
+   * Persist isolation context so resume restamps {@link Fx.tenant}.
+   *
+   * @param id - Tenant id (null clears)
+   */
+  stampTenant(id: string | null): Promise<void>;
+  /**
    * Replay or execute a named step. Never re-runs `fn` when already journaled.
    *
    * @param name - Step name
@@ -606,6 +614,10 @@ export function createJournal(options: CreateJournalOptions): Journal {
       },
       undoStack() {
         return undos;
+      },
+      async stampTenant(id) {
+        run.tenant = id;
+        await persist();
       },
       beginRegistrationPass() {
         registrationPass = true;

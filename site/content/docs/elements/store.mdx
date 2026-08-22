@@ -314,7 +314,8 @@ The recommended path: declare tables ORM-agnostically, then let `oke db` emit re
 | `.describe("…")`                             | human title in the Console (falls back to key)                   |
 | `.references(() => col, { onDelete })`       | foreign key                                                      |
 | `store.schema.rls()`                         | `pgTable.withRLS` when there are no policies                     |
-| `store.schema.policy.gate/owner/scope`       | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()`) |
+| `store.schema.policy.gate/owner/scope/tenant` | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`) |
+| `store.schema.unscoped()`                    | Shared table — required when tenancy is on and there is no tenant policy          |
 
 Third argument on `store.schema.table` is Drizzle-shaped extras:
 
@@ -329,6 +330,7 @@ export const bookings = store.schema.table(
     store.schema.policy.gate("member", { for: "select" }),
     store.schema.policy.owner("owner", { for: "all" }),
     store.schema.policy.scope("booking:create", { for: "insert" }),
+    store.schema.policy.tenant("tenant_id"),
   ],
 );
 ```
@@ -338,9 +340,9 @@ Helpers emit stable names (`gate_member_select`). Raw
 escape hatch — predicates use `oke.*`, never `current_setting`.
 
 <Callout title="User-plane fx.store applies RLS">
-  HTTP / resource flows stamp Gate identity onto every postgres / pglite statement (`SET LOCAL ROLE
-  oke_app` + `set_config` in one pinned transaction). Table-owner bypass ends there; operator / cron
-  / CDC / signal / catalog stay unstamped.
+  HTTP / resource flows stamp Gate identity (`SET LOCAL ROLE oke_app` + `set_config`). Operator /
+  cron / CDC / signal stay unstamped. Tenancy on: also `oke.tenant()`; tables need `policy.tenant`
+  or `unscoped()`.
 </Callout>
 
 #### Foreign keys and relations
@@ -689,6 +691,10 @@ export const drafts = store.kv("drafts", { durable: true, description: "Compose 
 
 **Consequence:** `oke db seed` into cache Redis looks fine until compose recreates the
 container — Console Store then shows **No rows.** Seeded namespaces need `{ durable: true }`.
+
+With `gate.auth.tenant` on, KV keys are prefixed `{tenantId}:` (logical keys in `do` stay
+unprefixed). Missing `fx.tenant.id` throws **OKE1015**. Opt out with
+`store.kv("sessions", { tenantScoped: false })`.
 
 Gate rates and Signal stay on `REDIS_URL`. Missing `DATABASE_URL` with the postgres driver
 fails boot: `oke boot: durable store.kv needs DATABASE_URL`.
@@ -1128,7 +1134,7 @@ Default `store.kv` is cache Redis with no AOF — a recreate drops keys. SQL see
 - [Project structure](/docs/get-started/project-structure) — `list.ts` + `http.get()` is `GET /notes` named `notes.list`
 - [Flow](/docs/elements/flow) — the `fx.store` session inside `do`
 - [AI](/docs/elements/ai) — `ai.embed` into a vector `store.index`, searched via `fx.search`
-- [Gate](/docs/elements/gate) — `pii:reveal` and other permissions on flows
+- [Gate](/docs/elements/gate) — `pii:reveal`, `gate.auth.tenant`, and `oke.tenant()`
 - [CLI Reference](/docs/reference/cli) — `oke db push` · `generate` · `migrate`
 - [Configuration](/docs/reference/configuration) — `drivers.store` maps and `images` pins
 - [Environment variables](/docs/reference/environment-variables) — Redis · S3 · meilisearch URLs

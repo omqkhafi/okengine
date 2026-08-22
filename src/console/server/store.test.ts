@@ -17,6 +17,7 @@ import {
   queryStore,
   runStoreSql,
   tenancyDeclared,
+  tenancyEnabled,
   willNotFireFor,
 } from "./store.ts";
 
@@ -152,6 +153,22 @@ describe("projectStoresList", () => {
     });
     expect(tenancy).toBe(false);
     expect(tenants).toEqual([]);
+  });
+
+  test("tenancy.enabled uses registry ids, not historical run strings", async () => {
+    expect(tenancyEnabled({ ...MANIFEST, tenancy: { isolation: "row", enabled: true } })).toBe(
+      true,
+    );
+    const { tenants } = await projectStoresList({
+      manifest: { ...MANIFEST, tenancy: { isolation: "row", enabled: true } },
+      runtime: null,
+      declaredFingerprint: "x",
+      appliedFingerprint: null,
+      tenantIds: ["acme"],
+      runs: [{ flow: "x", tenant: "ghost-from-history" } as never],
+    });
+    expect(tenants).toEqual(["acme"]);
+    expect(tenants).not.toContain("ghost-from-history");
   });
 });
 

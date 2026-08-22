@@ -16,6 +16,12 @@ import {
   type ResolvedAuthSchema,
 } from "./schema.ts";
 import { sessionCryptoFromAuthOptions, type AuthSessionOptions } from "./plugin.ts";
+import { createTenantStore, type TenantStore } from "./tenants.ts";
+import {
+  resolveTenantAuth,
+  type ResolvedTenantAuth,
+  type TenantAuthOptions,
+} from "./tenant-config.ts";
 
 /** Email + password method knobs. */
 export interface EmailAndPasswordOptions {
@@ -115,6 +121,15 @@ export interface GateAuthOptions extends AuthSchemaOptions {
    * (`gate.auth.secret` is the HMAC pepper).
    */
   readonly apiKeyStore?: ApiKeyStore;
+  /**
+   * Multi-tenancy as an identity dimension. `true` enables defaults
+   * (`source: "claim"`, `required: false`). Off when omitted.
+   */
+  readonly tenant?: boolean | TenantAuthOptions;
+  /**
+   * Shared tenant registry. Created automatically when {@link tenant} is on.
+   */
+  readonly tenantStore?: TenantStore;
   /** Injectable clock. */
   readonly now?: () => number;
 }
@@ -171,6 +186,8 @@ export interface ResolvedGateAuth {
   readonly hooks: AuthDatabaseHooks | undefined;
   readonly sessions: SessionStore | undefined;
   readonly apiKeyStore: ApiKeyStore;
+  readonly tenant: ResolvedTenantAuth | undefined;
+  readonly tenantStore: TenantStore | undefined;
   readonly now: (() => number) | undefined;
 }
 
@@ -279,6 +296,10 @@ export function resolveGateAuth(options: ResolveGateAuthOptions): ResolvedGateAu
     hooks: auth.hooks,
     sessions: auth.sessions,
     apiKeyStore: auth.apiKeyStore ?? createApiKeyStore({ pepper: secret }),
+    tenant: auth.tenant ? resolveTenantAuth(auth.tenant) : undefined,
+    tenantStore: auth.tenant
+      ? (auth.tenantStore ?? createTenantStore())
+      : auth.tenantStore,
     now: auth.now,
   };
 }

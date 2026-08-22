@@ -299,6 +299,34 @@ describe("reconciliation", () => {
     expect(ranOrphan).toBe(false);
   });
 
+  test("per-tenant templates expand to {name}#{id} and never put the bare name", async () => {
+    const store = createMemoryCronStore();
+    const invoices = clock.perTenant("invoices", { every: "1h" });
+    const result = await reconcileClocks([invoices], store, { tenantIds: ["acme", "globex"] });
+    expect([...result.active].sort()).toEqual(["invoices#acme", "invoices#globex"]);
+    expect(await store.get("invoices")).toBeUndefined();
+    expect((await store.get("invoices#acme"))?.status).toBe("active");
+
+    const rt = createTestClockRuntime(0, {
+      store,
+      instanceId: "solo",
+      tenantIds: () => ["acme", "globex"],
+    });
+    rt.register(invoices);
+    let bare = 0;
+    let expanded = 0;
+    rt.onCron("invoices", () => {
+      bare += 1;
+    });
+    rt.onCron("invoices#acme", () => {
+      expanded += 1;
+    });
+    expect(await rt.runNow("invoices")).toBe(false);
+    expect(bare).toBe(0);
+    expect(await rt.runNow("invoices#acme")).toBe(true);
+    expect(expanded).toBe(1);
+  });
+
   test("scheduler reads effective state from the store", async () => {
     const store = createMemoryCronStore();
     const rt = createTestClockRuntime(0, { store, instanceId: "s1" });

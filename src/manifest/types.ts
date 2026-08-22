@@ -53,6 +53,12 @@ export type RunsResourceRef = "runs";
 export type AuthApiKeysResourceRef = "auth:api-keys";
 
 /**
+ * Auth tenant-management capability for `fx.auth` list/switch/create/….
+ * Not a store facet — do not declare `sql:oke_tenants`.
+ */
+export type AuthTenantsResourceRef = "auth:tenants";
+
+/**
  * Dead-letter / live-stream read capability — not a store facet.
  * Declare on `effects.reads` (never `writes`).
  */
@@ -87,9 +93,11 @@ export type JsonSchema = string | Record<string, unknown>;
  */
 export interface Effects {
   /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters` / `fx.live`. */
-  reads?: Array<ResourceRef | RunsResourceRef | SignalResourceRef | AuthApiKeysResourceRef>;
-  /** Store writes, plus `"auth:api-keys"` for `fx.auth` mutations. */
-  writes?: Array<ResourceRef | AuthApiKeysResourceRef>;
+  reads?: Array<
+    ResourceRef | RunsResourceRef | SignalResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef
+  >;
+  /** Store writes, plus `"auth:api-keys"` / `"auth:tenants"` for `fx.auth` mutations. */
+  writes?: Array<ResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef>;
   /** Emitted signals. */
   emits?: SignalRef[];
   /** Channel template sends (irreversible). */
@@ -179,6 +187,11 @@ export interface Flow {
   allowPii?: boolean;
   /** Author acknowledges an intentional contract break. */
   breaking?: boolean;
+  /**
+   * When `false`, skip tenant-role scope union.
+   * Default `true` when `gate.auth.tenant` is on.
+   */
+  tenantScoped?: boolean;
 }
 
 /** Live-tape cap. Omit both fields (or omit `retention`) for an unbounded tape. */
@@ -258,6 +271,8 @@ export interface Table {
   rls?: boolean;
   /** Policy name → Drizzle-shaped spec. */
   policies?: Record<string, TablePolicy>;
+  /** When `false`, skip fail-loud tenant-policy requirement. */
+  tenantScoped?: boolean;
 }
 
 /** One Store declaration. */
@@ -275,6 +290,11 @@ export interface Store {
    * Distinct from Flow `durable` (journaled steps).
    */
   durable?: boolean;
+  /**
+   * KV only — prefix keys with `{tenantId}:` when tenancy is on.
+   * Default `true` then; `false` is the global-namespace opt-out.
+   */
+  tenantScoped?: boolean;
 }
 
 /** Named clock / schedule. */
@@ -285,6 +305,8 @@ export interface Clock {
   overridable?: boolean;
   /** Optional human description (falls back to the clock map key). */
   description?: string;
+  /** Expand one `oke_crons` row per tenant. */
+  perTenant?: boolean;
 }
 
 /** Named gate — policy, rate, or a flattened `gate.all` handle. */
@@ -316,6 +338,11 @@ export interface SecretContract {
    * in the clear. Defaults to `true` (secret).
    */
   sensitive?: boolean;
+  /**
+   * Resolve per `fx.tenant.id` at request time (not boot).
+   * Default `true` when `gate.auth.tenant` is on.
+   */
+  perTenant?: boolean;
 }
 
 /** Channel template. */
@@ -411,7 +438,11 @@ export interface Plugin {
 
 /** Tenancy configuration (resolver is code; isolation is data). */
 export interface Tenancy {
+  /** `gate.auth.tenant` is on. */
+  enabled?: boolean;
   isolation?: TenancyIsolation;
+  /** Pure B2B — every user-plane request needs a tenant. */
+  membershipRequired?: boolean;
 }
 
 /** i18n configuration. */

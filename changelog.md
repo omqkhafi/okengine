@@ -14,8 +14,23 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+#### Console — Store
+
+- When `tenancy.enabled`, the Store tenant picker lists `oke_tenants`
+  only — not historical run-history strings.
+
 #### Runtime
 
+- `gate.auth.tenant` — tenant as an identity dimension (`true` or
+  `{ required, source, header, resolve, authoritative }`). Claim `tid`
+  is trusted; header/subdomain require membership. `fx.auth.listTenants`
+  / `switchTenant` / `createTenant` / `upsertTenantRole` are session-only
+  (`auth:tenants`). `switchTenant` mints a new family and never Set-Cookies.
+- `store.schema.policy.tenant(column)` / `store.schema.unscoped()`,
+  `oke.tenant()` RLS helper, KV `{tenantId}:` prefix, `clock.perTenant`,
+  and `vault.secret({ perTenant })` request-time paths.
+- **OKE1015** / **1016** / **1017** — tenant required, not a member,
+  unknown or `console:*` tenant-role scope.
 - `api.live(signal, input?, { onEvent })` subscribes to `delivery: "live"`
   HTTP SSE (callback + unsubscribe). Same handlers on exposing flows.
   Opt-in `autoResubscribe` reconnects with backoff and `Last-Event-ID`.
@@ -35,6 +50,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Turning on `gate.auth.tenant` is fail-loud: SQL tables need
+  `policy.tenant(...)` or `unscoped()`; KV prefixes keys; vault
+  contracts default per-tenant; flows default `tenantScoped: true`.
+  Tenant-role scopes never melt into the JWT.
 - No-arg `http.*.live()`, `flow({ live: true })`, resource `.live()`,
   and Manifest `live: boolean` are gone. `live` is the signal name.
 - `SignalBus.live()` is an `AsyncIterable` of `{ id, payload }` (not

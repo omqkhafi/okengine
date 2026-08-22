@@ -236,6 +236,7 @@ export const app = oke({
 | `session.singleSessionPerUser`              | `false`   | Opt-in: issuing a session revokes other families for that user                                                             |
 | `cookies.enabled`                           | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)                                                                       |
 | `secondaryStorage.enabled`                  | `false`   | Hot auth data in `store.kv` when configured                                                                                |
+| `tenant`                                    | unset     | Opt-in identity dimension — `true` or `{ required, source, header, resolve, authoritative }`                               |
 | `user` / `session` / …                      | defaults  | `modelName` / `fields` / `additionalFields`                                                                                |
 
 HIBP via `createHibpBreachCheck` from `okengine/auth` (k-anonymity range API; requires
@@ -255,6 +256,50 @@ gate: {
 Customize tables, then `oke schema generate` (`.oke/schema/oke.ts`; `--check` in CI). Extra
 sign-in shapes: [Plugins](/docs/plugins). Call auth from
 [createClient](/docs/reference/client) — helpers in `okengine/client/auth`.
+
+## Tenants (identity dimension)
+
+`gate.auth.tenant: true` (or an options bag) is **not** a second authorization system and not an
+organizations product. Tenant is a dimension of identity, like `fx.auth` / `fx.operator`.
+
+```typescript
+export const app = oke({
+  name: "shop",
+  gate: { auth: { tenant: true } },
+});
+```
+
+| Option          | Default   | Meaning                                                                                          |
+| --------------- | --------- | ------------------------------------------------------------------------------------------------ |
+| `required`      | `false`   | Pure B2B: authenticated user-plane requests without a tenant are `Forbidden` / `tenant_required` |
+| `source`        | `"claim"` | `"claim"` · `"header"` · `"subdomain"` · `"resolve"`                                             |
+| `header`        | `x-oke-tenant` | Header name when `source` is `"header"`                                                     |
+| `resolve`       | unset     | Callback that returns an id; membership is still checked unless `authoritative`                  |
+| `authoritative` | `false`   | Trust `resolve` without a membership query                                                       |
+
+Three tiers, fail-safe:
+
+1. **Claim** — signed JWT `tid` or API-key `tenantId`. The id is trusted; no membership query.
+2. **Header / subdomain** — never trust a client-supplied id without membership.
+3. **`resolve`** — still membership-checked unless `authoritative: true`.
+
+`required: false` (default) is B2C+B2B: `fx.tenant.id` may be `null`. Internal / cron / `fx.call`
+have no HTTP request — header and subdomain sources keep the stamped claim.
+
+`fx.auth.switchTenant(id)` issues a **new** access+refresh pair and a **new** family (so tab A
+rotation cannot reuse-detect tab B). It never Set-Cookies.
+
+Refresh copies that row's `tid`; tenant-role scopes never melt into the JWT.
+
+`fx.auth.listTenants` / `createTenant` / `addMember` / `upsertTenantRole` are session-only
+(`auth:tenants`). Tenant roles may grant application scopes only — `console:*` fails like an
+unknown name.
+
+Live `fx.auth.scopes` unions those grants only when `fx.tenant.id` is set, the flow is
+tenant-scoped (default on; `flow({ tenantScoped: false })` opts out), and user-plane.
+`gate.scope()` still reads `auth.scopes.has(name)`.
+
+SQL stamps `oke.tenant()` when tenancy is on — [Store](/docs/elements/store).
 
 ## API keys
 
@@ -300,8 +345,8 @@ edit live today.
 
 <Callout title="RLS reads the stamped principal">
   After HTTP Gate passes, user-plane `fx.store` stamps `oke.gate()`, `oke.user()`, and
-  `oke.has_scope()`. Rate, cron, CDC, and signal stay unstamped. Helpers:
-  [Store](/docs/elements/store).
+  `oke.has_scope()`. With `gate.auth.tenant` on, a fourth GUC `oke.tenant()` is set.
+  Rate, cron, CDC, and signal stay unstamped. Helpers: [Store](/docs/elements/store).
 </Callout>
 
 ## Troubleshooting
@@ -323,6 +368,12 @@ decisions belong inside `do` as typed `errors`.
 
 `Forbidden` means authenticated but a policy said no. Check `verified` or a missing scope —
 the failure includes the gate name and reason.
+
+</Accordion>
+<Accordion title="Forbidden tenant_required / not_member">
+
+`required: true` and no resolved tenant → `tenant_required`. Header/subdomain id that is not a
+membership → `not_member`. Call `fx.auth.switchTenant(id)` or send a signed `tid`.
 
 </Accordion>
 <Accordion title="Prod boot: gate.auth: secret is required">
@@ -370,7 +421,7 @@ predicates that ignore scopes still see `verified: true`.
 
 - [Project structure](/docs/get-started/project-structure) — `http.get()` and `flow({…})` fill path and name from the file tree
 - [Flow](/docs/elements/flow) — the trigger pipeline gates plug into
-- [fx](/docs/reference/fx) — `fx.auth`, `fx.operator`, `fx.principal`
+- [fx](/docs/reference/fx) — `fx.auth`, `fx.operator`, `fx.principal`, `fx.tenant`
 - [Client](/docs/reference/client) — Bearer `createClient` + `okengine/client/auth`
 - [Plugins](/docs/plugins) — username, magic link, OTP, TOTP, passkeys
 - [Vault](/docs/elements/vault) — credentials your policies protect

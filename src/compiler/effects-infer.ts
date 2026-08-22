@@ -8,6 +8,7 @@
 
 import type {
   AuthApiKeysResourceRef,
+  AuthTenantsResourceRef,
   Effects,
   PromptRef,
   ResourceRef,
@@ -146,8 +147,10 @@ const TABLE_ARG_METHODS = new Set([
  * @param options - Handler AST, bindings, and annotation flag
  */
 export function inferEffects(options: InferEffectsOptions): InferredEffects {
-  const reads = new Set<ResourceRef | SignalResourceRef | AuthApiKeysResourceRef>();
-  const writes = new Set<ResourceRef | AuthApiKeysResourceRef>();
+  const reads = new Set<
+    ResourceRef | SignalResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef
+  >();
+  const writes = new Set<ResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef>();
   const emits = new Set<SignalRef>();
   const sends = new Set<TemplateRef>();
   const asks = new Set<PromptRef>();
@@ -227,6 +230,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     if (chain.rootMethod === "auth" && call === chain.rootCall) {
       const method = chain.methods[1];
       if (method === "listApiKeys") reads.add("auth:api-keys");
+      if (method === "listTenants" || method === "listMembers") reads.add("auth:tenants");
       if (
         method === "createApiKey" ||
         method === "revokeApiKey" ||
@@ -234,6 +238,16 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
         method === "updateApiKey"
       ) {
         writes.add("auth:api-keys");
+      }
+      if (
+        method === "switchTenant" ||
+        method === "createTenant" ||
+        method === "deleteTenant" ||
+        method === "addMember" ||
+        method === "removeMember" ||
+        method === "upsertTenantRole"
+      ) {
+        writes.add("auth:tenants");
       }
       continue;
     }

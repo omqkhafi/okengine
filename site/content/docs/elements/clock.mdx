@@ -102,6 +102,12 @@ difference.
 | `timezone`    | string  | `"UTC"` | IANA timezone for cron evaluation                                                                                        |
 | `overridable` | boolean | `false` | Allow the Console to **edit** the schedule (pause is separate)                                                           |
 | `description` | string  | —       | Human title in the Console (falls back to the clock name)                                                                |
+| `perTenant`   | boolean | `false` | Expand to one `oke_crons` row per tenant (`{name}#{tenantId}`). Prefer `clock.perTenant(name, opts)`                     |
+
+<Callout title="Per-tenant clocks never tick the template">
+  Bind `on(clock.perTenant("invoices", { every: "1h" }), flow(...))`. Rows are `invoices#acme`;
+  tenant create/delete adds or orphans them. Fire stamps `fx.tenant.id`.
+</Callout>
 
 ### `fx.clock`
 
@@ -222,6 +228,7 @@ The registry is off in `test` and when there is no shared SQL URL. `dev`/`prod` 
 
 - [Project structure](/docs/get-started/project-structure) — clock flows in the tree get a name, never a URL
 - [Flow](/docs/elements/flow) — `on(trigger, flow)` and the `fx` surface
+- [Gate](/docs/elements/gate) — `clock.perTenant` when `gate.auth.tenant` is on
 - [fx · Runs](/docs/reference/fx#runs-observability-read) — native SLO checkers via `on(every(…))` + `fx.runs`
 - [Signal](/docs/elements/signal) — reacting to events instead of time
 

@@ -36,6 +36,7 @@ interface JournalDbRow {
   lease_expires_at: number | null;
   created_at: number;
   updated_at: number;
+  tenant: string | null;
 }
 
 /** Minimal SQL + transaction surface for the postgres journal store. */
@@ -151,6 +152,9 @@ function rowToRun(row: Record<string, unknown>): JournalRun {
   if (r.locked_by !== null && r.locked_by !== undefined) run.lockedBy = String(r.locked_by);
   const leaseExpiresAt = numOrNull(r.lease_expires_at);
   if (leaseExpiresAt !== null) run.leaseExpiresAt = leaseExpiresAt;
+  if (r.tenant !== null && r.tenant !== undefined && String(r.tenant).length > 0) {
+    run.tenant = String(r.tenant);
+  }
   return run;
 }
 
@@ -168,6 +172,7 @@ function runToParams(run: JournalRun): unknown[] {
     run.leaseExpiresAt ?? null,
     run.createdAt,
     run.updatedAt,
+    run.tenant ?? null,
   ];
 }
 
@@ -184,8 +189,10 @@ async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
     locked_by TEXT,
     lease_expires_at BIGINT,
     created_at BIGINT NOT NULL,
-    updated_at BIGINT NOT NULL
+    updated_at BIGINT NOT NULL,
+    tenant TEXT
   )`);
+  await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS tenant TEXT`);
   await sql.exec(
     `CREATE INDEX IF NOT EXISTS oke_journal_runs_wake ON oke_journal_runs (status, wake_at)`,
   );
@@ -308,7 +315,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       const text = sql.trim();
       const state = view();
 
-      if (/^CREATE\s+(TABLE|INDEX)/i.test(text)) return { changes: 0 };
+      if (/^CREATE\s+(TABLE|INDEX)/i.test(text) || /^ALTER\s+TABLE/i.test(text)) return { changes: 0 };
 
       const upsert =
         /^INSERT\s+INTO\s+oke_journal_runs\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*ON\s+CONFLICT\s*\(\s*id\s*\)\s*DO\s+UPDATE\s+SET\s+.+$/i.exec(
@@ -337,6 +344,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
               : Number(record.lease_expires_at),
           created_at: Number(record.created_at ?? 0),
           updated_at: Number(record.updated_at ?? 0),
+          tenant: (record.tenant as string | null) ?? null,
         };
         const idx = state.rows.findIndex((r) => r.id === next.id);
         if (idx >= 0) state.rows[idx] = next;
@@ -423,7 +431,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
   return api;
 }
 
-const UPSERT_SQL = `INSERT INTO oke_journal_runs (id, flow, input, status, entries, wake_at, error, output, locked_by, lease_expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET flow = EXCLUDED.flow, input = EXCLUDED.input, status = EXCLUDED.status, entries = EXCLUDED.entries, wake_at = EXCLUDED.wake_at, error = EXCLUDED.error, output = EXCLUDED.output, locked_by = EXCLUDED.locked_by, lease_expires_at = EXCLUDED.lease_expires_at, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at`;
+const UPSERT_SQL = `INSERT INTO oke_journal_runs (id, flow, input, status, entries, wake_at, error, output, locked_by, lease_expires_at, created_at, updated_at, tenant) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET flow = EXCLUDED.flow, input = EXCLUDED.input, status = EXCLUDED.status, entries = EXCLUDED.entries, wake_at = EXCLUDED.wake_at, error = EXCLUDED.error, output = EXCLUDED.output, locked_by = EXCLUDED.locked_by, lease_expires_at = EXCLUDED.lease_expires_at, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, tenant = EXCLUDED.tenant`;
 
 /** Postgres journal store with run-level lease coordination. */
 export type PostgresJournalStore = JournalStore &

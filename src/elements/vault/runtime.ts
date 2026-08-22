@@ -95,6 +95,10 @@ export interface CreateVaultRuntimeOptions {
   readonly allowGaps?: boolean;
   /** Clock for last-read timestamps (tests). */
   readonly now?: () => number;
+  /**
+   * When true, contracts with `perTenant !== false` are not boot-gap fatal.
+   */
+  readonly tenantEnabled?: boolean;
 }
 
 /** Vault runtime surface. */
@@ -244,6 +248,9 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
 
     const gaps: VaultGap[] = [];
     for (const c of contracts.values()) {
+      const perTenant =
+        c.perTenant === true || (options.tenantEnabled === true && c.perTenant !== false);
+      if (perTenant) continue;
       const value = merged.get(c.name);
       if (value === undefined || value.length === 0) {
         gaps.push({

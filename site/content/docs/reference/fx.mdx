@@ -93,10 +93,14 @@ on(
 | `fx.auth.revokeApiKey(id)`                                                     | `write` `auth:api-keys` | Owner only                                                                                         |
 | `fx.auth.rotateApiKey(id)`                                                     | `write` `auth:api-keys` | New secret once. Owner only                                                                        |
 | `fx.auth.updateApiKey(id, …)`                                                  | `write` `auth:api-keys` | Name / scopes / expiry / allowlist / rate. Re-attenuates                                           |
+| `fx.auth.listTenants()`                                                        | `read` `auth:tenants`   | Memberships for the live session. Session only                                                     |
+| `fx.auth.switchTenant(id)`                                                     | `write` `auth:tenants`  | New access+refresh, new family, `tid` on both. Never Set-Cookie. Session only                      |
+| `fx.auth.createTenant({ name, slug?, id? })`                                   | `write` `auth:tenants`  | Creator becomes a member. Session only                                                             |
+| `fx.auth.upsertTenantRole({ tenantId, roleName, scopes })`                     | `write` `auth:tenants`  | Application scopes only — `console:*` is unknown_scope                                             |
 
-`fx.call` starts the callee with an **empty** `fx.auth` (fail-closed for authorization). For
-audit/attribution only, read `fx.principal` — it propagates the originating identity without
-copying into `fx.auth`. Gates never consult `fx.principal`.
+`fx.call` starts the callee with an **empty** `fx.auth` (fail-closed for authorization) and
+propagates `fx.tenant.id`. For audit/attribution only, read `fx.principal` — it propagates the
+originating identity without copying into `fx.auth`. Gates never consult `fx.principal`.
 
 ## Concurrency and retry
 
@@ -279,10 +283,10 @@ Built-in `errors.*` / `oke.*` catalogs localize `fx.fail` messages and thrown
 
 | Property       | Shape                                                                      |
 | -------------- | -------------------------------------------------------------------------- |
-| `fx.auth`      | `{ userId, scopes, verified?, apiKeyId? }` plus key methods (session only) |
-| `fx.operator`  | `{ id: string \| null }` — Console plane                                   |
-| `fx.principal` | Read-only origin: `userId`, `operatorId`, `scopes`, `verified?`, `plane?`  |
-| `fx.tenant`    | `{ id: string \| null }` — active tenant                                   |
+| `fx.auth`      | `{ userId, scopes, verified?, apiKeyId? }` plus key and tenant methods (session only) |
+| `fx.operator`  | `{ id: string \| null }` — Console plane                                              |
+| `fx.principal` | Read-only origin: `userId`, `operatorId`, `scopes`, `verified?`, `plane?`             |
+| `fx.tenant`    | `{ id: string \| null }` — active tenant (propagates on `fx.call`)                    |
 
 **Consequence:** use `fx.auth` / gates for authorization; use `fx.principal` only when a callee
 must log who started the call chain. A key Bearer sets `userId` to the issuer and `apiKeyId`

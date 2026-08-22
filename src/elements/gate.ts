@@ -63,4 +63,9 @@ export {
   type TakeRateOptions,
 } from "./gate/strategies.ts";
 
-export { deriveModuleActions, flowIdToAction, formatGatesList } from "./gate/permissions.ts";
+export {
+  deriveModuleActions,
+  flowIdToAction,
+  formatGatesList,
+  isApplicationScope,
+} from "./gate/permissions.ts";

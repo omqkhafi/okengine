@@ -104,8 +104,14 @@ export interface SchemaRlsEnableDecl {
   readonly kind: "schema-rls";
 }
 
+/** Opt out of tenant isolation for a schema table when tenancy is on. */
+export interface SchemaTenantScopedDecl {
+  readonly kind: "schema-tenant-scoped";
+  readonly tenantScoped: false;
+}
+
 /** Third-arg extra for {@link schemaTable}. */
-export type SchemaTableExtra = SchemaPolicyDecl | SchemaRlsEnableDecl;
+export type SchemaTableExtra = SchemaPolicyDecl | SchemaRlsEnableDecl | SchemaTenantScopedDecl;
 
 /** Options for {@link schemaPolicy} / Gate helpers. */
 export interface SchemaPolicyOptions {
@@ -129,6 +135,8 @@ export interface SchemaTableDecl extends TableHandle {
   readonly rls?: boolean;
   /** Declared policies (emit + Manifest). */
   readonly policies?: readonly SchemaPolicyDecl[];
+  /** When `false`, skip fail-loud tenant-policy requirement. */
+  readonly tenantScoped?: boolean;
 }
 
 /**
@@ -424,12 +432,16 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
     (extra): extra is SchemaPolicyDecl => extra.kind === "schema-policy",
   );
   const rls = extras.some((extra) => extra.kind === "schema-rls") || policies.length > 0;
+  const unscoped = extras.some(
+    (extra) => extra.kind === "schema-tenant-scoped" && extra.tenantScoped === false,
+  );
   const table = {
     name,
     columns: stamped,
     ...stamped,
     ...(rls ? { rls: true } : {}),
     ...(policies.length > 0 ? { policies } : {}),
+    ...(unscoped ? { tenantScoped: false } : {}),
   };
   // Survive columns named `name` or `kind` (they would otherwise shadow
   // the table discriminant / SQL name).
@@ -535,11 +547,38 @@ export function schemaPolicyScope(
   });
 }
 
+/**
+ * Tenant-column policy — `tenant_id = oke.tenant()`.
+ *
+ * @param column - SQL / JS column name
+ * @param options - Command (default `all`)
+ */
+export function schemaPolicyTenant(
+  column: string,
+  options: Pick<SchemaPolicyOptions, "for" | "as" | "to"> = {},
+): SchemaPolicyDecl {
+  const command = options.for ?? "all";
+  return schemaPolicy(helperPolicyName("tenant", column, command), {
+    ...options,
+    for: command,
+    ...policyPredicates(command, `${column} = oke.tenant()`),
+  });
+}
+
+/**
+ * Mark a table as globally shared (`tenantScoped: false`).
+ * Required when `gate.auth.tenant` is on and the table has no tenant policy.
+ */
+export function schemaUnscoped(): SchemaTenantScopedDecl {
+  return { kind: "schema-tenant-scoped", tenantScoped: false };
+}
+
 /** Callable `store.schema.policy` plus Gate helpers. */
 export type SchemaPolicyApi = typeof schemaPolicy & {
   readonly gate: typeof schemaPolicyGate;
   readonly owner: typeof schemaPolicyOwner;
   readonly scope: typeof schemaPolicyScope;
+  readonly tenant: typeof schemaPolicyTenant;
 };
 
 /** `store.schema.policy` — raw + Gate helpers. */
@@ -547,6 +586,7 @@ export const schemaPolicyApi: SchemaPolicyApi = Object.assign(schemaPolicy, {
   gate: schemaPolicyGate,
   owner: schemaPolicyOwner,
   scope: schemaPolicyScope,
+  tenant: schemaPolicyTenant,
 });
 
 // ─── Relations (mirrors drizzle-orm `defineRelations`) ───────────────────────
@@ -746,6 +786,7 @@ export const schema = {
   relations: schemaRelations,
   rls: schemaRls,
   policy: schemaPolicyApi,
+  unscoped: schemaUnscoped,
 } as const;
 
 /**

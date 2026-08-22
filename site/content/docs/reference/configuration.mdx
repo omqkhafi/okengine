@@ -181,10 +181,13 @@ i18n: { locales: ["en"], default: "en" },
 
 ## tenancy
 
-| Option      | Type                              | Meaning                                  |
-| ----------- | --------------------------------- | ---------------------------------------- |
-| `isolation` | `"row" \| "schema" \| "database"` | How tenants are separated in the store   |
-| `resolve`   | string \| function                | Tenant resolver — reads `ctx.auth.orgId` |
+`oke.config.ts` `tenancy` is **isolation posture** (how rows are separated). Identity —
+who the tenant is — is `gate.auth.tenant` on [Gate](/docs/elements/gate#tenants-identity-dimension).
+
+| Option      | Type                              | Meaning                                |
+| ----------- | --------------------------------- | -------------------------------------- |
+| `isolation` | `"row" \| "schema" \| "database"` | How tenants are separated in the store |
+| `resolve`   | string \| function                | Observational resolver (isolation-only manifests) |
 
 ## privacy
 

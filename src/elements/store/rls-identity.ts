@@ -66,6 +66,8 @@ export function rlsIdentityFromAuth(input: {
   readonly gateNames: readonly string[];
   readonly bypass?: boolean;
   readonly operator?: boolean;
+  /** When set (tenancy on), stamp `oke.tenant` — empty string if unresolved. */
+  readonly tenantId?: string | null;
 }): RlsIdentity | null {
   if (input.bypass === true || input.operator === true) return null;
   const gate = firstPolicyOrPublic(input.gateNames);
@@ -75,6 +77,7 @@ export function rlsIdentityFromAuth(input: {
     gate,
     userId: input.userId ?? "",
     scopes,
+    ...(input.tenantId !== undefined ? { tenantId: input.tenantId ?? "" } : {}),
   };
 }
 

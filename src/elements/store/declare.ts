@@ -79,6 +79,11 @@ export interface KvStoreOptions {
    * not the cache Redis (`REDIS_URL`). Distinct from Flow `durable`.
    */
   readonly durable?: boolean;
+  /**
+   * Prefix keys with `{tenantId}:` when `gate.auth.tenant` is on.
+   * Default `true` then; set `false` for genuinely global namespaces.
+   */
+  readonly tenantScoped?: boolean;
 }
 
 /** KV store declaration. */
@@ -87,6 +92,7 @@ export interface KvStoreDecl extends StoreDeclBase {
   readonly ref: `kv:${string}`;
   readonly description?: string;
   readonly durable?: boolean;
+  readonly tenantScoped?: boolean;
 }
 
 /** Options for {@link store.files}. */
@@ -185,6 +191,7 @@ export function kv(name: string, options: KvStoreOptions = {}): KvStoreDecl {
     ref: `kv:${name}`,
     ...(options.description !== undefined ? { description: options.description } : {}),
     ...(options.durable === true ? { durable: true } : {}),
+    ...(options.tenantScoped !== undefined ? { tenantScoped: options.tenantScoped } : {}),
   };
   storeRegistry.push(decl);
   return decl;

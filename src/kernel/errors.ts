@@ -240,6 +240,24 @@ export const OKE_ERRORS = {
     cause: "domain table not found — migrations have not been applied.",
     fix: "run `oke db migrate` against this environment.",
   },
+  /** Tenant-scoped op ran with no resolved `fx.tenant.id`. */
+  TENANT_REQUIRED: {
+    code: 1015,
+    cause: "This operation needs a tenant, but none is resolved for this request.",
+    fix: "Call fx.auth.switchTenant(id), send a signed tid claim, or pass the tenant header.",
+  },
+  /** Client-supplied tenant id is not a real membership. */
+  TENANT_NOT_MEMBER: {
+    code: 1016,
+    cause: "The caller is not a member of tenant \"{tenant}\".",
+    fix: "Pick a tenant from fx.auth.listTenants() or add the user as a member.",
+  },
+  /** Tenant role mapped an invented or operator-plane scope. */
+  TENANT_UNKNOWN_SCOPE: {
+    code: 1017,
+    cause: "Tenant role scope \"{scope}\" is not a declared application scope.",
+    fix: "Use a name from this app's Manifest catalog (never console:*).",
+  },
 } as const satisfies Record<string, OkeErrorDefinition>;
 
 /**

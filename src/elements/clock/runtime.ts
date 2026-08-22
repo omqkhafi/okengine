@@ -40,6 +40,8 @@ export interface CreateClockRuntimeOptions {
    * and {@link ClockRuntime.now} reads it.
    */
   readonly timeTravel?: TimeTravel;
+  /** Tenant ids for {@link ClockDecl.perTenant} expansion at reconcile. */
+  readonly tenantIds?: () => readonly string[] | Promise<readonly string[]>;
 }
 
 /** Clock runtime. */
@@ -178,9 +180,17 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
       nextRunAt,
     });
 
-    const handler = handlers.get(name);
+    const template = templateNameOf(name);
+    const handler = handlers.get(name) ?? (template ? handlers.get(template) : undefined);
     if (handler) await handler(fresh);
     return true;
+  }
+
+  function templateNameOf(rowName: string): string | undefined {
+    const i = rowName.lastIndexOf("#");
+    if (i <= 0) return undefined;
+    const template = rowName.slice(0, i);
+    return declarations.has(template) ? template : undefined;
   }
 
   function isDue(row: CronRow, until: number): boolean {
@@ -217,7 +227,8 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
       declarations.set(decl.name, decl);
     },
     async reconcile() {
-      const result = await reconcileClocks([...declarations.values()], store);
+      const tenantIds = (await options.tenantIds?.()) ?? [];
+      const result = await reconcileClocks([...declarations.values()], store, { tenantIds });
       // Attach DST warnings for active cron expressions.
       for (const row of result.rows) {
         if (row.status !== "active") continue;

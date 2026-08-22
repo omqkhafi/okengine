@@ -84,6 +84,7 @@ export function claimsToPrincipal(claims: AccessClaims): ResolvedPrincipal {
     userId: claims.sub,
     scopes: claims.scopes,
     verified: true,
+    ...(claims.tid !== undefined ? { tenantId: claims.tid } : {}),
   };
 }
 
@@ -104,6 +105,7 @@ export function apiKeyRowToPrincipal(row: ApiKeyRow): ResolvedPrincipal {
       scopes: row.scopes,
       verified: true,
       apiKeyId: row.id,
+      ...(row.tenantId !== undefined ? { tenantId: row.tenantId } : {}),
     };
   }
   return {
@@ -112,6 +114,7 @@ export function apiKeyRowToPrincipal(row: ApiKeyRow): ResolvedPrincipal {
     scopes: row.scopes,
     verified: true,
     apiKeyId: row.id,
+    ...(row.tenantId !== undefined ? { tenantId: row.tenantId } : {}),
   };
 }
 

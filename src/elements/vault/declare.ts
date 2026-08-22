@@ -24,6 +24,11 @@ export interface VaultSecretOptions {
    * in the clear. Defaults to `true` for secrets and `false` for config.
    */
   readonly sensitive?: boolean;
+  /**
+   * Resolve per `fx.tenant.id` at request time (not boot).
+   * Default true when `gate.auth.tenant` is on.
+   */
+  readonly perTenant?: boolean;
 }
 
 /** Declared vault contract handle. */
@@ -38,6 +43,8 @@ export interface VaultSecretDecl {
   readonly dev?: string;
   /** Whether cleartext must never leave the runtime (default by kind). */
   readonly sensitive: boolean;
+  /** Request-time tenant path when true. */
+  readonly perTenant?: boolean;
 }
 
 /**
@@ -82,6 +89,7 @@ function declareSecret(name: string, options: VaultSecretOptions = {}): VaultSec
     ...(options.rotate !== undefined ? { rotate: options.rotate } : {}),
     ...(options.schema !== undefined ? { schema: options.schema } : {}),
     ...(options.dev !== undefined ? { dev: options.dev } : {}),
+    ...(options.perTenant !== undefined ? { perTenant: options.perTenant } : {}),
   };
   secretRegistry.push(decl);
   return decl;

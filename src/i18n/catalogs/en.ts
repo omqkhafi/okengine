@@ -40,6 +40,18 @@ export const builtinEn = {
       cause: 'Live cursor "{afterId}" is not on the tape for "{signal}".',
       fix: "Reconnect without Last-Event-ID to replay the remaining tape.",
     },
+    "1015": {
+      cause: "This operation needs a tenant, but none is resolved for this request.",
+      fix: "Call fx.auth.switchTenant(id), send a signed tid claim, or pass the tenant header.",
+    },
+    "1016": {
+      cause: 'The caller is not a member of tenant "{tenant}".',
+      fix: "Pick a tenant from fx.auth.listTenants() or add the user as a member.",
+    },
+    "1017": {
+      cause: 'Tenant role scope "{scope}" is not a declared application scope.',
+      fix: "Use a name from this app's Manifest catalog (never console:*).",
+    },
     "1101": {
       cause: "domain table not found — migrations have not been applied.",
       fix: "run `oke db migrate` against this environment.",
@@ -67,6 +79,9 @@ export const builtinEn = {
     "Forbidden.ip_denied": "Your IP address is blocked.",
     "Forbidden.ip_not_allowed": "Your IP address is not allowed.",
     "Forbidden.policy_denied": "Policy denied this request.",
+    "Forbidden.tenant_required": "This request needs a tenant.",
+    "Forbidden.not_member": "You are not a member of that tenant.",
+    "Forbidden.unknown_scope": "That tenant role scope is not a declared application scope.",
     "AuthRateLimited.rate_limited": "Too many authentication attempts. Try again later.",
   },
 } as const;

@@ -91,6 +91,11 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
     },
     fx: import("./fx.ts").Fx,
   ) => unknown | Promise<unknown>;
+  /**
+   * When `false`, skip tenant-role scope union even if `fx.tenant.id` is set.
+   * Default `true` when `gate.auth.tenant` is on.
+   */
+  readonly tenantScoped?: boolean;
   /** The behavior. */
   readonly do: FlowHandler<I, O>;
 }
@@ -190,6 +195,11 @@ export interface FlowDef<
   readonly plane: FlowPlane | undefined;
   /** Intentional contract-break acknowledgement for Manifest Diff. */
   readonly breaking: boolean;
+  /**
+   * When `false`, this flow is tenant-unaware (no tenant-role scope union).
+   * Default `true` when `gate.auth.tenant` is on.
+   */
+  readonly tenantScoped: boolean | undefined;
   /**
    * Optional compensation phase after terminal durable failure.
    * See {@link FlowOptions.compensate}.
@@ -299,6 +309,7 @@ export function flow(
     slo: options.slo,
     plane: options.plane,
     breaking: options.breaking ?? false,
+    tenantScoped: options.tenantScoped,
     compensate: options.compensate as FlowDef["compensate"],
     do: options.do as FlowHandler,
     triggers,

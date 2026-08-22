@@ -26,8 +26,13 @@ import { fail, type FlowFailure } from "./errors.ts";
 export interface FxAuthIdentity {
   /** User-plane subject id, or null when unauthenticated. */
   readonly userId: string | null;
-  /** Granted scopes for the live principal. */
+  /** Granted scopes for the live principal (may include tenant-role union). */
   readonly scopes: ReadonlySet<string>;
+  /**
+   * Session / JWT scopes before tenant-role union.
+   * `switchTenant` mints from this set so tenant grants never melt into the token.
+   */
+  readonly sessionScopes?: ReadonlySet<string>;
   /** Whether the identity has completed verification (email / MFA). */
   readonly verified?: boolean;
   /** Authenticating API key id when Bearer was a key secret; otherwise null. */

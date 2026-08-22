@@ -32,8 +32,8 @@ export async function persistApiKeyRow(
   await sql.execute(
     `INSERT INTO ${table} (
       id, plane, hash, name, scopes, expires_at, rate_limit, ip_allowlist,
-      creator_id, creator_scopes, created_at, last_used_at, revoked_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      creator_id, creator_scopes, created_at, last_used_at, revoked_at, tenant_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       hash = excluded.hash,
       name = excluded.name,
@@ -44,7 +44,8 @@ export async function persistApiKeyRow(
       creator_id = excluded.creator_id,
       creator_scopes = excluded.creator_scopes,
       last_used_at = excluded.last_used_at,
-      revoked_at = excluded.revoked_at`,
+      revoked_at = excluded.revoked_at,
+      tenant_id = excluded.tenant_id`,
     [
       row.id,
       row.plane,
@@ -59,6 +60,7 @@ export async function persistApiKeyRow(
       row.createdAt,
       row.lastUsedAt,
       row.revokedAt,
+      row.tenantId ?? null,
     ],
   );
 }
@@ -140,9 +142,11 @@ export async function ensureApiKeyTable(
       creator_scopes TEXT NOT NULL DEFAULT '[]',
       created_at BIGINT NOT NULL,
       last_used_at BIGINT,
-      revoked_at BIGINT
+      revoked_at BIGINT,
+      tenant_id TEXT
     )
   `);
+  await conn.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS tenant_id TEXT`);
 }
 
 /**
@@ -203,6 +207,9 @@ function rowFromSql(raw: Record<string, unknown>): ApiKeyRow | null {
     createdAt: asNumberOrNull(raw.created_at ?? raw.createdAt) ?? 0,
     lastUsedAt: asNumberOrNull(raw.last_used_at ?? raw.lastUsedAt),
     revokedAt: asNumberOrNull(raw.revoked_at ?? raw.revokedAt),
+    ...(asString(raw.tenant_id ?? raw.tenantId) !== null
+      ? { tenantId: asString(raw.tenant_id ?? raw.tenantId) }
+      : {}),
   };
 }
 

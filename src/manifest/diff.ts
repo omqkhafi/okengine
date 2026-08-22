@@ -1245,18 +1245,48 @@ function diffTenancy(
     );
     return;
   }
+  if (before?.enabled === true && after?.enabled !== true) {
+    out.push(
+      change(
+        "/tenancy/enabled",
+        "permission-widening",
+        "changed",
+        true,
+        after?.enabled,
+        "tenancy disabled",
+      ),
+    );
+  } else if (before?.enabled !== true && after?.enabled === true) {
+    out.push(
+      change("/tenancy/enabled", "no-impact", "changed", before?.enabled, true, "tenancy enabled"),
+    );
+  }
+  if (before?.membershipRequired === true && after?.membershipRequired !== true) {
+    out.push(
+      change(
+        "/tenancy/membershipRequired",
+        "permission-widening",
+        "changed",
+        true,
+        after?.membershipRequired,
+        "tenant membership no longer required",
+      ),
+    );
+  }
   const b = before?.isolation ? ISOLATION_RANK[before.isolation] : undefined;
   const a = after?.isolation ? ISOLATION_RANK[after.isolation] : undefined;
-  out.push(
-    change(
-      "/tenancy/isolation",
-      b !== undefined && a !== undefined && a < b ? "permission-widening" : "no-impact",
-      "changed",
-      before?.isolation,
-      after?.isolation,
-      `tenancy isolation ${before?.isolation} → ${after?.isolation}`,
-    ),
-  );
+  if (before?.isolation !== after?.isolation) {
+    out.push(
+      change(
+        "/tenancy/isolation",
+        b !== undefined && a !== undefined && a < b ? "permission-widening" : "no-impact",
+        "changed",
+        before?.isolation,
+        after?.isolation,
+        `tenancy isolation ${before?.isolation} → ${after?.isolation}`,
+      ),
+    );
+  }
 }
 
 function diffI18n(before: I18n | undefined, after: I18n | undefined, out: ManifestChange[]): void {

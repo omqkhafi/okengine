@@ -86,6 +86,52 @@ describe("fx — capability enforcement", () => {
     expect(ttl).toBeGreaterThan(0);
   });
 
+  test("kv prefixes keys with tenant id and fails loud without one", async () => {
+    const { createStoreRuntime, store } = await import("../elements/store.ts");
+    const { memoryKvDriver } = await import("../drivers/index.ts");
+    const decl = store.kv("drafts");
+    const rt = createStoreRuntime({
+      drivers: { kv: memoryKvDriver },
+      kv: { drafts: {} },
+    });
+    rt.register(decl);
+    const acme = createFx({
+      flow: "drafts.acme",
+      effects: { reads: ["kv:drafts"], writes: ["kv:drafts"] },
+      storeRuntime: rt,
+      tenantEnabled: true,
+      tenant: { id: "acme" },
+    });
+    const globex = createFx({
+      flow: "drafts.globex",
+      effects: { reads: ["kv:drafts"], writes: ["kv:drafts"] },
+      storeRuntime: rt,
+      tenantEnabled: true,
+      tenant: { id: "globex" },
+    });
+    await acme.store(decl).set("note", "alice");
+    await globex.store(decl).set("note", "bob");
+    expect(await acme.store(decl).get("note")).toBe("alice");
+    expect(await globex.store(decl).get("note")).toBe("bob");
+    expect(await acme.store(decl).list()).toEqual(["note"]);
+
+    const none = createFx({
+      flow: "drafts.none",
+      effects: { writes: ["kv:drafts"] },
+      storeRuntime: rt,
+      tenantEnabled: true,
+      tenant: { id: null },
+    });
+    let err: unknown;
+    try {
+      await none.store(decl).set("note", "x");
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(OkeError);
+    expect((err as OkeError).code).toBe(1015);
+  });
+
   test("index driverId is meilisearch before first I/O (not a function, not memory)", async () => {
     const { createStoreRuntime, store } = await import("../elements/store.ts");
     const { meilisearchDriver } = await import("../drivers/index.ts");
@@ -334,6 +380,28 @@ describe("fx.vault — object surface", () => {
       /fx\.vault\.status needs a bound Vault backend/,
     );
   });
+
+  test("per-tenant contracts store under {tenantId}/{contract}", async () => {
+    const { createVaultRuntime, vault } = await import("../elements/vault.ts");
+    const { adapter, rows } = memoryAdapter();
+    const stripe = vault.secret("STRIPE_KEY", { perTenant: true, dev: "sk_unused" });
+    const runtime = createVaultRuntime({
+      secrets: [stripe],
+      tenantEnabled: true,
+    });
+    const fx = createFx({
+      flow: "billing.key",
+      effects: { secrets: ["STRIPE_KEY"] },
+      vaultRuntime: runtime,
+      vaultAdapter: adapter as never,
+      tenantEnabled: true,
+      tenant: { id: "acme" },
+    });
+    await fx.vault.set("STRIPE_KEY", "sk_acme");
+    expect([...rows.keys()]).toEqual(["acme/STRIPE_KEY"]);
+    const redacted = await fx.vault.get("STRIPE_KEY");
+    expect(redacted.reveal()).toBe("sk_acme");
+  });
 });
 
 describe("fx — wholesale swap", () => {
@@ -450,6 +518,26 @@ describe("fx — wholesale swap", () => {
         },
         updateApiKey: async () => {
           throw new Error("auth.updateApiKey must not be used");
+        },
+        listTenants: async () => [],
+        switchTenant: async () => {
+          throw new Error("auth.switchTenant must not be used");
+        },
+        createTenant: async () => {
+          throw new Error("auth.createTenant must not be used");
+        },
+        deleteTenant: async () => {
+          throw new Error("auth.deleteTenant must not be used");
+        },
+        addMember: async () => {
+          throw new Error("auth.addMember must not be used");
+        },
+        removeMember: async () => {
+          throw new Error("auth.removeMember must not be used");
+        },
+        listMembers: async () => [],
+        upsertTenantRole: async () => {
+          throw new Error("auth.upsertTenantRole must not be used");
         },
       },
       operator: { id: null },
