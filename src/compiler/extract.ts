@@ -1089,6 +1089,16 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
     if (signalName) {
       const delivery = stringProp(opts, "delivery") as SignalDelivery | undefined;
       if (delivery) {
+        const retentionObj = objectProp(opts, "retention");
+        const maxAge = retentionObj ? stringProp(retentionObj, "maxAge") : undefined;
+        const maxCount = retentionObj ? numberProp(retentionObj, "maxCount") : undefined;
+        const retention =
+          maxAge !== undefined || maxCount !== undefined
+            ? {
+                ...(maxAge !== undefined ? { maxAge } : {}),
+                ...(maxCount !== undefined ? { maxCount } : {}),
+              }
+            : undefined;
         const signal: Signal = {
           delivery,
           ...(stringProp(opts, "description")
@@ -1100,6 +1110,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           ...(boolProp(opts, "deadLetter") !== undefined
             ? { deadLetter: boolProp(opts, "deadLetter") }
             : {}),
+          ...(retention !== undefined ? { retention } : {}),
         };
         scope.signals[signalName] = signal;
         const bindingName = enclosingConstName(call, program);

@@ -337,6 +337,23 @@ export const stripeKey = vault.secret("STRIPE_KEY", {
     expect(manifest.vault?.STRIPE_KEY?.description).toBe("Payments gateway key");
   });
 
+  test("extracts live signal retention", async () => {
+    const manifest = await extractFromSources({
+      "src/signals.ts": `
+import { signal } from "okengine";
+export const orderStatus = signal("order-status", {
+  delivery: "live",
+  optional: true,
+  retention: { maxAge: "24h", maxCount: 500 },
+});
+`,
+    });
+    expect(manifest.signals?.["order-status"]?.retention).toEqual({
+      maxAge: "24h",
+      maxCount: 500,
+    });
+  });
+
   test("extracts store.kv durable onto the Manifest store", async () => {
     const manifest = await extractFromSources({
       "src/kv.ts": `

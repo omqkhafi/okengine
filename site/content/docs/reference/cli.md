@@ -65,7 +65,7 @@ oke docker clean --yes           # non-TTY: current project only
 oke docker clean --all --yes     # non-TTY: every oke-dev-* project on this machine
 oke images pin                   # tags → digests in oke.images.lock
 
-oke build --target edge          # < 15 kB kernel profile
+oke build --target edge          # < 16 kB kernel profile
 oke eval                         # run prompt eval sets; fails CI on regression
 oke ai setup                     # configure AI driver + models (TTY wizard or flags)
 oke branch prod --at "yesterday" # fork journaled state into a sandbox

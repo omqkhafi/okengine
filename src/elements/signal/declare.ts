@@ -7,17 +7,18 @@
 
 import type { SignalDelivery } from "../../manifest/types.ts";
 import { signalRegistry } from "../../kernel/element-registries.ts";
+import { parseDurationMs } from "../clock/duration.ts";
 
-/** Options for {@link signal}. */
-export interface SignalOptions {
-  /**
-   * Delivery physics — required, no default.
-   *
-   * - `once` — competing consumers, retries, DLQ
-   * - `broadcast` — every subscriber receives a copy
-   * - `live` — client-subscribable stream (replayable)
-   */
-  readonly delivery: SignalDelivery;
+/** Live-tape cap. Omit both fields (or omit `retention`) for an unbounded tape. */
+export interface SignalRetention {
+  /** Drop events older than this duration (`"7d"`, `"1h"`, `"30s"`, …). */
+  readonly maxAge?: string;
+  /** Keep only the newest N live events. */
+  readonly maxCount?: number;
+}
+
+/** Shared options for every {@link signal} delivery mode. */
+interface SignalOptionsBase {
   /** Optional human description for Console / docs (falls back to the signal name). */
   readonly description?: string;
   /** Max delivery attempts before dead-letter (once). */
@@ -32,6 +33,21 @@ export interface SignalOptions {
   /** Allow emit with zero subscribers (skip orphan check). */
   readonly optional?: boolean;
 }
+
+/**
+ * Options for {@link signal}.
+ *
+ * `retention` is live-only — a type error on `once` / `broadcast`.
+ */
+export type SignalOptions =
+  | (SignalOptionsBase & {
+      readonly delivery: "once" | "broadcast";
+      readonly retention?: never;
+    })
+  | (SignalOptionsBase & {
+      readonly delivery: "live";
+      readonly retention?: SignalRetention;
+    });
 
 /**
  * Declared signal handle — usable as `on(signal, flow)`, `fx.emit(signal, …)`,
@@ -52,6 +68,8 @@ export interface SignalDecl<T = unknown> {
   readonly schema?: unknown;
   /** Optional orphan-emit allowance. */
   readonly optional: boolean;
+  /** Live-tape cap (`delivery: "live"` only). Omitted = unbounded. */
+  readonly retention?: SignalRetention;
   /** Phantom payload type for typed emits. */
   readonly _payload?: T;
 }
@@ -91,6 +109,21 @@ export function signal<T = unknown>(name: string, options: SignalOptions): Signa
   ) {
     throw new TypeError(`signal("${name}"): delivery is mandatory (once | broadcast | live)`);
   }
+  const retention = "retention" in options ? options.retention : undefined;
+  if (retention !== undefined && options.delivery !== "live") {
+    throw new TypeError(`signal("${name}"): retention is only valid with delivery: "live"`);
+  }
+  if (retention?.maxAge !== undefined && parseDurationMs(retention.maxAge) <= 0) {
+    throw new TypeError(
+      `signal("${name}"): retention.maxAge must be a duration like "24h" or "30s"`,
+    );
+  }
+  if (
+    retention?.maxCount !== undefined &&
+    (!Number.isInteger(retention.maxCount) || retention.maxCount < 1)
+  ) {
+    throw new TypeError(`signal("${name}"): retention.maxCount must be an integer ≥ 1`);
+  }
   const decl: SignalDecl<T> = {
     name,
     delivery: options.delivery,
@@ -99,6 +132,7 @@ export function signal<T = unknown>(name: string, options: SignalOptions): Signa
     deadLetter: options.deadLetter ?? true,
     schema: options.schema,
     optional: options.optional ?? false,
+    ...(options.delivery === "live" && retention !== undefined ? { retention } : {}),
   };
   signalRegistry.push(decl as SignalDecl);
   return decl;

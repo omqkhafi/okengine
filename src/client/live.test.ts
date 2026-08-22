@@ -321,6 +321,65 @@ describe("createClient — live", () => {
     expect(calls).toBe(1);
   }, 10_000);
 
+  test("reconnect sends Last-Event-ID; 410 clears cursor and replays", async () => {
+    const seenHeaders: Array<string | null> = [];
+    let calls = 0;
+    const events: unknown[] = [];
+    const errors: unknown[] = [];
+    const api = createClient<EventsApp>("http://app.test", {
+      fetch: async (_url, init) => {
+        calls += 1;
+        const h = new Headers(init?.headers);
+        seenHeaders.push(h.get("last-event-id"));
+        if (calls === 1) {
+          return sseResponse([{ orderId: "ord_1", status: "placed" }], ["evt-1"]);
+        }
+        if (calls === 2) {
+          return Response.json(
+            {
+              data: null,
+              error: { code: "LiveResumeGap", data: { signal: "order-status", afterId: "evt-1" } },
+            },
+            { status: 410 },
+          );
+        }
+        return sseResponse([{ orderId: "ord_1", status: "shipped" }], ["evt-2"]);
+      },
+      $routes: {
+        orders: {
+          events: {
+            method: "GET",
+            path: "/orders/:orderId/events",
+            live: "order-status",
+            matchKey: ["orderId"],
+            stream: true,
+          },
+        },
+      },
+    });
+    const stop = api.live(
+      orderStatus,
+      { orderId: "ord_1" },
+      {
+        onEvent: (e) => events.push(e),
+        onError: (e) => errors.push(e),
+        autoResubscribe: true,
+      },
+    );
+    await waitFor(() => events.length >= 2, 8_000);
+    stop();
+    expect(seenHeaders[0]).toBeNull();
+    expect(seenHeaders[1]).toBe("evt-1");
+    expect(seenHeaders[2]).toBeNull();
+    expect(events).toEqual([
+      { orderId: "ord_1", status: "placed" },
+      { orderId: "ord_1", status: "shipped" },
+    ]);
+    expect(errors.some((e) => e instanceof Error && e.message.includes("LiveResumeGap"))).toBe(
+      true,
+    );
+  }, 10_000);
+
   test("flow-scoped subscribe is unambiguous", async () => {
     const seen: unknown[] = [];
     const api = createClient<EventsApp>("http://app.test", {

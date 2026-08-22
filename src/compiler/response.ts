@@ -32,6 +32,7 @@ export interface FailureEnvelope {
  *
  * Gate denials use the status the Gates simulator promises:
  * `Unauthorized` → 401 · `Forbidden` → 403 · `RateLimited` → 429.
+ * Live resume gap (`LiveResumeGap`) → 410.
  *
  * @param failure - Typed failure
  */
@@ -45,6 +46,8 @@ export function statusForFailure(failure: FlowFailure): number {
       return 403;
     case "RateLimited":
       return 429;
+    case "LiveResumeGap":
+      return 410;
     default:
       return 400;
   }
@@ -86,23 +89,40 @@ export function encodeFailure(failure: FlowFailure): Response {
   });
 }
 
+function liveResumeGap(err: unknown): Response | undefined {
+  const o = err as { code?: unknown; params?: { signal?: string; afterId?: string } };
+  if (o?.code !== 1014) return;
+  return encodeFailure({
+    data: null,
+    error: {
+      code: "LiveResumeGap",
+      data: { signal: o.params?.signal ?? "", afterId: o.params?.afterId ?? "" },
+    },
+  });
+}
+
 /**
  * Encode an execute-style result (response / failure / output).
  *
+ * Awaits {@link JsonStreamResult.ready} before the 200 SSE body so OKE1014
+ * can return 410 instead of a half-open stream.
+ *
  * @param result - Pipeline outcome pieces
  */
-export function encodeExecuteResult(result: {
+export async function encodeExecuteResult(result: {
   readonly response?: Response | undefined;
   readonly failure?: FlowFailure | undefined;
   readonly output?: unknown;
   readonly error?: unknown;
-}): Response {
+}): Promise<Response> {
   if (result.response) return result.response;
   if (result.failure) return encodeFailure(result.failure);
   if (result.error !== undefined) {
     if (isFlowFailure(result.error)) {
       return encodeFailure(result.error);
     }
+    const gap = liveResumeGap(result.error);
+    if (gap) return gap;
     // Unhandled throws must never look like success (`undefined` → 204).
     return Response.json(
       {
@@ -116,14 +136,19 @@ export function encodeExecuteResult(result: {
       { status: 500 },
     );
   }
+  if (isJsonStreamResult(result.output)) {
+    try {
+      await result.output.ready?.();
+    } catch (err) {
+      await result.output.finalize?.();
+      const gap = liveResumeGap(err);
+      if (gap) return gap;
+      throw err;
+    }
+  }
   return encodeSuccess(result.output);
 }
 
-/**
- * Encode {@link JsonStreamResult} as SSE (`text/event-stream`).
- *
- * @param carrier - Stream carrier from `fx.json.stream`
- */
 function encodeSseStream(carrier: JsonStreamResult): Response {
   const encoder = new TextEncoder();
   let finalized = false;

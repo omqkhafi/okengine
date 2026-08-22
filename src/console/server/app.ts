@@ -439,15 +439,28 @@ export async function bindManifestSignalBus(state: ConsoleState): Promise<void> 
     now: state.now,
   });
   for (const [name, s] of declared) {
-    runtime.register(
-      declareSignal(name, {
-        delivery: s.delivery,
-        retries: s.retries,
-        deadLetter: s.deadLetter,
-        schema: s.schema,
-        optional: s.optional,
-      }),
-    );
+    if (s.delivery === "live") {
+      runtime.register(
+        declareSignal(name, {
+          delivery: "live",
+          retries: s.retries,
+          deadLetter: s.deadLetter,
+          schema: s.schema,
+          optional: s.optional,
+          ...(s.retention !== undefined ? { retention: s.retention } : {}),
+        }),
+      );
+    } else {
+      runtime.register(
+        declareSignal(name, {
+          delivery: s.delivery,
+          retries: s.retries,
+          deadLetter: s.deadLetter,
+          schema: s.schema,
+          optional: s.optional,
+        }),
+      );
+    }
   }
   state.signalBus = await runtime.start();
 }

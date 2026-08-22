@@ -181,6 +181,14 @@ export interface Flow {
   breaking?: boolean;
 }
 
+/** Live-tape cap. Omit both fields (or omit `retention`) for an unbounded tape. */
+export interface SignalRetention {
+  /** Drop events older than this duration (`"7d"`, `"1h"`, `"30s"`, …). */
+  maxAge?: string;
+  /** Keep only the newest N live events. */
+  maxCount?: number;
+}
+
 /** One Signal declaration. */
 export interface Signal {
   delivery: SignalDelivery;
@@ -190,6 +198,8 @@ export interface Signal {
   deadLetter?: boolean;
   schema?: JsonSchema;
   optional?: boolean;
+  /** Live-tape cap (`delivery: "live"` only). Omitted = unbounded. */
+  retention?: SignalRetention;
 }
 
 /** Column / field classification for privacy and retention. */

@@ -90,6 +90,7 @@ The declaration is identical in shape for all three — switching physics later 
 | `retries`     | number                            | `3`              | Retry budget for `once` — dead-letter when `attempts > retries` (`retries + 1` total invocations) |
 | `deadLetter`  | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                                                   |
 | `optional`    | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check)                                    |
+| `retention`   | `{ maxAge?, maxCount? }`          | unbounded        | Live tape cap (`delivery: "live"` only). Both limits AND-combine when set                         |
 
 ## One order, three modes
 
@@ -124,6 +125,7 @@ export const orderStatus = signal("order-status", {
   }),
   delivery: "live",
   optional: true, // clients may not be connected yet
+  retention: { maxAge: "24h", maxCount: 500 },
 });
 ```
 
@@ -182,7 +184,7 @@ export const notifyCustomer = on(
 );
 ```
 
-`live` — retain the tape. A late subscriber replays **full history** (`placed → fulfilling → shipped`), then keeps going.
+`live` — retain the tape. A late subscriber replays history (`placed → fulfilling → shipped`), then keeps going. Omit `retention` and that history is **unbounded** — declare `maxAge` / `maxCount` in production.
 
 The listener is **not** `on(orderStatus, flow)` — that trigger does not replay retained payloads. Expose GET SSE with `.live(signal)`, then subscribe from the typed client. `optional: true` is required so emits succeed before anyone is connected.
 
@@ -203,11 +205,9 @@ const stop = api.live(
 stop();
 ```
 
-Same signal, two audiences: member filter on `:orderId`, admin firehose. Duplicate `(signal, gates, match)` is **OKE1013**. Same HTTP path is still **OKE1011**.
+Same signal, two audiences: member filter on `:orderId`, admin firehose. Duplicate `(signal, gates, match)` is **OKE1013**. Same HTTP path is still **OKE1011**. Firehose default: `on(http.live(orderStatus).gate(member))` → `GET /_oke/live/order-status`.
 
-Firehose default: `on(http.live(orderStatus).gate(member))` → `GET /_oke/live/order-status`.
-
-Server-side `fx.live` **is** the SSE carrier (`JsonStreamResult`). Custom `do` is allowed; authors do not wrap `fx.json.stream`. v1 replays the **full** retained tape (no Last-Event-ID resume, no TTL). `autoResubscribe: true` opens a new request after a drop (500ms exponential backoff, 30s cap) — not cursor resume.
+Server-side `fx.live` **is** the SSE carrier (`JsonStreamResult`). Custom `do` is allowed; authors do not wrap `fx.json.stream`. Reconnects send `Last-Event-ID`; a missing cursor is **OKE1014** / HTTP 410, not a silent full replay. `autoResubscribe: true` backs off 500ms…30s and, after a 410, replays the remaining tape.
 
 **Why separate signals:** delivery is fixed per declaration. Competing work stays on `once`; fan-out stays on `broadcast`; the timeline stays on `live`. Switching a word later is cheap; mixing physics on one name is not.
 
@@ -266,7 +266,11 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 
 <SignalLiveReplay />
 
-`live` retains every delivered message and replays the **full history** to a late subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display). Last-Event-ID resume is deferred — the wire already carries `id:`.
+`live` retains delivered messages and replays them to a late subscriber. Omit `retention` for an unbounded tape (a production hazard). `maxAge` (clock duration) and `maxCount` AND-combine when both are set. Drivers prune on write and when `live()` opens — no background sweeper.
+
+Reconnects send SSE `Last-Event-ID`. If that id was pruned or never existed, the server returns **410** `{ error: { code: "LiveResumeGap" } }` (**OKE1014**) before opening the stream. The client clears the cursor; `autoResubscribe` then replays whatever remains.
+
+The Console payload monitor still shows only the newest 50 for display — that cap is not the retained tape.
 
 <Callout title="HTTP live is GET SSE">
   Expose with `http.get(path).live(signal)` or `http.live(signal)`. Subscribe with `api.live(signal,
@@ -327,6 +331,11 @@ The flow read a signal it did not declare. The compiler infers `reads: ["signal:
 
 Two GET routes expose the same live signal with the same gates and match.
 Change the gate or path-param filter, or drop the extra route (same path is **OKE1011**).
+
+</Accordion>
+<Accordion title="Subscribe gets HTTP 410 LiveResumeGap (OKE1014)">
+
+The `Last-Event-ID` cursor is not on the retained tape (pruned, never existed, or the memory bus restarted). The gap is visible in `onError`. With `autoResubscribe: true` the next request omits the header and replays what remains.
 
 </Accordion>
 <Accordion title="on(liveSignal, flow) never replays history">

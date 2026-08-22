@@ -156,7 +156,7 @@ export type PipelineEncoder = (result: {
   readonly failure?: FlowFailure | undefined;
   readonly output?: unknown;
   readonly error?: unknown;
-}) => Response;
+}) => Response | Promise<Response>;
 
 /**
  * Run the seven-stage pipeline around `handler`.
@@ -234,7 +234,7 @@ export async function runPipeline(
   // (short-circuit wins; encoder input mirrors the app layer exactly).
   if (encode !== undefined && ctx.response === undefined) {
     const failure = isFlowFailure(ctx.error) ? ctx.error : undefined;
-    ctx.response = encode({ failure, output: ctx.result, error: ctx.error });
+    ctx.response = await encode({ failure, output: ctx.result, error: ctx.error });
   }
 
   await runStage("onResponse", hooks, ctx, fx);

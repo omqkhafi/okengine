@@ -23,13 +23,17 @@ import { signal, type SignalDecl } from "./declare.ts";
 import type { LiveEvent } from "../../drivers/signal-types.ts";
 
 async function takeLivePayloads(iter: AsyncIterable<LiveEvent>, n: number): Promise<unknown[]> {
-  const out: unknown[] = [];
+  return (await takeLiveEvents(iter, n)).map((e) => e.payload);
+}
+
+async function takeLiveEvents(iter: AsyncIterable<LiveEvent>, n: number): Promise<LiveEvent[]> {
+  const out: LiveEvent[] = [];
   const it = iter[Symbol.asyncIterator]();
   try {
     while (out.length < n) {
       const step = await it.next();
       if (step.done) break;
-      out.push(step.value.payload);
+      out.push(step.value);
     }
   } finally {
     await it.return?.();
@@ -187,6 +191,75 @@ for (const { label, driver, setup } of drivers) {
 
       // All retained live messages replay — not the Console recentLive cap of 50.
       expect(late).toEqual([{ seat: "12A" }, { seat: "12B" }, { seat: "12C" }]);
+    });
+
+    test("live: maxCount keeps the newest N", async () => {
+      const live = signal("seat-feed", {
+        delivery: "live",
+        optional: true,
+        retention: { maxCount: 2 },
+      });
+      const bus = await openBus(driver, [live], setup?.() ?? {});
+
+      for (const seat of ["12A", "12B", "12C", "12D", "12E"]) {
+        await bus.emit("seat-feed", { seat });
+      }
+      await bus.drain();
+
+      const late = await takeLivePayloads(bus.live("seat-feed"), 2);
+      expect(late).toEqual([{ seat: "12D" }, { seat: "12E" }]);
+    });
+
+    test("live: maxAge prunes on emit and on live() open", async () => {
+      let t = 1_000;
+      const live = signal("seat-feed", {
+        delivery: "live",
+        optional: true,
+        retention: { maxAge: "1s" },
+      });
+      const bus = await openBus(driver, [live], { now: () => t, ...(setup?.() ?? {}) });
+
+      await bus.emit("seat-feed", { seat: "old" });
+      await bus.drain();
+      t += 2_000;
+      await bus.emit("seat-feed", { seat: "new" });
+      await bus.drain();
+
+      const late = await takeLivePayloads(bus.live("seat-feed"), 1);
+      expect(late).toEqual([{ seat: "new" }]);
+    });
+
+    test("live: afterId skips already-delivered events", async () => {
+      const live = signal("seat-feed", { delivery: "live", optional: true });
+      const bus = await openBus(driver, [live], setup?.() ?? {});
+
+      await bus.emit("seat-feed", { seat: "12A" });
+      await bus.emit("seat-feed", { seat: "12B" });
+      await bus.emit("seat-feed", { seat: "12C" });
+      await bus.drain();
+
+      const first = await takeLiveEvents(bus.live("seat-feed"), 3);
+      expect(first.map((e) => e.payload)).toEqual([
+        { seat: "12A" },
+        { seat: "12B" },
+        { seat: "12C" },
+      ]);
+      const rest = await takeLiveEvents(bus.live("seat-feed", { afterId: first[0]!.id }), 2);
+      expect(rest.map((e) => e.payload)).toEqual([{ seat: "12B" }, { seat: "12C" }]);
+    });
+
+    test("live: unknown afterId throws OKE1014", async () => {
+      const live = signal("seat-feed", { delivery: "live", optional: true });
+      const bus = await openBus(driver, [live], setup?.() ?? {});
+      await bus.emit("seat-feed", { seat: "12A" });
+      await bus.drain();
+
+      const it = bus.live("seat-feed", { afterId: "missing" })[Symbol.asyncIterator]();
+      try {
+        await expect(it.next()).rejects.toMatchObject({ code: 1014 });
+      } finally {
+        await it.return?.();
+      }
     });
   });
 }

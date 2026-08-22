@@ -345,7 +345,16 @@
         "retries": { "type": "integer", "minimum": 0 },
         "deadLetter": { "type": "boolean" },
         "schema": { "$ref": "#/$defs/JsonSchema" },
-        "optional": { "type": "boolean" }
+        "optional": { "type": "boolean" },
+        "retention": {
+          "description": "Live-tape cap (delivery: live only). Omitted = unbounded.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxAge": { "type": "string", "description": "Drop events older than this duration (7d, 1h, 30s, …)." },
+            "maxCount": { "type": "integer", "minimum": 1, "description": "Keep only the newest N live events." }
+          }
+        }
       }
     },
     "ColumnClassification": {

@@ -41,6 +41,7 @@ export type {
   SignalDriver,
   SignalBus,
   LiveEvent,
+  LiveSubscribeOptions,
   SignalMessage,
   SignalEmitOptions,
   SignalFailureReason,

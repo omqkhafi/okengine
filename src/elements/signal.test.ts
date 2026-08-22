@@ -86,6 +86,20 @@ describe("signal declaration", () => {
     expect(s.delivery).toBe("once");
     expect(s.name).toBe("order-placed");
   });
+
+  test("retention is live-only", () => {
+    expect(() =>
+      // @ts-expect-error retention is live-only
+      signal("order-placed", { delivery: "once", retention: { maxCount: 2 } }),
+    ).toThrow(/retention is only valid/);
+
+    const live = signal("order-status", {
+      delivery: "live",
+      optional: true,
+      retention: { maxAge: "24h", maxCount: 500 },
+    });
+    expect(live.retention).toEqual({ maxAge: "24h", maxCount: 500 });
+  });
 });
 
 for (const { label, driver, setup } of drivers) {

@@ -31,8 +31,10 @@ import {
   type SignalStats,
   type SignalTransaction,
   type SignalUnsubscribe,
+  type LiveSubscribeOptions,
 } from "./signal-types.ts";
 import { createLiveIterable } from "./signal-live-iter.ts";
+import { liveIdsToPrune, skipAfterId } from "./signal-retention.ts";
 
 /** Internal mutable message. */
 interface MutMessage {
@@ -315,12 +317,24 @@ export async function createSignalEngine(
     };
   }
 
-  function live(signal: string): AsyncIterable<LiveEvent> {
+  function live(signal: string, opts?: LiveSubscribeOptions): AsyncIterable<LiveEvent> {
     const decl = requireDecl(signal);
     if (decl.delivery !== "live") {
       throw new Error(`signal "${signal}" is not delivery: "live"`);
     }
+    const afterId = opts?.afterId;
     return createLiveIterable((emit) => {
+      pruneLive(signal);
+      const history: LiveEvent[] = [];
+      for (const m of messages) {
+        if (m.signal === signal && m.delivery === "live") {
+          history.push({ id: m.id, payload: m.payload });
+        }
+      }
+      const skipped = skipAfterId(history, afterId);
+      if (afterId !== undefined && afterId.length > 0 && !skipped.found) {
+        throw new OkeError(OKE_ERRORS.LIVE_RESUME_GAP, { signal, afterId });
+      }
       let set = liveHandlers.get(signal);
       if (!set) {
         set = new Set();
@@ -330,15 +344,41 @@ export async function createSignalEngine(
         emit(event);
       };
       set.add(handler);
-      for (const m of messages) {
-        if (m.signal === signal && m.delivery === "live") {
-          emit({ id: m.id, payload: m.payload });
-        }
+      for (const event of skipped.rest) {
+        emit(event);
       }
       return () => {
         set.delete(handler);
       };
     });
+  }
+
+  async function checkLiveResume(signal: string, afterId: string): Promise<void> {
+    requireDecl(signal);
+    pruneLive(signal);
+    const found = messages.some(
+      (m) => m.signal === signal && m.delivery === "live" && m.id === afterId,
+    );
+    if (!found) {
+      throw new OkeError(OKE_ERRORS.LIVE_RESUME_GAP, { signal, afterId });
+    }
+  }
+
+  function pruneLive(signal: string): void {
+    const decl = signals.get(signal);
+    const drop = liveIdsToPrune(
+      messages
+        .filter((m) => m.signal === signal && m.delivery === "live")
+        .map((m) => ({ id: m.id, createdAt: m.createdAt })),
+      decl?.retention,
+      now(),
+    );
+    if (drop.length === 0) return;
+    const dropSet = new Set(drop);
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]!;
+      if (m.delivery === "live" && dropSet.has(m.id)) messages.splice(i, 1);
+    }
   }
 
   function toPublic(m: MutMessage): SignalMessage {
@@ -485,6 +525,11 @@ export async function createSignalEngine(
       noteDelivered();
       progress = true;
     }
+    const touched = new Set<string>();
+    for (const m of messages) {
+      if (m.delivery === "live") touched.add(m.signal);
+    }
+    for (const name of touched) pruneLive(name);
     return progress;
   }
 
@@ -724,6 +769,7 @@ export async function createSignalEngine(
     begin,
     subscribe,
     live,
+    checkLiveResume,
     drain,
     deadLetters,
     inspect,

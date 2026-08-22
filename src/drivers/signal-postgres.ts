@@ -28,8 +28,10 @@ import {
   type SignalStats,
   type SignalTransaction,
   type SignalUnsubscribe,
+  type LiveSubscribeOptions,
 } from "./signal-types.ts";
 import { createLiveIterable } from "./signal-live-iter.ts";
+import { liveIdsToPrune, skipAfterId } from "./signal-retention.ts";
 
 /** Row shape in `oke_signal_messages`. */
 interface MsgRow {
@@ -263,6 +265,23 @@ export function createPostgresSignalFake(options?: {
       const state = view();
 
       if (/^CREATE\s+TABLE/i.test(text)) return { changes: 0 };
+      if (/^CREATE\s+INDEX/i.test(text)) return { changes: 0 };
+
+      const delLive =
+        /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+delivery\s*=\s*'live'\s*$/i.exec(
+          text,
+        );
+      if (delLive) {
+        let changes = 0;
+        for (let i = state.messages.length - 1; i >= 0; i--) {
+          const m = state.messages[i]!;
+          if (m.id === params[0] && m.delivery === "live") {
+            state.messages.splice(i, 1);
+            changes += 1;
+          }
+        }
+        return { changes };
+      }
 
       const delDead =
         /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+signal\s*=\s*\?\s+AND\s+status\s*=\s*'dead'\s*$/i.exec(
@@ -442,6 +461,13 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     key TEXT PRIMARY KEY,
     value TEXT
   )`);
+  try {
+    await sql.exec(
+      `CREATE INDEX IF NOT EXISTS oke_signal_messages_live_created ON oke_signal_messages (signal, delivery, created_at)`,
+    );
+  } catch {
+    /* fake / older engines without IF NOT EXISTS — ignore */
+  }
 }
 
 function rowToMessage(row: Record<string, unknown>): SignalMessage {
@@ -689,12 +715,26 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     };
   }
 
-  function live(signal: string): AsyncIterable<LiveEvent> {
+  function live(signal: string, opts?: LiveSubscribeOptions): AsyncIterable<LiveEvent> {
     const decl = requireDecl(signal);
     if (decl.delivery !== "live") {
       throw new Error(`signal "${signal}" is not delivery: "live"`);
     }
+    const afterId = opts?.afterId;
     return createLiveIterable(async (emit) => {
+      await pruneLive(signal);
+      const historyRows = await sql.query(
+        `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'live' ORDER BY created_at ASC`,
+        [signal],
+      );
+      const history: LiveEvent[] = historyRows.map((row) => ({
+        id: String(row.id),
+        payload: JSON.parse(String(row.payload)),
+      }));
+      const skipped = skipAfterId(history, afterId);
+      if (afterId !== undefined && afterId.length > 0 && !skipped.found) {
+        throw new OkeError(OKE_ERRORS.LIVE_RESUME_GAP, { signal, afterId });
+      }
       let set = liveHandlers.get(signal);
       if (!set) {
         set = new Set();
@@ -704,17 +744,42 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
         emit(event);
       };
       set.add(handler);
-      const history = await sql.query(
-        `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'live' ORDER BY created_at ASC`,
-        [signal],
-      );
-      for (const row of history) {
-        emit({ id: String(row.id), payload: JSON.parse(String(row.payload)) });
+      for (const event of skipped.rest) {
+        emit(event);
       }
       return () => {
         set.delete(handler);
       };
     });
+  }
+
+  async function checkLiveResume(signal: string, afterId: string): Promise<void> {
+    requireDecl(signal);
+    await pruneLive(signal);
+    const history = await sql.query(
+      `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'live' ORDER BY created_at ASC`,
+      [signal],
+    );
+    if (!history.some((row) => String(row.id) === afterId)) {
+      throw new OkeError(OKE_ERRORS.LIVE_RESUME_GAP, { signal, afterId });
+    }
+  }
+
+  async function pruneLive(signal: string): Promise<void> {
+    const decl = signals.get(signal);
+    if (decl?.retention === undefined) return;
+    const history = await sql.query(
+      `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'live' ORDER BY created_at ASC`,
+      [signal],
+    );
+    const drop = liveIdsToPrune(
+      history.map((row) => ({ id: String(row.id), createdAt: Number(row.created_at) })),
+      decl.retention,
+      now(),
+    );
+    for (const id of drop) {
+      await sql.exec(`DELETE FROM oke_signal_messages WHERE id = ? AND delivery = 'live'`, [id]);
+    }
   }
 
   async function deliverOnce(
@@ -853,6 +918,14 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
         `UPDATE oke_signal_messages SET status = 'delivered', locked_by = NULL, lease_expires_at = NULL WHERE id = ?`,
         [row.id],
       );
+    }
+    const pruned = new Set<string>();
+    for (const row of pending) {
+      if (row.delivery !== "live") continue;
+      const sig = String(row.signal);
+      if (pruned.has(sig)) continue;
+      pruned.add(sig);
+      await pruneLive(sig);
     }
     return progress;
   }
@@ -1122,6 +1195,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     begin,
     subscribe,
     live,
+    checkLiveResume,
     drain,
     deadLetters,
     inspect,

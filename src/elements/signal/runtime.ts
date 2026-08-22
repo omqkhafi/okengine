@@ -64,8 +64,16 @@ export interface SignalRuntime {
    * Live feed (auto-starts). Replays history then new events.
    *
    * @param name - Signal name
+   * @param opts - Optional resume cursor
    */
-  live(name: string): AsyncIterable<LiveEvent>;
+  live(name: string, opts?: { readonly afterId?: string }): AsyncIterable<LiveEvent>;
+  /**
+   * Validate a live resume cursor (auto-starts). Throws OKE1014 when missing.
+   *
+   * @param name - Signal name
+   * @param afterId - SSE cursor
+   */
+  checkLiveResume(name: string, afterId: string): Promise<void>;
   /** Close the bus. */
   close(): Promise<void>;
 }
@@ -109,7 +117,7 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
       const b = await this.start();
       return b.deadLetters(name);
     },
-    live(name) {
+    live(name, opts) {
       return {
         [Symbol.asyncIterator]() {
           let inner: AsyncIterator<LiveEvent> | undefined;
@@ -117,20 +125,24 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
             async next() {
               if (!inner) {
                 const b = await runtime.start();
-                inner = b.live(name)[Symbol.asyncIterator]();
+                inner = b.live(name, opts)[Symbol.asyncIterator]();
               }
               return inner.next();
             },
             async return() {
               if (!inner) {
                 const b = await runtime.start();
-                inner = b.live(name)[Symbol.asyncIterator]();
+                inner = b.live(name, opts)[Symbol.asyncIterator]();
               }
               return inner.return?.() ?? { done: true, value: undefined };
             },
           };
         },
       };
+    },
+    async checkLiveResume(name, afterId) {
+      const b = await runtime.start();
+      await b.checkLiveResume(name, afterId);
     },
     async close() {
       if (bus) {

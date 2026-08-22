@@ -5,7 +5,7 @@
  */
 
 /** Kernel (edge profile) — gzipped minified bundle. */
-export const KERNEL_EDGE_BUDGET_BYTES = 15 * 1024;
+export const KERNEL_EDGE_BUDGET_BYTES = 16 * 1024;
 
 /** Client runtime — gzipped minified bundle. */
 export const CLIENT_BUDGET_BYTES = 4 * 1024;

@@ -80,6 +80,7 @@ export {
   createSignalRuntime,
   type SignalDecl,
   type SignalOptions,
+  type SignalRetention,
   type SignalRuntime,
   type DeadLetter,
   type SignalFailureReason,

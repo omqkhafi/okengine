@@ -44,7 +44,7 @@ async function defaultSyncAdoptBarrel(rootDir: string): Promise<readonly string[
 }
 
 /**
- * Build a deployable bundle. Edge target aims at the &lt;15 kB kernel budget.
+ * Build a deployable bundle. Edge target aims at the &lt;16 kB kernel budget.
  *
  * @param options - Target / entry
  */
@@ -109,7 +109,7 @@ export async function buildCli(args: readonly string[]): Promise<number> {
     else if (a === "--help" || a === "-h") {
       console.log(`oke build [--target|-t bun|node|edge] [--entry|-e src/app.ts]
 
-Tree-shaken bundle. --target edge aims at the <15 kB kernel budget.
+Tree-shaken bundle. --target edge aims at the <16 kB kernel budget.
 `);
       return 0;
     }

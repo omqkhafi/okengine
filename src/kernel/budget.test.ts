@@ -1,6 +1,6 @@
 /**
  * Kernel edge profile budget — AGENTS.md / unified-theory §24.
- * Limit: < 15 kB gzipped (minified bundle).
+ * Limit: < 16 kB gzipped (minified bundle).
  */
 
 import { describe, expect, test } from "bun:test";

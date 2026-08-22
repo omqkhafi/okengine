@@ -760,6 +760,18 @@ function diffSignal(before: Signal, after: Signal, path: string, out: ManifestCh
       ),
     );
   }
+  if (!deepEqual(before.retention, after.retention)) {
+    out.push(
+      change(
+        `${path}/retention`,
+        "contract-breaking",
+        kindOf(before.retention, after.retention),
+        before.retention,
+        after.retention,
+        "live retention changed",
+      ),
+    );
+  }
 }
 
 function diffStore(before: Store, after: Store, path: string, out: ManifestChange[]): void {

@@ -171,6 +171,7 @@ async function pump(
   const auto = handlers.autoResubscribe === true;
   let delayMs = LIVE_RESUBSCRIBE_INITIAL_MS;
   let attempt = 0;
+  let lastSeenId: string | undefined;
   for (;;) {
     if (signal.aborted) return;
     if (attempt > 0 && auto) {
@@ -180,13 +181,13 @@ async function pump(
     }
     attempt += 1;
     try {
-      const res = await openSse(base, exposure, input, opts, signal);
+      const res = await openSse(base, exposure, input, opts, signal, lastSeenId);
       if (signal.aborted) return;
       if (res.status === 401 && opts.auth?.refresh) {
         await opts.auth.refresh();
-        const retry = await openSse(base, exposure, input, opts, signal);
+        const retry = await openSse(base, exposure, input, opts, signal, lastSeenId);
         if (signal.aborted) return;
-        await readSse(retry, handlers.onEvent, signal);
+        lastSeenId = await consumeSse(retry, handlers, signal, lastSeenId);
         if (signal.aborted) return;
         const closed = new Error("live connection closed");
         if (auto) {
@@ -196,7 +197,14 @@ async function pump(
         handlers.onError?.(closed);
         return;
       }
-      await readSse(res, handlers.onEvent, signal);
+      if (res.status === 410) {
+        const err = await liveResumeGapError(res);
+        lastSeenId = undefined;
+        handlers.onError?.(err);
+        if (!auto) return;
+        continue;
+      }
+      lastSeenId = await consumeSse(res, handlers, signal, lastSeenId);
       if (signal.aborted) return;
       const closed = new Error("live connection closed");
       if (auto) {
@@ -215,6 +223,30 @@ async function pump(
       return;
     }
   }
+}
+
+async function consumeSse(
+  res: Response,
+  handlers: LiveHandlers<unknown>,
+  signal: AbortSignal,
+  lastSeenId: string | undefined,
+): Promise<string | undefined> {
+  let cursor = lastSeenId;
+  await readSse(
+    res,
+    (event, id) => {
+      handlers.onEvent(event);
+      if (id !== undefined && id.length > 0) cursor = id;
+    },
+    signal,
+    handlers.onOpen,
+  );
+  return cursor;
+}
+
+async function liveResumeGapError(res: Response): Promise<Error> {
+  const text = await res.text().catch(() => "");
+  return sseError(410, text);
 }
 
 /**
@@ -243,6 +275,7 @@ async function openSse(
   input: unknown,
   opts: ClientOptions,
   signal: AbortSignal,
+  lastSeenId?: string,
 ): Promise<Response> {
   const { url, method } = restGet(base, exposure.path, input);
   const headers = new Headers({ accept: "text/event-stream" });
@@ -256,6 +289,7 @@ async function openSse(
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
+  if (lastSeenId) headers.set("last-event-id", lastSeenId);
   const fetchFn: ClientFetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
   return fetchFn(url, { method, headers, signal });
 }
@@ -279,8 +313,9 @@ function restGet(base: string, path: string, input: unknown): { url: string; met
 
 async function readSse(
   res: Response,
-  onEvent: (event: unknown) => void,
+  onEvent: (event: unknown, id: string | undefined) => void,
   signal: AbortSignal,
+  onOpen?: () => void,
 ): Promise<void> {
   if (signal.aborted) return;
   const ct = res.headers.get("content-type") ?? "";
@@ -292,6 +327,7 @@ async function readSse(
     const text = await res.text().catch(() => "");
     throw sseError(res.status, text || `Expected text/event-stream, got ${ct || "none"}`);
   }
+  onOpen?.();
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
@@ -317,18 +353,20 @@ async function readSse(
 
 function dispatchFrame(
   raw: string,
-  onEvent: (event: unknown) => void,
+  onEvent: (event: unknown, id: string | undefined) => void,
   signal: AbortSignal,
 ): boolean {
   const dataLines: string[] = [];
+  let id: string | undefined;
   for (const line of raw.split("\n")) {
+    if (line.startsWith("id:")) id = line.slice(3).replace(/^ /, "");
     if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
   }
   if (dataLines.length === 0) return false;
   const data = dataLines.join("\n");
   if (data === "[DONE]") return true;
   if (signal.aborted) return true;
-  onEvent(JSON.parse(data) as unknown);
+  onEvent(JSON.parse(data) as unknown, id);
   return false;
 }
 

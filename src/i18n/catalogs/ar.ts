@@ -36,6 +36,10 @@ export const builtinAr = {
       cause: 'التدفق "{flow}" يُصدِر الإشارة "{resource}" بلا مشترك.',
       fix: "أضف on({resource}, …) أو عيّن الإشارة '{'optional: true'}'.",
     },
+    "1014": {
+      cause: 'مؤشر البث "{afterId}" ليس على شريط "{signal}".',
+      fix: "أعد الاتصال بدون Last-Event-ID لإعادة تشغيل الشريط المتبقي.",
+    },
     "1101": {
       cause: "جدول النطاق غير موجود — لم تُطبَّق الترحيلات.",
       fix: "شغّل `oke db migrate` على هذه البيئة.",

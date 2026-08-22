@@ -139,6 +139,15 @@ describe("diffManifest — fixture pairs", () => {
     expect(hasCategory(result.changes, "contract-breaking", "delivery")).toBe(true);
   });
 
+  test("10b · live retention change is contract-breaking", async () => {
+    const before = await loadBase();
+    before.signals!["order-placed"]!.delivery = "live";
+    const after = clone(before);
+    after.signals!["order-placed"]!.retention = { maxCount: 10 };
+    const result = diffManifest(before, after);
+    expect(hasCategory(result.changes, "contract-breaking", "retention")).toBe(true);
+  });
+
   test("11 · rate limit expression widened is permission-widening", async () => {
     const before = await loadBase();
     const after = clone(before);

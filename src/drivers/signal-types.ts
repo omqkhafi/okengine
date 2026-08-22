@@ -197,6 +197,15 @@ export interface LiveEvent {
   readonly payload: unknown;
 }
 
+/** Options for {@link SignalBus.live}. */
+export interface LiveSubscribeOptions {
+  /**
+   * Exclusive SSE cursor — replay events after this id, then continue.
+   * Omit for the full retained tape. Unknown / pruned ids throw OKE1014.
+   */
+  readonly afterId?: string;
+}
+
 /** Live subscriber (payload + id). */
 export type LiveHandler = (event: LiveEvent) => void | Promise<void>;
 
@@ -322,11 +331,22 @@ export interface SignalBus {
    * Client-subscribable live feed.
    *
    * Replays retained history, then yields new events until the iterator
-   * returns. `delivery` must be `"live"`.
+   * returns. `delivery` must be `"live"`. `afterId` skips through that
+   * id (exclusive); unknown or pruned ids throw OKE1014.
    *
    * @param signal - Signal name
+   * @param opts - Optional resume cursor
    */
-  live(signal: string): AsyncIterable<LiveEvent>;
+  live(signal: string, opts?: LiveSubscribeOptions): AsyncIterable<LiveEvent>;
+  /**
+   * Validate a live resume cursor without waiting for new events.
+   *
+   * Prunes the tape first. Throws OKE1014 when `afterId` is absent.
+   *
+   * @param signal - Signal name
+   * @param afterId - SSE cursor
+   */
+  checkLiveResume(signal: string, afterId: string): Promise<void>;
   /**
    * Process pending work until idle (deterministic tests).
    */

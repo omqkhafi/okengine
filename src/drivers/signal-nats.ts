@@ -108,7 +108,8 @@ export async function openNatsSignal(options: SignalOpenOptions): Promise<Signal
       };
     },
     subscribe: (signal, subscriberId, handler) => outbox.subscribe(signal, subscriberId, handler),
-    live: (signal) => outbox.live(signal),
+    live: (signal, opts) => outbox.live(signal, opts),
+    checkLiveResume: (signal, afterId) => outbox.checkLiveResume(signal, afterId),
     drain: () => outbox.drain(),
     deadLetters: (s) => outbox.deadLetters(s),
     inspect: (s) => outbox.inspect(s),

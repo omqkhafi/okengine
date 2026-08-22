@@ -18,10 +18,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - `api.live(signal, input?, { onEvent })` subscribes to `delivery: "live"`
   HTTP SSE (callback + unsubscribe). Same handlers on exposing flows.
-  Opt-in `autoResubscribe` replays the full tape after a drop.
+  Opt-in `autoResubscribe` reconnects with backoff and `Last-Event-ID`.
 - `http.get(path).live(signal)` / `http.live(signal)` expose a live
   signal as GET SSE. `fx.live` is the stream carrier. Multiple
   audiences of one signal boot when gates or match shape differ.
+- `signal(..., { delivery: "live", retention: { maxAge, maxCount } })`
+  caps the retained tape (AND-combined; omit for unbounded). Drivers
+  prune on write and when `live()` opens.
+- Live SSE resume: reconnects send `Last-Event-ID`. A missing cursor
+  is **OKE1014** / HTTP 410 `LiveResumeGap` — not a silent full replay.
+  `autoResubscribe` then replays the remaining tape after backoff.
+- `useLive(api, signal, input?)` on `okengine/client-react` —
+  `{ events, latest, error, isConnected }`.
 
 ### 💥 Breaking Changes
 
@@ -39,6 +47,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Client gzip budget is 4 kB (was 3 kB) so `api.live` SSE subscribe
   fits the published cap.
+- Kernel edge gzip budget is 16 kB (was 15 kB) so Last-Event-ID
+  resume (OKE1014 / 410) fits the edge encoder.
 
 ### 🐛 Fixed
 

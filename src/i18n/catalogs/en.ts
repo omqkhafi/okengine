@@ -36,6 +36,10 @@ export const builtinEn = {
       cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
       fix: "Add on({resource}, …) or mark the signal '{'optional: true'}'.",
     },
+    "1014": {
+      cause: 'Live cursor "{afterId}" is not on the tape for "{signal}".',
+      fix: "Reconnect without Last-Event-ID to replay the remaining tape.",
+    },
     "1101": {
       cause: "domain table not found — migrations have not been applied.",
       fix: "run `oke db migrate` against this environment.",

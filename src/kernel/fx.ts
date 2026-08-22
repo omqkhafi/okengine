@@ -372,6 +372,8 @@ export interface JsonStreamResult {
   readonly kind: "stream";
   readonly status: 200;
   readonly chunks: AsyncIterable<unknown>;
+  /** Awaited before the 200 SSE body; throws OKE1014 on a missing resume cursor. */
+  ready?: () => Promise<void>;
   /** Set by the kernel to commit journal / Runs after the stream settles. */
   finalize?: () => Promise<void>;
 }
@@ -676,16 +678,25 @@ export interface Fx {
   /**
    * Stream a `delivery: "live"` signal as SSE (records `read` on `signal:<name>`).
    *
+   * HTTP `Last-Event-ID` is applied when `opts.afterId` is omitted. A missing
+   * cursor throws OKE1014; `JsonStreamResult.ready` turns that into HTTP 410.
+   *
    * @param signal - Signal name or handle
-   * @param opts - Optional payload filter
+   * @param opts - Payload filter and optional resume cursor
    */
   live<T>(
     signal: SignalDecl<T>,
-    opts?: { readonly match?: (payload: T) => boolean },
+    opts?: {
+      readonly match?: (payload: T) => boolean;
+      readonly afterId?: string;
+    },
   ): JsonStreamResult;
   live(
     signal: NamedRef,
-    opts?: { readonly match?: (payload: unknown) => boolean },
+    opts?: {
+      readonly match?: (payload: unknown) => boolean;
+      readonly afterId?: string;
+    },
   ): JsonStreamResult;
   /**
    * Call another flow (records `call`). Stub returns `undefined`.
@@ -962,6 +973,8 @@ export interface CreateFxOptions {
    * as `parentRunId` so consuming Flows can join the trace chain.
    */
   readonly runId?: string;
+  /** HTTP `Last-Event-ID` for {@link Fx.live} resume (tests may pass `opts.afterId`). */
+  readonly lastEventId?: string;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
   /** Trigger gate names for RLS (`oke.gate` = first policy/public). */
@@ -1765,20 +1778,24 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return options.signalRuntime.deadLetters(name);
       });
     },
-    live(signal: NamedRef, opts?: { readonly match?: (payload: unknown) => boolean }) {
+    live(
+      signal: NamedRef,
+      opts?: { readonly match?: (payload: unknown) => boolean; readonly afterId?: string },
+    ) {
       const name = resolveName(signal);
-      const chunks = (async function* () {
+      const afterId = opts?.afterId ?? options.lastEventId;
+      const bind = async (): Promise<boolean> => {
         await gated("read", signalReadRef(name), async () => undefined);
-        if (isDryRun()) {
-          return;
-        }
-        if (!options.signalRuntime) {
-          throw new Error("fx.live requires a bound signal runtime");
-        }
+        if (isDryRun()) return false;
+        if (!options.signalRuntime) throw new Error("fx.live requires a bound signal runtime");
+        return true;
+      };
+      const chunks = (async function* () {
+        if (!(await bind())) return;
         const ambient = currentAbortSignal();
         const local = new AbortController();
         const unlink = linkAbort(ambient, local);
-        const iter = options.signalRuntime.live(name)[Symbol.asyncIterator]();
+        const iter = options.signalRuntime!.live(name, { afterId })[Symbol.asyncIterator]();
         const onAbort = (): void => {
           void iter.return?.();
         };
@@ -1803,6 +1820,10 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         kind: "stream" as const,
         status: 200 as const,
         chunks,
+        ready: async () => {
+          if (afterId && (await bind()))
+            await options.signalRuntime!.checkLiveResume(name, afterId);
+        },
       } as JsonStreamResult;
     },
     call(flow, input) {

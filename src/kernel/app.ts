@@ -1323,8 +1323,8 @@ export function oke(options: OkeOptions): OkeApp {
           resolvedLocale,
           defaultLocale,
         });
-      const signal = extras?.request?.signal;
-      return signal ? withAbortSignal(signal, run) : run();
+      const abort = extras?.request?.signal;
+      return abort ? withAbortSignal(abort, run) : run();
     });
   }
 
@@ -1485,6 +1485,7 @@ export function oke(options: OkeOptions): OkeApp {
       effects,
       runTelemetry: telemetry,
       runId,
+      lastEventId: extras?.request?.headers.get("last-event-id") || undefined,
       now,
       i18n: {
         locale: resolvedLocale,
@@ -1743,7 +1744,11 @@ export function oke(options: OkeOptions): OkeApp {
       }
     };
 
-    if (streamOut && !isTerminalFailure(result)) {
+    if (
+      streamOut &&
+      !isTerminalFailure(result) &&
+      result.response?.headers.get("content-type")?.includes("text/event-stream")
+    ) {
       streamOut.finalize = finalizeRun;
     } else {
       await finalizeRun();
@@ -2002,7 +2007,7 @@ export function oke(options: OkeOptions): OkeApp {
           );
           runLabel = internalResult.runId;
           cacheLabel = internalResult.cache;
-          return respond(encodeExecuteResult(internalResult));
+          return respond(await encodeExecuteResult(internalResult));
         }
       }
 
@@ -2081,7 +2086,7 @@ export function oke(options: OkeOptions): OkeApp {
       runLabel = result.runId;
       cacheLabel = result.cache;
 
-      return respond(encodeExecuteResult(result));
+      return respond(await encodeExecuteResult(result));
     },
     async dispatchSignal(signal, payload, meta) {
       const name = resolveName(signal);

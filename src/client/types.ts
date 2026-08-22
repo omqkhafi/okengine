@@ -267,9 +267,12 @@ export type LiveUnsubscribe = () => void;
 export interface LiveHandlers<T> {
   readonly onEvent: (event: T) => void;
   readonly onError?: (error: unknown) => void;
+  /** Fired after a successful SSE open (HTTP 200), including reconnects. */
+  readonly onOpen?: () => void;
   /**
-   * Re-open the SSE request from scratch (full replay) after a drop.
-   * Default false. Not Last-Event-ID resume.
+   * Re-open the SSE request after a drop. Default false.
+   * Reconnects send `Last-Event-ID` when a cursor was received.
+   * A 410 LiveResumeGap clears the cursor and replays the remaining tape.
    * Backoff starts at 500ms and doubles to 30s so a closed stream cannot
    * tight-loop reconnects.
    */
@@ -302,8 +305,8 @@ export type ClientLive<App = never> = [App] extends [never]
 type ClientLiveOverloads = {
   <T>(signal: LiveSignalHandle<T>, input: LiveInput<T>, handlers: LiveHandlers<T>): LiveUnsubscribe;
   <T>(signal: LiveSignalHandle<T>, handlers: LiveHandlers<T>): LiveUnsubscribe;
-  (name: string, input: unknown, handlers: LiveHandlers<unknown>): LiveUnsubscribe;
-  (name: string, handlers: LiveHandlers<unknown>): LiveUnsubscribe;
+  <T>(name: string, input: unknown, handlers: LiveHandlers<T>): LiveUnsubscribe;
+  <T>(name: string, handlers: LiveHandlers<T>): LiveUnsubscribe;
 };
 
 type IsLiveContract<C> = C extends { readonly live: string } ? true : false;

@@ -7,7 +7,7 @@
  */
 
 export { signal } from "./signal/declare.ts";
-export type { SignalDecl, SignalOptions } from "./signal/declare.ts";
+export type { SignalDecl, SignalOptions, SignalRetention } from "./signal/declare.ts";
 export type { DeadLetter, SignalFailureReason } from "../drivers/signal-types.ts";
 
 export { createSignalRuntime } from "./signal/runtime.ts";

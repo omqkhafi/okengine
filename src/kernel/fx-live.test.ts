@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { encodeExecuteResult } from "../compiler/response.ts";
 import { memorySignalDriver } from "../drivers/index.ts";
 import { createSignalRuntime, signal, type SignalDecl } from "../elements/signal.ts";
 import { withAbortSignal } from "./abort-scope.ts";
@@ -97,6 +98,54 @@ describe("fx.live", () => {
       "read:signal:order-status",
     ]);
     await it.return?.();
+    await runtime.close();
+  });
+
+  test("afterId skips already-delivered events", async () => {
+    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const runtime = openRuntime(orderStatus);
+    const bus = await runtime.start();
+    await runtime.emit("order-status", { orderId: "ord_1", status: "placed" });
+    await runtime.emit("order-status", { orderId: "ord_1", status: "shipped" });
+    await bus.drain();
+
+    const first = bus.live("order-status")[Symbol.asyncIterator]();
+    const a = await first.next();
+    await first.return?.();
+    const firstId = a.value?.id as string;
+
+    const { fx } = createFxContext({
+      flow: "orders.events",
+      effects: { reads: [signalReadRef("order-status")] },
+      signalRuntime: runtime,
+    });
+    const stream = fx.live(orderStatus, { afterId: firstId });
+    const it = stream.chunks[Symbol.asyncIterator]();
+    const step = await it.next();
+    expect(isSseFrame(step.value) && step.value.data).toEqual({
+      orderId: "ord_1",
+      status: "shipped",
+    });
+    await it.return?.();
+    await runtime.close();
+  });
+
+  test("ready throws OKE1014 for a missing afterId", async () => {
+    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const runtime = openRuntime(orderStatus);
+    const fx = createFx({
+      flow: "orders.events",
+      effects: { reads: [signalReadRef("order-status")] },
+      signalRuntime: runtime,
+    });
+    const stream = fx.live(orderStatus, { afterId: "missing" });
+    await expect(stream.ready?.()).rejects.toMatchObject({ code: 1014 });
+    const res = await encodeExecuteResult({ output: stream });
+    expect(res.status).toBe(410);
+    expect(await res.json()).toMatchObject({
+      data: null,
+      error: { code: "LiveResumeGap", data: { signal: "order-status", afterId: "missing" } },
+    });
     await runtime.close();
   });
 });
