@@ -6,6 +6,7 @@
  */
 
 import type { ColumnClassification } from "../../manifest/types.ts";
+import { lazyRequire } from "../../kernel/lazy-require.ts";
 import type { ColumnDef, TableHandle } from "./table.ts";
 import { id as idHelper, now as nowHelper } from "./table.ts";
 
@@ -479,12 +480,25 @@ function sqlStringLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function helperPolicyName(prefix: string, key: string, command: SchemaPolicyFor): string {
+/**
+ * Policy name `prefix_key_command`.
+ *
+ * @param prefix - Helper kind
+ * @param key - Gate / column / scope
+ * @param command - SQL command
+ */
+export function helperPolicyName(prefix: string, key: string, command: SchemaPolicyFor): string {
   const slug = key.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
   return `${prefix}_${slug}_${command}`;
 }
 
-function policyPredicates(
+/**
+ * USING / WITH CHECK split for a helper expression.
+ *
+ * @param command - SQL command
+ * @param expr - Predicate
+ */
+export function policyPredicates(
   command: SchemaPolicyFor,
   expr: string,
 ): { readonly using?: string; readonly withCheck?: string } {
@@ -547,6 +561,24 @@ export function schemaPolicyScope(
   });
 }
 
+/** Callable `store.schema.policy` plus Gate helpers. */
+export type SchemaPolicyApi = typeof schemaPolicy & {
+  readonly gate: typeof schemaPolicyGate;
+  readonly owner: typeof schemaPolicyOwner;
+  readonly scope: typeof schemaPolicyScope;
+  readonly tenant: (
+    column: string,
+    options?: Pick<SchemaPolicyOptions, "for" | "as" | "to">,
+  ) => SchemaPolicyDecl;
+};
+
+function loadSchemaTenant(): {
+  tenant: SchemaPolicyApi["tenant"];
+  unscoped: () => SchemaTenantScopedDecl;
+} {
+  return lazyRequire(import.meta.dir, ["schema", "tenant"].join("-"));
+}
+
 /**
  * Tenant-column policy — `tenant_id = oke.tenant()`.
  *
@@ -557,12 +589,7 @@ export function schemaPolicyTenant(
   column: string,
   options: Pick<SchemaPolicyOptions, "for" | "as" | "to"> = {},
 ): SchemaPolicyDecl {
-  const command = options.for ?? "all";
-  return schemaPolicy(helperPolicyName("tenant", column, command), {
-    ...options,
-    for: command,
-    ...policyPredicates(command, `${column} = oke.tenant()`),
-  });
+  return loadSchemaTenant().tenant(column, options);
 }
 
 /**
@@ -570,16 +597,8 @@ export function schemaPolicyTenant(
  * Required when `gate.auth.tenant` is on and the table has no tenant policy.
  */
 export function schemaUnscoped(): SchemaTenantScopedDecl {
-  return { kind: "schema-tenant-scoped", tenantScoped: false };
+  return loadSchemaTenant().unscoped();
 }
-
-/** Callable `store.schema.policy` plus Gate helpers. */
-export type SchemaPolicyApi = typeof schemaPolicy & {
-  readonly gate: typeof schemaPolicyGate;
-  readonly owner: typeof schemaPolicyOwner;
-  readonly scope: typeof schemaPolicyScope;
-  readonly tenant: typeof schemaPolicyTenant;
-};
 
 /** `store.schema.policy` — raw + Gate helpers. */
 export const schemaPolicyApi: SchemaPolicyApi = Object.assign(schemaPolicy, {

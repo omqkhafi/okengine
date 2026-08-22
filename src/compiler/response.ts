@@ -5,12 +5,7 @@
  */
 
 import type { FlowFailure } from "../kernel/errors.ts";
-import {
-  isJsonResult,
-  isJsonStreamResult,
-  isSseFrame,
-  type JsonStreamResult,
-} from "../kernel/fx.ts";
+import type { JsonResult, JsonStreamResult, SseFrame } from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { lazyRequire } from "../kernel/lazy-require.ts";
 import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
@@ -59,10 +54,11 @@ export function statusForFailure(failure: FlowFailure): number {
  * @param output - Handler output (`undefined` → 204)
  */
 export function encodeSuccess(output: unknown): Response {
-  if (isJsonStreamResult(output)) {
+  const json = loadFxJson();
+  if (json.isJsonStreamResult(output)) {
     return encodeSseStream(output);
   }
-  if (isJsonResult(output)) {
+  if (json.isJsonResult(output)) {
     if (output.status === 204) {
       return new Response(null, { status: 204 });
     }
@@ -89,6 +85,14 @@ export function encodeFailure(failure: FlowFailure): Response {
 
 function loadFxLiveStream(): typeof import("../kernel/fx-live-stream.ts") {
   return lazyRequire(`${import.meta.dir}/../kernel`, ["fx", "live", "stream"].join("-"));
+}
+
+function loadFxJson(): {
+  isJsonResult: (value: unknown) => value is JsonResult;
+  isJsonStreamResult: (value: unknown) => value is JsonStreamResult;
+  isSseFrame: (value: unknown) => value is SseFrame;
+} {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["fx", "runtime"].join("-"));
 }
 
 /**
@@ -132,7 +136,7 @@ export async function encodeExecuteResult(result: {
       { status: 500 },
     );
   }
-  if (isJsonStreamResult(result.output) && result.output.ready) {
+  if (loadFxJson().isJsonStreamResult(result.output) && result.output.ready) {
     const early = await loadFxLiveStream().awaitLiveReady(result.output);
     if (early) return early;
   }
@@ -151,7 +155,7 @@ function encodeSseStream(carrier: JsonStreamResult): Response {
     async start(controller) {
       try {
         for await (const chunk of carrier.chunks) {
-          const frame = isSseFrame(chunk)
+          const frame = loadFxJson().isSseFrame(chunk)
             ? chunk
             : { data: chunk as unknown, id: undefined as string | undefined };
           const lines: string[] = [];

@@ -27,7 +27,6 @@ import type { CapabilityToken } from "./capability.ts";
 import type { AppAuthBinding } from "./auth-resolve.ts";
 import type { ApiKeyStore } from "../auth/api-keys.ts";
 import type { AuthHttpMaterialization } from "../auth/bindings.ts";
-import type { TenantRow } from "../auth/tenants.ts";
 import type { WiredGateAuth } from "./app-auth.ts";
 import {
   resolveGateConfig,
@@ -35,25 +34,24 @@ import {
   type ResolvedGateConfig,
 } from "../elements/gate/config.ts";
 import { requirePackageModule } from "../shared/lazy-src.ts";
+import { lazyRequire } from "./lazy-require.ts";
+import type { DurableResult, RunDurableOptions } from "../elements/clock/durable.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import { parseAcceptLanguage } from "../elements/channel/locale.ts";
 import { runWithLocale } from "../i18n/locale-context.ts";
-import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
 import { withAbortSignal } from "./abort-scope.ts";
 import { fxRetry } from "./concurrency.ts";
-import {
-  createFxContext,
-  freezePrincipal,
-  isJsonStreamResult,
-  resolveName,
-  type CreateFxOptions,
-  type Fx,
-  type FxAuth,
-  type FxOperator,
-  type FxPrincipal,
-  type NamedRef,
+import type {
+  CreateFxOptions,
+  Fx,
+  FxAuth,
+  FxContext,
+  FxOperator,
+  FxPrincipal,
+  JsonStreamResult,
+  NamedRef,
 } from "./fx.ts";
 import {
   currentDevSurface,
@@ -152,6 +150,31 @@ function loadStoreCache(): typeof import("../elements/store/cache.ts") {
 /** i18n catalogs — loaded at execute time, not on the `oke()` construction graph. */
 function loadMessages(): typeof import("../i18n/messages.ts") {
   return requirePackageModule("i18n/messages", "messages");
+}
+
+/**
+ * `createFx` / JSON result helpers — loaded on first execute, not on Store-only
+ * `oke()` construction (same boundary as `boot.ts`).
+ */
+function loadFx(): {
+  createFxContext: (options: CreateFxOptions) => FxContext;
+  freezePrincipal: (p: FxPrincipal) => FxPrincipal;
+  isJsonStreamResult: (value: unknown) => value is JsonStreamResult;
+  resolveName: (ref: NamedRef) => string;
+} {
+  return lazyRequire(import.meta.dir, ["fx", "runtime"].join("-"));
+}
+
+/** App-shell tenancy wiring — loaded only when `gate.auth.tenant` is on. */
+function loadAppTenant(): { w: (kind: number, ...args: unknown[]) => unknown } {
+  return lazyRequire(import.meta.dir, ["app", "tenant"].join("-"));
+}
+
+/** Durable runner — statically imports `createFx`; keep it off Store-only `oke()`. */
+function loadDurable(): {
+  runDurable: (opts: RunDurableOptions) => Promise<DurableResult>;
+} {
+  return lazyRequire(import.meta.dir, ["clock", "durable"].join("-"));
 }
 
 /** Options for {@link oke}. */
@@ -984,9 +1007,9 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   async function handleCronFire(name: string): Promise<void> {
-    const { parsePerTenantCronName } = await import("../elements/clock/declare.ts");
-    const parsed = parsePerTenantCronName(name);
-    const extras = parsed ? { tenant: { id: parsed.tenantId } } : undefined;
+    const extras = gateConfig.auth?.tenant
+      ? (loadAppTenant().w(0, name) as { readonly tenant: { readonly id: string } } | undefined)
+      : undefined;
     await app.dispatchEvery(name, extras);
     // Named clocks (e.g. `clock("expire-stale", { every: "1h" })`) reconcile
     // to a store row whose effective interval may differ from the cron name.
@@ -1049,7 +1072,7 @@ export function oke(options: OkeOptions): OkeApp {
       const { store, instanceId, leaseMs } = activeJournal();
       const existing = await store.get(runId);
       try {
-        await runDurable({
+        await loadDurable().runDurable({
           flow: flowDef,
           input,
           journalStore: store,
@@ -1058,8 +1081,9 @@ export function oke(options: OkeOptions): OkeApp {
           now,
           fx: {
             ...durableResumeFx(),
-            tenantEnabled: gateConfig.auth?.tenant !== undefined,
-            tenantStore: gateConfig.auth?.tenantStore,
+            ...(gateConfig.auth?.tenant
+              ? (loadAppTenant().w(5, gateConfig.auth) as object)
+              : {}),
             ...(existing?.tenant ? { tenant: { id: existing.tenant } } : {}),
           },
         });
@@ -1225,24 +1249,19 @@ export function oke(options: OkeOptions): OkeApp {
       onCronFire: overrides?.onCronFire ?? handleCronFire,
       onSignal: overrides?.onSignal ?? handleSignalFire,
       onDurableResume: overrides?.onDurableResume ?? handleDurableResume,
-      tenantIds: gateConfig.auth?.tenantStore
-        ? () => [...gateConfig.auth!.tenantStore!.tenants.keys()]
-        : undefined,
+      ...(gateConfig.auth?.tenantStore
+        ? (loadAppTenant().w(1, gateConfig.auth.tenantStore) as object)
+        : {}),
     };
     const result = await bootApplication(merged);
     bootResult = result;
     if (gateConfig.auth?.tenantStore && result.clock) {
-      const { putPerTenantCronRows, orphanPerTenantCronRows } = await import(
-        "../elements/clock/reconcile.ts"
+      loadAppTenant().w(
+        2,
+        gateConfig.auth.tenantStore,
+        result.clock.store,
+        merged.clocks ?? [],
       );
-      const templates = merged.clocks ?? [];
-      const tenantStore = gateConfig.auth.tenantStore;
-      tenantStore.hooks = {
-        onCreate: (tenant: TenantRow) =>
-          putPerTenantCronRows(result.clock!.store, templates, tenant.id),
-        onDelete: (tenant: TenantRow) =>
-          orphanPerTenantCronRows(result.clock!.store, templates, tenant.id),
-      };
     }
     if (gateConfig.auth?.apiKeyStore && result.store) {
       const { bindHostApiKeySqlFromStore } = await import("../auth/api-key-sql.ts");
@@ -1441,7 +1460,6 @@ export function oke(options: OkeOptions): OkeApp {
         auth: {
           userId: options.fx?.auth?.userId ?? null,
           scopes: new Set(options.fx?.auth?.scopes ?? []),
-          sessionScopes: new Set(options.fx?.auth?.sessionScopes ?? options.fx?.auth?.scopes ?? []),
           verified: options.fx?.auth?.verified,
           apiKeyId: options.fx?.auth?.apiKeyId,
         },
@@ -1490,14 +1508,13 @@ export function oke(options: OkeOptions): OkeApp {
               }
             : undefined,
         ...(gateConfig.auth?.tenant && gateConfig.auth.tenantStore
-          ? {
-              tenant: {
-                config: gateConfig.auth.tenant,
-                store: gateConfig.auth.tenantStore,
-                flowTenantScoped,
-                flowPlane: flowDef.plane,
-              },
-            }
+          ? (loadAppTenant().w(
+              3,
+              gateConfig.auth.tenant,
+              gateConfig.auth.tenantStore,
+              flowTenantScoped,
+              flowDef.plane,
+            ) as object)
           : {}),
       });
 
@@ -1537,7 +1554,7 @@ export function oke(options: OkeOptions): OkeApp {
     }
 
     const effects = flowDef.effects ?? capability?.declared;
-    const { fx, ledger } = createFxContext({
+    const { fx, ledger } = loadFx().createFxContext({
       ...options.fx,
       flow: flowDef.name,
       effects,
@@ -1561,15 +1578,18 @@ export function oke(options: OkeOptions): OkeApp {
           ? { tenant: { id: extras.tenant.id } }
           : {}),
       apiKeyStore: gateConfig.auth?.apiKeyStore,
-      tenantStore: gateConfig.auth?.tenantStore,
       sessions: authBinding?.sessions,
-      sessionCrypto: authBinding
-        ? { secret: authBinding.secret, now: authBinding.now }
-        : undefined,
       manifest: options.manifest,
-      tenantEnabled,
-      flowTenantScoped,
-      flowPlane: flowDef.plane,
+      ...(tenantEnabled || extras?.tenant
+        ? (loadAppTenant().w(4, {
+            enabled: tenantEnabled,
+            store: gateConfig.auth?.tenantStore,
+            scoped: flowTenantScoped,
+            plane: flowDef.plane,
+            tenant: principals?.tenant ?? (extras?.tenant ? { id: extras.tenant.id } : undefined),
+            bind: authBinding,
+          }) as object)
+        : {}),
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(extras?.trustedInvoke === true && extras.revealPii === true ? { revealPii: true } : {}),
       rlsGateNames: gateNamesOf(trigger),
@@ -1597,10 +1617,10 @@ export function oke(options: OkeOptions): OkeApp {
           callInput,
           { kind: "internal" } satisfies InternalTrigger,
           {
-            originPrincipal: freezePrincipal(fx.principal),
+            originPrincipal: loadFx().freezePrincipal(fx.principal),
             locale: resolvedLocale,
             parentId: runId,
-            tenant: { id: fx.tenant.id },
+            ...(tenantEnabled ? { tenant: { id: fx.tenant.id } } : {}),
             ...(extras?.trustedInvoke === true && extras.revealPii === true
               ? { trustedInvoke: true, revealPii: true }
               : {}),
@@ -1702,7 +1722,7 @@ export function oke(options: OkeOptions): OkeApp {
                   durable: flowDef.durable,
                   effects: putEffects,
                 });
-              if (storeAfter && output !== undefined && !isJsonStreamResult(output)) {
+              if (storeAfter && output !== undefined && !loadFx().isJsonStreamResult(output)) {
                 const ttlMs =
                   typeof flowDef.cache === "string" ? cache.parseTtlMs(flowDef.cache) : undefined;
                 storeRt.putTier1(
@@ -1751,7 +1771,7 @@ export function oke(options: OkeOptions): OkeApp {
 
     const endedAt = now();
     const durationMs = resolveDurationMs(endedAt - startedAt, performance.now() - startedHr);
-    const streamOut = isJsonStreamResult(result.output) ? result.output : undefined;
+    const streamOut = loadFx().isJsonStreamResult(result.output) ? result.output : undefined;
 
     const finalizeRun = async (): Promise<void> => {
       // Stream rows land in Traces only after close. Measure wall time then
@@ -1931,7 +1951,7 @@ export function oke(options: OkeOptions): OkeApp {
       for (const [runId, sleeper] of [...sleepingRuns.entries()]) {
         if (t < sleeper.wakeAt) continue;
         sleepingRuns.delete(runId);
-        const result = await runDurable({
+        const result = await loadDurable().runDurable({
           flow: sleeper.flow,
           input: sleeper.input,
           journalStore: store,
@@ -1987,7 +2007,7 @@ export function oke(options: OkeOptions): OkeApp {
     },
     flow(ref) {
       if (isFlow(ref)) return flowsByName.get(ref.name) ?? ref;
-      return flowsByName.get(resolveName(ref as NamedRef));
+      return flowsByName.get(loadFx().resolveName(ref as NamedRef));
     },
     adopt(...args: readonly unknown[]) {
       const flows = accumulateAdoptArgs(args, routes);
@@ -2165,7 +2185,7 @@ export function oke(options: OkeOptions): OkeApp {
       return respond(await encodeExecuteResult(result));
     },
     async dispatchSignal(signal, payload, meta) {
-      const name = resolveName(signal);
+      const name = loadFx().resolveName(signal);
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
         if (b.trigger.kind === "signal" && b.trigger.name === name) {
@@ -2203,7 +2223,7 @@ export function oke(options: OkeOptions): OkeApp {
     async call(ref, input) {
       const flowDef = isFlow(ref)
         ? (flowsByName.get(ref.name) ?? ref)
-        : flowsByName.get(resolveName(ref as NamedRef));
+        : flowsByName.get(loadFx().resolveName(ref as NamedRef));
       if (!flowDef) {
         return undefined;
       }

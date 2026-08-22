@@ -52,7 +52,7 @@ import {
   recordWouldHaveFired,
   touchDryRunStore,
 } from "./dry-run.ts";
-import { fail, throwOke, type FailOptions, type FlowFailure } from "./errors.ts";
+import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
 import { currentAbortSignal, linkAbort } from "./abort-scope.ts";
 import {
   fxAll,
@@ -98,12 +98,6 @@ export const RUNS_RESOURCE = "runs";
  * module stays off the edge and Store-only graphs.
  */
 export const AUTH_API_KEYS_RESOURCE = "auth:api-keys";
-
-/**
- * Resource ref Flows declare for {@link Fx.auth} tenant methods.
- * Same string as `src/auth/tenants.ts`.
- */
-export const AUTH_TENANTS_RESOURCE = "auth:tenants";
 
 /**
  * Capability ref for {@link Fx.deadLetters} / {@link Fx.live} — `signal:<name>`, never a store facet.
@@ -1112,21 +1106,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     now,
     gated,
   });
-  const auth: FxAuth =
-    options.tenantStore !== undefined || options.tenantEnabled === true
-      ? (lazyRequire<typeof import("./fx-auth-tenants.ts")>(
-          import.meta.dir,
-          ["fx", "auth", "tenants"].join("-"),
-        ).attach({
-          auth: keys,
-          store: options.tenantStore,
-          sessions: options.sessions,
-          crypto: options.sessionCrypto,
-          manifest: options.manifest ?? undefined,
-          now,
-          gated,
-        }) as FxAuth)
-      : (keys as FxAuth);
+  const auth: FxAuth = keys as FxAuth;
   const operator: FxOperator = options.operator ?? { id: null };
   const tenant: { id: string | null } = options.tenant ?? { id: null };
   const defaultLocale = options.i18n?.defaultLocale ?? "en";
@@ -1464,42 +1444,31 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     } as SqlStoreHandle;
   }
 
-  function kvTenantScoped(decl: KvStoreDecl): boolean {
-    if (decl.tenantScoped === false) return false;
-    if (decl.tenantScoped === true) return true;
-    return options.tenantEnabled === true;
+  function loadFxTenantStore(): {
+    kv: (
+      mode: "in" | "out",
+      tenantId: string | null,
+      decl: KvStoreDecl,
+      enabled: boolean,
+      prop: string | symbol,
+      payload: unknown,
+    ) => unknown;
+    path: (
+      tenantId: string | null,
+      enabled: boolean,
+      contracts: { get(name: string): { perTenant?: boolean } | undefined } | undefined,
+      name: string,
+    ) => string;
+    missingVault: (storagePath: string) => Error;
+  } {
+    return lazyRequire(import.meta.dir, ["fx", "tenant", "store"].join("-"));
   }
 
-  function tenantKvPrefix(): string {
-    if (!tenant.id) throwOke("TENANT_REQUIRED");
-    return `${tenant.id}:`;
-  }
+  const tenantOn = options.tenantEnabled === true;
 
-  function vaultStoragePath(contractName: string): string {
-    const decl = options.vaultRuntime?.contracts.get(contractName);
-    const perTenant =
-      decl?.perTenant === true ||
-      (options.tenantEnabled === true && decl !== undefined && decl.perTenant !== false);
-    if (!perTenant) return contractName;
-    if (!tenant.id) throwOke("TENANT_REQUIRED");
-    return `${tenant.id}/${contractName}`;
-  }
-
-  function tenantKvArgs(decl: KvStoreDecl, prop: string | symbol, args: unknown[]): unknown[] {
-    if (!kvTenantScoped(decl)) return args;
-    const prefix = tenantKvPrefix();
-    if (prop === "list") {
-      const userPrefix = typeof args[0] === "string" ? args[0] : "";
-      return [`${prefix}${userPrefix}`];
-    }
-    if (typeof args[0] !== "string") return args;
-    return [`${prefix}${args[0]}`, ...args.slice(1)];
-  }
-
-  function stripTenantKvPrefix(decl: KvStoreDecl, keys: string[]): string[] {
-    if (!kvTenantScoped(decl) || !tenant.id) return keys;
-    const prefix = `${tenant.id}:`;
-    return keys.map((k) => (k.startsWith(prefix) ? k.slice(prefix.length) : k));
+  function tenantVaultPath(name: string): string {
+    if (!tenantOn) return name;
+    return loadFxTenantStore().path(tenant.id, true, options.vaultRuntime?.contracts, name);
   }
 
   function storeHandle(ref: SqlStoreDecl): SqlStoreHandle;
@@ -1586,15 +1555,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               const h = await open();
               const fn = (h as unknown as Record<string | symbol, unknown>)[prop];
               if (typeof fn !== "function") return undefined;
-              const callArgs =
-                decl.facet === "kv" ? tenantKvArgs(decl as KvStoreDecl, prop, args) : args;
-              const result = (fn as (...a: unknown[]) => unknown).apply(h, callArgs);
-              if (decl.facet === "kv" && prop === "list") {
-                return Promise.resolve(result as Promise<string[]>).then((keys) =>
-                  stripTenantKvPrefix(decl as KvStoreDecl, keys),
-                );
-              }
-              return result;
+              return (fn as (...a: unknown[]) => unknown).apply(h, args);
             });
         },
       });
@@ -1762,12 +1723,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     get(secret) {
       const name = resolveName(secret);
       return gatedSecret(name, async () => {
-        const path = vaultStoragePath(name);
+        const path = tenantVaultPath(name);
         if (path !== name) {
           if (options.vaultAdapter) {
             const rec = await options.vaultAdapter.get(path);
             if (!rec) {
-              throw new Error(`fx.vault.get: missing per-tenant secret "${path}"`);
+              throw loadFxTenantStore().missingVault(path);
             }
             return new Redacted(rec.value);
           }
@@ -1784,7 +1745,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(path);
       return gatedSecret(name, async () => {
         refuseDryRunVaultWrite("set", name);
-        const storage = vaultStoragePath(name);
+        const storage = tenantVaultPath(name);
         const written = await vaultAdapterFor("set").set(storage, value, {
           ...(setOptions?.ttlMs !== undefined ? { ttlMs: setOptions.ttlMs } : {}),
           ...(setOptions?.metadata !== undefined ? { metadata: setOptions.metadata } : {}),
@@ -1797,7 +1758,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(path);
       return gatedSecret(name, async () => {
         refuseDryRunVaultWrite("rotate", name);
-        const storage = vaultStoragePath(name);
+        const storage = tenantVaultPath(name);
         const written = await vaultAdapterFor("rotate").rotate(storage, value, {
           actor: vaultActor,
         });
@@ -1808,7 +1769,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(path);
       return gatedSecret(name, async () => {
         refuseDryRunVaultWrite("delete", name);
-        return vaultAdapterFor("delete").delete(vaultStoragePath(name), { actor: vaultActor });
+        return vaultAdapterFor("delete").delete(tenantVaultPath(name), { actor: vaultActor });
       });
     },
     async list(prefix) {
@@ -2182,6 +2143,25 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       return fxUsing(acquire, release, use);
     },
   };
+
+  if (options.tenantStore !== undefined || options.tenantEnabled === true) {
+    lazyRequire<{
+      install: (
+        bag: { auth: FxAuthIdentity; store: (ref: never) => object },
+        ctx: {
+          readonly tenantId: string | null;
+          readonly options: typeof options;
+          readonly now: () => number;
+          readonly gated: typeof gated;
+        },
+      ) => void;
+    }>(import.meta.dir, ["fx", "tenant", "store"].join("-")).install(fx, {
+      tenantId: tenant.id,
+      options,
+      now,
+      gated,
+    });
+  }
 
   return { fx, ledger, capability };
 }

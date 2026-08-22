@@ -9,6 +9,7 @@ import { plugin, type PluginDef } from "../kernel/plugin.ts";
 import type { BreachCheckFn } from "./breach-check.ts";
 import type { PasswordPolicyOptions } from "./password-policy.ts";
 import { AUTH_TABLES } from "./tables.ts";
+import { AUTH_TENANT_TABLES } from "./tenant-tables.ts";
 
 /** Session knobs beyond raw access/refresh TTLs. */
 export interface AuthSessionOptions {
@@ -83,7 +84,11 @@ export function auth(options: AuthPluginOptions = {}): PluginDef {
     /* principals resolved by session / API key middleware at runtime */
   });
 
-  for (const name of Object.values(AUTH_TABLES)) {
+  const tables: readonly string[] = [
+    ...Object.values(AUTH_TABLES),
+    ...Object.values(AUTH_TENANT_TABLES),
+  ];
+  for (const name of tables) {
     builder = builder.table(name, undefined, {
       plane: name.includes("operator")
         ? "operator"

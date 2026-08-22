@@ -298,6 +298,20 @@ For production built-in stores, set `vault.encryption.masterKey` to a KMS source
 `@aws-sdk/client-kms`) or use `managed` with a provider below. `oke doctor` warns when prod would
 take the master key from the environment.
 
+## Tenant isolation (built-in store)
+
+When `gate.auth.tenant` is on, `perTenant` contracts resolve at request time under
+`{tenantId}/{contract}`. Boot skips those contracts.
+
+The built-in Postgres table `oke_vault_secrets` carries `tenant_id` and the same
+`oke.tenant()` helper as domain tables — not a second GUC.
+
+<Callout title="RLS on ciphertext rows">
+  `tenant_id = oke.tenant() OR tenant_id IS NULL`. ENABLE without FORCE: the adapter
+  (owner) still sees every row; Console / `oke_app` cannot list another tenant's
+  ciphertext. Global `NULL` rows stay visible to every stamped tenant.
+</Callout>
+
 ## Managed providers (official)
 
 Set `drivers.vault` to `"managed"` and `OKE_VAULT_PROVIDER` to an id below. Omit the provider when
@@ -349,6 +363,13 @@ radius before you rotate, and `is:overdue` when a secret is past its
 
 Prefer `oke vault unseal --key -` and pipe the key on stdin, or omit `--key` on a
 TTY and type it at the hidden prompt. Avoid `--key <base64>` on shared hosts.
+
+</Accordion>
+<Accordion title="Console SQL lists another tenant's vault rows">
+
+User-plane SQL is stamped `oke.tenant()`. The policy hides other tenants' ciphertext
+and keeps global `NULL` rows. The Vault adapter is table owner, so ENABLE (not FORCE)
+does not hide rows from itself.
 
 </Accordion>
 <Accordion title="Expired secrets still take space in Postgres">

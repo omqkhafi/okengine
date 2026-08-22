@@ -14,6 +14,7 @@ import type { AuditAction, AuditEntry, AuditWriter } from "./audit.ts";
 import { VaultError } from "./errors.ts";
 import type { VaultErrorCode } from "./errors.ts";
 import type { VaultActorType } from "./types.ts";
+import { ensureVaultSecretsTenantRls } from "../../drivers/pg-vault-rls.ts";
 
 /**
  * Minimal SQL surface the Vault needs.
@@ -202,6 +203,11 @@ export async function ensureVaultTables(db: SqlExec): Promise<void> {
       // Never surface the driver error verbatim: it can echo row contents.
       throw new VaultError("BACKEND_ERROR", "vault: failed to ensure vault tables");
     }
+  }
+  try {
+    await ensureVaultSecretsTenantRls((sql: string) => db.execute(sql));
+  } catch {
+    throw new VaultError("BACKEND_ERROR", "vault: failed to ensure vault tables");
   }
 }
 

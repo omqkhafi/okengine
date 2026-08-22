@@ -299,7 +299,8 @@ Live `fx.auth.scopes` unions those grants only when `fx.tenant.id` is set, the f
 tenant-scoped (default on; `flow({ tenantScoped: false })` opts out), and user-plane.
 `gate.scope()` still reads `auth.scopes.has(name)`.
 
-SQL stamps `oke.tenant()` when tenancy is on — [Store](/docs/elements/store).
+SQL stamps `oke.tenant()` when tenancy is on — [Store](/docs/elements/store) and
+built-in [Vault](/docs/elements/vault#tenant-isolation-built-in-store) ciphertext.
 
 ## API keys
 

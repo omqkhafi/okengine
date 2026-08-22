@@ -3,6 +3,8 @@
  * Drizzle emit, and Gate identity helpers (`oke.gate` / `oke.user` / `oke.has_scope`).
  */
 
+import { lazyRequire } from "../kernel/lazy-require.ts";
+
 /** Policy command (`FOR`). */
 export type SqlPolicyCommand = "ALL" | "SELECT" | "INSERT" | "UPDATE" | "DELETE";
 
@@ -129,6 +131,7 @@ $oke_app_search_path$`,
 
 /**
  * All {@link OKE_RLS_HELPER_STATEMENTS} as one script (PGlite `exec` / `oke db push`).
+ * Vault table RLS is attached by {@link installOkeRlsHelpers} after helpers exist.
  */
 export const OKE_RLS_HELPER_SQL = `${OKE_RLS_HELPER_STATEMENTS.join(";\n")};`;
 
@@ -141,6 +144,10 @@ export async function installOkeRlsHelpers(exec: (sql: string) => Promise<unknow
   for (const stmt of OKE_RLS_HELPER_STATEMENTS) {
     await exec(stmt);
   }
+  const { attach } = lazyRequire<{
+    attach: (exec: (sql: string) => Promise<unknown>) => Promise<void>;
+  }>(import.meta.dir, ["pg", "vault", "rls"].join("-"));
+  await attach(exec);
 }
 
 /**

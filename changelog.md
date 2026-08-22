@@ -80,6 +80,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
   tight-loop thousands of requests.
 - `createClient(app)` types `.live(signal)` flows as subscribe
   (`onEvent`), not JSON RPC — `$routes` now carries `live` / `stream`.
+- Store-only `oke()` lazy-loads the durable Flow runner so graphs that
+  never run durable Flows stay under the 51 kB gzip cap after tenancy.
+
+### 🔒 Security
+
+- Built-in `oke_vault_secrets` enables RLS with
+  `tenant_id = oke.tenant() OR tenant_id IS NULL` (same helper as
+  domain tables). ENABLE without FORCE so the Vault adapter still sees
+  every row; Console / `oke_app` cannot list another tenant's ciphertext.
+  Global `NULL` rows stay visible.
 
 ## v0.16.0 — 2026-08-21
 

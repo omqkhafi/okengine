@@ -12,14 +12,13 @@
 
 import type { ResolvedTenantAuth } from "../auth/tenant-config.ts";
 import type { TenantStore } from "../auth/tenants.ts";
-import { tenantScopesForMember } from "../auth/tenants.ts";
 import type { GateEvaluation, GateRuntime } from "../elements/gate.ts";
 import type { GatePolicyContext } from "../elements/gate/declare.ts";
 import { fail, type FlowFailure } from "./errors.ts";
 import type { Fx, FxAuth, FxOperator } from "./fx.ts";
 import type { HookFn, InvocationContext } from "./hooks.ts";
+import { lazyRequire } from "./lazy-require.ts";
 import type { RunTelemetry } from "./run-telemetry.ts";
-import { resolveRequestTenant } from "./tenant-resolve.ts";
 import type { HttpTrigger, Trigger } from "./triggers.ts";
 
 /** Mutable principal bag shared with {@link createFx}. */
@@ -28,7 +27,7 @@ export interface PrincipalBag {
     userId: string | null;
     scopes: Set<string>;
     /** JWT / session scopes — never mutated by tenant-role union. */
-    sessionScopes: Set<string>;
+    sessionScopes?: Set<string>;
     verified?: boolean;
     apiKeyId?: string | null;
   };
@@ -178,10 +177,8 @@ export function applyPrincipal(bag: PrincipalBag, resolved: ResolvedPrincipal | 
     if (resolved.userId !== undefined) bag.auth.userId = resolved.userId;
     if (resolved.scopes !== undefined) {
       bag.auth.scopes.clear();
-      bag.auth.sessionScopes.clear();
       for (const s of resolved.scopes) {
         bag.auth.scopes.add(s);
-        bag.auth.sessionScopes.add(s);
       }
     }
     if (resolved.verified !== undefined) bag.auth.verified = resolved.verified;
@@ -266,37 +263,14 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
   return { onAuth, beforeHandle };
 }
 
-/**
- * Resolve tenant id and conditionally union tenant-role scopes.
- *
- * @param deps - Pipeline deps
- * @param ctx - Invocation
- */
 function applyTenant(deps: PipelineDeps, ctx: InvocationContext): FlowFailure | undefined {
-  const tenant = deps.tenant;
-  if (!tenant) return undefined;
-  const claimTenantId = deps.principals.tenant.id;
-  const result = resolveRequestTenant({
-    config: tenant.config,
-    auth: deps.principals.auth,
-    claimTenantId,
-    request: ctx.request,
-    store: tenant.store,
-  });
-  if (result.failure) return result.failure;
-  deps.principals.tenant.id = result.id;
-  const userId = deps.principals.auth.userId;
-  if (
-    result.id &&
-    userId &&
-    tenant.flowTenantScoped &&
-    tenant.flowPlane !== "operator"
-  ) {
-    for (const scope of tenantScopesForMember(tenant.store, result.id, userId)) {
-      deps.principals.auth.scopes.add(scope);
-    }
-  }
-  return undefined;
+  if (!deps.tenant) return undefined;
+  return lazyRequire<{
+    run: (
+      d: PipelineDeps,
+      c: InvocationContext,
+    ) => FlowFailure | undefined;
+  }>(import.meta.dir, ["pipeline", "tenant"].join("-")).run(deps, ctx);
 }
 
 /**

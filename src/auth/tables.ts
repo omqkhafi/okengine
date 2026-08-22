@@ -20,10 +20,6 @@ export const AUTH_TABLES = {
   roles: "oke_roles",
   roleGrants: "oke_role_grants",
   apiKeys: "oke_api_keys",
-  // Multi-tenancy (opt-in via `gate.auth.tenant`)
-  tenants: "oke_tenants",
-  tenantMembers: "oke_tenant_members",
-  tenantRoles: "oke_tenant_roles",
   // Session tables (auth element owns these)
   sessions: "oke_sessions",
   refreshTokens: "oke_refresh_tokens",

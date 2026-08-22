@@ -265,6 +265,8 @@ export {
   type TenantRow,
 } from "./tables.ts";
 
+export { AUTH_TENANT_TABLES } from "./tenant-tables.ts";
+
 export {
   AUTH_TENANTS_RESOURCE,
   DEFAULT_TENANT_ROLE,

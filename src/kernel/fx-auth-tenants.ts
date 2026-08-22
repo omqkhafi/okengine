@@ -251,3 +251,34 @@ export function attach(options: AttachAuthTenantMethodsOptions): FxAuthIdentity 
 
   return Object.assign(auth, methods);
 }
+
+/**
+ * Compact attach from `createFx` so Store-only graphs do not spell the
+ * tenant store / session crypto field names.
+ *
+ * @param auth - Identity after API-key methods
+ * @param options - createFx options bag
+ * @param now - Clock
+ * @param gated - Capability gate
+ */
+export function bind(
+  auth: FxAuthIdentity,
+  options: {
+    readonly tenantStore?: TenantStore;
+    readonly sessions?: SessionStore;
+    readonly sessionCrypto?: SessionCrypto;
+    readonly manifest?: Manifest;
+  },
+  now: () => number,
+  gated: AttachAuthTenantMethodsOptions["gated"],
+): FxAuthIdentity & FxAuthTenantMethods {
+  return attach({
+    auth,
+    store: options.tenantStore,
+    sessions: options.sessions,
+    crypto: options.sessionCrypto,
+    manifest: options.manifest ?? undefined,
+    now,
+    gated,
+  });
+}

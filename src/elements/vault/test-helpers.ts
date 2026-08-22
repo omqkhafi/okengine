@@ -251,7 +251,8 @@ function isDdl(text: string): boolean {
   return (
     text.startsWith("create table") ||
     text.startsWith("alter table") ||
-    text.startsWith("create index")
+    text.startsWith("create index") ||
+    text.startsWith("do $oke_vault_rls$")
   );
 }
 

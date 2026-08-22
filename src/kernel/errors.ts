@@ -240,35 +240,39 @@ export const OKE_ERRORS = {
     cause: "domain table not found — migrations have not been applied.",
     fix: "run `oke db migrate` against this environment.",
   },
-  /** Tenant-scoped op ran with no resolved `fx.tenant.id`. */
-  TENANT_REQUIRED: {
-    code: 1015,
-    cause: "This operation needs a tenant, but none is resolved for this request.",
-    fix: "Call fx.auth.switchTenant(id), send a signed tid claim, or pass the tenant header.",
-  },
-  /** Client-supplied tenant id is not a real membership. */
-  TENANT_NOT_MEMBER: {
-    code: 1016,
-    cause: "The caller is not a member of tenant \"{tenant}\".",
-    fix: "Pick a tenant from fx.auth.listTenants() or add the user as a member.",
-  },
-  /** Tenant role mapped an invented or operator-plane scope. */
-  TENANT_UNKNOWN_SCOPE: {
-    code: 1017,
-    cause: "Tenant role scope \"{scope}\" is not a declared application scope.",
-    fix: "Use a name from this app's Manifest catalog (never console:*).",
-  },
 } as const satisfies Record<string, OkeErrorDefinition>;
+
+/** Tenant error keys — definitions live in the lazy `errors-tenant` chunk. */
+export type TenantOkeErrorKey = "TENANT_REQUIRED" | "TENANT_NOT_MEMBER" | "TENANT_UNKNOWN_SCOPE";
+
+type TenantErrorChunk = {
+  readonly TENANT_REQUIRED: OkeErrorDefinition;
+  readonly TENANT_NOT_MEMBER: OkeErrorDefinition;
+  readonly TENANT_UNKNOWN_SCOPE: OkeErrorDefinition;
+};
+
+/**
+ * Load OKE1015–1017. Computed stem so Bun.build cannot inline the chunk.
+ */
+function loadTenantErrors(): TenantErrorChunk {
+  return lazyRequire(import.meta.dir, ["errors", "tenant"].join("-"));
+}
 
 /**
  * Build and throw a registered framework error.
  *
- * @param key - Key into {@link OKE_ERRORS}
+ * @param key - Key into {@link OKE_ERRORS} or a lazy tenant code
  * @param params - Interpolation params
  * @returns Never
  */
-export function throwOke(key: keyof typeof OKE_ERRORS, params: OkeErrorParams = {}): never {
-  throw new OkeError(OKE_ERRORS[key], params);
+export function throwOke(
+  key: keyof typeof OKE_ERRORS | TenantOkeErrorKey,
+  params: OkeErrorParams = {},
+): never {
+  if (typeof key === "string" && key.startsWith("TENANT_")) {
+    throw new OkeError(loadTenantErrors()[key as TenantOkeErrorKey], params);
+  }
+  throw new OkeError(OKE_ERRORS[key as keyof typeof OKE_ERRORS], params);
 }
 
 /**
@@ -283,6 +287,9 @@ export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefin
       ["errors", "live", "resume"].join("-"),
     ).LIVE_RESUME_GAP;
   }
+  if (code === 1015) return loadTenantErrors().TENANT_REQUIRED;
+  if (code === 1016) return loadTenantErrors().TENANT_NOT_MEMBER;
+  if (code === 1017) return loadTenantErrors().TENANT_UNKNOWN_SCOPE;
   for (const def of Object.values(OKE_ERRORS)) {
     if (def.code === code) return def;
   }

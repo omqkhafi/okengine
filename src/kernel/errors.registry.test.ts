@@ -8,10 +8,25 @@
 import { describe, expect, test } from "bun:test";
 import { OKE_ERRORS, OkeError, lookupOkeError, type OkeErrorDefinition } from "./errors.ts";
 import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
+import {
+  TENANT_NOT_MEMBER,
+  TENANT_REQUIRED,
+  TENANT_UNKNOWN_SCOPE,
+} from "./errors-tenant.ts";
+
+const LAZY_DEFS: readonly OkeErrorDefinition[] = [
+  LIVE_RESUME_GAP,
+  TENANT_REQUIRED,
+  TENANT_NOT_MEMBER,
+  TENANT_UNKNOWN_SCOPE,
+];
 
 describe("OKE error-code registry", () => {
   test("every code is unique", () => {
-    const codes = [...Object.values(OKE_ERRORS).map((d) => d.code), LIVE_RESUME_GAP.code];
+    const codes = [
+      ...Object.values(OKE_ERRORS).map((d) => d.code),
+      ...LAZY_DEFS.map((d) => d.code),
+    ];
     expect(new Set(codes).size).toBe(codes.length);
   });
 
@@ -24,10 +39,14 @@ describe("OKE error-code registry", () => {
     }
     expect(LIVE_RESUME_GAP.cause.trim().length).toBeGreaterThan(0);
     expect(LIVE_RESUME_GAP.fix.trim().length).toBeGreaterThan(0);
+    for (const def of LAZY_DEFS) {
+      expect(def.cause.trim().length, `${def.code}.cause`).toBeGreaterThan(0);
+      expect(def.fix.trim().length, `${def.code}.fix`).toBeGreaterThan(0);
+    }
   });
 
   test("OkeError docsUrl matches docs origin /e/{code}", () => {
-    for (const def of [...Object.values(OKE_ERRORS), LIVE_RESUME_GAP] as OkeErrorDefinition[]) {
+    for (const def of [...Object.values(OKE_ERRORS), ...LAZY_DEFS] as OkeErrorDefinition[]) {
       const err = new OkeError(def);
       expect(err.docsUrl).toBe(`https://oke.omqkhafi.dev/e/${def.code}`);
       expect(err.message).toContain(err.docsUrl);
@@ -38,5 +57,11 @@ describe("OKE error-code registry", () => {
 
   test("lookupOkeError finds the lazy LIVE_RESUME_GAP entry", () => {
     expect(lookupOkeError(1014)).toEqual(LIVE_RESUME_GAP);
+  });
+
+  test("lookupOkeError finds lazy tenant entries", () => {
+    expect(lookupOkeError(1015)).toEqual(TENANT_REQUIRED);
+    expect(lookupOkeError(1016)).toEqual(TENANT_NOT_MEMBER);
+    expect(lookupOkeError(1017)).toEqual(TENANT_UNKNOWN_SCOPE);
   });
 });
