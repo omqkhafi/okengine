@@ -33,7 +33,7 @@ Two behavioural differences from upstream are worth recording, because they are
 not oversights: our sidebar is driven by the Fumadocs page tree rather than a
 hand-written contents array, so meta.json stays the only source of navigation
 truth; and the changelog is parsed from the committed root changelog.md rather
-than fetched from the GitHub releases API, so the static export is
+than fetched from the GitHub releases API, so the site build is
 deterministic and builds with no network.
 
 Problem-space diagram (concept only)

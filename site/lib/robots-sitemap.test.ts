@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import robots from "../app/robots.ts";
 import sitemap from "../app/sitemap.ts";
 import { DOCS_ORIGIN } from "./agent-onboard";
+import { changelogSeriesPath, loadChangelogSeries } from "./changelog.ts";
 import { source } from "./source";
 
 describe("robots.txt", () => {
@@ -32,6 +33,9 @@ describe("sitemap.xml", () => {
     expect(urls.has(`${DOCS_ORIGIN}/llms.json`)).toBe(true);
     expect(urls.has(`${DOCS_ORIGIN}/llms/agents`)).toBe(true);
     expect(urls.has(`${DOCS_ORIGIN}/changelog`)).toBe(true);
+    for (const entry of loadChangelogSeries()) {
+      expect(urls.has(`${DOCS_ORIGIN}${changelogSeriesPath(entry.slug)}`)).toBe(true);
+    }
     for (const page of source.getPages()) {
       expect(urls.has(`${DOCS_ORIGIN}${page.url}`)).toBe(true);
     }

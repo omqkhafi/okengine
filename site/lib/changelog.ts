@@ -2,12 +2,13 @@
  * Changelog source — parses the canonical root `changelog.md` at build time.
  *
  * The site renders release history; it does not invent it. Reading a committed
- * file rather than calling the GitHub releases API keeps the static export
+ * file rather than calling the GitHub releases API keeps the build
  * deterministic and buildable with no network.
  */
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** One `### <label>` block inside a release. */
 export interface ChangelogGroup {
@@ -40,6 +41,12 @@ const BULLET = /^-\s+(.*)$/;
 
 /** Repo-relative path to the canonical file. */
 export const CHANGELOG_SOURCE = "changelog.md";
+
+/**
+ * Agent-readability budget used to gate rendered changelog pages.
+ * Heuristic: `ceil(chars / 4)`, matching the scan that flagged the unsplit page.
+ */
+export const AGENT_READABILITY_TOKEN_BUDGET = 25_000;
 
 /**
  * Parse the canonical changelog into releases.
@@ -152,7 +159,10 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
  *   empty state
  */
 export function loadChangelog(): ReadonlyArray<ChangelogRelease> {
-  const raw = readFileSync(join(process.cwd(), "..", CHANGELOG_SOURCE), "utf8");
+  const raw = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "..", CHANGELOG_SOURCE),
+    "utf8",
+  );
   const releases = parseChangelog(raw);
   if (releases.length === 0) {
     throw new Error(`changelog: no releases parsed from ${CHANGELOG_SOURCE}`);
@@ -181,4 +191,195 @@ export function splitInlineCode(text: string): ReadonlyArray<InlineSegment> {
         ? { code: true, text: part.slice(1, -1) }
         : { code: false, text: part },
     );
+}
+
+/**
+ * Approximate token count for agent-readability gates (`ceil(chars / 4)`).
+ *
+ * @param text - Page body
+ */
+export function estimateAgentTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Minor-series slug for a published version (`0.12.3` → `0.12`).
+ *
+ * @param version - Bare semver from a release heading
+ */
+export function seriesSlugForVersion(version: string): string {
+  const [major, minor] = version.split(".");
+  if (major === undefined || minor === undefined) {
+    throw new Error(`changelog: cannot derive series slug from ${version}`);
+  }
+  return `${major}.${minor}`;
+}
+
+/** One minor-version band rendered as its own page. */
+export interface ChangelogSeries {
+  /** URL slug, e.g. `0.12`. */
+  readonly slug: string;
+  readonly releases: ReadonlyArray<ChangelogRelease>;
+}
+
+/**
+ * Group newest-first releases into minor-version series (still newest-first).
+ *
+ * @param releases - Output of {@link parseChangelog}
+ */
+export function partitionChangelogByMinor(
+  releases: ReadonlyArray<ChangelogRelease>,
+): ReadonlyArray<ChangelogSeries> {
+  const order: string[] = [];
+  const buckets = new Map<string, ChangelogRelease[]>();
+  for (const release of releases) {
+    const slug = seriesSlugForVersion(release.version);
+    let bucket = buckets.get(slug);
+    if (!bucket) {
+      bucket = [];
+      buckets.set(slug, bucket);
+      order.push(slug);
+    }
+    bucket.push(release);
+  }
+  return order.map((slug) => ({ slug, releases: buckets.get(slug)! }));
+}
+
+/**
+ * Load the canonical file and partition it. Fails if any series page would
+ * exceed the agent-readability budget — split further rather than ship a wall.
+ */
+export function loadChangelogSeries(): ReadonlyArray<ChangelogSeries> {
+  const series = partitionChangelogByMinor(loadChangelog());
+  if (series.length === 0) {
+    throw new Error(`changelog: no series partitioned from ${CHANGELOG_SOURCE}`);
+  }
+  for (const entry of series) {
+    const tokens = estimateAgentTokens(renderChangelogSeriesMarkdown(entry));
+    if (tokens > AGENT_READABILITY_TOKEN_BUDGET) {
+      throw new Error(
+        `changelog: series ${entry.slug} is ${tokens} tokens (budget ${AGENT_READABILITY_TOKEN_BUDGET})`,
+      );
+    }
+  }
+  return series;
+}
+
+/**
+ * Look up one series by slug.
+ *
+ * @param series - Partitioned changelog
+ * @param slug - Minor-version slug
+ */
+export function changelogSeriesBySlug(
+  series: ReadonlyArray<ChangelogSeries>,
+  slug: string,
+): ChangelogSeries | undefined {
+  return series.find((entry) => entry.slug === slug);
+}
+
+/**
+ * HTML / markdown path for a series page.
+ *
+ * @param slug - Minor-version slug
+ */
+export function changelogSeriesPath(slug: string): string {
+  return `/changelog/${slug}`;
+}
+
+/**
+ * Stable fingerprint of one release for the 100% content-preservation gate.
+ *
+ * @param release - Parsed release
+ */
+export function changelogReleaseFingerprint(release: ChangelogRelease): string {
+  return JSON.stringify({
+    version: release.version,
+    date: release.date,
+    summary: release.summary,
+    groups: release.groups,
+  });
+}
+
+/**
+ * Render parsed groups back to markdown (projection of changelog.md, not a fork).
+ *
+ * @param group - `###` group
+ */
+function renderGroupMarkdown(group: ChangelogGroup): string {
+  const lines: string[] = [`### ${group.label}`, ""];
+  for (const item of group.items) {
+    lines.push(`- ${item}`, "");
+  }
+  for (const sub of group.subgroups) {
+    lines.push(`#### ${sub.label}`, "");
+    for (const item of sub.items) {
+      lines.push(`- ${item}`, "");
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Markdown body for one or more parsed releases.
+ *
+ * @param releases - Newest-first
+ */
+export function renderReleasesMarkdown(releases: ReadonlyArray<ChangelogRelease>): string {
+  const parts: string[] = [];
+  for (const release of releases) {
+    parts.push(`## ${release.tag} — ${release.date}`, "");
+    for (const line of release.summary) {
+      parts.push(line, "");
+    }
+    for (const group of release.groups) {
+      parts.push(renderGroupMarkdown(group));
+    }
+  }
+  return `${parts.join("\n").trimEnd()}\n`;
+}
+
+/**
+ * Index markdown listing every series page.
+ *
+ * @param series - Partitioned changelog
+ */
+export function renderChangelogIndexMarkdown(series: ReadonlyArray<ChangelogSeries>): string {
+  const lines = [
+    "# Changelog",
+    "",
+    `Release notes for okengine, split by minor version from \`${CHANGELOG_SOURCE}\`.`,
+    "",
+  ];
+  for (const entry of series) {
+    const newest = entry.releases[0];
+    const oldest = entry.releases[entry.releases.length - 1];
+    if (!newest || !oldest) continue;
+    const dates = newest.date === oldest.date ? newest.date : `${oldest.date} – ${newest.date}`;
+    const n = entry.releases.length;
+    const noun = n === 1 ? "release" : "releases";
+    lines.push(`- [${entry.slug}](${changelogSeriesPath(entry.slug)}) — ${n} ${noun}, ${dates}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+/**
+ * Markdown body for one minor-version page.
+ *
+ * @param series - One partitioned band
+ */
+export function renderChangelogSeriesMarkdown(series: ChangelogSeries): string {
+  return `# Changelog ${series.slug}\n\n${renderReleasesMarkdown(series.releases)}`;
+}
+
+/**
+ * Concatenate every series' releases in page order — must equal parseChangelog().
+ *
+ * @param series - Partitioned changelog
+ */
+export function flattenChangelogSeries(
+  series: ReadonlyArray<ChangelogSeries>,
+): ReadonlyArray<ChangelogRelease> {
+  return series.flatMap((entry) => entry.releases);
 }

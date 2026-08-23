@@ -13,6 +13,7 @@ This documentation site serves machine-readable twins of every page, following t
 | `/llms.json`               | Same catalogue as JSON (`slug`, `html`, `markdown`)     | Structured clients      |
 | `/llms-full.txt`           | All pages concatenated; teaching figures as blockquotes | Whole-docs context      |
 | `/llms.mdx/docs/⟨slug⟩.md` | One page as source markdown                             | One page — e.g. Vault   |
+| `/changelog`               | Index of minor-version release-note pages               | Recent history          |
 | `/llms/agents`             | The `AGENTS.md` contract                                | Session bootstrap       |
 | `/robots.txt`              | Allow-all, including named AI crawlers                  | Crawler policy          |
 | `/sitemap.xml`             | HTML pages plus the machine endpoints                   | Crawler map             |
@@ -24,6 +25,7 @@ curl https://oke.omqkhafi.dev/llms.txt
 curl https://oke.omqkhafi.dev/llms.json
 curl https://oke.omqkhafi.dev/llms-full.txt
 curl https://oke.omqkhafi.dev/llms.mdx/docs/elements/vault.md
+curl -H "Accept: text/markdown" https://oke.omqkhafi.dev/docs/elements/vault
 curl https://oke.omqkhafi.dev/llms/agents
 ```
 
@@ -35,9 +37,13 @@ curl https://oke.omqkhafi.dev/llms/agents
 The homepage **Onboard AI** button copies a one-line prompt that points an agent at
 `/llms.txt` plus `/llms/agents` on this origin — project-wide context, not a single docs page.
 
-HTML docs pages advertise `rel="alternate"` `type="text/markdown"` to the twin. Crawlers
-that honor `robots.txt` are allowed; `/sitemap.xml` lists the handbook and the machine
-entry points.
+HTML docs pages advertise `rel="alternate"` `type="text/markdown"` to the twin.
+`Accept: text/markdown` on the same URL returns that twin and sets `Vary: Accept`.
+
+`/llms.txt` opens with **When to use this** — Introduction, Installation, AGENTS.md,
+MCP, CLI, errors, npm, GitHub — then the curated map.
+
+Crawlers that honor `robots.txt` are allowed; `/sitemap.xml` lists the handbook and the machine entry points.
 
 ## How it pairs with the docs MCP
 

@@ -1,1 +1,0 @@
-import{jt as e}from"./shortcut-keys-DKxNTe_m.js";function t(t){return e(t.defaultTagName??`div`,t,t)}export{t};

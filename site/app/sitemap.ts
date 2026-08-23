@@ -1,4 +1,5 @@
 import { DOCS_ORIGIN } from "@/lib/agent-onboard";
+import { changelogSeriesPath, loadChangelogSeries } from "@/lib/changelog";
 import { source } from "@/lib/source";
 import type { MetadataRoute } from "next";
 
@@ -17,6 +18,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: DOCS_ORIGIN, changeFrequency: "weekly", priority: 1 },
     { url: `${DOCS_ORIGIN}/changelog`, changeFrequency: "weekly", priority: 0.6 },
+    ...loadChangelogSeries().map((entry) => ({
+      url: `${DOCS_ORIGIN}${changelogSeriesPath(entry.slug)}`,
+      changeFrequency: "weekly" as const,
+      priority: 0.5,
+    })),
     { url: `${DOCS_ORIGIN}/llms.txt`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${DOCS_ORIGIN}/llms.json`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${DOCS_ORIGIN}/llms-full.txt`, changeFrequency: "weekly", priority: 0.5 },

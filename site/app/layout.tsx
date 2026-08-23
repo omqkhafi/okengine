@@ -3,6 +3,7 @@ import { Provider } from "@/components/provider";
 import { Topbar } from "@/components/chrome/topbar";
 import { OkeFaviconCycle } from "@/components/oke-logo-icon";
 import { UnregisterServiceWorkers } from "@/components/unregister-service-workers";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site-identity";
 import { source } from "@/lib/source";
 import type { Metadata } from "next";
 import "./global.css";
@@ -14,14 +15,13 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
-  // Keep in sync with src/docs-origin.ts
-  metadataBase: new URL("https://oke.omqkhafi.dev"),
+  // Keep in sync with src/docs-origin.ts / site/lib/site-identity.ts
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "okengine",
-    template: "%s | okengine",
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era.",
+  description: SITE_DESCRIPTION,
   robots: {
     index: true,
     follow: true,

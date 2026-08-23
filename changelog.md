@@ -12,6 +12,34 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.17.1 — 2026-08-23
+
+### ✨ Added
+
+#### Docs
+
+- Homepage SoftwareApplication JSON-LD — `name`, `description`, and `url`
+  taken from the published site metadata (not invented fields).
+- Markdown 404 body when `Accept: text/markdown`: links to `/docs`,
+  `/llms.txt`, and `/sitemap.xml`. Status stays 404.
+- Homepage canonical `/`, `og:type` website, and `/og/home` image — same
+  1200×630 renderer as the docs Open Graph pipeline.
+- SoftwareApplication JSON-LD `sameAs` — GitHub repo and npm package
+  pages already linked from the site chrome.
+- `/llms.txt` opens with **When to use this**: Introduction, Installation,
+  AGENTS.md, MCP, CLI, errors, npm, and GitHub.
+
+### ♻️ Changed
+
+#### Docs
+
+- `/changelog` is an index of minor-version pages generated from
+  `changelog.md` (one source, no forked copies) so each rendered page
+  stays under the agent-readability budget.
+- HTML handbook URLs negotiate markdown in `proxy.ts` and send
+  `Vary: Accept`. The site is no longer a static `out/` export, because
+  that Next.js mode cannot run the proxy.
+
 ## v0.17.0 — 2026-08-22
 
 ### ✨ Added

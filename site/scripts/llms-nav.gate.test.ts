@@ -149,7 +149,7 @@ describe("llms.txt ↔ nav structure", () => {
     const navSlugs = await collectNavSlugs(DOCS);
     const navUrls = new Set(navSlugs.map(docsUrl));
     const index = buildLlmsTxt();
-    const extraPaths = new Set(LLMS_EXTRA_LINKS.map((e) => e.path));
+    const extraPaths = new Set(LLMS_EXTRA_LINKS.map((e) => toDocsUrl(e.path)));
     const linkSet = new Set(parseLlmsLinks(index).map(toDocsUrl));
 
     expect(source.getPages().length).toBe(navUrls.size);
@@ -159,6 +159,7 @@ describe("llms.txt ↔ nav structure", () => {
     }
     for (const url of linkSet) {
       if (extraPaths.has(url)) continue;
+      if (!url.startsWith("/docs")) continue;
       expect(navUrls.has(url)).toBe(true);
     }
 

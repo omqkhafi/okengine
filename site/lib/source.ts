@@ -34,7 +34,7 @@ export function getPageImageUrl(page: (typeof source)["$inferPage"]) {
  */
 export function getPageMarkdownUrl(page: (typeof source)["$inferPage"]) {
   // Always end in `.md`. Extensionless `/llms.mdx/docs/ai` is a file next
-  // to `/llms.mdx/docs/ai/…` — static export cannot copy both.
+  // to `/llms.mdx/docs/ai/…` — keep the suffix as the public markdown URL.
   const last = page.slugs.at(-1);
   const segments = last !== undefined ? [...page.slugs.slice(0, -1), `${last}.md`] : ["index.md"];
 

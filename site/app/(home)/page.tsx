@@ -23,8 +23,11 @@ import { Reveal } from "@/components/landing/reveal";
 import { Surfaces } from "@/components/landing/surfaces";
 import { BuiltWithStrip, WorksWithStrip } from "@/components/landing/trust-strip";
 import { Vocabulary } from "@/components/landing/vocabulary";
+import { JsonLd } from "@/components/json-ld";
 import { POSITIONING } from "@/lib/elements";
+import { HOMEPAGE_METADATA, softwareApplicationJsonLd } from "@/lib/site-identity";
 import { loadStarterFlowSnippet } from "@/lib/starter-flow";
+import type { Metadata } from "next";
 
 const START_HERE: ReadonlyArray<{
   readonly href: string;
@@ -48,11 +51,14 @@ const START_HERE: ReadonlyArray<{
   },
 ];
 
+export const metadata: Metadata = HOMEPAGE_METADATA;
+
 export default function HomePage() {
   const starterSnippet = loadStarterFlowSnippet();
 
   return (
     <div id="hero" className="relative text-fd-foreground">
+      <JsonLd data={softwareApplicationJsonLd()} />
       {/* Clipped: the lattice's decorative grid bleeds past its column padding. */}
       <section className="overflow-x-clip border-b border-fd-border">
         <div className="flex flex-col lg:flex-row">

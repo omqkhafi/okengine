@@ -31,6 +31,7 @@ describe("NAV_TABS", () => {
       "/docs/get-started/introduction",
       "/docs/elements/flow",
       "/changelog",
+      "/changelog/0.17",
     ];
 
     for (const pathname of pathnames) {
@@ -66,8 +67,11 @@ describe("headerGeometry", () => {
   });
 
   test("the changelog cell matches the release rail's split", async () => {
-    const page = await Bun.file(join(APP, "changelog", "page.tsx")).text();
-    expect(page).toContain(`lg:w-[${headerGeometry("/changelog").paneWidth}]`);
+    const shell = await Bun.file(
+      join(import.meta.dir, "..", "components", "release-notes", "shell.tsx"),
+    ).text();
+    expect(shell).toContain(`lg:w-[${headerGeometry("/changelog").paneWidth}]`);
+    expect(headerGeometry("/changelog/0.17")).toEqual(headerGeometry("/changelog"));
   });
 
   test("the docs cell width is the shared left-pane token", async () => {
@@ -81,7 +85,7 @@ describe("headerGeometry", () => {
   });
 
   test("no surface is framed, so the header can stay full-bleed", async () => {
-    for (const file of ["(home)/page.tsx", "changelog/page.tsx"]) {
+    for (const file of ["(home)/page.tsx", "changelog/page.tsx", "changelog/[series]/page.tsx"]) {
       expect(await Bun.file(join(APP, file)).text()).not.toContain("max-w-360");
     }
     const band = await Bun.file(
@@ -97,6 +101,7 @@ describe("hasDocsPane", () => {
     expect(hasDocsPane("/docs/cli")).toBe(true);
     expect(hasDocsPane("/")).toBe(false);
     expect(hasDocsPane("/changelog")).toBe(false);
+    expect(hasDocsPane("/changelog/0.17")).toBe(false);
     expect(hasDocsPane("/docsearch")).toBe(false);
   });
 });

@@ -6,7 +6,8 @@
  */
 
 import { DOCS_ORIGIN } from "./agent-onboard";
-import { docsContentRoute } from "./shared";
+import { createOkeNpmUrl, docsContentRoute, githubRepoUrl, npmPackageUrl } from "./shared";
+import { SITE_DESCRIPTION, SITE_NAME } from "./site-identity";
 import { source } from "./source";
 
 /** One handbook page as the index builders see it. */
@@ -82,20 +83,39 @@ export const LLMS_EXTRA_LINKS: readonly {
     section: "For agents",
   },
   {
+    title: "okengine on npm",
+    path: npmPackageUrl,
+    note: "Published package — the `oke` CLI binary ships on this package.",
+    section: "For agents",
+  },
+  {
+    title: "create-oke on npm",
+    path: createOkeNpmUrl,
+    note: "Scaffolding CLI — `bunx create-oke@latest`.",
+    section: "For agents",
+  },
+  {
+    title: "GitHub",
+    path: githubRepoUrl,
+    note: "Source repository.",
+    section: "For agents",
+  },
+  {
     title: "Changelog",
     path: "/changelog",
-    note: "Release notes for okengine.",
+    note: "Release notes for okengine, split by minor version.",
     section: "Optional",
   },
 ];
 
 /**
- * Absolute URL on the published docs origin.
+ * Absolute URL on the published docs origin, or pass-through for `https://` extras.
  *
- * @param path - Site-relative path beginning with `/`
+ * @param path - Site-relative path beginning with `/`, or an absolute http(s) URL
  * @param origin - Override for tests
  */
 export function absoluteDocsUrl(path: string, origin: string = DOCS_ORIGIN): string {
+  if (path.startsWith("https://") || path.startsWith("http://")) return path;
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${origin.replace(/\/$/, "")}${normalized}`;
 }
@@ -140,13 +160,29 @@ export function buildLlmsTxt(
   const bySlug = new Map(pages.map((page) => [page.slugs.join("/"), page]));
   const used = new Set<string>();
   const lines: string[] = [
-    "# okengine",
+    `# ${SITE_NAME}`,
     "",
-    "> One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era. This file is the machine-readable map of the handbook.",
+    `> ${SITE_DESCRIPTION} This file is the machine-readable map of the handbook.`,
     "",
     "Fetch `/llms.mdx/docs/⟨slug⟩.md` for one page as markdown, `/llms-full.txt` for everything, `/llms/agents` for the agent contract.",
     "",
+    "## When to use this",
+    "",
+    "Building or changing an okengine app.",
+    "",
   ];
+  const whenToUse = [
+    pageLinkFromSlug(bySlug, "get-started/introduction", origin),
+    pageLinkFromSlug(bySlug, "get-started/installation", origin),
+    linkLine("AGENTS.md", absoluteDocsUrl("/llms/agents", origin), extraNote("AGENTS.md")),
+    pageLinkFromSlug(bySlug, "ai/mcp", origin),
+    pageLinkFromSlug(bySlug, "reference/cli", origin),
+    pageLinkFromSlug(bySlug, "reference/errors", origin),
+    linkLine("okengine on npm", npmPackageUrl, extraNote("okengine on npm")),
+    linkLine("create-oke on npm", createOkeNpmUrl, extraNote("create-oke on npm")),
+    linkLine("GitHub", githubRepoUrl, extraNote("GitHub")),
+  ].filter((line) => line.length > 0);
+  lines.push(...whenToUse, "");
 
   for (const section of LLMS_PRIMARY_SECTIONS) {
     lines.push(`## ${section.heading}`, "");
@@ -189,7 +225,7 @@ export function buildLlmsCatalog(
   origin: string = DOCS_ORIGIN,
   pages: readonly LlmsPageRef[] = listLlmsPages(),
 ): {
-  readonly name: "okengine";
+  readonly name: typeof SITE_NAME;
   readonly description: string;
   readonly origin: string;
   readonly index: string;
@@ -205,9 +241,8 @@ export function buildLlmsCatalog(
 } {
   const sorted = pages.slice().sort((a, b) => a.url.localeCompare(b.url));
   return {
-    name: "okengine",
-    description:
-      "One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era.",
+    name: SITE_NAME,
+    description: SITE_DESCRIPTION,
     origin,
     index: absoluteDocsUrl("/llms.txt", origin),
     full: absoluteDocsUrl("/llms-full.txt", origin),
@@ -220,6 +255,23 @@ export function buildLlmsCatalog(
       markdown: absoluteDocsUrl(markdownPathForSlugs(page.slugs), origin),
     })),
   };
+}
+
+/**
+ * @param bySlug - Pages keyed by joined slug
+ * @param slug - Handbook slug such as `get-started/introduction`
+ * @param origin - Absolute origin
+ */
+function pageLinkFromSlug(bySlug: Map<string, LlmsPageRef>, slug: string, origin: string): string {
+  const page = bySlug.get(slug);
+  return page === undefined ? "" : pageLink(page, origin);
+}
+
+/**
+ * @param title - Extra link title in `LLMS_EXTRA_LINKS`
+ */
+function extraNote(title: string): string {
+  return LLMS_EXTRA_LINKS.find((extra) => extra.title === title)?.note ?? "";
 }
 
 /**

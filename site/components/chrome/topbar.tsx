@@ -35,10 +35,10 @@ import { ExternalArrow, GithubMark, NpmMark } from "@/components/chrome/icons";
 import { OkeLogo } from "@/components/oke-logo";
 import { cn } from "@/lib/cn";
 import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from "@/lib/nav";
-import { gitConfig, npmPackageUrl } from "@/lib/shared";
+import { githubRepoUrl, npmPackageUrl } from "@/lib/shared";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
-const REPO_URL = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+const REPO_URL = githubRepoUrl;
 
 /** Flush 1:1 header cells — height is `--landing-topbar-height`. */
 const SQUARE_CELL = "flex aspect-square h-full shrink-0 items-center justify-center";

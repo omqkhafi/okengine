@@ -20,6 +20,15 @@ export const gitConfig = {
 /** Published package page on npm. */
 export const npmPackageUrl = "https://www.npmjs.com/package/okengine";
 
+/** Scaffolding CLI on npm (`bunx create-oke@latest`). */
+export const createOkeNpmUrl = "https://www.npmjs.com/package/create-oke";
+
+/** Canonical GitHub repository URL. */
+export const githubRepoUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+
+/** Homepage Open Graph image (same 1200×630 pipeline as docs OG). */
+export const homepageOgPath = "/og/home";
+
 /**
  * Build a blob URL for a repo-relative path.
  *

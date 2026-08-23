@@ -23,6 +23,11 @@ describe("buildLlmsTxt", () => {
     expect(body.lastIndexOf("## Optional")).toBeGreaterThan(body.lastIndexOf("## Reference"));
     expect(body).toContain(`${DOCS_ORIGIN}/llms.mdx/docs/elements/vault.md`);
     expect(body).not.toMatch(/\]\(\/docs\//);
+    expect(body).toContain("## When to use this");
+    expect(body.indexOf("## When to use this")).toBeLessThan(body.indexOf("## Start here"));
+    expect(body).toContain("https://www.npmjs.com/package/okengine");
+    expect(body).toContain("https://www.npmjs.com/package/create-oke");
+    expect(body).toContain("https://github.com/omqkhafi/okengine");
   });
 
   test("every link is an absolute https URL", () => {
@@ -81,7 +86,7 @@ describe("markdownPathForSlugs", () => {
     expect(markdownPathForSlugs(["elements", "vault"])).toBe("/llms.mdx/docs/elements/vault.md");
   });
 
-  test("docs index markdown is index.md so static export has no file/dir clash", () => {
+  test("docs index markdown is index.md so the public URL has no file/dir clash", () => {
     const index = source.getPages().find((page) => page.slugs.length === 0);
     expect(index).toBeDefined();
     expect(getPageMarkdownUrl(index!).url).toBe("/llms.mdx/docs/index.md");

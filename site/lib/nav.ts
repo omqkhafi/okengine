@@ -70,8 +70,8 @@ export function headerGeometry(pathname: string): HeaderGeometry {
       rule: "border-fd-foreground/5",
     };
   }
-  // Changelog: the release rail's 30/70 split.
-  if (pathname === "/changelog") {
+  // Changelog: the release rail's 30/70 split (index and /changelog/{series}).
+  if (pathname === "/changelog" || pathname.startsWith("/changelog/")) {
     return { paneWidth: "30%", rule: "border-fd-border" };
   }
   // Home: the hero's 44/56 column split.
