@@ -71,7 +71,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <Band label="readme">
+      <Band label="readme" labelAs="h2">
         <div className="flex flex-col gap-10 lg:gap-12">
           <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
             <Reveal>
@@ -96,20 +96,20 @@ export default function HomePage() {
         </div>
       </Band>
 
-      <Band label="stack">
+      <Band label="stack" labelAs="h2">
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
           <div className="flex min-w-0 flex-col gap-3">
-            <span className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+            <h3 className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
               Built with
-            </span>
+            </h3>
             <Reveal>
               <BuiltWithStrip />
             </Reveal>
           </div>
           <div className="flex min-w-0 flex-col gap-3 border-t border-fd-border pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-            <span className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+            <h3 className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
               Works with
-            </span>
+            </h3>
             <Reveal delay={0.05}>
               <WorksWithStrip />
             </Reveal>
@@ -263,7 +263,7 @@ export default function HomePage() {
                     className="group flex h-full flex-col gap-1 bg-fd-card px-5 py-4 transition-colors hover:bg-fd-secondary/40"
                   >
                     <span className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">{item.title}</span>
+                      <h3 className="text-sm font-medium">{item.title}</h3>
                       <ArrowUpRight
                         aria-hidden
                         className="size-3.5 translate-x-1 translate-y-1 text-fd-muted-foreground opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100"

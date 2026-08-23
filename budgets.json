@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-08-23T07:17:26.468Z",
-  "version": "0.17.1",
+  "measuredAt": "2026-08-23T08:08:33.333Z",
+  "version": "0.17.2",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 356483,
+      "value": 356482,
       "limit": 716800,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 9.496,
+      "value": 9.325,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",

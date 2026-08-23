@@ -456,9 +456,9 @@ function ManifestDetail(): ReactNode {
   return (
     <div className="hidden gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border lg:grid lg:grid-cols-3">
       <div className="bg-fd-card px-4 py-4">
-        <p className="mb-2.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground uppercase">
+        <h3 className="mb-2.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground uppercase">
           01 · inputs via fx
-        </p>
+        </h3>
         <ul className="flex flex-col gap-2">
           {MANIFEST_INPUTS.map((input) => {
             const meta = INPUT_META[input.records] ?? { icon: Terminal, tone: "sky" as const };
@@ -483,23 +483,23 @@ function ManifestDetail(): ReactNode {
         </ul>
       </div>
       <div className="bg-fd-card px-4 py-4">
-        <p className="mb-2.5 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground uppercase">
+        <h3 className="mb-2.5 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground uppercase">
           <FileJson2
             aria-hidden
             className="size-3 text-teal-600 dark:text-teal-400"
             strokeWidth={1.75}
           />
           02 · artifact keys
-        </p>
+        </h3>
         <KeyChips label="top level" keys={MANIFEST_TOP_LEVEL_KEYS} tone="teal" />
         <div className="mt-3">
           <KeyChips label="per flow" keys={MANIFEST_FLOW_KEYS.slice(0, 5)} tone="sky" />
         </div>
       </div>
       <div className="bg-fd-card px-4 py-4">
-        <p className="mb-2.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground uppercase">
+        <h3 className="mb-2.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground uppercase">
           03 · derived · {DERIVED_SURFACES.length}
-        </p>
+        </h3>
         <SurfaceGrid />
       </div>
     </div>

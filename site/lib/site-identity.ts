@@ -5,7 +5,14 @@
  */
 
 import { DOCS_ORIGIN } from "./agent-onboard";
-import { createOkeNpmUrl, githubRepoUrl, homepageOgPath, npmPackageUrl } from "./shared";
+import {
+  createOkeNpmUrl,
+  githubRepoUrl,
+  homepageOgPath,
+  jsrPackageUrl,
+  npmPackageUrl,
+  xProfileUrl,
+} from "./shared";
 import type { Metadata } from "next";
 
 /** Product name shown in metadata, JSON-LD, and the llms.txt H1. */
@@ -22,14 +29,41 @@ export const SITE_DESCRIPTION =
 export const SITE_URL = DOCS_ORIGIN;
 
 /**
- * Real public profiles for JSON-LD `sameAs` — GitHub repo and published npm
- * packages, already linked from the site chrome.
+ * Real public profiles for JSON-LD `sameAs`.
+ *
+ * Included (verified, currently live):
+ * GitHub repo, npm `okengine`, npm `create-oke`, JSR `@omqkhafi/okengine`,
+ * X `@omqkhafi`.
+ *
+ * Skipped — no real profile exists: Wikipedia, Wikidata, LinkedIn.
  */
-export const SITE_SAME_AS: readonly string[] = [githubRepoUrl, npmPackageUrl, createOkeNpmUrl];
+export const SITE_SAME_AS: readonly string[] = [
+  githubRepoUrl,
+  npmPackageUrl,
+  createOkeNpmUrl,
+  jsrPackageUrl,
+  xProfileUrl,
+];
+
+/**
+ * Google-supported `applicationCategory` for a backend framework
+ * (Search Central SoftwareApplication list — not a generic guess).
+ */
+export const SITE_APPLICATION_CATEGORY = "DeveloperApplication" as const;
+
+/**
+ * Offer for MIT / self-hosted software: free, no paid SKU.
+ * `priceCurrency` is ISO 4217 (USD) as required by schema.org Offer.
+ */
+export const SITE_OFFER = {
+  "@type": "Offer",
+  price: "0",
+  priceCurrency: "USD",
+} as const;
 
 /**
  * SoftwareApplication JSON-LD for the homepage. Identity fields come from site
- * metadata; `sameAs` is the GitHub/npm URLs already on this site.
+ * metadata; category/offer reflect the real MIT self-hosted model.
  */
 export function softwareApplicationJsonLd(): {
   readonly "@context": "https://schema.org";
@@ -37,6 +71,8 @@ export function softwareApplicationJsonLd(): {
   readonly name: string;
   readonly description: string;
   readonly url: string;
+  readonly applicationCategory: typeof SITE_APPLICATION_CATEGORY;
+  readonly offers: typeof SITE_OFFER;
   readonly sameAs: readonly string[];
 } {
   return {
@@ -45,6 +81,8 @@ export function softwareApplicationJsonLd(): {
     name: SITE_NAME,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
+    applicationCategory: SITE_APPLICATION_CATEGORY,
+    offers: SITE_OFFER,
     sameAs: SITE_SAME_AS,
   };
 }

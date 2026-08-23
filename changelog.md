@@ -12,6 +12,32 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Dev, Keel & create-oke
+
+- `bun run verify` — same check jobs as `.github/workflows/ci.yml`
+  (`verify:lint`, `verify:typecheck`, `verify:test`, `verify:gate`,
+  `verify:site`). `bun run ci` still adds budgets and the Keel example.
+
+## v0.17.2 — 2026-08-23
+
+### ✨ Added
+
+#### Docs
+
+- SoftwareApplication JSON-LD now includes `applicationCategory`
+  (`DeveloperApplication`) and a free MIT `Offer` (`price` 0, USD).
+- JSON-LD `sameAs` adds the live JSR package and X profile. Wikipedia,
+  Wikidata, and LinkedIn are omitted — those profiles do not exist.
+
+### ♻️ Changed
+
+#### Docs
+
+- Homepage heading outline is H1 → H2 → H3 (readme/stack labels, element
+  names, exports, surfaces, start-here cards) with no visual copy change.
+
 ## v0.17.1 — 2026-08-23
 
 ### ✨ Added

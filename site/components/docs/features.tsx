@@ -140,12 +140,12 @@ function FeatureCard({ feature, index }: { feature: (typeof ELEMENTS)[number]; i
           </motion.span>
         </div>
 
-        <p className="mt-3 text-base font-semibold text-fd-foreground">
+        <h3 className="mt-3 text-base font-semibold text-fd-foreground">
           {feature.name}
           <span className="ms-2 text-xs font-normal text-fd-muted-foreground">
             {feature.essence}
           </span>
-        </p>
+        </h3>
         <p className="mt-1 text-sm leading-snug text-fd-muted-foreground">{feature.description}</p>
 
         <div className="mt-auto pt-5">{previewFor(feature.preview, active)}</div>

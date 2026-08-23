@@ -57,9 +57,9 @@ export function Vocabulary(): ReactNode {
               className="sently-spotlight flex min-w-0 flex-col gap-1 bg-fd-card px-3 py-3 sm:px-4 sm:py-3.5"
             >
               <div className="flex min-w-0 items-baseline justify-between gap-2">
-                <code className="min-w-0 truncate font-mono text-sm font-medium text-fd-foreground">
+                <h3 className="min-w-0 truncate font-mono text-sm font-medium text-fd-foreground">
                   {entry.name}
-                </code>
+                </h3>
                 <span className="shrink-0 font-mono text-[10px] text-fd-muted-foreground/60">
                   {String(i + 1).padStart(2, "0")}
                 </span>

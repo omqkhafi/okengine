@@ -143,8 +143,25 @@ describe("SoftwareApplication JSON-LD", () => {
     expect(parsed.sameAs).toEqual([...SITE_SAME_AS]);
     expect(parsed.sameAs.some((url) => url.startsWith("https://github.com/"))).toBe(true);
     expect(parsed.sameAs.some((url) => url.includes("npmjs.com"))).toBe(true);
+    expect(parsed.sameAs.some((url) => url.includes("jsr.io"))).toBe(true);
+    expect(parsed.sameAs.some((url) => url.includes("x.com/"))).toBe(true);
+    expect(parsed.applicationCategory).toBe("DeveloperApplication");
+    expect(parsed.offers).toEqual({
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    });
     expect(Object.keys(parsed).sort()).toEqual(
-      ["@context", "@type", "description", "name", "sameAs", "url"].sort(),
+      [
+        "@context",
+        "@type",
+        "applicationCategory",
+        "description",
+        "name",
+        "offers",
+        "sameAs",
+        "url",
+      ].sort(),
     );
   });
 });

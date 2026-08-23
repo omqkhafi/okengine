@@ -65,9 +65,9 @@ export function Surfaces(): ReactNode {
                   <code className="font-mono text-2xl leading-none font-medium tracking-tight text-fd-foreground">
                     :{surface.port}
                   </code>
-                  <span className="font-mono text-[11px] tracking-[0.14em] text-fd-muted-foreground uppercase">
+                  <h3 className="font-mono text-[11px] tracking-[0.14em] text-fd-muted-foreground uppercase">
                     {surface.surface}
-                  </span>
+                  </h3>
                 </div>
                 <span className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.12em] text-fd-muted-foreground uppercase">
                   <span

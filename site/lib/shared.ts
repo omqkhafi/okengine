@@ -26,6 +26,12 @@ export const createOkeNpmUrl = "https://www.npmjs.com/package/create-oke";
 /** Canonical GitHub repository URL. */
 export const githubRepoUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 
+/** Published package on JSR (`jsr add @omqkhafi/okengine`). */
+export const jsrPackageUrl = `https://jsr.io/@${gitConfig.user}/${gitConfig.repo}`;
+
+/** Public X profile for the project. */
+export const xProfileUrl = "https://x.com/omqkhafi";
+
 /** Homepage Open Graph image (same 1200×630 pipeline as docs OG). */
 export const homepageOgPath = "/og/home";
 

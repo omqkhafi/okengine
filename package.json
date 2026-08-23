@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "repository": {
@@ -117,6 +117,7 @@
     "gate": "PUBLISH_GATE=1 bun test src/cli/doc-staleness.test.ts src/cli/competitor-mention-removal.test.ts src/drivers/vault-driver-removal.test.ts src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts scripts/publish.gate.test.ts",
     "dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
+    "verify": "bun run lint && bun run fmt:check && bun run typecheck && bun run test && bun run gate && bun run site:build",
     "ci": "bun scripts/ci.ts",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run scripts/publish.ts",

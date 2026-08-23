@@ -8,21 +8,30 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
+type BandLabelTag = "span" | "h2";
+
 /**
  * Small monospace section marker shown at the top-left of a band.
  *
  * @param children - Label text (rendered uppercase)
+ * @param as - `h2` when this label is the section heading (no BandHeading below)
  */
-export function BandLabel({ children }: { children: ReactNode }) {
+export function BandLabel({
+  children,
+  as: Tag = "span",
+}: {
+  children: ReactNode;
+  as?: BandLabelTag;
+}) {
   return (
     <div className="flex items-center gap-2 border-b border-fd-border px-5 py-3 sm:px-8">
       <span
         aria-hidden
         className="sently-dot-pulse size-1 rounded-full bg-fd-muted-foreground/60"
       />
-      <span className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+      <Tag className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
         {children}
-      </span>
+      </Tag>
     </div>
   );
 }
@@ -31,21 +40,24 @@ export function BandLabel({ children }: { children: ReactNode }) {
  * One full-width section of the landing page.
  *
  * @param label - Optional section marker rendered above the content
+ * @param labelAs - `h2` when the band has no BandHeading (readme / stack)
  * @param className - Extra classes for the inner content wrapper
  * @param children - Section content
  */
 export function Band({
   label,
+  labelAs,
   className,
   children,
 }: {
   label?: string;
+  labelAs?: BandLabelTag;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <section className="border-b border-fd-border">
-      {label ? <BandLabel>{label}</BandLabel> : null}
+      {label ? <BandLabel as={labelAs}>{label}</BandLabel> : null}
       <div className={cn("px-5 py-10 sm:px-8 sm:py-14", className)}>{children}</div>
     </section>
   );
