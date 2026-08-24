@@ -14,6 +14,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+#### Docs
+
+- Root `SECURITY.md` — coordinated disclosure via GitHub private
+  vulnerability reporting (Security tab); README Documentation link.
+
 #### Dev, Keel & create-oke
 
 - `bun run verify` — same check jobs as `.github/workflows/ci.yml`

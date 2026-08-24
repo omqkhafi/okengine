@@ -140,6 +140,7 @@ Store apps sync schema with `oke db push|generate|migrate` (local `oke dev` auto
 | Agents index | [/llms.txt](https://oke.omqkhafi.dev/llms.txt)                 |
 | Manifest     | [`manifest.v1.schema.json`](manifest.v1.schema.json)           |
 | Budgets      | [`BUDGETS.md`](BUDGETS.md)                                     |
+| Security     | [`SECURITY.md`](SECURITY.md)                                   |
 | Contributing | [`CONTRIBUTING.md`](CONTRIBUTING.md)                           |
 
 ## License
