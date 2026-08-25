@@ -1,0 +1,330 @@
+---
+title: Testing
+description: Write deterministic tests for your Flows with createTestApp — freeze the clock, mock AI, drain signals, and prove side effects.
+icon: FlaskConical
+---
+
+`createTestApp` boots the **same app** you deploy, but with memory drivers and a
+frozen clock. You drive it through `t.api`, `t.auth`, `t.signals`, `t.clock`,
+and `t.channels` — every assertion is deterministic.
+
+<Callout title="The one rule">
+  Boot the same `app` your server boots. Assert only through the harness
+  surfaces (`t.api`, `t.auth`, `t.signals`, `t.clock`, `t.channels`,
+  `t.ai`, `t.effects`) — never reach into internal runtimes.
+</Callout>
+
+## Import
+
+The harness ships as a separate subpath so production bundles stay small:
+
+```typescript title="tests/orders.test.ts"
+import { describe, expect, test } from "bun:test";
+import { createTestApp } from "okengine/testing"; // or "okengine/test"
+import { app } from "../src/app";
+
+test("orders flow", async () => {
+  const t = await createTestApp(app);
+  // ...
+  await t.close();
+});
+```
+
+Both `okengine/testing` and `okengine/test` are aliases. Use `okengine/testing`
+(→ `dist/testing.js`) for published packages and hoisted monorepos; `okengine/test`
+is the source-only path older starters use.
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Adopt your Flows
+
+Every behavior on the app is reachable. No separate test database or server.
+
+```typescript title="src/flows/orders/index.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const create = on(
+  http.post("/orders").gate(member),
+  flow("orders.create", {
+    in: z.object({ sku: z.string(), qty: z.number() }),
+    out: z.object({ id: z.string() }),
+    do: async (input, fx) => {
+      const id = fx.id();
+      await fx.emit(orderPlaced, { orderId: id, ...input });
+      return { id };
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Boot the harness
+
+```typescript title="tests/orders.test.ts"
+const t = await createTestApp(app, { gates: [member] });
+```
+
+</Step>
+
+<Step>
+### Login and call
+
+```typescript
+const u = await t.auth.loginAs({ scopes: ["order:create"] });
+const { data, error } = await t.api.orders.create({ sku: "COFFEE", qty: 2 }, { as: u });
+expect(error).toBeNull();
+expect(data).toEqual({ id: expect.any(String) });
+```
+
+</Step>
+
+<Step>
+### Advance time and drain signals
+
+Signal handlers and Clocks are processed deterministically:
+
+```typescript
+await t.signals.drain();          // run queued signal work
+await t.clock.advance("2m");      // tick scheduled Clocks forward
+expect(t.channels.sent()).toContainEqual(
+  expect.objectContaining({ template: "order-confirmed" }),
+);
+```
+
+</Step>
+
+</Steps>
+
+## Harness surface
+
+| Property                         | What it does                                                                           |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `t.api.<unit>.<flow>(input, opts?)` | Invoke an adopted Flow directly with a `{ as }` principal and optional `{ tenant }`   |
+| `t.auth.loginAs(options)`        | Returns a verified `TestUser` with `id`, `scopes`, `verified`, and optional `tenantId` |
+| `t.clock.advance(by)` / `t.clock.now()` | Freeze and move the harness clock (used by durable sleeps and Clocks)           |
+| `t.cron.run(name)`               | Run a named Clock / `every()` interval now, still leader-elected                       |
+| `t.signals.drain()`              | Drain the signal bus until idle (deterministic queued work)                            |
+| `t.signals.subscribeLive(signal, handlers)` | Subscribe to a `delivery: "live"` signal's event stream (deterministic)      |
+| `t.signals.waitForLive(signal, predicate)`  | Resolve once a live event matching `predicate` arrives                        |
+| `t.channels.sent()`              | Receipts / inbox entries sent during the test                                          |
+| `t.ai.mock(prompt, output)`      | Register a canned mock response for a Prompt                                          |
+| `t.ai.cost()`                    | Accumulated AI cost across `fx.ask` calls                                              |
+| `t.effects.of(runId)`            | Effect ledger for a recorded run (reads / writes / emits / sends)                      |
+| `t.runs()`                       | All wide events recorded during the test                                               |
+| `t.close()`                      | Close booted element runtimes                                                          |
+
+## Multi-tenancy & RLS
+
+With `gate.auth: { tenant: true }` you can test tenant isolation with real
+row-level security.
+
+```typescript title="src/db/documents.ts"
+import { store, field } from "okengine";
+
+export const documents = store.schema.table(
+  "documents",
+  {
+    id: field.text().primaryKey(),
+    tenant_id: field.text().notNull(),
+    title: field.text().notNull(),
+  },
+  [store.schema.policy.tenant("tenant_id", { for: "all" })],
+);
+```
+
+Give each test user a tenant, and drive distinct tenants against the same
+
+Flow:
+
+```typescript title="tests/tenant.test.ts"
+const t = await createTestApp(app, {
+  gates: [member],
+  boot: { config: { drivers: { store: { sql: { test: "pglite" } } } } },
+});
+
+const alice = await t.auth.loginAs({ id: "alice", tenantId: "acme" });
+const bob = await t.auth.loginAs({ id: "bob", tenantId: "globex" });
+
+await t.api.docs.create({ title: "Acme Roadmap" }, { as: alice });
+await t.api.docs.create({ title: "Globex Secrets" }, { as: bob });
+
+const acmeDocs = await t.api.docs.list(undefined, { as: alice });
+expect(acmeDocs.data).toHaveLength(1); // only Acme Roadmap
+```
+
+Re-scope a single call to another tenant with `{ tenant }`, independent of the
+principal's own tenant:
+
+```typescript
+const carol = await t.auth.loginAs({ id: "carol", tenantId: "acme" });
+const { data } = await t.api.docs.create(
+  { title: "Globex Carol" },
+  { as: carol, tenant: "globex" },
+);
+expect(data.tenantId).toBe("globex");
+```
+
+RLS policies are row-level: tenant-scoped tables need `store.schema.policy.tenant`
+(or `store.schema.unscoped()` for genuinely global tables). Harness boots do not
+run migrations — in a real app `oke db push` installs those policies.
+
+## Deterministic live signals
+
+Signals with `delivery: "live"` back client feeds and SSE streams. The harness
+exposes the retained event stream so you can assert both sides deterministically:
+
+```typescript title="tests/live.test.ts"
+const orderStatus = signal("order-status", {
+  delivery: "live",
+  retention: { maxCount: 10 },
+});
+
+on(
+  http.post("/orders/status").public(),
+  flow("orders.updateStatus", {
+    in: z.object({ orderId: z.string(), status: z.string() }),
+    effects: { emits: ["order-status"] },
+    do: async (input, fx) => {
+      await fx.emit(orderStatus, input);
+      return { ok: true };
+    },
+  }),
+);
+```
+
+```typescript
+const seen: Array<{ orderId: string; status: string }> = [];
+
+const unsubscribe = t.signals.subscribeLive(orderStatus, {
+  onEvent: (event) => seen.push(event),
+});
+
+await t.api.orders.updateStatus({ orderId: "o1", status: "placed" });
+await t.signals.drain();
+expect(seen.map((e) => e.status)).toEqual(["placed"]);
+
+// Resolve a promise the moment a matching event arrives.
+const deliveredPromise = t.signals.waitForLive(
+  orderStatus,
+  (event) => event.status === "delivered",
+);
+await t.api.orders.updateStatus({ orderId: "o1", status: "delivered" });
+await t.signals.drain();
+const delivered = await deliveredPromise;
+expect(delivered.status).toBe("delivered");
+
+unsubscribe(); // no further events observed
+```
+
+Call `t.signals.drain()` after each emit — live events are staged until the bus
+drains. `retention` caps the replayed tape (`maxCount` / `maxAge`); it is only
+valid on `delivery: "live"` signals.
+
+## Time travel
+
+`t.clock` freezes time. `t.clock.advance("2m")` moves the clock forward and
+resumes any durable sleeps that become due. `t.cron.run("expire-stale")` runs a
+named Clock now:
+
+```typescript
+await t.clock.advance("30s");                     // durable sleeps resume
+await t.cron.run("expire-stale");                 // named Clock fires
+expect(t.channels.sent()).toHaveLength(1);        // side effect observed
+```
+
+## AI & channels
+
+`fx.ask` routes to a mock driver. Register canned outputs and read accumulated
+cost:
+
+```typescript
+t.ai.mock(summarizePrompt, { title: "Mock summary" });
+const { data } = await t.api.posts.summarize({ postId: "p_1" }, { as: u });
+expect(data).toEqual({ title: "Mock summary" });
+expect(t.ai.cost()).toBe(0);
+```
+
+Channels write to an inbox instead of a transport:
+
+```typescript
+expect(t.channels.sent()).toContainEqual(
+  expect.objectContaining({ template: "order-confirmed", to: u.id }),
+);
+```
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="createTestApp fails to boot — missing secrets or stores">
+  The starter patches test drivers and fallback secrets on the app options. If
+  your `oke({ ... })` references a Vault secret or Store that the template does
+  not define, pass them explicitly:
+
+  ```typescript
+  await createTestApp(app, {
+    secrets: [openAiKey],
+    vaultSecrets: { OPENAI_KEY: "sk-test" },
+  });
+  ```
+
+</Accordion>
+
+<Accordion title="My live subscription never receives events">
+  - Live events are staged until `t.signals.drain()` — await `drain()` after
+    every emitting call.
+  - Register `subscribeLive` / `waitForLive` **before** you emit.
+  - A signal with a schema drops violating emits — assert `res.error`.
+
+</Accordion>
+
+<Accordion title="Cross-tenant reads return a stale cached row">
+  Tier-1 read caching keys by flow, input, and user id — tenant is a row-level
+  RLS scope, not a cache dimension. For reads under a `{ tenant }` override, use
+  a distinct call principal (or write first) so the cache key differs.
+
+</Accordion>
+
+<Accordion title="PGlite RLS policies aren't applied in the harness">
+  Test boots never run migrations — `oke db push` installs DDL and
+  `store.schema.policy.tenant` policies in real apps.
+
+  Assert real RLS by installing the policy + `oke.*` helpers on the booted
+  primary connection (as the repo's `sql-rls-isolation.test.ts` does).
+
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — triggers, contracts, effects, and composition
+- [Store](/docs/elements/store) — SQL, KV, files, index, and RLS policies
+- [Signal](/docs/elements/signal) — delivery physics, retention, and live feeds
+- [Client](/docs/reference/client) — the typed client for real HTTP calls
+
+## Next
+
+<Cards>
+  <Card
+    title="Project structure"
+    description="Folders are the URL; unit plus export is the name."
+    href="/docs/get-started/project-structure"
+  />
+  <Card
+    title="Flow"
+    description="Triggers, contracts, effects, and composition."
+    href="/docs/elements/flow"
+  />
+  <Card
+    title="Signal"
+    description="Delivery physics, retention, and deterministic live feeds."
+    href="/docs/elements/signal"
+  />
+</Cards>
