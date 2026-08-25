@@ -19,8 +19,6 @@ export {
   type TestClock,
   type TestCron,
   type TestEffects,
-  type TestLiveHandlers,
-  type TestLiveUnsubscribe,
   type TestSignals,
   type TestUser,
 } from "./test/create-test-app.ts";

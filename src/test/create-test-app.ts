@@ -44,6 +44,8 @@ export interface TestUser {
   readonly id: string;
   readonly scopes: ReadonlySet<string>;
   readonly verified: boolean;
+  /** Tenant id stamped onto `fx.tenant.id` for scoped calls. */
+  readonly tenantId?: string;
 }
 
 /** Options for {@link TestAuth.loginAs}. */
@@ -52,11 +54,15 @@ export interface LoginAsOptions {
   readonly scopes?: readonly string[];
   readonly verified?: boolean;
   readonly plane?: "user" | "operator";
+  /** Tenant the principal belongs to — stamped onto `fx.tenant.id`. */
+  readonly tenantId?: string;
 }
 
 /** Second argument to test API calls. */
 export interface TestCallOptions {
   readonly as?: TestUser | ResolvedPrincipal;
+  /** Override the tenant stamped for this call (overrides `as.tenantId`). */
+  readonly tenant?: string;
 }
 
 /** Auth surface on the harness. */
@@ -269,6 +275,7 @@ export async function createTestApp<App extends OkeApp>(
         id: opts.id ?? `user_${crypto.randomUUID().slice(0, 8)}`,
         scopes: new Set(opts.scopes ?? []),
         verified: opts.verified ?? true,
+        ...(opts.tenantId !== undefined ? { tenantId: opts.tenantId } : {}),
       };
     },
   };
@@ -381,7 +388,7 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
       };
     }
 
-    const principal = toPrincipal(opts?.as);
+    const principal = toPrincipal(opts?.as, opts?.tenant);
     const httpTrigger = flowDef.triggers.find((t) => t.kind === "http");
     const trigger: Trigger =
       httpTrigger ?? flowDef.triggers[0] ?? ({ kind: "internal" } satisfies InternalTrigger);
@@ -389,6 +396,7 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
     const result = await app.execute(flowDef, input, trigger, {
       principal,
       auth: principal,
+      ...(principal?.tenantId !== undefined ? { tenant: { id: principal.tenantId } } : {}),
     });
 
     // Keep effects cache warm for t.effects.of after the caller awaits runs().
@@ -533,8 +541,13 @@ function matchRestHeuristic(
   return undefined;
 }
 
-function toPrincipal(as: TestUser | ResolvedPrincipal | undefined): ResolvedPrincipal | undefined {
-  if (!as) return undefined;
+function toPrincipal(
+  as: TestUser | ResolvedPrincipal | undefined,
+  tenantOverride?: string,
+): ResolvedPrincipal | undefined {
+  if (!as) {
+    return tenantOverride ? { tenantId: tenantOverride } : undefined;
+  }
   if ("scopes" in as && as.scopes instanceof Set && "id" in as) {
     const u = as as TestUser;
     return {
@@ -542,9 +555,11 @@ function toPrincipal(as: TestUser | ResolvedPrincipal | undefined): ResolvedPrin
       userId: u.id,
       scopes: u.scopes,
       verified: u.verified,
+      tenantId: tenantOverride ?? u.tenantId,
     };
   }
-  return as as ResolvedPrincipal;
+  const p = as as ResolvedPrincipal;
+  return tenantOverride ? { ...p, tenantId: tenantOverride } : p;
 }
 
 /** @internal re-export fail for harness tests that assert typed denials */
