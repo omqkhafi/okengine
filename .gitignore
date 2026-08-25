@@ -79,6 +79,9 @@ reports/
 # Local Taqnyat scratch script (never commit)
 src/plugins/__taqnyat-final.ts
 
+# Bench artifacts (local measurements, never commit)
+src/bench/results/
+
 # Local HyperFrames compositions (promo / explainer drafts — not the product)
 /video/
 

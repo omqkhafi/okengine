@@ -47,6 +47,27 @@ export type InferSelectRow<T> = T extends { readonly $inferSelect: infer R } ? R
 const rlsStampTails = new WeakMap<SqlConnection, Promise<unknown>>();
 
 /**
+ * One helper-installation per CONNECTION, not per session handle.
+ *
+ * Concurrent identity bags share `sharedSqlConn`; installing per handle races
+ * `CREATE OR REPLACE FUNCTION oke.*` on the same `pg_proc` tuple and fails
+ * with `tuple concurrently updated`. The install promise is shared so the
+ * first stamped op installs and everyone else awaits it.
+ */
+const rlsHelperInstalls = new WeakMap<SqlConnection, Promise<void>>();
+
+async function ensureOkeRlsHelpers(connection: SqlConnection): Promise<void> {
+  let installing = rlsHelperInstalls.get(connection);
+  if (!installing) {
+    installing = installOkeRlsHelpers((sql) => connection.exec(sql));
+    rlsHelperInstalls.set(connection, installing);
+    // Failed install must not poison the cache — allow a retry.
+    void installing.catch(() => rlsHelperInstalls.delete(connection));
+  }
+  await installing;
+}
+
+/**
  * True when SQL must not enter an RLS identity frame (txn control or DDL).
  *
  * @param sql - Statement
@@ -405,7 +426,6 @@ export function createSqlStoreHandle(
 ): SqlStoreHandle {
   const { connection, classifications, revealPii, rls } = options;
   const domainDdl: DomainDdlMode = options.domainDdl ?? "ensure";
-  let helpersReady = false;
 
   function mask(rows: SqlRow[], table?: string): SqlRow[] {
     return maskRows(rows, { classifications, table, revealPii });
@@ -448,10 +468,7 @@ export function createSqlStoreHandle(
 
   async function applyRlsStamp<T>(fn: (conn: SqlConnection) => Promise<T>): Promise<T> {
     if (!rls) return fn(connection);
-    if (!helpersReady) {
-      await installOkeRlsHelpers((sql) => connection.exec(sql));
-      helpersReady = true;
-    }
+    await ensureOkeRlsHelpers(connection);
     const frame = async (tx: SqlConnection): Promise<T> => {
       for (const stmt of buildRlsIdentityPreludeSql(rls)) {
         await tx.exec(stmt.sql, stmt.params ?? []);

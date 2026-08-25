@@ -84,7 +84,8 @@ export interface DoctorFinding {
     | "tenancy"
     | "driver"
     | "pii_ask"
-    | "vault_master_key";
+    | "vault_master_key"
+    | "file_descriptor_limit";
   readonly severity: "error" | "warn";
   readonly message: string;
 }
@@ -138,6 +139,15 @@ export interface DoctorOptions {
   readonly writeErr?: (text: string) => void;
   /** Emit only JSON on stdout. */
   readonly json?: boolean;
+  /**
+   * Inject the file-descriptor pressure probe (tests). When unset, the real
+   * probe runs only when a manifest was loaded (conservative skip otherwise).
+   */
+  readonly detectFdPressure?: () => Promise<{
+    readonly softLimit: number;
+    readonly estimatedNeed: number;
+    readonly headroom: number;
+  }>;
 }
 
 /**
@@ -228,6 +238,34 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
         code: "port_conflict",
         severity: "error",
         message: `port ${port} is already in use`,
+      });
+    }
+  }
+
+  // File-descriptor headroom — live SSE holds one fd per open subscriber.
+  // Severity: error when the soft limit dips under ~60% of estimated peak
+  // need (exhaustion is imminent); warn when it is under 2× need.
+  const fd =
+    options.detectFdPressure !== undefined
+      ? await options.detectFdPressure()
+      : manifest
+        ? await (async () => {
+            const { checkFileDescriptorHeadroom } = await import("./doctor-fd.ts");
+            return checkFileDescriptorHeadroom(manifest);
+          })()
+        : null;
+  if (fd) {
+    if (fd.softLimit < fd.estimatedNeed * 0.6) {
+      findings.push({
+        code: "file_descriptor_limit",
+        severity: "error",
+        message: `file descriptor soft limit ${fd.softLimit} is below estimated peak need ${fd.estimatedNeed} (headroom ${fd.headroom}) — raise with \`ulimit -n\` or launchd Limits`,
+      });
+    } else if (fd.softLimit < fd.estimatedNeed * 2) {
+      findings.push({
+        code: "file_descriptor_limit",
+        severity: "warn",
+        message: `file descriptor soft limit ${fd.softLimit} leaves thin headroom over estimated peak need ${fd.estimatedNeed} (headroom ${fd.headroom}) — consider raising with \`ulimit -n\``,
       });
     }
   }

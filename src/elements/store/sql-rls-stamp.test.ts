@@ -15,10 +15,12 @@ import { createSqlStoreHandle } from "./sql-session.ts";
 function createTinyPoolClient(size = 2): PostgresClientLike & {
   readonly reserveCalls: { n: number };
   readonly rootBegins: { n: number };
+  readonly helperInstalls: { n: number };
 } {
   const slots = Array.from({ length: size }, () => ({ held: false }));
   const reserveCalls = { n: 0 };
   const rootBegins = { n: 0 };
+  const helperInstalls = { n: 0 };
 
   function checkout(): { held: boolean } {
     const idle = slots.find((slot) => !slot.held);
@@ -35,15 +37,18 @@ function createTinyPoolClient(size = 2): PostgresClientLike & {
   const client: PostgresClientLike & {
     readonly reserveCalls: { n: number };
     readonly rootBegins: { n: number };
+    readonly helperInstalls: { n: number };
   } = {
     reserveCalls,
     rootBegins,
+    helperInstalls,
     async reserve() {
       reserveCalls.n += 1;
       const slot = checkout();
       slot.held = true;
       return {
         async unsafe(sql) {
+          if (/CREATE OR REPLACE FUNCTION oke\.gate\(\)/.test(sql)) helperInstalls.n += 1;
           return rowsFor(sql);
         },
         release() {
@@ -53,6 +58,7 @@ function createTinyPoolClient(size = 2): PostgresClientLike & {
     },
     async unsafe(sql) {
       const slot = checkout();
+      if (/CREATE OR REPLACE FUNCTION oke\.gate\(\)/.test(sql)) helperInstalls.n += 1;
       const head = sql.trim().split(/\s+/)[0]?.toUpperCase();
       if (head === "BEGIN") {
         rootBegins.n += 1;
@@ -113,5 +119,26 @@ describe("sql-session RLS stamp on pooled postgres", () => {
     await expect(pool.unsafe("BEGIN")).resolves.toEqual([]);
     await expect(pool.unsafe("BEGIN")).resolves.toEqual([]);
     await expect(pool.unsafe("SET LOCAL ROLE oke_app")).rejects.toThrow("checkout timeout");
+  });
+
+  test("concurrent identity bags on one connection install helpers exactly once (G8c fix)", async () => {
+    const pool = createTinyPoolClient(8);
+    const connection = await connectPostgres({ client: pool, role: "primary" });
+    // Fresh handles per identity — the pre-fix code installed per handle.
+    const mk = (userId: string) =>
+      createSqlStoreHandle("sql:app", {
+        connection,
+        classifications: new Map(),
+        routedRole: "primary",
+        domainDdl: "off",
+        rls: { gate: "member", userId, scopes: ["member"] },
+      });
+    const sessions = Array.from({ length: 6 }, (_, i) => mk(`user-${i}`));
+
+    await Promise.all(sessions.map((s) => s.raw(`SELECT id, owner FROM notes`)));
+
+    // One shared-conn install — concurrent CREATE OR REPLACE would otherwise
+    // race pg_proc (`tuple concurrently updated`).
+    expect(pool.helperInstalls.n).toBe(1);
   });
 });

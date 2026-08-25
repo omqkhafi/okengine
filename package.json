@@ -119,6 +119,7 @@
     "build:lib": "bun src/release/build-lib.ts",
     "prepack": "bun run build && bun run build:lib",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts src/okid.bench.test.ts",
+    "bench:load": "OKE_BENCH=1 bun test ./src/bench/*.bench.ts --timeout 600000 --pass-with-no-tests",
     "budgets": "bun src/release/publish.ts",
     "gate": "PUBLISH_GATE=1 bun test src/cli/doc-staleness.test.ts src/cli/competitor-mention-removal.test.ts src/drivers/vault-driver-removal.test.ts src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts scripts/publish.gate.test.ts",
     "dev": "bun run --cwd site dev",

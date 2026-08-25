@@ -70,6 +70,58 @@ describe("channel declaration", () => {
 });
 
 describe("fallback chain records both attempts", () => {
+  test("default sender passes SMTP address validation (G13d fix)", async () => {
+    const seen: Array<string | undefined> = [];
+    const capturing = okTransport("smtp");
+    const base = capturing.send.bind(capturing);
+    const runtime = createChannelRuntime({
+      templates: [channel.email().template("no-from-declared")],
+      drivers: [
+        driverFromTransport("smtp", {
+          provider: "smtp",
+          async send(options: MailOptions) {
+            seen.push(addressToString(options.from));
+            return base(options);
+          },
+        }),
+      ],
+      catalog: { "no-from-declared": { en: { subject: "s", text: "t" } } },
+    });
+
+    const result = await runtime.send("no-from-declared", { to: "user@example.com" });
+    expect(result.ok).toBe(true);
+    // Dotless `oke@localhost` was rejected by sently address validation.
+    expect(seen[0]).toBe("oke@localhost.test");
+  });
+
+  test("concurrent sends serialize per transport — no wire interleave (G13d fix)", async () => {
+    let inside = 0;
+    let overlapped = false;
+    const serialTransport: Transport = {
+      provider: "smtp",
+      async send(options: MailOptions): Promise<SendResult> {
+        if (inside > 0) overlapped = true;
+        inside += 1;
+        await new Promise((r) => setTimeout(r, 5));
+        inside -= 1;
+        return okTransport("smtp").send(options);
+      },
+    };
+    const runtime = createChannelRuntime({
+      templates: [channel.email().template("bulk")],
+      drivers: [driverFromTransport("smtp", serialTransport)],
+      catalog: { bulk: { en: { subject: "s", text: "t" } } },
+    });
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        runtime.send("bulk", { to: `user${i}@example.com` }).then((r) => r.ok),
+      ),
+    );
+    expect(results.every(Boolean)).toBe(true);
+    expect(overlapped).toBe(false);
+  });
+
   test("failed then succeeded — both attempts on the receipt", async () => {
     const inbox = createChannelInbox();
     const runtime = createChannelRuntime({

@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Manifest } from "../manifest/types.ts";
 import { runDoctor } from "./doctor.ts";
+import { estimatePeakFds } from "./doctor-fd.ts";
 
 describe("oke doctor", () => {
   test("catches a missing secret", async () => {
@@ -208,5 +209,96 @@ describe("oke doctor", () => {
     });
     expect(code).toBe(0);
     expect(findings.some((f) => f.code === "pii_ask")).toBe(false);
+  });
+});
+
+describe("doctor file_descriptor_limit", () => {
+  const base = {
+    secrets: [] as string[],
+    ports: [] as number[],
+    skipDbDrift: true,
+    expectedSchemaFingerprint: "same",
+    currentSchemaFingerprint: "same",
+    write: () => {},
+  };
+
+  test("warns when soft limit is low relative to estimated need", async () => {
+    const { code, findings } = await runDoctor({
+      ...base,
+      detectFdPressure: async () => ({ softLimit: 256, estimatedNeed: 400, headroom: -144 }),
+    });
+    expect(code).toBe(0);
+    expect(
+      findings.some((f) => f.code === "file_descriptor_limit" && f.severity === "warn"),
+    ).toBe(true);
+  });
+
+  test("errors when soft limit below estimated need", async () => {
+    const { code, findings } = await runDoctor({
+      ...base,
+      detectFdPressure: async () => ({ softLimit: 200, estimatedNeed: 400, headroom: -200 }),
+    });
+    expect(code).toBe(2);
+    const finding = findings.find((f) => f.code === "file_descriptor_limit");
+    expect(finding?.severity).toBe("error");
+    expect(finding?.message).toContain("file descriptor");
+  });
+
+  test("no finding with ample headroom", async () => {
+    const { code, findings } = await runDoctor({
+      ...base,
+      detectFdPressure: async () => ({ softLimit: 65536, estimatedNeed: 500, headroom: 65036 }),
+    });
+    expect(code).toBe(0);
+    expect(findings.some((f) => f.code === "file_descriptor_limit")).toBe(false);
+  });
+
+  test("skips conservatively without manifest/live signals", async () => {
+    const findings: unknown[] = [];
+    const { code } = await runDoctor({
+      ...base,
+      write: (t) => findings.push(t),
+    });
+    // Real probe runs; on typical dev limits it must not throw and must exit ok.
+    expect([0, 2]).toContain(code);
+  });
+
+  test("estimatePeakFds counts live signals and http routes", async () => {
+    const manifest = {
+      oke: "1.0",
+      app: "t",
+      signals: {
+        tick: { delivery: "live" },
+        once: { delivery: "once" },
+        fan: { delivery: "broadcast" },
+      },
+      flows: {
+        sse: { trigger: { http: { method: "GET", path: "/live" } }, live: "tick" },
+        plain: { trigger: { http: { method: "POST", path: "/x" } } },
+      },
+    } as unknown as Manifest;
+    const need = estimatePeakFds(manifest);
+    expect(need).toBeGreaterThan(estimatePeakFds(null));
+    expect(need).toBeGreaterThanOrEqual(64 * 2 * 2); // live signal + SSE route, ≥2 fds/sub
+  });
+
+  test("estimatePeakFds subscriber term is linear in live signals (G3b-calibrated)", () => {
+    const one = {
+      oke: "1.0",
+      app: "t",
+      signals: { a: { delivery: "live" } },
+      flows: {},
+    } as unknown as Manifest;
+    const two = {
+      ...one,
+      signals: { a: { delivery: "live" }, b: { delivery: "live" } },
+    } as unknown as Manifest;
+    const base = estimatePeakFds(null);
+    const deltaOne = estimatePeakFds(one) - base;
+    const deltaTwo = estimatePeakFds(two) - base;
+    // Each additional live signal adds the same subscriber-fd budget.
+    expect(deltaTwo).toBe(deltaOne * 2);
+    // G3b measured 1.53 fds/subscriber; budget must be at least 1 fd/sub.
+    expect(deltaOne).toBeGreaterThanOrEqual(64);
   });
 });

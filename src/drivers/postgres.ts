@@ -122,8 +122,25 @@ export function toPostgresParams(sql: string, values: readonly unknown[] = []): 
 export async function connectPostgres(options: SqlConnectOptions = {}): Promise<SqlConnection> {
   const role = options.role ?? "primary";
   const injected = options.client as PostgresClientLike | undefined;
-  const client = injected ?? sharedPostgresClient(options.url);
-  return wrapPostgresClient(client, role, { shared: injected === undefined });
+  // Dedicated single-connection client (pool.max === 1): workloads that hold
+  // manual transaction state across many statements (e.g. vault rotateMaster)
+  // must not share a pooled client — Bun raises ERR_POSTGRES_UNSAFE_TRANSACTION
+  // when raw statements interleave with open transaction state on the shared
+  // pool. Opt in explicitly; default behavior is unchanged.
+  const dedicated = !injected && options.pool?.max === 1;
+  const client =
+    injected ??
+    (dedicated
+      ? dedicatedPostgresClient(resolvePostgresUrl(options.url))
+      : sharedPostgresClient(options.url));
+  return wrapPostgresClient(client, role, {
+    shared: injected === undefined && !dedicated,
+  });
+}
+
+/** Standalone one-connection Bun.SQL client — closed with its SqlConnection. */
+function dedicatedPostgresClient(url: string): PostgresClientLike {
+  return new Bun.SQL(url, { max: 1 }) as unknown as PostgresClientLike;
 }
 
 /**

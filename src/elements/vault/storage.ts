@@ -153,9 +153,11 @@ CREATE TABLE IF NOT EXISTS oke_vault_status (
 
 /**
  * Claim the rotate-master lease — same predicate as Clock/Signal
- * (`FOR UPDATE SKIP LOCKED` + lease-expiry reclaim).
+ * (lease-expiry reclaim). Plain `FOR UPDATE` (no `SKIP LOCKED`): a row busy
+ * with a concurrent audit append must briefly wait, not be misread as
+ * "lease held by another instance".
  */
-export const CLAIM_ROTATE_LEASE_SQL: string = `SELECT id FROM oke_vault_status WHERE id = 1 AND ((rotate_locked_by IS NULL) OR (rotate_locked_by = $1) OR (rotate_lease_expires_at IS NULL) OR (rotate_lease_expires_at <= $2)) FOR UPDATE SKIP LOCKED`;
+export const CLAIM_ROTATE_LEASE_SQL: string = `SELECT id FROM oke_vault_status WHERE id = 1 AND ((rotate_locked_by IS NULL) OR (rotate_locked_by = $1) OR (rotate_lease_expires_at IS NULL) OR (rotate_lease_expires_at <= $2)) FOR UPDATE`;
 
 /** Default rotate-master lease TTL (ms) — lazy reclaim, no sweeper. */
 export const DEFAULT_ROTATE_LEASE_MS: number = 30_000;

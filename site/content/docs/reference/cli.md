@@ -27,7 +27,7 @@ oke test                         # bun test with PGLite posture (NODE_ENV=test, 
 oke mode                         # removed — prints error; use oke dev (Compose) / oke test (PGLite)
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
-oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
+oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift, FD headroom
 oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
                                  #   → `bun run dev:console` boots kernel + Vite with a fixed
                                  #     operator (`dev@oke.dev` / `Okengine123!`) — Sign in (prefilled)

@@ -18,12 +18,15 @@
  *   audit-tamper      — raw SQL UPDATE on oke_vault_audit (bypass adapter)
  *   rotate-race       — call rotateMaster once; write ok/error JSON
  *   read-loop         — get(path) until stopPath appears or duration elapses
+ *   bench-read-loop   — read-loop variant that records per-read durationMs
+ *                       (G7 rotate-under-read bench)
  *   set-race          — write `count` distinct paths; append to donePath
  */
 
 import { connectPglite } from "../../drivers/pglite.ts";
 import { connectPostgres } from "../../drivers/postgres.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
+import { appendFile } from "node:fs/promises";
 import {
   createBuiltinVaultAdapter,
   sqlConnectionAsExec,
@@ -56,7 +59,9 @@ interface RotateState {
  */
 async function openSql(sqlUrl: string): Promise<SqlConnection> {
   if (/^postgres(ql)?:\/\//.test(sqlUrl)) {
-    return connectPostgres({ url: sqlUrl });
+    // Dedicated client: rotation / manual-BEGIN workloads fail on a shared
+    // pooled client (ERR_POSTGRES_UNSAFE_TRANSACTION).
+    return connectPostgres({ url: sqlUrl, pool: { max: 1 } });
   }
   return connectPglite({ url: sqlUrl });
 }
@@ -384,6 +389,72 @@ if (mode === "read-loop") {
       }
       await Bun.sleep(5);
     }
+    process.exit(0);
+  } finally {
+    await conn.close();
+  }
+}
+
+if (mode === "bench-read-loop") {
+  const sqlUrl = process.argv[3];
+  const masterKey = process.argv[4];
+  const path = process.argv[5];
+  const readsPath = process.argv[6];
+  const stopPath = process.argv[7];
+  const durationMs = Number(process.argv[8] ?? "15000");
+  if (!sqlUrl || !masterKey || !path || !readsPath || !stopPath) {
+    console.error(
+      "usage: bench-read-loop <sqlUrl> <masterKey> <path> <readsPath> <stopPath> [durationMs]",
+    );
+    process.exit(2);
+  }
+
+  const conn = await openSql(sqlUrl);
+  try {
+    const adapter = createBuiltinVaultAdapter({ db: sqlConnectionAsExec(conn) });
+    await adapter.unseal(masterKey);
+    // Append-only JSONL without re-reading the file each iteration.
+    const lines: string[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = async () => {
+      if (lines.length === 0) return;
+      const batch = lines.splice(0).join("");
+      await appendFile(readsPath, batch);
+    };
+    const scheduleFlush = () => {
+      if (flushTimer) return;
+      flushTimer = setTimeout(() => {
+        flushTimer = undefined;
+        void flush();
+      }, 50);
+    };
+
+    const deadline = Date.now() + durationMs;
+    while (Date.now() < deadline) {
+      if (await Bun.file(stopPath).exists()) break;
+      const s = performance.now();
+      try {
+        const secret = await adapter.get(path);
+        const dur = performance.now() - s;
+        lines.push(
+          `${JSON.stringify({
+            ok: true,
+            durMs: Number(dur.toFixed(3)),
+            value: secret?.value ?? null,
+            kekVersion: secret?.kekVersion ?? null,
+            at: Date.now(),
+          })}\n`,
+        );
+      } catch (error) {
+        const dur = performance.now() - s;
+        const message = error instanceof Error ? error.message : String(error);
+        lines.push(`${JSON.stringify({ ok: false, durMs: Number(dur.toFixed(3)), error: message, at: Date.now() })}\n`);
+      }
+      scheduleFlush();
+      await Bun.sleep(2);
+    }
+    if (flushTimer) clearTimeout(flushTimer);
+    await flush();
     process.exit(0);
   } finally {
     await conn.close();

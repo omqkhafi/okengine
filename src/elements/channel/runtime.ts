@@ -175,7 +175,32 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
   const catalog = options.catalog ?? {};
   const defaultLocale = options.defaultLocale ?? "en";
   const now = options.now ?? (() => Date.now());
-  const drivers = [...(options.drivers ?? [])];
+
+  /**
+   * One wire conversation per transport instance — sently transports are not
+   * safe for concurrent `send()` on the shared socket (interleaved SMTP DATA
+   * → "Unexpected SMTP response for DATA end"). Every driver handed to this
+   * runtime gets a serializing wrapper so concurrent flows queue instead of
+   * corrupting the connection.
+   */
+  function serializeTransport(t: ChannelDriver["transport"] & object): Transport {
+    let tail: Promise<unknown> = Promise.resolve();
+    return {
+      ...(t.provider !== undefined ? { provider: t.provider } : {}),
+      send(mail: Parameters<Transport["send"]>[0]): ReturnType<Transport["send"]> {
+        const run = tail.then(
+          () => t.send(mail),
+          () => t.send(mail),
+        );
+        tail = run.catch(() => undefined);
+        return run as ReturnType<Transport["send"]>;
+      },
+    } as Transport;
+  }
+
+  const drivers = [...(options.drivers ?? [])].map((d) =>
+    d.transport ? { ...d, transport: serializeTransport(d.transport) } : d,
+  );
 
   function resolveBody(
     template: string,
@@ -543,7 +568,9 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     let attempts: ChannelAttempt[];
 
     if (medium === "email" || (medium === "any" && chain.some((d) => d.transport))) {
-      const from = decl.from ?? "oke@localhost";
+      // Default sender must pass RFC/sently validation — `oke@localhost`
+      // (dotless) was rejected by every real SMTP transport after retries.
+      const from = decl.from ?? "oke@localhost.test";
       const sendResult = await sendViaEmailChain(chain, {
         from,
         to: opts.to,

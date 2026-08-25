@@ -251,7 +251,7 @@ describe.skipIf(!LIVE_URL)("chaos — 2b. concurrent rotateMaster (multi-process
     const dir = await mkdtemp(join(tmpdir(), "oke-vault-chaos-rotate-race-"));
     const resultPath = join(dir, "results.jsonl");
 
-    const schema = await connectPostgres({ url });
+    const schema = await connectPostgres({ url, pool: { max: 1 } });
     try {
       await resetVaultTables(schema);
       const adapter = createBuiltinVaultAdapter({ db: sqlConnectionAsExec(schema) });
@@ -345,7 +345,9 @@ describe.skipIf(!LIVE_URL)("chaos — 3b. read during rotation (second process, 
     const stopPath = join(dir, "stop");
     const path = "chaos/cross-read";
 
-    const conn = await connectPostgres({ url });
+    // Dedicated client: rotateMaster holds manual BEGIN state across
+    // statements — the shared pool raises ERR_POSTGRES_UNSAFE_TRANSACTION.
+    const conn = await connectPostgres({ url, pool: { max: 1 } });
     try {
       await resetVaultTables(conn);
       const adapter = createBuiltinVaultAdapter({

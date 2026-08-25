@@ -42,6 +42,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
   Zero dependencies, `crypto.getRandomValues()` only, rejection-sampled for
   bias-free character selection.
 
+#### Dev, Keel & create-oke
+
+- `oke doctor` `file_descriptor_limit` check — estimates peak FDs from the
+  manifest (live signals + SSE routes) and compares against `ulimit -n`.
+- `bun run bench:load` + `src/bench/` — system load harness (15 groups) for
+  regression trend runs against live Keel infra (`OKE_BENCH=1`).
+
 ### ♻️ Changed
 
 #### Runtime
@@ -67,6 +74,23 @@ needed). Large groups add `####` area headings so the list stays scannable.
 ### 🐛 Fixed
 
 #### Runtime
+
+- `connectPostgres({ pool: { max: 1 } })` opens a dedicated single-connection
+  client instead of the shared pool — vault `rotateMaster` and other manual
+  `BEGIN` workloads no longer hit `ERR_POSTGRES_UNSAFE_TRANSACTION`.
+- Vault rotate-lease claim uses plain `FOR UPDATE` (no `SKIP LOCKED`) so a
+  row briefly locked by an audit append is not misread as “lease held by
+  another instance”.
+- RLS helper install (`CREATE OR REPLACE FUNCTION oke.*`) is memoized per
+  SQL connection, not per session handle — concurrent identity bags no
+  longer race `pg_proc` with `tuple concurrently updated`.
+- Channel default email sender is `oke@localhost.test` (was `oke@localhost`)
+  so out-of-the-box SMTP validation accepts the envelope.
+- Concurrent `channel` sends through one transport are serialized so shared
+  SMTP sockets cannot interleave DATA frames.
+- `oke doctor` estimates peak file-descriptor need from live signals / SSE
+  routes (G3b-calibrated ~1.5 fds/subscriber) and warns or errors when the
+  process soft limit is too low.
 
 - Test harness channel runtime now inherits templates declared on the app
   itself (`oke({ channel: { templates } })`) — previously only
