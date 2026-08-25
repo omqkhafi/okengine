@@ -20,6 +20,7 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   { src: "src/kernel-entry.ts", out: "dist/kernel-entry.js" },
   { src: "src/full.ts", out: "dist/full.js" },
   { src: "src/i18n-entry.ts", out: "dist/i18n-entry.js" },
+  { src: "src/testing.ts", out: "dist/testing.js" },
   { src: "src/compiler-entry.ts", out: "dist/compiler-entry.js" },
   { src: "src/journal-entry.ts", out: "dist/journal-entry.js" },
   // Lazy sync chunks — loaded via requirePackageModule / computed require

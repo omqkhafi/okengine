@@ -72,6 +72,12 @@
     "./client/auth": "./src/client/auth.ts",
     "./client-react": "./src/client-react/index.ts",
     "./test": "./src/test/index.ts",
+    "./testing": {
+      "types": "./src/testing.ts",
+      "bun": "./src/testing.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
+    },
     "./config": "./src/config/index.ts",
     "./auth": "./src/auth/index.ts",
     "./console": "./src/console/index.ts",
