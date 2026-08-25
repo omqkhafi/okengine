@@ -16,7 +16,7 @@
   <a href="https://www.npmjs.com/package/okengine"><img alt="npm" src="https://shieldcn.dev/npm/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://jsr.io/@omqkhafi/okengine"><img alt="JSR" src="https://shieldcn.dev/jsr/@omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="MIT" src="https://shieldcn.dev/npm/license/okengine.svg?size=sm&variant=outline" /></a>
-  <a href="https://bun.sh"><img alt="Bun >=1.3.14" src="https://shieldcn.dev/badge/Bun-%3E%3D1.3.14.svg?logo=bun&size=sm&variant=outline" /></a>
+  <a href="https://bun.sh"><img alt="Bun >=1.4.0" src="https://shieldcn.dev/badge/Bun-%3E%3D1.4.0.svg?logo=bun&size=sm&variant=outline" /></a>
   <a href="https://github.com/omqkhafi/okengine/actions"><img alt="CI" src="https://shieldcn.dev/github/ci/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://github.com/omqkhafi/okengine/commits"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
 </p>
@@ -39,7 +39,7 @@
 
 ## Install
 
-Requires [Bun](https://bun.sh) `>=1.3.14`.
+Requires [Bun](https://bun.sh) `>=1.4.0`.
 
 ```bash
 bunx create-oke@latest my-app                      # scaffold (recommended)
@@ -69,12 +69,13 @@ Mnemonic: **O·K·E = 6·5·3**.
 The starter already exports a health Flow — change it and save; App and Console update from the same Manifest:
 
 ```typescript
-import { on, flow, http, gate } from "okengine";
+// src/flows/main/health.ts — folders are the URL: `main/health.ts` → GET /health
+import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const health = on(
-  http.get("/health").gate(gate.public),
-  flow("health.check", {
+  http.get().public(),
+  flow({
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
   }),
@@ -90,6 +91,8 @@ import type { App } from "./app";
 const api = createClient<App>("http://localhost:6530");
 const { data, error } = await api.main.health({});
 ```
+
+Native ids: import `okid` from `okengine/okid` — compact, URL-safe, cryptographically random (`okid()`, `okid(16)`, `okid({ sortable: true })`).
 
 Full walkthrough: [Basic usage](https://oke.omqkhafi.dev/docs/get-started/basic-usage).
 

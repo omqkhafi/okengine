@@ -5,10 +5,10 @@
 okengine is pre-1.0 (`v0.x`). Breaking changes are expected until a stable
 release (see the README warning and changelog).
 
-| Version                         | Security fixes |
-| ------------------------------- | -------------- |
-| Latest `main` / newest release  | Yes            |
-| Older tags and published lines  | No             |
+| Version                        | Security fixes |
+| ------------------------------ | -------------- |
+| Latest `main` / newest release | Yes            |
+| Older tags and published lines | No             |
 
 There is no multi-version LTS matrix. Fixes land on `main` and ship in the
 next published release only — older releases are not backported.

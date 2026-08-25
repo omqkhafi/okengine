@@ -8,13 +8,104 @@
 import type { ColumnClassification } from "../../manifest/types.ts";
 import { lazyRequire } from "../../kernel/lazy-require.ts";
 import type { ColumnDef, TableHandle } from "./table.ts";
-import { id as idHelper, now as nowHelper } from "./table.ts";
+import {
+  id as idHelper,
+  now as nowHelper,
+  nowIso as nowIsoHelper,
+  nowDate as nowDateHelper,
+} from "./table.ts";
 
-/** SQL type primitives supported in v1. */
-export type FieldSqlType = "text" | "integer";
+/**
+ * SQL type primitives — the full Drizzle Postgres column-type surface.
+ * Factory names mirror `drizzle-orm/pg-core` exactly.
+ */
+export type FieldSqlType =
+  | "text"
+  | "varchar"
+  | "char"
+  | "boolean"
+  | "smallint"
+  | "integer"
+  | "bigint"
+  | "serial"
+  | "smallserial"
+  | "bigserial"
+  | "numeric"
+  | "real"
+  | "doublePrecision"
+  | "json"
+  | "jsonb"
+  | "uuid"
+  | "time"
+  | "timestamp"
+  | "date"
+  | "interval"
+  | "point"
+  | "line"
+  | "bytea"
+  | "inet"
+  | "cidr"
+  | "macaddr"
+  | "macaddr8";
+
+/** Timestamp / time precision — mirrors drizzle-orm rc.5 `Precision` union. */
+export type FieldPrecision = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** JS mapping for temporal (`timestamp` / `date`) columns. */
+export type TemporalMode = "date" | "string";
+
+/** JS mapping for `bigint` columns. */
+export type BigIntMode = "number" | "bigint" | "string";
+
+/** JS mapping for `numeric` columns. */
+export type NumericMode = "string" | "number" | "bigint";
+
+/** Tuple vs object mapping for geometric `point` columns. */
+export type PointMode = "tuple" | "xy";
+
+/** Tuple vs equation-object mapping for geometric `line` columns. */
+export type LineMode = "tuple" | "abc";
+
+/** Postgres `interval` field subset — mirrors drizzle-orm rc.5 `IntervalConfig["fields"]`. */
+export type IntervalField =
+  | "year"
+  | "month"
+  | "day"
+  | "hour"
+  | "minute"
+  | "second"
+  | "year to month"
+  | "day to hour"
+  | "day to minute"
+  | "day to second"
+  | "hour to minute"
+  | "hour to second"
+  | "minute to second";
+
+/**
+ * Per-type options recorded on a column (`length`, `precision`, `scale`,
+ * `withTimezone`, `mode`, `fields`, `enumValues`). Only the keys relevant to
+ * {@link SchemaColumnDecl.sqlType} are populated.
+ */
+export interface FieldTypeOptions {
+  /** `varchar` / `char` max length. */
+  readonly length?: number;
+  /** `time` / `timestamp` fractional-second digits (0–6). */
+  readonly precision?: number;
+  /** `numeric(p, s)` scale digits. */
+  readonly scale?: number;
+  /** `time` / `timestamp` timezone flavor. */
+  readonly withTimezone?: boolean;
+  /** JS mapping selector (`TemporalMode` / `BigIntMode` / `NumericMode` / `PointMode` / `LineMode`). */
+  readonly mode?: string;
+  /** `interval` field qualifier. */
+  readonly fields?: IntervalField;
+  /** Allowed string values (`text` / `varchar` / `char` enum). */
+  readonly enumValues?: readonly string[];
+}
 
 /** Known `$defaultFn` helpers recognized by the Drizzle emitter. */
-export type DefaultFnKind = "id" | "now" | "custom";
+export type DefaultFnKind = "id" | "now" | "nowIso" | "nowDate" | "custom";
 
 /** FK action — mirrors Drizzle `UpdateDeleteAction`. */
 export type ReferenceAction = "cascade" | "restrict" | "no action" | "set null" | "set default";
@@ -62,7 +153,7 @@ export interface SchemaColumnDecl<
   readonly $infer?: TData;
   readonly unique: boolean;
   /** Literal `.default(v)` when set. */
-  readonly defaultValue?: string | number | boolean | null;
+  readonly defaultValue?: string | number | boolean | Date | Buffer | null;
   /** Runtime default applied on insert when the key is missing. */
   readonly defaultFn?: () => unknown;
   /** Emitter hint for `$defaultFn(id|now)`. */
@@ -71,6 +162,8 @@ export interface SchemaColumnDecl<
   readonly tableName?: string;
   /** Foreign key when `.references()` was used. */
   readonly references?: ColumnReference;
+  /** Per-type options (`length`, `precision`, `mode`, `enumValues`, …). */
+  readonly typeOptions?: FieldTypeOptions;
   /** Optional human description for Console / docs (falls back to the JS key). */
   readonly description?: string;
   /**
@@ -150,8 +243,42 @@ export interface FieldBuilder<TData = unknown, TNotNull extends boolean = false>
   primaryKey(): FieldBuilder<TData, true>;
   notNull(): FieldBuilder<TData, true>;
   unique(): FieldBuilder<TData, TNotNull>;
-  default(value: string | number | boolean | null): FieldBuilder<TData, TNotNull>;
-  defaultFn(fn: () => unknown): FieldBuilder<TData, TNotNull>;
+  default(value: TData | null): FieldBuilder<TData, TNotNull>;
+  defaultFn(fn: () => TData): FieldBuilder<TData, TNotNull>;
+  /**
+   * Prepared default — a fresh OKID string on every insert. Sugar for
+   * `defaultFn(okid)`; the emitter compiles it to Drizzle `$defaultFn(id)`.
+   *
+   * Only string-typed columns expose it (a non-string builder types the
+   * member as `undefined`, so misuse fails TypeScript with a "possibly
+   * undefined" error).
+   *
+   * ```ts
+   * id: field.text().primaryKey().okid(),
+   * ```
+   */
+  okid: TData extends string ? () => FieldBuilder<TData, TNotNull> : undefined;
+  /**
+   * Prepared default — the current instant, shaped to this column.
+   *
+   * Sugar for `defaultFn(now | nowIso | nowDate)`; the emitter compiles it to
+   * Drizzle `$defaultFn(...)`. The resolved helper follows the column's SQL
+   * type and temporal mode:
+   *
+   * - number columns → epoch-ms (`now`)
+   * - `timestamp` / `date` (default `{ mode: "date" }`) → `Date` (`nowDate`)
+   * - `timestamp` / `date` with `{ mode: "string" }` → ISO-8601 string
+   *   (`nowIso`)
+   *
+   * Non-temporal string columns also resolve to an ISO string.
+   *
+   * ```ts
+   * createdAt: field.integer().notNull().now(),          // epoch-ms number
+   * bornAt:   field.timestamp().notNull().now(),          // Date object
+   * seenAt:   field.timestamp({ mode: "string" }).now(),  // ISO string
+   * ```
+   */
+  now: TData extends number | Date | string ? () => FieldBuilder<TData, TNotNull> : undefined;
   pii(): FieldBuilder<TData, TNotNull>;
   sensitive(): FieldBuilder<TData, TNotNull>;
   retain(duration: string): FieldBuilder<TData, TNotNull>;
@@ -159,6 +286,14 @@ export interface FieldBuilder<TData = unknown, TNotNull extends boolean = false>
   as(sqlName: string): FieldBuilder<TData, TNotNull>;
   /** Optional human description for Console / docs (falls back to the JS key). */
   describe(description: string): FieldBuilder<TData, TNotNull>;
+  /**
+   * Override the inferred JS value type (mirrors Drizzle `$type<T>()`).
+   *
+   * ```ts
+   * field.uuid().type<UserId & { __brand: "user_id" }>()
+   * ```
+   */
+  type<T>(): FieldBuilder<T, TNotNull>;
   /**
    * Declare a foreign key to another column (dialect-agnostic).
    *
@@ -182,13 +317,14 @@ interface FieldState {
   readonly primaryKey: boolean;
   readonly notNull: boolean;
   readonly unique: boolean;
-  readonly defaultValue?: string | number | boolean | null;
+  readonly defaultValue?: string | number | boolean | Date | Buffer | null;
   readonly defaultFn?: () => unknown;
   readonly defaultFnKind?: DefaultFnKind;
   readonly classification?: ColumnClassification;
   readonly sqlName?: string;
   readonly description?: string;
   readonly references?: ColumnReference;
+  readonly typeOptions?: FieldTypeOptions;
 }
 
 function camelToSnake(key: string): string {
@@ -201,9 +337,14 @@ function camelToSnake(key: string): string {
 function defaultFnKindOf(fn: () => unknown): DefaultFnKind {
   if (fn === idHelper) return "id";
   if (fn === nowHelper) return "now";
+  if (fn === nowIsoHelper) return "nowIso";
+  if (fn === nowDateHelper) return "nowDate";
   const name = typeof fn.name === "string" ? fn.name : "";
   if (name === "id") return "id";
+  if (name === "okid") return "id";
   if (name === "now") return "now";
+  if (name === "nowIso") return "nowIso";
+  if (name === "nowDate") return "nowDate";
   return "custom";
 }
 
@@ -224,12 +365,42 @@ function createBuilder<TData, TNotNull extends boolean>(
     primaryKey: () => next<true>({ primaryKey: true, notNull: true }),
     notNull: () => next<true>({ notNull: true }),
     unique: () => next<TNotNull>({ unique: true }),
-    default: (value) => next<TNotNull>({ defaultValue: value }),
+    default: (value) => next<TNotNull>({ defaultValue: value as FieldState["defaultValue"] }),
     defaultFn: (fn) =>
       next<TNotNull>({
-        defaultFn: fn,
-        defaultFnKind: defaultFnKindOf(fn),
+        defaultFn: fn as () => unknown,
+        defaultFnKind: defaultFnKindOf(fn as () => unknown),
       }),
+    okid: (() =>
+      next<TNotNull>({
+        defaultFn: idHelper,
+        defaultFnKind: "id",
+      })) as FieldBuilder<TData, TNotNull>["okid"],
+    now: (() => {
+      const sqlType = state.sqlType;
+      const mode = state.typeOptions?.mode;
+      // Number-typed columns — epoch-ms default.
+      const numericTypes = new Set<FieldSqlType>([
+        "smallint",
+        "integer",
+        "bigint",
+        "serial",
+        "smallserial",
+        "bigserial",
+        "numeric",
+        "real",
+        "doublePrecision",
+      ]);
+      if (numericTypes.has(sqlType)) {
+        return next<TNotNull>({ defaultFn: nowHelper, defaultFnKind: "now" });
+      }
+      // Date-object temporal columns `{ mode: "date" }`.
+      if (mode === "date" && (sqlType === "timestamp" || sqlType === "date")) {
+        return next<TNotNull>({ defaultFn: nowDateHelper, defaultFnKind: "nowDate" });
+      }
+      // Everything else — ISO-8601 string default.
+      return next<TNotNull>({ defaultFn: nowIsoHelper, defaultFnKind: "nowIso" });
+    }) as FieldBuilder<TData, TNotNull>["now"],
     pii: () =>
       next<TNotNull>({ classification: mergeClassification(state.classification, { pii: true }) }),
     sensitive: () =>
@@ -242,6 +413,7 @@ function createBuilder<TData, TNotNull extends boolean>(
       }),
     as: (sqlName) => next<TNotNull>({ sqlName }),
     describe: (description) => next<TNotNull>({ description }),
+    type: () => createBuilder<unknown, TNotNull>(state) as FieldBuilder<never, TNotNull> as never,
     references: (ref, actions) =>
       next<TNotNull>({
         references: actions ? { ref, actions } : { ref },
@@ -262,6 +434,9 @@ function createBuilder<TData, TNotNull extends boolean>(
         ...(state.classification ? { classification: state.classification } : {}),
         ...(state.description !== undefined ? { description: state.description } : {}),
         ...(state.references ? { references: state.references } : {}),
+        ...(state.typeOptions !== undefined && Object.keys(state.typeOptions).length > 0
+          ? { typeOptions: state.typeOptions }
+          : {}),
         getSQL(): never {
           throw new Error(
             `SchemaColumnDecl.getSQL("${sqlName}") is a type bridge — OKE compiles columns directly`,
@@ -273,38 +448,321 @@ function createBuilder<TData, TNotNull extends boolean>(
 }
 
 /**
- * Field builders — `field.text()` / `field.integer()`.
+ * Field builders — the full Drizzle Postgres column-type surface.
+ *
+ * Factory names mirror `drizzle-orm/pg-core` exactly (`field.text()` ·
+ * `field.timestamp()` · …). Options bags carry the per-type knobs (`length`,
+ * `precision`, `mode`, …) and JS inference follows Drizzle's mapping rules —
+ * with OKE defaults: temporals infer `Date` unless `{ mode: "string" }`,
+ * and the serial family is NOT NULL by SQL physics.
  */
 export const field = {
-  text: (): FieldBuilder<string, false> =>
-    createBuilder<string, false>({
-      sqlType: "text",
-      primaryKey: false,
-      notNull: false,
-      unique: false,
-    }),
-  integer: (): FieldBuilder<number, false> =>
-    createBuilder<number, false>({
-      sqlType: "integer",
-      primaryKey: false,
-      notNull: false,
-      unique: false,
-    }),
-} as const;
+  /**
+   * Text id column with the default generation id pre-applied.
+   *
+   * The "default generation id" currently resolves to OKID, so
+   * `field.id()` ≡ `field.text().okid()` — it infers `string` and emits a
+   * `$defaultFn(id)` to be minted on insert.
+   *
+   * ```ts
+   * id: field.id().primaryKey(),
+   * ```
+   */
+  id: (() => fieldOf("text", { defaultFn: idHelper, defaultFnKind: "id" })) as FieldApi["id"],
+
+  /**
+   * Text id column explicitly generated with OK ID.
+   *
+   * Unlike {@link field.id} (which follows whatever the default generation id
+   * becomes), this pins OK ID. Today that is the same generator.
+   *
+   * ```ts
+   * id: field.okid().primaryKey(),
+   * ```
+   */
+  okid: (() => fieldOf("text", { defaultFn: idHelper, defaultFnKind: "id" })) as FieldApi["okid"],
+
+  /** Variable-length string; `{ enum: [...] }` narrows to a literal union. */
+  text: ((options?: { readonly enum?: readonly string[] }) =>
+    fieldOf("text", mergeOptions({ enumValues: options?.enum }))) as FieldApi["text"],
+
+  /** Bounded string; `{ length }` emits `varchar(n)`, `{ enum }` narrows literals. */
+  varchar: ((options?: { readonly length?: number; readonly enum?: readonly string[] }) =>
+    fieldOf(
+      "varchar",
+      mergeOptions({ length: options?.length }, { enumValues: options?.enum }),
+    )) as FieldApi["varchar"],
+
+  /** Fixed-length blank-padded string; same knobs as {@link field.varchar}. */
+  char: ((options?: { readonly length?: number; readonly enum?: readonly string[] }) =>
+    fieldOf(
+      "char",
+      mergeOptions({ length: options?.length }, { enumValues: options?.enum }),
+    )) as FieldApi["char"],
+
+  boolean: (() => fieldOf("boolean")) as FieldApi["boolean"],
+  smallint: (() => fieldOf("smallint")) as FieldApi["smallint"],
+  integer: (() => fieldOf("integer")) as FieldApi["integer"],
+
+  /** `bigint` — defaults to JS `number`; rc.5 requires an explicit mode upstream, ours absorbs it. */
+  bigint: ((options?: { readonly mode?: "number" | "bigint" | "string" }) =>
+    fieldOf("bigint", mergeOptions({ mode: options?.mode ?? "number" }))) as FieldApi["bigint"],
+
+  /** Auto-incrementing int4 — NOT NULL by SQL physics. */
+  serial: (() => notNullFieldOf("serial")) as FieldApi["serial"],
+  /** Auto-incrementing int2 — NOT NULL by SQL physics. */
+  smallserial: (() => notNullFieldOf("smallserial")) as FieldApi["smallserial"],
+
+  /** Auto-incrementing int8 — NOT NULL; defaults to JS `number`. */
+  bigserial: ((options?: { readonly mode?: "number" | "bigint" }) =>
+    notNullFieldOf(
+      "bigserial",
+      mergeOptions({ mode: options?.mode ?? "number" }),
+    )) as FieldApi["bigserial"],
+
+  /**
+   * Exact-decimal `numeric(p, s)` — infers `string` by default (Drizzle
+   * physics: avoids float error); opt into `number` / `bigint` via `mode`.
+   */
+  numeric: ((options?: {
+    readonly precision?: number;
+    readonly scale?: number;
+    readonly mode?: "string" | "number" | "bigint";
+  }) =>
+    fieldOf(
+      "numeric",
+      mergeOptions(
+        { precision: options?.precision },
+        { scale: options?.scale },
+        { mode: options?.mode },
+      ),
+    )) as FieldApi["numeric"],
+
+  /** Alias of {@link field.numeric} — mirrors drizzle-orm (`decimal === numeric`). */
+  decimal: undefined as unknown as FieldApi["decimal"],
+
+  /** Single-precision float4 (~6 significant digits). */
+  real: (() => fieldOf("real")) as FieldApi["real"],
+  /** Double-precision float8 (~15 significant digits). */
+  doublePrecision: (() => fieldOf("doublePrecision")) as FieldApi["doublePrecision"],
+
+  /** Textual JSON — narrow the payload with `field.json<MyShape>()`. */
+  json: (<T = unknown>() => fieldOf<T>("json")) as FieldApi["json"],
+  /** Binary JSON (decomposed, indexable) — narrow with `field.jsonb<MyShape>()`. */
+  jsonb: (<T = unknown>() => fieldOf<T>("jsonb")) as FieldApi["jsonb"],
+
+  uuid: (() => fieldOf("uuid")) as FieldApi["uuid"],
+
+  /** Time of day — always infers `string` (Drizzle `'string time'`). */
+  time: ((options?: { readonly precision?: FieldPrecision; readonly withTimezone?: boolean }) =>
+    fieldOf(
+      "time",
+      mergeOptions({ precision: options?.precision }, { withTimezone: options?.withTimezone }),
+    )) as FieldApi["time"],
+
+  /**
+   * Date + time — infers `Date` objects by default; `{ mode: "string" }`
+   * opts into ISO strings. OKE pins the mode explicitly when emitting
+   * Drizzle schemas.
+   */
+  timestamp: ((options?: {
+    readonly mode?: TemporalMode;
+    readonly precision?: FieldPrecision;
+    readonly withTimezone?: boolean;
+  }) =>
+    fieldOf(
+      "timestamp",
+      mergeOptions(
+        { mode: options?.mode ?? "date" },
+        { precision: options?.precision },
+        { withTimezone: options?.withTimezone },
+      ),
+    )) as FieldApi["timestamp"],
+
+  /** Calendar date — infers `Date` by default; `{ mode: "string" }` opts into ISO `YYYY-MM-DD`. */
+  date: ((options?: { readonly mode?: TemporalMode }) =>
+    fieldOf("date", mergeOptions({ mode: options?.mode ?? "date" }))) as FieldApi["date"],
+
+  /** Time span — infers `string`. */
+  interval: ((options?: { readonly fields?: IntervalField; readonly precision?: number }) =>
+    fieldOf(
+      "interval",
+      mergeOptions({ fields: options?.fields }, { precision: options?.precision }),
+    )) as FieldApi["interval"],
+
+  /** Geometric point — `[number, number]` tuple by default; `{ mode: "xy" }` for `{ x, y }`. */
+  point: ((options?: { readonly mode?: PointMode }) =>
+    fieldOf("point", mergeOptions({ mode: options?.mode ?? "tuple" }))) as FieldApi["point"],
+
+  /** Geometric line — `[n, n, n]` tuple by default; `{ mode: "abc" }` for the equation object. */
+  line: ((options?: { readonly mode?: LineMode }) =>
+    fieldOf("line", mergeOptions({ mode: options?.mode ?? "tuple" }))) as FieldApi["line"],
+
+  /** Binary data — infers `Buffer` (a `Uint8Array`). */
+  bytea: (() => fieldOf("bytea")) as FieldApi["bytea"],
+
+  inet: (() => fieldOf("inet")) as FieldApi["inet"],
+  cidr: (() => fieldOf("cidr")) as FieldApi["cidr"],
+  macaddr: (() => fieldOf("macaddr")) as FieldApi["macaddr"],
+  macaddr8: (() => fieldOf("macaddr8")) as FieldApi["macaddr8"],
+} as FieldApi;
+
+// `decimal` is the exact alias drizzle-orm ships (`export const decimal = numeric`)
+// — same runtime, same overloads. Assigned post-literal because the literal
+// references `field.numeric` before `field` is initialized.
+(field.decimal as FieldApi["numeric"]) = field.numeric;
+
+/** Precise public signatures for {@link field} (overloads + inference). */
+interface FieldApi {
+  /** Text id column with the default generation id (currently OK ID) pre-applied. */
+  readonly id: () => FieldBuilder<string, false>;
+  /** Text id column explicitly generated with OK ID. */
+  readonly okid: () => FieldBuilder<string, false>;
+  readonly text: {
+    (): FieldBuilder<string, false>;
+    <const E extends readonly [string, ...string[]]>(options: {
+      readonly enum: E;
+    }): FieldBuilder<E[number], false>;
+  };
+  readonly varchar: {
+    (): FieldBuilder<string, false>;
+    (options: { readonly length: number }): FieldBuilder<string, false>;
+    <const E extends readonly [string, ...string[]]>(options: {
+      readonly length?: number;
+      readonly enum: E;
+    }): FieldBuilder<E[number], false>;
+  };
+  readonly char: FieldApi["varchar"];
+  readonly boolean: () => FieldBuilder<boolean, false>;
+  readonly smallint: () => FieldBuilder<number, false>;
+  readonly integer: () => FieldBuilder<number, false>;
+  readonly bigint: {
+    (): FieldBuilder<number, false>;
+    (options: { readonly mode: "bigint" }): FieldBuilder<bigint, false>;
+    (options: { readonly mode: "string" }): FieldBuilder<string, false>;
+  };
+  readonly serial: () => FieldBuilder<number, true>;
+  readonly smallserial: () => FieldBuilder<number, true>;
+  readonly bigserial: {
+    (): FieldBuilder<number, true>;
+    (options: { readonly mode: "bigint" }): FieldBuilder<bigint, true>;
+  };
+  readonly numeric: {
+    (): FieldBuilder<string, false>;
+    (options: {
+      readonly precision?: number;
+      readonly scale?: number;
+      readonly mode?: "string";
+    }): FieldBuilder<string, false>;
+    (options: {
+      readonly precision?: number;
+      readonly scale?: number;
+      readonly mode: "number";
+    }): FieldBuilder<number, false>;
+    (options: {
+      readonly precision?: number;
+      readonly scale?: number;
+      readonly mode: "bigint";
+    }): FieldBuilder<bigint, false>;
+  };
+  readonly decimal: FieldApi["numeric"];
+  readonly real: () => FieldBuilder<number, false>;
+  readonly doublePrecision: () => FieldBuilder<number, false>;
+  readonly json: <T = unknown>() => FieldBuilder<T, false>;
+  readonly jsonb: <T = unknown>() => FieldBuilder<T, false>;
+  readonly uuid: () => FieldBuilder<string, false>;
+  readonly time: (options?: {
+    readonly precision?: FieldPrecision;
+    readonly withTimezone?: boolean;
+  }) => FieldBuilder<string, false>;
+  readonly timestamp: {
+    (options?: {
+      readonly mode?: "date";
+      readonly precision?: FieldPrecision;
+      readonly withTimezone?: boolean;
+    }): FieldBuilder<Date, false>;
+    (options: {
+      readonly mode: "string";
+      readonly precision?: FieldPrecision;
+      readonly withTimezone?: boolean;
+    }): FieldBuilder<string, false>;
+  };
+  readonly date: {
+    (options?: { readonly mode?: "date" }): FieldBuilder<Date, false>;
+    (options: { readonly mode: "string" }): FieldBuilder<string, false>;
+  };
+  readonly interval: (options?: {
+    readonly fields?: IntervalField;
+    readonly precision?: number;
+  }) => FieldBuilder<string, false>;
+  readonly point: {
+    (options?: { readonly mode?: "tuple" }): FieldBuilder<[number, number], false>;
+    (options: { readonly mode: "xy" }): FieldBuilder<{ x: number; y: number }, false>;
+  };
+  readonly line: {
+    (options?: { readonly mode?: "tuple" }): FieldBuilder<[number, number, number], false>;
+    (options: { readonly mode: "abc" }): FieldBuilder<{ a: number; b: number; c: number }, false>;
+  };
+  readonly bytea: () => FieldBuilder<Buffer, false>;
+  readonly inet: () => FieldBuilder<string, false>;
+  readonly cidr: () => FieldBuilder<string, false>;
+  readonly macaddr: () => FieldBuilder<string, false>;
+  readonly macaddr8: () => FieldBuilder<string, false>;
+}
+
+/**
+ * Merge defined per-type option entries into a {@link Partial<FieldState>}
+ * patch — empty when nothing was set.
+ */
+function mergeOptions(
+  ...parts: readonly (Partial<FieldTypeOptions> | undefined)[]
+): Partial<FieldState> {
+  const merged: Record<string, unknown> = {};
+  for (const part of parts) {
+    if (!part) continue;
+    for (const [key, value] of Object.entries(part)) {
+      if (value !== undefined) merged[key] = value;
+    }
+  }
+  return Object.keys(merged).length > 0 ? { typeOptions: merged as FieldTypeOptions } : {};
+}
+
+function fieldOf<TData>(
+  sqlType: FieldSqlType,
+  extra: Partial<FieldState> = {},
+): FieldBuilder<TData, false> {
+  return createBuilder<TData, false>({
+    sqlType,
+    primaryKey: false,
+    notNull: false,
+    unique: false,
+    ...extra,
+  });
+}
+
+function notNullFieldOf<TData>(
+  sqlType: FieldSqlType,
+  extra: Partial<FieldState> = {},
+): FieldBuilder<TData, true> {
+  return createBuilder<TData, true>({
+    sqlType,
+    primaryKey: false,
+    notNull: true,
+    unique: false,
+    ...extra,
+  });
+}
 
 /**
  * Column map input for {@link schemaTable}.
  *
- * Explicit `string` / `number` × nullability variants so `field.text()`
- * (`FieldBuilder<string, false>`) remains assignable — methodful builders
- * are invariant in their type parameters.
+ * Structural over enumerated: methodful builders are invariant in their type
+ * parameters, so an explicit `string | number × false | true` union would
+ * reject the widened `field.*` surface (`Date`, `bigint`, tuples, generics).
+ * `FieldBuilder<unknown, boolean>` accepts every builder via covariance of
+ * the phantom `$infer` property.
  */
-export type SchemaColumnInput =
-  | FieldBuilder<string, false>
-  | FieldBuilder<string, true>
-  | FieldBuilder<number, false>
-  | FieldBuilder<number, true>
-  | SchemaColumnDecl;
+export type SchemaColumnInput = FieldBuilder<unknown, boolean> | SchemaColumnDecl;
 
 /**
  * Whether a value is a finalized {@link SchemaColumnDecl}.

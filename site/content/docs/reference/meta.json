@@ -12,6 +12,7 @@
     "errors",
     "plugins",
     "cli",
-    "security"
+    "security",
+    "okid"
   ]
 }

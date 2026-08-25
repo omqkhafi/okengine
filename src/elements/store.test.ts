@@ -70,7 +70,9 @@ describe("store facets", () => {
   });
 
   test("id and now helpers", () => {
-    expect(id()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    const value = id();
+    expect(value).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(value.length).toBe(21);
     expect(now()).toBeGreaterThan(0);
   });
 });

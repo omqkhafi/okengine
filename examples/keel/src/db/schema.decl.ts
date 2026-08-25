@@ -1,4 +1,4 @@
-import { store, field, id, now } from "okengine";
+import { store, field } from "okengine";
 
 /**
  * Keel work-management domain — Asana / ClickUp / Monday shaped.
@@ -6,34 +6,34 @@ import { store, field, id, now } from "okengine";
  */
 
 export const spaces = store.schema.table("spaces", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   key: field.text().notNull().unique(),
   name: field.text().notNull(),
   color: field.text(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const members = store.schema.table("members", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   spaceId: field.text().references(() => spaces.id, { onDelete: "set null" }),
   name: field.text().notNull(),
   email: field.text().notNull().pii(),
   role: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const goals = store.schema.table("goals", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   name: field.text().notNull(),
   status: field.text().notNull(),
   ownerEmail: field.text().pii(),
-  targetDate: field.text(),
-  createdAt: field.integer().notNull().defaultFn(now),
-  updatedAt: field.integer().notNull().defaultFn(now),
+  targetDate: field.timestamp(),
+  createdAt: field.timestamp().notNull().now(),
+  updatedAt: field.timestamp().notNull().now(),
 });
 
 export const projects = store.schema.table("projects", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   spaceId: field
     .text()
     .notNull()
@@ -42,15 +42,15 @@ export const projects = store.schema.table("projects", {
   name: field.text().notNull(),
   status: field.text().notNull(),
   leadEmail: field.text().pii(),
-  startDate: field.text(),
-  targetDate: field.text(),
+  startDate: field.timestamp(),
+  targetDate: field.timestamp(),
   color: field.text(),
-  createdAt: field.integer().notNull().defaultFn(now),
-  updatedAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
+  updatedAt: field.timestamp().notNull().now(),
 });
 
 export const sections = store.schema.table("sections", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   projectId: field
     .text()
     .notNull()
@@ -60,7 +60,7 @@ export const sections = store.schema.table("sections", {
 });
 
 export const tasks = store.schema.table("tasks", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   identifier: field.text().notNull().unique(),
   title: field.text().notNull(),
   description: field.text(),
@@ -75,18 +75,18 @@ export const tasks = store.schema.table("tasks", {
   projectId: field.text().references(() => projects.id, { onDelete: "set null" }),
   sectionId: field.text().references(() => sections.id, { onDelete: "set null" }),
   parentId: field.text(),
-  startDate: field.text(),
-  dueDate: field.text(),
-  completedAt: field.text(),
-  archivedAt: field.text(),
+  startDate: field.timestamp(),
+  dueDate: field.timestamp(),
+  completedAt: field.timestamp(),
+  archivedAt: field.timestamp(),
   creatorEmail: field.text().pii(),
   roleNeeded: field.text(),
-  createdAt: field.integer().notNull().defaultFn(now),
-  updatedAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
+  updatedAt: field.timestamp().notNull().now(),
 });
 
 export const taskAssignees = store.schema.table("task_assignees", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
@@ -95,7 +95,7 @@ export const taskAssignees = store.schema.table("task_assignees", {
 });
 
 export const taskFollowers = store.schema.table("task_followers", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
@@ -104,7 +104,7 @@ export const taskFollowers = store.schema.table("task_followers", {
 });
 
 export const taskDependencies = store.schema.table("task_dependencies", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
@@ -116,13 +116,13 @@ export const taskDependencies = store.schema.table("task_dependencies", {
 });
 
 export const tags = store.schema.table("tags", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   name: field.text().notNull(),
   groupName: field.text(),
 });
 
 export const taskTags = store.schema.table("task_tags", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
@@ -134,7 +134,7 @@ export const taskTags = store.schema.table("task_tags", {
 });
 
 export const customFields = store.schema.table("custom_fields", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   projectId: field
     .text()
     .notNull()
@@ -144,7 +144,7 @@ export const customFields = store.schema.table("custom_fields", {
 });
 
 export const customFieldValues = store.schema.table("custom_field_values", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
@@ -157,38 +157,38 @@ export const customFieldValues = store.schema.table("custom_field_values", {
 });
 
 export const comments = store.schema.table("comments", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
     .references(() => tasks.id, { onDelete: "cascade" }),
   authorEmail: field.text().pii(),
   body: field.text().notNull(),
-  resolvedAt: field.text(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  resolvedAt: field.timestamp(),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const activity = store.schema.table("activity", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   parentKind: field.text().notNull(),
   parentId: field.text().notNull(),
   actorEmail: field.text().pii(),
   kind: field.text().notNull(),
   body: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const documents = store.schema.table("documents", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   title: field.text().notNull(),
   body: field.text().notNull(),
   parentKind: field.text().notNull(),
   parentId: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const fileObjects = store.schema.table("file_objects", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   objectKey: field.text().notNull(),
   originalName: field.text().notNull(),
   contentType: field.text().notNull(),
@@ -197,7 +197,7 @@ export const fileObjects = store.schema.table("file_objects", {
 });
 
 export const projectUpdates = store.schema.table("project_updates", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   projectId: field
     .text()
     .notNull()
@@ -205,11 +205,11 @@ export const projectUpdates = store.schema.table("project_updates", {
   health: field.text().notNull(),
   body: field.text().notNull(),
   authorEmail: field.text().pii(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const views = store.schema.table("views", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   projectId: field
     .text()
     .notNull()
@@ -218,22 +218,22 @@ export const views = store.schema.table("views", {
   kind: field.text().notNull(),
   filtersJson: field.text(),
   ownerEmail: field.text().pii(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const forms = store.schema.table("forms", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   projectId: field
     .text()
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   name: field.text().notNull(),
   schemaJson: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const formSubmissions = store.schema.table("form_submissions", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   formId: field
     .text()
     .notNull()
@@ -241,27 +241,27 @@ export const formSubmissions = store.schema.table("form_submissions", {
   taskId: field.text().references(() => tasks.id, { onDelete: "set null" }),
   payloadJson: field.text().notNull(),
   customerName: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const inbox = store.schema.table("inbox", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   memberEmail: field.text().notNull(),
   kind: field.text().notNull(),
   title: field.text().notNull(),
   refId: field.text().notNull(),
-  readAt: field.text(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  readAt: field.timestamp(),
+  createdAt: field.timestamp().notNull().now(),
 });
 
 export const recurrence = store.schema.table("recurrence", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   taskId: field
     .text()
     .notNull()
     .references(() => tasks.id, { onDelete: "cascade" }),
   every: field.text().notNull(),
-  nextAt: field.text().notNull(),
+  nextAt: field.timestamp().notNull(),
 });
 
 /** RQB v2 relations — keys match emitted Drizzle export names. */

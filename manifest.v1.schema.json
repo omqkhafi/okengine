@@ -378,7 +378,38 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": { "type": "string", "enum": ["text", "integer"] },
+        "type": {
+          "type": "string",
+          "enum": [
+            "text",
+            "varchar",
+            "char",
+            "boolean",
+            "smallint",
+            "integer",
+            "bigint",
+            "serial",
+            "smallserial",
+            "bigserial",
+            "numeric",
+            "real",
+            "doublePrecision",
+            "json",
+            "jsonb",
+            "uuid",
+            "time",
+            "timestamp",
+            "date",
+            "interval",
+            "point",
+            "line",
+            "bytea",
+            "inet",
+            "cidr",
+            "macaddr",
+            "macaddr8"
+          ]
+        },
         "nullable": { "type": "boolean" },
         "primaryKey": { "type": "boolean" },
         "unique": { "type": "boolean" },
@@ -390,6 +421,24 @@
             { "type": "null" }
           ]
         },
+        "enumValues": {
+          "description": "Allowed string values for enum columns (text/varchar/char).",
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "length": { "description": "varchar/char max length.", "type": "integer", "minimum": 1 },
+        "precision": {
+          "description": "Fractional-second digits (time/timestamp, 0-6) or interval precision.",
+          "type": "integer"
+        },
+        "scale": { "description": "numeric(p, s) scale digits.", "type": "integer" },
+        "withTimezone": { "description": "time/timestamp timezone flavor.", "type": "boolean" },
+        "mode": {
+          "description": "JS mapping selector for temporal/numeric/point/line/bigint columns.",
+          "type": "string"
+        },
+        "fields": { "description": "interval field qualifier.", "type": "string" },
         "sqlName": { "type": "string", "minLength": 1 },
         "description": {
           "description": "Optional human description; consumers fall back to the column map key.",

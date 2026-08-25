@@ -141,7 +141,7 @@ reclaimed after its lease expires and continues at the next unfinished step.
 | Guarantee          | What it means                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
 | Leader election    | Instances that share one CronStore fire a given tick once (lease TTL, default 30s)                 |
-| Process identity   | Boot mints one `instanceId` (`inst-<uuid>`) for Clock, Journal, and the fleet registry             |
+| Process identity   | Boot mints one `instanceId` (`inst-<okid>`) for Clock, Journal, and the fleet registry             |
 | Catch-up `"one"`   | Health counts every missed slot; the runtime still fires **once** when overdue — not once per miss |
 | Reconciled at boot | Named clocks land in `oke_crons`; the scheduler reads the Store, not the source                    |
 | DST detection      | Ambiguous local times get a Console warning — schedules are not rewritten or blocked               |

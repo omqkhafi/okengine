@@ -14,7 +14,66 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
-#### Docs
+#### Runtime
+
+- `field.*` widens from `text | integer` to the full Drizzle Postgres column
+  surface — `varchar` / `char` (with `length` + enum literals), `boolean`,
+  `smallint`, `bigint`, the serial family, `numeric` / `decimal`
+  (`precision`/`scale`/`mode`), `real` / `doublePrecision`, `json` / `jsonb`
+  (generic payload), `uuid`, `time` / `timestamp` / `date` / `interval`,
+  `point` / `line`, `bytea`, and the network family (`inet` / `cidr` /
+  `macaddr` / `macaddr8`). Options bags carry per-type knobs; temporals infer `Date`
+  by default with `{ mode: "string" }` opting into ISO strings; the
+  serial family is NOT NULL by SQL physics.
+- `.type<T>()` builder override (mirrors Drizzle `$type<T>`) and typed
+  `.default(value)` that rejects values outside the column's JS type.
+- Prepared default shorthands — `.okid()` (fresh OKID on insert) and
+  `.now()` sugar over `defaultFn(id)` / the `now` family; `.now()` resolves
+  by the column — epoch-ms on numbers, `Date` on default/date-mode
+  temporals, ISO-8601 on string-mode temporals.
+- Drizzle emitter emits drizzle-exact factory calls per type (options,
+  pinned temporal modes) and collects the `drizzle-orm/pg-core` import list
+  dynamically.
+- Manifest columns record the widened types plus `enumValues`, `length`,
+  `precision`, `scale`, `withTimezone`, `mode`, and `fields`.
+- `okengine/okid` — native id generator `okid()` (21 chars, 126 bits, URL-safe
+  `a-zA-Z0-9-_`), opt-in `{ sortable: true }` time prefix and alphabet control
+  (`numbers` / `lowercase` / `uppercase` / `symbols` / `lookAlikes`).
+  Zero dependencies, `crypto.getRandomValues()` only, rejection-sampled for
+  bias-free character selection.
+
+### ♻️ Changed
+
+#### Runtime
+
+- Internal opaque ids (`id()` / `fx.id()` / run, job, event, instance, and
+  file ids) now use OKID from `okengine/okid` instead of UUID strings —
+  shorter and equally collision-resistant.
+- `defaultFn(id)` now emits native OKIDs, and `defaultFn(okid)` is recognized
+  as an id default; the declarative schema surface accepts either.
+
+### 💥 Breaking Changes
+
+#### Runtime
+
+- `field.timestamp()` and `field.date()` now infer `Date` objects by default
+  (previously ISO strings) — opt into ISO strings with `{ mode: "string" }`.
+  Drizzle emission pins `mode: "date"`, and `.now()` on default temporals
+  yields `Date` (`$defaultFn(nowDate)`).
+- `.default(v)` is now typed against the column's JS type — call sites
+  passing mismatched literals (e.g. `field.integer().default("0")`) fail
+  typecheck.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Test harness channel runtime now inherits templates declared on the app
+  itself (`oke({ channel: { templates } })`) — previously only
+  `boot.channel.templates` overrides reached the harness, so app-declared
+  templates silently dropped out of `t.channels.sent()`.
+
+### Docs
 
 - Root `SECURITY.md` — coordinated disclosure via GitHub private
   vulnerability reporting (Security tab); README Documentation link.

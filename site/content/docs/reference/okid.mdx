@@ -1,0 +1,137 @@
+---
+title: "OKID"
+description: "OKE's native id generator — compact, URL-safe, cryptographically random ids from okengine/okid, with an opt-in time-sortable and alphabet-controlled variant."
+icon: "Hash"
+source: "docs/spec/unified-theory.md"
+---
+
+Using `okengine/okid` gives you an id for any primary key, request trace, or event that is short (`okid()` is 21 characters), URL-safe, and random from a cryptographic source. Turn to it when a plain UUID string is more than you need; your app already generates them wherever `defaultFn(id)` is used.
+
+<Callout title="The one rule">
+  Use OKID for identity, never for secrets. An id is enumerable by design, so anything you hand to
+  an untrusted client must be a token from the Vault, not an OKID.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Install nothing — it is exported by the package
+
+```typescript
+import { okid } from "okengine/okid";
+```
+
+</Step>
+
+<Step>
+### Generate an id
+
+```typescript
+const userId = okid();
+const requestId = okid(16);
+const eventKey = okid({ sortable: true });
+const inviteCode = okid({ lookAlikes: false, uppercase: false });
+```
+
+</Step>
+
+<Step>
+### Store it anywhere a string fits
+
+```typescript
+// field.id() is shorthand for "default generation id" — currently OK ID.
+field.id().primaryKey();
+// Or pin OK ID explicitly:
+field.okid().primaryKey();
+```
+
+The same 21-character id lands in your SQL primary keys, KV keys, and trace ids.
+
+</Step>
+
+</Steps>
+
+## Reference
+
+| Call                                               | Result                                    | Notes                                   |
+| -------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
+| `okid()`                                           | 21-char URL-safe id, 126 bits of entropy  | 64-char alphabet, `a-zA-Z0-9-_`         |
+| `okid(length)`                                     | id of exactly `length` characters         | integer between 8 and 128               |
+| `okid({ length })`                                 | options form, id of `length`              | default 21                              |
+| `okid({ sortable })`                               | time-prefixed id, 8 prefix + `length − 8` | lexicographic order ≈ creation order    |
+| `okid({ numbers, lowercase, uppercase, symbols })` | charset control                           | each group defaults to on               |
+| `okid({ lookAlikes })`                             | confusable-char control                   | `lookAlikes: false` drops `1lI0Oouv5Ss` |
+
+### Options
+
+| Option       | Type      | Default | Meaning                                                     |
+| ------------ | --------- | ------- | ----------------------------------------------------------- |
+| `length`     | `number`  | `21`    | total id length in characters, between 8 and 128            |
+| `sortable`   | `boolean` | `false` | prefix an 8-char epoch-ms timestamp so sorting follows time |
+| `numbers`    | `boolean` | `true`  | include `0-9`                                               |
+| `lowercase`  | `boolean` | `true`  | include `a-z`                                               |
+| `uppercase`  | `boolean` | `true`  | include `A-Z`                                               |
+| `symbols`    | `boolean` | `true`  | include `-` and `_`                                         |
+| `lookAlikes` | `boolean` | `true`  | include confusable chars `1lI0Oouv5Ss`; set `false` to drop |
+
+### Exported constants
+
+| Constant                   | Value                                     | Meaning                          |
+| -------------------------- | ----------------------------------------- | -------------------------------- |
+| `OKID_ALPHABET`            | `a-zA-Z0-9-_`                             | default, Base64URL order         |
+| `OKID_SORTABLE_ALPHABET`   | alphabet sorted by code unit (same chars) | used by the sortable encoder     |
+| `OKID_LOOKALIKE_CHARS`     | `1lI0Oouv5Ss`                             | dropped when `lookAlikes: false` |
+| `OKID_DEFAULT_LENGTH`      | `21`                                      | default length                   |
+| `OKID_MIN_LENGTH`          | `8`                                       | shortest non-sortable length     |
+| `OKID_MAX_LENGTH`          | `128`                                     | longest length                   |
+| `OKID_SORTABLE_MIN_LENGTH` | `16`                                      | shortest sortable length (8+8)   |
+
+## Collision resistance
+
+Every character is drawn uniformly from the alphabet with `crypto.getRandomValues()`. Because it uses an unbiased character selection (never modulo), each character carries exactly `log2(alphabet)` bits of entropy. At the default 21 characters over 64 symbols, that is 126 bits — the birthday-bound collision probability across one billion ids is on the order of `10⁻²¹`. You do not need a UUID for collision resistance; this is where a UUID is stronger only because it is a different format, not a different amount of randomness.
+
+**Consequence:** two ids minted at the same millisecond are still distinct — the timestamp prefix never replaces entropy, it prefixes it.
+
+## Sortable ids
+
+`sortable: true` prepends 48 bits of `Date.now()` encoded in exactly 8 characters, in an alphabet whose sort order matches time order. Sorting a batch of these ids reproduces the creation order across milliseconds.
+
+**Consequence:** a sortable id embeds its creation time (millisecond precision), so keep them out of public, enumerable surfaces. Clock skew distorts order but can never produce a duplicate — the tail stays random.
+
+## Alphabet control
+
+Turning groups off shrinks the alphabet. With a non-power-of-two alphabet, OKID uses rejection sampling instead of modulo, so every remaining character stays equally likely — the output never becomes measurably biased.
+
+**Consequence:** smaller alphabets mean fewer bits per character. `lookAlikes: false` alone drops the default entropy only slightly (126 → ~120 bits); dropping whole groups costs more. Choose the smallest alphabet that fits the human-transcription use case.
+
+## Under the hood
+
+The generator is a pure function: no counters, no process or machine fingerprint, no shared mutable state. It is safe to call concurrently from any number of workers, and every id uses only the bytes it needs — no hidden timestamp, no hidden prefix.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="I get an error for an empty alphabet">
+
+Passing `numbers: false, lowercase: false, uppercase: false, symbols: false` at the same time throws a `RangeError` with the message `okid: alphabet is empty — enable at least one character group`. Re-enable at least one group, or don't use the option object and rely on the default alphabet.
+
+</Accordion>
+<Accordion title="I get a RangeError for a length">
+
+`okid(0)`, `okid(-1)`, `okid(7)`, `okid(129)`, and non-integer lengths throw a `RangeError`. Sortable ids have a higher floor: passing a sortable length below 16 throws. Keep lengths between 8 and 128 (16–128 for sortable).
+
+</Accordion>
+<Accordion title="My ids are not sortable by the alphabet order I expected">
+
+The default alphabet order is not lexicographic; `_` sorts between uppercase and lowercase. When `sortable` is on, ids use the code-point-ordered alphabet, so plain string comparison matches time order. Do not customize the alphabet in sortable mode — the option exists exactly because the default order is not trustworthy for ordering.
+
+</Accordion>
+</Accordions>
+
+## References
+
+- [Store](/docs/elements/store) — `defaultFn(id)` in table declarations delegates to `okid()`
+- [fx](/docs/reference/fx) — `fx.id()` in the runtime uses `okid()`
+- [Clock](/docs/elements/clock) — process `instanceId` (`inst-<okid>`) is an OKID

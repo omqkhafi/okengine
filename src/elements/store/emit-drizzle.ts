@@ -17,6 +17,7 @@ import {
   schemaTable,
   schemaTableSqlName,
   tablesFromExports,
+  type FieldTypeOptions,
   type RelationColumnRef,
   type SchemaColumnDecl,
   type SchemaColumnInput,
@@ -68,17 +69,21 @@ export function dialectFromDriverId(driverId: string | undefined): SqlDialect {
 /**
  * Serialize one column to a Drizzle builder chain.
  *
+ * Emits drizzle-exact calls for every {@link FieldSqlType}, carrying options
+ * (`length`, `precision`, `scale`, `withTimezone`, `mode`, `fields`,
+ * `enumValues`). Temporal modes are always pinned explicitly — rc.5 library
+ * defaults differ from OKE's (bare `date()` = string, bare `timestamp()` =
+ * Date).
+ *
+ * Postgres INTEGER is 32-bit; abstract `integer` (often ms clocks) → bigint.
+ * drizzle-orm's `bigint()` requires `{ mode }` — omitting it throws on
+ * `config.mode` when the generated schema is loaded by drizzle-kit push.
+ *
  * @param col - Column decl
  * @param dialect - Target dialect (affects import names only at file level)
  */
 export function emitColumnSource(col: SchemaColumnDecl, _dialect: SqlDialect = "postgres"): string {
-  // Postgres INTEGER is 32-bit; abstract `integer` (often ms clocks) → bigint.
-  // drizzle-orm's `bigint()` requires `{ mode }` — omitting it throws on
-  // `config.mode` when the generated schema is loaded by drizzle-kit push.
-  let expr =
-    col.sqlType === "integer"
-      ? `bigint(${JSON.stringify(col.sqlName)}, { mode: "number" })`
-      : `text(${JSON.stringify(col.sqlName)})`;
+  let expr = `${columnFactoryCall(col)}`;
   if (col.primaryKey) expr += ".primaryKey()";
   else if (col.notNull) expr += ".notNull()";
   if (col.unique) expr += ".unique()";
@@ -87,6 +92,8 @@ export function emitColumnSource(col: SchemaColumnDecl, _dialect: SqlDialect = "
   }
   if (col.defaultFnKind === "id") expr += ".$defaultFn(id)";
   else if (col.defaultFnKind === "now") expr += ".$defaultFn(now)";
+  else if (col.defaultFnKind === "nowIso") expr += ".$defaultFn(nowIso)";
+  else if (col.defaultFnKind === "nowDate") expr += ".$defaultFn(nowDate)";
   if (col.references) {
     const target = col.references.ref();
     const targetTable = exportNameForTable(target.tableName ?? "unknown");
@@ -104,8 +111,119 @@ export function emitColumnSource(col: SchemaColumnDecl, _dialect: SqlDialect = "
   return expr;
 }
 
-function literalSource(value: string | number | boolean | null): string {
+/** Factory call for a column type with its options, e.g. `varchar("x", { length: 256 })`. */
+function columnFactoryCall(col: SchemaColumnDecl): string {
+  const name = JSON.stringify(col.sqlName);
+  const o = col.typeOptions ?? {};
+  switch (col.sqlType) {
+    case "text":
+      return enumConfig(o) !== undefined
+        ? `text(${name}, { enum: ${JSON.stringify(o.enumValues)} })`
+        : `text(${name})`;
+    case "varchar":
+    case "char": {
+      const factory = col.sqlType;
+      const configParts: string[] = [];
+      if (o.length !== undefined) configParts.push(`length: ${o.length}`);
+      const enumValues = enumConfig(o);
+      if (enumValues !== undefined) configParts.push(`enum: ${enumValues}`);
+      return configParts.length > 0
+        ? `${factory}(${name}, { ${configParts.join(", ")} })`
+        : `${factory}(${name})`;
+    }
+    case "boolean":
+      return `boolean(${name})`;
+    case "smallint":
+      return `smallint(${name})`;
+    case "integer":
+      // Postgres INTEGER is 32-bit — abstract integer (ms clocks) widens.
+      return `bigint(${name}, { mode: "number" })`;
+    case "bigint":
+      return `bigint(${name}, { mode: ${JSON.stringify(o.mode ?? "number")} })`;
+    case "serial":
+      return `serial(${name})`;
+    case "smallserial":
+      return `smallserial(${name})`;
+    case "bigserial":
+      return `bigserial(${name}, { mode: ${JSON.stringify(o.mode ?? "number")} })`;
+    case "numeric": {
+      const configParts: string[] = [];
+      if (o.precision !== undefined) configParts.push(`precision: ${o.precision}`);
+      if (o.scale !== undefined) configParts.push(`scale: ${o.scale}`);
+      if (o.mode !== undefined && o.mode !== "string") {
+        configParts.push(`mode: ${JSON.stringify(o.mode)}`);
+      }
+      // rc.5 factory shape: numeric(name, config?) where the config is a
+      // discriminated union requiring at least one of precision/scale/mode.
+      return configParts.length > 0
+        ? `numeric(${name}, { ${configParts.join(", ")} })`
+        : `numeric(${name})`;
+    }
+    case "real":
+      return `real(${name})`;
+    case "doublePrecision":
+      return `doublePrecision(${name})`;
+    case "json":
+      return `json(${name})`;
+    case "jsonb":
+      return `jsonb(${name})`;
+    case "uuid":
+      return `uuid(${name})`;
+    case "time": {
+      const configParts: string[] = [];
+      if (o.withTimezone !== undefined) configParts.push(`withTimezone: ${o.withTimezone}`);
+      if (o.precision !== undefined) configParts.push(`precision: ${o.precision}`);
+      return configParts.length > 0
+        ? `time(${name}, { ${configParts.join(", ")} })`
+        : `time(${name})`;
+    }
+    case "timestamp": {
+      const configParts: string[] = [`mode: ${JSON.stringify(o.mode ?? "date")}`];
+      if (o.precision !== undefined) configParts.push(`precision: ${o.precision}`);
+      if (o.withTimezone !== undefined) configParts.push(`withTimezone: ${o.withTimezone}`);
+      return `timestamp(${name}, { ${configParts.join(", ")} })`;
+    }
+    case "date":
+      return `date(${name}, { mode: ${JSON.stringify(o.mode ?? "date")} })`;
+    case "interval": {
+      const configParts: string[] = [];
+      if (o.fields !== undefined) configParts.push(`fields: ${JSON.stringify(o.fields)}`);
+      if (o.precision !== undefined) configParts.push(`precision: ${o.precision}`);
+      return configParts.length > 0
+        ? `interval(${name}, { ${configParts.join(", ")} })`
+        : `interval(${name})`;
+    }
+    case "point":
+      return o.mode !== undefined && o.mode !== "tuple"
+        ? `point(${name}, { mode: ${JSON.stringify(o.mode)} })`
+        : `point(${name})`;
+    case "line":
+      return o.mode !== undefined && o.mode !== "tuple"
+        ? `line(${name}, { mode: ${JSON.stringify(o.mode)} })`
+        : `line(${name})`;
+    case "bytea":
+      return `bytea(${name})`;
+    case "inet":
+      return `inet(${name})`;
+    case "cidr":
+      return `cidr(${name})`;
+    case "macaddr":
+      return `macaddr(${name})`;
+    case "macaddr8":
+      return `macaddr8(${name})`;
+  }
+}
+
+function enumConfig(o: FieldTypeOptions): string | undefined {
+  if (!o.enumValues || o.enumValues.length === 0) return undefined;
+  return JSON.stringify(o.enumValues);
+}
+
+function literalSource(value: string | number | boolean | Date | Buffer | null): string {
   if (value === null) return "null";
+  if (value instanceof Date) return `new Date(${JSON.stringify(value.toISOString())})`;
+  if (Buffer.isBuffer(value))
+    return `Buffer.from(${JSON.stringify(value.toString("base64"))}, "base64")`;
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);
@@ -184,12 +302,18 @@ export function emitDrizzleSource(
   options: EmitDrizzleSourceOptions = {},
 ): string {
   void dialect;
-  const needsInteger = tables.some((t) =>
-    Object.values(t.columns).some((c) => c.sqlType === "integer"),
+  const usedFactories = new Set<string>();
+  for (const table of tables) {
+    for (const col of Object.values(table.columns)) {
+      // Abstract `integer` emits as drizzle `bigint` (32-bit widening).
+      usedFactories.add(col.sqlType === "integer" ? "bigint" : col.sqlType);
+    }
+  }
+  const pgIntImport = [...usedFactories].filter(
+    (name) => name !== "pgTable" && name !== "pgPolicy",
   );
-  const pgIntImport = needsInteger ? "bigint" : null;
   const needsPolicy = tables.some((t) => (t.policies?.length ?? 0) > 0);
-  const coreNames = ["pgTable", "text", pgIntImport, needsPolicy ? "pgPolicy" : null].filter(
+  const coreNames = ["pgTable", ...pgIntImport, needsPolicy ? "pgPolicy" : null].filter(
     (name): name is string => name !== null,
   );
   const coreImport = `import { ${coreNames.join(", ")} } from "drizzle-orm/pg-core";`;
@@ -201,9 +325,18 @@ export function emitDrizzleSource(
   const needsNow = tables.some((t) =>
     Object.values(t.columns).some((c) => c.defaultFnKind === "now"),
   );
-  const helperNames = [needsId ? "id" : null, needsNow ? "now" : null].filter(
-    (x): x is string => x !== null,
+  const needsNowIso = tables.some((t) =>
+    Object.values(t.columns).some((c) => c.defaultFnKind === "nowIso"),
   );
+  const needsNowDate = tables.some((t) =>
+    Object.values(t.columns).some((c) => c.defaultFnKind === "nowDate"),
+  );
+  const helperNames = [
+    needsId ? "id" : null,
+    needsNow ? "now" : null,
+    needsNowIso ? "nowIso" : null,
+    needsNowDate ? "nowDate" : null,
+  ].filter((x): x is string => x !== null);
   const helperImport =
     helperNames.length > 0 ? `import { ${helperNames.join(", ")} } from "okengine/store";\n` : "";
 

@@ -239,14 +239,50 @@ export interface DeclaredColumnReference {
 }
 
 export interface DeclaredColumn extends ColumnClassification {
-  /** SQL type primitive (`text` · `integer` in v1). */
-  type?: "text" | "integer";
+  /** SQL type primitive — full `field.*` surface (`text` · `integer` · `jsonb` · …). */
+  type?:
+    | "text"
+    | "varchar"
+    | "char"
+    | "boolean"
+    | "smallint"
+    | "integer"
+    | "bigint"
+    | "serial"
+    | "smallserial"
+    | "bigserial"
+    | "numeric"
+    | "real"
+    | "doublePrecision"
+    | "json"
+    | "jsonb"
+    | "uuid"
+    | "time"
+    | "timestamp"
+    | "date"
+    | "interval"
+    | "point"
+    | "line"
+    | "bytea"
+    | "inet"
+    | "cidr"
+    | "macaddr"
+    | "macaddr8";
   /** When false, column is NOT NULL. */
   nullable?: boolean;
   primaryKey?: boolean;
   unique?: boolean;
   /** Literal default when present. */
   default?: string | number | boolean | null;
+  /** Allowed string values for enum columns (`text`/`varchar`/`char`). */
+  enumValues?: string[];
+  /** Per-type options (`length`, `precision`, `scale`, `withTimezone`, `mode`, `fields`). */
+  length?: number;
+  precision?: number;
+  scale?: number;
+  withTimezone?: boolean;
+  mode?: string;
+  fields?: string;
   /** Database column name (snake_case by default). */
   sqlName?: string;
   /** Optional human description (falls back to the column map key). */

@@ -35,7 +35,7 @@ export const watch = on(
             title: payload.title,
             refId: payload.id,
             readAt: null,
-            createdAt: now,
+            createdAt: new Date(now).toISOString(),
           });
       }
     },

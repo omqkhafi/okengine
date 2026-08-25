@@ -117,13 +117,13 @@ Gate names are not Postgres roles.
 In `src/schema.decl.ts`, describe your tables with plain field builders — no ORM syntax:
 
 ```typescript title="src/schema.decl.ts"
-import { store, field, id, now } from "okengine";
+import { store, field } from "okengine";
 
 export const notes = store.schema.table("notes", {
-  id: field.text().primaryKey().defaultFn(id),
+  id: field.id().primaryKey(),
   title: field.text().notNull(),
   body: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  createdAt: field.integer().notNull().now(),
 });
 ```
 
@@ -304,18 +304,36 @@ await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 
 The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle (`pgTable` for Postgres / PGLite) into `src/db/schema.drizzle.ts`.
 
-| Field API                                     | Meaning                                                                           |
-| --------------------------------------------- | --------------------------------------------------------------------------------- |
-| `field.text()` / `field.integer()`            | v1 column primitives                                                              |
-| `.primaryKey()` · `.notNull()` · `.unique()`  | constraints                                                                       |
-| `.default(v)` · `.defaultFn(id \| now)`       | defaults                                                                          |
-| `.pii()` · `.sensitive()` · `.retain("30d")`  | privacy classification                                                            |
-| `.as("sql_name")`                             | override the automatic `camelCase → snake_case`                                   |
-| `.describe("…")`                              | human title in the Console (falls back to key)                                    |
-| `.references(() => col, { onDelete })`        | foreign key                                                                       |
-| `store.schema.rls()`                          | `pgTable.withRLS` when there are no policies                                      |
-| `store.schema.policy.gate/owner/scope/tenant` | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`) |
-| `store.schema.unscoped()`                     | Shared table — required when tenancy is on and there is no tenant policy          |
+| Field API                                                    | Meaning                                                                                                                                                                                 |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field.text({ enum })`                                       | text; enum narrows to a literal union                                                                                                                                                   |
+| `field.id()`                                                 | id column with the default generation id (currently OK ID) minted on insert                                                                                                             |
+| `field.okid()`                                               | id column explicitly generated with OK ID                                                                                                                                               |
+| `field.varchar({ length })` · `field.char`                   | bounded strings (same enum support)                                                                                                                                                     |
+| `field.boolean()`                                            | boolean                                                                                                                                                                                 |
+| `field.smallint()` · `field.integer()`                       | ints (abstract integer emits as Drizzle `bigint`)                                                                                                                                       |
+| `field.bigint({ mode })`                                     | int8 — JS `number` (default) / `bigint` / `string`                                                                                                                                      |
+| `field.serial()` · `smallserial` · `bigserial`               | auto-increment — NOT NULL by SQL physics                                                                                                                                                |
+| `field.numeric({ precision, scale })`                        | exact decimals — infers `string`; `{ mode }` opts into `number` / `bigint`                                                                                                              |
+| `field.real()` · `doublePrecision()`                         | floats (~6 / ~15 significant digits)                                                                                                                                                    |
+| `field.json<T>()` · `jsonb<T>()`                             | JSON payloads with a generic type                                                                                                                                                       |
+| `field.uuid()`                                               | UUID strings                                                                                                                                                                            |
+| `field.time()` · `timestamp()` · `date()`                    | temporals — `Date` by default; `{ mode: "string" }` opts into ISO `string`                                                                                                              |
+| `field.interval({ fields })`                                 | time spans                                                                                                                                                                              |
+| `field.point({ mode })` · `line()`                           | geometric tuples or objects                                                                                                                                                             |
+| `field.bytea()`                                              | binary (`Buffer`)                                                                                                                                                                       |
+| `field.inet()` · `cidr` · `macaddr8`                         | network addresses as strings                                                                                                                                                            |
+| `.primaryKey()` · `.notNull()` · `.unique()`                 | constraints                                                                                                                                                                             |
+| `.default(v)` · `.defaultFn(id \| now \| nowIso \| nowDate)` | defaults — typed against the column's JS type                                                                                                                                           |
+| `.okid()` · `.now()`                                         | prepared defaults — fresh OKID / current instant. `.now()` resolves by column: epoch-ms on numbers, ISO-8601 on string-mode temporals, `Date` on default / `{ mode: "date" }` temporals |
+| `.type<T>()`                                                 | override the inferred JS type (mirrors Drizzle `$type<T>`)                                                                                                                              |
+| `.pii()` · `.sensitive()` · `.retain("30d")`                 | privacy classification                                                                                                                                                                  |
+| `.as("sql_name")`                                            | override the automatic `camelCase → snake_case`                                                                                                                                         |
+| `.describe("…")`                                             | human title in the Console (falls back to key)                                                                                                                                          |
+| `.references(() => col, { onDelete })`                       | foreign key                                                                                                                                                                             |
+| `store.schema.rls()`                                         | `pgTable.withRLS` when there are no policies                                                                                                                                            |
+| `store.schema.policy.gate/owner/scope/tenant`                | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`)                                                                                                       |
+| `store.schema.unscoped()`                                    | Shared table — required when tenancy is on and there is no tenant policy                                                                                                                |
 
 Third argument on `store.schema.table` is Drizzle-shaped extras:
 

@@ -93,7 +93,15 @@ export type { CacheTier, CacheEntry, InvalidationEvent, StoreCache } from "./sto
 export { isReadOnlyStoreFlow, sqlRoleForEffects, resolveSqlTarget } from "./store/replica.ts";
 export type { SqlBindingConfig } from "./store/replica.ts";
 
-export { defineTable, resolveTableName, classificationsFromTable, id, now } from "./store/table.ts";
+export {
+  defineTable,
+  resolveTableName,
+  classificationsFromTable,
+  id,
+  now,
+  nowIso,
+  nowDate,
+} from "./store/table.ts";
 export type { ColumnDef, TableHandle } from "./store/table.ts";
 
 export { resource } from "./store/resource.ts";

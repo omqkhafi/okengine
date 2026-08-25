@@ -72,6 +72,7 @@ import type { RunsRuntime } from "../runs/runtime.ts";
 import type { RunsRow, WideEvent } from "../runs/types.ts";
 import type { RunWindowStats, SloBreach } from "../runs/window.ts";
 import type { MessageCatalogs } from "../i18n/messages.ts";
+import { okid } from "../okid.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import type { AppMessageKey, MessageValues } from "../i18n/types.ts";
 
@@ -1197,7 +1198,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       },
       insert(row: Record<string, unknown>): Promise<{ id: string }> {
         return gated("write", ref, () => {
-          const id = typeof row.id === "string" ? row.id : crypto.randomUUID();
+          const id = typeof row.id === "string" ? row.id : okid();
           table().set(id, { ...row, id });
           return { id };
         });
@@ -2088,7 +2089,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     locale,
     id() {
-      return crypto.randomUUID();
+      return okid();
     },
     auth,
     operator,

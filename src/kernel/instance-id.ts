@@ -3,14 +3,16 @@
  * and the fleet registry.
  */
 
+import { okid } from "../okid.ts";
+
 /** Prefix for process instance ids minted at boot. */
 export const INSTANCE_ID_PREFIX = "inst-";
 
 /**
- * Mint a process instance id (`inst-<uuid>`).
+ * Mint a process instance id (`inst-<okid>`).
  */
 export function mintInstanceId(): string {
-  return `${INSTANCE_ID_PREFIX}${crypto.randomUUID()}`;
+  return `${INSTANCE_ID_PREFIX}${okid()}`;
 }
 
 /**

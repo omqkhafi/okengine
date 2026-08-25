@@ -17,15 +17,18 @@ async function pushInbox(
   refId: string,
 ): Promise<void> {
   if (!memberEmail) return;
-  await fx.store(db).insert(inbox).values({
-    id: fx.id(),
-    memberEmail,
-    kind,
-    title,
-    refId,
-    readAt: null,
-    createdAt: fx.clock.now(),
-  });
+  await fx
+    .store(db)
+    .insert(inbox)
+    .values({
+      id: fx.id(),
+      memberEmail,
+      kind,
+      title,
+      refId,
+      readAt: null,
+      createdAt: new Date(fx.clock.now()).toISOString(),
+    });
 }
 
 /** On task change → assignee email + inbox. */

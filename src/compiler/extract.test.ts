@@ -272,6 +272,103 @@ export const db = store.sql("app", { schema: { bookings } });
     expect(table?.policies?.owner_owner_all?.using).toContain("oke.user()");
   });
 
+  test("extracts widened field heads and option bags into manifest columns", async () => {
+    const source = `
+import { store, field, id } from "okengine";
+
+export const events = store.schema.table("events", {
+  id: field.uuid().primaryKey().defaultFn(id),
+  status: field.varchar({ length: 64, enum: ["new", "archived"] }),
+  doc: field.jsonb(),
+  at: field.timestamp({ mode: "date", precision: 6, withTimezone: true }).notNull(),
+  day: field.date(),
+  amount: field.numeric({ precision: 12, scale: 2 }).notNull(),
+  ratio: field.numeric({ mode: "number" }),
+  span: field.interval({ fields: "day to second" }),
+  loc: field.point({ mode: "xy" }),
+  ip: field.inet(),
+  bin: field.bytea(),
+  big: field.bigserial({ mode: "bigint" }),
+  flag: field.boolean(),
+});
+
+export const db = store.sql("app", { schema: { events } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    const cols = manifest.stores?.app?.tables?.events?.columns;
+
+    expect(cols?.id).toMatchObject({ type: "uuid", primaryKey: true });
+    expect(cols?.status).toMatchObject({
+      type: "varchar",
+      length: 64,
+      enumValues: ["new", "archived"],
+    });
+    expect(cols?.doc).toMatchObject({ type: "jsonb", nullable: true });
+    expect(cols?.at).toMatchObject({
+      type: "timestamp",
+      mode: "date",
+      precision: 6,
+      withTimezone: true,
+      nullable: false,
+    });
+    expect(cols?.day).toMatchObject({ type: "date", nullable: true });
+    expect(cols?.amount).toMatchObject({
+      type: "numeric",
+      precision: 12,
+      scale: 2,
+      nullable: false,
+    });
+    expect(cols?.ratio).toMatchObject({ type: "numeric", mode: "number" });
+    expect(cols?.span).toMatchObject({ type: "interval", fields: "day to second" });
+    expect(cols?.loc).toMatchObject({ type: "point", mode: "xy" });
+    expect(cols?.ip).toMatchObject({ type: "inet" });
+    expect(cols?.bin).toMatchObject({ type: "bytea" });
+    expect(cols?.big).toMatchObject({ type: "bigserial", mode: "bigint" });
+    expect(cols?.flag).toMatchObject({ type: "boolean" });
+  });
+
+  test("prepared .okid()/.now() defaults mark the column dynamic like defaultFn", async () => {
+    const source = `
+import { store, field } from "okengine";
+
+export const assets = store.schema.table("assets", {
+  id: field.text().primaryKey().okid(),
+  createdAt: field.integer().notNull().now(),
+  updatedAt: field.timestamp({ mode: "date" }),
+});
+
+export const db = store.sql("app", { schema: { assets } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    const cols = manifest.stores?.app?.tables?.assets?.columns;
+    expect(cols?.id).toMatchObject({ type: "text", primaryKey: true, default: null });
+    expect(cols?.createdAt).toMatchObject({ type: "integer", nullable: false, default: null });
+  });
+
+  test("decimal head collapses to numeric in the manifest", async () => {
+    const source = `
+import { store, field } from "okengine";
+
+export const rates = store.schema.table("rates", {
+  rate: field.decimal({ precision: 6, scale: 3 }),
+});
+
+export const db = store.sql("app", { schema: { rates } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    expect(manifest.stores?.app?.tables?.rates?.columns?.rate).toMatchObject({
+      type: "numeric",
+      precision: 6,
+      scale: 3,
+    });
+  });
+
   test("extracts optional description fields additively", async () => {
     const source = `
 import { store, field, signal, channel, clock, gate, vault } from "okengine";

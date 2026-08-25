@@ -6,6 +6,7 @@
  */
 
 import type { ColumnClassification } from "../../manifest/types.ts";
+import { okid } from "../../okid.ts";
 
 /** Column descriptor with optional classification. */
 export interface ColumnDef {
@@ -59,8 +60,22 @@ export interface ResolvedColumn {
   readonly sqlName: string;
   /** Whether this column is the primary key. */
   readonly primary: boolean;
-  /** SQL type hint for DDL. */
-  readonly sqlType: "TEXT" | "INTEGER" | "REAL" | "BLOB";
+  /** Unparameterized Postgres DDL type for auto-DDL (`CREATE TABLE`). */
+  readonly sqlType:
+    | "TEXT"
+    | "INTEGER"
+    | "BIGINT"
+    | "REAL"
+    | "DOUBLE PRECISION"
+    | "NUMERIC"
+    | "BOOLEAN"
+    | "JSONB"
+    | "BYTEA"
+    | "POINT"
+    | "LINE"
+    | "TIMESTAMP"
+    | "DATE"
+    | "BLOB";
   /** Optional `$defaultFn` from Drizzle. */
   readonly defaultFn?: () => unknown;
 }
@@ -120,6 +135,57 @@ export function isDrizzleTable(t: Record<string, unknown>): boolean {
 }
 
 /**
+ * Unparameterized Postgres DDL type for an abstract {@link FieldSqlType}.
+ *
+ * Mirrors each type's drizzle `getSQLType()` output minus parameters — the
+ * memory driver's `CREATE TABLE` parser comma-splits column defs, so
+ * `numeric(p, s)` parens are never emitted here. Precision/length remain
+ * migration-time concerns via drizzle-kit reading the emitted schema.
+ *
+ * @param sqlType - Declared SQL type primitive
+ */
+export function ddlTypeOf(sqlType: string): ResolvedColumn["sqlType"] {
+  switch (sqlType) {
+    case "smallint":
+    case "smallserial":
+      return "INTEGER";
+    case "integer":
+    case "bigint":
+    case "serial":
+    case "bigserial":
+      // Abstract integer (ms clocks) and int8 family widen to BIGINT.
+      return "BIGINT";
+    case "real":
+      return "REAL";
+    case "doublePrecision":
+      return "DOUBLE PRECISION";
+    case "numeric":
+      return "NUMERIC";
+    case "boolean":
+      return "BOOLEAN";
+    case "json":
+    case "jsonb":
+      // jsonb chosen for indexability; auto-DDL is a dev-only convenience.
+      return "JSONB";
+    case "bytea":
+      return "BYTEA";
+    case "point":
+      return "POINT";
+    case "line":
+      return "LINE";
+    case "timestamp":
+      return "TIMESTAMP";
+    case "date":
+      return "DATE";
+    case "BLOB":
+      return "BLOB";
+    default:
+      // text · varchar · char · uuid · time · interval · inet/cidr/mac* — text-shaped.
+      return "TEXT";
+  }
+}
+
+/**
  * Introspect columns from a TableHandle or Drizzle table.
  *
  * @param table - Table-like value
@@ -144,19 +210,11 @@ export function resolveColumns(table: unknown): ResolvedColumn[] {
           typeof col.primaryKey === "boolean"
             ? col.primaryKey
             : col.name === "id" || key === "id" || sqlName === "id";
-        const sqlType =
-          col.sqlType === "integer" || col.sqlType === "INTEGER"
-            ? ("INTEGER" as const)
-            : col.sqlType === "real" || col.sqlType === "REAL"
-              ? ("REAL" as const)
-              : col.sqlType === "blob" || col.sqlType === "BLOB"
-                ? ("BLOB" as const)
-                : ("TEXT" as const);
         return {
           key,
           sqlName,
           primary,
-          sqlType,
+          sqlType: ddlTypeOf(col.sqlType ?? ""),
           ...(typeof col.defaultFn === "function" ? { defaultFn: col.defaultFn } : {}),
         };
       });
@@ -219,13 +277,19 @@ function drizzleSqlType(
 ): ResolvedColumn["sqlType"] {
   const ct = (columnType ?? "").toLowerCase();
   const dt = (dataType ?? "").toLowerCase();
-  if (ct.includes("int") || dt.includes("int") || dt.includes("number")) {
-    return "INTEGER";
-  }
-  if (ct.includes("real") || ct.includes("numeric") || dt.includes("float")) {
-    return "REAL";
-  }
-  if (ct.includes("blob") || dt.includes("buffer")) return "BLOB";
+  if (ct.includes("bigint") || dt.includes("bigint")) return "BIGINT";
+  if (ct.includes("smallint")) return "INTEGER";
+  if (ct.includes("int") || dt.includes("int") || dt.includes("number")) return "INTEGER";
+  if (dt.includes("boolean") || ct.includes("bool")) return "BOOLEAN";
+  if (ct.includes("jsonb")) return "JSONB";
+  if (ct.includes("json")) return "JSONB";
+  if (ct.includes("bytea") || dt.includes("buffer")) return "BYTEA";
+  if (ct.includes("double precision")) return "DOUBLE PRECISION";
+  if (ct.includes("real") || dt.includes("float")) return "REAL";
+  if (ct.includes("numeric")) return "NUMERIC";
+  if (ct.includes("timestamp")) return "TIMESTAMP";
+  if (ct.startsWith("date")) return "DATE";
+  if (ct.includes("blob")) return "BLOB";
   return "TEXT";
 }
 
@@ -330,15 +394,32 @@ export function classificationsFromTable(table: TableHandle): Record<string, Col
 }
 
 /**
- * Generate a unique id (UUID). Suitable for `$defaultFn(id)` in schemas.
+ * Generate a unique id (21-char OKID, 126-bit entropy). Suitable for
+ * `$defaultFn(id)` in schemas.
  */
 export function id(): string {
-  return crypto.randomUUID();
+  return okid();
 }
 
 /**
- * Current epoch-ms. Suitable for `$defaultFn(now)` in schemas.
+ * Current epoch-ms. Suitable for `$defaultFn(now)` in schemas (number columns).
  */
 export function now(): number {
   return Date.now();
+}
+
+/**
+ * Current instant as an ISO-8601 string. The resolved default for `.now()` on
+ * string-typed temporal columns (`timestamp` / `date` in string mode).
+ */
+export function nowIso(): string {
+  return new Date().toISOString();
+}
+
+/**
+ * Current instant as a `Date`. The resolved default for `.now()` on temporal
+ * columns declared with `{ mode: "date" }`.
+ */
+export function nowDate(): Date {
+  return new Date();
 }

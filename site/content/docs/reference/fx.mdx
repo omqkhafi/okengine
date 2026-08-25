@@ -230,7 +230,9 @@ Returning a plain value instead answers 200 with `{ data: value, error: null }` 
 | `fx.log.debug/info/warn/error(msg, data?)` | Redacting — secrets print as `***`                          |
 | `fx.t(key, values?)`                       | ICU MessageFormat — active locale → `i18n.default` → key    |
 | `fx.locale`                                | Active locale (`Accept-Language` matched to `i18n.locales`) |
-| `fx.id()`                                  | UUID — the only legal id generator                          |
+| `fx.id()`                                  | OKID — 21-char native id from `okengine/okid`               |
+
+See [OKID](/docs/reference/okid) for generation options and the entropy model.
 
 `fx.t` uses [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
 (FormatJS): `{name}`, plurals, `select` / `selectordinal`, rich-text tags.

@@ -5,11 +5,14 @@
 
 const T0 = 1_753_920_000_000;
 
+/** ISO-8601 instant for an epoch-ms seed timestamp. */
+const iso = (ms: number): string => new Date(ms).toISOString();
+
 /** Workspace spaces. */
 export const FEATURED_SPACES = [
-  { id: "space_eng", key: "ENG", name: "Engineering", color: "#2563eb", createdAt: T0 },
-  { id: "space_des", key: "DES", name: "Design", color: "#db2777", createdAt: T0 },
-  { id: "space_gtm", key: "GTM", name: "Go-to-market", color: "#059669", createdAt: T0 },
+  { id: "space_eng", key: "ENG", name: "Engineering", color: "#2563eb", createdAt: iso(T0) },
+  { id: "space_des", key: "DES", name: "Design", color: "#db2777", createdAt: iso(T0) },
+  { id: "space_gtm", key: "GTM", name: "Go-to-market", color: "#059669", createdAt: iso(T0) },
 ] as const;
 
 /**
@@ -23,7 +26,7 @@ export const FEATURED_MEMBERS = [
     name: "Demo User",
     email: "demo@example.com",
     role: "owner",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_admin",
@@ -31,7 +34,7 @@ export const FEATURED_MEMBERS = [
     name: "Avery Cole",
     email: "admin@keel.dev",
     role: "admin",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_aria",
@@ -39,7 +42,7 @@ export const FEATURED_MEMBERS = [
     name: "Aria Chen",
     email: "aria@keel.dev",
     role: "project_manager",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_lead",
@@ -47,7 +50,7 @@ export const FEATURED_MEMBERS = [
     name: "Jules Hart",
     email: "jules@keel.dev",
     role: "lead",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_ben",
@@ -55,7 +58,7 @@ export const FEATURED_MEMBERS = [
     name: "Ben Okonkwo",
     email: "ben@keel.dev",
     role: "developer",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_eli",
@@ -63,7 +66,7 @@ export const FEATURED_MEMBERS = [
     name: "Eli Park",
     email: "eli@keel.dev",
     role: "contributor",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_cai",
@@ -71,7 +74,7 @@ export const FEATURED_MEMBERS = [
     name: "Cai Moreno",
     email: "cai@keel.dev",
     role: "member",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_member",
@@ -79,7 +82,7 @@ export const FEATURED_MEMBERS = [
     name: "Member",
     email: "member@example.com",
     role: "member",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_commenter",
@@ -87,7 +90,7 @@ export const FEATURED_MEMBERS = [
     name: "Kit Rowe",
     email: "kit@keel.dev",
     role: "commenter",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "mem_dia",
@@ -95,7 +98,7 @@ export const FEATURED_MEMBERS = [
     name: "Dia Farouk",
     email: "dia@keel.dev",
     role: "guest",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -107,8 +110,8 @@ export const FEATURED_GOALS = [
     status: "at_risk",
     ownerEmail: "aria@keel.dev",
     targetDate: "2026-09-30",
-    createdAt: T0,
-    updatedAt: T0,
+    createdAt: iso(T0),
+    updatedAt: iso(T0),
   },
 ] as const;
 
@@ -124,8 +127,8 @@ export const FEATURED_PROJECTS = [
     startDate: "2026-07-01",
     targetDate: "2026-08-29",
     color: "#2563eb",
-    createdAt: T0,
-    updatedAt: T0,
+    createdAt: iso(T0),
+    updatedAt: iso(T0),
   },
   {
     id: "proj_web",
@@ -137,8 +140,8 @@ export const FEATURED_PROJECTS = [
     startDate: "2026-07-08",
     targetDate: "2026-09-12",
     color: "#7c3aed",
-    createdAt: T0,
-    updatedAt: T0,
+    createdAt: iso(T0),
+    updatedAt: iso(T0),
   },
   {
     id: "proj_launch",
@@ -150,8 +153,8 @@ export const FEATURED_PROJECTS = [
     startDate: "2026-08-01",
     targetDate: "2026-09-30",
     color: "#059669",
-    createdAt: T0,
-    updatedAt: T0,
+    createdAt: iso(T0),
+    updatedAt: iso(T0),
   },
 ] as const;
 
@@ -215,8 +218,8 @@ function task(row: {
     completedAt: null as string | null,
     archivedAt: null as string | null,
     roleNeeded: null as string | null,
-    createdAt: T0,
-    updatedAt: T0,
+    createdAt: iso(T0),
+    updatedAt: iso(T0),
     ...row,
   };
 }
@@ -371,7 +374,7 @@ export const FEATURED_COMMENTS = [
     authorEmail: "aria@keel.dev",
     body: "Form intake — assign to a developer. @ben@keel.dev can you take this?",
     resolvedAt: null as string | null,
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "cmt_2",
@@ -379,7 +382,7 @@ export const FEATURED_COMMENTS = [
     authorEmail: "ben@keel.dev",
     body: "Repro'd — session cleared after claim rotate.",
     resolvedAt: null,
-    createdAt: T0 + 3_600_000,
+    createdAt: iso(T0 + 3_600_000),
   },
   {
     id: "cmt_3",
@@ -387,7 +390,7 @@ export const FEATURED_COMMENTS = [
     authorEmail: "cai@keel.dev",
     body: "ملاحظة التصميم — identifiers stay LTR inside RTL notes.",
     resolvedAt: null,
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -399,7 +402,7 @@ export const FEATURED_DOCUMENTS = [
     body: "SSO + billing webhook before freeze.",
     parentKind: "project",
     parentId: "proj_api",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "doc_spec_12",
@@ -407,7 +410,7 @@ export const FEATURED_DOCUMENTS = [
     body: "Claim rotate must keep the session cookie.",
     parentKind: "task",
     parentId: "tsk_eng_12",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -419,7 +422,7 @@ export const FEATURED_UPDATES = [
     health: "at_risk",
     body: "Checkout polish blocked on billing webhook.",
     authorEmail: "eli@keel.dev",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -432,7 +435,7 @@ export const FEATURED_VIEWS = [
     kind: "board",
     filtersJson: "{}",
     ownerEmail: "aria@keel.dev",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "view_api_list",
@@ -441,7 +444,7 @@ export const FEATURED_VIEWS = [
     kind: "list",
     filtersJson: "{}",
     ownerEmail: "ben@keel.dev",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "view_launch_tl",
@@ -450,7 +453,7 @@ export const FEATURED_VIEWS = [
     kind: "timeline",
     filtersJson: "{}",
     ownerEmail: "aria@keel.dev",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -461,7 +464,7 @@ export const FEATURED_FORMS = [
     projectId: "proj_api",
     name: "Customer request",
     schemaJson: '{"title":"string","body":"string"}',
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -473,7 +476,7 @@ export const FEATURED_SUBMISSIONS = [
     taskId: "tsk_eng_12",
     payloadJson: '{"title":"SSO login fails"}',
     customerName: "Harbor Logistics",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -486,7 +489,7 @@ export const FEATURED_INBOX = [
     title: "Harbor Logistics",
     refId: "tsk_eng_12",
     readAt: null as string | null,
-    createdAt: T0,
+    createdAt: iso(T0),
   },
   {
     id: "inb_2",
@@ -495,7 +498,7 @@ export const FEATURED_INBOX = [
     title: "SSO login fails",
     refId: "tsk_eng_12",
     readAt: null,
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 
@@ -508,7 +511,7 @@ export const FEATURED_ACTIVITY = [
     actorEmail: "aria@keel.dev",
     kind: "created",
     body: "SSO login fails",
-    createdAt: T0,
+    createdAt: iso(T0),
   },
 ] as const;
 

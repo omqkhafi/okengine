@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 
 import { fsDriver } from "../../drivers/fs.ts";
 import type { FilesBucket } from "../../drivers/types.ts";
+import { okid } from "../../okid.ts";
 import {
   duckPath,
   duckQuery,
@@ -102,7 +103,7 @@ export const filesRunsDriver: RunsDriver = {
           locality === "remote" && remote
             ? { bucket: remote, keyPrefix: remotePrefix }
             : { bucket: local, keyPrefix: "" };
-        const fileId = crypto.randomUUID();
+        const fileId = okid();
         const objectKey = `${target.keyPrefix}${partitionObjectKey(day!, fileId)}`;
         const tmpDir = await mkdtemp(join(tmpdir(), "oke-pq-"));
         const tmp = join(tmpDir, `${fileId}.parquet`);

@@ -50,8 +50,7 @@ function fieldFromColumn(
   descriptionOverride?: string,
 ): FormField {
   const declared = isDeclaredColumn(col) ? col : null;
-  const type =
-    declared?.type === "integer" ? "integer" : declared?.type === "text" ? "string" : "unknown";
+  const type = formFieldType(declared);
   const required = declared?.nullable === false || declared?.primaryKey === true;
   const description =
     descriptionOverride ??
@@ -61,6 +60,9 @@ function fieldFromColumn(
     name,
     type,
     required,
+    ...(declared?.enumValues !== undefined && declared.enumValues.length > 0
+      ? { enumValues: [...declared.enumValues] }
+      : {}),
     ...(description !== undefined ? { description } : {}),
     ...(col.pii === true ? { pii: true } : {}),
     ...(col.sensitive === true ? { sensitive: true } : {}),
@@ -78,6 +80,38 @@ function fieldFromColumn(
         }
       : {}),
   };
+}
+
+const NUMERIC_COLUMN_TYPES: ReadonlySet<NonNullable<DeclaredColumn["type"]>> = new Set([
+  "smallint",
+  "integer",
+  "bigint",
+  "serial",
+  "smallserial",
+  "bigserial",
+  "real",
+  "doublePrecision",
+]);
+
+/**
+ * Map a declared SQL type to its form input physics.
+ *
+ * @param declared - Declared column (or null for bare classification)
+ */
+function formFieldType(declared: DeclaredColumn | null): FormField["type"] {
+  const type = declared?.type;
+  if (type === undefined) return "unknown";
+  if (type === "boolean") return "boolean";
+  if (NUMERIC_COLUMN_TYPES.has(type)) {
+    // real/doublePrecision render as number; int family as integer steppers.
+    return type === "real" || type === "doublePrecision" ? "number" : "integer";
+  }
+  if (type === "json" || type === "jsonb") return "object";
+  // Everything else is text-shaped at the wire: text/varchar/char, temporals
+  // in their default string mode, uuid, network family, point/line, bytea.
+  if (type === "timestamp" || type === "date") return "string";
+  if (type === "numeric") return "string";
+  return "string";
 }
 
 function isDeclaredColumn(col: DeclaredColumn | ColumnClassification): col is DeclaredColumn {

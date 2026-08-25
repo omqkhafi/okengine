@@ -38,6 +38,7 @@ import { http } from "./triggers.ts";
 import { GATE_KV_NAMESPACE } from "./boot-bind/gate.ts";
 import { createBunRuntime } from "../runtime/bun.ts";
 import { installGracefulShutdown } from "./graceful-shutdown.ts";
+import { okid } from "../okid.ts";
 
 const mode = process.argv[2];
 if (mode !== "serve") {
@@ -139,7 +140,7 @@ const rate = flow("horizontal.rate", {
 });
 const write = flow("horizontal.write", {
   do: async (_input, fx) => {
-    const id = crypto.randomUUID();
+    const id = okid();
     await fx
       .store(db)
       .insert(writesTable)

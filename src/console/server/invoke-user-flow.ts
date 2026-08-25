@@ -16,6 +16,7 @@ import { isFlowFailure } from "../../kernel/hooks.ts";
 import type { Trigger } from "../../kernel/triggers.ts";
 import type { RlsIdentity } from "../../drivers/pg-rls.ts";
 import { resolveRlsIdentity } from "../../elements/store.ts";
+import { okid } from "../../okid.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import type { ConsoleIdentity } from "./state.ts";
 
@@ -361,7 +362,7 @@ export function bindHostInvokeUserFlow(app: InvokeHostApp): ConsoleInvokeUserFlo
       ...(input.body !== undefined ? { body: input.body } : {}),
     });
 
-    const runId = crypto.randomUUID();
+    const runId = okid();
     const result = await app.execute(flowDef, assembled, trigger, {
       trustedInvoke: true,
       runId,

@@ -55,6 +55,9 @@ export const GENERATED = {
 
 const T0 = 1_753_920_000_000;
 
+/** ISO-8601 instant for an epoch-ms seed timestamp. */
+const iso = (ms: number): string => new Date(ms).toISOString();
+
 /** Task row matching `schema.decl` tasks. */
 export type SeedTaskRow = {
   id: string;
@@ -75,8 +78,8 @@ export type SeedTaskRow = {
   archivedAt: string | null;
   creatorEmail: string;
   roleNeeded: string | null;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /** KV entry for drafts or reminders. */
@@ -173,7 +176,7 @@ export function generateKeelVolume(): {
     name: string;
     email: string;
     role: string;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly projects: ReadonlyArray<{
     id: string;
@@ -185,8 +188,8 @@ export function generateKeelVolume(): {
     startDate: string | null;
     targetDate: string;
     color: string | null;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: string;
+    updatedAt: string;
   }>;
   readonly sections: ReadonlyArray<{
     id: string;
@@ -205,7 +208,7 @@ export function generateKeelVolume(): {
     authorEmail: string;
     body: string;
     resolvedAt: string | null;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly documents: ReadonlyArray<{
     id: string;
@@ -213,7 +216,7 @@ export function generateKeelVolume(): {
     body: string;
     parentKind: string;
     parentId: string;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly submissions: ReadonlyArray<{
     id: string;
@@ -221,7 +224,7 @@ export function generateKeelVolume(): {
     taskId: string;
     payloadJson: string;
     customerName: string;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly activity: ReadonlyArray<{
     id: string;
@@ -230,7 +233,7 @@ export function generateKeelVolume(): {
     actorEmail: string;
     kind: string;
     body: string;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly inbox: ReadonlyArray<{
     id: string;
@@ -239,7 +242,7 @@ export function generateKeelVolume(): {
     title: string;
     refId: string;
     readAt: string | null;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly views: ReadonlyArray<{
     id: string;
@@ -248,7 +251,7 @@ export function generateKeelVolume(): {
     kind: string;
     filtersJson: string;
     ownerEmail: string;
-    createdAt: number;
+    createdAt: string;
   }>;
   readonly drafts: readonly SeedKvEntry[];
   readonly reminders: readonly SeedKvEntry[];
@@ -264,7 +267,7 @@ export function generateKeelVolume(): {
     name: p.name,
     email: `${p.id}@keel.dev`,
     role: p.role,
-    createdAt: T0,
+    createdAt: iso(T0),
   }));
   const emails = [...FEATURED_MEMBERS.map((m) => m.email), ...members.map((m) => m.email)];
 
@@ -278,8 +281,8 @@ export function generateKeelVolume(): {
     startDate: null as string | null,
     targetDate: `2026-0${(i % 9) + 1}-15`,
     color: null as string | null,
-    createdAt: T0,
-    updatedAt: T0,
+    createdAt: iso(T0),
+    updatedAt: iso(T0),
   }));
   const projectIds = ["proj_api", "proj_web", "proj_launch", ...projects.map((p) => p.id), null];
 
@@ -323,8 +326,8 @@ export function generateKeelVolume(): {
       archivedAt: rand() < 0.04 ? "2026-08-01T00:00:00Z" : null,
       creatorEmail: pick(emails),
       roleNeeded: pick(ROLES),
-      createdAt: T0 + i * 1000,
-      updatedAt: T0 + i * 1000,
+      createdAt: iso(T0 + i * 1000),
+      updatedAt: iso(T0 + i * 1000),
     });
   }
 
@@ -369,7 +372,7 @@ export function generateKeelVolume(): {
     authorEmail: string;
     body: string;
     resolvedAt: string | null;
-    createdAt: number;
+    createdAt: string;
   }> = [];
   for (let i = 0; i < GENERATED.comments; i += 1) {
     const issue = tasks[Math.floor(rand() * tasks.length)]!;
@@ -379,7 +382,7 @@ export function generateKeelVolume(): {
       authorEmail: pick(emails),
       body: pick(COMMENT_BODIES),
       resolvedAt: null,
-      createdAt: T0 + i,
+      createdAt: iso(T0 + i),
     });
   }
 
@@ -391,7 +394,7 @@ export function generateKeelVolume(): {
       body: `Working notes for ${issue.title}.`,
       parentKind: "task",
       parentId: issue.id,
-      createdAt: T0,
+      createdAt: iso(T0),
     };
   });
 
@@ -404,7 +407,7 @@ export function generateKeelVolume(): {
       taskId: issue.id,
       payloadJson: JSON.stringify({ title: issue.title }),
       customerName: pick(customers),
-      createdAt: T0,
+      createdAt: iso(T0),
     };
   });
 
@@ -417,7 +420,7 @@ export function generateKeelVolume(): {
       actorEmail: pick(emails),
       kind: "created",
       body: issue.title,
-      createdAt: T0,
+      createdAt: iso(T0),
     };
   });
 
@@ -430,7 +433,7 @@ export function generateKeelVolume(): {
       title: issue.title,
       refId: issue.id,
       readAt: null as string | null,
-      createdAt: T0,
+      createdAt: iso(T0),
     };
   });
 
@@ -441,7 +444,7 @@ export function generateKeelVolume(): {
     kind: pick(["list", "board", "timeline", "calendar"] as const),
     filtersJson: "{}",
     ownerEmail: pick(emails),
-    createdAt: T0,
+    createdAt: iso(T0),
   }));
 
   const drafts: SeedKvEntry[] = [];

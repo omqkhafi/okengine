@@ -57,6 +57,7 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/ai/llms-txt": "FileText",
   "/docs/reference/configuration": "Settings",
   "/docs/reference/fx": "Braces",
+  "/docs/reference/okid": "Hash",
   "/docs/reference/i18n": "Languages",
   "/docs/reference/environment-variables": "Variable",
   "/docs/reference/errors": "CircleAlert",

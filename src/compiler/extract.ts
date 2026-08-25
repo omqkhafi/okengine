@@ -611,18 +611,62 @@ function parseDeclaredColumns(obj: AstNode): Record<string, DeclaredColumn> {
 }
 
 /**
+ * Abstract `field.*` SQL type heads recognized by the compiler.
+ */
+const FIELD_SQL_TYPES: ReadonlySet<string> = new Set([
+  "text",
+  "varchar",
+  "char",
+  "boolean",
+  "smallint",
+  "integer",
+  "bigint",
+  "serial",
+  "smallserial",
+  "bigserial",
+  "numeric",
+  "decimal",
+  "real",
+  "doublePrecision",
+  "json",
+  "jsonb",
+  "uuid",
+  "time",
+  "timestamp",
+  "date",
+  "interval",
+  "point",
+  "line",
+  "bytea",
+  "inet",
+  "cidr",
+  "macaddr",
+  "macaddr8",
+]);
+
+/** Manifest primitive for a field head (`decimal` collapses into `numeric`). */
+function manifestFieldType(head: string): DeclaredColumn["type"] {
+  return head === "decimal" ? "numeric" : (head as DeclaredColumn["type"]);
+}
+
+/**
  * Walk `field.text().notNull().pii()` (and similar) into a DeclaredColumn.
+ *
+ * Recognizes every {@link FIELD_SQL_TYPES} head plus the option bag passed to
+ * the factory call (`field.varchar({ length: 256 })`,
+ * `field.timestamp({ mode: "date", precision: 6 })`, …).
  *
  * @param node - AST node for the column value
  * @param key - JS key (for default sqlName)
  */
 function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined {
   const chain: string[] = [];
-  let sqlType: "text" | "integer" | undefined;
+  let sqlType: DeclaredColumn["type"];
   let sqlName: string | undefined;
   let description: string | undefined;
   let defaultValue: string | number | boolean | null | undefined;
   let hasDefault = false;
+  let optionsNode: AstNode | undefined;
   let cur: AstNode | undefined = node;
 
   while (cur && cur.type === "CallExpression") {
@@ -639,7 +683,7 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
         if (method === "describe") {
           description = stringArg(call.arguments[0]) ?? description;
         }
-        if (method === "defaultFn") {
+        if (method === "defaultFn" || method === "okid" || method === "now") {
           hasDefault = true;
           defaultValue = defaultValue ?? null;
         }
@@ -669,30 +713,29 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
     break;
   }
 
-  // Remaining should be field.text / field.integer
+  // Remaining should be field.<type> — bare MemberExpression or factory call
+  // with an options object (field.varchar({ length: 256 })).
   if (cur && cur.type === "MemberExpression") {
     const member = cur as AstNode & { object: AstNode; property: AstNode };
     if (identifierName(member.object) === "field") {
       const t = identifierName(member.property);
-      if (t === "text" || t === "integer") sqlType = t;
+      if (t && FIELD_SQL_TYPES.has(t)) sqlType = manifestFieldType(t);
     }
   }
 
   // Also: field.text() ends as CallExpression with callee MemberExpression field.text
   if (!sqlType && node.type === "CallExpression") {
-    // Re-walk to find field.text() / field.integer() as a call
     let probe: AstNode | undefined = node;
     while (probe && probe.type === "CallExpression") {
       const call = probe as CallExpression;
       const callee = call.callee;
       if (callee.type === "MemberExpression") {
         const member = callee as AstNode & { object: AstNode; property: AstNode };
-        if (
-          identifierName(member.object) === "field" &&
-          (identifierName(member.property) === "text" ||
-            identifierName(member.property) === "integer")
-        ) {
-          sqlType = identifierName(member.property) as "text" | "integer";
+        const head = identifierName(member.property);
+        if (identifierName(member.object) === "field" && head && FIELD_SQL_TYPES.has(head)) {
+          sqlType = manifestFieldType(head);
+          const arg0 = call.arguments[0];
+          if (arg0?.type === "ObjectExpression") optionsNode = arg0;
           break;
         }
         probe = member.object;
@@ -715,6 +758,7 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
     ...(description !== undefined ? { description } : {}),
     ...(methods.has("pii") ? { pii: true } : {}),
     ...(methods.has("sensitive") ? { sensitive: true } : {}),
+    ...parseFieldOptions(optionsNode),
   };
   if (methods.has("retain")) {
     // retain("7y") — find the call in the original chain by re-walk
@@ -778,6 +822,49 @@ function parseReferencesArg(
     }
   }
   return {};
+}
+
+/**
+ * Extract per-type options (`length`, `precision`, `scale`, `withTimezone`,
+ * `mode`, `fields`, `enumValues`) from a factory call's options object.
+ *
+ * @param node - Options object AST node (may be undefined)
+ */
+function parseFieldOptions(node: AstNode | undefined): Partial<DeclaredColumn> | undefined {
+  if (!node || node.type !== "ObjectExpression") return undefined;
+  const length = numberProp(node, "length");
+  const precision = numberProp(node, "precision");
+  const scale = numberProp(node, "scale");
+  const withTimezone = boolProp(node, "withTimezone");
+  const mode = stringProp(node, "mode");
+  const fields = stringProp(node, "fields");
+  const enumNode = objectProp(node, "enum");
+  const enumValues =
+    enumNode?.type === "ArrayExpression"
+      ? ((enumNode as AstNode & { elements?: AstNode[] }).elements ?? [])
+          .map((el) => stringArg(el))
+          .filter((v): v is string => v !== undefined)
+      : undefined;
+  if (
+    length === undefined &&
+    precision === undefined &&
+    scale === undefined &&
+    withTimezone === undefined &&
+    mode === undefined &&
+    fields === undefined &&
+    (enumValues === undefined || enumValues.length === 0)
+  ) {
+    return undefined;
+  }
+  return {
+    ...(length !== undefined ? { length } : {}),
+    ...(precision !== undefined ? { precision } : {}),
+    ...(scale !== undefined ? { scale } : {}),
+    ...(withTimezone !== undefined ? { withTimezone } : {}),
+    ...(mode !== undefined ? { mode } : {}),
+    ...(fields !== undefined ? { fields } : {}),
+    ...(enumValues !== undefined && enumValues.length > 0 ? { enumValues } : {}),
+  };
 }
 
 function camelToSnakeKey(key: string): string {

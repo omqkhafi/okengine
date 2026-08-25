@@ -9,6 +9,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { okid } from "../okid.ts";
 import { JournalSuspend } from "./journal-suspend.ts";
 
 export { JournalSuspend, isJournalSuspend } from "./journal-suspend.ts";
@@ -452,7 +453,7 @@ export interface Journal {
  */
 export function createJournal(options: CreateJournalOptions): Journal {
   const now = options.now ?? (() => Date.now());
-  const newId = options.id ?? (() => crypto.randomUUID());
+  const newId = options.id ?? (() => okid());
   const lease = options.lease;
   const coordinated = lease !== undefined && hasJournalLease(options.store);
 

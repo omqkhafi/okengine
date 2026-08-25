@@ -470,13 +470,12 @@ export function createSqlStoreHandle(
     if (cols.length === 0) return;
     const name = resolveTableName(table);
     const pk = cols.find((c) => c.primary)?.sqlName;
-    // Postgres/PGLite INTEGER is 32-bit — abstract `integer` (ms timestamps via
-    // `now`) must map to BIGINT. SQLite INTEGER is flexible up to 64-bit.
-    const pgWideInt = connection.driverId === "postgres" || connection.driverId === "pglite";
+    // ddlTypeOf already widens the int family to BIGINT; memory/SQLite accept
+    // it too (dynamic typing), so no per-driver remap is needed.
+    void connection.driverId;
     const colSql = cols
       .map((c) => {
-        const base = pgWideInt && c.sqlType === "INTEGER" ? "BIGINT" : c.sqlType;
-        const typ = pk && c.sqlName === pk ? `${base} PRIMARY KEY` : base;
+        const typ = pk && c.sqlName === pk ? `${c.sqlType} PRIMARY KEY` : c.sqlType;
         return `${quoteIdent(c.sqlName)} ${typ}`;
       })
       .join(", ");
@@ -863,21 +862,9 @@ export function createSqlStoreHandle(
     async ensureTable(table: TableHandle) {
       const cols = Object.values(table.columns);
       const pk = resolvePkColumn(table);
-      const intType =
-        connection.driverId === "postgres" || connection.driverId === "pglite"
-          ? "BIGINT"
-          : "INTEGER";
       const colSql = cols
         .map((c) => {
-          const typ =
-            c.name === pk
-              ? "TEXT PRIMARY KEY"
-              : c.name === "clicks" ||
-                  c.name === "qty" ||
-                  c.name === "createdAt" ||
-                  c.name === "created_at"
-                ? intType
-                : "TEXT";
+          const typ = c.name === pk ? "TEXT PRIMARY KEY" : "TEXT";
           return `${quoteIdent(c.name)} ${typ}`;
         })
         .join(", ");

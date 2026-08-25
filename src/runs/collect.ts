@@ -12,6 +12,7 @@ import type { Fx } from "../kernel/fx.ts";
 import type { Trigger } from "../kernel/triggers.ts";
 import type { FlowPlane } from "../manifest/types.ts";
 import { cacheDimensionOf, type RunTelemetry } from "../kernel/run-telemetry.ts";
+import { okid } from "../okid.ts";
 import type { RunError, WideEvent } from "./types.ts";
 
 /** Inputs for {@link collectWideEvent}. */
@@ -97,7 +98,7 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
   };
 
   return {
-    id: input.id ?? crypto.randomUUID(),
+    id: input.id ?? okid(),
     ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
     flow: input.flow.name,
     ...(input.flow.unit !== undefined ? { unit: input.flow.unit } : {}),

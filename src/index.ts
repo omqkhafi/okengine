@@ -51,6 +51,8 @@ export {
   classify,
   id,
   now,
+  nowIso,
+  nowDate,
   defineTable,
   field,
   defineSeed,

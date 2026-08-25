@@ -155,7 +155,7 @@ export const update = on(
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      const patch: Record<string, unknown> = { updatedAt: fx.clock.now() };
+      const patch: Record<string, unknown> = { updatedAt: new Date(fx.clock.now()).toISOString() };
       if (input.title !== undefined) patch.title = input.title;
       if (input.description !== undefined) patch.description = input.description;
       if (input.priority !== undefined) patch.priority = input.priority;
@@ -244,15 +244,18 @@ export const assign = on(
           email: input.assigneeEmail,
         },
       });
-      await fx.store(db).insert(inbox).values({
-        id: fx.id(),
-        memberEmail: input.assigneeEmail,
-        kind: "task-assigned",
-        title: task.title,
-        refId: task.id,
-        readAt: null,
-        createdAt: fx.clock.now(),
-      });
+      await fx
+        .store(db)
+        .insert(inbox)
+        .values({
+          id: fx.id(),
+          memberEmail: input.assigneeEmail,
+          kind: "task-assigned",
+          title: task.title,
+          refId: task.id,
+          readAt: null,
+          createdAt: new Date(fx.clock.now()).toISOString(),
+        });
       await fx.emit(taskAssigned, {
         id: task.id,
         identifier: task.identifier,
@@ -278,7 +281,7 @@ export const complete = on(
       await fx
         .store(db)
         .update(tasks)
-        .set({ status: "done", completedAt, updatedAt: fx.clock.now() })
+        .set({ status: "done", completedAt, updatedAt: new Date(fx.clock.now()).toISOString() })
         .where(eq(tasks.id, input.id));
       const task = asTask(row);
       await writeActivity(fx, task.id, "completed", task.title);
@@ -387,7 +390,7 @@ export const move = on(
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      const patch: Record<string, unknown> = { updatedAt: fx.clock.now() };
+      const patch: Record<string, unknown> = { updatedAt: new Date(fx.clock.now()).toISOString() };
       if (input.projectId !== undefined) patch.projectId = input.projectId;
       if (input.sectionId !== undefined) patch.sectionId = input.sectionId;
       if (input.spaceKey) {

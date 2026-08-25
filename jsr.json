@@ -19,7 +19,8 @@
     "./channel": "./src/elements/channel.ts",
     "./ai": "./src/elements/ai.ts",
     "./runs": "./src/runs/index.ts",
-    "./drivers": "./src/drivers/index.ts"
+    "./drivers": "./src/drivers/index.ts",
+    "./okid": "./src/okid.ts"
   },
   "publish": {
     "include": [

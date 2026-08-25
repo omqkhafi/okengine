@@ -44,6 +44,7 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   { src: "src/elements/store/cache.ts", out: "dist/store-cache.js" },
   { src: "src/i18n/messages.ts", out: "dist/messages.js" },
   { src: "src/i18n/failure-message.ts", out: "dist/failure-message.js" },
+  { src: "src/okid.ts", out: "dist/okid.js" },
 ];
 
 /**

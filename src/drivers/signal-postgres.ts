@@ -7,6 +7,7 @@
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
+import { okid } from "../okid.ts";
 import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
 import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
 import { LIVE_RESUME_GAP } from "../kernel/errors-live-resume.ts";
@@ -607,7 +608,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     await tx.exec(
       `INSERT INTO oke_signal_messages (id, signal, payload, ordering_key, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to, parent_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        crypto.randomUUID(),
+        okid(),
         signal,
         JSON.stringify(payload ?? null),
         orderingKey,

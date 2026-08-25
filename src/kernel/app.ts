@@ -832,6 +832,7 @@ export function oke(options: OkeOptions): OkeApp {
   const $options: OkeOptions = {
     ...options,
     ...(effectiveAi !== undefined ? { ai: effectiveAi } : {}),
+    ...(effectiveChannel !== undefined ? { channel: effectiveChannel } : {}),
     ...(effectiveStores.length > 0 ? { stores: effectiveStores } : {}),
     ...(effectiveSecrets.length > 0 ? { secrets: effectiveSecrets } : {}),
     ...(effectiveSignals.length > 0 ? { signals: effectiveSignals } : {}),

@@ -27,9 +27,16 @@ const FORBIDDEN_III_DEV = ["iii", ".", "dev"].join("");
 const FORBIDDEN_COMPARISON_PATH = ["get-started/", "comparison"].join("");
 /** Word-boundary classic Node framework — `-F` false-positives on `CallExpression`. */
 const FORBIDDEN_EXPRESS = ["\\b", "Ex", "press", "\\b"].join("");
+/** Compact-ID peer library (okid design context stays first-principles). */
+const FORBIDDEN_NANOID = ["na", "no", "id"].join("");
+/** Collision-resistant-ID peer library (same rule). */
+const FORBIDDEN_CUID = ["cu", "id2"].join("");
 
 /** Decoy `X-Powered-By` fixture value in the headers plugin tests. */
 const EXPRESS_ALLOW = ["src/plugins/headers.test.ts:"];
+
+/** Design-context prompt file — the only sanctioned location for peer names. */
+const OKID_PROMPT_ALLOW = ["okid.md:", "bun.lock:"];
 
 /**
  * Run `git grep -F` and assert zero matches after ignoring allow-listed paths.
@@ -113,5 +120,13 @@ describe("named competitor mention removal gate", () => {
 
   test("tracked tree has zero classic Node framework peer mentions outside decoy fixture", () => {
     assertZeroGitGrepRegex(FORBIDDEN_EXPRESS, EXPRESS_ALLOW);
+  });
+
+  test("tracked tree has zero compact-ID peer library mentions outside design prompt", () => {
+    assertZeroGitGrepFixed(FORBIDDEN_NANOID, OKID_PROMPT_ALLOW);
+  });
+
+  test("tracked tree has zero collision-resistant-ID peer library mentions outside design prompt", () => {
+    assertZeroGitGrepFixed(FORBIDDEN_CUID, OKID_PROMPT_ALLOW);
   });
 });

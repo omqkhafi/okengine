@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.17.2 · measured 2026-08-23T08:08:33.333Z_
+_okengine v0.17.2 · measured 2026-08-24T22:32:40.549Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
@@ -10,41 +10,42 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |                                 | Measured  | Limit     |
 | ------------------------------- | --------- | --------- |
-| Kernel (edge profile)           | 15.05 kB  | 16.00 kB  |
+| Kernel (edge profile)           | 15.77 kB  | 16.00 kB  |
 | Client runtime                  | 3.75 kB   | 4.00 kB   |
 | Console initial load            | 348.13 kB | 700.00 kB |
-| Cold start on Bun               | 9.325 ms  | 75.000 ms |
+| Cold start on Bun               | 8.632 ms  | 75.000 ms |
 | p99 routing overhead            | 0.001 ms  | 1.000 ms  |
-| HTTP ping app (gzip, externals) | 40.67 kB  | 41.48 kB  |
-| HTTP ping app (raw, externals)  | 117.95 kB | 120.31 kB |
+| HTTP ping app (gzip, externals) | 41.41 kB  | 42.24 kB  |
+| HTTP ping app (raw, externals)  | 119.44 kB | 121.83 kB |
 
 ## Exports
 
 |              | Measured  | Ceiling   |
 | ------------ | --------- | --------- |
-| okengine     | 87.52 kB  | 89.27 kB  |
+| okengine     | 88.88 kB  | 90.65 kB  |
 | ai           | 12.01 kB  | 12.26 kB  |
 | auth         | 15.32 kB  | 15.62 kB  |
 | channel      | 6.43 kB   | 6.68 kB   |
 | client       | 4.01 kB   | 4.26 kB   |
 | client-react | 7.98 kB   | 8.23 kB   |
 | client/auth  | 559 B     | 815 B     |
-| clock        | 15.94 kB  | 16.26 kB  |
-| compiler     | 17.31 kB  | 17.66 kB  |
+| clock        | 16.67 kB  | 17.00 kB  |
+| compiler     | 17.70 kB  | 18.06 kB  |
 | config       | 1.21 kB   | 1.46 kB   |
-| console      | 154.47 kB | 157.56 kB |
-| full         | 98.53 kB  | 100.50 kB |
+| console      | 155.38 kB | 158.49 kB |
+| full         | 99.79 kB  | 101.79 kB |
 | gate         | 4.50 kB   | 4.75 kB   |
-| http         | 41.70 kB  | 42.53 kB  |
+| http         | 42.43 kB  | 43.28 kB  |
 | i18n         | 4.29 kB   | 4.54 kB   |
-| journal      | 2.16 kB   | 2.41 kB   |
-| kernel       | 47.99 kB  | 48.95 kB  |
+| journal      | 2.90 kB   | 3.15 kB   |
+| kernel       | 48.71 kB  | 49.68 kB  |
 | mcp          | 9.54 kB   | 9.79 kB   |
-| plugins      | 16.00 kB  | 16.32 kB  |
-| runs         | 8.99 kB   | 9.24 kB   |
+| okid         | 1.11 kB   | 1.36 kB   |
+| plugins      | 17.23 kB  | 17.57 kB  |
+| runs         | 9.69 kB   | 9.94 kB   |
 | signal       | 1.26 kB   | 1.51 kB   |
-| store        | 21.36 kB  | 21.79 kB  |
-| test         | 18.75 kB  | 19.13 kB  |
+| store        | 22.68 kB  | 23.14 kB  |
+| test         | 19.48 kB  | 19.87 kB  |
 | vault        | 12.78 kB  | 13.03 kB  |
 
 ## Plugins
@@ -64,28 +65,28 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
-| headers     | 2.68 kB  | 2.93 kB |
-| cors        | 2.52 kB  | 2.77 kB |
-| csrf        | 2.12 kB  | 2.37 kB |
-| ipAllowlist | 2.23 kB  | 2.48 kB |
+| headers     | 3.86 kB  | 4.11 kB |
+| cors        | 3.70 kB  | 3.95 kB |
+| csrf        | 3.30 kB  | 3.55 kB |
+| ipAllowlist | 3.39 kB  | 3.64 kB |
 
 ### Ops
 
 |                 | Measured | Ceiling |
 | --------------- | -------- | ------- |
-| maintenanceMode | 2.03 kB  | 2.28 kB |
+| maintenanceMode | 3.21 kB  | 3.46 kB |
 
 ### Perf
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
-| compression | 2.35 kB  | 2.60 kB |
+| compression | 3.52 kB  | 3.77 kB |
 
 ## Drivers
 
 |                           | Measured | Ceiling  |
 | ------------------------- | -------- | -------- |
-| drivers                   | 72.67 kB | 74.13 kB |
+| drivers                   | 73.39 kB | 74.86 kB |
 | ai-anthropic              | 979 B    | 1.21 kB  |
 | ai-mock                   | 1.05 kB  | 1.30 kB  |
 | ai-ollama                 | 1.96 kB  | 2.21 kB  |
@@ -125,7 +126,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 | signal-live-iter          | 443 B    | 699 B    |
 | signal-memory             | 6.22 kB  | 6.47 kB  |
 | signal-nats               | 6.70 kB  | 6.95 kB  |
-| signal-postgres           | 8.38 kB  | 8.63 kB  |
+| signal-postgres           | 9.09 kB  | 9.34 kB  |
 | signal-redis              | 7.29 kB  | 7.54 kB  |
 | signal-retention          | 611 B    | 867 B    |
 | vault-1password           | 1.91 kB  | 2.16 kB  |
