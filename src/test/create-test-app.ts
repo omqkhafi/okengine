@@ -97,10 +97,44 @@ export interface TestCron {
   run(name: string): Promise<boolean>;
 }
 
+/** Live-subscription handlers for {@link TestSignals.subscribeLive}. */
+export interface TestLiveHandlers<T = unknown> {
+  /** Called with each live event payload. */
+  readonly onEvent: (event: T) => void;
+  /** Called when the live stream errors. */
+  readonly onError?: (error: unknown) => void;
+}
+
+/** Unsubscribe handle returned by {@link TestSignals.subscribeLive}. */
+export type TestLiveUnsubscribe = () => void;
+
 /** Signal surface. */
 export interface TestSignals {
   /** Drain the bus until idle (deterministic queued work). */
   drain(): Promise<void>;
+  /**
+   * Subscribe to a `delivery: "live"` signal's event stream.
+   *
+   * @param signal - Signal declaration or name
+   * @param handlers - Event / error handlers
+   * @returns Unsubscribe function
+   */
+  subscribeLive<T = unknown>(
+    signal: SignalDecl | string,
+    handlers: TestLiveHandlers<T>,
+  ): TestLiveUnsubscribe;
+  /**
+   * Resolve once a live event matching `predicate` arrives.
+   *
+   * @param signal - Signal declaration or name
+   * @param predicate - Event filter
+   * @param timeoutMs - Reject after this many ms (default 1000)
+   */
+  waitForLive<T = unknown>(
+    signal: SignalDecl | string,
+    predicate: (event: T) => boolean,
+    timeoutMs?: number,
+  ): Promise<T>;
 }
 
 /** Channel surface. */
@@ -312,6 +346,59 @@ export async function createTestApp<App extends OkeApp>(
       async drain() {
         const bus = app.bootResult?.signal?.bus;
         if (bus) await bus.drain();
+      },
+      subscribeLive(signal, handlers) {
+        const name = typeof signal === "string" ? signal : signal.name;
+        let active = true;
+        const rt = app.bootResult?.signal;
+        void (async () => {
+          const iter = rt?.live(name)[Symbol.asyncIterator]();
+          if (!iter) return;
+          for (;;) {
+            if (!active) {
+              await iter.return?.();
+              return;
+            }
+            const { done, value } = await iter.next();
+            if (done || !active) {
+              await iter.return?.();
+              return;
+            }
+            if (!active) break;
+            try {
+              handlers.onEvent(value.payload as never);
+            } catch (err) {
+              handlers.onError?.(err);
+            }
+          }
+        })();
+        return () => {
+          active = false;
+        };
+      },
+      waitForLive(signal, predicate, timeoutMs) {
+        const name = typeof signal === "string" ? signal : signal.name;
+        return new Promise((resolve, reject) => {
+          let unsubscribe: TestLiveUnsubscribe | undefined;
+          const timer = setTimeout(() => {
+            unsubscribe?.();
+            reject(new Error(`waitForLive: no matching event for "${name}" within ${timeoutMs ?? 1000}ms`));
+          }, timeoutMs ?? 1000);
+          unsubscribe = this.subscribeLive(signal as never, {
+            onEvent: (event: unknown) => {
+              if (predicate(event as never)) {
+                clearTimeout(timer);
+                unsubscribe?.();
+                resolve(event as never);
+              }
+            },
+            onError: (err) => {
+              clearTimeout(timer);
+              unsubscribe?.();
+              reject(err);
+            },
+          });
+        });
       },
     },
     channels: {
