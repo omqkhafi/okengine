@@ -88,11 +88,15 @@ export {
   getUserById,
   normalizeEmail,
   ensureUserByEmail,
+  ensureUserExists,
+  linkOrProvision,
   IdentityError,
   type IdentityStore,
   type UserIdentityRow,
   type UserAccountRow,
   type CreateUserWithPasswordOptions,
+  type LinkOrProvisionOptions,
+  type LinkedCredential,
 } from "./identity.ts";
 
 export {
@@ -197,6 +201,19 @@ export {
 } from "./api-key-sql.ts";
 
 export {
+  identitySqlExec,
+  bindIdentitySqlPersist,
+  bindHostIdentitySql,
+  bindHostIdentitySqlFromStore,
+  ensureIdentityTables,
+  hydrateIdentityStore,
+  persistIdentityUserRow,
+  persistIdentityAccountRow,
+  type IdentitySqlExec,
+  type HostIdentitySqlRuntime,
+} from "./identity-sql.ts";
+
+export {
   createOperatorInviteStore,
   createOperatorInvite,
   isInviteExpired,
@@ -250,7 +267,6 @@ export { invokeAs, type InvokeAsOptions } from "./invoke-as.ts";
 export {
   AUTH_TABLES,
   type ApiKeyRow,
-  type IdentityRow,
   type OperatorCredentialRow,
   type OperatorInviteRow,
   type OperatorRow,

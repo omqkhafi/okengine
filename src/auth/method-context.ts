@@ -8,6 +8,7 @@
 
 import type { PasswordHashOptions } from "../runtime/types.ts";
 import type { BreachCheckFn } from "./breach-check.ts";
+import type { IdentityStore } from "./identity.ts";
 import type { PasswordPolicyOptions } from "./password-policy.ts";
 import type { SessionStore } from "./sessions.ts";
 
@@ -15,6 +16,8 @@ import type { SessionStore } from "./sessions.ts";
 export interface ActiveGateAuthContext {
   readonly secret: string;
   readonly sessions: SessionStore;
+  /** Shared identity/credential store — method plugins resolve users here. */
+  readonly identities?: IdentityStore;
   readonly now?: () => number;
   /** From `gate.auth.passwordPolicy` — shared by credential method plugins. */
   readonly passwordPolicy?: PasswordPolicyOptions;

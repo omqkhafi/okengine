@@ -26,6 +26,7 @@ import type { BootOptions, BootResult, ElementRuntimes } from "./boot.ts";
 import type { CapabilityToken } from "./capability.ts";
 import type { AppAuthBinding } from "./auth-resolve.ts";
 import type { ApiKeyStore } from "../auth/api-keys.ts";
+import type { IdentityStore } from "../auth/identity.ts";
 import type { AuthHttpMaterialization } from "../auth/bindings.ts";
 import type { WiredGateAuth } from "./app-auth.ts";
 import {
@@ -399,6 +400,8 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
   readonly authBinding: AppAuthBinding | undefined;
   /** Shared API key store when `gate.auth` is enabled. */
   readonly apiKeys: ApiKeyStore | undefined;
+  /** Shared identity/credential store when `gate.auth` is enabled. */
+  readonly identities: IdentityStore | undefined;
   /**
    * Attach a plugin app-wide. Scope is the attachment point.
    * Types accumulate — decorations are visible on downstream handlers.
@@ -1261,6 +1264,10 @@ export function oke(options: OkeOptions): OkeApp {
       const { bindHostApiKeySqlFromStore } = await import("../auth/api-key-sql.ts");
       await bindHostApiKeySqlFromStore(result.store, gateConfig.auth.apiKeyStore);
     }
+    if (gateConfig.auth?.identities && result.store) {
+      const { bindHostIdentitySqlFromStore } = await import("../auth/identity-sql.ts");
+      await bindHostIdentitySqlFromStore(result.store, gateConfig.auth.identities);
+    }
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");
@@ -1920,6 +1927,8 @@ export function oke(options: OkeOptions): OkeApp {
       return authBinding;
     },
     apiKeys: gateConfig.auth?.apiKeyStore,
+    /** Shared identity store when `gate.auth` is enabled. */
+    identities: gateConfig.auth?.identities,
     async resumeDurable(now) {
       const t = now ?? bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();
       const { store, instanceId, leaseMs } = activeJournal();

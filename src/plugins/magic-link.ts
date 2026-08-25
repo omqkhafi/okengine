@@ -6,12 +6,7 @@
  * local DX without Mailpit / SMTP.
  */
 
-import {
-  createIdentityStore,
-  ensureUserByEmail,
-  normalizeEmail,
-  type IdentityStore,
-} from "../auth/identity.ts";
+import { linkOrProvision, normalizeEmail, type IdentityStore } from "../auth/identity.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import {
   createVerificationStore,
@@ -29,6 +24,7 @@ import {
   createMethodRuntime,
   fail,
   flow,
+  resolveSharedIdentities,
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
@@ -90,7 +86,7 @@ export interface MagicLinkOptions extends AuthMethodOptions {
  */
 export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
-  const identities = opts.identities ?? createIdentityStore();
+  const identities = resolveSharedIdentities(opts);
   const verifications = opts.verifications ?? createVerificationStore();
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
   const baseUrl = (opts.baseUrl ?? process.env.OKE_APP_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
@@ -172,7 +168,13 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
       if (!row) return fail("AuthFailed", { reason: "invalid_credentials" });
       row.consumedAt = now;
       const email = row.identifier.slice("magic:".length);
-      const user = ensureUserByEmail(identities, email, now);
+      const { user } = await linkOrProvision(identities, {
+        provider: "magic-link",
+        providerAccountId: email,
+        email,
+        emailVerified: true,
+        now: () => now,
+      });
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: user.id,
         plane: "user",

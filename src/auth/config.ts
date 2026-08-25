@@ -8,6 +8,7 @@ import type { PasswordHashOptions } from "../runtime/types.ts";
 import type { SessionStore } from "./sessions.ts";
 import { createApiKeyStore, type ApiKeyStore } from "./api-keys.ts";
 import type { BreachCheckFn } from "./breach-check.ts";
+import { createIdentityStore, type IdentityStore } from "./identity.ts";
 import type { PasswordPolicyOptions } from "./password-policy.ts";
 import {
   resolveAuthSchema,
@@ -117,6 +118,11 @@ export interface GateAuthOptions extends AuthSchemaOptions {
    */
   readonly sessions?: SessionStore;
   /**
+   * Shared identity / credential store. Created automatically when omitted.
+   * All Gate auth method plugins resolve against this one store by default.
+   */
+  readonly identities?: IdentityStore;
+  /**
    * Shared API key store. Created automatically when omitted
    * (`gate.auth.secret` is the HMAC pepper).
    */
@@ -186,6 +192,8 @@ export interface ResolvedGateAuth {
   readonly hooks: AuthDatabaseHooks | undefined;
   readonly sessions: SessionStore | undefined;
   readonly apiKeyStore: ApiKeyStore;
+  /** Shared identity store — the single user/credential source across Gate auth + method plugins. */
+  readonly identities: IdentityStore;
   readonly tenant: ResolvedTenantAuth | undefined;
   readonly tenantStore: TenantStore | undefined;
   readonly now: (() => number) | undefined;
@@ -296,6 +304,7 @@ export function resolveGateAuth(options: ResolveGateAuthOptions): ResolvedGateAu
     hooks: auth.hooks,
     sessions: auth.sessions,
     apiKeyStore: auth.apiKeyStore ?? createApiKeyStore({ pepper: secret }),
+    identities: auth.identities ?? createIdentityStore(),
     tenant: auth.tenant ? resolveTenantAuth(auth.tenant) : undefined,
     tenantStore: auth.tenant ? (auth.tenantStore ?? createTenantStore()) : auth.tenantStore,
     now: auth.now,

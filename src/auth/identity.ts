@@ -39,6 +39,10 @@ export interface IdentityStore {
   accounts: Map<string, UserAccountRow>;
   /** `provider:providerAccountId` → account id. */
   byProvider: Map<string, string>;
+  /** Optional write-through user persist (SQL). Bound at host boot. */
+  persistUser?: (row: UserIdentityRow) => void | Promise<void>;
+  /** Optional write-through account persist (SQL). Bound at host boot. */
+  persistAccount?: (row: UserAccountRow) => void | Promise<void>;
 }
 
 /**
@@ -84,11 +88,11 @@ export function normalizeEmail(email: string): string {
  * @param email - Normalized email
  * @param now - Clock
  */
-export function ensureUserByEmail(
+export async function ensureUserByEmail(
   store: IdentityStore,
   email: string,
   now: number,
-): UserIdentityRow {
+): Promise<UserIdentityRow> {
   const existingId = store.byEmail.get(email);
   if (existingId) {
     const existing = store.users.get(existingId);
@@ -107,6 +111,7 @@ export function ensureUserByEmail(
   };
   store.users.set(id, user);
   store.byEmail.set(email, id);
+  await store.persistUser?.(user);
   return user;
 }
 
@@ -164,6 +169,7 @@ export async function createUserWithPassword(
   store.byEmail.set(email, id);
   store.accounts.set(accountId, account);
   store.byProvider.set(`credential:${email}`, accountId);
+  await Promise.all([store.persistUser?.(user), store.persistAccount?.(account)]);
   return user;
 }
 
@@ -199,6 +205,138 @@ export async function authenticateUser(
  */
 export function getUserById(store: IdentityStore, id: string): UserIdentityRow | undefined {
   return store.users.get(id);
+}
+
+/** Options for {@link linkOrProvision}. */
+export interface LinkOrProvisionOptions {
+  /** Provider name (`magic-link`, `otp`, `passkey`, `username`, `anonymous`). */
+  readonly provider: string;
+  /** Provider-scoped subject (email, phone, username, credential id). */
+  readonly providerAccountId: string;
+  /** Email to attach to a freshly provisioned user (normalized by the store). */
+  readonly email?: string;
+  /** Email-verified claim (only when provisioning). */
+  readonly emailVerified?: boolean;
+  /** Display name when provisioning. */
+  readonly name?: string;
+  /** Optional password hash for the account row. */
+  readonly passwordHash?: string | null;
+  /** Currently authenticated `fx.auth.userId`, when the request is authenticated. */
+  readonly currentUserId?: string;
+  /** Injectable clock. */
+  readonly now?: () => number;
+}
+
+/** Result of {@link linkOrProvision}. */
+export interface LinkedCredential {
+  readonly user: UserIdentityRow;
+  readonly account: UserAccountRow;
+  /** `true` when a new account was written (vs plain sign-in resolution). */
+  readonly created: boolean;
+}
+
+/**
+ * The single shared credential-write path across Gate auth method plugins.
+ *
+ * Enforces the locked account-linking rule centrally:
+ * - An existing `provider:providerAccountId` resolves to its user (sign-in).
+ * - A new credential may attach to an existing user ONLY when the request is
+ *   already authenticated as that user (`currentUserId` matches).
+ * - An unauthenticated new credential whose email is already owned by another
+ *   user is REFUSED (`email_in_use`) — never auto-linked by email match alone.
+ *
+ * @param store - Shared identity store
+ * @param options - Credential + linking context
+ */
+export async function linkOrProvision(
+  store: IdentityStore,
+  options: LinkOrProvisionOptions,
+): Promise<LinkedCredential> {
+  const { provider, providerAccountId } = options;
+  const now = options.now ?? (() => Date.now());
+  const key = `${provider}:${providerAccountId}`;
+
+  // 1. Existing credential → plain sign-in resolution (no linking needed).
+  const existingAccountId = store.byProvider.get(key);
+  if (existingAccountId) {
+    const account = store.accounts.get(existingAccountId);
+    const user = account ? store.users.get(account.userId) : undefined;
+    if (account && user) return { user, account, created: false };
+  }
+
+  const email = options.email ? normalizeEmail(options.email) : undefined;
+  const emailOwnerId = email ? store.byEmail.get(email) : undefined;
+  if (emailOwnerId) {
+    if (options.currentUserId) {
+      if (emailOwnerId !== options.currentUserId) {
+        throw new IdentityError("email_conflict", "email belongs to another user");
+      }
+    } else {
+      throw new IdentityError("email_in_use", "email already registered to another credential");
+    }
+  }
+
+  const t = now();
+  const userId = options.currentUserId ?? crypto.randomUUID();
+  const existingUser = store.users.get(userId);
+  const user: UserIdentityRow = existingUser ?? {
+    id: userId,
+    email: email ?? "",
+    name: options.name?.trim() || (email ? email.split("@")[0] || "user" : "user"),
+    emailVerified: options.emailVerified === true,
+    status: "active",
+    createdAt: t,
+    updatedAt: t,
+    extra: {},
+  };
+  const account: UserAccountRow = {
+    id: crypto.randomUUID(),
+    userId,
+    provider,
+    providerAccountId,
+    passwordHash: options.passwordHash ?? null,
+    createdAt: t,
+    updatedAt: t,
+  };
+
+  const userIsNew = !store.users.has(userId);
+  store.users.set(userId, user);
+  if (email) store.byEmail.set(email, userId);
+  store.accounts.set(account.id, account);
+  store.byProvider.set(key, account.id);
+  if (userIsNew) await store.persistUser?.(user);
+  await store.persistAccount?.(account);
+  return { user, account, created: true };
+}
+
+/**
+ * Ensure a user row exists for `userId` (defensive — two-factor enable on an
+ * established session principal).
+ *
+ * @param store - Shared identity store
+ * @param userId - Existing principal id
+ * @param now - Clock
+ */
+export async function ensureUserExists(
+  store: IdentityStore,
+  userId: string,
+  now: number,
+): Promise<UserIdentityRow> {
+  const existing = store.users.get(userId);
+  if (existing) return existing;
+  const user: UserIdentityRow = {
+    id: userId,
+    email: "",
+    name: "user",
+    emailVerified: false,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+    extra: {},
+  };
+  store.users.set(userId, user);
+  await store.persistUser?.(user);
+  return user;
 }
 
 /** Identity-plane error. */

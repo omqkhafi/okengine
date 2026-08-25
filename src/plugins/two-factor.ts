@@ -5,6 +5,7 @@
  */
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
+import { IdentityError, ensureUserExists } from "../auth/identity.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import { plugin, type PluginDef } from "../kernel/plugin.ts";
 import {
@@ -16,6 +17,7 @@ import {
   createMethodRuntime,
   fail,
   flow,
+  resolveSharedIdentities,
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
@@ -56,6 +58,7 @@ export interface TwoFactorOptions extends AuthMethodOptions {
  */
 export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
+  const identities = resolveSharedIdentities(opts);
   const factors = opts.factors ?? createTwoFactorStore();
   const issuer = opts.issuer ?? "oke";
 
@@ -70,6 +73,14 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     do: async (_input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
+      try {
+        await ensureUserExists(identities, userId, runtime.now());
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "unauthenticated" });
+        }
+        throw err;
+      }
       const secret = generateBase32Secret(20);
       const recoveryCodes = Array.from({ length: 8 }, () => randomRecoveryCode());
       const recoveryHashes = new Set<string>();

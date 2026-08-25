@@ -2,6 +2,7 @@
  * Anonymous sign-in Gate auth method plugin.
  */
 
+import { IdentityError, linkOrProvision } from "../auth/identity.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import { plugin, type PluginDef } from "../kernel/plugin.ts";
 import {
@@ -10,7 +11,9 @@ import {
   SessionTokensOut,
   bindPublicAuth,
   createMethodRuntime,
+  fail,
   flow,
+  resolveSharedIdentities,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
 
@@ -29,13 +32,28 @@ export interface AnonymousPluginOptions extends AuthMethodOptions {
  */
 export function anonymous(opts: AnonymousPluginOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
+  const identities = resolveSharedIdentities(opts);
 
   const signIn = flow("auth.signInAnonymous", {
     plane: "user",
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
     do: async () => {
-      const userId = crypto.randomUUID();
+      let userId: string;
+      try {
+        userId = (
+          await linkOrProvision(identities, {
+            provider: "anonymous",
+            providerAccountId: crypto.randomUUID(),
+            now: runtime.now,
+          })
+        ).user.id;
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        throw err;
+      }
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: userId,
         plane: "user",

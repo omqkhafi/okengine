@@ -4,6 +4,7 @@
 
 import { assertNotBreached, BreachCheckError, type BreachCheckFn } from "../auth/breach-check.ts";
 import { getActiveGateAuthContext } from "../auth/method-context.ts";
+import { IdentityError, linkOrProvision } from "../auth/identity.ts";
 import {
   assertPasswordPolicy,
   PasswordPolicyError,
@@ -21,6 +22,7 @@ import {
   createMethodRuntime,
   fail,
   flow,
+  resolveSharedIdentities,
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
@@ -311,6 +313,7 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
   const active = getActiveGateAuthContext();
   const usernames = opts.usernames ?? createUsernameStore();
+  const identities = resolveSharedIdentities(opts);
   const usernamePolicy = opts.usernamePolicy ?? {};
   const passwordPolicy = opts.passwordPolicy ?? active?.passwordPolicy ?? {};
   const passwordHash = opts.password ?? active?.password ?? { algorithm: "argon2id" };
@@ -359,18 +362,34 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
       if (usernames.byUsername.has(key)) {
         return fail("AuthFailed", { reason: "invalid_credentials" });
       }
-      const userId = crypto.randomUUID();
       const passwordHashValue = await crypto.hashPassword(input.password, passwordHash);
+      let user: { id: string };
+      try {
+        user = (
+          await linkOrProvision(identities, {
+            provider: "username",
+            providerAccountId: key,
+            name: key,
+            passwordHash: passwordHashValue,
+            now: runtime.now,
+          })
+        ).user;
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        throw err;
+      }
       const row: UsernameRow = {
-        userId,
+        userId: user.id,
         username: key,
         passwordHash: passwordHashValue,
         createdAt: runtime.now(),
       };
       usernames.byUsername.set(key, row);
-      usernames.byUserId.set(userId, row);
+      usernames.byUserId.set(user.id, row);
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
-        id: userId,
+        id: user.id,
         plane: "user",
         scopes: [],
       });
@@ -378,7 +397,7 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
         accessToken: issued.accessToken,
         refreshToken: issued.refreshToken,
         accessExpiresAt: issued.accessExpiresAt,
-        userId,
+        userId: user.id,
       };
     },
   });
@@ -394,8 +413,22 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
       const hash = row?.passwordHash ?? (await dummyHash(crypto));
       const ok = await crypto.verifyPassword(input.password, hash);
       if (!ok || !row) return fail("AuthFailed", { reason: "invalid_credentials" });
+      const userId = row.userId;
+      try {
+        await linkOrProvision(identities, {
+          provider: "username",
+          providerAccountId: key,
+          currentUserId: userId,
+          now: runtime.now,
+        });
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        throw err;
+      }
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
-        id: row.userId,
+        id: userId,
         plane: "user",
         scopes: [],
       });
@@ -403,7 +436,7 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
         accessToken: issued.accessToken,
         refreshToken: issued.refreshToken,
         accessExpiresAt: issued.accessExpiresAt,
-        userId: row.userId,
+        userId,
       };
     },
   });

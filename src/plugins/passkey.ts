@@ -7,6 +7,7 @@
  */
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
+import { IdentityError, linkOrProvision } from "../auth/identity.ts";
 import {
   createVerificationStore,
   hashChallenge,
@@ -24,6 +25,7 @@ import {
   createMethodRuntime,
   fail,
   flow,
+  resolveSharedIdentities,
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
@@ -82,6 +84,7 @@ const CeremonyIn = z.object({
  */
 export function passkey(opts: PasskeyOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
+  const identities = resolveSharedIdentities(opts);
   const passkeys = opts.passkeys ?? createPasskeyStore();
   const challenges = opts.challenges ?? createVerificationStore();
   const rpId = opts.rpId ?? "localhost";
@@ -152,9 +155,25 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
       if (passkeys.byCredentialId.has(input.credentialId)) {
         return fail("AuthFailed", { reason: "invalid_credentials" });
       }
+      let userId: string;
+      try {
+        userId = (
+          await linkOrProvision(identities, {
+            provider: "passkey",
+            providerAccountId: input.credentialId,
+            currentUserId: sessionUser,
+            now: runtime.now,
+          })
+        ).user.id;
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        throw err;
+      }
       const cred: PasskeyCredential = {
         credentialId: input.credentialId,
-        userId: input.userId,
+        userId,
         publicKey: input.publicKey,
         counter: verified.signCount,
         createdAt: runtime.now(),

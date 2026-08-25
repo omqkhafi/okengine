@@ -56,17 +56,6 @@ export interface OperatorSsoLinkRow {
   subject: string;
 }
 
-/** User-plane identity. */
-export interface IdentityRow {
-  id: string;
-  provider: string;
-  subject: string;
-  email: string;
-  name: string;
-  status: "active" | "suspended";
-  lastSeenAt: number | null;
-}
-
 /** Role (data, not code). */
 export interface RoleRow {
   id: string;

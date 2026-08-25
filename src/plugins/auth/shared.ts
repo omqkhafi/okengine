@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { AUTH_RATE_PRESETS, AUTH_SESSION_GATE, bindAuthHttp } from "../../auth/bindings.ts";
+import { createIdentityStore, type IdentityStore } from "../../auth/identity.ts";
 import { getActiveGateAuthContext } from "../../auth/method-context.ts";
 import { createSessionStore, type SessionCrypto, type SessionStore } from "../../auth/sessions.ts";
 import { gate } from "../../elements/gate.ts";
@@ -34,6 +35,8 @@ export interface AuthMethodOptions {
   readonly secret?: string;
   /** Shared session store (prefer the same store as `gate.auth`). */
   readonly sessions?: SessionStore;
+  /** Shared identity/credential store (defaults to `gate.auth.identities`). */
+  readonly identities?: IdentityStore;
   /** Injectable clock. */
   readonly now?: () => number;
 }
@@ -74,6 +77,18 @@ export function createMethodRuntime(opts: AuthMethodOptions = {}): {
       now,
     },
   };
+}
+
+/**
+ * Resolve the shared identity/credential store for a method plugin.
+ * Prefers explicit opts, then the active `gate.auth.identities`, else a new
+ * isolated store (advanced / test-injection).
+ *
+ * @param opts - Method options carrying an optional `identities`
+ */
+export function resolveSharedIdentities(opts: AuthMethodOptions = {}): IdentityStore {
+  const active = getActiveGateAuthContext();
+  return opts.identities ?? active?.identities ?? createIdentityStore();
 }
 
 /**

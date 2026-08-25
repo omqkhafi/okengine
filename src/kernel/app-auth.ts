@@ -80,6 +80,7 @@ export function wireGateAuth(options: WireGateAuthOptions): WiredGateAuth {
   setActiveGateAuthContext({
     secret: authBinding.secret,
     sessions: authBinding.sessions,
+    identities: auth.identities,
     now: authBinding.now,
     passwordPolicy: auth.passwordPolicy,
     password: auth.password,

@@ -5,10 +5,11 @@
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
 import {
-  createIdentityStore,
-  ensureUserByEmail,
+  IdentityError,
+  linkOrProvision,
   normalizeEmail,
   type IdentityStore,
+  type UserIdentityRow,
 } from "../auth/identity.ts";
 import type { OtpPluginConfig } from "../auth/otp-capability.ts";
 import { sealOtp, unsealOtp } from "../auth/otp-seal.ts";
@@ -35,6 +36,7 @@ import {
   fail,
   flow,
   resolveMethodSecret,
+  resolveSharedIdentities,
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
@@ -198,7 +200,7 @@ export function otp(opts: OtpOptions): PluginDef {
   const runtime = createMethodRuntime(opts);
   const secret = resolveMethodSecret(opts);
   const phones = opts.phones ?? createPhoneStore();
-  const identities = opts.identities ?? createIdentityStore();
+  const identities = resolveSharedIdentities(opts);
   const verifications = opts.verifications ?? createVerificationStore();
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
   const resendCooldownMs =
@@ -319,7 +321,19 @@ export function otp(opts: OtpOptions): PluginDef {
 
         let userId = phones.byPhone.get(phone);
         if (!userId) {
-          userId = crypto.randomUUID();
+          try {
+            const { user } = await linkOrProvision(identities, {
+              provider: "otp",
+              providerAccountId: phone,
+              now: () => now,
+            });
+            userId = user.id;
+          } catch (err) {
+            if (err instanceof IdentityError) {
+              return fail("AuthFailed", { reason: "invalid_credentials" });
+            }
+            throw err;
+          }
           phones.byPhone.set(phone, userId);
         }
         const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
@@ -518,7 +532,19 @@ export function otp(opts: OtpOptions): PluginDef {
       if (phone) {
         let userId = phones.byPhone.get(phone);
         if (!userId) {
-          userId = crypto.randomUUID();
+          try {
+            const { user } = await linkOrProvision(identities, {
+              provider: "otp",
+              providerAccountId: phone,
+              now: () => now,
+            });
+            userId = user.id;
+          } catch (err) {
+            if (err instanceof IdentityError) {
+              return fail("AuthFailed", { reason: "invalid_credentials" });
+            }
+            throw err;
+          }
           phones.byPhone.set(phone, userId);
         }
         const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
@@ -534,7 +560,23 @@ export function otp(opts: OtpOptions): PluginDef {
         };
       }
 
-      const user = ensureUserByEmail(identities, email!, now);
+      let user: UserIdentityRow;
+      try {
+        user = (
+          await linkOrProvision(identities, {
+            provider: "otp",
+            providerAccountId: email!,
+            email,
+            emailVerified: true,
+            now: () => now,
+          })
+        ).user;
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        throw err;
+      }
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: user.id,
         plane: "user",

@@ -175,7 +175,7 @@ export function createAuthHttpBindings(
   } = {},
 ): AuthHttpMaterialization {
   const sessions = options.sessions ?? config.sessions ?? createSessionStore();
-  const identities = options.identities ?? createIdentityStore();
+  const identities = options.identities ?? config.identities ?? createIdentityStore();
   const loginAttempts = createLoginAttemptBag();
   const rateGates = createAuthRateGates(options.rateLimitEnabled !== false);
   const policyGates = createAuthPolicyGates(config);
