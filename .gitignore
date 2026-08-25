@@ -71,6 +71,7 @@ blob-report/
 
 # Local agent / implementation reports (never commit)
 reports/
+.hermes
 
 # Ephemeral CLI integration fixtures (e.g. src/cli/.tmp-db-mig-*)
 .tmp-db-mig-*/

@@ -49,6 +49,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - `bun run bench:load` + `src/bench/` — system load harness (15 groups) for
   regression trend runs against live Keel infra (`OKE_BENCH=1`).
 
+#### Test harness
+
+- Public `okengine/testing` subpath (aliased `okengine/test`) exposing
+  `createTestApp` — a dedicated `dist/testing.js` build keeps the harness out
+  of core/client production bundles (kernel + client budget gates cover it).
+- Multi-tenancy testing: `loginAs({ tenantId })` stamps `fx.tenant.id`, and
+  `{ tenant }` on API calls re-scopes a single call — verified with real
+  PGlite RLS isolation (`store.schema.policy.tenant`).
+- Deterministic live signals: `signals.subscribeLive` / `signals.waitForLive`
+  give test-first assertions over `delivery: "live"` event streams
+  (`retention`-aware replay).
+- Testing guide at `get-started/testing.mdx` — harness surface, multi-tenant
+  RLS recipes, live-signal patterns, time travel, AI mocks, and troubleshooting.
+
 ### ♻️ Changed
 
 #### Runtime

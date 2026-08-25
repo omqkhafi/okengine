@@ -118,7 +118,7 @@ describe("createTestApp tenancy testing & RLS isolation", () => {
         WITH CHECK (tenant_id = oke.tenant())`,
     );
 
-// Alice creates document in Acme
+    // Alice creates document in Acme
     const createRes1 = await t.api.docs!.create!({ title: "Acme Roadmap" }, { as: userAcme });
     expect(createRes1.error).toBeNull();
     expect((createRes1.data as { tenantId: string | null }).tenantId).toBe("acme");
@@ -167,9 +167,7 @@ describe("createTestApp tenancy testing & RLS isolation", () => {
     expect(listOverride.error).toBeNull();
     // Two Globex rows now: Bob's original + Carol's override write.
     expect((listOverride.data as { title: string }[]).length).toBe(2);
-    const overrideTitles = (listOverride.data as { title: string }[])
-      .map((r) => r.title)
-      .sort();
+    const overrideTitles = (listOverride.data as { title: string }[]).map((r) => r.title).sort();
     expect(overrideTitles).toEqual(["Globex Carol", "Globex Secrets"]);
 
     await t.close();

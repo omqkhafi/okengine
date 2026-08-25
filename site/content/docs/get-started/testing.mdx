@@ -9,9 +9,9 @@ frozen clock. You drive it through `t.api`, `t.auth`, `t.signals`, `t.clock`,
 and `t.channels` — every assertion is deterministic.
 
 <Callout title="The one rule">
-  Boot the same `app` your server boots. Assert only through the harness
-  surfaces (`t.api`, `t.auth`, `t.signals`, `t.clock`, `t.channels`,
-  `t.ai`, `t.effects`) — never reach into internal runtimes.
+  Boot the same `app` your server boots. Assert only through the harness surfaces (`t.api`,
+  `t.auth`, `t.signals`, `t.clock`, `t.channels`, `t.ai`, `t.effects`) — never reach into internal
+  runtimes.
 </Callout>
 
 ## Import
@@ -90,11 +90,9 @@ expect(data).toEqual({ id: expect.any(String) });
 Signal handlers and Clocks are processed deterministically:
 
 ```typescript
-await t.signals.drain();          // run queued signal work
-await t.clock.advance("2m");      // tick scheduled Clocks forward
-expect(t.channels.sent()).toContainEqual(
-  expect.objectContaining({ template: "order-confirmed" }),
-);
+await t.signals.drain(); // run queued signal work
+await t.clock.advance("2m"); // tick scheduled Clocks forward
+expect(t.channels.sent()).toContainEqual(expect.objectContaining({ template: "order-confirmed" }));
 ```
 
 </Step>
@@ -103,21 +101,21 @@ expect(t.channels.sent()).toContainEqual(
 
 ## Harness surface
 
-| Property                         | What it does                                                                           |
-| -------------------------------- | -------------------------------------------------------------------------------------- |
-| `t.api.<unit>.<flow>(input, opts?)` | Invoke an adopted Flow directly with a `{ as }` principal and optional `{ tenant }`   |
-| `t.auth.loginAs(options)`        | Returns a verified `TestUser` with `id`, `scopes`, `verified`, and optional `tenantId` |
-| `t.clock.advance(by)` / `t.clock.now()` | Freeze and move the harness clock (used by durable sleeps and Clocks)           |
-| `t.cron.run(name)`               | Run a named Clock / `every()` interval now, still leader-elected                       |
-| `t.signals.drain()`              | Drain the signal bus until idle (deterministic queued work)                            |
-| `t.signals.subscribeLive(signal, handlers)` | Subscribe to a `delivery: "live"` signal's event stream (deterministic)      |
-| `t.signals.waitForLive(signal, predicate)`  | Resolve once a live event matching `predicate` arrives                        |
-| `t.channels.sent()`              | Receipts / inbox entries sent during the test                                          |
-| `t.ai.mock(prompt, output)`      | Register a canned mock response for a Prompt                                          |
-| `t.ai.cost()`                    | Accumulated AI cost across `fx.ask` calls                                              |
-| `t.effects.of(runId)`            | Effect ledger for a recorded run (reads / writes / emits / sends)                      |
-| `t.runs()`                       | All wide events recorded during the test                                               |
-| `t.close()`                      | Close booted element runtimes                                                          |
+| Property                                    | What it does                                                                           |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `t.api.<unit>.<flow>(input, opts?)`         | Invoke an adopted Flow directly with a `{ as }` principal and optional `{ tenant }`    |
+| `t.auth.loginAs(options)`                   | Returns a verified `TestUser` with `id`, `scopes`, `verified`, and optional `tenantId` |
+| `t.clock.advance(by)` / `t.clock.now()`     | Freeze and move the harness clock (used by durable sleeps and Clocks)                  |
+| `t.cron.run(name)`                          | Run a named Clock / `every()` interval now, still leader-elected                       |
+| `t.signals.drain()`                         | Drain the signal bus until idle (deterministic queued work)                            |
+| `t.signals.subscribeLive(signal, handlers)` | Subscribe to a `delivery: "live"` signal's event stream (deterministic)                |
+| `t.signals.waitForLive(signal, predicate)`  | Resolve once a live event matching `predicate` arrives                                 |
+| `t.channels.sent()`                         | Receipts / inbox entries sent during the test                                          |
+| `t.ai.mock(prompt, output)`                 | Register a canned mock response for a Prompt                                           |
+| `t.ai.cost()`                               | Accumulated AI cost across `fx.ask` calls                                              |
+| `t.effects.of(runId)`                       | Effect ledger for a recorded run (reads / writes / emits / sends)                      |
+| `t.runs()`                                  | All wide events recorded during the test                                               |
+| `t.close()`                                 | Close booted element runtimes                                                          |
 
 ## Multi-tenancy & RLS
 
@@ -233,9 +231,9 @@ resumes any durable sleeps that become due. `t.cron.run("expire-stale")` runs a
 named Clock now:
 
 ```typescript
-await t.clock.advance("30s");                     // durable sleeps resume
-await t.cron.run("expire-stale");                 // named Clock fires
-expect(t.channels.sent()).toHaveLength(1);        // side effect observed
+await t.clock.advance("30s"); // durable sleeps resume
+await t.cron.run("expire-stale"); // named Clock fires
+expect(t.channels.sent()).toHaveLength(1); // side effect observed
 ```
 
 ## AI & channels
@@ -267,12 +265,12 @@ expect(t.channels.sent()).toContainEqual(
   your `oke({ ... })` references a Vault secret or Store that the template does
   not define, pass them explicitly:
 
-  ```typescript
-  await createTestApp(app, {
-    secrets: [openAiKey],
-    vaultSecrets: { OPENAI_KEY: "sk-test" },
-  });
-  ```
+```typescript
+await createTestApp(app, {
+  secrets: [openAiKey],
+  vaultSecrets: { OPENAI_KEY: "sk-test" },
+});
+```
 
 </Accordion>
 
@@ -295,8 +293,8 @@ expect(t.channels.sent()).toContainEqual(
   Test boots never run migrations — `oke db push` installs DDL and
   `store.schema.policy.tenant` policies in real apps.
 
-  Assert real RLS by installing the policy + `oke.*` helpers on the booted
-  primary connection (as the repo's `sql-rls-isolation.test.ts` does).
+Assert real RLS by installing the policy + `oke.*` helpers on the booted
+primary connection (as the repo's `sql-rls-isolation.test.ts` does).
 
 </Accordion>
 

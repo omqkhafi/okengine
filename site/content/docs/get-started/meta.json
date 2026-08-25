@@ -1,5 +1,13 @@
 {
   "title": "Get Started",
   "icon": "Rocket",
-  "pages": ["index", "introduction", "why", "installation", "basic-usage", "testing", "project-structure"]
+  "pages": [
+    "index",
+    "introduction",
+    "why",
+    "installation",
+    "basic-usage",
+    "testing",
+    "project-structure"
+  ]
 }

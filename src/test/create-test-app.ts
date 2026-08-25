@@ -382,7 +382,11 @@ export async function createTestApp<App extends OkeApp>(
           let unsubscribe: TestLiveUnsubscribe | undefined;
           const timer = setTimeout(() => {
             unsubscribe?.();
-            reject(new Error(`waitForLive: no matching event for "${name}" within ${timeoutMs ?? 1000}ms`));
+            reject(
+              new Error(
+                `waitForLive: no matching event for "${name}" within ${timeoutMs ?? 1000}ms`,
+              ),
+            );
           }, timeoutMs ?? 1000);
           unsubscribe = this.subscribeLive(signal as never, {
             onEvent: (event: unknown) => {
