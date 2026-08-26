@@ -43,6 +43,7 @@ export {
   type PasskeyStore,
 } from "./passkey.ts";
 export { oauth, type OAuthOptions } from "./oauth.ts";
+export { mcpOauth, mcpOauthConsentFlows, type McpOauthOptions } from "./mcp-oauth.ts";
 export {
   b64urlDecode,
   b64urlEncode,

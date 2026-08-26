@@ -2050,6 +2050,10 @@ function parseTrigger(
       return { trigger: {} };
     }
 
+    // mcp.tool("bookings.create").gate(...) / mcp.tool(name)
+    const mcpTool = parseMcpTrigger(call, scope);
+    if (mcpTool) return mcpTool;
+
     // http.post("/x").gate(...) / http.get("/x").live(signal) / http.live(signal)
     const http = parseHttpTrigger(call, scope, filePath);
     if (http) return http;
@@ -2064,6 +2068,8 @@ function parseTrigger(
   if (node.type === "MemberExpression") {
     const http = parseHttpTrigger(node, scope, filePath);
     if (http) return http;
+    const mcp = parseMcpTrigger(node, scope);
+    if (mcp) return mcp;
   }
 
   if (node.type === "Identifier") {
@@ -2204,6 +2210,45 @@ function parseCdcTrigger(call: CallExpression): Trigger["cdc"] | undefined {
 
 function stripTriggerExtras(trigger: Trigger): Trigger {
   return trigger;
+}
+
+/**
+ * `mcp.tool("name").gate(...)` — per-flow MCP tool opt-in. The Manifest
+ * records `trigger.mcp: { name }` plus any chained gates; absence of the
+ * trigger means the flow is not an MCP tool.
+ */
+function parseMcpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | undefined {
+  const chain = flattenMemberCallChain(leaf);
+  let toolName: string | undefined;
+  const gateNames: string[] = [];
+
+  for (const node of chain) {
+    if (node.type !== "CallExpression") continue;
+    const c = node as CallExpression;
+    const callee = c.callee;
+    if (callee.type !== "MemberExpression") continue;
+    const member = callee as AstNode & { object: AstNode; property: AstNode };
+    const prop = identifierName(member.property);
+    if (
+      prop === "tool" &&
+      member.object.type === "Identifier" &&
+      (member.object as Identifier).name === "mcp"
+    ) {
+      toolName = stringArg(c.arguments[0]);
+      continue;
+    }
+    if (prop === "gate") {
+      for (const arg of c.arguments) {
+        gateNames.push(...gateNamesFromArg(arg, scope));
+      }
+    }
+  }
+
+  if (!toolName) return undefined;
+  return {
+    trigger: { mcp: { name: toolName } },
+    gates: gateNames.length > 0 ? gateNames : undefined,
+  };
 }
 
 function parseEffectsObject(node: AstNode | undefined): Effects | undefined {

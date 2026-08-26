@@ -107,8 +107,30 @@ export interface InternalTrigger {
   readonly kind: "internal";
 }
 
+/**
+ * MCP tool exposure — the per-flow opt-in surface for OAuth-protected
+ * user-plane tools (`on(mcp.tool("bookings.create").gate(...), flow)`).
+ *
+ * Deny-by-default: a flow without this trigger is never listed over MCP.
+ * Gates are required (typically `gate.auth` + `gate.scope(...)`) exactly
+ * like sensitive HTTP routes.
+ */
+export interface McpToolTrigger {
+  readonly kind: "mcp";
+  /** Tool name exposed in MCP `tools/list`. */
+  readonly name: string;
+  readonly gates: readonly GateRef[];
+  readonly gate: GateAttach<McpToolTrigger>;
+}
+
 /** Discriminated union of all trigger kinds. */
-export type Trigger = HttpTrigger | EveryTrigger | SignalAsTrigger | CdcTrigger | InternalTrigger;
+export type Trigger =
+  | HttpTrigger
+  | EveryTrigger
+  | SignalAsTrigger
+  | CdcTrigger
+  | InternalTrigger
+  | McpToolTrigger;
 
 /** Trigger kind string. */
 export type TriggerKind = Trigger["kind"];
@@ -412,6 +434,37 @@ export function table(name: string, store?: string): TableHandle {
 export const internal: InternalTrigger = { kind: "internal" };
 
 /**
+ * MCP tool namespace — `mcp.tool("bookings.create")` marks a flow as an
+ * explicitly exposed MCP tool for OAuth user-plane clients. Chain `.gate(...)`
+ * like HTTP triggers; no gates ⇒ not exposed (deny-by-default).
+ *
+ * @param name - Tool name (namespaced, e.g. `bookings.create`)
+ */
+export const mcp: {
+  /**
+   * @param name - Tool name
+   */
+  tool(name: string): McpToolTrigger;
+} = {
+  tool(name: string): McpToolTrigger {
+    if (name.trim().length === 0) {
+      throw new TypeError("mcp.tool(name): name is required");
+    }
+    return withMcpGates(name, []);
+  },
+};
+
+/** @internal Attach a resolved gate list onto a fresh {@link McpToolTrigger}. */
+function withMcpGates(name: string, gates: readonly GateRef[]): McpToolTrigger {
+  return {
+    kind: "mcp",
+    name,
+    gates,
+    gate: createGateAttach((next) => withMcpGates(name, next), gates),
+  };
+}
+
+/**
  * Normalize anything accepted by {@link on} into a {@link Trigger}.
  *
  * @param value - Trigger or signal handle
@@ -427,7 +480,8 @@ export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
       kind === "every" ||
       kind === "signal" ||
       kind === "cdc" ||
-      kind === "internal"
+      kind === "internal" ||
+      kind === "mcp"
     ) {
       return value as Trigger;
     }

@@ -219,7 +219,17 @@
         "signal": { "type": "string", "minLength": 1 },
         "cron": { "type": "string", "minLength": 1 },
         "every": { "type": "string", "minLength": 1 },
-        "cdc": { "$ref": "#/$defs/CdcTrigger" }
+        "cdc": { "$ref": "#/$defs/CdcTrigger" },
+        "mcp": { "$ref": "#/$defs/McpTrigger" }
+      }
+    },
+    "McpTrigger": {
+      "description": "Explicit MCP tool exposure. Presence means the flow is listed over MCP for OAuth user-plane clients; absence means not an MCP tool (deny-by-default).",
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 }
       }
     },
     "Slo": {

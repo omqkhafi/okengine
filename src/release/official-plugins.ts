@@ -38,6 +38,7 @@ export const OFFICIAL_PLUGIN_BUDGETS: readonly OfficialPluginBudget[] = [
   { name: "twoFactor", file: "two-factor.ts", category: "auth" },
   { name: "passkey", file: "passkey.ts", category: "auth" },
   { name: "oauth", file: "oauth.ts", category: "oauth" },
+  { name: "mcpOauth", file: "mcp-oauth.ts", category: "oauth" },
   { name: "headers", file: "headers.ts", category: "security" },
   { name: "cors", file: "cors.ts", category: "security" },
   { name: "csrf", file: "csrf.ts", category: "security" },

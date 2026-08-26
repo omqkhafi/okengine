@@ -128,6 +128,15 @@ export interface CdcTrigger {
 }
 
 /**
+ * MCP tool exposure — explicit per-flow opt-in for OAuth user-plane tools.
+ * Presence of this trigger means the flow is listed over MCP; absence means
+ * it is not an MCP tool (deny-by-default).
+ */
+export interface McpTrigger {
+  name: string;
+}
+
+/**
  * Discriminated trigger. Omitting trigger means call-only (internal) flow.
  */
 export interface Trigger {
@@ -136,6 +145,7 @@ export interface Trigger {
   cron?: string;
   every?: string;
   cdc?: CdcTrigger;
+  mcp?: McpTrigger;
 }
 
 /** Declared service-level objective. */
