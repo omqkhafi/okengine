@@ -41,6 +41,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
   (`numbers` / `lowercase` / `uppercase` / `symbols` / `lookAlikes`).
   Zero dependencies, `crypto.getRandomValues()` only, rejection-sampled for
   bias-free character selection.
+- `oauth()` plugin — Authorization Code + PKCE social sign-in for Apple,
+  Discord, Facebook, Figma, GitHub, Google, Microsoft, and X. Hand-rolled
+  drivers (OIDC JWKS verify or OAuth2 profile fetch), Vault-declared client
+  secrets, optional sealed provider-token storage, and identity only through
+  `linkOrProvision`.
 
 #### Dev, Keel & create-oke
 
@@ -48,6 +53,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
   manifest (live signals + SSE routes) and compares against `ulimit -n`.
 - `bun run bench:load` + `src/bench/` — system load harness (15 groups) for
   regression trend runs against live Keel infra (`OKE_BENCH=1`).
+
+#### Docs
+
+- Plugins → **OAuth** category: overview plus per-provider pages (Apple,
+  Discord, Facebook, Figma, GitHub, Google, Microsoft, X).
 
 #### Test harness
 
@@ -121,6 +131,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - `bun run verify` — same check jobs as `.github/workflows/ci.yml`
   (`verify:lint`, `verify:typecheck`, `verify:test`, `verify:gate`,
   `verify:site`). `bun run ci` still adds budgets and the Keel example.
+
+### 🔒 Security
+
+#### Runtime
+
+- OAuth mix-up defense (RFC 9700 / RFC 9207): per-provider callback routes,
+  single-use hashed `state`, and issuer pinning on every assertion.
+- Unverified provider emails cannot take over existing accounts
+  (GHSA-6g38-8j4p-j3pr class) — Facebook/X/Figma always unverified; Apple
+  string `"false"` stays false.
 
 ## v0.17.2 — 2026-08-23
 

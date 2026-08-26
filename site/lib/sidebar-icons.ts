@@ -1,6 +1,6 @@
 /**
  * Docs sidebar icons — Lucide for product surfaces, monochrome brand marks for
- * Recipes + Providers pages (fill inherits sidebar ink).
+ * Recipes, Providers, and OAuth plugin pages (fill inherits sidebar ink).
  */
 
 import type { LoaderPlugin } from "fumadocs-core/source";
@@ -51,6 +51,7 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/plugins/ip-allowlist": "ListChecks",
   "/docs/plugins/maintenance-mode": "Construction",
   "/docs/plugins/headers": "ShieldCheck",
+  "/docs/plugins/oauth": "FingerprintPattern",
   "/docs/ai": "Bot",
   "/docs/ai/mcp": "Plug",
   "/docs/ai/skills": "Sparkles",
@@ -92,6 +93,14 @@ const PATH_BRANDS: Readonly<Record<string, BrandMarkId>> = {
   "/docs/providers/upstash": "upstash",
   "/docs/providers/dragonfly-cloud": "dragonfly",
   "/docs/providers/digitalocean-caching": "digitalocean",
+  "/docs/plugins/apple": "apple",
+  "/docs/plugins/discord": "discord",
+  "/docs/plugins/facebook": "facebook",
+  "/docs/plugins/figma": "figma",
+  "/docs/plugins/github": "github",
+  "/docs/plugins/google": "google",
+  "/docs/plugins/microsoft": "microsoft",
+  "/docs/plugins/x": "x",
 };
 
 /** Folder display name → docs path for icon lookup. */

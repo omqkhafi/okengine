@@ -66,6 +66,7 @@ const GROUP_HEADINGS: Readonly<Record<BudgetGroup, string>> = {
 /** Docs category → markdown subheading under Plugins. */
 const PLUGIN_CATEGORY_HEADINGS: Readonly<Record<string, string>> = {
   auth: "Auth",
+  oauth: "OAuth",
   security: "Security",
   ops: "Ops",
   perf: "Perf",

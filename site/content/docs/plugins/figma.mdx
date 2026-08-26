@@ -1,0 +1,134 @@
+---
+title: "Figma"
+description: "Official plugin — Figma sign-in with HTTP Basic client auth and no email verification signal."
+icon: "PenTool"
+source: "docs/spec/unified-theory.md"
+---
+
+Figma is OAuth2 with two twists: the token endpoint uses **HTTP Basic**
+instead of a body field, and the API exposes **no verification flag** — so
+emails are always unverified.
+
+<Callout title="The one rule">
+  Register your exact callback URI in the Figma app, seed the client secret,
+  and expect unverified emails — new accounts only, never takeovers.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Create an app
+
+Figma → Settings → Security → **Personal access tokens / OAuth apps** → create
+an OAuth app. Add `https://app.example.com/auth/oauth/callback/figma` as a
+callback URL.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      figma: { enabled: true },
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Set the client secret
+
+```text
+# .env.local
+OAUTH_FIGMA_CLIENT_SECRET=...
+```
+
+The driver sends it as `Authorization: Basic base64(client_id:client_secret)`
+on the token call.
+
+</Step>
+
+</Steps>
+
+## How identity works
+
+| Aspect | Behavior |
+| ------ | -------- |
+| Token exchange | `POST https://api.figma.com/v1/oauth/token` with the Basic header + PKCE verifier |
+| Profile | `GET https://api.figma.com/v1/me` |
+| Subject | `id`, falling back to `handle` when absent |
+| Email trust | **always unverified** — no verification field exists |
+
+Default scopes: `file_read`. Trim this to what you actually need; sign-in
+itself requires nothing beyond defaults.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_FIGMA_CLIENT_ID` |
+| `redirectUri` | `string` | `{baseUrl}…/figma` | Exact registered URI |
+| `scopes` | `string[]` | driver defaults | Extra scopes |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/figma/start` |
+| Callback | `GET+POST /auth/oauth/callback/figma` |
+| Link | `POST /auth/oauth/figma/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="401 on token exchange">
+
+The Basic header is built from *your* pair — a mismatched id/secret rotation
+or a secret seeded under the wrong provider key. Check
+`OAUTH_FIGMA_CLIENT_SECRET`.
+
+</Accordion>
+<Accordion title="invalid_grant">
+
+Codes are single-use and expire quickly. Flow rows are too — restart from
+`/start`.
+
+</Accordion>
+<Accordion title="Email missing on the profile">
+
+Some Figma accounts expose no email. The session signs in without one;
+nothing else changes.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [GitHub](/docs/plugins/github) — OAuth2 with real verification signal
+- [Vault](/docs/elements/vault) — where secrets live
+
+## Next
+
+<Cards>
+  <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
+  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+  <Card title="X" description="PKCE public client." href="/docs/plugins/x" />
+</Cards>

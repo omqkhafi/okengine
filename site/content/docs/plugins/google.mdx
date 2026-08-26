@@ -1,0 +1,142 @@
+---
+title: "Google"
+description: "Official plugin — Google sign-in via OIDC discovery and JWKS-verified ID tokens."
+icon: "Globe"
+source: "docs/spec/unified-theory.md"
+---
+
+Google is the reference OIDC provider for `oauth()`: discovery, ID-token
+signature checks, and issuer pinning all work the textbook way. If you are
+wiring your first social provider, start here.
+
+<Callout title="The one rule">
+  Register `https://app.example.com/auth/oauth/callback/google` (your exact
+  origin) as an Authorized Redirect URI, then enable it with
+  `providers.google.enabled`. The comparison is byte-exact.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Create OAuth credentials
+
+In Google Cloud Console → APIs & Services → Credentials, create an **OAuth
+client ID** of type *Web application*. Add your callback URI under Authorized
+Redirect URIs.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      google: { enabled: true },
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Set the client secret
+
+```text
+# .env.local
+OAUTH_GOOGLE_CLIENT_SECRET=GOCSPX-...
+```
+
+Boot fails loudly if the secret is missing — the contract is declared by the
+plugin itself.
+
+</Step>
+
+</Steps>
+
+## How identity works
+
+The driver discovers Google's endpoints from
+`https://accounts.google.com/.well-known/openid-configuration` and caches them.
+On callback it verifies the ID token end-to-end:
+
+| Check | Rule |
+| ----- | ---- |
+| Signature | RS256 / ES256 against Google's published JWKS |
+| Issuer | must equal `https://accounts.google.com` |
+| Audience | must include your client id (`azp` when multi-audience) |
+| Expiry | rejected when stale |
+| Nonce | single-use, bound to the flow row |
+
+Email trust follows the OIDC claim: `email_verified: true` marks the address
+verified; anything else — including string `"false"` — stays unverified.
+
+Default scopes: `openid`, `email`, `profile`.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_GOOGLE_CLIENT_ID` |
+| `redirectUri` | `string` | `{baseUrl}…/google` | Exact registered URI |
+| `scopes` | `string[]` | driver defaults | Extra scopes |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/google/start` |
+| Callback | `GET+POST /auth/oauth/callback/google` |
+| Link | `POST /auth/oauth/google/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="redirect_uri_mismatch at Google">
+
+The registered URI and the sent URI differ. Byte-exact means scheme, host,
+port, path, no trailing slash drift. Copy the value from
+`providers.google.redirectUri` or `baseUrl` synthesis.
+
+</Accordion>
+<Accordion title="invalid_client at token exchange">
+
+`OAUTH_GOOGLE_CLIENT_SECRET` is missing or stale. Secrets resolve through the
+Vault chain — update `.env.local` or your Vault driver, then restart.
+
+</Accordion>
+<Accordion title="aud_mismatch">
+
+You are using credentials from a different Google project than the one that
+issued the code, or swapped client ids between environments.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [Vault](/docs/elements/vault) — where secrets live
+- [Gate](/docs/elements/gate) — `gate.auth`
+
+## Next
+
+<Cards>
+  <Card title="Apple" description="form_post + ES256 client-secret JWT." href="/docs/plugins/apple" />
+  <Card title="Microsoft" description="Entra tenants and issuer templates." href="/docs/plugins/microsoft" />
+  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+</Cards>

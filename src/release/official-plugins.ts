@@ -5,7 +5,7 @@
  */
 
 /** Docs / landing category for an official plugin. */
-export type PluginBudgetCategory = "auth" | "security" | "ops" | "perf";
+export type PluginBudgetCategory = "auth" | "oauth" | "security" | "ops" | "perf";
 
 /** One official plugin entry measured as `export:./plugins/<name>`. */
 export type OfficialPluginBudget = {
@@ -20,6 +20,7 @@ export type OfficialPluginBudget = {
 /** Category display order (docs index). */
 export const PLUGIN_BUDGET_CATEGORIES: readonly PluginBudgetCategory[] = [
   "auth",
+  "oauth",
   "security",
   "ops",
   "perf",
@@ -36,6 +37,7 @@ export const OFFICIAL_PLUGIN_BUDGETS: readonly OfficialPluginBudget[] = [
   { name: "otp", file: "otp.ts", category: "auth" },
   { name: "twoFactor", file: "two-factor.ts", category: "auth" },
   { name: "passkey", file: "passkey.ts", category: "auth" },
+  { name: "oauth", file: "oauth.ts", category: "oauth" },
   { name: "headers", file: "headers.ts", category: "security" },
   { name: "cors", file: "cors.ts", category: "security" },
   { name: "csrf", file: "csrf.ts", category: "security" },

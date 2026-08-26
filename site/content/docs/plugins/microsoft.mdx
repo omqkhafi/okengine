@@ -1,0 +1,140 @@
+---
+title: "Microsoft"
+description: "Official plugin — Entra ID sign-in across personal, work, and school accounts with tenant-aware issuer checks."
+icon: "LayoutGrid"
+source: "docs/spec/unified-theory.md"
+---
+
+Microsoft (Entra ID) is OIDC with a tenant twist: `common` discovery advertises
+an issuer with the `{tenantid}` placeholder, so the value you pin at start is
+a *template* validated against the concrete token at callback.
+
+<Callout title="The one rule">
+  Pick the audience first: `tenant: "common"` for everyone, `organizations`
+  for work/school only, `consumers` for personal accounts, or a tenant GUID to
+  lock sign-in to one directory.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Register an app
+
+In the Azure portal → Microsoft Entra ID → App registrations → New
+registration. Choose *Accounts in any organizational directory and personal
+Microsoft accounts* for `common`. Add your redirect URI under **Web**.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      microsoft: { enabled: true }, // tenant defaults to "common"
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Set the client secret
+
+```text
+# .env.local
+OAUTH_MICROSOFT_CLIENT_SECRET=...
+```
+
+Certificates are not used — the driver authenticates with the shared secret
+form field.
+
+</Step>
+
+</Steps>
+
+## How identity works
+
+| Aspect | Behavior |
+| ------ | -------- |
+| Discovery | `{tenant}/oauth2/v2.0/.well-known/openid-configuration`, cached |
+| Issuer pinning | flow stores `https://login.microsoftonline.com/{tenantid}/v2.0`; tokens must match it shape-for-shape |
+| Tenant claim | the token's `tid` must be GUID-shaped and consistent with `iss` |
+| Signature | RS256 against the tenant's published keys |
+| Email trust | OIDC `email_verified` claim |
+
+**Consequence:** an ID token minted by a *different* tenant fails the issuer
+template even though its signature is perfectly valid — the mix-up defense
+survives multi-tenancy.
+
+Default scopes: `openid`, `email`, `profile`.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_MICROSOFT_CLIENT_ID` |
+| `tenant` | `string` | `"common"` | `organizations`, `consumers`, or a GUID |
+| `redirectUri` | `string` | `{baseUrl}…/microsoft` | Exact registered URI |
+| `scopes` | `string[]` | driver defaults | Extra scopes |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/microsoft/start` |
+| Callback | `GET+POST /auth/oauth/callback/microsoft` |
+| Link | `POST /auth/oauth/microsoft/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="issuer_mismatch on every login">
+
+Your app registration's *supported account types* disagree with the configured
+`tenant`. `common` requires multi-tenant + personal accounts; a single-tenant
+GUID needs the matching registration.
+
+</Accordion>
+<Accordion title="AADSTS50011 (redirect mismatch)">
+
+The reply URL registered in Azure does not byte-match the stored
+`redirectUri`. Re-copy from your plugin config; trailing slashes count.
+
+</Accordion>
+<Accordion title="No email arrives">
+
+Personal Microsoft accounts can omit email entirely. The flow signs the person
+in without one — exactly like Discord phone-only accounts.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [Google](/docs/plugins/google) — plain single-issuer OIDC
+- [Vault](/docs/elements/vault) — where secrets live
+
+## Next
+
+<Cards>
+  <Card title="Apple" description="form_post + ES256 client-secret JWT." href="/docs/plugins/apple" />
+  <Card title="Discord" description="Nullable emails, verified flag." href="/docs/plugins/discord" />
+  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+</Cards>

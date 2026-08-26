@@ -1,0 +1,126 @@
+---
+title: "X"
+description: "Official plugin — X (Twitter) sign-in as a PKCE public client with confidential-client secrets left out."
+icon: "X"
+source: "docs/spec/unified-theory.md"
+---
+
+X is the one provider where `oauth()` behaves as a **public client**: the
+token exchange carries the code verifier but no secret. PKCE is the only
+proof the callback is yours.
+
+<Callout title="The one rule">
+  Enable OAuth 2.0 in the X Developer Portal, set up your exact callback URI,
+  and request `users.email` access if you need addresses. No
+  `OAUTH_X_CLIENT_SECRET` exists — none is read.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Configure the app
+
+X Developer Portal → Project → User authentication settings → **Set up**.
+Choose *Web App*, enable OAuth 2.0, and add
+`https://app.example.com/auth/oauth/callback/x` as a callback URI.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      x: { enabled: true },
+    },
+  }),
+);
+```
+
+</Step>
+
+</Steps>
+
+That is the whole setup — no Vault contract for this provider.
+
+## How identity works
+
+| Aspect | Behavior |
+| ------ | -------- |
+| Token exchange | `POST https://api.x.com/2/oauth2/token` with the code verifier, no secret |
+| Profile | `GET /2/users/me?user.fields=id,name,username,confirmed_email` |
+| Subject | the string `id` inside `data` |
+| Email trust | **always unverified** — `confirmed_email` gates API access, it does not attest verification |
+
+**Consequence:** an X email never claims an existing account during sign-up.
+It can attach to a fresh account or to an existing one you already control via
+authenticated linking.
+
+Default scopes: `users.read`, `tweet.read`.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_X_CLIENT_ID` |
+| `redirectUri` | `string` | `{baseUrl}…/x` | Exact registered URI |
+| `scopes` | `string[]` | driver defaults | Extra scopes (`offline.access`, …) |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/x/start` |
+| Callback | `GET+POST /auth/oauth/callback/x` |
+| Link | `POST /auth/oauth/x/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="invalid_request on token exchange">
+
+Callback URIs must match exactly and the code must be fresh. X codes are
+single-use and short-lived; flow rows expire after ten minutes too.
+
+</Accordion>
+<Accordion title="No email ever arrives">
+
+`confirmed_email` requires elevated access plus the `users.email` scope. Even
+then the address stays unverified by design — see the trust table above.
+
+</Accordion>
+<Accordion title="403 forbidden">
+
+Your app tier lacks user-context authentication, or the requested scope set
+exceeds what the portal grants.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [Facebook](/docs/plugins/facebook) — also never-verified emails
+- [Vault](/docs/elements/vault) — optional token storage
+
+## Next
+
+<Cards>
+  <Card title="Facebook" description="Never-verified emails." href="/docs/plugins/facebook" />
+  <Card title="Figma" description="Basic-auth token endpoint." href="/docs/plugins/figma" />
+  <Card title="Discord" description="Nullable emails." href="/docs/plugins/discord" />
+</Cards>

@@ -1,0 +1,135 @@
+---
+title: "Facebook"
+description: "Official plugin — Facebook Login via Graph API with conservative email handling."
+icon: "Share2"
+source: "docs/spec/unified-theory.md"
+---
+
+Facebook Login is OAuth2 against the Graph API, and its trust story is the
+simplest one in `oauth()`: the platform offers **no verification signal to
+apps**, so emails from Facebook are treated as unverified — always.
+
+<Callout title="The one rule">
+  Treat every Facebook-provided address as unverified. The flow provisions new
+  accounts with them but refuses to let them claim accounts that already
+  exist.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Create an app
+
+Meta for Developers → **Create App** → *Authentication*. Under Facebook Login
+→ Settings, add `https://app.example.com/auth/oauth/callback/facebook` as a
+Valid OAuth Redirect URI.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      facebook: { enabled: true },
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Set the client secret
+
+```text
+# .env.local
+OAUTH_FACEBOOK_CLIENT_SECRET=...
+```
+
+</Step>
+
+</Steps>
+
+## How identity works
+
+| Aspect | Behavior |
+| ------ | -------- |
+| Authorize | `www.facebook.com/v21.0/dialog/oauth` |
+| Token exchange | `graph.facebook.com/v21.0/oauth/access_token` |
+| Profile | `GET /me?fields=id,name,email` (the `id` is the subject) |
+| Email | present when the user has one; phone-only accounts have none |
+| Email trust | **always unverified** — no trustworthy provider signal exists |
+
+**Consequence:** an attacker completing Facebook login with *your* email gets
+`email_in_use`, not your session. This exact scenario is the takeover class
+the trust matrix closes.
+
+Default scopes: `email`, `public_profile`.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_FACEBOOK_CLIENT_ID` (App ID) |
+| `redirectUri` | `string` | `{baseUrl}…/facebook` | Exact registered URI |
+| `scopes` | `string[]` | driver defaults | Extra scopes |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/facebook/start` |
+| Callback | `GET+POST /auth/oauth/callback/facebook` |
+| Link | `POST /auth/oauth/facebook/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="URL Blocked: redirect_uri">
+
+The URI is not on the Valid OAuth Redirect URIs list, or the app is in
+development mode and the user lacks a role. Byte-exact matching applies.
+
+</Accordion>
+<Accordion title="Sign-in works but there is no email">
+
+The user declined the email permission or has none on file. The flow proceeds
+without an address — same behavior as Discord phone-only accounts.
+
+</Accordion>
+<Accordion title="Error code 190 at exchange">
+
+The app secret was rotated or the code was replayed. Codes are single-use;
+restart from `/start`.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [X](/docs/plugins/x) — also never-verified emails
+- [Vault](/docs/elements/vault) — where secrets live
+
+## Next
+
+<Cards>
+  <Card title="X" description="PKCE public client." href="/docs/plugins/x" />
+  <Card title="Figma" description="Basic-auth token endpoint." href="/docs/plugins/figma" />
+  <Card title="Discord" description="Nullable emails." href="/docs/plugins/discord" />
+</Cards>

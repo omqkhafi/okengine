@@ -1,0 +1,184 @@
+---
+title: "OAuth"
+description: "Official plugin — social sign-in with eight providers under /auth, Authorization Code + PKCE only."
+icon: "FingerprintPattern"
+source: "docs/spec/unified-theory.md"
+---
+
+`oauth()` adds social login to Gate auth. Start at
+`/auth/oauth/{provider}/start`, approve, then land on
+`/auth/oauth/callback/{provider}` with a session — eight providers.
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(oauth({ providers: { ... } }))`. Every
+  provider runs Authorization Code + PKCE with an exact registered redirect URI
+  — implicit and password grants do not exist here.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      google: { enabled: true },
+      github: { enabled: true },
+    },
+  }),
+);
+```
+
+`baseUrl` synthesizes `{baseUrl}/auth/oauth/callback/{provider}` — register
+that exact string. Client secrets resolve from Vault
+(`OAUTH_GOOGLE_CLIENT_SECRET`, `OAUTH_GITHUB_CLIENT_SECRET`, …).
+
+</Step>
+
+<Step>
+### Start the flow
+
+```typescript
+const { data } = await api.auth.oauthStart({ provider: "google" });
+// redirect the browser to data.authorizationUrl
+```
+
+The response carries `authorizationUrl`, `expiresInMs`, and the provider echo.
+The flow row (state hash, PKCE verifier, nonce) lives for ten minutes.
+
+</Step>
+
+<Step>
+### Callback issues a session
+
+The provider redirects to your callback route; the flow verifies state,
+exchanges the code, and signs the person in:
+
+```typescript
+const body = {
+  accessToken: "...",
+  refreshToken: "...",
+  userId: "usr_...",
+};
+```
+
+A brand-new visitor gets a fresh account. Someone whose email already belongs
+to another credential is refused with `email_in_use`.
+
+</Step>
+
+</Steps>
+
+## Providers
+
+| Provider | Shape | Identity source | Email verified |
+| -------- | ----- | --------------- | -------------- |
+| Google | OIDC | JWKS-verified ID token | `email_verified` claim |
+| Apple | OIDC | JWKS-verified ID token | strict parse — `"false"` stays false |
+| Microsoft | OIDC | JWKS-verified ID token | `email_verified` claim |
+| GitHub | OAuth2 | `/user` + `/user/emails` | primary `verified` flag |
+| Discord | OAuth2 | `/users/@me` | `verified` flag |
+| X | OAuth2 | `/2/users/me` | never — no trustworthy signal |
+| Facebook | OAuth2 | Graph `/me` | never — no trustworthy signal |
+| Figma | OAuth2 | `/v1/me` | never — no verification field |
+
+Each provider has its own page under this category — endpoints, scopes, setup,
+and trust rules.
+
+## Security model
+
+| Threat | Defense |
+| ------ | ------- |
+| Code interception | PKCE S256 on every provider |
+| CSRF / forged callbacks | single-use `state`, SHA-256-hashed at rest |
+| Mix-up across providers (RFC 9700) | per-provider callback routes + issuer pinning on every assertion |
+| Unverified-email takeover | `linkOrProvision` refuses `email_in_use` without an authenticated owner |
+| Redirect manipulation | byte-exact stored `redirect_uri` at token exchange |
+
+**Consequence:** an attacker who completes a social login claiming your email
+gains nothing — the account stays untouched unless they already own a session
+for it.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `providers` | map | `{}` | Per-provider config, disabled by default |
+| `baseUrl` | `string` | — | Origin for synthesized callback URIs |
+| `secret` | `string` | active\* | HMAC secret (\*from `gate.auth`) |
+| `sessions` | `SessionStore` | active\* | Session store |
+| `identities` | `IdentityStore` | active\* | Shared user store |
+| `verifications` | `VerificationStore` | new | Flow-state store |
+| `fetch` | `typeof fetch` | global | Injectable transport (tests) |
+
+Per-provider config: `enabled`, `clientId`, `redirectUri`, `scopes`,
+`storeProviderTokens`, plus Microsoft `tenant` and Apple `teamId` / `keyId`.
+
+## Surfaces
+
+| Flow | Path | Gate |
+| ---- | ---- | ---- |
+| `auth.oauthStart` | `POST /auth/oauth/{provider}/start` | `gate.public` + otp rate |
+| `auth.oauthCallback` | `GET+POST /auth/oauth/callback/{provider}` | `gate.public` + otp rate |
+| `auth.oauthLinkStart` | `POST /auth/oauth/{provider}/link` | session + bearer |
+
+The GET + POST callback pair exists because Apple posts its response instead of
+redirecting.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Boot fails listing OAUTH_…_CLIENT_SECRET">
+
+Every enabled provider needs its secret in Vault before boot. Seed
+`OAUTH_{PROVIDER}_CLIENT_SECRET` (Apple uses `OAUTH_APPLE_PRIVATE_KEY`) through
+your Vault driver or `.env.local`.
+
+</Accordion>
+<Accordion title="Callback returns invalid_state">
+
+The state was consumed, expired (ten-minute TTL), or minted by a different
+provider's start call. Restart from `/start`.
+
+</Accordion>
+<Accordion title="Callback returns issuer_mismatch">
+
+The ID token's issuer does not match the provider that started the flow — the
+signature was valid but the token came from elsewhere. This rejection is the
+mix-up defense working; retry the real provider.
+
+</Accordion>
+<Accordion title="Callback returns email_in_use">
+
+The provider returned an email already registered to another account without
+proof you own that account. Sign in with the original method first, then link
+via `POST /auth/oauth/{provider}/link`.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Gate](/docs/elements/gate) — `gate.auth`
+- [Passkey](/docs/plugins/passkey) — phishing-resistant alternative
+- [Client](/docs/reference/client) — calling `/auth` from the browser
+
+## Next
+
+<Cards>
+  <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
+  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+  <Card title="Passkey" description="WebAuthn-shaped passkeys." href="/docs/plugins/passkey" />
+</Cards>

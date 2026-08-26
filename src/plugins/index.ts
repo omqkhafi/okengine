@@ -42,6 +42,7 @@ export {
   type PasskeyOptions,
   type PasskeyStore,
 } from "./passkey.ts";
+export { oauth, type OAuthOptions } from "./oauth.ts";
 export {
   b64urlDecode,
   b64urlEncode,

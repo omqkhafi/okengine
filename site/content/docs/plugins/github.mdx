@@ -1,0 +1,134 @@
+---
+title: "GitHub"
+description: "Official plugin — GitHub sign-in with primary-email lookup from the emails API."
+icon: "GitBranch"
+source: "docs/spec/unified-theory.md"
+---
+
+GitHub is OAuth2 without discovery or ID tokens, so `oauth()` builds the
+identity assertion from two REST calls: `/user` for the account and
+`/user/emails` for the address that actually matters.
+
+<Callout title="The one rule">
+  Request the `user:email` scope. The public profile email is usually null;
+  the verified primary address only exists on the emails endpoint.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Create an OAuth App
+
+GitHub → Settings → Developer settings → OAuth Apps → **New OAuth App**.
+Authorization callback URL:
+`https://app.example.com/auth/oauth/callback/github`.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      github: { enabled: true },
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Set the client secret
+
+```text
+# .env.local
+OAUTH_GITHUB_CLIENT_SECRET=...
+```
+
+</Step>
+
+</Steps>
+
+## How identity works
+
+| Aspect | Behavior |
+| ------ | -------- |
+| Token exchange | form POST to `github.com/login/oauth/access_token`, JSON accepted |
+| Profile | `GET https://api.github.com/user` (numeric `id` is the subject) |
+| Email | `GET https://api.github.com/user/emails`; picks the entry with `primary: true` |
+| Email trust | verified only when the selected entry has an explicit `verified: true` |
+
+**Consequence:** a GitHub account whose primary email is unverified never
+claims that address during sign-up — the flow provisions without verified
+status instead of risking someone else's inbox.
+
+Default scopes: `read:user`, `user:email`. PKCE parameters are sent; GitHub
+ignores them but the protection stays uniform across providers.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_GITHUB_CLIENT_ID` |
+| `redirectUri` | `string` | `{baseUrl}…/github` | Exact registered URI |
+| `scopes` | `string[]` | driver defaults | Extra scopes |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/github/start` |
+| Callback | `GET+POST /auth/oauth/callback/github` |
+| Link | `POST /auth/oauth/github/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Sign-in succeeds with no email">
+
+The token lacks `user:email` (custom scopes dropped it) or the account has no
+verified addresses. The session is valid; add the scope for future flows.
+
+</Accordion>
+<Accordion title="401 on /user/emails">
+
+App permissions changed or the user revoked the grant under Settings →
+Applications. The driver degrades to no email rather than failing sign-in.
+
+</Accordion>
+<Accordion title="redirect_uri mismatch">
+
+GitHub compares the registered callback URL exactly. Re-copy the value your
+config produces.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [Discord](/docs/plugins/discord) — same OAuth2 shape, nullable email
+- [Vault](/docs/elements/vault) — where secrets live
+
+## Next
+
+<Cards>
+  <Card title="Discord" description="Verified flag with nullable email." href="/docs/plugins/discord" />
+  <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
+  <Card title="X" description="PKCE public client." href="/docs/plugins/x" />
+</Cards>

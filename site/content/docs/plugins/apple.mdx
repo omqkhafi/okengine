@@ -1,0 +1,148 @@
+---
+title: "Apple"
+description: "Official plugin — Sign in with Apple with form_post callbacks and an ES256 client-secret JWT."
+icon: "Apple"
+source: "docs/spec/unified-theory.md"
+---
+
+Sign in with Apple is OIDC with three twists: the web flow **posts** its
+response, every exchange needs an ES256 client-secret **JWT you sign**, and
+`email_verified` can arrive as the *string* `"false"`.
+
+<Callout title="The one rule">
+  Create a Sign in with Apple key (Team ID, Key ID, `.p8` private key), seed
+  the key in Vault, and register your exact callback URI — Apple validates all
+  three on every exchange.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Create a key
+
+In the Apple Developer portal: Identifiers → register an App ID with *Sign In
+with Apple*; Keys → create a key with that capability; note the **Team ID**
+and **Key ID**, and download the `.p8` once.
+
+</Step>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { oauth } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: { auth: {} },
+}).plug(
+  oauth({
+    baseUrl: "https://app.example.com",
+    providers: {
+      apple: {
+        enabled: true,
+        teamId: "ABCDE12345",
+        keyId: "XYZ6789012",
+      },
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Seed the private key
+
+```text
+# .env.local
+OAUTH_APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEH...
+-----END PRIVATE KEY-----"
+```
+
+The driver mints a fresh ES256 client-secret JWT per exchange (`iss` = team,
+`kid` = key, one-hour life) and discards nothing to disk.
+
+</Step>
+
+</Steps>
+
+## How identity works
+
+| Aspect | Behavior |
+| ------ | -------- |
+| Callback | Apple posts `code` + `state` as a form body — both GET and POST are bound |
+| Signature | ES256 against `appleid.apple.com` JWKS |
+| Issuer | must equal `https://appleid.apple.com` |
+| Name | delivered only on first authorization via the form-posted `user` field |
+| Email trust | strict parse — only boolean `true`, `"true"`, or `"1"` count |
+
+**Consequence:** the string `"false"` stays unverified. Naive truthiness would
+mark every private-relay email verified — that is the takeover bug class this
+parse exists to close.
+
+Default scopes: `name`, `email`.
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `enabled` | `boolean` | `false` | Turn the provider on |
+| `clientId` | `string` | Vault/env\* | `\*OAUTH_APPLE_CLIENT_ID` (Services ID) |
+| `teamId` | `string` | required | Apple Developer Team ID |
+| `keyId` | `string` | required | Private-key identifier |
+| `redirectUri` | `string` | `{baseUrl}…/apple` | Exact registered URI |
+| `scopes` | `string[]` | `name email` | Requested scopes |
+| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+
+## Surfaces
+
+| Flow | Path |
+| ---- | ---- |
+| Start | `POST /auth/oauth/apple/start` |
+| Callback | `GET+POST /auth/oauth/callback/apple` |
+| Link | `POST /auth/oauth/apple/link` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="invalid_client at token exchange">
+
+Team ID, Key ID, or the `.p8` does not match the App ID / Services ID you are
+signing for. The JWT is minted fresh per exchange, so fixing the inputs is
+enough — no restart cache to clear.
+
+</Accordion>
+<Accordion title="invalid_request mentioning response_mode">
+
+Your Services ID must allow the callback you registered. Check the return URLs
+on the Sign in with Apple key configuration.
+
+</Accordion>
+<Accordion title="Callback never fires">
+
+Browsers post to `/auth/oauth/callback/apple`; make sure proxies do not strip
+form bodies. The route accepts POST with
+`application/x-www-form-urlencoded`.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OAuth](/docs/plugins/oauth) — shared flows and security model
+- [Vault](/docs/elements/vault) — seeding `OAUTH_APPLE_PRIVATE_KEY`
+- [Gate](/docs/elements/gate) — `gate.auth`
+
+## Next
+
+<Cards>
+  <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
+  <Card title="Microsoft" description="Entra tenants and issuer templates." href="/docs/plugins/microsoft" />
+  <Card title="X" description="PKCE public client, never-verified emails." href="/docs/plugins/x" />
+</Cards>
