@@ -549,6 +549,14 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
    * @param input - Input
    */
   call(ref: NamedRef | AnyFlowDef, input?: unknown): Promise<unknown>;
+  /**
+   * Resolve a user-plane MCP tool exposure by its declared tool name.
+   * Returns the bound flow when {@link on}`(`{@link mcp.tool}`(`"name"`).gate(...)`)
+   * registered it; `undefined` when absent or ungated (not indexed).
+   *
+   * @param name - Tool name from `mcp.tool("…")`
+   */
+  resolveMcpTool(name: string): AnyFlowDef | undefined;
   /** All adopted bindings. */
   readonly bindings: readonly Binding[];
   /**
@@ -693,6 +701,35 @@ function registerHttpRoute(
   }
   smart.add(trigger.method, trigger.path, binding);
   compiled.set(binding, compileHttpBinding(binding, aot));
+}
+
+/**
+ * Register one MCP tool binding: unique tool name, indexed for dispatch lookup.
+ *
+ * Only gated exposures are indexed — bare `mcp.tool(name)` bindings remain
+ * unlisted (deny-by-default) and are rejected at boot by gate posture audit.
+ *
+ * @param binding - MCP tool binding
+ * @param seenMcpTools - Tool names already registered
+ * @param mcpToolsByName - Tool name → binding index for dispatch
+ */
+function registerMcpTool(
+  binding: Binding,
+  seenMcpTools: Set<string>,
+  mcpToolsByName: Map<string, Binding>,
+): void {
+  const trigger = binding.trigger;
+  if (trigger.kind !== "mcp") return;
+  if (seenMcpTools.has(trigger.name)) {
+    throwOke("MCP_TOOL_DUPLICATE", {
+      tool: trigger.name,
+      flow: binding.flow.name || "(unnamed)",
+    });
+  }
+  seenMcpTools.add(trigger.name);
+  if (trigger.gates.length > 0) {
+    mcpToolsByName.set(trigger.name, binding);
+  }
 }
 
 /**
@@ -877,10 +914,15 @@ export function oke(options: OkeOptions): OkeApp {
   const smart = createRouter<Binding>(options.router ?? "default");
   const seenHttpRoutes = new Set<string>();
   const seenLiveExposures = new Map<string, string>();
+  const seenMcpTools = new Set<string>();
+  const mcpToolsByName = new Map<string, Binding>();
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
       registerHttpRoute(b, seenHttpRoutes, seenLiveExposures, smart, compiled, aot);
+    }
+    if (b.trigger.kind === "mcp") {
+      registerMcpTool(b, seenMcpTools, mcpToolsByName);
     }
   }
   // Defer SmartRouter selection until first match so `.plug()` can still
@@ -893,6 +935,9 @@ export function oke(options: OkeOptions): OkeApp {
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
       registerHttpRoute(b, seenHttpRoutes, seenLiveExposures, smart, compiled, aot);
+    }
+    if (b.trigger.kind === "mcp") {
+      registerMcpTool(b, seenMcpTools, mcpToolsByName);
     }
   }
 
@@ -2236,6 +2281,9 @@ export function oke(options: OkeOptions): OkeApp {
       const result = await execute(flowDef, input, trigger);
       if (result.failure) return result.failure;
       return result.output;
+    },
+    resolveMcpTool(name) {
+      return mcpToolsByName.get(name)?.flow;
     },
     compiledFor(binding) {
       return compiled.get(binding);

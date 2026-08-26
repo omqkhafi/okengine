@@ -447,7 +447,7 @@ export const mcp: {
   tool(name: string): McpToolTrigger;
 } = {
   tool(name: string): McpToolTrigger {
-    if (name.trim().length === 0) {
+    if (typeof name !== "string" || name.trim().length === 0) {
       throw new TypeError("mcp.tool(name): name is required");
     }
     return withMcpGates(name, []);

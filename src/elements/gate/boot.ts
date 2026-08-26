@@ -28,7 +28,7 @@ export class GateBootError extends Error {
   constructor(gaps: readonly GatePostureGap[]) {
     const lines = gaps.map((g) => `  - ${g.flowId} ${g.method} ${g.path}`);
     super(
-      `gate boot failed — ${gaps.length} HTTP trigger(s) missing auth posture (attach a gate or .public()):\n${lines.join("\n")}`,
+      `gate boot failed — ${gaps.length} trigger(s) missing auth posture (attach a gate or .public()):\n${lines.join("\n")}`,
     );
     this.name = "GateBootError";
     this.gaps = gaps;
@@ -40,6 +40,13 @@ export interface HttpTriggerPosture {
   readonly kind: "http";
   readonly method: string;
   readonly path: string;
+  readonly gates: readonly (string | { readonly name: string })[];
+}
+
+/** Minimal MCP tool trigger shape for posture audit. */
+export interface McpTriggerPosture {
+  readonly kind: "mcp";
+  readonly name: string;
   readonly gates: readonly (string | { readonly name: string })[];
 }
 
@@ -104,6 +111,26 @@ export function collectUnguardedHttpGaps(bindings: readonly BindingPosture[]): G
 }
 
 /**
+ * Collect MCP tool triggers with neither a gate nor `.public()`.
+ *
+ * @param bindings - Adopted / registered bindings
+ */
+export function collectUnguardedMcpGaps(bindings: readonly BindingPosture[]): GatePostureGap[] {
+  const gaps: GatePostureGap[] = [];
+  for (const b of bindings) {
+    if (b.trigger.kind !== "mcp") continue;
+    const t = b.trigger as McpTriggerPosture;
+    if (hasHttpGatePosture(t.gates)) continue;
+    gaps.push({
+      flowId: b.flow.name,
+      method: "mcp",
+      path: t.name,
+    });
+  }
+  return gaps;
+}
+
+/**
  * Whether `unguardedHttp: "allow"` may skip the audit for this boot.
  * Hard-coded: only `env === "test"`.
  *
@@ -131,6 +158,6 @@ export function assertHttpGatePosture(
   const opts: AssertHttpGatePostureOptions =
     typeof options === "string" ? { unguardedHttp: options } : options;
   if (unguardedHttpAllowActive(opts.unguardedHttp, opts.env)) return;
-  const gaps = collectUnguardedHttpGaps(bindings);
+  const gaps = [...collectUnguardedHttpGaps(bindings), ...collectUnguardedMcpGaps(bindings)];
   if (gaps.length > 0) throw new GateBootError(gaps);
 }

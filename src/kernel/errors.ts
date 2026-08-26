@@ -217,6 +217,14 @@ export const OKE_ERRORS = {
     fix: "Use a different gate or path-param filter, or drop the extra route.",
   },
   /**
+   * Two MCP tool bindings share the same exposed tool name.
+   */
+  MCP_TOOL_DUPLICATE: {
+    code: 1018,
+    cause: 'MCP tool "{tool}" is bound twice (flow "{flow}").',
+    fix: "Give each MCP tool exposure a unique tool name.",
+  },
+  /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */
