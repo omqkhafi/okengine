@@ -35,8 +35,18 @@ const FORBIDDEN_CUID = ["cu", "id2"].join("");
 /** Decoy `X-Powered-By` fixture value in the headers plugin tests. */
 const EXPRESS_ALLOW = ["src/plugins/headers.test.ts:"];
 
-/** Design-context prompt file — the only sanctioned location for peer names. */
-const OKID_PROMPT_ALLOW = ["okid.md:", "bun.lock:"];
+/**
+ * Allow-listed paths where peer-name strings are sanctioned: the okid design
+ * prompt, lockfile hashes, and the vendored Console dist bundle (Zod ships
+ * string-format validators whose registered format names collide with peer
+ * library names inside minified zod-core — vendor API identifiers, not
+ * authored comparisons).
+ */
+const OKID_PROMPT_ALLOW = [
+  "okid.md:",
+  "bun.lock:",
+  "src/console/ui-next/dist/assets/index-Dg85EWzD.js:",
+];
 
 /**
  * Run `git grep -F` and assert zero matches after ignoring allow-listed paths.

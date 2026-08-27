@@ -43,6 +43,8 @@ import { runWithLocale } from "../i18n/locale-context.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
 import { withAbortSignal } from "./abort-scope.ts";
+import { withCdcMutationId } from "../elements/store/sql-session.ts";
+import { MUTATION_ID_HEADER } from "./realtime-bind.ts";
 import { fxRetry } from "./concurrency.ts";
 import type {
   CreateFxOptions,
@@ -1427,8 +1429,24 @@ export function oke(options: OkeOptions): OkeApp {
     );
 
     return runWithLocale({ locale: resolvedLocale, defaultLocale }, () => {
-      const run = () =>
-        executeInLocale({
+      const run = async (): Promise<ExecuteResult> => {
+        // Ambient mutation id — the client's `X-Oke-Mutation-Id` header rides
+        // onto every CDC event this write produces so optimistic clients can
+        // dedupe their own writes (Realtime correctness contract).
+        const mutationId = extras?.request?.headers.get(MUTATION_ID_HEADER)?.trim();
+        if (mutationId !== undefined && mutationId.length > 0) {
+          return withCdcMutationId(mutationId, () =>
+            executeInLocale({
+              flowDef,
+              input,
+              trigger,
+              extras,
+              resolvedLocale,
+              defaultLocale,
+            }),
+          );
+        }
+        return executeInLocale({
           flowDef,
           input,
           trigger,
@@ -1436,6 +1454,7 @@ export function oke(options: OkeOptions): OkeApp {
           resolvedLocale,
           defaultLocale,
         });
+      };
       const abort = extras?.request?.signal;
       return abort ? withAbortSignal(abort, run) : run();
     });

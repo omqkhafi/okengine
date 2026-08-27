@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-08-27T07:06:40.569Z",
+  "measuredAt": "2026-08-27T11:31:57.950Z",
   "version": "0.17.2",
   "budgets": [
     {
@@ -15,7 +15,7 @@
     {
       "id": "clientGzipBytes",
       "label": "Client runtime",
-      "value": 3879,
+      "value": 4035,
       "limit": 4096,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 9.116,
+      "value": 9.601,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "httpPingGzipBytes",
       "label": "HTTP ping app (gzip, externals)",
-      "value": 49836,
-      "limit": 50833,
+      "value": 50568,
+      "limit": 51580,
       "unit": "bytes",
       "gate": "regression",
       "group": "core",
@@ -65,8 +65,8 @@
     {
       "id": "httpPingRawBytes",
       "label": "HTTP ping app (raw, externals)",
-      "value": 144800,
-      "limit": 147696,
+      "value": 147301,
+      "limit": 150248,
       "unit": "bytes",
       "gate": "regression",
       "group": "core",
@@ -75,8 +75,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 99002,
-      "limit": 100983,
+      "value": 99953,
+      "limit": 101953,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -115,8 +115,8 @@
     {
       "id": "export:./client",
       "label": "client",
-      "value": 4538,
-      "limit": 4794,
+      "value": 4685,
+      "limit": 4941,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./client-react",
       "label": "client-react",
-      "value": 10955,
-      "limit": 11211,
+      "value": 11375,
+      "limit": 11631,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -155,8 +155,8 @@
     {
       "id": "export:./compiler",
       "label": "compiler",
-      "value": 18427,
-      "limit": 18796,
+      "value": 18750,
+      "limit": 19125,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 166332,
-      "limit": 169659,
+      "value": 167189,
+      "limit": 170533,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -185,8 +185,8 @@
     {
       "id": "export:./full",
       "label": "full",
-      "value": 110051,
-      "limit": 112253,
+      "value": 110927,
+      "limit": 113146,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -205,8 +205,8 @@
     {
       "id": "export:./http",
       "label": "http",
-      "value": 50872,
-      "limit": 51890,
+      "value": 51762,
+      "limit": 52798,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -235,8 +235,8 @@
     {
       "id": "export:./kernel",
       "label": "kernel",
-      "value": 57097,
-      "limit": 58239,
+      "value": 57988,
+      "limit": 59148,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -295,8 +295,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 25110,
-      "limit": 25613,
+      "value": 25161,
+      "limit": 25665,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -525,8 +525,8 @@
     {
       "id": "export:./drivers/cdc-outbox",
       "label": "cdc-outbox",
-      "value": 2694,
-      "limit": 2950,
+      "value": 2950,
+      "limit": 3206,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -885,8 +885,8 @@
     {
       "id": "export:./drivers/pg-rls",
       "label": "pg-rls",
-      "value": 4237,
-      "limit": 4493,
+      "value": 4638,
+      "limit": 4894,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -895,8 +895,8 @@
     {
       "id": "export:./drivers/pg-rls-row-passes",
       "label": "pg-rls-row-passes",
-      "value": 1949,
-      "limit": 2205,
+      "value": 2376,
+      "limit": 2632,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

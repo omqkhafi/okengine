@@ -678,6 +678,116 @@ export const list = mounted.list;
   });
 });
 
+describe("extractManifest — live guardrails (DX Pack A)", () => {
+  test("live: true without a PK column fails loud at extract", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+export const notesTable = store.schema.table(
+  "notes",
+  { body: field.text().notNull() },
+);
+const notesR = store.resource(db, notesTable, { live: true });
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+`;
+    expect(extractFromSources({ "src/flows/notes.ts": source })).rejects.toThrow(
+      /requires a primary key/,
+    );
+  });
+
+  test("warns when the table has no updatedAt / updated_at column", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+export const notesTable = store.schema.table(
+  "notes",
+  { id: field.text().primaryKey() },
+);
+const notesR = store.resource(db, notesTable, { live: true });
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+`;
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: unknown): void => {
+      warnings.push(String(msg));
+    };
+    try {
+      await extractFromSources({ "src/flows/notes.ts": source });
+    } finally {
+      console.warn = originalWarn;
+    }
+    expect(warnings.some((w) => w.includes("updatedAt"))).toBe(true);
+    // RLS warn also fires here — declared table carries no policies.
+    expect(warnings.some((w) => w.includes("RLS policies"))).toBe(true);
+  });
+
+  test("no updatedAt warn when a timestamp variant exists; RLS warn alone fires", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+export const notesTable = store.schema.table(
+  "notes",
+  { id: field.text().primaryKey(), updated_at: field.timestamp({ mode: "string" }).notNull() },
+);
+const notesR = store.resource(db, notesTable, { live: true });
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+`;
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: unknown): void => {
+      warnings.push(String(msg));
+    };
+    try {
+      await extractFromSources({ "src/flows/notes.ts": source });
+    } finally {
+      console.warn = originalWarn;
+    }
+    expect(warnings.some((w) => w.includes("updatedAt"))).toBe(false);
+    expect(warnings.some((w) => w.includes("RLS policies"))).toBe(true);
+  });
+
+  test("silent when the table is complete: PK + updatedAt + policies", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+export const notesTable = store.schema.table(
+  "notes",
+  { id: field.text().primaryKey(), updated_at: field.timestamp({ mode: "string" }).notNull() },
+  [store.schema.policy.gate("member")],
+);
+const notesR = store.resource(db, notesTable, { live: true });
+const mounted = on(http.resource("/notes", notesR.all()).gate(member));
+
+export const list = mounted.list;
+`;
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: unknown): void => {
+      warnings.push(String(msg));
+    };
+    try {
+      await extractFromSources({ "src/flows/notes.ts": source });
+    } finally {
+      console.warn = originalWarn;
+    }
+    expect(warnings).toEqual([]);
+  });
+});
+
 describe("extractManifest — vault.config", () => {
   test("fx.vault.get(config) infers the contract name, not the binding id", async () => {
     const core = `

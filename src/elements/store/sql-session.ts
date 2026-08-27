@@ -14,6 +14,7 @@ import {
   type RlsIdentity,
 } from "../../drivers/pg-rls.ts";
 import { throwOke } from "../../kernel/errors.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { maskRows, tableFromSql } from "./classify.ts";
 import { isMissingDomainRelationError } from "./missing-relation.ts";
 import {
@@ -58,6 +59,8 @@ export interface SqlCdcSink {
     readonly op: "insert" | "update" | "delete";
     readonly before: Record<string, unknown> | null;
     readonly after: Record<string, unknown> | null;
+    /** Echoed `X-Oke-Mutation-Id` when the write rode an HTTP request. */
+    readonly mutationId?: string;
   }): void | Promise<void>;
 }
 
@@ -92,12 +95,38 @@ function notifySqlCdc(event: {
   readonly after: Record<string, unknown> | null;
 }): void {
   if (!sqlCdcSink) return;
+  const mutationId = currentCdcMutationId();
   try {
-    const result = sqlCdcSink(event);
+    const result = sqlCdcSink(mutationId !== undefined ? { ...event, mutationId } : event);
     if (result instanceof Promise) void result.catch(() => undefined);
   } catch {
     // Telemetry must never break writes.
   }
+}
+
+/**
+ * Ambient mutation id for the current async chain — read from the
+ * `X-Oke-Mutation-Id` request header by the HTTP layer and echoed onto CDC
+ * events so clients can dedupe their own writes (Realtime optimistic race
+ * contract).
+ */
+const cdcMutationStorage = new AsyncLocalStorage<{ readonly mutationId: string }>();
+
+/**
+ * Read the ambient mutation id, or `undefined` outside a stamped request.
+ */
+export function currentCdcMutationId(): string | undefined {
+  return cdcMutationStorage.getStore()?.mutationId;
+}
+
+/**
+ * Run `fn` with `mutationId` as the ambient CDC mutation id.
+ *
+ * @param mutationId - Client-supplied mutation correlation id
+ * @param fn - Flow execution whose store writes carry the id
+ */
+export async function withCdcMutationId<T>(mutationId: string, fn: () => Promise<T>): Promise<T> {
+  return cdcMutationStorage.run({ mutationId }, fn);
 }
 
 /**

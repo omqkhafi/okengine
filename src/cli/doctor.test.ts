@@ -302,3 +302,103 @@ describe("doctor file_descriptor_limit", () => {
     expect(deltaOne).toBeGreaterThanOrEqual(64);
   });
 });
+
+describe("doctor realtime checks", () => {
+  const base = {
+    secrets: [] as string[],
+    ports: [] as number[],
+    skipDbDrift: true,
+    write: () => {},
+    currentSchemaFingerprint: null,
+  };
+
+  test("cdc_outbox_backlog warn at >10k pending", async () => {
+    const { findings } = await runDoctor({
+      ...base,
+      detectRealtimeMetrics: async () => ({
+        subscribers: 10,
+        queueDepth: 0,
+        fanout: { eventsIn: 1, eventsShed: 0, checksRun: 0, checkFailures: 0 },
+        outbox: { pending: 20_000, dispatchedOverCap: 0 },
+      }),
+    });
+    const finding = findings.find((f) => f.code === "cdc_outbox_backlog");
+    expect(finding?.severity).toBe("warn");
+  });
+
+  test("cdc_outbox_backlog error at >100k pending", async () => {
+    const { code, findings } = await runDoctor({
+      ...base,
+      detectRealtimeMetrics: async () => ({
+        subscribers: 10,
+        queueDepth: 0,
+        fanout: { eventsIn: 1, eventsShed: 0, checksRun: 0, checkFailures: 0 },
+        outbox: { pending: 150_000, dispatchedOverCap: 0 },
+      }),
+    });
+    expect(code).toBe(2);
+    expect(findings.find((f) => f.code === "cdc_outbox_backlog")?.severity).toBe("error");
+  });
+
+  test("cdc_outbox_retention warns when delivered rows exceed maxCount cap", async () => {
+    const { findings } = await runDoctor({
+      ...base,
+      detectRealtimeMetrics: async () => ({
+        subscribers: 10,
+        queueDepth: 0,
+        fanout: { eventsIn: 1, eventsShed: 0, checksRun: 0, checkFailures: 0 },
+        outbox: { pending: 0, dispatchedOverCap: 500 },
+      }),
+    });
+    expect(findings.some((f) => f.code === "cdc_outbox_retention")).toBe(true);
+  });
+
+  test("live_subscriber_pressure warns above ~150 active subs", async () => {
+    const { findings } = await runDoctor({
+      ...base,
+      detectRealtimeMetrics: async () => ({
+        subscribers: 200,
+        queueDepth: 0,
+        fanout: { eventsIn: 1, eventsShed: 0, checksRun: 0, checkFailures: 0 },
+        outbox: { unavailable: "no_bridge" },
+      }),
+    });
+    expect(findings.some((f) => f.code === "live_subscriber_pressure")).toBe(true);
+  });
+
+  test("live_fanout_queue_saturated errors on near-cap depth plus shedding; no finding when healthy", async () => {
+    const saturated = await runDoctor({
+      ...base,
+      detectRealtimeMetrics: async () => ({
+        subscribers: 100,
+        queueDepth: 9_000,
+        fanout: { eventsIn: 50_000, eventsShed: 12, checksRun: 40_000, checkFailures: 2 },
+        outbox: { unavailable: "no_bridge" },
+      }),
+    });
+    expect(saturated.findings.some((f) => f.code === "live_fanout_queue_saturated")).toBe(true);
+
+    const healthy = await runDoctor({
+      ...base,
+      expectedSchemaFingerprint: "same",
+      currentSchemaFingerprint: "same",
+      detectRealtimeMetrics: async () => ({
+        subscribers: 100,
+        queueDepth: 4,
+        fanout: { eventsIn: 5_000, eventsShed: 0, checksRun: 4_800, checkFailures: 0 },
+        outbox: { unavailable: "no_bridge" },
+      }),
+    });
+    expect(healthy.findings).toHaveLength(0);
+  });
+
+  test("no realtime findings when no bridge is bound (metrics null)", async () => {
+    const { findings } = await runDoctor({
+      ...base,
+      detectRealtimeMetrics: async () => null,
+    });
+    expect(
+      findings.filter((f) => f.code.startsWith("cdc_") || f.code.startsWith("live_")),
+    ).toHaveLength(0);
+  });
+});

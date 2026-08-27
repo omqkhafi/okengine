@@ -11,9 +11,20 @@
 
 /** Wire event kinds served by a resource live route (`GET <path>/live`). */
 export type LiveQueryEvent<Row = Record<string, unknown>> =
-  | { readonly kind: "upsert"; readonly row: Row }
-  | { readonly kind: "revoked"; readonly id: string; readonly reason: "rls" | "query" }
-  | { readonly kind: "delete"; readonly id: string };
+  | {
+      readonly kind: "upsert";
+      readonly row: Row;
+      readonly seq?: number;
+      /** Echoed `X-Oke-Mutation-Id` — identifies the write that caused it. */
+      readonly mutationId?: string;
+    }
+  | {
+      readonly kind: "revoked";
+      readonly id: string;
+      readonly reason: "rls" | "query";
+      readonly seq?: number;
+    }
+  | { readonly kind: "delete"; readonly id: string; readonly seq?: number };
 
 /** Error codes surfaced on `error` in hook state. */
 export type LiveQueryError =
@@ -51,6 +62,23 @@ export function reduceLiveQueryRows<Row>(
     return next;
   }
   return rows.filter((r) => idOf(r) !== event.id);
+}
+
+/**
+ * Idempotence guard for replayed SSE events: drop anything at or below the
+ * highest sequence number already applied for this subscription (Realtime
+ * correctness contract — reconnect replay must not double-apply). Events
+ * without a `seq` always apply.
+ *
+ * @param lastAppliedSeq - Highest seq applied so far (`0` = none)
+ * @param event - Incoming classified event
+ * @returns True when the event must be ignored
+ */
+export function isReplayedEvent(
+  lastAppliedSeq: number,
+  event: { readonly kind: string; readonly seq?: number },
+): boolean {
+  return event.seq !== undefined && event.seq <= lastAppliedSeq;
 }
 
 /**

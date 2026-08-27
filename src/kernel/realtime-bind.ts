@@ -50,6 +50,7 @@ const LIVE_STREAM_BUFFER_MAX = 512;
 /** Active bridge state (singleton per process). */
 let active: {
   readonly runtime: ReturnType<typeof liveQueryRuntimeFromConn>;
+  readonly outbox: CdcOutbox;
   readonly runner?: CdcOutboxRunner;
 } | null = null;
 
@@ -84,7 +85,6 @@ export function bindRealtimeBridge(
   const outbox = new CdcOutbox(primary);
   // First tick creates the table + indexes without blocking boot.
   void outbox.ensure().catch(() => undefined);
-
   const sink: SqlCdcSink = (event) => {
     // In-process leg first — classification needs no outbox round-trip.
     runtime.onCdc(event);
@@ -106,6 +106,7 @@ export function bindRealtimeBridge(
           before: row.before,
           after: row.after,
           ...(Number.isFinite(row.seq) ? { seq: row.seq } : {}),
+          ...(row.mutationId !== undefined ? { mutationId: row.mutationId } : {}),
         });
       }
     },
@@ -113,7 +114,7 @@ export function bindRealtimeBridge(
   );
   runner.start();
 
-  active = { runtime, runner };
+  active = { runtime, outbox, runner };
   return runtime;
 }
 
@@ -274,4 +275,44 @@ export function unbindRealtimeBridge(): void {
 /** Test/doctor visibility into the bound bridge. */
 export function realtimeBridgeRuntime(): ReturnType<typeof liveQueryRuntimeFromConn> | undefined {
   return active?.runtime;
+}
+
+/**
+ * Realtime observability snapshot (metrics / doctor / Console):
+ *
+ * - `subscribers` — active live subscriptions right now
+ * - `queueDepth` — pending fan-out jobs (architecture contract gauge)
+ * - `fanout` — LiveQuery runtime counters (events in/shed, checks run/failed)
+ * - `outbox` — pending rows + delivered-over-cap gauge, plus runner counters
+ *   (`eventsDrained`, `pruneFailures`, …) when the poller leg is bound
+ *
+ * Returns `null` when no realtime bridge is bound (no Postgres-capable
+ * primary SQL driver, or app already stopped).
+ */
+export async function realtimeMetrics(): Promise<{
+  subscribers: number;
+  queueDepth: number;
+  fanout: { eventsIn: number; eventsShed: number; checksRun: number; checkFailures: number };
+  outbox:
+    | {
+        pending: number;
+        dispatchedOverCap: number;
+        runner?: { polls: number; batches: number; eventsDrained: number; pruneFailures: number };
+      }
+    | { unavailable: "no_bridge" };
+} | null> {
+  if (!active) return null;
+  const outboxStats = await active.outbox.stats().catch(() => null);
+  return {
+    subscribers: active.runtime.size,
+    queueDepth: active.runtime.queueDepth,
+    fanout: { ...active.runtime.metrics },
+    outbox:
+      outboxStats === null
+        ? { unavailable: "no_bridge" as const }
+        : {
+            ...outboxStats,
+            ...(active.runner !== undefined ? { runner: { ...active.runner.metrics } } : {}),
+          },
+  };
 }

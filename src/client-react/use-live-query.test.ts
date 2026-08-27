@@ -398,4 +398,78 @@ describe("useLiveQuery", () => {
     });
     host.remove();
   });
+
+  test("mutate sends X-Oke-Mutation-Id header per call", async () => {
+    const initialRows: Task[] = [{ id: "t1", title: "one", status: "open", updatedAt: 1 }];
+    const list = listFlowFrom(initialRows);
+    const seenMutationHeaders: (string | undefined)[] = [];
+
+    const api = createClient("http://app.test", {
+      $routes: {
+        tasks: {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+          update: { method: "POST", path: "/tasks/update" },
+        },
+        // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+      } as never,
+      fetch: async (_url, init) => {
+        if (init?.method === "GET") {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              void controller;
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          });
+        }
+        const headers = new Headers(init?.headers);
+        seenMutationHeaders.push(headers.get("x-oke-mutation-id") ?? undefined);
+        return new Response(JSON.stringify({ data: { id: "t1" }, error: null }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+
+    const host = happy.document.createElement("div");
+    happy.document.body.appendChild(host);
+    let mutateRef: ReturnType<typeof useLiveQuery<Task>>["mutate"] | undefined;
+    function Probe(): null {
+      const state = useLiveQuery<Task>({ api, listFlow: list.flow, query: undefined, live: LIVE });
+      mutateRef = state.mutate;
+      return null;
+    }
+    let root: Root | undefined;
+    await act(async () => {
+      root = createRoot(host as unknown as Element);
+      root.render(createElement(Probe));
+    });
+    await waitFor(() => mutateRef !== undefined);
+
+    const updateFlow = (
+      api as unknown as {
+        tasks: { update: Parameters<ReturnType<typeof useLiveQuery<Task>>["mutate"]>[0] };
+      }
+    ).tasks.update;
+
+    await act(async () => {
+      await mutateRef!(updateFlow, { id: "t1" }, {});
+    });
+    await act(async () => {
+      await mutateRef!(updateFlow, { id: "t1" }, {});
+    });
+    expect(seenMutationHeaders.length).toBe(2);
+    for (const h of seenMutationHeaders) {
+      expect(h).toBeDefined();
+      expect(h!.length).toBeGreaterThan(8);
+    }
+    expect(seenMutationHeaders[0]).not.toBe(seenMutationHeaders[1]);
+
+    await act(async () => {
+      root?.unmount();
+    });
+    host.remove();
+  });
 });

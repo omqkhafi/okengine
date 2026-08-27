@@ -526,7 +526,11 @@ describe("RLS parity — regression gate: TO-role + command-clause selection (pg
     const rows = await h.raw(`SELECT 1 AS ok FROM "tenant_wide" WHERE id = ? LIMIT 1`, ["1"]);
     expect(rows.length).toBe(0);
     // Replay must agree — old fn returned true here (LEAK).
-    const inline = buildInlineRowPassesSql("tenant_wide", { id: "1", tenant_id: "acme", note: "secret" }, "SELECT");
+    const inline = buildInlineRowPassesSql(
+      "tenant_wide",
+      { id: "1", tenant_id: "acme", note: "secret" },
+      "SELECT",
+    );
     const out = await h.raw(inline, []);
     expect(out[0]?.ok === true).toBe(false);
   });

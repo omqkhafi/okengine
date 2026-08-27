@@ -17,10 +17,23 @@ import { hasFlag, wantsJson } from "./args.ts";
 import { checkManifestPiiAsks } from "./doctor-pii.ts";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
 import { loadManifest, loadOkeConfig } from "./load-config.ts";
+import { OUTBOX_PRUNE_INTERVAL_MS } from "../drivers/cdc-outbox.ts";
 import { isPortInUse } from "./ports.ts";
 import { schemaFingerprint, readSchemaFingerprint } from "./schema.ts";
 
 export { isPortInUse } from "./ports.ts";
+
+/** Warn when the CDC outbox drain rate looks stalled below this backlog. */
+const OUTBOX_BACKLOG_WARN = 10_000;
+
+/** Error-severity outbox backlog — poller considered down. */
+const OUTBOX_BACKLOG_ERROR = 100_000;
+
+/** v1 documented fan-out ceiling per table (Hardening 2 / plan §Operations). */
+const LIVE_SUBSCRIBER_SOFT_CAP = 150;
+
+/** Queue-depth threshold where fan-out health findings start firing. */
+const LIVE_FANOUT_QUEUE_WARN_DEPTH = 8_000;
 
 /**
  * `label → merged EnvDriverMap` pairs, in the fixed order shown by
@@ -85,7 +98,11 @@ export interface DoctorFinding {
     | "driver"
     | "pii_ask"
     | "vault_master_key"
-    | "file_descriptor_limit";
+    | "file_descriptor_limit"
+    | "cdc_outbox_backlog"
+    | "cdc_outbox_retention"
+    | "live_subscriber_pressure"
+    | "live_fanout_queue_saturated";
   readonly severity: "error" | "warn";
   readonly message: string;
 }
@@ -148,7 +165,21 @@ export interface DoctorOptions {
     readonly estimatedNeed: number;
     readonly headroom: number;
   }>;
+  /**
+   * Inject the realtime metrics probe (tests). When unset, the real probe
+   * reads the bound realtime bridge in-process (returns `null` — no findings
+   * — when this CLI process has none, e.g. the app runs in another host).
+   */
+  readonly detectRealtimeMetrics?: () => Promise<RealtimeMetricsSnapshot | null>;
 }
+
+/** Realtime metrics shape used by the doctor checks (see {@link realtimeMetrics}). */
+export type RealtimeMetricsSnapshot = {
+  subscribers: number;
+  queueDepth: number;
+  fanout: { eventsIn: number; eventsShed: number; checksRun: number; checkFailures: number };
+  outbox: { pending: number; dispatchedOverCap: number } | { unavailable: "no_bridge" };
+};
 
 /**
  * Run doctor checks.
@@ -267,6 +298,65 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
         severity: "warn",
         message: `file descriptor soft limit ${fd.softLimit} leaves thin headroom over estimated peak need ${fd.estimatedNeed} (headroom ${fd.headroom}) — consider raising with \`ulimit -n\``,
       });
+    }
+  }
+
+  // Realtime health — CDC outbox backlog/retention + live fan-out pressure.
+  // Thresholds from the Realtime plan's operations section; all probes are
+  // injectable so tests never need a bound bridge.
+  if (options.detectRealtimeMetrics !== undefined || manifest !== undefined) {
+    const rt =
+      options.detectRealtimeMetrics !== undefined
+        ? await options.detectRealtimeMetrics()
+        : await (async () => {
+            const { realtimeMetrics } = await import("../kernel/realtime-bind.ts");
+            return realtimeMetrics() as Promise<RealtimeMetricsSnapshot | null>;
+          })();
+    if (rt !== null) {
+      const outbox = rt.outbox;
+      if (!("unavailable" in outbox)) {
+        if (outbox.pending > OUTBOX_BACKLOG_ERROR) {
+          findings.push({
+            code: "cdc_outbox_backlog",
+            severity: "error",
+            message: `CDC outbox backlog ${outbox.pending} rows exceeds ${OUTBOX_BACKLOG_ERROR} — poller stalled or consumers down; check \`oke_cdc_outbox\` and runner metrics`,
+          });
+        } else if (outbox.pending > OUTBOX_BACKLOG_WARN) {
+          findings.push({
+            code: "cdc_outbox_backlog",
+            severity: "warn",
+            message: `CDC outbox backlog ${outbox.pending} rows exceeds ${OUTBOX_BACKLOG_WARN} — watch the poller drain rate`,
+          });
+        }
+        if (outbox.dispatchedOverCap > 0) {
+          findings.push({
+            code: "cdc_outbox_retention",
+            severity: "warn",
+            message: `${outbox.dispatchedOverCap} delivered outbox rows exceed the maxCount retention cap — pruner may be stuck; verify \`${OUTBOX_PRUNE_INTERVAL_MS}ms\` prune cadence`,
+          });
+        }
+      }
+      if (rt.subscribers > LIVE_SUBSCRIBER_SOFT_CAP) {
+        findings.push({
+          code: "live_subscriber_pressure",
+          severity: "warn",
+          message: `${rt.subscribers} active live subscribers exceeds the ~150 fan-out ceiling documented for v1 — expect rising p99 latency; identity dedup lands in Round 2+`,
+        });
+      }
+      const saturated = rt.queueDepth >= LIVE_FANOUT_QUEUE_WARN_DEPTH && rt.fanout.eventsShed > 0;
+      if (saturated) {
+        findings.push({
+          code: "live_fanout_queue_saturated",
+          severity: "error",
+          message: `fan-out queue depth ${rt.queueDepth} at cap with ${rt.fanout.eventsShed} events shed — subscribers are losing events now; raise pool concurrency or shed rate first`,
+        });
+      } else if (rt.queueDepth >= LIVE_FANOUT_QUEUE_WARN_DEPTH) {
+        findings.push({
+          code: "live_fanout_queue_saturated",
+          severity: "warn",
+          message: `fan-out queue depth ${rt.queueDepth} near cap (${rt.fanout.checksRun} checks in flight historically) — headroom thin before shedding begins`,
+        });
+      }
     }
   }
 

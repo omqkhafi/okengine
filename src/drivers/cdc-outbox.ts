@@ -16,6 +16,8 @@ export interface OutboxRow {
   readonly op: "insert" | "update" | "delete";
   readonly before: Record<string, unknown> | null;
   readonly after: Record<string, unknown> | null;
+  /** Echoed `X-Oke-Mutation-Id` (client dedupe), when the write carried one. */
+  readonly mutationId?: string;
   readonly createdAt: number;
 }
 
@@ -27,6 +29,26 @@ export interface OutboxRetention {
   readonly maxCount?: number;
 }
 
+/** Default `maxAgeMs` — delivered rows pruned after 24h (Signal live-tape parity). */
+export const OUTBOX_DEFAULT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Default `maxCount` — cap total delivered rows retained (never touches pending). */
+export const OUTBOX_DEFAULT_MAX_COUNT = 50_000;
+
+/**
+ * Fill omitted retention fields with the {@link OUTBOX_DEFAULT_MAX_AGE_MS} /
+ * {@link OUTBOX_DEFAULT_MAX_COUNT} defaults so the outbox is never the one
+ * durable table without pruning discipline.
+ *
+ * @param retention - Caller caps (fields omit → default)
+ */
+export function resolveOutboxRetention(retention: OutboxRetention = {}): Required<OutboxRetention> {
+  return {
+    maxAgeMs: retention.maxAgeMs ?? OUTBOX_DEFAULT_MAX_AGE_MS,
+    maxCount: retention.maxCount ?? OUTBOX_DEFAULT_MAX_COUNT,
+  };
+}
+
 /** Postgres DDL for the outbox. */
 export const OKE_CDC_OUTBOX_DDL = `
 CREATE TABLE IF NOT EXISTS oke_cdc_outbox (
@@ -36,6 +58,7 @@ CREATE TABLE IF NOT EXISTS oke_cdc_outbox (
   op text NOT NULL,
   before_data jsonb,
   after_data jsonb,
+  mutation_id text,
   created_at bigint NOT NULL,
   claimed_at bigint,
   delivered_at bigint
@@ -58,7 +81,7 @@ export class CdcOutbox {
     exec(sql: string, params?: readonly unknown[]): Promise<{ changes: number }>;
     transaction?<T>(fn: (tx: unknown) => Promise<T>): Promise<T>;
   };
-  private readonly retention: OutboxRetention;
+  private readonly retention: Required<OutboxRetention>;
   private readonly now: () => number;
   private ensuring?: Promise<void>;
 
@@ -72,7 +95,7 @@ export class CdcOutbox {
     now: () => number = () => Date.now(),
   ) {
     this.conn = conn;
-    this.retention = retention;
+    this.retention = resolveOutboxRetention(retention);
     this.now = now;
   }
 
@@ -103,21 +126,48 @@ export class CdcOutbox {
     readonly op: "insert" | "update" | "delete";
     readonly before?: Record<string, unknown> | null;
     readonly after?: Record<string, unknown> | null;
+    readonly mutationId?: string;
   }): Promise<void> {
     await this.ensure();
     const { okid } = await import("../okid.ts");
     await this.conn.exec(
-      `INSERT INTO oke_cdc_outbox (id, table_name, op, before_data, after_data, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO oke_cdc_outbox (id, table_name, op, before_data, after_data, mutation_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id ?? okid(),
         entry.tableName,
         entry.op,
         entry.before === null || entry.before === undefined ? null : JSON.stringify(entry.before),
         entry.after === null || entry.after === undefined ? null : JSON.stringify(entry.after),
+        entry.mutationId ?? null,
         this.now(),
       ],
     );
+  }
+
+  /**
+   * Outbox backlog gauges for metrics/doctor: total pending (undelivered)
+   * rows and delivered rows retained beyond the `maxCount` cap.
+   *
+   * @returns `{ pending, dispatchedOverCap }` row counts
+   */
+  async stats(): Promise<{ pending: number; dispatchedOverCap: number }> {
+    await this.ensure();
+    const rows = await this.conn.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE delivered_at IS NULL) AS pending,
+         GREATEST(
+           COUNT(*) FILTER (WHERE delivered_at IS NOT NULL) - ?,
+           0
+         ) AS dispatched_over_cap
+       FROM oke_cdc_outbox`,
+      [this.retention.maxCount],
+    );
+    const row = rows[0];
+    return {
+      pending: row === undefined ? 0 : Number(row.pending ?? 0),
+      dispatchedOverCap: row === undefined ? 0 : Number(row.dispatched_over_cap ?? 0),
+    };
   }
 
   /**
@@ -170,7 +220,7 @@ export class CdcOutbox {
     limit: number,
   ): Promise<OutboxRow[]> {
     const rows = await tx.query(
-      `SELECT id, seq, table_name, op, before_data, after_data, created_at
+      `SELECT id, seq, table_name, op, before_data, after_data, mutation_id, created_at
          FROM oke_cdc_outbox
         WHERE delivered_at IS NULL
           AND (claimed_at IS NULL OR claimed_at <= ?)
@@ -186,6 +236,9 @@ export class CdcOutbox {
       op: r.op as OutboxRow["op"],
       before: parseImages(r.before_data),
       after: parseImages(r.after_data),
+      ...(typeof r.mutation_id === "string" && r.mutation_id.length > 0
+        ? { mutationId: r.mutation_id }
+        : {}),
       createdAt: Number(r.created_at),
     }));
     const ids = mapped.map((r) => r.id);

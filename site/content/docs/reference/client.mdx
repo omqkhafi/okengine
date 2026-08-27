@@ -322,11 +322,16 @@ sees rows that still pass their RLS stamp + list filters:
 ```typescript
 import { useLiveQuery } from "okengine/client-react";
 
-const { data, error, isLoading, isConnected, mutate } = useLiveQuery({
+const { data, error, isLoading, isConnected, isReconnecting, refetch, mutate } = useLiveQuery({
   api,
   listFlow: api.tasks.list,
   query: { status: "open" },
   live: { method: "GET", path: "/tasks/live" }, // from app.$routes
+  options: {
+    enabled: session.status === "authenticated", // default true — idle when false
+    refreshKey: tenantId, // identity change → full re-subscribe
+    onAuthRefresh: onAuthRefreshed, // auth.refresh() → new snapshot + replay
+  },
 });
 
 await mutate(
@@ -338,6 +343,20 @@ await mutate(
   },
 );
 ```
+
+Every `mutate` call generates a client UUID sent as the `X-Oke-Mutation-Id`
+header — the server echoes it onto that write's CDC events, so:
+
+- Your own late SSE echoes never double-apply (pending-set dedupe).
+- Reconnects replay-guard by event `seq` (`isReplayedEvent`).
+- Manual `refetch()` re-runs only the HTTP list read; reconnects always do a
+  full subscribe-protocol cycle (new snapshot + replay).
+
+| State            | Meaning                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `isLoading`      | Waiting for the first snapshot — no data yet                        |
+| `isConnected`    | SSE stream is open                                                  |
+| `isReconnecting` | Stream dropped after a successful load; reconnect backoff in flight |
 
 **Consequence:** optimistic patches roll back automatically when the Flow returns
 `error !== null`. Server CDC / the successful response clear the override so the next upsert is

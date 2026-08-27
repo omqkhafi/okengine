@@ -5,7 +5,7 @@
  * Optional `routes` map switches to REST (`method` + path template).
  */
 
-import type { ClientEnvelope, ClientFetch, ClientOptions } from "./types.ts";
+import type { ClientEnvelope, ClientFetch, ClientHeaders, ClientOptions } from "./types.ts";
 
 /** Internal transport handle. */
 export interface Transport {
@@ -14,8 +14,9 @@ export interface Transport {
    *
    * @param key - `unit/flow`
    * @param input - JSON body / path-param source
+   * @param headers - Per-call extra headers (merged after static ones)
    */
-  call(key: string, input: unknown): Promise<ClientEnvelope>;
+  call(key: string, input: unknown, headers?: ClientHeaders): Promise<ClientEnvelope>;
 }
 
 /**
@@ -31,14 +32,14 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
   const backoff = opts.retry?.backoff ?? 2;
 
   return {
-    async call(key, input) {
+    async call(key, input, callHeaders) {
       let refreshed = false;
       let attempt = 0;
       let delay = delay0;
 
       for (;;) {
         try {
-          const res = await once(base, key, input, opts, fetchFn);
+          const res = await once(base, key, input, opts, fetchFn, callHeaders);
           if (res.status === 401 && opts.auth?.refresh && !refreshed) {
             refreshed = true;
             await opts.auth.refresh();
@@ -88,6 +89,7 @@ async function once(
   input: unknown,
   opts: ClientOptions,
   fetchFn: ClientFetch,
+  callHeaders?: ClientHeaders,
 ): Promise<Response> {
   const route = opts.routes?.[key.replace("/", ".")];
   const { url, method, body } = route
@@ -100,6 +102,11 @@ async function once(
     for (const [k, v] of extra) headers.set(k, v);
   } else if (extra) {
     for (const [k, v] of Object.entries(extra)) headers.set(k, v);
+  }
+  if (Array.isArray(callHeaders)) {
+    for (const [k, v] of callHeaders) headers.set(k, v);
+  } else if (callHeaders) {
+    for (const [k, v] of Object.entries(callHeaders)) headers.set(k, v);
   }
   if (body !== undefined && !headers.has("content-type")) {
     headers.set("content-type", "application/json");

@@ -24,6 +24,7 @@ import {
 } from "./live.ts";
 import type {
   Client,
+  ClientHeaders,
   ClientLive,
   ClientOptions,
   ClientRouteMap,
@@ -97,11 +98,13 @@ function buildClient(url: string, opts: ClientOptions = {}): Client {
   const routes = opts.routes ?? flattenRoutes(opts.$routes);
   const live = flattenLiveRoutes(opts.$routes);
   const transport = createTransport(base, { ...opts, routes });
+  const perCallHeaders = createPerCallHeaders();
   return proxy(transport, [], {
     base,
     opts,
     liveBySignal: live.bySignal,
     liveByFlow: live.byFlow,
+    perCallHeaders,
   }) as Client;
 }
 
@@ -110,7 +113,47 @@ type ProxyCtx = {
   readonly opts: ClientOptions;
   readonly liveBySignal: LiveRouteTable;
   readonly liveByFlow: LiveByFlow;
+  /**
+   * Extra headers attached to the next transport call, then cleared — the
+   * `X-Oke-Mutation-Id` channel for optimistic dedupe (one-shot by design;
+   * a mutated header must not leak into unrelated calls).
+   */
+  perCallHeaders: PerCallHeaders;
 };
+
+/**
+ * One-shot header bag: set before a mutation call, drained after it. Safe
+ * across concurrent calls — each `run` stages its own merge and restores the
+ * previous stage on completion (LIFO), so nested/parallel runs don't clobber.
+ */
+function createPerCallHeaders(): PerCallHeaders {
+  let extra: ClientHeaders | undefined;
+  return {
+    /** Stage headers consumed by the next transport call only. */
+    run<T>(headers: ClientHeaders | undefined, fn: () => Promise<T>): Promise<T> {
+      const prev = extra;
+      extra = headers === undefined ? prev : mergeHeaders(prev, headers);
+      return fn().finally(() => {
+        extra = prev;
+      });
+    },
+    /** Transport-side read (invoked inside `invoke`). */
+    read(): ClientHeaders | undefined {
+      return extra;
+    },
+  };
+}
+
+/** Shallow-merge two header bags (later wins on key conflicts). */
+function mergeHeaders(base: ClientHeaders | undefined, over: ClientHeaders): ClientHeaders {
+  if (base === undefined) return over;
+  if (!Array.isArray(base) && !Array.isArray(over)) {
+    return { ...base, ...over };
+  }
+  const toEntries = (h: ClientHeaders): [string, string][] =>
+    Array.isArray(h) ? h : Object.entries(h);
+  return [...toEntries(base), ...toEntries(over)];
+}
 
 /**
  * Flatten `app.$routes` into the transport REST table (`unit.flow` → method/path).
@@ -162,7 +205,7 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
     }
     const unit = path[0]!;
     const flow = path.slice(1).join(".");
-    const result = await transport.call(`${unit}/${flow}`, input);
+    const result = await transport.call(`${unit}/${flow}`, input, ctx.perCallHeaders.read());
     return attachPager(result, invoke, input);
   };
   const call = (a?: unknown, b?: unknown) => {
@@ -182,7 +225,11 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
     get(_target, prop, receiver) {
       if (typeof prop === "symbol") {
         if (prop === TRANSPORT_BRAND) {
-          return { base: ctx.base, opts: ctx.opts } satisfies TransportBag;
+          return {
+            base: ctx.base,
+            opts: ctx.opts,
+            perCallHeaders: ctx.perCallHeaders,
+          } satisfies TransportBag;
         }
         return Reflect.get(_target, prop, receiver);
       }
@@ -198,10 +245,23 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
 /** Symbol brand exposing `{ base, opts }` from a client Proxy instance. */
 const TRANSPORT_BRAND = Symbol("oke.transportBag");
 
+/** One-shot header channel surface (see {@link createPerCallHeaders}). */
+export interface PerCallHeaders {
+  /**
+   * Run `fn` with `headers` merged onto its transport call (and any pager
+   * walks the result spawns). Restores prior state afterwards.
+   */
+  run<T>(headers: ClientHeaders | undefined, fn: () => Promise<T>): Promise<T>;
+  /** Transport-side read (invoked inside `invoke`). */
+  read(): ClientHeaders | undefined;
+}
+
 /** Transport surface carried by a built client — read via {@link transportOf}. */
 export interface TransportBag {
   readonly base: string;
   readonly opts: ClientOptions;
+  /** One-shot extra headers for a mutation (e.g. `X-Oke-Mutation-Id`). */
+  readonly perCallHeaders: PerCallHeaders;
 }
 
 /**

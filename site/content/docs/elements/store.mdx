@@ -216,6 +216,20 @@ const mounted = on(http.resource("/notes", notesR.all()).gate(member));
 
 **Consequence:** the live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. Clients consume it with `useLiveQuery` from `okengine/client-react`.
 
+`live: true` carries compile-time guardrails at extract, plus durable delivery
+and runtime watchtowers:
+
+- A table with **no primary key fails extract loud** — upsert/revoked/delete
+  address rows by PK.
+- Missing `updatedAt`/`updated_at` warns (no `rowVersion` LWW guard; races
+  rely on `X-Oke-Mutation-Id` echo dedupe), missing RLS policies warns
+  (every gated subscriber would see every row).
+- CDC events ride the durable `oke_cdc_outbox`; delivered rows prune on
+  retention defaults (24h / 50k) so the outbox never grows unbounded.
+- `oke doctor` findings watch the runtime side: `cdc_outbox_backlog`,
+  `cdc_outbox_retention`, `live_subscriber_pressure` (~150 subs/table in v1),
+  and `live_fanout_queue_saturated`.
+
 The list endpoint's URL is the whole query language:
 
 | Param                               | Meaning                                                   | Example                               |

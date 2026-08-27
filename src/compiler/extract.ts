@@ -1940,6 +1940,7 @@ function registerResourceMount(
   if (resource?.live === true) {
     const tableName = resource.tableName;
     if (tableName !== undefined) {
+      assertLiveGuardrails(scope, resource, tableName);
       const signalName = `oke/live/sql:${tableName}`;
       scope.signals[signalName] = {
         delivery: "live",
@@ -2674,6 +2675,52 @@ function applyTenancyDefaults(manifest: Manifest): void {
   }
   for (const secret of Object.values(manifest.vault ?? {})) {
     if (secret.perTenant === undefined) secret.perTenant = true;
+  }
+}
+
+/**
+ * DX Pack A guardrails for `live: true` resources (Realtime Hardening plan):
+ *
+ * - **error** — table has no primary key column (upsert/revoked/delete are
+ *   PK-addressed; without one classification cannot address rows).
+ * - **warn** — no `updatedAt`/`updated_at` timestamp column (`rowVersion`
+ *   LWW guard unavailable; optimistic races rely on `mutationId` only).
+ * - **warn** — table carries no RLS policies (live without RLS is
+ *   operator-bypass territory — confirm intent).
+ *
+ * Column information lives on the declared schema table; when the compiler
+ * could not resolve columns statically (bare string table), checks skip.
+ *
+ * @param scope - Project scope (declared tables + resolved drivers)
+ * @param resource - Resolved store.resource declaration
+ * @param tableName - Physical SQL table name
+ */
+function assertLiveGuardrails(
+  scope: ProjectScope,
+  resource: NonNullable<ReturnType<ProjectScope["resources"]["get"]>>,
+  tableName: string,
+): void {
+  const declared = scope.schemaTables.get(tableName);
+  if (!declared) return;
+  const columns = Object.values(declared.columns);
+  if (columns.length > 0 && !columns.some((c) => c.primaryKey === true)) {
+    throw new Error(
+      `extract: live: true on table "${tableName}" requires a primary key column (upsert/revoked/delete address rows by PK)`,
+    );
+  }
+  const hasUpdatedAt = columns.some((c) => c.sqlName === "updated_at" || c.sqlName === "updatedAt");
+  if (columns.length > 0 && !hasUpdatedAt) {
+    console.warn(
+      `[oke extract] warn: live: true on "${tableName}" has no updatedAt/updated_at column — rowVersion LWW guard unavailable; optimistic races rely on mutationId`,
+    );
+  }
+  if (
+    (declared.rls !== true || Object.keys(declared.policies ?? {}).length === 0) &&
+    resource.storeRef.startsWith("sql:")
+  ) {
+    console.warn(
+      `[oke extract] warn: live: true on "${tableName}" without RLS policies — every gated subscriber sees every row; confirm this is intended`,
+    );
   }
 }
 

@@ -23,9 +23,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { transportOf } from "../client/create.ts";
 import type { ClientCall, ClientResult } from "../client/types.ts";
+import { MUTATION_ID_HEADER } from "../kernel/realtime-bind.ts";
 import {
   applyOptimisticPatch,
   clearOptimisticPatch,
+  isReplayedEvent,
   isStaleUpsert,
   reduceLiveQueryRows,
   type LiveQueryError,
@@ -54,6 +56,18 @@ export interface UseLiveQueryOptions<Row> {
    * Changing it resets everything and refetches.
    */
   readonly refreshKey?: string | number;
+  /**
+   * Subscribe this hook to auth identity changes: when the client's
+   * `auth.refresh()` succeeds, reconnect via the full subscribe protocol
+   * (new snapshot + replay) so RLS-scoped rows reflect the new identity.
+   */
+  readonly onAuthRefresh?: (cb: () => void) => () => void;
+  /**
+   * When `false`, no SSE connection and no list fetch — the hook stays idle
+   * (`data` remains `null`). Re-subscribes when it flips back to `true`.
+   * Default `true`.
+   */
+  readonly enabled?: boolean;
 }
 
 /**
@@ -68,6 +82,17 @@ export interface UseLiveQueryState<Row> {
   readonly error: LiveQueryError | null;
   readonly isLoading: boolean;
   readonly isConnected: boolean;
+  /**
+   * A reconnect attempt is in flight (stream dropped, backoff or re-open
+   * pending). Distinct from {@link isLoading} — data stays rendered while
+   * reconnecting; it is only `true` after the first successful load.
+   */
+  readonly isReconnecting: boolean;
+  /**
+   * Manual HTTP list refresh. Does not replace the subscribe protocol —
+   * reconnects always re-run the full snapshot + replay cycle.
+   */
+  refetch: () => Promise<void>;
   /**
    * Optimistic mutation wrapping an existing Flow call.
    *
@@ -99,7 +124,7 @@ export interface UseLiveQueryState<Row> {
  * @param args.listFlow - The resource's list call (`api.tasks.list`)
  * @param args.query - Same input as the list Flow (filters)
  * @param args.live - SSE route from `$routes`
- * @param args.options - PK/version extractors, refresh key
+ * @param args.options - PK/version extractors, refresh key, `enabled`
  */
 export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args: {
   readonly api: object;
@@ -110,6 +135,7 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
 }): UseLiveQueryState<Row> {
   const { api, listFlow, query, live, options } = args;
   const opts = options ?? {};
+  const enabled = opts.enabled ?? true;
   const defaultIdOf = useCallback((row: Row) => String((row as Record<string, unknown>).id), []);
   const idOf = opts.idOf ?? defaultIdOf;
 
@@ -120,6 +146,7 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
   const [error, setError] = useState<LiveQueryError | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [isConnected, setConnected] = useState(false);
+  const [isReconnecting, setReconnecting] = useState(false);
 
   // Refs mirror state so streaming/mutate callbacks read latest without
   // resubscribing.
@@ -130,6 +157,25 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
   const overridesRef = useRef<ReadonlyMap<string, Partial<Row>>>(new Map());
   const [overridesVersion, setOverridesVersion] = useState(0);
   const bumpOverrides = useCallback(() => setOverridesVersion((v) => v + 1), []);
+  // Highest applied event seq (0 = none) — reconnect replays skip at/below.
+  const lastSeqRef = useRef(0);
+  // mutationId → settle status for in-flight/just-settled mutations. Upserts
+  // echoing a pending-or-failed id are the client's own late CDC echoes.
+  const pendingMutationsRef = useRef<Map<string, "ok" | "error">>(new Map());
+
+  // Identity refresh (Realtime plan): when the client's `auth.refresh()`
+  // succeeds, re-run the full subscribe protocol (new snapshot + replay) so
+  // RLS-scoped rows reflect the new identity. `onAuthRefresh` registers a
+  // listener; each fire bumps `refreshBump`, re-triggering the main effect.
+  const [authVersion, setAuthVersion] = useState(0);
+  const [refreshBump, setRefreshBump] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    return opts.onAuthRefresh?.(() => setAuthVersion((v) => v + 1));
+  }, [enabled, opts.onAuthRefresh]);
+  useEffect(() => {
+    if (authVersion > 0) setRefreshBump((v) => v + 1);
+  }, [authVersion]);
 
   const merged = useMemo(
     () => project(data, overridesRef.current),
@@ -140,6 +186,18 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
   );
 
   useEffect(() => {
+    if (!enabled) {
+      // Idle: no SSE, no list fetch; state resets for a clean re-subscribe.
+      setError(null);
+      setLoading(true);
+      setConnected(false);
+      setReconnecting(false);
+      dataRef.current = null;
+      setData(null);
+      overridesRef.current = new Map();
+      lastSeqRef.current = 0;
+      return;
+    }
     const bag = transportOf(api);
     if (!bag) throw new Error("useLiveQuery requires a client from createClient");
     let stopped = false;
@@ -150,12 +208,25 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
     setError(null);
     setLoading(true);
     setConnected(false);
+    setReconnecting(false);
     dataRef.current = null;
     setData(null);
     overridesRef.current = new Map();
+    lastSeqRef.current = 0;
 
     const applyEvent = (event: LiveQueryEvent<Row>): void => {
       if (!loaded || stopped) return;
+      if (isReplayedEvent(lastSeqRef.current, event)) return;
+      if (event.seq !== undefined && event.seq > lastSeqRef.current) {
+        lastSeqRef.current = event.seq;
+      }
+      if (event.kind === "upsert" && event.mutationId !== undefined) {
+        // Optimistic race rule (Realtime plan): an upsert echoing this
+        // client's own mutationId is skipped until the response settles —
+        // and dropped entirely when the write rolled back or failed.
+        const status = pendingMutationsRef.current.get(event.mutationId);
+        if (status === "ok" || status === "error") return;
+      }
       if (event.kind !== "upsert") {
         const cleared = clearOptimisticPatch(overridesRef.current, [event.id]);
         if (cleared !== overridesRef.current) {
@@ -205,11 +276,14 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
       query,
       {
         onOpen: () => {
-          if (!stopped) setConnected(true);
+          if (stopped) return;
+          setConnected(true);
+          setReconnecting(false);
         },
         onError: () => {
           if (stopped) return;
           setConnected(false);
+          if (loaded) setReconnecting(true);
           setError({ kind: "connection", error: new Error("live connection lost") });
         },
         onEvent: (rawEvent) => {
@@ -226,7 +300,7 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
     );
 
     // Authoritative initial read — starts after the stream opens.
-    void (async () => {
+    const loadOnce = async (): Promise<void> => {
       try {
         const result =
           queryKey === "null"
@@ -257,13 +331,23 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
           setLoading(false);
         }
       }
-    })();
+    };
+    void loadOnce();
+    refetchRef.current = loadOnce;
 
     return () => {
       stopped = true;
       stopStream();
+      refetchRef.current = undefined;
     };
-  }, [live.method, live.path, queryKey, refreshKey, bumpOverrides]);
+  }, [enabled, live.method, live.path, queryKey, refreshKey, refreshBump, bumpOverrides]);
+
+  // Manual refetch — stable identity; calls the latest list loader. Does not
+  // replace the subscribe protocol; reconnects re-run the full cycle.
+  const refetchRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const refetch = useCallback(async (): Promise<void> => {
+    await refetchRef.current?.();
+  }, []);
 
   const mutate = useCallback(
     async <X, Y, M extends Record<string, unknown>>(
@@ -297,22 +381,39 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
           bumpOverrides();
         }
       }
+      // Required mutationId (Realtime correctness contract): a client UUID
+      // rides onto this call so CDC upserts echo it back and rolled-back
+      // writes can drop their own late events.
+      const mutationId = newMutationId();
+      const bag = transportOf(api);
       let result: ClientResult<Y, M>;
       try {
-        result =
+        const send = (): Promise<ClientResult<Y, M>> =>
           input === undefined
-            ? await (flow as unknown as () => Promise<ClientResult<Y, M>>)()
-            : await (flow as unknown as (i: X) => Promise<ClientResult<Y, M>>)(input);
+            ? (flow as unknown as () => Promise<ClientResult<Y, M>>)()
+            : (flow as unknown as (i: X) => Promise<ClientResult<Y, M>>)(input);
+        result =
+          bag !== undefined
+            ? await bag.perCallHeaders.run({ [MUTATION_ID_HEADER]: mutationId }, send)
+            : await send();
       } catch (err) {
+        pendingMutationsRef.current.set(mutationId, "error");
         rollback(patchedIds, snapshot, dataRef, setData, overridesRef, bumpOverrides);
         throw err;
       }
       if (result.error !== null) {
+        pendingMutationsRef.current.set(mutationId, "error");
         rollback(patchedIds, snapshot, dataRef, setData, overridesRef, bumpOverrides);
         return result;
       }
-      // Success — clear overrides where a PK round-trips so real CDC upserts
-      // replace the local image without re-projecting patches.
+      // Success — events echoing this mutationId are reconciles, not foreign
+      // writes; drop them for a grace window instead of double-applying.
+      pendingMutationsRef.current.set(mutationId, "ok");
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(mutationId);
+      }, PENDING_MUTATION_TTL_MS);
+      // Clear overrides where a PK round-trips so real CDC upserts replace
+      // the local image without re-projecting patches.
       if (result.data !== null) {
         const clearTargets = confirmClearTargets(result.data, input, mopts);
         if (clearTargets.length > 0) {
@@ -325,7 +426,7 @@ export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args
     [bumpOverrides],
   );
 
-  return { data: merged, error, isLoading, isConnected, mutate };
+  return { data: merged, error, isLoading, isConnected, isReconnecting, refetch, mutate };
 }
 
 type ClientListResult<Row> = ClientResult<Row[], Record<string, never>>;
@@ -411,3 +512,19 @@ function diffRows<Row>(before: Row, after: Row): Partial<Row> {
   }
   return out as Partial<Row>;
 }
+
+/** Grace window a settled mutationId stays in the dedupe set (ms). */
+const PENDING_MUTATION_TTL_MS = 10_000;
+
+/**
+ * Client-generated UUID for the `X-Oke-Mutation-Id` header. Prefers
+ * `crypto.randomUUID`; falls back to a timestamp+counter composite where
+ * `crypto` is unavailable (old test environments).
+ */
+function newMutationId(): string {
+  if (globalThis.crypto?.randomUUID !== undefined) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `mut-${Date.now()}-${Math.random().toString(36).slice(2)}-${mutationCounter++}`;
+}
+let mutationCounter = 0;

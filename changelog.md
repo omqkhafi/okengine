@@ -30,6 +30,26 @@ needed). Large groups add `####` area headings so the list stays scannable.
   policies.
 - G16 live-query fan-out bench (`src/bench/g16-live-query-fanout.bench.ts`).
 
+- CDC outbox retention defaults (24h max-age / 50k-row count cap, configurable
+  via `retention`) — the durable event table now prunes itself like every
+  other Signal/Journal surface.
+- `X-Oke-Mutation-Id` end-to-end: mutation requests carry a client UUID
+  header; writes echo it onto their CDC events (in-process and
+  outbox-round-tripped) so `useLiveQuery` dedupes its own late echoes — the
+  realtime optimistic-race contract.
+- `useLiveQuery` gains `enabled: false` idle mode, manual `refetch()`,
+  `isReconnecting` (distinct from first-load `isLoading`), reconnect
+  seq-guard replay dedup (`isReplayedEvent`), and identity refresh via
+  `onAuthRefresh` (full subscribe-protocol re-run on auth change).
+- Compiler guardrails for `store.resource({ live: true })` — missing primary
+  key fails extract loud; missing `updatedAt`/`updated_at` column and
+  missing RLS policies warn with remediation intent.
+- Realtime operations surface: `realtimeMetrics()` snapshot (subscribers,
+  fan-out queue depth, shed/check counters, outbox backlog gauges) plus four
+  new `oke doctor` findings — `cdc_outbox_backlog` (warn >10k / error >100k),
+  `cdc_outbox_retention`, `live_subscriber_pressure` (>150 subs), and
+  `live_fanout_queue_saturated`.
+
 - `field.*` widens from `text | integer` to the full Drizzle Postgres column
   surface — `varchar` / `char` (with `length` + enum literals), `boolean`,
   `smallint`, `bigint`, the serial family, `numeric` / `decimal`
