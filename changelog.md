@@ -12,6 +12,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.18.3 — 2026-08-28
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Manual live-query HTTP e2e types use a minimal SSE reader shape so
+  `tsc` no longer fails on missing `ReadableStreamReadResult` / `readMany`.
+
 ## v0.18.2 — 2026-08-28
 
 ### 🐛 Fixed

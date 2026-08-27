@@ -36,19 +36,22 @@ const activity = store.schema.table("activity", {
   label: field.text().notNull(),
 });
 
+/** Minimal stream reader — avoids DOM `ReadableStreamReadResult` / `readMany` lib skew. */
+type SseByteReader = {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  cancel(): Promise<void>;
+};
+
 /**
  * Drain SSE until a classified upsert frame appears, without dropping a
  * late chunk via Promise.race (a timed-out `read()` must stay the pending
  * one across loop iterations).
  */
-async function readUntilUpsert(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  timeoutMs: number,
-): Promise<string> {
+async function readUntilUpsert(reader: SseByteReader, timeoutMs: number): Promise<string> {
   const dec = new TextDecoder();
   let body = "";
   const deadline = Date.now() + timeoutMs;
-  let pending: Promise<ReadableStreamReadResult<Uint8Array>> | undefined;
+  let pending: Promise<{ done: boolean; value?: Uint8Array }> | undefined;
   while (Date.now() < deadline && !body.includes('"kind":"upsert"')) {
     pending ??= reader.read();
     const remaining = Math.max(1, deadline - Date.now());
@@ -61,7 +64,7 @@ async function readUntilUpsert(
     if (step.kind === "timeout") continue;
     pending = undefined;
     if (step.r.done) break;
-    body += dec.decode(step.r.value, { stream: true });
+    if (step.r.value) body += dec.decode(step.r.value, { stream: true });
   }
   return body;
 }

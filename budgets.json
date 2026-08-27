@@ -1,6 +1,6 @@
 {
   "measuredAt": "2026-08-27T20:27:55.233Z",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
