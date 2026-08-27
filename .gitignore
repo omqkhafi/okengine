@@ -13,7 +13,9 @@ node_modules
 !/docs/guides/**
 !site/content/docs/
 !site/content/docs/**
-!.cursor/**
+# Cursor plan files carry macOS `com.apple.provenance` and break Bun's
+# hardlink of `file:../..` (okengine@root). Keep them out of the tree.
+.cursor/plans/
 
 # output
 out

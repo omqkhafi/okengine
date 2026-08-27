@@ -1,4 +1,4 @@
-import { on, flow, http } from "okengine";
+import { on, flow, http } from "okengine/http";
 import { z } from "zod";
 
 /** Liveness for probes and `bun test`. */

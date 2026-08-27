@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare": "bun scripts/link-okengine.ts",
     "typecheck": "tsc --noEmit",
     "test": "oke test",
     "dev": "oke dev",
@@ -12,7 +13,6 @@
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-rc.5-169397b",
-    "okengine": "file:../..",
     "zod": "^4.4.3"
   },
   "devDependencies": {

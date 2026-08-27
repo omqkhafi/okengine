@@ -134,7 +134,8 @@
     "ci": "bun scripts/ci.ts",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run scripts/publish.ts",
-    "g": "gflows"
+    "g": "gflows",
+    "postinstall": "bun run --cwd examples/keel prepare"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",

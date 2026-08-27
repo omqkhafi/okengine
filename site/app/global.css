@@ -383,6 +383,10 @@ html > body[data-scroll-locked] {
  * table of contents clear of the pinned topbar, and `--fd-docs-height` stops the
  * grid's viewport-height floor from adding the topbar's height to the page.
  * Same technique as better-auth's `.docs-layout` rule (see site/NOTICE).
+ *
+ * Layout width is the full band after the custom sidebar (no 1200px cap) so the
+ * main column owns the space between sidebar and TOC. At xl, collapse Fumadocs'
+ * outer gutters and center `#nd-page` in that flexible main cell.
  */
 .docs-layout {
   --fd-layout-width: 100vw;
@@ -393,8 +397,25 @@ html > body[data-scroll-locked] {
 
 @media (min-width: 64rem) {
   .docs-layout {
-    --fd-layout-width: min(calc(100vw - var(--landing-left-pane-width)), 1200px);
+    --fd-layout-width: calc(100vw - var(--landing-left-pane-width));
     padding-inline-start: var(--landing-left-pane-width);
+  }
+}
+
+@media (min-width: 80rem) {
+  /* Fumadocs sets grid-template inline; !important wins so main is flexible. */
+  .docs-layout {
+    grid-template:
+      "sidebar sidebar header toc toc"
+      "sidebar sidebar toc-popover toc toc"
+      "sidebar sidebar main toc toc" 1fr /
+      0px 0px minmax(0, 1fr) var(--fd-toc-width) 0px !important;
+  }
+
+  .docs-layout #nd-page {
+    justify-self: center;
+    width: 100%;
+    max-width: 900px;
   }
 }
 

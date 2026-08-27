@@ -1,4 +1,4 @@
-import { on, flow } from "okengine";
+import { on, flow } from "okengine/http";
 
 import { noteCreatedMail } from "@/core";
 import { noteCreated } from "./signals";

@@ -1,4 +1,4 @@
-import { on, flow, http } from "okengine";
+import { on, flow, http } from "okengine/http";
 import { z } from "zod";
 
 /** First-run welcome — visit :6530/ after `oke dev` (browser code block; curl stays JSON). */

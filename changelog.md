@@ -57,6 +57,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
   new `oke doctor` findings — `cdc_outbox_backlog` (warn >10k / error >100k),
   `cdc_outbox_retention`, `live_subscriber_pressure` (>150 subs), and
   `live_fanout_queue_saturated`.
+- Project-wide live-by-default: `oke({ store: { live: true } })` flips the
+  default posture for NEW `store.schema.table()` declarations to live — the
+  automatic CDC + RLS-per-event stream `store.resource({ live: true })`
+  already provides — unless a table opts out with `store.schema.live(false)`
+  (or `store.resource(…, { live: false })`). Declaration ergonomics only;
+  the runtime/fan-out cost model is identical to explicit `live: true`
+  (per-subscriber stamped RLS checks, documented in store docs). Flag
+  defaults `false` — existing explicit-only behavior unchanged, zero
+  cost when off. Same DX Pack A guardrails fire on the default-flip path.
 
 - `field.*` widens from `text | integer` to the full Drizzle Postgres column
   surface — `varchar` / `char` (with `length` + enum literals), `boolean`,
@@ -133,7 +142,6 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Store docs promote Access policies (owner / tenant / scope) and Live
   queries (`live: true` and `.live(table)`) to dedicated H3s under SQL.
 
-
 ### 💥 Breaking Changes
 
 #### Runtime
@@ -179,6 +187,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- `bun install` no longer fails with `failed to link package: okengine@ (link)`
+  — Keel links the monorepo root via `prepare` symlink instead of
+  `"okengine": "file:../.."`, which made Bun hardlink the whole tree and
+  choke on Cursor plan files under `.cursor/plans` (`com.apple.provenance`).
 - `bun run verify` — same check jobs as `.github/workflows/ci.yml`
   (`verify:lint`, `verify:typecheck`, `verify:test`, `verify:gate`,
   `verify:site`). `bun run ci` still adds budgets and the Keel example.

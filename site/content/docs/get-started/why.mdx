@@ -1,116 +1,140 @@
 ---
 title: Why OKE
-description: The six seams every TypeScript backend maintains by hand — and what OKE derives from one Manifest instead.
+description: From forty tools to one species — the Manifest, the `fx` rule, and the eight closed elements.
 source: docs/spec/unified-theory.md
 icon: Compass
 ---
 
-Every TypeScript backend works on day one. The bill arrives later: the cache
-that serves last month's schema, the secret that only exists on your laptop,
-the dashboard that has never heard of your new Flow.
+## From forty tools to one species
 
-None of these are router problems. They are **seams** — copies of your code's
-knowledge, kept in places the compiler cannot check, updated by memory.
+A booking API, a nightly cleanup job, a receipt email, a row-change hook — in most stacks these are **four frameworks**. In OKE they are **one species** with one shape. Learn the shape once; only the trigger changes.
 
-<Callout title="The one rule">
-  **All world access goes through `fx`.** What a Flow reads, writes, emits, and reveals is recorded
-  — so the seams below are derived from one Manifest, not re-typed per project.
-</Callout>
+> **The one rule**
+> Every backend behavior is a **Flow**: `on(Trigger) → Effects`. There are no separate species called endpoints, handlers, consumers, jobs, or workflows.
 
-## The six seams
+## The pain we solve
 
-### The cache that lies
+Every TypeScript backend works on day one. The bill arrives later. None of these are router problems — they are **gaps** between what your code knows and what your tooling knows.
 
-You add a column to `orders` and update three writers. The hand-bumped cache
-key in `checkout` is not one of them. A customer finds it a week later.
+### Cache that lies
 
-**OKE derives:** reads and writes are recorded through `fx`, so invalidation
-follows the Flow — there is no separate key to remember.
+You add a column to `orders` and update three writers. The cache key in `checkout` is not one of them. A customer finds it a week later.
 
-### The secret that fails in prod
+OKE derives: reads and writes are recorded through `fx`, so cache invalidation follows the Flow — there is no separate key to remember.
 
-`STRIPE_KEY` lives in your laptop's `.env`, a README, and a teammate's shell
-history. The deploy boots fine — the first charge request dies at 2am.
+### Secret that fails at 2am
 
-**OKE derives:** [Vault](/docs/elements/vault) contracts declare the need in
-code; boot resolves every contract and fails loud with every gap listed —
-never halfway.
+`STRIPE_KEY` lives in your laptop's `.env`, a README, and a teammate's shell history. The deploy boots fine — the first charge request dies at 2am.
+
+OKE derives: [Vault](/docs/elements/vault) contracts declare the need in code; boot resolves every contract and **fails loud** with every gap listed — never halfway.
 
 ### The glue you rewrite
 
-CORS rules, security headers, CSRF tokens, compression — copied from the last
-repo, tweaked, and already drifting from whatever that repo does today.
+CORS rules, security headers, CSRF tokens, compression — copied from the last repo, tweaked, and already drifting from whatever that repo does today.
 
-**OKE derives:** the official `okengine/plugins` set ships this glue once —
-shared lifecycle, optional live DB config, nothing to re-copy.
+OKE derives: the official `okengine/plugins` set ships this glue once — shared lifecycle, optional live DB config, nothing to re-copy.
 
 ### The dashboard that doesn't know you
 
-Your observability stack learned your routes from sampled traffic. The Flow
-you deployed an hour ago is invisible until someone wires it by hand.
+Your observability stack learned your routes from sampled traffic. The Flow you deployed an hour ago is invisible until someone wires it by hand.
 
-**OKE derives:** its operator interface reads the Manifest —
-flows, effects, traces, architecture — current on every save, in dev and prod
-(`:6533`).
+OKE derives: its operator interface reads the Manifest — flows, effects, traces, architecture — current on every save, in dev and prod (`:6533`).
 
-### The permission check in the wrong place
+### Permission check in the wrong place
 
-`if (!user.isAdmin)` sits in handler forty-one of sixty. Which Flows touch
-`payments`? grep answers slowly; review answers never.
+`if (!user.isAdmin)` sits in handler forty-one of sixty. Which Flows touch `payments`? grep answers slowly; review answers never.
 
-**OKE derives:** declared effects produce a least-privilege matrix — widening
-access appears in Manifest Diff, not in a diff nobody reads.
+OKE derives: declared effects produce a **least-privilege matrix** — widening access appears in Manifest Diff, not in a diff nobody reads.
 
 ### Local works, prod doesn't
 
-Local runs one vendor client, CI another, prod a third — three glue stories
-for the same database. "Works on my machine" is a driver mismatch.
+Local runs one vendor client, CI another, prod a third — three glue stories for the same database.
 
-**OKE derives:** drivers are named after protocols (`postgres`, `redis`,
-`s3`), the vendor lives in `images`, and `oke dev` runs the real
-stack locally.
+OKE derives: drivers are named after protocols (`postgres`, `redis`, `s3`), the vendor lives in `images`, and `oke dev` runs the real stack locally.
 
-## The tax is drift
+---
 
-Every seam above is the same shape: a hand-maintained copy of knowledge the
-code already has. Watch one change propagate both ways.
+Every gap above is the same shape: knowledge the code already has, duplicated somewhere the compiler cannot check. **The tax is drift.** One change costs fifteen seams to update by hand; in OKE it always costs one.
 
-<DriftBoard />
+## One Manifest feeds every surface
 
-On the left, versions scatter and stay scattered. On the right, one Manifest
-feeds five surfaces — they cannot disagree, because none of them is a copy.
+At build time OKE extracts a **Manifest** — a machine-readable description of your system from TypeScript source. You do not maintain a second source of truth; the Manifest is the _single artifact_ from which everything downstream is derived:
 
-## The answer's shape
+| Surface                           | Port               | You maintain?                 |
+| --------------------------------- | ------------------ | ----------------------------- |
+| Typed client (`okengine/client`)  | your app code      | No — derived from `Manifest`  |
+| Console panels, traces, explorers | `:6533`            | No — reads the Manifest       |
+| MCP for agents                    | `:6535`            | No — reads the Manifest       |
+| Architecture diagram              | Console            | No — it _is_ the effect graph |
+| Capability matrix + cache keys    | compiler / runtime | No — inferred from `fx`       |
 
-Forty infrastructure concerns collapse into eight elements — each kept only
-because it has irreducible physics. One change costs up to fifteen seams in
-the zoo; here it always costs two.
+Because every surface reads the same Manifest, they **cannot disagree** — there is only one source of truth.
 
-<CollapseBoard />
+## The `fx` rule — one door to the world
 
-New infrastructure becomes a **driver** for an existing element, never a
-ninth element — the set of eight is closed.
+**All world access goes through `fx`.** A Flow that imports `node:fs`, calls `fetch` directly, or uses `Date.now()` is a defect. Effects are **inferred from what a Flow touches through `fx`**, and that inference powers the Manifest, the Console, caching, and durability.
 
-## Traditional vs OKE
+<Callout title="What `fx` records">
+  Every read, write, emit, send, ask, secret, and call is captured — so the Manifest knows exactly
+  which flows touch `orders` or send PII to a model, without you declaring it.
+</Callout>
 
-| Seam               | Maintained by hand                                        | Derived by OKE                                                          |
-| ------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Behavior model     | Endpoints, jobs, consumers, workflows as separate species | One species — Flow: `on(Trigger) → Effects`                             |
-| Cache invalidation | Hand-written keys; drift from writers                     | Derived from effects recorded through `fx`                              |
-| HTTP glue          | Middleware copied per repo                                | Official plugins — `headers`, `cors`, `csrf`, compression, IP allowlist |
-| Secrets / config   | Env sprawl; fails on first request                        | Vault contracts; `VaultBootError` at boot                               |
-| Observability      | Bolted on; separate source of truth                       | Console from the Manifest, dev and prod (`:6533`)                       |
-| Permissions        | Ad-hoc checks scattered in handlers                       | Least-privilege matrix from declared effects                            |
-| Local vs prod      | Vendor clients; one-off compose                           | Protocol drivers; vendor in `images`; `oke dev`                         |
-| Client / agents    | Separate codegen or hand-kept schemas                     | Typed client and MCP (`:6535`) from the same Manifest                   |
+| Inferred from `fx`      | What it gives you                    |
+| ----------------------- | ------------------------------------ |
+| Cache invalidation keys | Automatic — follows the Flow         |
+| Live queries            | Built-in subscription model          |
+| Least-privilege tokens  | Capability matrix from effects       |
+| Deterministic tests     | Time, clock, and randomness injected |
+| Manifest Diff           | Exact change surface on every save   |
+
+## Eight elements — a closed set
+
+Forty infrastructure concerns collapse into eight elements — each kept only because it has **irreducible physics**. New infrastructure becomes a **driver** for an existing element, never a ninth.
+
+| Element     | Essence                       | Replaces the zoo                                          |
+| ----------- | ----------------------------- | --------------------------------------------------------- |
+| **Flow**    | Behavior                      | endpoint · handler · consumer · job · workflow · webhook  |
+| **Signal**  | Data in motion                | queue · pub/sub · stream · websocket · SSE · event bus    |
+| **Store**   | Data at rest                  | database · cache · KV · file storage · search index       |
+| **Clock**   | Time                          | cron · delay · timeout · durable sleep · TTL              |
+| **Gate**    | Permission to act             | auth · session · ABAC · rate limit · quota · feature flag |
+| **Vault**   | Protected knowledge           | secrets · config · environment                            |
+| **Channel** | Reaching humans               | email · SMS · WhatsApp · push                             |
+| **AI**      | Reaching machine intelligence | model calls · prompts · embeddings · agents · RAG         |
+
+Drivers are named after **protocols** (`postgres`, `redis`, `s3`) — never vendors. The vendor lives in `images`, and `oke dev` runs the real stack locally.
+
+## The shape of a Flow
+
+One pipeline. Only the trigger changes between an endpoint, a job, a consumer, and a row hook:
+
+```ts
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const health = on(
+  http.get().public(),
+  flow({
+    out: z.object({ ok: z.literal(true) }),
+    do: () => ({ ok: true as const }),
+  }),
+);
+```
+
+| Piece         | Role                                                           |
+| ------------- | -------------------------------------------------------------- |
+| **Trigger**   | How work starts — `http`, a signal, `every`, a row change      |
+| **Contracts** | `in`, `out`, typed `errors` — validated before and after `do`  |
+| **`do`**      | The body — every read, write, emit, and call goes through `fx` |
+| **Effects**   | Inferred from those `fx` calls — not hand-annotated            |
+
+Consequence: **one documentation path, one trace shape, one Flow model, one thing for an AI agent to learn.**
 
 ## Ambition, stated plainly
 
-|                 | Statement                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------ |
-| **Ambition**    | The default, most capable TypeScript backend — Bun-first, Web-Standards portable, contract-first |
-| **Grounded in** | Eight elements, effect inference through `fx`, Gate and Vault, the official plugin set           |
-| **Maturity**    | **pre-1.0** — published and usable; not independently battle-tested at scale yet                 |
+> **Ambition**: The default, most capable TypeScript backend — Bun-first, Web-Standards portable, contract-first  
+> **Grounded in**: Eight elements, effect inference through `fx`, Gate and Vault, the official plugin set  
+> **Maturity**: **pre-1.0** — published and usable; not independently battle-tested at scale yet
 
 ## Learn more
 

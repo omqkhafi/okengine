@@ -1,4 +1,4 @@
-import { on, flow, http } from "okengine";
+import { on, flow, http } from "okengine/http";
 
 import { db, notesMutate, webhookSecret } from "@/core";
 import { notes } from "@/db/schema.decl";

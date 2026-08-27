@@ -1,4 +1,4 @@
-import { on, flow, http } from "okengine";
+import { on, flow, http } from "okengine/http";
 import { isNull } from "drizzle-orm";
 
 import { db } from "@/core";

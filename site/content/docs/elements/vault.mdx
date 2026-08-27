@@ -242,9 +242,9 @@ Backup stays on the CLI (`oke vault backup` / `restore`). The Console never
 accepts a master key in the HTTP body — unseal via `OKE_VAULT_MASTER_KEY`.
 
 <Callout title="Builtin concurrency (rotate / audit / backup)">
-  `rotate-master` holds a lease (`FOR UPDATE` + lease TTL) so exactly one batch runs at a time; a busy
-  audit append briefly waits rather than being misread as "lease held". Audit appends serialize under a
-  transactional write lock; backups use temp → fsync → rename with end marker + checksum.
+  `rotate-master` holds a lease (`FOR UPDATE` + lease TTL) so exactly one batch runs at a time; a
+  busy audit append briefly waits rather than being misread as "lease held". Audit appends serialize
+  under a transactional write lock; backups use temp → fsync → rename with end marker + checksum.
 </Callout>
 
 <Callout title="Builtin master keys and expired rows">
