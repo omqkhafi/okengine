@@ -117,6 +117,9 @@ export type {
   ResolvedListConfig,
 } from "./store/resource.ts";
 
+export { liveQuery } from "./store/live-query.ts";
+export type { ListOptions } from "./store/list-query.ts";
+
 export {
   defineSeed,
   normalizeSeedFns,

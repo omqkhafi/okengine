@@ -54,6 +54,15 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
    * @param signal - Live signal handle
    */
   live(signal: SignalSource): LiveHttpTrigger<M, P>;
+  /**
+   * Declare a live query surface over a table on this GET: same CDC +
+   * per-subscriber RLS classification physics as
+   * `store.resource(…, { live: true })`, for a hand-written flow. The
+   * flow body opens the stream via `liveQuery(fx, table, input)`.
+   *
+   * @param table - `store.schema.table` (or drizzle/table handle) binding
+   */
+  live(table: object): LiveHttpTrigger<M, P>;
 }
 
 /**
@@ -184,8 +193,19 @@ export function createHttpTrigger<M extends HttpMethod, P extends string>(
     public() {
       return createHttpTrigger(method, path, [...gates, GATE_PUBLIC_NAME], liveSignal);
     },
-    live(signal: SignalSource) {
-      return createHttpTrigger(method, path, gates, signal);
+    live(source: SignalSource | object) {
+      if (typeof source === "object" && !("name" in source)) {
+        // Table binding — declare a live query surface over this table.
+        // Same signal name the `store.resource` live surface synthesizes;
+        // resolved lazily so triggers.ts stays free of store imports.
+        const storeTable = lazyRequire<typeof import("../elements/store/table.ts")>(
+          "../elements/store",
+          "table",
+        );
+        const signal = { name: `oke/live/sql:${storeTable.resolveTableName(source)}` };
+        return createHttpTrigger(method, path, gates, signal);
+      }
+      return createHttpTrigger(method, path, gates, source as SignalSource);
     },
   };
   return trigger;

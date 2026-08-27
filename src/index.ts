@@ -61,6 +61,7 @@ export {
   resolveSeedIdentity,
   seedPromptMessage,
   createStoreRuntime,
+  liveQuery,
   type StoreDecl,
   type StoreRuntime,
   type SqlStoreHandle,

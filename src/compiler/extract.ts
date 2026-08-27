@@ -1693,7 +1693,21 @@ function registerFlow(args: {
   flow.source = `${args.file.path}:${line}`;
 
   if (boolProp(opts, "durable")) flow.durable = true;
-  if (typeof liveFromTrigger === "string") flow.live = liveFromTrigger;
+  if (typeof liveFromTrigger === "string") {
+    flow.live = liveFromTrigger;
+    // Manual live surface — `.live(tableBinding)` on the trigger. Synthesize
+    // the internal signal exactly like `store.resource({ live: true })` so
+    // the Manifest stays a faithful mirror of what booted, and enforce the
+    // same guardrails (PK required; updatedAt / RLS warnings).
+    const liveTable = trigger?.liveTable;
+    if (liveTable !== undefined) {
+      assertLiveGuardrails(args.scope, liveTable, `sql:${liveTable}`);
+      args.scope.signals[`oke/live/sql:${liveTable}`] = {
+        delivery: "live",
+        description: `Live query CDC fan-out for ${liveTable} (synthesized by .live(table))`,
+      };
+    }
+  }
   if (boolProp(opts, "breaking")) flow.breaking = true;
 
   const slo = parseSlo(objectProp(opts, "slo"));
@@ -1940,7 +1954,7 @@ function registerResourceMount(
   if (resource?.live === true) {
     const tableName = resource.tableName;
     if (tableName !== undefined) {
-      assertLiveGuardrails(scope, resource, tableName);
+      assertLiveGuardrails(scope, tableName, resource.storeRef);
       const signalName = `oke/live/sql:${tableName}`;
       scope.signals[signalName] = {
         delivery: "live",
@@ -2082,8 +2096,10 @@ function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: P
 interface ParsedTrigger {
   trigger: Trigger;
   gates?: string[];
-  /** Live signal name from `.live(signal)` / `http.live(signal)`. */
+  /** Live signal name from `.live(signal)` / `http.live(signal)` / `.live(table)`. */
   live?: string;
+  /** Physical table name when `.live(tableBinding)` — manual live surface. */
+  liveTable?: string;
 }
 
 function parseTrigger(
@@ -2150,6 +2166,19 @@ function resolveSignalName(node: AstNode | undefined, scope: ProjectScope): stri
   return id;
 }
 
+/**
+ * Resolve a `.live(tableBinding)` argument — a `store.schema.table(...)`
+ * (or `table(...)`) binding — to the internal live-signal name
+ * `oke/live/sql:<table>`. Returns `undefined` for anything that is not a
+ * table binding (signal handles resolve through {@link resolveSignalName}).
+ */
+function resolveLiveTableName(node: AstNode | undefined, scope: ProjectScope): string | undefined {
+  const id = identifierName(node);
+  if (!id) return undefined;
+  const binding = scope.bindings.get(id);
+  return binding?.kind === "table" ? binding.ref : undefined;
+}
+
 function parseHttpTrigger(
   leaf: AstNode,
   scope: ProjectScope,
@@ -2160,6 +2189,8 @@ function parseHttpTrigger(
   let method: string | undefined;
   let path: string | undefined;
   let live: string | undefined;
+  /** Table name when `.live(tableBinding)` — a manual live query surface. */
+  let liveTable: string | undefined;
   const gateNames: string[] = [];
 
   for (const node of chain) {
@@ -2174,10 +2205,20 @@ function parseHttpTrigger(
       if (obj.type === "Identifier" && (obj as Identifier).name === "http" && prop) {
         if (prop === "live") {
           method = "GET";
-          const signalName = resolveSignalName(c.arguments[0], scope);
+          const tableName = resolveLiveTableName(c.arguments[0], scope);
+          const signalName =
+            tableName !== undefined
+              ? `oke/live/sql:${tableName}`
+              : resolveSignalName(c.arguments[0], scope);
           if (signalName) {
             live = signalName;
-            path = `/_oke/live/${encodeURIComponent(signalName)}`;
+            if (tableName !== undefined) liveTable = tableName;
+            // Keep any explicit GET path chained so far (e.g.
+            // `http.get("/tasks/live").live(tasks)`); only synthesize the
+            // firehose path for the bare `http.live(signal)` form.
+            if (path === undefined) {
+              path = `/_oke/live/${encodeURIComponent(signalName)}`;
+            }
           }
           continue;
         }
@@ -2195,8 +2236,15 @@ function parseHttpTrigger(
 
       if (prop === "public") gateNames.push("public");
       if (prop === "live") {
-        const signalName = resolveSignalName(c.arguments[0], scope);
-        if (signalName) live = signalName;
+        const tableName = resolveLiveTableName(c.arguments[0], scope);
+        const signalName =
+          tableName !== undefined
+            ? `oke/live/sql:${tableName}`
+            : resolveSignalName(c.arguments[0], scope);
+        if (signalName) {
+          live = signalName;
+          if (tableName !== undefined) liveTable = tableName;
+        }
       }
     }
   }
@@ -2228,6 +2276,7 @@ function parseHttpTrigger(
     },
     gates: gateNames.length > 0 ? gateNames : undefined,
     ...(live !== undefined ? { live } : {}),
+    ...(liveTable !== undefined ? { liveTable } : {}),
   };
 }
 
@@ -2679,7 +2728,9 @@ function applyTenancyDefaults(manifest: Manifest): void {
 }
 
 /**
- * DX Pack A guardrails for `live: true` resources (Realtime Hardening plan):
+ * DX Pack A guardrails for live query surfaces (Realtime Hardening plan) —
+ * enforced identically for `store.resource({ live: true })` and manual
+ * `.live(table)` flows:
  *
  * - **error** — table has no primary key column (upsert/revoked/delete are
  *   PK-addressed; without one classification cannot address rows).
@@ -2692,14 +2743,10 @@ function applyTenancyDefaults(manifest: Manifest): void {
  * could not resolve columns statically (bare string table), checks skip.
  *
  * @param scope - Project scope (declared tables + resolved drivers)
- * @param resource - Resolved store.resource declaration
  * @param tableName - Physical SQL table name
+ * @param storeRef - ResourceRef of the owning store (`sql:<name>`)
  */
-function assertLiveGuardrails(
-  scope: ProjectScope,
-  resource: NonNullable<ReturnType<ProjectScope["resources"]["get"]>>,
-  tableName: string,
-): void {
+function assertLiveGuardrails(scope: ProjectScope, tableName: string, storeRef: string): void {
   const declared = scope.schemaTables.get(tableName);
   if (!declared) return;
   const columns = Object.values(declared.columns);
@@ -2716,7 +2763,7 @@ function assertLiveGuardrails(
   }
   if (
     (declared.rls !== true || Object.keys(declared.policies ?? {}).length === 0) &&
-    resource.storeRef.startsWith("sql:")
+    storeRef.startsWith("sql:")
   ) {
     console.warn(
       `[oke extract] warn: live: true on "${tableName}" without RLS policies — every gated subscriber sees every row; confirm this is intended`,

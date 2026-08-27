@@ -1,4 +1,4 @@
-import { on, flow, http, fail, table, type Fx } from "okengine";
+import { on, flow, http, fail, table, liveQuery, type Fx } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -200,6 +200,30 @@ export const list = on(
         }),
       );
     },
+  }),
+);
+
+/**
+ * Live task feed — hand-written live query surface (no store.resource).
+ *
+ * `.live(tasks)` stamps the internal `oke/live/sql:tasks` CDC signal at
+ * compile time and enforces the same guardrails as `live: true` resources
+ * (PK required; updatedAt / RLS warnings). The body reuses the exact list
+ * grammar via `liveQuery` — same filters as `tasks.list` — so the client's
+ * `useLiveQuery("/tasks/live", { status, ... })` window matches its list.
+ * CDC is classified per-subscriber (RLS + this filter window); unrelated
+ * tables (e.g. `activity` written by writeActivity) never enter the stream.
+ */
+export const live = on(
+  http.get("/tasks/live").gate(member).live(tasks),
+  flow("tasks.live", {
+    in: { unknown: true },
+    do: async (input, fx) =>
+      liveQuery(fx, tasks, input, {
+        search: [tasks.title, tasks.identifier],
+        filter: [tasks.status, tasks.projectId],
+        order: "all",
+      }),
   }),
 );
 

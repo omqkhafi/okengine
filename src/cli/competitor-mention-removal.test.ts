@@ -45,7 +45,10 @@ const EXPRESS_ALLOW = ["src/plugins/headers.test.ts:"];
 const OKID_PROMPT_ALLOW = [
   "okid.md:",
   "bun.lock:",
-  "src/console/ui-next/dist/assets/index-Dg85EWzD.js:",
+  // Minified zod-core inside the vendored Console bundle registers string
+  // format validators whose names collide with peer library names — vendor
+  // identifiers, not authored comparisons. Hash changes on Console rebuilds.
+  "src/console/ui-next/dist/assets/index-DSEpMBPY.js:",
 ];
 
 /**

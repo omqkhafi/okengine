@@ -788,6 +788,87 @@ export const list = mounted.list;
   });
 });
 
+describe("extractManifest — manual live (.live(table) on a hand-written flow)", () => {
+  test("synthesizes the internal signal + live CustomMatch flow on the hand-written GET", async () => {
+    const source = `
+import { on, http, store, flow, liveQuery } from "okengine";
+
+export const db = store.sql("tasks", { schema: {} });
+
+export const tasksTable = store.schema.table(
+  "tasks",
+  { id: field.text().primaryKey(), updated_at: field.timestamp({ mode: "string" }).notNull() },
+  [store.schema.policy.gate("member")],
+);
+
+export const tasksLive = on(
+  http.get("/tasks/live").gate(member).live(tasksTable),
+  flow("tasks.live", {
+    in: { unknown: true },
+    do: async (_input, fx) => liveQuery(fx, tasksTable, _input),
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/tasks.ts": source });
+
+    expect(manifest.signals?.["oke/live/sql:tasks"]?.delivery).toBe("live");
+    const flow = manifest.flows?.["tasks_live"] ?? manifest.flows?.["tasks.live"];
+    expect(flow?.live).toBe("oke/live/sql:tasks");
+    expect(flow?.trigger).toEqual({ http: { method: "GET", path: "/tasks/live" } });
+    expect(flow?.gates).toEqual(["member"]);
+  });
+
+  test("guardrails fire for .live(table): no PK → extract error; missing updatedAt → warn", async () => {
+    const noPk = `
+import { on, http, store, flow, liveQuery } from "okengine";
+
+export const db = store.sql("tasks", { schema: {} });
+
+export const tasksTable = store.schema.table(
+  "tasks",
+  { body: field.text().notNull() },
+  [store.schema.policy.gate("member")],
+);
+
+export const tasksLive = on(
+  http.get("/tasks/live").gate(member).live(tasksTable),
+  flow("tasks.live", { do: async (_input, fx) => liveQuery(fx, tasksTable, _input) }),
+);
+`;
+    await expect(extractFromSources({ "src/flows/tasks.ts": noPk })).rejects.toThrow(
+      /requires a primary key/,
+    );
+
+    const warnSource = `
+import { on, http, store, flow, liveQuery } from "okengine";
+
+export const db = store.sql("tasks", { schema: {} });
+
+export const tasksTable = store.schema.table(
+  "tasks",
+  { id: field.text().primaryKey() },
+  [store.schema.policy.gate("member")],
+);
+
+export const tasksLive = on(
+  http.get("/tasks/live").gate(member).live(tasksTable),
+  flow("tasks.live", { do: async (_input, fx) => liveQuery(fx, tasksTable, _input) }),
+);
+`;
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: unknown): void => {
+      warnings.push(String(msg));
+    };
+    try {
+      await extractFromSources({ "src/flows/tasks.ts": warnSource });
+    } finally {
+      console.warn = originalWarn;
+    }
+    expect(warnings.some((w) => w.includes("updatedAt"))).toBe(true);
+  });
+});
+
 describe("extractManifest — vault.config", () => {
   test("fx.vault.get(config) infers the contract name, not the binding id", async () => {
     const core = `
