@@ -29,6 +29,7 @@ import type {
   Signal,
   Slo,
   Store,
+  StoreLive,
   Table,
   Tenancy,
   Trigger,
@@ -102,6 +103,7 @@ export function diffManifest(before: Manifest, after: Manifest): ManifestDiffRes
   diffAi(before.ai, after.ai, changes);
   diffDrivers(before.drivers, after.drivers, changes);
   diffTenancy(before.tenancy, after.tenancy, changes);
+  diffStoreLive(before.store, after.store, changes);
   diffI18n(before.i18n, after.i18n, changes);
   diffTopology(before.topology, after.topology, changes);
   diffImages(before.images, after.images, changes);
@@ -849,6 +851,18 @@ function diffTable(before: Table, after: Table, path: string, out: ManifestChang
       ),
     );
   }
+  if (before.live !== after.live && (before.live !== undefined || after.live !== undefined)) {
+    out.push(
+      change(
+        `${path}/live`,
+        "effect-widening",
+        kindOf(before.live, after.live),
+        before.live,
+        after.live,
+        `live ${String(before.live)} → ${String(after.live)}`,
+      ),
+    );
+  }
 }
 
 function diffClock(before: Clock, after: Clock, path: string, out: ManifestChange[]): void {
@@ -1285,6 +1299,29 @@ function diffTenancy(
         after?.isolation,
         `tenancy isolation ${before?.isolation} → ${after?.isolation}`,
       ),
+    );
+  }
+}
+
+function diffStoreLive(
+  before: StoreLive | undefined,
+  after: StoreLive | undefined,
+  out: ManifestChange[],
+): void {
+  if (deepEqual(before, after)) return;
+  const beforeEnabled = before?.live === true;
+  const afterEnabled = after?.live === true;
+  if (!beforeEnabled && afterEnabled) {
+    // New default live surfaces under the flag are synthesized /live routes
+    // over SQL tables — effect-widening (behavioral, but not a contract break).
+    out.push(
+      change("/store/live", "effect-widening", "changed", undefined, true, "store.live enabled"),
+    );
+    return;
+  }
+  if (beforeEnabled && !afterEnabled) {
+    out.push(
+      change("/store/live", "effect-widening", "changed", true, undefined, "store.live disabled"),
     );
   }
 }

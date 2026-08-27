@@ -128,6 +128,7 @@ import {
   type SmartRouter,
 } from "./router.ts";
 import { isPendingHttpPath } from "./http-path-pending.ts";
+import { drainPendingResourceLiveMounts } from "./resource-live.ts";
 import type {
   CdcTrigger,
   EveryTrigger,
@@ -266,6 +267,16 @@ export interface OkeOptions {
   readonly clocks?: BootOptions["clocks"];
   /** Store facet declarations to register. */
   readonly stores?: BootOptions["stores"];
+  /**
+   * Store-wide behavior options. `{ live: true }` flips NEW
+   * `store.schema.table()` declarations to live-by-default (an automatic
+   * CDC + RLS-per-event live stream, same as `.live(table)` /
+   * `liveQuery()`) unless a table explicitly opts out with
+   * `store.schema.live(false)`. Default `false` — today's explicit-only
+   * behavior, zero change to existing apps. Declaration ergonomics only;
+   * never the runtime cost model.
+   */
+  readonly store?: { readonly live?: boolean };
   /** Channel runtime options. */
   readonly channel?: BootOptions["channel"];
   /** AI runtime options. */
@@ -942,6 +953,13 @@ export function oke(options: OkeOptions): OkeApp {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
     }
   }
+
+  // Project-wide `store.live` default — drain deferred resource live mounts
+  // now that the flag is known. Off flag: pending state is discarded and the
+  // behavior is 100% today's explicit-only. On flag: every pending resource
+  // whose table did not opt out with `store.schema.live(false)` adopts its
+  // `GET <path>/live` SSE binding through the normal route path.
+  drainPendingResourceLiveMounts(options.store?.live === true, adoptBinding);
 
   // Phase 1a: mirror tokens into Set-Cookie when gate.auth.cookies.enabled.
   if (gateConfig.auth?.cookies.enabled) {

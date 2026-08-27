@@ -1670,3 +1670,188 @@ export const app = oke({
     );
   });
 });
+
+describe("extractManifest — project-wide store.live default", () => {
+  test("oke({ store: { live: true } }) makes new tables live by default", async () => {
+    const source = `
+import { on, http, store, field, oke } from "okengine";
+
+export const db = store.sql("app", { schema: {} });
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey(),
+  updatedAt: field.integer().notNull(),
+}, [
+  store.schema.policy.owner("owner"),
+]);
+
+const notesR = store.resource(db, notes, {});
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const app = oke({
+  name: "shop",
+  store: { live: true },
+});
+`;
+    const manifest = await extractFromSources({ "src/app.ts": source });
+
+    // Manifest.store stamps the project flag.
+    expect(manifest.store).toEqual({ live: true });
+
+    // The table itself is live by default (opt-in flip, no per-table flag).
+    expect(manifest.stores?.app?.tables?.notes?.live).toBe(true);
+
+    // Resource synthesized GET /notes/live + internal signal without an explicit live: true.
+    expect(manifest.signals?.["oke/live/sql:notes"]?.delivery).toBe("live");
+    expect(manifest.flows?.["_live_notes"]?.trigger?.http?.path).toBe("/notes/live");
+  });
+
+  test("store.schema.live(false) opts a table out under the project flag", async () => {
+    const source = `
+import { on, http, store, field, oke } from "okengine";
+
+export const db = store.sql("app", { schema: {} });
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey(),
+  updatedAt: field.integer().notNull(),
+}, [
+  store.schema.policy.owner("owner"),
+  store.schema.live(false),
+]);
+
+const notesR = store.resource(db, notes, {});
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const app = oke({
+  name: "shop",
+  store: { live: true },
+});
+`;
+    const manifest = await extractFromSources({ "src/app.ts": source });
+
+    expect(manifest.store).toEqual({ live: true });
+    // Opted-out table stays not live — no default flip, no synthesis.
+    expect(manifest.stores?.app?.tables?.notes?.live).toBe(false);
+    expect(manifest.signals?.["oke/live/sql:notes"]).toBeUndefined();
+    expect(manifest.flows?.["_live_notes"]).toBeUndefined();
+  });
+
+  test("live: false on the resource is equivalent to store.schema.live(false)", async () => {
+    const source = `
+import { on, http, store, field, oke } from "okengine";
+
+export const db = store.sql("app", { schema: {} });
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey(),
+  updatedAt: field.integer().notNull(),
+}, [
+  store.schema.policy.owner("owner"),
+]);
+
+const notesR = store.resource(db, notes, { live: false });
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const app = oke({
+  name: "shop",
+  store: { live: true },
+});
+`;
+    const manifest = await extractFromSources({ "src/app.ts": source });
+
+    // The table-level default applies (live-by-default project-wide); only
+    // this mount's /live route is suppressed by the resource opt-out.
+    expect(manifest.stores?.app?.tables?.notes?.live).toBe(true);
+    expect(manifest.signals?.["oke/live/sql:notes"]?.delivery).toBe("live");
+    expect(manifest.flows?.["_live_notes"]).toBeUndefined();
+  });
+
+  test("explicit live: true wins over store.schema.live(false)", async () => {
+    const source = `
+import { on, http, store, field, oke } from "okengine";
+
+export const db = store.sql("app", { schema: {} });
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey(),
+  updatedAt: field.integer().notNull(),
+}, [
+  store.schema.policy.owner("owner"),
+  store.schema.live(false),
+]);
+
+const notesR = store.resource(db, notes, { live: true });
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const app = oke({
+  name: "shop",
+  store: { live: true },
+});
+`;
+    const manifest = await extractFromSources({ "src/app.ts": source });
+
+    // The explicit opt-in is separate from the default flip — it still wins.
+    expect(manifest.stores?.app?.tables?.notes?.live).toBe(false);
+    expect(manifest.signals?.["oke/live/sql:notes"]?.delivery).toBe("live");
+    expect(manifest.flows?.["_live_notes"]?.trigger?.http?.path).toBe("/notes/live");
+  });
+
+  test("without the flag, an omitted live stays today's explicit-only behavior", async () => {
+    const source = `
+import { on, http, store, field } from "okengine";
+
+export const db = store.sql("app", { schema: {} });
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey(),
+  updatedAt: field.integer().notNull(),
+}, [
+  store.schema.policy.owner("owner"),
+]);
+
+const notesR = store.resource(db, notes, {});
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const app = oke({
+  name: "shop",
+});
+`;
+    const manifest = await extractFromSources({ "src/app.ts": source });
+
+    expect(manifest.store).toBeUndefined();
+    // Table not live, resource without live: true synthesizes nothing.
+    expect(manifest.stores?.app?.tables?.notes?.live).toBeUndefined();
+    expect(manifest.signals?.["oke/live/sql:notes"]).toBeUndefined();
+    expect(manifest.flows?.["_live_notes"]).toBeUndefined();
+  });
+
+  test("the project default fires the same DX Pack A guardrails as explicit live: true", async () => {
+    const source = `
+import { on, http, store, field, oke } from "okengine";
+
+export const db = store.sql("app", { schema: {} });
+
+export const notes = store.schema.table("notes", {
+  body: field.text().notNull(),
+});
+
+const notesR = store.resource(db, notes, {});
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const app = oke({
+  name: "shop",
+  store: { live: true },
+});
+`;
+    await expect(extractFromSources({ "src/app.ts": source })).rejects.toThrow(
+      /requires a primary key/,
+    );
+  });
+});

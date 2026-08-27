@@ -81,6 +81,8 @@ type DeclaredSchemaTable = {
   readonly rls?: boolean;
   readonly policies?: Record<string, TablePolicy>;
   readonly tenantScoped?: boolean;
+  /** `false` when `store.schema.live(false)` opted out (project flag on). */
+  readonly live?: boolean;
 };
 
 interface ProjectScope {
@@ -111,6 +113,8 @@ interface ProjectScope {
   i18n?: Manifest["i18n"];
   topology?: Manifest["topology"];
   images?: Record<string, string>;
+  /** Store-wide live defaulting — `oke({ store: { live: true } })`. */
+  store?: Manifest["store"];
   flows: Record<string, Flow>;
   /** Export name → flow id (for agent tools). */
   flowExports: Map<string, string>;
@@ -123,7 +127,13 @@ interface ProjectScope {
       breaking?: boolean;
       /** Physical table name (second argument or schema-table binding ref). */
       tableName?: string;
-      /** `live: true` — the resource carries a live query surface. */
+      /**
+       * Raw `live` option on `store.resource(…, { live })` — `undefined`
+       * when omitted. Resolved against the project-wide `store.live` flag
+       * and the table's `live: false` opt-out in pass 2.
+       */
+      liveOpt?: boolean;
+      /** `true` when the resource carries a live query surface. */
       live?: boolean;
     }
   >;
@@ -220,12 +230,14 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   if (Object.keys(journeys).length > 0) manifest.journeys = journeys;
   if (Object.keys(drivers).length > 0) manifest.drivers = drivers;
   if (scope.tenancy) manifest.tenancy = scope.tenancy;
+  if (scope.store && scope.store.live === true) manifest.store = { live: true };
   if (scope.i18n) manifest.i18n = scope.i18n;
   if (scope.topology) manifest.topology = scope.topology;
   if (scope.images) manifest.images = scope.images;
 
   applyTenancyDefaults(manifest);
   assertTenantSafeSchema(manifest);
+  applyLiveDefaults(manifest, scope);
 
   return manifest;
 }
@@ -282,6 +294,7 @@ function collectDeclarations(filePath: string, program: AstNode, scope: ProjectS
     const name = stringProp(opts, "name");
     if (name) scope.app = name;
     applyOkeTenantConfig(opts, scope);
+    applyOkeStoreLiveConfig(opts, scope);
   });
 }
 
@@ -481,23 +494,26 @@ function tableFromDeclared(t: DeclaredSchemaTable): {
   rls?: boolean;
   policies?: Record<string, TablePolicy>;
   tenantScoped?: boolean;
+  live?: boolean;
 } {
   return {
     columns: t.columns,
     ...(t.rls ? { rls: true } : {}),
     ...(t.policies ? { policies: t.policies } : {}),
     ...(t.tenantScoped === false ? { tenantScoped: false } : {}),
+    ...(t.live === false ? { live: false } : {}),
   };
 }
 
 function parseSchemaTableExtras(
   node: AstNode | undefined,
-): Pick<DeclaredSchemaTable, "rls" | "policies" | "tenantScoped"> {
+): Pick<DeclaredSchemaTable, "rls" | "policies" | "tenantScoped" | "live"> {
   if (!node || node.type !== "ArrayExpression") return {};
   const els = (node as AstNode & { elements?: AstNode[] }).elements ?? [];
   const policies: Record<string, TablePolicy> = {};
   let rls = false;
   let tenantScoped: boolean | undefined;
+  let live: boolean | undefined;
   for (const el of els) {
     if (!el || el.type !== "CallExpression") continue;
     const extra = parseSchemaTableExtra(el as CallExpression);
@@ -510,6 +526,10 @@ function parseSchemaTableExtras(
       tenantScoped = false;
       continue;
     }
+    if (extra.kind === "live") {
+      live = false;
+      continue;
+    }
     policies[extra.name] = extra.policy;
     rls = true;
   }
@@ -517,6 +537,7 @@ function parseSchemaTableExtras(
     ...(rls ? { rls: true } : {}),
     ...(Object.keys(policies).length > 0 ? { policies } : {}),
     ...(tenantScoped === false ? { tenantScoped: false } : {}),
+    ...(live === false ? { live: false } : {}),
   };
 }
 
@@ -525,6 +546,7 @@ function parseSchemaTableExtra(
 ):
   | { kind: "rls" }
   | { kind: "unscoped" }
+  | { kind: "live" }
   | { kind: "policy"; name: string; policy: TablePolicy }
   | undefined {
   const callee = call.callee;
@@ -536,6 +558,9 @@ function parseSchemaTableExtra(
   }
   if (method === "unscoped" && isStoreSchemaCallee(member.object)) {
     return { kind: "unscoped" };
+  }
+  if (method === "live" && isStoreSchemaCallee(member.object)) {
+    return { kind: "live" };
   }
   if (method === "policy" && isStoreSchemaCallee(member.object)) {
     const name = stringArg(call.arguments[0]);
@@ -960,12 +985,17 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
               : undefined
             : undefined) ?? stringArg(call.arguments[1]);
         if (bindingName) {
+          // Raw declaration: `{ live: true }` opts in, `{ live: false }`
+          // opts out of the project-wide default, omitted defers to the
+          // project flag resolved in pass 2 (scope/store live stamp complete
+          // and `schemaTables` populated regardless of file order).
+          const liveOpt = opts ? boolProp(opts, "live") : undefined;
           scope.resources.set(bindingName, {
             storeName,
             storeRef: ref,
             ...(breaking ? { breaking: true } : {}),
             ...(tableName !== undefined ? { tableName } : {}),
-            ...(opts && boolProp(opts, "live") === true ? { live: true } : {}),
+            ...(liveOpt !== undefined ? { liveOpt } : {}),
           });
         }
       }
@@ -1910,6 +1940,19 @@ function registerResourceMount(
   }
   const resource = baseName ? scope.resources.get(baseName) : undefined;
 
+  // Resolve the table's live posture once: an explicit `{ live: false }`
+  // opts out, an explicit `{ live: true }` opts in, and an omitted `live`
+  // defers to the project-wide `store.live` flag unless the table itself
+  // declared `store.schema.live(false)`. The raw option stays on the
+  // resource; this pass-2 resolution relies on the fully-populated scope
+  // (project flag stamped in pass 1, `schemaTables` regardless of file order).
+  const resourceLive =
+    resource?.liveOpt !== undefined
+      ? resource.liveOpt
+      : resource?.tableName !== undefined &&
+        scope.store?.live === true &&
+        scope.schemaTables.get(resource.tableName)?.live !== false;
+
   const storeRef: ResourceRef | undefined =
     resource?.storeRef !== undefined ? (resource.storeRef as ResourceRef) : undefined;
   const effects: Effects | undefined = storeRef
@@ -1948,13 +1991,16 @@ function registerResourceMount(
 
   // Live query surface — synthesize GET <path>/live + the internal signal
   // exactly like `store.resource({ live: true })` does at runtime so the
-  // Manifest stays a faithful mirror of what booted. Requires a statically
-  // known table name; runtime `resolveTableName` throws for anything else,
-  // so an unresolvable table never boots a live surface either.
-  if (resource?.live === true) {
+  // Manifest stays a faithful mirror of what booted. Gate is the resolved
+  // `resourceLive` (explicit opt-in/opt-out, else the project-wide
+  // `store.live` flag minus the table's `live: false` opt-out). Requires a
+  // statically known table name; runtime `resolveTableName` throws for
+  // anything else, so an unresolvable table never boots a live surface either.
+  if (resourceLive === true && resource !== undefined) {
     const tableName = resource.tableName;
     if (tableName !== undefined) {
-      assertLiveGuardrails(scope, tableName, resource.storeRef);
+      const resourceStoreRef = resource.storeRef;
+      assertLiveGuardrails(scope, tableName, resourceStoreRef);
       const signalName = `oke/live/sql:${tableName}`;
       scope.signals[signalName] = {
         delivery: "live",
@@ -1965,7 +2011,7 @@ function registerResourceMount(
         trigger: { http: { method: "GET", path: `${path}/live` } },
         effects: {
           reads: [
-            (resource.storeRef ?? sqlTableRef(tableName)) as ResourceRef,
+            (resourceStoreRef ?? sqlTableRef(tableName)) as ResourceRef,
             `signal:${signalName}` as ResourceRef,
           ],
         },
@@ -2724,6 +2770,49 @@ function applyTenancyDefaults(manifest: Manifest): void {
   }
   for (const secret of Object.values(manifest.vault ?? {})) {
     if (secret.perTenant === undefined) secret.perTenant = true;
+  }
+}
+
+/**
+ * Stamp the project-wide store-live default from `oke({ store: { live: true } })`.
+ *
+ * Mirrors {@link applyOkeTenantConfig} — the proven "opt-in flag flips the
+ * default posture for NEW declarations" pattern. Only `live: true` flips the
+ * default; `false` / omitted leaves today's explicit-only behavior untouched.
+ */
+function applyOkeStoreLiveConfig(opts: AstNode | undefined, scope: ProjectScope): void {
+  const store = objectProp(opts, "store");
+  const live = boolProp(store, "live");
+  if (live !== true) return;
+  scope.store = { ...scope.store, live: true };
+}
+
+/**
+ * Default every SQL table to live when `oke({ store: { live: true } })` is
+ * on, unless the table explicitly opted out with `store.schema.live(false)`.
+ *
+ * The default flip is declaration ergonomics only: each live table is
+ * recorded in the Manifest and its DX Pack A guardrails run through the exact
+ * same {@link assertLiveGuardrails} path as an explicit `live: true` — no
+ * separate, weaker code path. RLS-per-event fan-out cost is unchanged.
+ */
+function applyLiveDefaults(manifest: Manifest, scope: ProjectScope): void {
+  if (manifest.store?.live !== true) return;
+  for (const [storeName, store] of Object.entries(manifest.stores ?? {})) {
+    if (store.facet !== "sql" || !store.tables) continue;
+    for (const [tableName, table] of Object.entries(store.tables)) {
+      if (table.live === false) continue;
+      table.live = true;
+      const signalName = `oke/live/sql:${tableName}`;
+      if (manifest.signals?.[signalName] === undefined) {
+        manifest.signals = manifest.signals ?? {};
+        manifest.signals[signalName] = {
+          delivery: "live",
+          description: `Live query CDC fan-out for ${tableName} (synthesized by store.live project default)`,
+        };
+      }
+      assertLiveGuardrails(scope, tableName, `sql:${storeName}`);
+    }
   }
 }
 

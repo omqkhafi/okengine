@@ -15,6 +15,7 @@ import {
   type ResourceMount,
   type SignalSource,
 } from "./triggers.ts";
+import { registerPendingResourceLiveMount } from "./resource-live.ts";
 
 /**
  * Mount a CRUD resource at `path`: `list`/`create` on the base, `get` /
@@ -36,6 +37,14 @@ export function httpResource<P extends string>(
   // rides the same gates as the CRUD verbs.
   const liveFlow = (ops as { readonly live?: { readonly signal: string; readonly flow: unknown } })
     .live;
+  // `store.resource(…, { live: omitted })` puts a pending surface on the ops
+  // bag. `http.resource` records the mount slot; `oke()` drains it only when
+  // the project-wide `store.live` flag is on.
+  const pendingSignal = (ops as { readonly pendingLive?: { readonly signalName: string } })
+    .pendingLive?.signalName;
+  if (pendingSignal !== undefined && liveFlow === undefined) {
+    registerPendingResourceLiveMount({ path, gates, signalName: pendingSignal });
+  }
   const mounts = [
     { trigger: verb("GET", path), flow: ops.list },
     { trigger: verb("POST", path), flow: ops.create },

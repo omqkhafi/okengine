@@ -205,8 +205,22 @@ export interface SchemaTenantScopedDecl {
   readonly tenantScoped: false;
 }
 
+/**
+ * Opt out of the project-wide `store.live` default for a schema table when
+ * `oke({ store: { live: true } })` is on. Mirrors {@link SchemaTenantScopedDecl}
+ * (`unscoped()`) — a per-table escape hatch for a project-level default flip.
+ */
+export interface SchemaLiveDecl {
+  readonly kind: "schema-live";
+  readonly live: false;
+}
+
 /** Third-arg extra for {@link schemaTable}. */
-export type SchemaTableExtra = SchemaPolicyDecl | SchemaRlsEnableDecl | SchemaTenantScopedDecl;
+export type SchemaTableExtra =
+  | SchemaPolicyDecl
+  | SchemaRlsEnableDecl
+  | SchemaTenantScopedDecl
+  | SchemaLiveDecl;
 
 /** Options for {@link schemaPolicy} / Gate helpers. */
 export interface SchemaPolicyOptions {
@@ -232,6 +246,8 @@ export interface SchemaTableDecl extends TableHandle {
   readonly policies?: readonly SchemaPolicyDecl[];
   /** When `false`, skip fail-loud tenant-policy requirement. */
   readonly tenantScoped?: boolean;
+  /** When `false`, opt out of the project-wide `store.live` default. */
+  readonly live?: boolean;
 }
 
 /**
@@ -895,6 +911,7 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
   const unscoped = extras.some(
     (extra) => extra.kind === "schema-tenant-scoped" && extra.tenantScoped === false,
   );
+  const live = extras.some((extra) => extra.kind === "schema-live") ? false : undefined;
   const table = {
     name,
     columns: stamped,
@@ -902,6 +919,7 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
     ...(rls ? { rls: true } : {}),
     ...(policies.length > 0 ? { policies } : {}),
     ...(unscoped ? { tenantScoped: false } : {}),
+    ...(live !== undefined ? { live: false } : {}),
   };
   // Survive columns named `name` or `kind` (they would otherwise shadow
   // the table discriminant / SQL name).
@@ -915,6 +933,22 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
  */
 export function schemaRls(): SchemaRlsEnableDecl {
   return { kind: "schema-rls" };
+}
+
+/**
+ * Opt a table out of the project-wide live-by-default posture
+ * (`oke({ store: { live: true } })`). The project flag makes every NEW
+ * `store.schema.table` declaration live by default; pass
+ * `store.schema.live(false)` in the table's extras array to declare a
+ * specific table as NOT live. No-op when the project flag is off (that
+ * path is already explicit-only).
+ *
+ * Mirrors `store.schema.unscoped()`, the per-table opt-out for the
+ * `gate.auth.tenant` default flip. Changes declaration defaulting only —
+ * never the underlying CDC / RLS-per-event cost model.
+ */
+export function schemaLive(live: false): SchemaLiveDecl {
+  return { kind: "schema-live", live };
 }
 
 /**
@@ -1269,6 +1303,7 @@ export const schema = {
   rls: schemaRls,
   policy: schemaPolicyApi,
   unscoped: schemaUnscoped,
+  live: schemaLive,
 } as const;
 
 /**

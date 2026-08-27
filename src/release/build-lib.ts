@@ -65,7 +65,11 @@ export async function buildLib(): Promise<void> {
       naming: relative(DIST, absOut).replace(/\\/g, "/"),
       target: "bun",
       format: "esm",
-      minify: false,
+      // Non-Bun consumers ship this output; minify keeps `dist/` compact.
+      // Budgets measure a *separate* minified build (measure.ts), but the
+      // published artifact should not ship full-size sources when the compiler
+      // is available to minify at the same cost.
+      minify: true,
       sourcemap: "external",
       external: [...EXPORT_BUILD_EXTERNALS],
       splitting: false,

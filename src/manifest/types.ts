@@ -323,6 +323,14 @@ export interface Table {
   policies?: Record<string, TablePolicy>;
   /** When `false`, skip fail-loud tenant-policy requirement. */
   tenantScoped?: boolean;
+  /**
+   * Live-query posture for this table. `false` is the explicit per-table
+   * opt-out taken when the project-wide `store.live` flag is on. Defaults to
+   * `true` for every NEW table under that flag; `undefined` otherwise. Never
+   * changes the underlying CDC / RLS-per-event cost model — only declaration
+   * defaulting.
+   */
+  live?: boolean;
 }
 
 /** One Store declaration. */
@@ -486,6 +494,12 @@ export interface Plugin {
   tables?: Record<string, PluginTable>;
 }
 
+/** Store-wide live-query defaulting configuration. */
+export interface StoreLive {
+  /** `oke({ store: { live: true } })` is on — new tables are live by default. */
+  live?: boolean;
+}
+
 /** Tenancy configuration (resolver is code; isolation is data). */
 export interface Tenancy {
   /** `gate.auth.tenant` is on. */
@@ -528,6 +542,8 @@ export interface Manifest {
   plugins?: Record<string, Plugin>;
   drivers?: Record<string, string[]>;
   tenancy?: Tenancy;
+  /** Store-wide live defaulting — `oke({ store: { live: true } })`. */
+  store?: StoreLive;
   i18n?: I18n;
   journeys?: Record<string, Journey>;
   topology?: Topology;

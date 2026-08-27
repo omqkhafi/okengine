@@ -25,6 +25,7 @@ import { z } from "zod";
 import type { SqlStoreDecl } from "./declare.ts";
 import type { SqlRow } from "../../drivers/types.ts";
 import { resolveColumns, resolveTableName } from "./table.ts";
+import { registerPendingResourceLive } from "../../kernel/resource-live.ts";
 import type { SqlPageOptions } from "./sql-session.ts";
 import {
   encodeCursor,
@@ -103,6 +104,8 @@ export interface ResourceFlowDefs {
   readonly get: FlowDef<any, any, any>;
   readonly update: FlowDef<any, any, any>;
   readonly remove: FlowDef<any, any, any>;
+  /** Live surface when `live: true` — mounted by `http.resource(…, …all())`. */
+  readonly live?: ResourceLiveSurface;
 }
 
 /** Column lookup for {@link ResourceDef.page}. */
@@ -364,67 +367,78 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   // bridge classifies CDC events per subscriber and pushes through this
   // flow. Classified events are per-identity RLS verdicts, so delivery is
   // direct per-subscriber push — never a shared signal tape.
-  const liveSurface: ResourceLiveSurface | undefined = options.live
-    ? (() => {
-        const signalName = `oke/live/sql:${tableName}`;
-        const pkColumn = idColumn?.sqlName ?? idKey;
-        const columnKinds: Record<string, LiveColumnKind> = {};
-        for (const c of columns) {
-          const kind: LiveColumnKind | undefined =
-            c.sqlType === "BOOLEAN"
-              ? "boolean"
-              : c.sqlType === "INTEGER" || c.sqlType === "BIGINT" || c.sqlType === "REAL"
-                ? "number"
-                : c.sqlType === "JSONB"
-                  ? undefined
-                  : "string";
-          if (kind !== undefined) columnKinds[c.key] = kind;
+  //
+  // `live: false` is the explicit per-table opt-out for the project-wide
+  // `store.live` default — never builds a surface. `live: true` builds it
+  // immediately. When `live` is omitted the surface is deferred: it is
+  // recorded as a pending live default and drained by `oke()` only when
+  // `store: { live: true }` is set.
+  const buildLiveSurface = (): ResourceLiveSurface => {
+    const signalName = `oke/live/sql:${tableName}`;
+    const pkColumn = idColumn?.sqlName ?? idKey;
+    const columnKinds: Record<string, LiveColumnKind> = {};
+    for (const c of columns) {
+      const kind: LiveColumnKind | undefined =
+        c.sqlType === "BOOLEAN"
+          ? "boolean"
+          : c.sqlType === "INTEGER" || c.sqlType === "BIGINT" || c.sqlType === "REAL"
+            ? "number"
+            : c.sqlType === "JSONB"
+              ? undefined
+              : "string";
+      if (kind !== undefined) columnKinds[c.key] = kind;
+    }
+    const liveFlow = flow(`_live_${tableName}`, {
+      ...(options.out !== undefined ? { out: options.out } : {}),
+      effects: { reads: [db.ref, `signal:${signalName}`] },
+      do: async (input: unknown, fx: Fx) => {
+        const bridge = realtimeBridgeRuntime();
+        if (!bridge) {
+          throw new Error(
+            `live query for "${tableName}" requires an RLS-capable SQL driver (postgres / pglite)`,
+          );
         }
-        const liveFlow = flow(`_live_${tableName}`, {
-          ...(options.out !== undefined ? { out: options.out } : {}),
-          effects: { reads: [db.ref, `signal:${signalName}`] },
-          do: async (input: unknown, fx: Fx) => {
-            const bridge = realtimeBridgeRuntime();
-            if (!bridge) {
-              throw new Error(
-                `live query for "${tableName}" requires an RLS-capable SQL driver (postgres / pglite)`,
-              );
-            }
-            // Same PostgREST window as the list Flow — filters decide whether
-            // a row belongs to this live query ("query exit"), RLS decides
-            // visibility. Pagination cursors don't gate membership.
-            const parsed = parseListQuery(input, scope.query);
-            if (!parsed.ok) return parsed.failure;
-            let whereSql: string | undefined;
-            let whereParams: readonly unknown[] = [];
-            const pageWhere = parsed.page.where;
-            if (pageWhere !== undefined) {
-              const compiled = compileWhere(pageWhere);
-              if (compiled.clause !== "") {
-                whereSql = compiled.clause;
-                whereParams = compiled.params;
-              }
-            }
-            const identity = fx.rlsIdentity;
-            if (!identity) {
-              throw new Error(`live query for "${tableName}" requires a gated identity`);
-            }
-            const stream = openLiveStream(fx.id(), {
-              table: tableName,
-              identity,
-              pkColumn,
-              ...(whereSql !== undefined ? { whereSql } : {}),
-              ...(whereParams.length > 0 ? { whereParams } : {}),
-              ...(Object.keys(columnKinds).length > 0 ? { tableColumns: columnKinds } : {}),
-            });
-            return fx.json.stream(stream.chunks);
-          },
-        }) as unknown as AnyFlowDef;
-        return { signal: signalName, flow: liveFlow };
-      })()
-    : undefined;
+        // Same PostgREST window as the list Flow — filters decide whether
+        // a row belongs to this live query ("query exit"), RLS decides
+        // visibility. Pagination cursors don't gate membership.
+        const parsed = parseListQuery(input, scope.query);
+        if (!parsed.ok) return parsed.failure;
+        let whereSql: string | undefined;
+        let whereParams: readonly unknown[] = [];
+        const pageWhere = parsed.page.where;
+        if (pageWhere !== undefined) {
+          const compiled = compileWhere(pageWhere);
+          if (compiled.clause !== "") {
+            whereSql = compiled.clause;
+            whereParams = compiled.params;
+          }
+        }
+        const identity = fx.rlsIdentity;
+        if (!identity) {
+          throw new Error(`live query for "${tableName}" requires a gated identity`);
+        }
+        const stream = openLiveStream(fx.id(), {
+          table: tableName,
+          identity,
+          pkColumn,
+          ...(whereSql !== undefined ? { whereSql } : {}),
+          ...(whereParams.length > 0 ? { whereParams } : {}),
+          ...(Object.keys(columnKinds).length > 0 ? { tableColumns: columnKinds } : {}),
+        });
+        return fx.json.stream(stream.chunks);
+      },
+    }) as unknown as AnyFlowDef;
+    return { signal: signalName, flow: liveFlow };
+  };
 
-  return {
+  // Immediate vs deferred live surface:
+  // - `live: true` — build now (today's explicit opt-in, unchanged).
+  // - `live: false` — the per-table opt-out for the project default.
+  // - omitted — record a pending default surface, drained by `oke()` when
+  //   `store: { live: true }` is set; otherwise discarded (today's behavior).
+  const signalName = `oke/live/sql:${tableName}`;
+  let liveSurface: ResourceLiveSurface | undefined;
+  const resolved: ResourceDef = {
     ...defs,
     table: tableName,
     idKey,
@@ -435,7 +449,22 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     sqlNameOf(key) {
       return columns.find((c) => c.key === key)?.sqlName;
     },
-    all: () => defs,
+    all: () => {
+      // Live surface rides along so `http.resource(path, notesR.all())` can
+      // mount `GET <path>/live` from the resource even when the caller uses
+      // `.all()` (existing docs examples pass `.all()` directly). Prefer a
+      // drain-stamped surface, then the immediate closure surface.
+      const bag = defs as ResourceFlowDefs;
+      const stamped = (bag as { readonly live?: ResourceLiveSurface }).live;
+      const effective = stamped ?? liveSurface;
+      if (effective) {
+        Object.defineProperty(bag, "live", {
+          value: effective,
+          enumerable: true,
+        });
+      }
+      return bag;
+    },
     page(input) {
       const parsed = parseListQuery(input, scope.query);
       if (!parsed.ok) {
@@ -445,6 +474,34 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       }
       return { ...parsed.page, meta: parsed.meta };
     },
-    ...(liveSurface ? { live: liveSurface } : {}),
   };
+  // Table-level `store.schema.live(false)` is the explicit per-table opt-out
+  // from the project-wide `store.live` default. It only cancels the DEFAULT —
+  // an explicit `options.live: true` on the resource still wins so today's
+  // opt-in behavior is unchanged.
+  const tableLiveOptedOut =
+    table !== null &&
+    typeof table === "object" &&
+    (table as { readonly live?: boolean }).live === false;
+
+  if (options.live === true) {
+    liveSurface = buildLiveSurface();
+  } else if (options.live !== false && !tableLiveOptedOut) {
+    const pending: { readonly signalName: string } = { signalName };
+    Object.defineProperty(defs, "pendingLive", { value: pending, configurable: true });
+    registerPendingResourceLive({
+      signalName,
+      def: resolved as object,
+      bag: defs as object,
+      build: buildLiveSurface,
+    });
+  }
+
+  if (liveSurface) {
+    Object.defineProperty(resolved, "live", {
+      value: liveSurface,
+      enumerable: true,
+    });
+  }
+  return resolved;
 }
