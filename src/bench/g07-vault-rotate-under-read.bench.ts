@@ -64,8 +64,7 @@ interface ReadLine {
 
 async function loadReads(path: string): Promise<ReadLine[]> {
   if (!(await Bun.file(path).exists())) return [];
-  return (await Bun.file(path)
-    .text())
+  return (await Bun.file(path).text())
     .trim()
     .split("\n")
     .filter(Boolean)
@@ -133,9 +132,7 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G7b — vault rotate under 
         await readerA;
 
         const failedA = armA.filter((l) => !l.ok);
-        const tornA = armA.filter(
-          (l) => l.ok && typeof l.value === "string" && l.value !== VALUE,
-        );
+        const tornA = armA.filter((l) => l.ok && typeof l.value === "string" && l.value !== VALUE);
         const dursA = armA.map((l) => l.durMs ?? NaN).filter(Number.isFinite);
         const windowA = armA.filter(
           (l) => (l.at ?? 0) >= rotateStartA && (l.at ?? 0) <= rotateEndA,
@@ -237,8 +234,10 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G7b — vault rotate under 
         console.log("[G7b] metrics:", JSON.stringify(metrics));
 
         const issues: string[] = [];
-        if (failedA.length > 0) issues.push(`armA: ${failedA.length} FAILED reads (shared-key reader must never fail)`);
-        if (tornA.length > 0 || tornB.length > 0) issues.push("torn values observed during rotation");
+        if (failedA.length > 0)
+          issues.push(`armA: ${failedA.length} FAILED reads (shared-key reader must never fail)`);
+        if (tornA.length > 0 || tornB.length > 0)
+          issues.push("torn values observed during rotation");
 
         // Issue found on first measurement attempt + fix (see below).
         const path_ = await writeArtifact({

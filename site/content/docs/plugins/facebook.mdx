@@ -10,9 +10,8 @@ simplest one in `oauth()`: the platform offers **no verification signal to
 apps**, so emails from Facebook are treated as unverified — always.
 
 <Callout title="The one rule">
-  Treat every Facebook-provided address as unverified. The flow provisions new
-  accounts with them but refuses to let them claim accounts that already
-  exist.
+  Treat every Facebook-provided address as unverified. The flow provisions new accounts with them
+  but refuses to let them claim accounts that already exist.
 </Callout>
 
 ## Quick start
@@ -22,7 +21,7 @@ apps**, so emails from Facebook are treated as unverified — always.
 <Step>
 ### Create an app
 
-Meta for Developers → **Create App** → *Authentication*. Under Facebook Login
+Meta for Developers → **Create App** → _Authentication_. Under Facebook Login
 → Settings, add `https://app.example.com/auth/oauth/callback/facebook` as a
 Valid OAuth Redirect URI.
 
@@ -65,15 +64,15 @@ OAUTH_FACEBOOK_CLIENT_SECRET=...
 
 ## How identity works
 
-| Aspect | Behavior |
-| ------ | -------- |
-| Authorize | `www.facebook.com/v21.0/dialog/oauth` |
-| Token exchange | `graph.facebook.com/v21.0/oauth/access_token` |
-| Profile | `GET /me?fields=id,name,email` (the `id` is the subject) |
-| Email | present when the user has one; phone-only accounts have none |
-| Email trust | **always unverified** — no trustworthy provider signal exists |
+| Aspect         | Behavior                                                      |
+| -------------- | ------------------------------------------------------------- |
+| Authorize      | `www.facebook.com/v21.0/dialog/oauth`                         |
+| Token exchange | `graph.facebook.com/v21.0/oauth/access_token`                 |
+| Profile        | `GET /me?fields=id,name,email` (the `id` is the subject)      |
+| Email          | present when the user has one; phone-only accounts have none  |
+| Email trust    | **always unverified** — no trustworthy provider signal exists |
 
-**Consequence:** an attacker completing Facebook login with *your* email gets
+**Consequence:** an attacker completing Facebook login with _your_ email gets
 `email_in_use`, not your session. This exact scenario is the takeover class
 the trust matrix closes.
 
@@ -81,21 +80,21 @@ Default scopes: `email`, `public_profile`.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_FACEBOOK_CLIENT_ID` (App ID) |
-| `redirectUri` | `string` | `{baseUrl}…/facebook` | Exact registered URI |
-| `scopes` | `string[]` | driver defaults | Extra scopes |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default               | Meaning                               |
+| --------------------- | ---------- | --------------------- | ------------------------------------- |
+| `enabled`             | `boolean`  | `false`               | Turn the provider on                  |
+| `clientId`            | `string`   | Vault/env\*           | `\*OAUTH_FACEBOOK_CLIENT_ID` (App ID) |
+| `redirectUri`         | `string`   | `{baseUrl}…/facebook` | Exact registered URI                  |
+| `scopes`              | `string[]` | driver defaults       | Extra scopes                          |
+| `storeProviderTokens` | `boolean`  | `false`               | Keep tokens in Vault                  |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/facebook/start` |
+| Flow     | Path                                     |
+| -------- | ---------------------------------------- |
+| Start    | `POST /auth/oauth/facebook/start`        |
 | Callback | `GET+POST /auth/oauth/callback/facebook` |
-| Link | `POST /auth/oauth/facebook/link` |
+| Link     | `POST /auth/oauth/facebook/link`         |
 
 ## Troubleshooting
 

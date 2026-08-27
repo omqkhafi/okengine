@@ -351,6 +351,26 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         return [{ ...row }];
       }
 
+      // DELETE ... RETURNING * (CDC before-image capture on sql-session
+      // delete paths). Same grammar as exec()'s DELETE branch.
+      const deleteReturning =
+        /^DELETE\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+(.+?)\s+RETURNING\s+\*\s*$/i.exec(
+          text,
+        );
+      if (deleteReturning) {
+        const table = getTable(parseIdent(deleteReturning[1]!));
+        const ast = parseWhere(deleteReturning[2]!);
+        const removed: SqlRow[] = [];
+        table.rows = table.rows.filter((r) => {
+          if (evalWhere(ast, r, params, { i: 0 })) {
+            removed.push({ ...r });
+            return false;
+          }
+          return true;
+        });
+        return removed;
+      }
+
       throw new Error(`memory sql: unsupported query: ${sql}`);
     },
     async exec(sql, params = []) {

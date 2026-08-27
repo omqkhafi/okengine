@@ -283,6 +283,32 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         return [{ [retCol]: next }];
       }
 
+      // CTE-shaped atomic increment with jsonb image capture:
+      // WITH __oke_old AS (SELECT "pk" FROM t WHERE "pk" = ? FOR UPDATE)
+      //   UPDATE t SET "col" = "col" + ? FROM __oke_old
+      //   WHERE t."pk" = __oke_old."pk"
+      //   RETURNING row_to_json(t) AS __oke_after_data, "col"
+      const cteIncrement =
+        /^WITH\s+__oke_old\s+AS\s+\(SELECT\s+("?[\w]+"?)\s+FROM\s+("?[\w]+"?)\s+WHERE\s+"?[\w]+"?\s*=\s*\?\s+FOR\s+UPDATE\)\s+UPDATE\s+("?[\w]+"?)\s+SET\s+("?[\w]+"?)\s*=\s*("?[\w]+"?)\s*\+\s*\?\s+FROM\s+__oke_old\s+WHERE\s+("?[\w]+")\."?[\w]+"?\s*=\s*__oke_old\."?[\w]+"?\s+RETURNING\s+row_to_json\(("?[\w]+")\)\s+AS\s+__oke_after_data,\s*("?[\w]+"?)\s*$/i.exec(
+          normalised,
+        );
+      if (cteIncrement) {
+        const whereTable = parseIdent(cteIncrement[2]!);
+        const updateTable = parseIdent(cteIncrement[3]!);
+        const setCol = parseIdent(cteIncrement[4]!);
+        const addCol = parseIdent(cteIncrement[5]!);
+        const retCol = parseIdent(cteIncrement[8]!);
+        if (whereTable !== updateTable || setCol !== addCol || setCol !== retCol) {
+          throw new Error(`postgres fake: unsupported SQL: ${sql}`);
+        }
+        const list = tables.get(updateTable) ?? [];
+        const row = list.find((r) => r[parseIdent(cteIncrement[1]!)] === values[0]);
+        if (!row) return [];
+        const next = Number(row[setCol] ?? 0) + Number(values[1]);
+        row[setCol] = next;
+        return [{ __oke_after_data: { ...row }, [retCol]: next }];
+      }
+
       const insertReturning =
         /^INSERT\s+INTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*RETURNING\s+\*\s*$/i.exec(
           normalised,

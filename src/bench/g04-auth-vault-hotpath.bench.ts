@@ -55,9 +55,7 @@ describe.skipIf(!process.env.OKE_BENCH)("G4 — auth/vault hot path", () => {
       const issues: string[] = [];
 
       // Raw HMAC verify (the inner hash of every auth attempt).
-      const hmac = await timeLoop(AUTH_ITERS[0]!, () =>
-        hashApiKeySecret(created.secret),
-      );
+      const hmac = await timeLoop(AUTH_ITERS[0]!, () => hashApiKeySecret(created.secret));
       const hmacS = summarize(hmac);
       metrics["hmac.p50Ms"] = hmacS.p50Ms;
       metrics["hmac.p99Ms"] = hmacS.p99Ms;
@@ -84,8 +82,7 @@ describe.skipIf(!process.env.OKE_BENCH)("G4 — auth/vault hot path", () => {
         group: "G4-auth",
         hardware: HARDWARE,
         disclaimer: DISCLAIMER,
-        command:
-          "OKE_BENCH=1 bun test ./src/bench/g04-auth-vault-hotpath.bench.ts",
+        command: "OKE_BENCH=1 bun test ./src/bench/g04-auth-vault-hotpath.bench.ts",
         metrics,
         issues,
         fixes: [],
@@ -143,8 +140,8 @@ describe.skipIf(!process.env.OKE_BENCH)("G4 — auth/vault hot path", () => {
         "fx.get.p50Ms": b.p50Ms,
         "fx.get.p99Ms": b.p99Ms,
         "fx.get.opsPerSec": b.opsPerSec,
-        "addedP99Ms": addedP99Ms,
-        "addedP50Ms": Number((b.p50Ms - a.p50Ms).toFixed(3)),
+        addedP99Ms: addedP99Ms,
+        addedP50Ms: Number((b.p50Ms - a.p50Ms).toFixed(3)),
       };
 
       console.log("[G4] vault metrics:", JSON.stringify(metrics));
@@ -159,8 +156,7 @@ describe.skipIf(!process.env.OKE_BENCH)("G4 — auth/vault hot path", () => {
         group: "G4-vault",
         hardware: HARDWARE,
         disclaimer: DISCLAIMER,
-        command:
-          "OKE_BENCH=1 bun test ./src/bench/g04-auth-vault-hotpath.bench.ts",
+        command: "OKE_BENCH=1 bun test ./src/bench/g04-auth-vault-hotpath.bench.ts",
         metrics,
         issues,
         fixes: [],

@@ -15,11 +15,7 @@ import {
   type OAuthExchangeResult,
 } from "./oauth-types.ts";
 import { buildAuthorizeQuery, normalizeEmail, parseEmailVerified } from "./oauth-shared.ts";
-import {
-  createAppleClientSecretJwt,
-  discoverOpenId,
-  verifyIdToken,
-} from "./oauth-oidc.ts";
+import { createAppleClientSecretJwt, discoverOpenId, verifyIdToken } from "./oauth-oidc.ts";
 
 const AUTHORIZATION_SERVER_ID = "https://appleid.apple.com";
 

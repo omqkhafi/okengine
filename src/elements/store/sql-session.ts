@@ -47,6 +47,60 @@ export type InferSelectRow<T> = T extends { readonly $inferSelect: infer R } ? R
 const rlsStampTails = new WeakMap<SqlConnection, Promise<unknown>>();
 
 /**
+ * Runtime CDC sink — set once by the store runtime at boot. Write hooks call
+ * {@link notifySqlCdc} after committed DML; the sink feeds LiveQueryRuntime
+ * and (when a driver owns an outbox) durable multi-host delivery.
+ */
+export interface SqlCdcSink {
+  /** Deliver one captured change. */
+  (event: {
+    readonly tableName: string;
+    readonly op: "insert" | "update" | "delete";
+    readonly before: Record<string, unknown> | null;
+    readonly after: Record<string, unknown> | null;
+  }): void | Promise<void>;
+}
+
+let sqlCdcSink: SqlCdcSink | null = null;
+
+/**
+ * Install the process-wide CDC sink. Idempotent — last install wins.
+ *
+ * @param sink - Store-runtime-owned delivery target
+ */
+export function setSqlCdcSink(sink: SqlCdcSink | null): void {
+  sqlCdcSink = sink;
+}
+
+/**
+ * True when `sql` starts with INSERT/UPDATE/DELETE on a domain table
+ * (excludes stamp preludes, txn control, DDL — see {@link isRlsStampExemptSql}).
+ *
+ * @param sql - Statement text with any placeholder style
+ */
+export function isCdcCandidateSql(sql: string): boolean {
+  return (
+    /^(insert|update|delete)\b/i.test(sql.trim()) && !/^(delete\s+from\s+oke_)/i.test(sql.trim())
+  );
+}
+
+/** Fire-and-forget CDC notification (never blocks or fails the write path). */
+function notifySqlCdc(event: {
+  readonly tableName: string;
+  readonly op: "insert" | "update" | "delete";
+  readonly before: Record<string, unknown> | null;
+  readonly after: Record<string, unknown> | null;
+}): void {
+  if (!sqlCdcSink) return;
+  try {
+    const result = sqlCdcSink(event);
+    if (result instanceof Promise) void result.catch(() => undefined);
+  } catch {
+    // Telemetry must never break writes.
+  }
+}
+
+/**
  * One helper-installation per CONNECTION, not per session handle.
  *
  * Concurrent identity bags share `sharedSqlConn`; installing per handle races
@@ -529,6 +583,30 @@ export function createSqlStoreHandle(
     return compileWhere(where);
   }
 
+  /**
+   * Postgres `row_to_json` images come back as JSON strings on pglite and
+   * objects on Bun.SQL — normalize to the JS row mapping (snake→camel).
+   *
+   * @param table - Table handle for column remapping
+   * @param image - Raw RETURNING cell
+   */
+  function jsonImageToJs(table: TableHandle | unknown, image: unknown): SqlRow | null {
+    if (image === null || image === undefined) return null;
+    let obj: Record<string, unknown>;
+    if (typeof image === "string") {
+      try {
+        obj = JSON.parse(image) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    } else if (typeof image === "object") {
+      obj = image as Record<string, unknown>;
+    } else {
+      return null;
+    }
+    return toJs(table, [obj])[0] ?? null;
+  }
+
   /** Accumulated select state across the fluent chain. */
   interface SelectPlan {
     readonly where?: unknown;
@@ -657,8 +735,14 @@ export function createSqlStoreHandle(
             const placeholders = cols.map(() => "?").join(", ");
             const colList = cols.map(quoteIdent).join(", ");
             const params = cols.map((c) => prepared[c]);
-            const sql = `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders})`;
-            await exec(sql, params);
+            const sql = `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders}) RETURNING *`;
+            const inserted = await query(sql, params);
+            notifySqlCdc({
+              tableName: name,
+              op: "insert",
+              before: null,
+              after: toJs(table, inserted)[0] ?? null,
+            });
           };
           return {
             async returning() {
@@ -670,6 +754,12 @@ export function createSqlStoreHandle(
               const params = cols.map((c) => prepared[c]);
               const sql = `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders}) RETURNING *`;
               const rows = await query(sql, params);
+              notifySqlCdc({
+                tableName: name,
+                op: "insert",
+                before: null,
+                after: (toJs(table, rows)[0] as Record<string, unknown>) ?? null,
+              });
               return mask(toJs(table, rows), name);
             },
             execute: runExecute,
@@ -696,11 +786,53 @@ export function createSqlStoreHandle(
               if (!compiled.clause) {
                 throw new Error("update().set().where(): condition required");
               }
-              const params = [...setEntries.map(([, v]) => v), ...compiled.params];
+              const pk = resolvePkColumn(table);
+              const setParams = setEntries.map(([, v]) => v);
+
+              // Single-statement before capture (postgres / pglite): the
+              // `__oke_old` CTE snapshots matched pre-images FOR UPDATE,
+              // joins the UPDATE, and RETURNING emits both JSON images in
+              // one round-trip. Binding order follows marker appearance:
+              // CTE(where) params first, then SET values.
+              if (RLS_CONTEXT_DRIVERS.has(connection.driverId)) {
+                const sql =
+                  `WITH __oke_old AS (` +
+                  `SELECT * FROM ${quoteIdent(name)} WHERE ${compiled.clause} FOR UPDATE` +
+                  `)` +
+                  ` UPDATE ${quoteIdent(name)} SET ${setSql}` +
+                  ` FROM __oke_old` +
+                  ` WHERE ${quoteIdent(name)}.${quoteIdent(pk)} = __oke_old.${quoteIdent(pk)}` +
+                  ` RETURNING row_to_json(__oke_old) AS __oke_before_data, row_to_json(${quoteIdent(name)}) AS __oke_after_data`;
+                const result = await query(sql, [...compiled.params, ...setParams]);
+                for (const rawRow of result) {
+                  notifySqlCdc({
+                    tableName: name,
+                    op: "update",
+                    before: jsonImageToJs(table, rawRow.__oke_before_data),
+                    after: jsonImageToJs(table, rawRow.__oke_after_data),
+                  });
+                }
+                return result.length;
+              }
+
+              // Fallback (memory): explicit pre-read then plain DML — the
+              // hook still emits true before-images, just via two statements.
+              const prior = await query(
+                `SELECT * FROM ${quoteIdent(name)} WHERE ${compiled.clause}`,
+                compiled.params,
+              );
               const result = await exec(
                 `UPDATE ${quoteIdent(name)} SET ${setSql} WHERE ${compiled.clause}`,
-                params,
+                [...setParams, ...compiled.params],
               );
+              for (const beforeRow of toJs(table, prior)) {
+                notifySqlCdc({
+                  tableName: name,
+                  op: "update",
+                  before: beforeRow,
+                  after: { ...beforeRow },
+                });
+              }
               return result.changes;
             },
           };
@@ -725,10 +857,19 @@ export function createSqlStoreHandle(
           await ensureFromMeta(table);
           const name = resolveTableName(table);
           const pk = resolvePkColumn(table);
-          const result = await exec(`DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`, [
-            idValue,
-          ]);
-          return result.changes > 0;
+          // DELETE ... RETURNING * gives the full last image in one statement.
+          const rows = await query(
+            `DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ? RETURNING *`,
+            [idValue],
+          );
+          if (rows.length === 0) return false;
+          notifySqlCdc({
+            tableName: name,
+            op: "delete",
+            before: toJs(table, rows)[0] ?? null,
+            after: null,
+          });
+          return true;
         })();
       }
       const builder: DeleteBuilder = {
@@ -739,11 +880,14 @@ export function createSqlStoreHandle(
           if (!compiled.clause) {
             throw new Error("delete().where(): condition required");
           }
-          const result = await exec(
-            `DELETE FROM ${quoteIdent(name)} WHERE ${compiled.clause}`,
+          const rows = await query(
+            `DELETE FROM ${quoteIdent(name)} WHERE ${compiled.clause} RETURNING *`,
             compiled.params,
           );
-          return result.changes;
+          for (const beforeRow of toJs(table, rows)) {
+            notifySqlCdc({ tableName: name, op: "delete", before: beforeRow, after: null });
+          }
+          return rows.length;
         },
       };
       return builder;
@@ -789,7 +933,16 @@ export function createSqlStoreHandle(
         const placeholders = cols.map(() => "?").join(", ");
         const colList = cols.map(quoteIdent).join(", ");
         const params = cols.map((c) => prepared[c]);
-        await exec(`INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders})`, params);
+        const rows = await query(
+          `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders}) RETURNING *`,
+          params,
+        );
+        notifySqlCdc({
+          tableName: name,
+          op: "insert",
+          before: null,
+          after: toJs(table, rows)[0] ?? null,
+        });
         return { status: "upserted" as const };
       }
       if (upsertOptions?.onExisting !== "update") {
@@ -800,7 +953,45 @@ export function createSqlStoreHandle(
       if (setEntries.length === 0) return { status: "changed" as const };
       const setSql = setEntries.map(([col]) => `${quoteIdent(col)} = ?`).join(", ");
       const params = [...setEntries.map(([, v]) => v), ...compiled.params];
+      if (RLS_CONTEXT_DRIVERS.has(connection.driverId)) {
+        // Single-statement before/after capture — same shape as update().
+        // SET may include the PK (upsert keys) — exclude it from the UPDATE
+        // list to keep param order and row identity stable.
+        const pkCol = resolvePkColumn(table);
+        const setEntriesNoPk = setEntries.filter(([col]) => col !== pkCol);
+        const setSqlNoPk = setEntriesNoPk.map(([col]) => `${quoteIdent(col)} = ?`).join(", ");
+        const sql =
+          `WITH __oke_old AS (` +
+          `SELECT * FROM ${quoteIdent(name)} WHERE ${compiled.clause} FOR UPDATE` +
+          `)` +
+          ` UPDATE ${quoteIdent(name)} SET ${setSqlNoPk}` +
+          ` FROM __oke_old` +
+          ` WHERE ${quoteIdent(name)}.${quoteIdent(pkCol)} = __oke_old.${quoteIdent(pkCol)}` +
+          ` RETURNING row_to_json(__oke_old) AS __oke_before_data, row_to_json(${quoteIdent(name)}) AS __oke_after_data`;
+        const result = await query(sql, [...compiled.params, ...setEntriesNoPk.map(([, v]) => v)]);
+        for (const rawRow of result) {
+          notifySqlCdc({
+            tableName: name,
+            op: "update",
+            before: jsonImageToJs(table, rawRow.__oke_before_data),
+            after: jsonImageToJs(table, rawRow.__oke_after_data),
+          });
+        }
+        return { status: "changed" as const };
+      }
+      const prior = await query(
+        `SELECT * FROM ${quoteIdent(name)} WHERE ${compiled.clause}`,
+        compiled.params,
+      );
       await exec(`UPDATE ${quoteIdent(name)} SET ${setSql} WHERE ${compiled.clause}`, params);
+      for (const beforeRow of toJs(table, prior)) {
+        notifySqlCdc({
+          tableName: name,
+          op: "update",
+          before: beforeRow,
+          after: { ...beforeRow, ...values },
+        });
+      }
       return { status: "changed" as const };
     },
 
@@ -812,6 +1003,38 @@ export function createSqlStoreHandle(
       const colMeta = cols.find((c) => c.key === column || c.sqlName === column);
       const sqlCol = colMeta?.sqlName ?? column;
       const col = quoteIdent(sqlCol);
+      if (RLS_CONTEXT_DRIVERS.has(connection.driverId)) {
+        // Single statement: the CTE locks the row and carries only the PK
+        // (projecting more would make the bare SET target ambiguous against
+        // __oke_old's columns), UPDATE returns the after-image and new value
+        // in one round-trip.
+        const sql =
+          `WITH __oke_old AS (` +
+          `SELECT ${quoteIdent(pk)} FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ? FOR UPDATE` +
+          `)` +
+          ` UPDATE ${quoteIdent(name)} SET ${col} = ${col} + ?` +
+          ` FROM __oke_old` +
+          ` WHERE ${quoteIdent(name)}.${quoteIdent(pk)} = __oke_old.${quoteIdent(pk)}` +
+          ` RETURNING row_to_json(${quoteIdent(name)}) AS __oke_after_data, ${col}`;
+        const result = await query(sql, [idValue, by]);
+        const row = result[0];
+        if (!row) {
+          throw new Error(`increment(): no row with ${pk} ${JSON.stringify(idValue)} in ${name}`);
+        }
+        notifySqlCdc({
+          tableName: name,
+          op: "update",
+          // No full pre-image in this single statement — the CTE projects
+          // just the PK. The runtime classifies a numeric-only mutation as
+          // an upsert event; revocation never needs this before-image.
+          before: null,
+          after: jsonImageToJs(table, row.__oke_after_data),
+        });
+        return asNumber(row[sqlCol], sqlCol);
+      }
+      const prior = await query(`SELECT * FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`, [
+        idValue,
+      ]);
       const rows = await query(
         `UPDATE ${quoteIdent(name)} SET ${col} = ${col} + ? WHERE ${quoteIdent(pk)} = ? RETURNING ${col}`,
         [by, idValue],
@@ -820,6 +1043,12 @@ export function createSqlStoreHandle(
       if (!row) {
         throw new Error(`increment(): no row with ${pk} ${JSON.stringify(idValue)} in ${name}`);
       }
+      notifySqlCdc({
+        tableName: name,
+        op: "update",
+        before: toJs(table, prior)[0] ?? null,
+        after: null,
+      });
       return asNumber(row[sqlCol], sqlCol);
     },
 

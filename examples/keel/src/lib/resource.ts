@@ -52,6 +52,11 @@ export function bindCrud(spec: {
   readonly search?: readonly string[];
   /** Skip the POST create binding (caller supplies a richer create). */
   readonly skipCreate?: boolean;
+  /**
+   * Opt into the live query stack — synthesizes `GET <path>/live` SSE with
+   * per-subscriber RLS classification (same gates as `read`).
+   */
+  readonly live?: boolean;
 }): CrudBag {
   const { unit, path, table, read, write } = spec;
   const item = `${path}/:id`;
@@ -70,6 +75,7 @@ export function bindCrud(spec: {
       filter: "all",
       order: "all",
     },
+    ...(spec.live === true ? { live: true } : {}),
   });
 
   const list = on(
@@ -169,6 +175,16 @@ export function bindCrud(spec: {
       },
     }),
   );
+
+  // Live query SSE — classified per-subscriber RLS events on GET <path>/live.
+  // Uses the resource-synthesized flow (direct LiveQueryRuntime delivery), not
+  // the shared Signal tape. Mounted only when `live: true`.
+  if (resource.live) {
+    on(
+      http.get(`${path}/live`).gate(read).live({ name: resource.live.signal }),
+      resource.live.flow as never,
+    );
+  }
 
   return { list, create: create ?? list, get, update, remove };
 }

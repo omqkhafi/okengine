@@ -48,10 +48,7 @@ export function startSampler(
 }
 
 /** Linear slope MB/min over samples (least squares on last N points). */
-export function rssSlopeMbPerMin(
-  samples: readonly RssSample[],
-  windowLast = 12,
-): number {
+export function rssSlopeMbPerMin(samples: readonly RssSample[], windowLast = 12): number {
   const pts = samples.slice(-windowLast).filter((s) => s.rssMb > 0);
   if (pts.length < 2) return 0;
   const n = pts.length;

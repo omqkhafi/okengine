@@ -228,9 +228,9 @@ describe("doctor file_descriptor_limit", () => {
       detectFdPressure: async () => ({ softLimit: 256, estimatedNeed: 400, headroom: -144 }),
     });
     expect(code).toBe(0);
-    expect(
-      findings.some((f) => f.code === "file_descriptor_limit" && f.severity === "warn"),
-    ).toBe(true);
+    expect(findings.some((f) => f.code === "file_descriptor_limit" && f.severity === "warn")).toBe(
+      true,
+    );
   });
 
   test("errors when soft limit below estimated need", async () => {

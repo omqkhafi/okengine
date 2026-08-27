@@ -37,12 +37,17 @@ export function openOAuthDiscord(
     authorizationServerId: AUTHORIZATION_SERVER_ID,
     buildAuthorizeUrl(input: OAuthAuthorizeInput): OAuthAuthorizeResult {
       return {
-        url: buildAuthorizeQuery("https://discord.com/oauth2/authorize", input, { prompt: "consent" }),
+        url: buildAuthorizeQuery("https://discord.com/oauth2/authorize", input, {
+          prompt: "consent",
+        }),
       };
     },
     async exchangeCode(input: OAuthExchangeInput): Promise<OAuthExchangeResult> {
       return {
-        tokens: await postTokenRequest({ tokenEndpoint: "https://discord.com/api/oauth2/token", input }),
+        tokens: await postTokenRequest({
+          tokenEndpoint: "https://discord.com/api/oauth2/token",
+          input,
+        }),
       };
     },
     async resolveAssertion(input: OAuthAssertionInput): Promise<OAuthAssertion> {

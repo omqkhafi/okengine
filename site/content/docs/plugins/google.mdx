@@ -10,9 +10,8 @@ signature checks, and issuer pinning all work the textbook way. If you are
 wiring your first social provider, start here.
 
 <Callout title="The one rule">
-  Register `https://app.example.com/auth/oauth/callback/google` (your exact
-  origin) as an Authorized Redirect URI, then enable it with
-  `providers.google.enabled`. The comparison is byte-exact.
+  Register `https://app.example.com/auth/oauth/callback/google` (your exact origin) as an Authorized
+  Redirect URI, then enable it with `providers.google.enabled`. The comparison is byte-exact.
 </Callout>
 
 ## Quick start
@@ -23,7 +22,7 @@ wiring your first social provider, start here.
 ### Create OAuth credentials
 
 In Google Cloud Console → APIs & Services → Credentials, create an **OAuth
-client ID** of type *Web application*. Add your callback URI under Authorized
+client ID** of type _Web application_. Add your callback URI under Authorized
 Redirect URIs.
 
 </Step>
@@ -72,13 +71,13 @@ The driver discovers Google's endpoints from
 `https://accounts.google.com/.well-known/openid-configuration` and caches them.
 On callback it verifies the ID token end-to-end:
 
-| Check | Rule |
-| ----- | ---- |
-| Signature | RS256 / ES256 against Google's published JWKS |
-| Issuer | must equal `https://accounts.google.com` |
-| Audience | must include your client id (`azp` when multi-audience) |
-| Expiry | rejected when stale |
-| Nonce | single-use, bound to the flow row |
+| Check     | Rule                                                    |
+| --------- | ------------------------------------------------------- |
+| Signature | RS256 / ES256 against Google's published JWKS           |
+| Issuer    | must equal `https://accounts.google.com`                |
+| Audience  | must include your client id (`azp` when multi-audience) |
+| Expiry    | rejected when stale                                     |
+| Nonce     | single-use, bound to the flow row                       |
 
 Email trust follows the OIDC claim: `email_verified: true` marks the address
 verified; anything else — including string `"false"` — stays unverified.
@@ -87,21 +86,21 @@ Default scopes: `openid`, `email`, `profile`.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_GOOGLE_CLIENT_ID` |
-| `redirectUri` | `string` | `{baseUrl}…/google` | Exact registered URI |
-| `scopes` | `string[]` | driver defaults | Extra scopes |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default             | Meaning                    |
+| --------------------- | ---------- | ------------------- | -------------------------- |
+| `enabled`             | `boolean`  | `false`             | Turn the provider on       |
+| `clientId`            | `string`   | Vault/env\*         | `\*OAUTH_GOOGLE_CLIENT_ID` |
+| `redirectUri`         | `string`   | `{baseUrl}…/google` | Exact registered URI       |
+| `scopes`              | `string[]` | driver defaults     | Extra scopes               |
+| `storeProviderTokens` | `boolean`  | `false`             | Keep tokens in Vault       |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/google/start` |
+| Flow     | Path                                   |
+| -------- | -------------------------------------- |
+| Start    | `POST /auth/oauth/google/start`        |
 | Callback | `GET+POST /auth/oauth/callback/google` |
-| Link | `POST /auth/oauth/google/link` |
+| Link     | `POST /auth/oauth/google/link`         |
 
 ## Troubleshooting
 
@@ -136,7 +135,19 @@ issued the code, or swapped client ids between environments.
 ## Next
 
 <Cards>
-  <Card title="Apple" description="form_post + ES256 client-secret JWT." href="/docs/plugins/apple" />
-  <Card title="Microsoft" description="Entra tenants and issuer templates." href="/docs/plugins/microsoft" />
-  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+  <Card
+    title="Apple"
+    description="form_post + ES256 client-secret JWT."
+    href="/docs/plugins/apple"
+  />
+  <Card
+    title="Microsoft"
+    description="Entra tenants and issuer templates."
+    href="/docs/plugins/microsoft"
+  />
+  <Card
+    title="GitHub"
+    description="OAuth2 with verified-email lookup."
+    href="/docs/plugins/github"
+  />
 </Cards>

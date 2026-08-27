@@ -40,11 +40,21 @@ export function openOAuthGithub(
       return { url: buildAuthorizeQuery("https://github.com/login/oauth/authorize", input) };
     },
     async exchangeCode(input: OAuthExchangeInput): Promise<OAuthExchangeResult> {
-      return { tokens: await postTokenRequest({ tokenEndpoint: "https://github.com/login/oauth/access_token", input }) };
+      return {
+        tokens: await postTokenRequest({
+          tokenEndpoint: "https://github.com/login/oauth/access_token",
+          input,
+        }),
+      };
     },
     async resolveAssertion(input: OAuthAssertionInput): Promise<OAuthAssertion> {
       return resolveOauth2Assertion(input, async (accessToken) => {
-        const user = await fetchProviderJson("https://api.github.com/user", accessToken, fetchFn, "github");
+        const user = await fetchProviderJson(
+          "https://api.github.com/user",
+          accessToken,
+          fetchFn,
+          "github",
+        );
         const subject = typeof user["id"] === "number" ? String(user["id"]) : undefined;
         if (subject === undefined) throw new Error("github: profile missing numeric id");
         const login = typeof user["login"] === "string" ? user.login : undefined;

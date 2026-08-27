@@ -10,8 +10,8 @@ identity assertion from two REST calls: `/user` for the account and
 `/user/emails` for the address that actually matters.
 
 <Callout title="The one rule">
-  Request the `user:email` scope. The public profile email is usually null;
-  the verified primary address only exists on the emails endpoint.
+  Request the `user:email` scope. The public profile email is usually null; the verified primary
+  address only exists on the emails endpoint.
 </Callout>
 
 ## Quick start
@@ -64,12 +64,12 @@ OAUTH_GITHUB_CLIENT_SECRET=...
 
 ## How identity works
 
-| Aspect | Behavior |
-| ------ | -------- |
-| Token exchange | form POST to `github.com/login/oauth/access_token`, JSON accepted |
-| Profile | `GET https://api.github.com/user` (numeric `id` is the subject) |
-| Email | `GET https://api.github.com/user/emails`; picks the entry with `primary: true` |
-| Email trust | verified only when the selected entry has an explicit `verified: true` |
+| Aspect         | Behavior                                                                       |
+| -------------- | ------------------------------------------------------------------------------ |
+| Token exchange | form POST to `github.com/login/oauth/access_token`, JSON accepted              |
+| Profile        | `GET https://api.github.com/user` (numeric `id` is the subject)                |
+| Email          | `GET https://api.github.com/user/emails`; picks the entry with `primary: true` |
+| Email trust    | verified only when the selected entry has an explicit `verified: true`         |
 
 **Consequence:** a GitHub account whose primary email is unverified never
 claims that address during sign-up — the flow provisions without verified
@@ -80,21 +80,21 @@ ignores them but the protection stays uniform across providers.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_GITHUB_CLIENT_ID` |
-| `redirectUri` | `string` | `{baseUrl}…/github` | Exact registered URI |
-| `scopes` | `string[]` | driver defaults | Extra scopes |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default             | Meaning                    |
+| --------------------- | ---------- | ------------------- | -------------------------- |
+| `enabled`             | `boolean`  | `false`             | Turn the provider on       |
+| `clientId`            | `string`   | Vault/env\*         | `\*OAUTH_GITHUB_CLIENT_ID` |
+| `redirectUri`         | `string`   | `{baseUrl}…/github` | Exact registered URI       |
+| `scopes`              | `string[]` | driver defaults     | Extra scopes               |
+| `storeProviderTokens` | `boolean`  | `false`             | Keep tokens in Vault       |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/github/start` |
+| Flow     | Path                                   |
+| -------- | -------------------------------------- |
+| Start    | `POST /auth/oauth/github/start`        |
 | Callback | `GET+POST /auth/oauth/callback/github` |
-| Link | `POST /auth/oauth/github/link` |
+| Link     | `POST /auth/oauth/github/link`         |
 
 ## Troubleshooting
 
@@ -128,7 +128,11 @@ config produces.
 ## Next
 
 <Cards>
-  <Card title="Discord" description="Verified flag with nullable email." href="/docs/plugins/discord" />
+  <Card
+    title="Discord"
+    description="Verified flag with nullable email."
+    href="/docs/plugins/discord"
+  />
   <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
   <Card title="X" description="PKCE public client." href="/docs/plugins/x" />
 </Cards>

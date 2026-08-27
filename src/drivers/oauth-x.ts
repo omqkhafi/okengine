@@ -44,7 +44,10 @@ export function openOAuthX(
     async exchangeCode(input: OAuthExchangeInput): Promise<OAuthExchangeResult> {
       // X is a public client — no client_secret on the token call.
       return {
-        tokens: await postTokenRequest({ tokenEndpoint: "https://api.x.com/2/oauth2/token", input }),
+        tokens: await postTokenRequest({
+          tokenEndpoint: "https://api.x.com/2/oauth2/token",
+          input,
+        }),
       };
     },
     async resolveAssertion(input: OAuthAssertionInput): Promise<OAuthAssertion> {

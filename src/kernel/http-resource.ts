@@ -13,6 +13,7 @@ import {
   type HttpTrigger,
   type ResourceFlowBag,
   type ResourceMount,
+  type SignalSource,
 } from "./triggers.ts";
 
 /**
@@ -31,16 +32,32 @@ export function httpResource<P extends string>(
   const id = `${path}/:id` as `${P}/:id`;
   const verb = <M extends HttpMethod>(method: M, p: P | `${P}/:id`): HttpTrigger<M> =>
     createHttpTrigger(method, p, gates);
+  // Live exposure — synthesized from the resource's live surface so SSE
+  // rides the same gates as the CRUD verbs.
+  const liveFlow = (ops as { readonly live?: { readonly signal: string; readonly flow: unknown } })
+    .live;
+  const mounts = [
+    { trigger: verb("GET", path), flow: ops.list },
+    { trigger: verb("POST", path), flow: ops.create },
+    { trigger: verb("GET", id), flow: ops.get },
+    { trigger: verb("PATCH", id), flow: ops.update },
+    { trigger: verb("DELETE", id), flow: ops.remove },
+    ...(liveFlow !== undefined
+      ? [
+          {
+            trigger: createHttpTrigger("GET" as const, `${path}/live`, gates, {
+              name: liveFlow.signal,
+            } as SignalSource),
+            flow: liveFlow.flow,
+          },
+        ]
+      : []),
+  ];
   const mount: ResourceMount = {
     [resourceMountBrand]: true,
     gates,
-    mounts: [
-      { trigger: verb("GET", path), flow: ops.list },
-      { trigger: verb("POST", path), flow: ops.create },
-      { trigger: verb("GET", id), flow: ops.get },
-      { trigger: verb("PATCH", id), flow: ops.update },
-      { trigger: verb("DELETE", id), flow: ops.remove },
-    ],
+    ...(liveFlow !== undefined ? { live: { signal: liveFlow.signal, flow: liveFlow.flow } } : {}),
+    mounts,
     gate: createGateAttach((next) => httpResource(path, ops, next), gates),
     public() {
       return httpResource(path, ops, [...gates, GATE_PUBLIC_NAME]);

@@ -14,10 +14,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { postgresDriver } from "../drivers/postgres.ts";
 import { sql } from "../elements/store/declare.ts";
 import { defineTable } from "../elements/store/table.ts";
-import {
-  createSqlStoreHandle,
-  type SqlStoreHandle,
-} from "../elements/store/sql-session.ts";
+import { createSqlStoreHandle, type SqlStoreHandle } from "../elements/store/sql-session.ts";
 import { createStoreRuntime } from "../elements/store/runtime.ts";
 import { okid } from "../okid.ts";
 import { LIVE_PG } from "./lib/infra.ts";
@@ -74,7 +71,10 @@ afterAll(async () => {
   await runtime?.close();
 });
 
-async function timedPhase(name: string, op: (i: number) => Promise<unknown>): Promise<{
+async function timedPhase(
+  name: string,
+  op: (i: number) => Promise<unknown>,
+): Promise<{
   latencies: number[];
 }> {
   const latencies: number[] = [];
@@ -118,7 +118,10 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G8a — store.sql sustained
       // 2. Sustained point updates.
       t0 = performance.now();
       const upd = await timedPhase("update", (i) =>
-        handle.update(rows).set({ n: i + 1 }).where({ id: ids[i]! }),
+        handle
+          .update(rows)
+          .set({ n: i + 1 })
+          .where({ id: ids[i]! }),
       );
       wallS = (performance.now() - t0) / 1000;
       Object.assign(metrics, metricsFor("update", upd.latencies, wallS));
@@ -130,7 +133,10 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G8a — store.sql sustained
         const s = performance.now();
         const found = await handle.select().from(rows).where({ id: ids[i]! }).limit(1);
         if (found.length !== 1) throw new Error(`G8a mixed: row ${ids[i]} missing`);
-        await handle.update(rows).set({ n: i + 2 }).where({ id: ids[i]! });
+        await handle
+          .update(rows)
+          .set({ n: i + 2 })
+          .where({ id: ids[i]! });
         mixLatencies.push(performance.now() - s);
       }
       wallS = (performance.now() - t0) / 1000;
@@ -138,7 +144,11 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G8a — store.sql sustained
       Object.assign(metrics, { mixedReadThenWritePairs: OPS });
 
       // Sanity: last update landed.
-      const check = await handle.select().from(rows).where({ id: ids[OPS - 1]! }).limit(1);
+      const check = await handle
+        .select()
+        .from(rows)
+        .where({ id: ids[OPS - 1]! })
+        .limit(1);
       expect(Number(check[0]?.n)).toBe(OPS + 1);
 
       console.log("[G8a] metrics:", JSON.stringify(metrics));

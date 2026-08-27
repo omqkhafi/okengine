@@ -53,34 +53,28 @@ afterAll(async () => {
 });
 
 describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G2 — perTenant lease contention", () => {
-  test(
-    "correctness: concurrent claimers → exactly one holder, zero duplicate fires",
-    async () => {
-      const name = perTenantCronName(TEMPLATE, "dupe-check");
-      const existing = await store.get(name);
-      if (!existing) await store.put(seedRow(name));
+  test("correctness: concurrent claimers → exactly one holder, zero duplicate fires", async () => {
+    const name = perTenantCronName(TEMPLATE, "dupe-check");
+    const existing = await store.get(name);
+    if (!existing) await store.put(seedRow(name));
 
-      const C = 24;
-      const results = await Promise.all(
-        Array.from({ length: C }, (_, i) =>
-          store.acquireLease(name, `g2-instance-${i}`, Date.now(), CONTENTION_LEASE_MS),
-        ),
-      );
-      const winners = results.filter(Boolean).length;
-      expect(winners).toBe(1);
+    const C = 24;
+    const results = await Promise.all(
+      Array.from({ length: C }, (_, i) =>
+        store.acquireLease(name, `g2-instance-${i}`, Date.now(), CONTENTION_LEASE_MS),
+      ),
+    );
+    const winners = results.filter(Boolean).length;
+    expect(winners).toBe(1);
 
-      const row = await store.get(name);
-      expect(row?.leaderInstanceId ?? (await rawLeader())).toBeTruthy();
-    },
-    60_000,
-  );
+    const row = await store.get(name);
+    expect(row?.leaderInstanceId ?? (await rawLeader())).toBeTruthy();
+  }, 60_000);
 
   test(
     "throughput sweep: tenants × concurrent claimers",
     async () => {
-      const names = Array.from({ length: TENANTS }, (_, i) =>
-        perTenantCronName(TEMPLATE, `t${i}`),
-      );
+      const names = Array.from({ length: TENANTS }, (_, i) => perTenantCronName(TEMPLATE, `t${i}`));
       // Seed (idempotent).
       const have = new Set((await store.list()).map((r) => r.name));
       for (const n of names) if (!have.has(n)) await store.put(seedRow(n));
@@ -131,7 +125,9 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G2 — perTenant lease cont
 
       const issues: string[] = [];
       if (totalDuplicateFires > 0) {
-        issues.push(`duplicate lease fires observed: ${totalDuplicateFires} (CLAIM_LEASE_SQL correctness)`);
+        issues.push(
+          `duplicate lease fires observed: ${totalDuplicateFires} (CLAIM_LEASE_SQL correctness)`,
+        );
       }
 
       const path = await writeArtifact({

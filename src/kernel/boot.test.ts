@@ -116,9 +116,9 @@ describe("boot — lazy element needs", () => {
         if (raw.byteLength === 0) continue;
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
-      // Rebased after host API-key persist + allowlist on `oke()`.
-      // (~50.3 kB gzip with export externals).
-      expect(total).toBeLessThan(51_000);
+      // Rebased after host API-key persist + allowlist on `oke()` and the
+      // realtime bridge (CDC sink, LiveQuery runtime, openLiveStream).
+      expect(total).toBeLessThan(58_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

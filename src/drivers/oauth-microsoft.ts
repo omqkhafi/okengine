@@ -35,7 +35,11 @@ export type MicrosoftTenant = "common" | "organizations" | "consumers" | string;
  * @param options - Tenant selector + injectable fetch
  */
 export function openOAuthMicrosoft(
-  options: { readonly tenant?: MicrosoftTenant; readonly scopes?: readonly string[]; readonly fetch?: typeof globalThis.fetch } = {},
+  options: {
+    readonly tenant?: MicrosoftTenant;
+    readonly scopes?: readonly string[];
+    readonly fetch?: typeof globalThis.fetch;
+  } = {},
 ): OAuthDriver {
   const tenant = options.tenant ?? "common";
   const discoveryIssuer = `${LOGIN_ORIGIN}/${tenant}/v2.0`;
@@ -57,24 +61,21 @@ export function openOAuthMicrosoft(
         throw new OAuthProtocolError("missing_secret", "microsoft requires a client secret");
       }
       const endpoints = await discoverOpenId(discoveryIssuer, fetchFn);
-      const res = await fetchFn(
-        endpoints.tokenEndpoint,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            accept: "application/json",
-          },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
-            code: input.code,
-            redirect_uri: input.redirectUri,
-            client_id: input.clientId,
-            client_secret: input.clientSecret,
-            code_verifier: input.codeVerifier,
-          }).toString(),
+      const res = await fetchFn(endpoints.tokenEndpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "application/json",
         },
-      );
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code: input.code,
+          redirect_uri: input.redirectUri,
+          client_id: input.clientId,
+          client_secret: input.clientSecret,
+          code_verifier: input.codeVerifier,
+        }).toString(),
+      });
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok || typeof body["access_token"] !== "string") {
         throw new OAuthProtocolError(
@@ -100,7 +101,10 @@ export function openOAuthMicrosoft(
     },
     async resolveAssertion(input: OAuthAssertionInput): Promise<OAuthAssertion> {
       if (!input.tokens.idToken) {
-        throw new OAuthProtocolError("missing_id_token", "microsoft token response missing id_token");
+        throw new OAuthProtocolError(
+          "missing_id_token",
+          "microsoft token response missing id_token",
+        );
       }
       const claims = await verifyMicrosoftIdToken({
         idToken: input.tokens.idToken,
@@ -109,7 +113,9 @@ export function openOAuthMicrosoft(
         fetchFn,
         ...(input.now !== undefined ? { now: input.now } : {}),
       });
-      const email = normalizeEmail(claims.payload["email"]) ?? normalizeEmail(claims.payload["preferred_username"]);
+      const email =
+        normalizeEmail(claims.payload["email"]) ??
+        normalizeEmail(claims.payload["preferred_username"]);
       return {
         subject: claims.subject,
         issuer: claims.issuer,

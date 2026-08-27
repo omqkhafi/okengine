@@ -4,10 +4,7 @@
  * Apple requires. Hand-rolled on `crypto.subtle`.
  */
 
-import {
-  OAuthProtocolError,
-  type OAuthDriverId,
-} from "./oauth-types.ts";
+import { OAuthProtocolError, type OAuthDriverId } from "./oauth-types.ts";
 import {
   base64UrlEncode,
   fetchJwks,
@@ -53,7 +50,10 @@ export async function discoverOpenId(
   const wellKnown = `${issuer.endsWith("/") ? issuer : `${issuer}/`}.well-known/openid-configuration`;
   const res = await fetchFn(wellKnown, { headers: { accept: "application/json" } });
   if (!res.ok) {
-    throw new OAuthProtocolError("discovery_failed", `OIDC discovery failed with HTTP ${res.status}`);
+    throw new OAuthProtocolError(
+      "discovery_failed",
+      `OIDC discovery failed with HTTP ${res.status}`,
+    );
   }
   const doc = (await res.json()) as Record<string, unknown>;
   const authorizationEndpoint = doc["authorization_endpoint"];
@@ -64,7 +64,10 @@ export async function discoverOpenId(
     typeof tokenEndpoint !== "string" ||
     typeof jwksUri !== "string"
   ) {
-    throw new OAuthProtocolError("discovery_failed", "Discovery document missing required endpoints");
+    throw new OAuthProtocolError(
+      "discovery_failed",
+      "Discovery document missing required endpoints",
+    );
   }
   const entry = { authorizationEndpoint, tokenEndpoint, jwksUri, fetchedAt: Date.now() };
   globalDiscoveryCache.set(issuer, entry);
@@ -200,7 +203,11 @@ export async function createAppleClientSecretJwt(options: {
     ),
   );
   const derSig = new Uint8Array(
-    await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, enc.encode(`${header}.${payload}`)),
+    await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      key,
+      enc.encode(`${header}.${payload}`),
+    ),
   );
   // Bun's WebCrypto emits the raw P-1363 form (r‖s) — already JOSE-shaped.
   const joseSig = rawToJose(derSig.subarray(0, 32), derSig.subarray(32));

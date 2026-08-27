@@ -574,6 +574,7 @@ describe("fx — wholesale swap", () => {
       get signal() {
         return new AbortController().signal;
       },
+      rlsIdentity: undefined,
       all(thunks) {
         return Promise.all(thunks.map((t) => t())) as never;
       },

@@ -38,15 +38,17 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE)(...);
 
 ## Commands
 
-| Command | What |
-| --- | --- |
-| `bun run bench:load` | run every `src/bench/*.bench.ts` group (10 min timeout each) |
-| `bun test src/bench/g01-rls-stamp.bench.ts` | run one group |
+| Command                                     | What                                                         |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `bun run bench:load`                        | run every `src/bench/*.bench.ts` group (10 min timeout each) |
+| `bun test src/bench/g01-rls-stamp.bench.ts` | run one group                                                |
 
 ### Group execution order
 
 Phase 0 (harness) → **G12** (doctor fd check) → G1 → G2, G4, G7, G8, G9,
-G13 → G3 (re-verifies G12 fd estimate) → G5 → G6 → G10 → G11 → G14 → G15.
+G13 → G3 (re-verifies G12 fd estimate) → G5 → G6 → G10 → G11 → G14 → G15
+
+- **G16** — Live query fan-out (subscribers × stamped EXISTS).
 
 ### Manual child modes
 

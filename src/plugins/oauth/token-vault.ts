@@ -82,10 +82,7 @@ function toArrayBuffer(view: Uint8Array): ArrayBuffer {
  * @param secret - Root auth secret
  * @param envelope - userId → sealed per-user blob
  */
-export async function sealTokenEnvelope(
-  secret: string,
-  envelopeJson: string,
-): Promise<string> {
+export async function sealTokenEnvelope(secret: string, envelopeJson: string): Promise<string> {
   return sealTokenBlob(secret, envelopeJson);
 }
 

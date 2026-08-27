@@ -204,7 +204,10 @@ async function signEs256IdToken(claims: Readonly<Record<string, unknown>>): Prom
     "sign",
     "verify",
   ]);
-  const exported = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as Record<string, unknown>;
+  const exported = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as Record<
+    string,
+    unknown
+  >;
   const enc = new TextEncoder();
   const header = base64UrlEncode(enc.encode(JSON.stringify({ alg: "ES256", kid: "atk-kid" })));
   const payload = base64UrlEncode(enc.encode(JSON.stringify(claims)));
@@ -236,10 +239,11 @@ describe("GHSA-6g38-8j4p-j3pr — unverified email hijack", () => {
             (u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"),
             { access_token: "fb-at", token_type: "bearer" },
           ),
-          jsonRoute(
-            (u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"),
-            { id: "fb-evildoer", name: "Evildoer", email: victimEmail },
-          ),
+          jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"), {
+            id: "fb-evildoer",
+            name: "Evildoer",
+            email: victimEmail,
+          }),
         ],
         calls,
       ),
@@ -271,14 +275,14 @@ describe("GHSA-6g38-8j4p-j3pr — unverified email hijack", () => {
   test("control: fresh unverified Facebook email provisions normally with emailVerified=false", async () => {
     const { app, identities } = await bootHarness(
       mockFetch([
-        jsonRoute(
-          (u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"),
-          { access_token: "fb-at" },
-        ),
-        jsonRoute(
-          (u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"),
-          { id: "fb-newbie", name: "Newbie", email: "fresh-fb@example.com" },
-        ),
+        jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"), {
+          access_token: "fb-at",
+        }),
+        jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"), {
+          id: "fb-newbie",
+          name: "Newbie",
+          email: "fresh-fb@example.com",
+        }),
       ]),
     );
 
@@ -300,14 +304,14 @@ describe("GHSA-6g38-8j4p-j3pr — unverified email hijack", () => {
     const ownerEmail = "linkme@example.com";
     const { app, identities } = await bootHarness(
       mockFetch([
-        jsonRoute(
-          (u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"),
-          { access_token: "fb-at" },
-        ),
-        jsonRoute(
-          (u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"),
-          { id: "fb-linker", name: "Owner", email: ownerEmail },
-        ),
+        jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"), {
+          access_token: "fb-at",
+        }),
+        jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"), {
+          id: "fb-linker",
+          name: "Owner",
+          email: ownerEmail,
+        }),
       ]),
     );
 
@@ -358,10 +362,13 @@ describe("GHSA-6g38-8j4p-j3pr — unverified email hijack", () => {
     const driver = openOAuthGithub({
       fetch: mockFetch([
         jsonRoute((u) => u.href === "https://api.github.com/user", { id: 9001, login: "octocat" }),
-        jsonRoute((u) => u.href === "https://api.github.com/user/emails", [
-          { email: "shadow@example.com", primary: false, verified: false },
-          { email: "primary@example.com", primary: true, verified: true },
-        ]),
+        jsonRoute(
+          (u) => u.href === "https://api.github.com/user/emails",
+          [
+            { email: "shadow@example.com", primary: false, verified: false },
+            { email: "primary@example.com", primary: true, verified: true },
+          ],
+        ),
       ]),
     });
     const assertion = await driver.resolveAssertion({
@@ -504,14 +511,14 @@ describe("Mix-up attack defense", () => {
   test("flow rows are single-use — a consumed state cannot be replayed", async () => {
     const { app } = await bootHarness(
       mockFetch([
-        jsonRoute(
-          (u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"),
-          { access_token: "fb-at" },
-        ),
-        jsonRoute(
-          (u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"),
-          { id: "fb-replay", name: "Replay", email: "replay@example.com" },
-        ),
+        jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/oauth/access_token"), {
+          access_token: "fb-at",
+        }),
+        jsonRoute((u) => u.href.startsWith("https://graph.facebook.com/v21.0/me"), {
+          id: "fb-replay",
+          name: "Replay",
+          email: "replay@example.com",
+        }),
       ]),
     );
 

@@ -167,9 +167,7 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G9 — journal sustained", 
         backlogMax: samples.length ? Math.max(...samples.map((x) => x.backlog)) : -1,
         backlogAvg:
           samples.length > 0
-            ? Number(
-                (samples.reduce((a, x) => a + x.backlog, 0) / samples.length).toFixed(2),
-              )
+            ? Number((samples.reduce((a, x) => a + x.backlog, 0) / samples.length).toFixed(2))
             : -1,
         backlogFinal: samples.length ? samples[samples.length - 1]!.backlog : -1,
       };
@@ -178,7 +176,9 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G9 — journal sustained", 
       const issues: string[] = [];
       if (failedRuns > 0) issues.push(`failed durable runs under sustained load: ${failedRuns}`);
       if (metrics.backlogFinal! > CONCURRENCY * 2) {
-        issues.push(`backlog did not drain: final=${metrics.backlogFinal} vs concurrency=${CONCURRENCY}`);
+        issues.push(
+          `backlog did not drain: final=${metrics.backlogFinal} vs concurrency=${CONCURRENCY}`,
+        );
       }
 
       const path = await writeArtifact({

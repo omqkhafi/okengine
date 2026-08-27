@@ -4,11 +4,7 @@
  * fetch, explicit errors, strict parsing.
  */
 
-import {
-  OAuthProtocolError,
-  type OAuthAuthorizeInput,
-  type OAuthDriverId,
-} from "./oauth-types.ts";
+import { OAuthProtocolError, type OAuthAuthorizeInput, type OAuthDriverId } from "./oauth-types.ts";
 
 /** Parsed JWT parts. */
 export interface ParsedJwt {
@@ -100,7 +96,10 @@ export async function codeChallengeS256(verifier: string): Promise<string> {
  * @param parsed - Pre-parsed token
  * @param jwk - Public key from the provider JWKS
  */
-export async function verifyJwtSignature(parsed: ParsedJwt, jwk: Record<string, unknown>): Promise<void> {
+export async function verifyJwtSignature(
+  parsed: ParsedJwt,
+  jwk: Record<string, unknown>,
+): Promise<void> {
   const alg = typeof jwk.alg === "string" ? jwk.alg : parsed.header["alg"];
   if (alg !== "RS256" && alg !== "ES256") {
     throw new OAuthProtocolError("unsupported_alg", `Unsupported ID token alg: ${String(alg)}`);
@@ -129,7 +128,14 @@ async function importJwk(jwk: Record<string, unknown>, alg: "RS256" | "ES256"): 
   const format = "jwk" as const;
   return crypto.subtle.importKey(
     format,
-    normalized as unknown as { kty: string; crv?: string; x?: string; y?: string; n?: string; e?: string },
+    normalized as unknown as {
+      kty: string;
+      crv?: string;
+      x?: string;
+      y?: string;
+      n?: string;
+      e?: string;
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (alg === "ES256"
       ? { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" }
@@ -156,7 +162,10 @@ export function toArrayBuffer(view: Uint8Array): ArrayBuffer {
 export async function fetchJwks(
   url: string,
   fetchFn: typeof globalThis.fetch,
-  cache: Map<string, { keys: ReadonlyArray<Record<string, unknown>>; fetchedAt: number }> = globalJwksCache,
+  cache: Map<
+    string,
+    { keys: ReadonlyArray<Record<string, unknown>>; fetchedAt: number }
+  > = globalJwksCache,
 ): Promise<ReadonlyArray<Record<string, unknown>>> {
   const cached = cache.get(url);
   if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
@@ -172,7 +181,10 @@ export async function fetchJwks(
   return body.keys;
 }
 
-const globalJwksCache = new Map<string, { keys: ReadonlyArray<Record<string, unknown>>; fetchedAt: number }>();
+const globalJwksCache = new Map<
+  string,
+  { keys: ReadonlyArray<Record<string, unknown>>; fetchedAt: number }
+>();
 const JWKS_TTL_MS = 10 * 60_000;
 
 /**

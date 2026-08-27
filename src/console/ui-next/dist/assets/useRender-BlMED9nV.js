@@ -1,1 +1,0 @@
-import{jt as e}from"./shortcut-keys-DuUugrKv.js";function t(t){return e(t.defaultTagName??`div`,t,t)}export{t};

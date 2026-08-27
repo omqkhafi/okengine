@@ -89,7 +89,12 @@ export function openOAuthFigma(
     },
     async resolveAssertion(input: OAuthAssertionInput): Promise<OAuthAssertion> {
       return resolveOauth2Assertion(input, async (accessToken) => {
-        const me = await fetchProviderJson("https://api.figma.com/v1/me", accessToken, fetchFn, "figma");
+        const me = await fetchProviderJson(
+          "https://api.figma.com/v1/me",
+          accessToken,
+          fetchFn,
+          "figma",
+        );
         const subject =
           typeof me["id"] === "string"
             ? me["id"]

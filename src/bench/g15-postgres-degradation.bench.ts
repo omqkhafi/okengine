@@ -21,10 +21,7 @@ import { describe, expect, test } from "bun:test";
 import { connectPostgres, postgresDriver } from "../drivers/postgres.ts";
 import type { SqlDriver, SqlConnection } from "../drivers/types.ts";
 import { sql } from "../elements/store/declare.ts";
-import {
-  createSqlStoreHandle,
-  type SqlStoreHandle,
-} from "../elements/store/sql-session.ts";
+import { createSqlStoreHandle, type SqlStoreHandle } from "../elements/store/sql-session.ts";
 import { createStoreRuntime } from "../elements/store/runtime.ts";
 import { LIVE_PG } from "./lib/infra.ts";
 import { measureEventLoopLag } from "./lib/event-loop-lag.ts";
@@ -196,8 +193,7 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)(
           finalInflight: finalInflight,
           avgInflight: Number(
             (
-              inflightSamples.reduce((a, s) => a + s.inflight, 0) /
-              (inflightSamples.length || 1)
+              inflightSamples.reduce((a, s) => a + s.inflight, 0) / (inflightSamples.length || 1)
             ).toFixed(1),
           ),
           rssStartMb: Number(rssStart.toFixed(1)),
@@ -221,7 +217,9 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)(
           );
         }
         if (metrics.lagP99Ms! > 250) {
-          issues.push(`event-loop lag p99 ${metrics.lagP99Ms}ms — backpressure is leaking onto the loop`);
+          issues.push(
+            `event-loop lag p99 ${metrics.lagP99Ms}ms — backpressure is leaking onto the loop`,
+          );
         }
         if (issues.length === 0 && finalInflight > ARRIVALS_PER_SEC) {
           issues.push(

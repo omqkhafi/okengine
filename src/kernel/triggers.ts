@@ -201,6 +201,8 @@ export interface ResourceFlowBag {
   readonly get: unknown;
   readonly update: unknown;
   readonly remove: unknown;
+  /** Live surface when present — `store.resource(…, { live: true }).all()`. */
+  readonly live?: { readonly signal: string; readonly flow: unknown };
 }
 
 /**
@@ -212,6 +214,12 @@ export interface ResourceMount {
   readonly [resourceMountBrand]: true;
   readonly mounts: ReadonlyArray<{ readonly trigger: HttpTrigger; readonly flow: unknown }>;
   readonly gates: readonly GateRef[];
+  /**
+   * Optional live surface — set by `httpResource` when the ops bag carries
+   * `live` (from `store.resource(…, { live: true }).all()`). `on()` then
+   * synthesizes the SSE exposure on `<path>/live`.
+   */
+  readonly live?: { readonly signal: string; readonly flow: unknown };
   /**
    * Attach gates to every verb (registration order). `gate.all` and arrays flatten.
    */

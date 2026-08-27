@@ -217,7 +217,8 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G14 — graceful shutdown u
       } else if (timeToExitMs > 10_000) {
         issues.push(`time-to-exit ${timeToExitMs}ms exceeds 10s`);
       }
-      if (floodExit !== "closed") issues.push("SSE subscribers not all closed within 10s of shutdown");
+      if (floodExit !== "closed")
+        issues.push("SSE subscribers not all closed within 10s of shutdown");
 
       console.log("[G14] metrics:", JSON.stringify(metrics));
       if (issues.length > 0) console.log("[G14] issues:", issues);

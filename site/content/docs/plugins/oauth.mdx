@@ -83,29 +83,29 @@ to another credential is refused with `email_in_use`.
 
 ## Providers
 
-| Provider | Shape | Identity source | Email verified |
-| -------- | ----- | --------------- | -------------- |
-| Google | OIDC | JWKS-verified ID token | `email_verified` claim |
-| Apple | OIDC | JWKS-verified ID token | strict parse — `"false"` stays false |
-| Microsoft | OIDC | JWKS-verified ID token | `email_verified` claim |
-| GitHub | OAuth2 | `/user` + `/user/emails` | primary `verified` flag |
-| Discord | OAuth2 | `/users/@me` | `verified` flag |
-| X | OAuth2 | `/2/users/me` | never — no trustworthy signal |
-| Facebook | OAuth2 | Graph `/me` | never — no trustworthy signal |
-| Figma | OAuth2 | `/v1/me` | never — no verification field |
+| Provider  | Shape  | Identity source          | Email verified                       |
+| --------- | ------ | ------------------------ | ------------------------------------ |
+| Google    | OIDC   | JWKS-verified ID token   | `email_verified` claim               |
+| Apple     | OIDC   | JWKS-verified ID token   | strict parse — `"false"` stays false |
+| Microsoft | OIDC   | JWKS-verified ID token   | `email_verified` claim               |
+| GitHub    | OAuth2 | `/user` + `/user/emails` | primary `verified` flag              |
+| Discord   | OAuth2 | `/users/@me`             | `verified` flag                      |
+| X         | OAuth2 | `/2/users/me`            | never — no trustworthy signal        |
+| Facebook  | OAuth2 | Graph `/me`              | never — no trustworthy signal        |
+| Figma     | OAuth2 | `/v1/me`                 | never — no verification field        |
 
 Each provider has its own page under this category — endpoints, scopes, setup,
 and trust rules.
 
 ## Security model
 
-| Threat | Defense |
-| ------ | ------- |
-| Code interception | PKCE S256 on every provider |
-| CSRF / forged callbacks | single-use `state`, SHA-256-hashed at rest |
-| Mix-up across providers (RFC 9700) | per-provider callback routes + issuer pinning on every assertion |
-| Unverified-email takeover | `linkOrProvision` refuses `email_in_use` without an authenticated owner |
-| Redirect manipulation | byte-exact stored `redirect_uri` at token exchange |
+| Threat                             | Defense                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| Code interception                  | PKCE S256 on every provider                                             |
+| CSRF / forged callbacks            | single-use `state`, SHA-256-hashed at rest                              |
+| Mix-up across providers (RFC 9700) | per-provider callback routes + issuer pinning on every assertion        |
+| Unverified-email takeover          | `linkOrProvision` refuses `email_in_use` without an authenticated owner |
+| Redirect manipulation              | byte-exact stored `redirect_uri` at token exchange                      |
 
 **Consequence:** an attacker who completes a social login claiming your email
 gains nothing — the account stays untouched unless they already own a session
@@ -113,26 +113,26 @@ for it.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `providers` | map | `{}` | Per-provider config, disabled by default |
-| `baseUrl` | `string` | — | Origin for synthesized callback URIs |
-| `secret` | `string` | active\* | HMAC secret (\*from `gate.auth`) |
-| `sessions` | `SessionStore` | active\* | Session store |
-| `identities` | `IdentityStore` | active\* | Shared user store |
-| `verifications` | `VerificationStore` | new | Flow-state store |
-| `fetch` | `typeof fetch` | global | Injectable transport (tests) |
+| Option          | Type                | Default  | Meaning                                  |
+| --------------- | ------------------- | -------- | ---------------------------------------- |
+| `providers`     | map                 | `{}`     | Per-provider config, disabled by default |
+| `baseUrl`       | `string`            | —        | Origin for synthesized callback URIs     |
+| `secret`        | `string`            | active\* | HMAC secret (\*from `gate.auth`)         |
+| `sessions`      | `SessionStore`      | active\* | Session store                            |
+| `identities`    | `IdentityStore`     | active\* | Shared user store                        |
+| `verifications` | `VerificationStore` | new      | Flow-state store                         |
+| `fetch`         | `typeof fetch`      | global   | Injectable transport (tests)             |
 
 Per-provider config: `enabled`, `clientId`, `redirectUri`, `scopes`,
 `storeProviderTokens`, plus Microsoft `tenant` and Apple `teamId` / `keyId`.
 
 ## Surfaces
 
-| Flow | Path | Gate |
-| ---- | ---- | ---- |
-| `auth.oauthStart` | `POST /auth/oauth/{provider}/start` | `gate.public` + otp rate |
-| `auth.oauthCallback` | `GET+POST /auth/oauth/callback/{provider}` | `gate.public` + otp rate |
-| `auth.oauthLinkStart` | `POST /auth/oauth/{provider}/link` | session + bearer |
+| Flow                  | Path                                       | Gate                     |
+| --------------------- | ------------------------------------------ | ------------------------ |
+| `auth.oauthStart`     | `POST /auth/oauth/{provider}/start`        | `gate.public` + otp rate |
+| `auth.oauthCallback`  | `GET+POST /auth/oauth/callback/{provider}` | `gate.public` + otp rate |
+| `auth.oauthLinkStart` | `POST /auth/oauth/{provider}/link`         | session + bearer         |
 
 The GET + POST callback pair exists because Apple posts its response instead of
 redirecting.
@@ -179,6 +179,10 @@ via `POST /auth/oauth/{provider}/link`.
 
 <Cards>
   <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
-  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+  <Card
+    title="GitHub"
+    description="OAuth2 with verified-email lookup."
+    href="/docs/plugins/github"
+  />
   <Card title="Passkey" description="WebAuthn-shaped passkeys." href="/docs/plugins/passkey" />
 </Cards>

@@ -13,11 +13,18 @@ export {
   nextResubscribeDelay,
   pickLiveExposure,
 } from "./live.ts";
-export { createClient, flattenRoutes } from "./create.ts";
-export type { AppWithRoutes } from "./create.ts";
+export { createClient, flattenRoutes, transportOf } from "./create.ts";
+export type { AppWithRoutes, TransportBag } from "./create.ts";
 export { isErrorCode, isFail, isOk, isTransportError } from "./errors.ts";
 export { isPagerMeta, pagerLink } from "./pager.ts";
 export type { ClientPager, PagerLink } from "./pager.ts";
+export {
+  applyOptimisticPatch,
+  clearOptimisticPatch,
+  isStaleUpsert,
+  reduceLiveQueryRows,
+} from "./use-live-query.ts";
+export type { LiveQueryError, LiveQueryEvent } from "./use-live-query.ts";
 export { createTransport } from "./transport.ts";
 export type { Transport } from "./transport.ts";
 export type {

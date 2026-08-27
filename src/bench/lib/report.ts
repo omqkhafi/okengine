@@ -19,8 +19,7 @@ export interface BenchArtifact {
 
 export const HARDWARE = "Apple M4, 24GB";
 
-export const DISCLAIMER =
-  "trend-analysis-only; not SLA; macOS M4 not Linux prod";
+export const DISCLAIMER = "trend-analysis-only; not SLA; macOS M4 not Linux prod";
 
 /** Percentile of an array of samples (ms or ops). */
 export function percentile(samples: number[], p: number): number {

@@ -12,14 +12,14 @@
 
 Six real product defects were found and fixed during the campaign, each recorded as measured → issue → fix → re-measured in its group's artifact:
 
-| # | Defect | Root cause | Fix | Verified by |
-|---|--------|-----------|-----|-------------|
-| 1 | `rotateMaster` → `ERR_POSTGRES_UNSAFE_TRANSACTION` on shared pool (G7b) | manual BEGIN needs a dedicated client | `connectPostgres` honors `pool.max === 1` as opt-in dedicated client (`src/drivers/postgres.ts`) | G7b full rerun, vault suites |
-| 2 | False "lease held by another instance" during rotation (G7b) | rotate-lease claim used `FOR UPDATE SKIP LOCKED`; audit-append contention misread as lease loss | plain `FOR UPDATE` in `src/elements/vault/storage.ts` | 5/5 green vault+driver suite runs |
-| 3 | 25× `tuple concurrently updated` under concurrent identity bags (G8c) | RLS helper install memoized per handle → raced `CREATE OR REPLACE FUNCTION` | per-connection dedupe via `WeakMap<SqlConnection, Promise>` (`src/elements/store/sql-session.ts`) + regression test | G8c full sweep, G1 blast-radius rerun |
-| 4 | Out-of-the-box email always fails (~3s retry then dead) (G13d) | default sender `oke@localhost` dotless → SMTP validation reject | default → `oke@localhost.test` (`src/elements/channel/runtime.ts`) + regression test | 150/150 Mailpit deliveries |
-| 5 | All concurrent sends through one transport die ("Unexpected SMTP response for DATA end") (G13d) | shared SMTP socket wire interleaving | per-transport send serialization in `createChannelRuntime` + regression test | full send sweep from t=0 |
-| 6 | Doctor fd estimate off by ~4,400% (G3b vs G12) | formula budgeted 64 fds/SSE subscriber; reality ≈1.5 | measured constant `FD_COST_PER_SUBSCRIBER = 1.5` exported from `src/cli/doctor-fd.ts` + linear-scaling test | re-measured Δ +6.7% |
+| #   | Defect                                                                                          | Root cause                                                                                      | Fix                                                                                                                 | Verified by                           |
+| --- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1   | `rotateMaster` → `ERR_POSTGRES_UNSAFE_TRANSACTION` on shared pool (G7b)                         | manual BEGIN needs a dedicated client                                                           | `connectPostgres` honors `pool.max === 1` as opt-in dedicated client (`src/drivers/postgres.ts`)                    | G7b full rerun, vault suites          |
+| 2   | False "lease held by another instance" during rotation (G7b)                                    | rotate-lease claim used `FOR UPDATE SKIP LOCKED`; audit-append contention misread as lease loss | plain `FOR UPDATE` in `src/elements/vault/storage.ts`                                                               | 5/5 green vault+driver suite runs     |
+| 3   | 25× `tuple concurrently updated` under concurrent identity bags (G8c)                           | RLS helper install memoized per handle → raced `CREATE OR REPLACE FUNCTION`                     | per-connection dedupe via `WeakMap<SqlConnection, Promise>` (`src/elements/store/sql-session.ts`) + regression test | G8c full sweep, G1 blast-radius rerun |
+| 4   | Out-of-the-box email always fails (~3s retry then dead) (G13d)                                  | default sender `oke@localhost` dotless → SMTP validation reject                                 | default → `oke@localhost.test` (`src/elements/channel/runtime.ts`) + regression test                                | 150/150 Mailpit deliveries            |
+| 5   | All concurrent sends through one transport die ("Unexpected SMTP response for DATA end") (G13d) | shared SMTP socket wire interleaving                                                            | per-transport send serialization in `createChannelRuntime` + regression test                                        | full send sweep from t=0              |
+| 6   | Doctor fd estimate off by ~4,400% (G3b vs G12)                                                  | formula budgeted 64 fds/SSE subscriber; reality ≈1.5                                            | measured constant `FD_COST_PER_SUBSCRIBER = 1.5` exported from `src/cli/doctor-fd.ts` + linear-scaling test         | re-measured Δ +6.7%                   |
 
 Plus one pre-phase fix delivered by Group 12 itself: **`oke doctor file_descriptor_limit` check** (`src/cli/doctor-fd.ts`, wired into `runDoctor()` after port checks, injectable `detectFdPressure`; severity error when `softLimit < estimatedNeed`, warn when `< estimatedNeed × 2`). Doctor test suite: 15 pass / 0 fail. Live CLI: warns at `ulimit -n 256`, clean at 65536.
 
@@ -32,15 +32,15 @@ Harness-only bugs (no product impact, each fixed before final runs, sustained re
 **Command:** `OKE_BENCH=1 bun test ./src/bench/g01-rls-stamp.bench.ts --timeout 120000`
 Sweep N ∈ {10,50,100,200,500} × bind shapes {3,4 binds} on one PGlite connection behind `withRlsStampLock`.
 
-| N | p50 (ms) | p99 (ms) | ops/s |
-|---|---------|---------|-------|
-| 10 | 1.9 | 4.2 | 2,803 |
-| 50 | 6.7 | 14.5 | 3,560 |
-| 100 | 13.3 | 27.1 | 3,703 |
-| 200 | 27.5 | 56.2 | 3,761 |
-| 500 | 60.2 | 128.7 | 4,026 |
+| N   | p50 (ms) | p99 (ms) | ops/s |
+| --- | -------- | -------- | ----- |
+| 10  | 1.9      | 4.2      | 2,803 |
+| 50  | 6.7      | 14.5     | 3,560 |
+| 100 | 13.3     | 27.1     | 3,703 |
+| 200 | 27.5     | 56.2     | 3,761 |
+| 500 | 60.2     | 128.7    | 4,026 |
 
-Latency degrades linearly with N while throughput *rises* (queue pipelines cleanly) — no super-linear collapse. Correctness sanity (concurrent identities don't leak across stamps): pass.
+Latency degrades linearly with N while throughput _rises_ (queue pipelines cleanly) — no super-linear collapse. Correctness sanity (concurrent identities don't leak across stamps): pass.
 **Issues:** none. Re-run post-G8-fix (blast radius): same shape, confirmed unchanged. Artifact: `G1-1787650152550.json`
 
 ## G2 — Tenancy at scale (clock.perTenant)
@@ -48,10 +48,10 @@ Latency degrades linearly with N while throughput *rises* (queue pipelines clean
 **Command:** `OKE_BENCH=1 OKE_TEST_POSTGRES=1 DATABASE_URL=$DATABASE_URL bun test ./src/bench/g02-clock-per-tenant.bench.ts --timeout 180000`
 120 perTenant rows seeded; concurrent lease acquisition via `CLAIM_LEASE_SQL` on live PG through pgdog.
 
-| k | claims | p50 | p99 | claims/s | duplicate fires |
-|---|--------|-----|-----|----------|-----------------|
-| 4 | 1,440 | 49 ms | 105 ms | 4,867 | **0** |
-| 16 | 5,760 | 182 ms | 355 ms | 5,366 | **0** |
+| k   | claims | p50    | p99    | claims/s | duplicate fires |
+| --- | ------ | ------ | ------ | -------- | --------------- |
+| 4   | 1,440  | 49 ms  | 105 ms | 4,867    | **0**           |
+| 16  | 5,760  | 182 ms | 355 ms | 5,366    | **0**           |
 
 Zero duplicate fires across all 7,200 claims. Artifact: `G2-1787646500776.json`
 
@@ -69,13 +69,13 @@ Zero duplicate fires across all 7,200 claims. Artifact: `G2-1787646500776.json`
 
 **Command:** `OKE_BENCH=1 bun test ./src/bench/g04-auth-vault-hotpath.bench.ts`
 
-| Probe | Throughput | p99 |
-|---|---|---|
-| `authenticateApiKey` (1k/10k/50k iters) | ~87k–102k ops/s flat | ~0.03 ms |
-| raw HMAC verify | ~64k/s | — |
-| boot-bag `vaultRuntime.read` | ~15.3M reads/s | ~0 |
-| request-time `fx.vault.get` | ~3.4M reads/s | 0.001 ms |
-| **added p99 (request-time − boot-bag)** | **0.001 ms** | well inside the <1 ms routing budget |
+| Probe                                   | Throughput           | p99                                  |
+| --------------------------------------- | -------------------- | ------------------------------------ |
+| `authenticateApiKey` (1k/10k/50k iters) | ~87k–102k ops/s flat | ~0.03 ms                             |
+| raw HMAC verify                         | ~64k/s               | —                                    |
+| boot-bag `vaultRuntime.read`            | ~15.3M reads/s       | ~0                                   |
+| request-time `fx.vault.get`             | ~3.4M reads/s        | 0.001 ms                             |
+| **added p99 (request-time − boot-bag)** | **0.001 ms**         | well inside the <1 ms routing budget |
 
 Artifacts: `G4-auth-…json`, `G4-vault-…json`
 
@@ -128,12 +128,12 @@ Delivered before any SSE work: `file_descriptor_limit` finding in `oke doctor` (
 
 **Command:** `OKE_BENCH=1 OKE_TEST_REDIS_URL=$OKE_TEST_REDIS_URL bun test ./src/bench/g13-elements.bench.ts --timeout 300000`
 
-| Sub-bench | Result |
-|---|---|
-| Gate `takeRate` @ high RPS (live redis EVAL) | 95,304 takes/s, p99 1.5 ms; exact accounting: 5,000 allowed / 5,000 denied vs bucket max |
-| `gated()` cumulative cost | 0.64 µs/op @1k → 0.30 µs/op @50k — sub-linear, no cumulative growth |
-| `fx.json.stream` concurrent (encodeSseStream) | 11,025 streams/s = 363,824 SSE frames/s @ concurrency 25; stream p99 5.6 ms |
-| Channel bulk send (RetryTransport → Mailpit) | first runs dead → **Fixes #4 & #5**; re-measured from t=0: **150/150 delivered** (Mailpit delta exactly 150), 294 sends/s serialized, p99 63 ms |
+| Sub-bench                                     | Result                                                                                                                                          |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gate `takeRate` @ high RPS (live redis EVAL)  | 95,304 takes/s, p99 1.5 ms; exact accounting: 5,000 allowed / 5,000 denied vs bucket max                                                        |
+| `gated()` cumulative cost                     | 0.64 µs/op @1k → 0.30 µs/op @50k — sub-linear, no cumulative growth                                                                             |
+| `fx.json.stream` concurrent (encodeSseStream) | 11,025 streams/s = 363,824 SSE frames/s @ concurrency 25; stream p99 5.6 ms                                                                     |
+| Channel bulk send (RetryTransport → Mailpit)  | first runs dead → **Fixes #4 & #5**; re-measured from t=0: **150/150 delivered** (Mailpit delta exactly 150), 294 sends/s serialized, p99 63 ms |
 
 Artifacts: `G13{a,b,c,d}-…json` (G13d carries both issue→fix→re-measured trails)
 
@@ -147,11 +147,11 @@ Full `load-child serve` + `installGracefulShutdown`; 220 held SSE + 60 workers (
 **Command:** `OKE_BENCH=1 OKE_BENCH_PG_DELAY_MS=500 OKE_TEST_POSTGRES=1 DATABASE_URL=$DATABASE_URL bun test ./src/bench/g15-postgres-degradation.bench.ts --timeout 300000`
 Test-only `delayedPostgresDriver()` wrapper sleeps before every query; live pgdog PG only.
 
-| Arrival rate | Achieved | Max in-flight | Errors |
-|---|---|---|---|
-| 10/s | 9.83 ops/s | 61 | 0 |
-| 20/s | 19.7 ops/s | 122 | 0 |
-| 40/s (2× overload) | 38.3 ops/s | 239 → drains to 12 | 0 |
+| Arrival rate       | Achieved   | Max in-flight      | Errors |
+| ------------------ | ---------- | ------------------ | ------ |
+| 10/s               | 9.83 ops/s | 61                 | 0      |
+| 20/s               | 19.7 ops/s | 122                | 0      |
+| 40/s (2× overload) | 38.3 ops/s | 239 → drains to 12 | 0      |
 
 RSS growth bounded (+15–23 MB); event-loop lag p99 ≤3 ms. Verdict: **bounded graceful backpressure** — no unbounded `withRlsStampLock` queue/OOM; Bun.SQL pool parallelism keeps service ≈ arrival even at 2× overload.
 

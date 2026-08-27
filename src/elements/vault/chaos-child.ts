@@ -448,7 +448,9 @@ if (mode === "bench-read-loop") {
       } catch (error) {
         const dur = performance.now() - s;
         const message = error instanceof Error ? error.message : String(error);
-        lines.push(`${JSON.stringify({ ok: false, durMs: Number(dur.toFixed(3)), error: message, at: Date.now() })}\n`);
+        lines.push(
+          `${JSON.stringify({ ok: false, durMs: Number(dur.toFixed(3)), error: message, at: Date.now() })}\n`,
+        );
       }
       scheduleFlush();
       await Bun.sleep(2);

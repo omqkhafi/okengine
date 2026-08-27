@@ -235,7 +235,13 @@ export function oauth(options: OAuthOptions = {}) {
       }
 
       if (p.config.storeProviderTokens === true && exchangedTokens !== undefined) {
-        await persistProviderTokens(p.id, linked.userId, exchangedTokens, runtime.crypto.secret, fx);
+        await persistProviderTokens(
+          p.id,
+          linked.userId,
+          exchangedTokens,
+          runtime.crypto.secret,
+          fx,
+        );
       }
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: linked.userId,
@@ -333,7 +339,10 @@ function bindCallbackBothMethods(flowDef: AnyFlowDef): Binding[] {
   const gates = authPublicGates("otp");
   const getBinding = bindPublicAuthGet("/auth/oauth/callback/:provider", flowDef, gates);
   const postBinding = bindAuthHttp(
-    http.post("/auth/oauth/callback/:provider").public().gate(...gates),
+    http
+      .post("/auth/oauth/callback/:provider")
+      .public()
+      .gate(...gates),
     flowDef,
   );
   return [getBinding, postBinding];

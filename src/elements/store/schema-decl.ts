@@ -7,6 +7,7 @@
 
 import type { ColumnClassification } from "../../manifest/types.ts";
 import { lazyRequire } from "../../kernel/lazy-require.ts";
+import type { PolicyGateDecl } from "../gate/declare.ts";
 import type { ColumnDef, TableHandle } from "./table.ts";
 import {
   id as idHelper,
@@ -1004,18 +1005,22 @@ export function schemaPolicyOwner(
 /**
  * Scope policy — `oke.has_scope('booking:create')`.
  *
- * @param scope - Scope string
+ * Accepts a bare scope string or a `gate.scope(...)` declaration; the decl
+ * form keeps the scope string single-sourced (TS catches dangling gate refs).
+ *
+ * @param scope - Scope string or `PolicyGateDecl` from `gate.scope(...)`
  * @param options - Command (default `insert`)
  */
 export function schemaPolicyScope(
-  scope: string,
+  scope: string | PolicyGateDecl,
   options: Pick<SchemaPolicyOptions, "for" | "as" | "to"> = {},
 ): SchemaPolicyDecl {
+  const resolved = typeof scope === "string" ? scope : (scope.scopes?.[0] ?? scope.name);
   const command = options.for ?? "insert";
-  return schemaPolicy(helperPolicyName("scope", scope, command), {
+  return schemaPolicy(helperPolicyName("scope", resolved, command), {
     ...options,
     for: command,
-    ...policyPredicates(command, `oke.has_scope(${sqlStringLiteral(scope)})`),
+    ...policyPredicates(command, `oke.has_scope(${sqlStringLiteral(resolved)})`),
   });
 }
 

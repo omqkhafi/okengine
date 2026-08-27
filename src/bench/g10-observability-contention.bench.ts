@@ -129,12 +129,8 @@ async function runArm(
 
     const workers = [
       ...Array.from({ length: PING_WORKERS }, pingLoop),
-      ...Array.from({ length: DURABLE_WORKERS }, () =>
-        loop("/_/bench/durable", {}, "durable"),
-      ),
-      ...Array.from({ length: STORE_WORKERS }, () =>
-        loop("/_/bench/rls", { n: 1 }, "store"),
-      ),
+      ...Array.from({ length: DURABLE_WORKERS }, () => loop("/_/bench/durable", {}, "durable")),
+      ...Array.from({ length: STORE_WORKERS }, () => loop("/_/bench/rls", { n: 1 }, "store")),
     ];
     const running = Promise.all(workers);
 

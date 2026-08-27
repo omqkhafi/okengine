@@ -7,12 +7,11 @@ source: "docs/spec/unified-theory.md"
 
 Sign in with Apple is OIDC with three twists: the web flow **posts** its
 response, every exchange needs an ES256 client-secret **JWT you sign**, and
-`email_verified` can arrive as the *string* `"false"`.
+`email_verified` can arrive as the _string_ `"false"`.
 
 <Callout title="The one rule">
-  Create a Sign in with Apple key (Team ID, Key ID, `.p8` private key), seed
-  the key in Vault, and register your exact callback URI — Apple validates all
-  three on every exchange.
+  Create a Sign in with Apple key (Team ID, Key ID, `.p8` private key), seed the key in Vault, and
+  register your exact callback URI — Apple validates all three on every exchange.
 </Callout>
 
 ## Quick start
@@ -22,8 +21,8 @@ response, every exchange needs an ES256 client-secret **JWT you sign**, and
 <Step>
 ### Create a key
 
-In the Apple Developer portal: Identifiers → register an App ID with *Sign In
-with Apple*; Keys → create a key with that capability; note the **Team ID**
+In the Apple Developer portal: Identifiers → register an App ID with _Sign In
+with Apple_; Keys → create a key with that capability; note the **Team ID**
 and **Key ID**, and download the `.p8` once.
 
 </Step>
@@ -74,13 +73,13 @@ The driver mints a fresh ES256 client-secret JWT per exchange (`iss` = team,
 
 ## How identity works
 
-| Aspect | Behavior |
-| ------ | -------- |
-| Callback | Apple posts `code` + `state` as a form body — both GET and POST are bound |
-| Signature | ES256 against `appleid.apple.com` JWKS |
-| Issuer | must equal `https://appleid.apple.com` |
-| Name | delivered only on first authorization via the form-posted `user` field |
-| Email trust | strict parse — only boolean `true`, `"true"`, or `"1"` count |
+| Aspect      | Behavior                                                                  |
+| ----------- | ------------------------------------------------------------------------- |
+| Callback    | Apple posts `code` + `state` as a form body — both GET and POST are bound |
+| Signature   | ES256 against `appleid.apple.com` JWKS                                    |
+| Issuer      | must equal `https://appleid.apple.com`                                    |
+| Name        | delivered only on first authorization via the form-posted `user` field    |
+| Email trust | strict parse — only boolean `true`, `"true"`, or `"1"` count              |
 
 **Consequence:** the string `"false"` stays unverified. Naive truthiness would
 mark every private-relay email verified — that is the takeover bug class this
@@ -90,23 +89,23 @@ Default scopes: `name`, `email`.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_APPLE_CLIENT_ID` (Services ID) |
-| `teamId` | `string` | required | Apple Developer Team ID |
-| `keyId` | `string` | required | Private-key identifier |
-| `redirectUri` | `string` | `{baseUrl}…/apple` | Exact registered URI |
-| `scopes` | `string[]` | `name email` | Requested scopes |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default            | Meaning                                 |
+| --------------------- | ---------- | ------------------ | --------------------------------------- |
+| `enabled`             | `boolean`  | `false`            | Turn the provider on                    |
+| `clientId`            | `string`   | Vault/env\*        | `\*OAUTH_APPLE_CLIENT_ID` (Services ID) |
+| `teamId`              | `string`   | required           | Apple Developer Team ID                 |
+| `keyId`               | `string`   | required           | Private-key identifier                  |
+| `redirectUri`         | `string`   | `{baseUrl}…/apple` | Exact registered URI                    |
+| `scopes`              | `string[]` | `name email`       | Requested scopes                        |
+| `storeProviderTokens` | `boolean`  | `false`            | Keep tokens in Vault                    |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/apple/start` |
+| Flow     | Path                                  |
+| -------- | ------------------------------------- |
+| Start    | `POST /auth/oauth/apple/start`        |
 | Callback | `GET+POST /auth/oauth/callback/apple` |
-| Link | `POST /auth/oauth/apple/link` |
+| Link     | `POST /auth/oauth/apple/link`         |
 
 ## Troubleshooting
 
@@ -143,6 +142,10 @@ form bodies. The route accepts POST with
 
 <Cards>
   <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
-  <Card title="Microsoft" description="Entra tenants and issuer templates." href="/docs/plugins/microsoft" />
+  <Card
+    title="Microsoft"
+    description="Entra tenants and issuer templates."
+    href="/docs/plugins/microsoft"
+  />
   <Card title="X" description="PKCE public client, never-verified emails." href="/docs/plugins/x" />
 </Cards>

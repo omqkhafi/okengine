@@ -40,10 +40,7 @@ export async function waitForFile(path: string, timeoutMs = 20_000): Promise<boo
 }
 
 /** Poll until `cond()` returns true (or timeout). */
-export async function waitFor(
-  cond: () => Promise<boolean>,
-  timeoutMs = 20_000,
-): Promise<boolean> {
+export async function waitFor(cond: () => Promise<boolean>, timeoutMs = 20_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await cond()) return true;

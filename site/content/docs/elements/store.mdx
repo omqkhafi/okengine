@@ -202,7 +202,19 @@ const notesR = store.resource(db, notes, {
 const mounted = on(http.resource("/notes", notesR.all()).public());
 ```
 
-`.gate(...)` / `.public()` chain like `http.get` — gates on every verb. Live SSE is `.live(signal)` on a GET, not on `http.resource`.
+`.gate(...)` / `.public()` chain like `http.get` — gates on every verb. Pass `live: true` to also mount `GET <path>/live` — an SSE feed of per-subscriber classified events (`upsert` / `revoked` / `delete`), gated the same way as the CRUD verbs.
+
+```typescript
+const notesR = store.resource(db, notes, {
+  in: NewNote,
+  out: Note,
+  live: true, // synthesizes GET /notes/live + internal live signal
+});
+
+const mounted = on(http.resource("/notes", notesR.all()).gate(member));
+```
+
+**Consequence:** the live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. Clients consume it with `useLiveQuery` from `okengine/client-react`.
 
 The list endpoint's URL is the whole query language:
 

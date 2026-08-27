@@ -59,117 +59,105 @@ function leastSquaresSlope(xs: readonly number[], ys: readonly number[]): number
 }
 
 describe.skipIf(!process.env.OKE_BENCH)("G11 — cold start cycle", () => {
-  test(
-    `${CYCLES} fresh Bun.spawn cycles — two-window medians + parent RSS slope`,
-    async () => {
-      const samples: CycleSample[] = [];
-      for (let i = 1; i <= CYCLES; i++) {
-        const proc = Bun.spawn(["bun", "-e", PROBE], {
-          cwd: ROOT,
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        const [stdout, stderr, exitCode] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-          proc.exited,
-        ]);
-        if (exitCode !== 0) throw new Error(`cycle ${i} probe failed: ${stderr || stdout}`);
-        const ms = Number(stdout.trim());
-        if (!Number.isFinite(ms) || ms <= 0) {
-          throw new Error(`cycle ${i} returned non-numeric: ${stdout}`);
-        }
-        samples.push({
-          i,
-          coldMs: ms,
-          parentRssMb: process.memoryUsage.rss() / 1024 / 1024,
-        });
-        if (i % 25 === 0) console.log(`[G11] cycle ${i}/${CYCLES}: ${ms.toFixed(1)}ms`);
+  test(`${CYCLES} fresh Bun.spawn cycles — two-window medians + parent RSS slope`, async () => {
+    const samples: CycleSample[] = [];
+    for (let i = 1; i <= CYCLES; i++) {
+      const proc = Bun.spawn(["bun", "-e", PROBE], {
+        cwd: ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      if (exitCode !== 0) throw new Error(`cycle ${i} probe failed: ${stderr || stdout}`);
+      const ms = Number(stdout.trim());
+      if (!Number.isFinite(ms) || ms <= 0) {
+        throw new Error(`cycle ${i} returned non-numeric: ${stdout}`);
       }
+      samples.push({
+        i,
+        coldMs: ms,
+        parentRssMb: process.memoryUsage.rss() / 1024 / 1024,
+      });
+      if (i % 25 === 0) console.log(`[G11] cycle ${i}/${CYCLES}: ${ms.toFixed(1)}ms`);
+    }
 
-      const all = samples.map((s) => s.coldMs);
-      const w1 = samples.slice(0, 10).map((s) => s.coldMs);
-      const w2 = samples.slice(-10).map((s) => s.coldMs);
+    const all = samples.map((s) => s.coldMs);
+    const w1 = samples.slice(0, 10).map((s) => s.coldMs);
+    const w2 = samples.slice(-10).map((s) => s.coldMs);
 
-      // Slopes: ms per cycle within the last window, and MB per cycle for RSS.
-      const tail = samples.slice(-10);
-      const tailCycleSlopePerCycle = leastSquaresSlope(
-        tail.map((s) => s.i),
-        tail.map((s) => s.coldMs),
+    // Slopes: ms per cycle within the last window, and MB per cycle for RSS.
+    const tail = samples.slice(-10);
+    const tailCycleSlopePerCycle = leastSquaresSlope(
+      tail.map((s) => s.i),
+      tail.map((s) => s.coldMs),
+    );
+    const rssSlopePerCycleAll = leastSquaresSlope(
+      samples.map((s) => s.i),
+      samples.map((s) => s.parentRssMb),
+    );
+
+    const metrics: Record<string, number> = {
+      cycles: CYCLES,
+      window1_p50Ms: Number(percentile(w1, 50).toFixed(3)),
+      window1_p99Ms: Number(percentile(w1, 99).toFixed(3)),
+      window2_p50Ms: Number(percentile(w2, 50).toFixed(3)),
+      window2_p99Ms: Number(percentile(w2, 99).toFixed(3)),
+      overallP50Ms: Number(percentile(all, 50).toFixed(3)),
+      overallP99Ms: Number(percentile(all, 99).toFixed(3)),
+      overallMinMs: Number(Math.min(...all).toFixed(3)),
+      overallMaxMs: Number(Math.max(...all).toFixed(3)),
+      window2MinusWindow1P50Ms: Number((percentile(w2, 50) - percentile(w1, 50)).toFixed(3)),
+      window2CycleSlopeMsPerCycle: Number(tailCycleSlopePerCycle.toFixed(4)),
+      parentRssStartMb: Number(samples[0]!.parentRssMb.toFixed(1)),
+      parentRssEndMb: Number(samples.at(-1)!.parentRssMb.toFixed(1)),
+      parentRssSlopeMbPerCycle: Number(rssSlopePerCycleAll.toFixed(4)),
+      parentRssGrowthMb: Number((samples.at(-1)!.parentRssMb - samples[0]!.parentRssMb).toFixed(1)),
+    };
+
+    // Interpretation rules baked into the artifact.
+    const issues: string[] = [];
+    const notes: string[] = [];
+    if (metrics.window2CycleSlopeMsPerCycle! > 2 && percentile(w2, 50) > percentile(w1, 50)) {
+      issues.push(
+        `suspected leak: cycles 91-100 trend rising at ${metrics.window2CycleSlopeMsPerCycle}ms/cycle ` +
+          `and warm window p50 (${metrics.window2_p50Ms}ms) exceeds cold window p50 ` +
+          `(${metrics.window1_p50Ms}ms)`,
       );
-      const rssSlopePerCycleAll = leastSquaresSlope(
-        samples.map((s) => s.i),
-        samples.map((s) => s.parentRssMb),
+    }
+    if (metrics.parentRssSlopeMbPerCycle! > 0.5) {
+      issues.push(
+        `parent RSS climbing at ${metrics.parentRssSlopeMbPerCycle}MB/cycle ` +
+          `(+${metrics.parentRssGrowthMb}MB over run)`,
       );
+    }
+    if (issues.length === 0 && metrics.window2MinusWindow1P50Ms! < 0) {
+      notes.push(
+        "warm-window p50 below cold-window p50 — expected OS/FS cache warmup across 100 spawns, not a real improvement",
+      );
+    }
 
-      const metrics: Record<string, number> = {
-        cycles: CYCLES,
-        window1_p50Ms: Number(percentile(w1, 50).toFixed(3)),
-        window1_p99Ms: Number(percentile(w1, 99).toFixed(3)),
-        window2_p50Ms: Number(percentile(w2, 50).toFixed(3)),
-        window2_p99Ms: Number(percentile(w2, 99).toFixed(3)),
-        overallP50Ms: Number(percentile(all, 50).toFixed(3)),
-        overallP99Ms: Number(percentile(all, 99).toFixed(3)),
-        overallMinMs: Number(Math.min(...all).toFixed(3)),
-        overallMaxMs: Number(Math.max(...all).toFixed(3)),
-        window2MinusWindow1P50Ms: Number(
-          (percentile(w2, 50) - percentile(w1, 50)).toFixed(3),
-        ),
-        window2CycleSlopeMsPerCycle: Number(tailCycleSlopePerCycle.toFixed(4)),
-        parentRssStartMb: Number(samples[0]!.parentRssMb.toFixed(1)),
-        parentRssEndMb: Number(samples.at(-1)!.parentRssMb.toFixed(1)),
-        parentRssSlopeMbPerCycle: Number(rssSlopePerCycleAll.toFixed(4)),
-        parentRssGrowthMb: Number(
-          (samples.at(-1)!.parentRssMb - samples[0]!.parentRssMb).toFixed(1),
-        ),
-      };
+    const artifact: BenchArtifact = {
+      group: "G11-cold-start-cycle",
+      hardware: HARDWARE,
+      disclaimer: DISCLAIMER,
+      command: "OKE_BENCH=1 bun test ./src/bench/g11-cold-start-cycle.bench.ts --timeout 300000",
+      metrics,
+      issues: [...notes.map((n) => `note: ${n}`), ...issues],
+      fixes: [],
+      remeasured: null,
+    };
+    console.log("[G11] metrics:", JSON.stringify(metrics));
+    if (artifact.issues.length > 0) console.log("[G11] issues:", artifact.issues);
+    const path = await writeArtifact(artifact);
+    console.log(`[G11] artifact: ${path}`);
 
-      // Interpretation rules baked into the artifact.
-      const issues: string[] = [];
-      const notes: string[] = [];
-      if (
-        metrics.window2CycleSlopeMsPerCycle! > 2 &&
-        percentile(w2, 50) > percentile(w1, 50)
-      ) {
-        issues.push(
-          `suspected leak: cycles 91-100 trend rising at ${metrics.window2CycleSlopeMsPerCycle}ms/cycle ` +
-            `and warm window p50 (${metrics.window2_p50Ms}ms) exceeds cold window p50 ` +
-            `(${metrics.window1_p50Ms}ms)`,
-        );
-      }
-      if (metrics.parentRssSlopeMbPerCycle! > 0.5) {
-        issues.push(
-          `parent RSS climbing at ${metrics.parentRssSlopeMbPerCycle}MB/cycle ` +
-            `(+${metrics.parentRssGrowthMb}MB over run)`,
-        );
-      }
-      if (issues.length === 0 && metrics.window2MinusWindow1P50Ms! < 0) {
-        notes.push(
-          "warm-window p50 below cold-window p50 — expected OS/FS cache warmup across 100 spawns, not a real improvement",
-        );
-      }
-
-      const artifact: BenchArtifact = {
-        group: "G11-cold-start-cycle",
-        hardware: HARDWARE,
-        disclaimer: DISCLAIMER,
-        command:
-          "OKE_BENCH=1 bun test ./src/bench/g11-cold-start-cycle.bench.ts --timeout 300000",
-        metrics,
-        issues: [...notes.map((n) => `note: ${n}`), ...issues],
-        fixes: [],
-        remeasured: null,
-      };
-      console.log("[G11] metrics:", JSON.stringify(metrics));
-      if (artifact.issues.length > 0) console.log("[G11] issues:", artifact.issues);
-      const path = await writeArtifact(artifact);
-      console.log(`[G11] artifact: ${path}`);
-
-      expect(CYCLES).toBeGreaterThanOrEqual(100);
-      expect(metrics.overallP50Ms!).toBeGreaterThan(0);
-    },
-    300_000,
-  );
+    expect(CYCLES).toBeGreaterThanOrEqual(100);
+    expect(metrics.overallP50Ms!).toBeGreaterThan(0);
+  }, 300_000);
 });
 
 // G11 is pure subprocess work — live infra import kept only for gate symmetry.

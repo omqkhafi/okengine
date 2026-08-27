@@ -60,13 +60,10 @@ if (mode !== "serve") {
 const instanceId = process.argv[3] ?? "bench-a";
 const port = Number(process.argv[4] ?? "0");
 
-const pgUrl =
-  process.env.DATABASE_URL?.trim() || process.env.OKE_STORE_SQL_URL?.trim() || "";
+const pgUrl = process.env.DATABASE_URL?.trim() || process.env.OKE_STORE_SQL_URL?.trim() || "";
 const redisUrl = (process.env.OKE_TEST_REDIS_URL ?? process.env.REDIS_URL)?.trim() ?? "";
 if (!pgUrl || !redisUrl) {
-  console.error(
-    "load-app: DATABASE_URL and OKE_TEST_REDIS_URL (or REDIS_URL) are required",
-  );
+  console.error("load-app: DATABASE_URL and OKE_TEST_REDIS_URL (or REDIS_URL) are required");
   process.exit(2);
 }
 

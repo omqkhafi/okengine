@@ -1313,6 +1313,20 @@ export function oke(options: OkeOptions): OkeApp {
       const { bindHostIdentitySqlFromStore } = await import("../auth/identity-sql.ts");
       await bindHostIdentitySqlFromStore(result.store, gateConfig.auth.identities);
     }
+    // Realtime bridge — CDC sink + LiveQuery runtime + outbox poller when a
+    // Postgres-capable primary SQL connection exists. No-op otherwise.
+    if (result.store) {
+      const { bindRealtimeBridge } = await import("./realtime-bind.ts");
+      const primaryConn = await result.store.primarySql();
+      if (primaryConn) {
+        bindRealtimeBridge(primaryConn, (tableName, payload) =>
+          app.dispatchCdc(tableName, {
+            before: (payload.before ?? null) as Record<string, unknown> | null,
+            after: (payload.after ?? null) as Record<string, unknown> | null,
+          }),
+        );
+      }
+    }
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");
@@ -1954,6 +1968,11 @@ export function oke(options: OkeOptions): OkeApp {
     async stop() {
       if (!bootResult) return;
       bootResult.stopScheduler();
+      // Realtime bridge down before connections close.
+      {
+        const { unbindRealtimeBridge } = await import("./realtime-bind.ts");
+        unbindRealtimeBridge();
+      }
       // Proactive lease release so survivors need not wait for TTL reclaim.
       await releaseInstanceLeases({
         bootResult: {

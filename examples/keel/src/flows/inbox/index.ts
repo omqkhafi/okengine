@@ -1,5 +1,6 @@
-import { on, flow, http, fail } from "okengine";
+import { on, flow, http, fail, store } from "okengine";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 import { db, member } from "@/core";
 import { inbox } from "@/db/schema.decl";
@@ -14,6 +15,26 @@ const InboxHit = inboxZod.select.pick({
   refId: true,
   readAt: true,
 });
+
+/**
+ * Live query surface for the member inbox — `GET /inbox/live` streams
+ * classified upsert/revoked/delete events. Clients filter to their own rows
+ * with `?memberEmail=eq.<userId>` (same PostgREST grammar as list).
+ */
+const inboxR = store.resource(db, inbox, {
+  in: z.object({
+    memberEmail: z.string().email(),
+    kind: z.string().min(1),
+    title: z.string().min(1),
+    refId: z.string().min(1),
+  }),
+  out: InboxHit,
+  live: true,
+});
+
+if (inboxR.live) {
+  on(http.get("/inbox/live").gate(member).live({ name: inboxR.live.signal }), inboxR.live.flow);
+}
 
 /** Inbox for the signed-in member. */
 export const list = on(

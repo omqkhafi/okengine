@@ -67,10 +67,17 @@ async function readReadyPid(proc: Server): Promise<number> {
 }
 
 /** SSE subscriber that counts received data frames until aborted. */
-async function sseSubscriber(target: string, ac: AbortController, onFrame: () => void): Promise<void> {
+async function sseSubscriber(
+  target: string,
+  ac: AbortController,
+  onFrame: () => void,
+): Promise<void> {
   while (!ac.signal.aborted) {
     try {
-      const res = await fetch(target, { signal: ac.signal, headers: { accept: "text/event-stream" } });
+      const res = await fetch(target, {
+        signal: ac.signal,
+        headers: { accept: "text/event-stream" },
+      });
       if (!res.body) return;
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -211,7 +218,7 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G6 — mixed load contentio
           metrics.g5BaselinePingRps = g5Ping;
           metrics.pingDeltaVsG5Pct =
             g5Ping > 0
-              ? Number((((metrics.pingReqPerSec ?? 0) - g5Ping) / g5Ping * 100).toFixed(1))
+              ? Number(((((metrics.pingReqPerSec ?? 0) - g5Ping) / g5Ping) * 100).toFixed(1))
               : -1;
         }
 

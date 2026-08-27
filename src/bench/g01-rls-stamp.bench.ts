@@ -110,21 +110,18 @@ async function sweepPoint(
 }
 
 describe.skipIf(!process.env.OKE_BENCH)("G1 — RLS stamp serialization (pglite)", () => {
-  test(
-    "correctness sanity: concurrent identities do not leak across stamps",
-    async () => {
-      const [u3, u4, u3again] = await Promise.all([
-        asUser3.raw(PROBE_SQL),
-        asUser4.raw(PROBE_SQL),
-        asUser3.raw(PROBE_SQL),
-      ]);
-      expect((u3[0] as { u: string }).u).toBe("alice");
-      expect((u4[0] as { u: string }).u).toBe("bob");
-      expect((u3[0] as { t: string | null }).t).toBeNull();
-      expect((u4[0] as { t: string }).t).toBe("acme");
-      expect((u3again[0] as { u: string }).u).toBe("alice");
-    },
-  );
+  test("correctness sanity: concurrent identities do not leak across stamps", async () => {
+    const [u3, u4, u3again] = await Promise.all([
+      asUser3.raw(PROBE_SQL),
+      asUser4.raw(PROBE_SQL),
+      asUser3.raw(PROBE_SQL),
+    ]);
+    expect((u3[0] as { u: string }).u).toBe("alice");
+    expect((u4[0] as { u: string }).u).toBe("bob");
+    expect((u3[0] as { t: string | null }).t).toBeNull();
+    expect((u4[0] as { t: string }).t).toBe("acme");
+    expect((u3again[0] as { u: string }).u).toBe("alice");
+  });
 
   test(
     "sweep concurrency × bind shapes",
@@ -138,7 +135,14 @@ describe.skipIf(!process.env.OKE_BENCH)("G1 — RLS stamp serialization (pglite)
           const { latencies, opsPerSec } = await sweepPoint(handle, n, ROUNDS);
           const s = summarize(latencies);
           const maxMs = Number(Math.max(...latencies).toFixed(3));
-          points.push({ n, shape, p50Ms: s.p50Ms, p99Ms: s.p99Ms, maxMs, opsPerSec: Number(opsPerSec.toFixed(1)) });
+          points.push({
+            n,
+            shape,
+            p50Ms: s.p50Ms,
+            p99Ms: s.p99Ms,
+            maxMs,
+            opsPerSec: Number(opsPerSec.toFixed(1)),
+          });
         }
       }
 

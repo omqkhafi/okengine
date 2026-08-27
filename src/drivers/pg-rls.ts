@@ -482,3 +482,5 @@ export function buildRlsIdentityPreludeSql(identity: RlsIdentity): readonly RlsP
     },
   ];
 }
+
+export { buildRowPassesProbe, ROW_PASSES_POLICIES_STATEMENTS } from "./pg-rls-row-passes.ts";

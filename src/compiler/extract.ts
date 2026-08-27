@@ -115,7 +115,18 @@ interface ProjectScope {
   /** Export name → flow id (for agent tools). */
   flowExports: Map<string, string>;
   /** Local binding name → store.resource declaration (for on(http.resource)). */
-  resources: Map<string, { storeName: string; storeRef: string; breaking?: boolean }>;
+  resources: Map<
+    string,
+    {
+      storeName: string;
+      storeRef: string;
+      breaking?: boolean;
+      /** Physical table name (second argument or schema-table binding ref). */
+      tableName?: string;
+      /** `live: true` — the resource carries a live query surface. */
+      live?: boolean;
+    }
+  >;
   /** Local binding name → medium, for `const x = channel.email(…)` binders. */
   channelMediumBindings: Map<string, ChannelMedium>;
 }
@@ -939,11 +950,22 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const storeName = ref.split(":")[1] ?? dbName ?? "store";
         const opts = objectArg(call.arguments[2]);
         const breaking = opts ? boolProp(opts, "breaking") === true : false;
+        // Table name: the second argument may be a schema-table binding
+        // (resolve to its declared name) or a bare string literal.
+        const tableArgName = identifierName(call.arguments[1]);
+        const tableName =
+          (tableArgName
+            ? scope.bindings.get(tableArgName)?.kind === "table"
+              ? scope.bindings.get(tableArgName)?.ref
+              : undefined
+            : undefined) ?? stringArg(call.arguments[1]);
         if (bindingName) {
           scope.resources.set(bindingName, {
             storeName,
             storeRef: ref,
             ...(breaking ? { breaking: true } : {}),
+            ...(tableName !== undefined ? { tableName } : {}),
+            ...(opts && boolProp(opts, "live") === true ? { live: true } : {}),
           });
         }
       }
@@ -1908,6 +1930,36 @@ function registerResourceMount(
     };
     scope.flows[name] = flow;
     scope.bindings.set(name, { kind: "flow", ref: name });
+  }
+
+  // Live query surface — synthesize GET <path>/live + the internal signal
+  // exactly like `store.resource({ live: true })` does at runtime so the
+  // Manifest stays a faithful mirror of what booted. Requires a statically
+  // known table name; runtime `resolveTableName` throws for anything else,
+  // so an unresolvable table never boots a live surface either.
+  if (resource?.live === true) {
+    const tableName = resource.tableName;
+    if (tableName !== undefined) {
+      const signalName = `oke/live/sql:${tableName}`;
+      scope.signals[signalName] = {
+        delivery: "live",
+        description: `Live query CDC fan-out for ${tableName} (synthesized by store.resource live)`,
+      };
+      const flowName = `_live_${tableName}`;
+      scope.flows[flowName] = {
+        trigger: { http: { method: "GET", path: `${path}/live` } },
+        effects: {
+          reads: [
+            (resource.storeRef ?? sqlTableRef(tableName)) as ResourceRef,
+            `signal:${signalName}` as ResourceRef,
+          ],
+        },
+        ...(gates && gates.length > 0 ? { gates } : {}),
+        ...(resource.breaking ? { breaking: true } : {}),
+        source: `${file.path}:${line}`,
+      };
+      scope.bindings.set(flowName, { kind: "flow", ref: flowName });
+    }
   }
 
   const exportName = enclosingConstName(onCall, program);

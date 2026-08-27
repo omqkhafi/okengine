@@ -91,6 +91,9 @@ export function on(
     };
     const ops: Record<string, unknown> = {};
     for (const { trigger, flow } of triggerOrMount.mounts) {
+      // Live SSE exposure binds through the normal `on()` path below (its
+      // trigger carries a liveSignal) — it is not one of the five CRUD ops.
+      if (trigger.liveSignal !== undefined) continue;
       const key = trigger.path.endsWith("/:id")
         ? byIdVerb[trigger.method]
         : baseVerb[trigger.method];
@@ -99,6 +102,12 @@ export function on(
       }
       on(trigger, flow as FlowDef<any, any, any, any, Trigger | undefined>);
       ops[key] = flow;
+    }
+    // Live surface — the `<path>/live` mount carries a liveSignal; bind it
+    // through `on()` so SSE synthesis + exposure-uniqueness checks run once.
+    const liveMount = triggerOrMount.mounts.find((m) => m.trigger.liveSignal !== undefined);
+    if (liveMount !== undefined && isFlow(liveMount.flow)) {
+      on(liveMount.trigger, liveMount.flow as FlowDef<any, any, any, any, Trigger | undefined>);
     }
     return ops as unknown as ResourceFlowBag;
   }

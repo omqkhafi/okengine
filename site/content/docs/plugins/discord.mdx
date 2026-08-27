@@ -10,9 +10,8 @@ Discord is OAuth2 with one quirk: `/users/@me` `email` can be **null**
 instead of failing them.
 
 <Callout title="The one rule">
-  Keep the `email` scope in the request (it is on by default). Without it
-  Discord never reports `verified: true`, and unverified emails cannot claim
-  existing accounts.
+  Keep the `email` scope in the request (it is on by default). Without it Discord never reports
+  `verified: true`, and unverified emails cannot claim existing accounts.
 </Callout>
 
 ## Quick start
@@ -65,12 +64,12 @@ OAUTH_DISCORD_CLIENT_SECRET=...
 
 ## How identity works
 
-| Aspect | Behavior |
-| ------ | -------- |
-| Profile | `GET https://discord.com/api/users/@me` (string `id` is the subject) |
-| Email | taken as-is when present; `null` flows through as *no email* |
+| Aspect      | Behavior                                                                            |
+| ----------- | ----------------------------------------------------------------------------------- |
+| Profile     | `GET https://discord.com/api/users/@me` (string `id` is the subject)                |
+| Email       | taken as-is when present; `null` flows through as _no email_                        |
 | Email trust | `verified: true` only; the flag silently going missing keeps the address unverified |
-| Name | `global_name`, falling back to `username` |
+| Name        | `global_name`, falling back to `username`                                           |
 
 **Consequence:** an integration bug that drops the `verified` field degrades
 to unverified — never to falsely verified. That direction of failure is what
@@ -81,21 +80,21 @@ Default scopes: `identify`, `email`. The authorize URL always carries
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_DISCORD_CLIENT_ID` |
-| `redirectUri` | `string` | `{baseUrl}…/discord` | Exact registered URI |
-| `scopes` | `string[]` | driver defaults | Extra scopes |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default              | Meaning                     |
+| --------------------- | ---------- | -------------------- | --------------------------- |
+| `enabled`             | `boolean`  | `false`              | Turn the provider on        |
+| `clientId`            | `string`   | Vault/env\*          | `\*OAUTH_DISCORD_CLIENT_ID` |
+| `redirectUri`         | `string`   | `{baseUrl}…/discord` | Exact registered URI        |
+| `scopes`              | `string[]` | driver defaults      | Extra scopes                |
+| `storeProviderTokens` | `boolean`  | `false`              | Keep tokens in Vault        |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/discord/start` |
+| Flow     | Path                                    |
+| -------- | --------------------------------------- |
+| Start    | `POST /auth/oauth/discord/start`        |
 | Callback | `GET+POST /auth/oauth/callback/discord` |
-| Link | `POST /auth/oauth/discord/link` |
+| Link     | `POST /auth/oauth/discord/link`         |
 
 ## Troubleshooting
 
@@ -130,7 +129,11 @@ existing ones.
 ## Next
 
 <Cards>
-  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+  <Card
+    title="GitHub"
+    description="OAuth2 with verified-email lookup."
+    href="/docs/plugins/github"
+  />
   <Card title="Facebook" description="Never-verified emails." href="/docs/plugins/facebook" />
   <Card title="Google" description="OIDC reference provider." href="/docs/plugins/google" />
 </Cards>

@@ -98,5 +98,11 @@ export function bindPublicAuthGet(
   flowDef: AnyFlowDef,
   gates: readonly Parameters<ReturnType<typeof http.get>["gate"]>[0][] = [],
 ): Binding {
-  return bindAuthHttp(http.get(path).public().gate(...gates), flowDef);
+  return bindAuthHttp(
+    http
+      .get(path)
+      .public()
+      .gate(...gates),
+    flowDef,
+  );
 }

@@ -631,6 +631,51 @@ export const remove = mounted.remove;
     expect(manifest.flows?.get?.live).toBeUndefined();
     expect(manifest.flows?.create?.live).toBeUndefined();
   });
+
+  test("live: true synthesizes the internal signal + GET /live flow", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+export const notesTable = store.schema.table("notes", {});
+const notesR = store.resource(db, notesTable, { live: true });
+
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const get = mounted.get;
+`;
+    const manifest = await extractFromSources({ "src/flows/notes.ts": source });
+
+    // Internal signal derived from the physical table.
+    expect(manifest.signals?.["oke/live/sql:notes"]?.delivery).toBe("live");
+    expect(manifest.flows?.["_live_notes"]?.trigger).toEqual({
+      http: { method: "GET", path: "/notes/live" },
+    });
+    expect(manifest.flows?.["_live_notes"]?.effects?.reads).toEqual([
+      "sql:notes",
+      "signal:oke/live/sql:notes",
+    ]);
+  });
+
+  test("live signal name follows a schema-table binding, not the JS binding", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+export const tasksTable = store.schema.table("tasks", {});
+const tasksR = store.resource(db, tasksTable, { live: true });
+const mounted = on(http.resource("/tasks", tasksR.all()));
+
+export const list = mounted.list;
+`;
+    const manifest = await extractFromSources({ "src/flows/tasks.ts": source });
+
+    expect(manifest.signals?.["oke/live/sql:tasks"]).toBeDefined();
+    expect(manifest.flows?.["_live_tasks"]?.trigger?.http?.path).toBe("/tasks/live");
+  });
 });
 
 describe("extractManifest — vault.config", () => {

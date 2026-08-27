@@ -172,7 +172,8 @@ const { data } = await api.auth.signInEmail({ email, password });
 if (data) session.set(data);
 ```
 
-React: `useSession(api, session)` and `useLive(api, signal, input?)` from `okengine/client-react`.
+React: `useSession(api, session)`, `useLive(api, signal, input?)`, and
+`useLiveQuery({ api, listFlow, live, query? })` from `okengine/client-react`.
 
 | Step                   | What happens                                                     |
 | ---------------------- | ---------------------------------------------------------------- |
@@ -205,6 +206,7 @@ A 401 with no `{ data, error }` body becomes `TransportError` with `data.status:
 | `AUTH_ERROR_CODES`          | `okengine/client/auth`  | Common auth Flow / gate codes                    |
 | `useSession(api, session?)` | `okengine/client-react` | React status + `auth.me`                         |
 | `useLive(api, signal, …)`   | `okengine/client-react` | React `events` / `latest` / `isConnected`        |
+| `useLiveQuery({ … })`       | `okengine/client-react` | Live list + optimistic `mutate` over a resource  |
 
 Core `okengine/client` stays under the size budget — helpers are separate exports. Not in
 core today: cookie jars or plugin `.client()` decorations. Browser apps: also see
@@ -304,6 +306,42 @@ const { events, latest, error, isConnected } = useLive(
   },
 );
 ```
+
+### Live queries (`store.resource({ live: true })`)
+
+When a resource opts into `live: true`, the compiler mounts `GET <path>/live` next to the CRUD
+verbs. That route streams **classified** row events — not a shared tape — so each subscriber only
+sees rows that still pass their RLS stamp + list filters:
+
+| `kind`    | Meaning                                                        |
+| --------- | -------------------------------------------------------------- |
+| `upsert`  | Row visible under stamp + query — merge/replace by primary key |
+| `revoked` | Row left visibility (`reason: "rls"` \| `"query"`) — remove    |
+| `delete`  | Row deleted in CDC — remove                                    |
+
+```typescript
+import { useLiveQuery } from "okengine/client-react";
+
+const { data, error, isLoading, isConnected, mutate } = useLiveQuery({
+  api,
+  listFlow: api.tasks.list,
+  query: { status: "open" },
+  live: { method: "GET", path: "/tasks/live" }, // from app.$routes
+});
+
+await mutate(
+  api.tasks.update,
+  { id, status: "done" },
+  {
+    optimistic: (rows) => rows.map((r) => (r.id === id ? { ...r, status: "done" } : r)),
+    pkOf: (input) => input.id,
+  },
+);
+```
+
+**Consequence:** optimistic patches roll back automatically when the Flow returns
+`error !== null`. Server CDC / the successful response clear the override so the next upsert is
+authoritative.
 
 ## Exports
 

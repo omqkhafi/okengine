@@ -1,8 +1,22 @@
 /**
- * React helpers for okengine clients — `useSession` / `useLive` over {@link createClient}.
+ * React helpers for okengine clients — `useSession` / `useLive` /
+ * `useLiveQuery` over {@link createClient}.
  *
  * @module
  */
+
+export {
+  subscribeLiveResource,
+  type ResourceStreamHandlers,
+  type ResourceStreamOptions,
+  type ResourceStreamStop,
+} from "./live-resource.ts";
+export type { LiveRouteContract } from "./use-live-query.ts";
+export {
+  useLiveQuery,
+  type UseLiveQueryOptions,
+  type UseLiveQueryState,
+} from "./use-live-query.ts";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { MemorySession } from "../client/auth.ts";

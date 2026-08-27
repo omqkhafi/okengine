@@ -181,6 +181,9 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
   return new Proxy(call, {
     get(_target, prop, receiver) {
       if (typeof prop === "symbol") {
+        if (prop === TRANSPORT_BRAND) {
+          return { base: ctx.base, opts: ctx.opts } satisfies TransportBag;
+        }
         return Reflect.get(_target, prop, receiver);
       }
       if (prop === "then") return undefined;
@@ -190,6 +193,37 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
       return proxy(transport, [...path, prop], ctx);
     },
   });
+}
+
+/** Symbol brand exposing `{ base, opts }` from a client Proxy instance. */
+const TRANSPORT_BRAND = Symbol("oke.transportBag");
+
+/** Transport surface carried by a built client — read via {@link transportOf}. */
+export interface TransportBag {
+  readonly base: string;
+  readonly opts: ClientOptions;
+}
+
+/**
+ * Read the origin + client options from any {@link createClient} instance
+ * (symbol-brand channel on the root proxy — invisible to `get` traps beyond
+ * symbol reflection). The root proxy targets a callable, so both `function`
+ * and `object` receivers are accepted.
+ *
+ * @param api - Client instance or its typed surface
+ */
+export function transportOf(api: unknown): TransportBag | undefined {
+  if (typeof api !== "object" && typeof api !== "function") return undefined;
+  const bag = Reflect.get(api as object, TRANSPORT_BRAND) as unknown;
+  if (
+    bag !== null &&
+    typeof bag === "object" &&
+    "base" in bag &&
+    typeof (bag as { base: unknown }).base === "string"
+  ) {
+    return bag as TransportBag;
+  }
+  return undefined;
 }
 
 function makeLive(ctx: ProxyCtx): ClientLive {

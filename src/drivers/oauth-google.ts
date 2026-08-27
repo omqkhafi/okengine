@@ -94,14 +94,17 @@ export async function exchangeForm(
     throw new OAuthProtocolError("missing_secret", "token exchange requires a client secret");
   }
   const fetchFn = input.fetch ?? globalThis.fetch;
-  const res = await fetchFn(tokenEndpoint, formPost({
-    grant_type: "authorization_code",
-    code: input.code,
-    redirect_uri: input.redirectUri,
-    client_id: input.clientId,
-    client_secret: clientSecret,
-    code_verifier: input.codeVerifier,
-  }));
+  const res = await fetchFn(
+    tokenEndpoint,
+    formPost({
+      grant_type: "authorization_code",
+      code: input.code,
+      redirect_uri: input.redirectUri,
+      client_id: input.clientId,
+      client_secret: clientSecret,
+      code_verifier: input.codeVerifier,
+    }),
+  );
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok || typeof body["access_token"] !== "string") {
     throw new OAuthProtocolError(

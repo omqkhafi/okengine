@@ -64,9 +64,12 @@ function trustVerified(verified: unknown): boolean {
  *
  * @param options - Profile fields plus the pinned issuer
  */
-export function oauth2Assertion(options: OAuth2Profile & { readonly issuer: string }): OAuthAssertion {
+export function oauth2Assertion(
+  options: OAuth2Profile & { readonly issuer: string },
+): OAuthAssertion {
   const email = normalizeEmail(options.email);
-  const name = typeof options.name === "string" && options.name.length > 0 ? options.name : undefined;
+  const name =
+    typeof options.name === "string" && options.name.length > 0 ? options.name : undefined;
   return {
     subject: options.subject,
     issuer: options.issuer,

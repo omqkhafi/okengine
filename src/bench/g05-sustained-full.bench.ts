@@ -200,11 +200,12 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G5 — sustained baseline",
         const rssSlopeTail = rssSlopeMbPerMin(all, 6);
         // Spread-into-Math.max overflows the call stack at millions of
         // samples — always reduce instead.
-        const maxOf = (arr: readonly number[]): number =>
-          arr.reduce((a, b) => (b > a ? b : a), 0);
+        const maxOf = (arr: readonly number[]): number => arr.reduce((a, b) => (b > a ? b : a), 0);
         const issues: string[] = [];
         if (errors > 0) {
-          issues.push(`${errors} request errors under sustained load — investigate before trusting p99`);
+          issues.push(
+            `${errors} request errors under sustained load — investigate before trusting p99`,
+          );
         }
         if (rssSlopeFull > 5 && rssSlopeTail > 2) {
           issues.push(
@@ -232,9 +233,7 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G5 — sustained baseline",
           windowP99MedianMs: Number(medianWindowP99.toFixed(2)),
           rssSlopeMbPerMin: rssSlopeFull,
           rssSlopeLastMinute: rssSlopeTail,
-          rssMaxMb: all.length
-            ? Number(maxOf(all.map((x) => x.rssMb)).toFixed(1))
-            : -1,
+          rssMaxMb: all.length ? Number(maxOf(all.map((x) => x.rssMb)).toFixed(1)) : -1,
           fdsFinal: all.length ? all[all.length - 1]!.fds : -1,
           gateLimited429: gated429,
           errors,

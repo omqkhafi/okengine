@@ -16,6 +16,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Realtime live queries — `store.resource({ live: true })` synthesizes
+  `GET <path>/live` SSE with per-subscriber RLS classification
+  (`upsert` / `revoked` / `delete`). Application-level CDC via the
+  sql-session write hook + `oke_cdc_outbox` SKIP LOCKED poller; fan-out
+  through `LiveQueryRuntime` (bounded worker pool). `oke.row_passes_policies`
+  parity-gated against native Postgres RLS.
+- `useLiveQuery` (`okengine/client-react`) — snapshot + SSE race protocol,
+  three-event reducer, optimistic `mutate()` wrapping existing `ClientCall`
+  envelopes. Pure helpers (`reduceLiveQueryRows`, `applyOptimisticPatch`)
+  also on `okengine/client`.
+- `store.schema.policy.scope(PolicyGateDecl | string)` — DRY gate refs in RLS
+  policies.
+- G16 live-query fan-out bench (`src/bench/g16-live-query-fanout.bench.ts`).
+
 - `field.*` widens from `text | integer` to the full Drizzle Postgres column
   surface — `varchar` / `char` (with `length` + enum literals), `boolean`,
   `smallint`, `bigint`, the serial family, `numeric` / `decimal`
@@ -49,6 +63,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Keel inbox mounts `GET /inbox/live` (live query stack); `bindCrud({ live: true })`
+  wires the same surface for any CRUD unit.
 - `oke doctor` `file_descriptor_limit` check — estimates peak FDs from the
   manifest (live signals + SSE routes) and compares against `ulimit -n`.
 - `bun run bench:load` + `src/bench/` — system load harness (15 groups) for
@@ -56,6 +72,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Store + Client docs cover `live: true` and `useLiveQuery`.
 - Plugins → **OAuth** category: overview plus per-provider pages (Apple,
   Discord, Facebook, Figma, GitHub, Google, Microsoft, X).
 

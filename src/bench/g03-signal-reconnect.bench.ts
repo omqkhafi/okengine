@@ -15,9 +15,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  LIVE_PG,
-} from "./lib/infra.ts";
+import { LIVE_PG } from "./lib/infra.ts";
 import { DISCLAIMER, HARDWARE, percentile, writeArtifact } from "./lib/report.ts";
 import {
   LIVE_RESUBSCRIBE_INITIAL_MS,
@@ -55,7 +53,10 @@ async function reconnectClient(
   for (;;) {
     if (stopped) return;
     const ac = new AbortController();
-    stop.then(() => ac.abort(), () => ac.abort());
+    stop.then(
+      () => ac.abort(),
+      () => ac.abort(),
+    );
     try {
       const res = await fetch(target, {
         signal: ac.signal,
@@ -166,81 +167,81 @@ describe.skipIf(!process.env.OKE_BENCH || !LIVE_PG)("G3c — reconnect storm + b
         servers.push(server);
         let serverPid = await readReadyPid(server);
 
-      const target = `${BASE}/_oke/live/${SIGNAL}`;
-      const allDelays: number[][] = Array.from({ length: CLIENTS }, () => []);
-      const stop = promiseOf<void>();
-      const clients = Array.from({ length: CLIENTS }, (_, i) =>
-        reconnectClient(target, stop.promise, allDelays[i]!),
-      );
+        const target = `${BASE}/_oke/live/${SIGNAL}`;
+        const allDelays: number[][] = Array.from({ length: CLIENTS }, () => []);
+        const stop = promiseOf<void>();
+        const clients = Array.from({ length: CLIENTS }, (_, i) =>
+          reconnectClient(target, stop.promise, allDelays[i]!),
+        );
 
-      // Give everyone a live connection first.
-      await Bun.sleep(CAL ? 2_000 : 4_000);
-      expect(countConns(serverPid)).toBeGreaterThan(CLIENTS * 0.5);
+        // Give everyone a live connection first.
+        await Bun.sleep(CAL ? 2_000 : 4_000);
+        expect(countConns(serverPid)).toBeGreaterThan(CLIENTS * 0.5);
 
-      // Abrupt kill — no graceful close, every socket drops at once.
-      server.kill();
-      await server.exited.catch(() => {});
+        // Abrupt kill — no graceful close, every socket drops at once.
+        server.kill();
+        await server.exited.catch(() => {});
 
-      await Bun.sleep(CAL ? 1_000 : 2_000); // clients enter backoff
+        await Bun.sleep(CAL ? 1_000 : 2_000); // clients enter backoff
 
-      // Restart; the storm should land within ≤ a few backoff rounds.
-      server = spawnServe();
-      servers.push(server);
-      serverPid = await readReadyPid(server);
+        // Restart; the storm should land within ≤ a few backoff rounds.
+        server = spawnServe();
+        servers.push(server);
+        serverPid = await readReadyPid(server);
 
-      const settleMs = CAL ? 8_000 : 35_000;
-      await Bun.sleep(settleMs);
+        const settleMs = CAL ? 8_000 : 35_000;
+        await Bun.sleep(settleMs);
 
-      // Count re-established sockets while clients are still connected.
-      const reconnected = countConns(serverPid);
+        // Count re-established sockets while clients are still connected.
+        const reconnected = countConns(serverPid);
 
-      stop.resolve();
-      await Promise.race([Promise.all(clients), Bun.sleep(10_000)]);
+        stop.resolve();
+        await Promise.race([Promise.all(clients), Bun.sleep(10_000)]);
 
-      const flat = allDelays.flat();
-      const minD = flat.length ? Math.min(...flat) : -1;
-      const maxD = flat.length ? Math.max(...flat) : -1;
+        const flat = allDelays.flat();
+        const minD = flat.length ? Math.min(...flat) : -1;
+        const maxD = flat.length ? Math.max(...flat) : -1;
 
-      const latencies = allDelays.map((d, i) => ({
-        client: i,
-        attempts: d.length,
-      }));
-      const activeClients = latencies.filter((l) => l.attempts > 0).length;
+        const latencies = allDelays.map((d, i) => ({
+          client: i,
+          attempts: d.length,
+        }));
+        const activeClients = latencies.filter((l) => l.attempts > 0).length;
 
-      const issues: string[] = [];
-      if (minD < LIVE_RESUBSCRIBE_INITIAL_MS) issues.push(`backoff below floor: ${minD}ms`);
-      if (maxD > LIVE_RESUBSCRIBE_MAX_MS) issues.push(`backoff above ceiling: ${maxD}ms`);
-      if (reconnected < CLIENTS * 0.9) {
-        issues.push(`only ${reconnected}/${CLIENTS} sockets re-established after restart`);
-      }
+        const issues: string[] = [];
+        if (minD < LIVE_RESUBSCRIBE_INITIAL_MS) issues.push(`backoff below floor: ${minD}ms`);
+        if (maxD > LIVE_RESUBSCRIBE_MAX_MS) issues.push(`backoff above ceiling: ${maxD}ms`);
+        if (reconnected < CLIENTS * 0.9) {
+          issues.push(`only ${reconnected}/${CLIENTS} sockets re-established after restart`);
+        }
 
-      const metrics: Record<string, number> = {
-        clients: CLIENTS,
-        backoffSamples: flat.length,
-        backoffMinMs: minD,
-        backoffMaxMs: maxD,
-        backoffP99Ms: percentile(flat, 99),
-        clientsThatRetried: activeClients,
-        socketsReconnected: reconnected,
-      };
-      console.log("[G3c] metrics:", JSON.stringify(metrics));
+        const metrics: Record<string, number> = {
+          clients: CLIENTS,
+          backoffSamples: flat.length,
+          backoffMinMs: minD,
+          backoffMaxMs: maxD,
+          backoffP99Ms: percentile(flat, 99),
+          clientsThatRetried: activeClients,
+          socketsReconnected: reconnected,
+        };
+        console.log("[G3c] metrics:", JSON.stringify(metrics));
 
-      const path = await writeArtifact({
-        group: "G3c-signal-reconnect",
-        hardware: HARDWARE,
-        disclaimer: DISCLAIMER,
-        command:
-          "OKE_BENCH=1 OKE_TEST_POSTGRES=1 DATABASE_URL=$DATABASE_URL OKE_TEST_REDIS_URL=$OKE_TEST_REDIS_URL bun test ./src/bench/g03-signal-reconnect.bench.ts --timeout 180000",
-        metrics,
-        issues,
-        fixes: [],
-        remeasured: null,
-      });
-      console.log(`[G3c] artifact: ${path}`);
+        const path = await writeArtifact({
+          group: "G3c-signal-reconnect",
+          hardware: HARDWARE,
+          disclaimer: DISCLAIMER,
+          command:
+            "OKE_BENCH=1 OKE_TEST_POSTGRES=1 DATABASE_URL=$DATABASE_URL OKE_TEST_REDIS_URL=$OKE_TEST_REDIS_URL bun test ./src/bench/g03-signal-reconnect.bench.ts --timeout 180000",
+          metrics,
+          issues,
+          fixes: [],
+          remeasured: null,
+        });
+        console.log(`[G3c] artifact: ${path}`);
 
-      expect(minD).toBeGreaterThanOrEqual(LIVE_RESUBSCRIBE_INITIAL_MS);
-      expect(maxD).toBeLessThanOrEqual(LIVE_RESUBSCRIBE_MAX_MS);
-      expect(reconnected).toBeGreaterThanOrEqual(CLIENTS * 0.5);
+        expect(minD).toBeGreaterThanOrEqual(LIVE_RESUBSCRIBE_INITIAL_MS);
+        expect(maxD).toBeLessThanOrEqual(LIVE_RESUBSCRIBE_MAX_MS);
+        expect(reconnected).toBeGreaterThanOrEqual(CLIENTS * 0.5);
       } finally {
         for (const s of servers) {
           s.kill();

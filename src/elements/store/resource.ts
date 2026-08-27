@@ -15,9 +15,15 @@
  * Every surface is whitelisted by a ColumnScope (`"all" | Column[] | "none"`).
  */
 
-import { flow, type FlowDef, type FlowErrorMap } from "../../kernel/flow.ts";
+import { flow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "../../kernel/flow.ts";
 import { fail } from "../../kernel/errors.ts";
 import type { Fx } from "../../kernel/fx.ts";
+import {
+  openLiveStream,
+  realtimeBridgeRuntime,
+  type LiveColumnKind,
+} from "../../kernel/realtime-bind.ts";
+import { compileWhere } from "./sql-condition.ts";
 import { validationFailure } from "../../validation/standard-schema.ts";
 import { z } from "zod";
 import type { SqlStoreDecl } from "./declare.ts";
@@ -59,6 +65,13 @@ export interface ResourceOptions {
    * onto `store.resource`.
    */
   readonly breaking?: boolean;
+  /**
+   * Enable the live query stack: compiler synthesizes an internal Signal
+   * (`oke/live/sql:<table>`), wires CDC fan-out, and mounts
+   * `GET <path>/live` when used with `http.resource`. Requires RLS-capable
+   * SQL drivers (postgres / pglite).
+   */
+  readonly live?: boolean;
 }
 
 /** List options on {@link ResourceOptions}. */
@@ -102,6 +115,22 @@ export interface ResourceColumns {
   readonly sqlNameOf: (key: string) => string | undefined;
 }
 
+/**
+ * Live query surface synthesized for `store.resource(…, { live: true })`.
+ *
+ * The signal carries classified {@link LiveQueryEvent}-shaped payloads;
+ * `flow` is a `delivery: "live"` SSE consumer (`fx.live` physics) that the
+ * app mounts on `GET <resource>/live`. The realtime bridge publishes to the
+ * same signal name, so transport, retention, and Last-Event-ID resume are
+ * the already-proven Signal stack.
+ */
+export interface ResourceLiveSurface {
+  /** Internal signal name — `oke/live/sql:<table>`. */
+  readonly signal: string;
+  /** Default subscribe path — `<mount path>/live` is derived at mount. */
+  readonly flow: AnyFlowDef;
+}
+
 /** A resource factory result — FlowDefs plus introspection for `page`. */
 export interface ResourceDef extends ResourceColumns {
   readonly list: FlowDef<any, any, any>;
@@ -119,6 +148,11 @@ export interface ResourceDef extends ResourceColumns {
   readonly maxLimit: number;
   /** Resolved list config (defaults applied). */
   readonly listConfig: ResolvedListConfig;
+  /**
+   * Live query surface when `live: true` — signal name + SSE Flow to mount.
+   * Absent otherwise.
+   */
+  readonly live?: ResourceLiveSurface;
   /** All five ops for `http.resource(path, resource.all())`. */
   all(): ResourceFlowDefs;
   /** Input for {@link SqlStoreHandle.page} from validated list input. */
@@ -973,6 +1007,71 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     remove: removeFlow as FlowDef<any, any, any>,
   };
 
+  // Live query surface — internal signal name + SSE stream Flow. Developers
+  // mount it via `http.resource` (or a manual `.live()` GET); the realtime
+  // bridge classifies CDC events per subscriber and pushes through this
+  // flow. Classified events are per-identity RLS verdicts, so delivery is
+  // direct per-subscriber push — never a shared signal tape.
+  const liveSurface: ResourceLiveSurface | undefined = options.live
+    ? (() => {
+        const signalName = `oke/live/sql:${tableName}`;
+        const pkColumn = idColumn?.sqlName ?? idKey;
+        const columnKinds: Record<string, LiveColumnKind> = {};
+        for (const c of columns) {
+          const kind: LiveColumnKind | undefined =
+            c.sqlType === "BOOLEAN"
+              ? "boolean"
+              : c.sqlType === "INTEGER" || c.sqlType === "BIGINT" || c.sqlType === "REAL"
+                ? "number"
+                : c.sqlType === "JSONB"
+                  ? undefined
+                  : "string";
+          if (kind !== undefined) columnKinds[c.key] = kind;
+        }
+        const liveFlow = flow(`_live_${tableName}`, {
+          ...(options.out !== undefined ? { out: options.out } : {}),
+          effects: { reads: [db.ref, `signal:${signalName}`] },
+          do: async (input: unknown, fx: Fx) => {
+            const bridge = realtimeBridgeRuntime();
+            if (!bridge) {
+              throw new Error(
+                `live query for "${tableName}" requires an RLS-capable SQL driver (postgres / pglite)`,
+              );
+            }
+            // Same PostgREST window as the list Flow — filters decide whether
+            // a row belongs to this live query ("query exit"), RLS decides
+            // visibility. Pagination cursors don't gate membership.
+            const parsed = parseList(input);
+            if (!parsed.ok) return parsed.failure;
+            let whereSql: string | undefined;
+            let whereParams: readonly unknown[] = [];
+            const pageWhere = parsed.page.where;
+            if (pageWhere !== undefined) {
+              const compiled = compileWhere(pageWhere);
+              if (compiled.clause !== "") {
+                whereSql = compiled.clause;
+                whereParams = compiled.params;
+              }
+            }
+            const identity = fx.rlsIdentity;
+            if (!identity) {
+              throw new Error(`live query for "${tableName}" requires a gated identity`);
+            }
+            const stream = openLiveStream(fx.id(), {
+              table: tableName,
+              identity,
+              pkColumn,
+              ...(whereSql !== undefined ? { whereSql } : {}),
+              ...(whereParams.length > 0 ? { whereParams } : {}),
+              ...(Object.keys(columnKinds).length > 0 ? { tableColumns: columnKinds } : {}),
+            });
+            return fx.json.stream(stream.chunks);
+          },
+        }) as unknown as AnyFlowDef;
+        return { signal: signalName, flow: liveFlow };
+      })()
+    : undefined;
+
   return {
     ...defs,
     table: tableName,
@@ -994,5 +1093,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       }
       return { ...parsed.page, meta: parsed.meta };
     },
+    ...(liveSurface ? { live: liveSurface } : {}),
   };
 }

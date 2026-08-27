@@ -855,6 +855,14 @@ export interface Fx {
    */
   readonly signal: AbortSignal;
   /**
+   * Resolved RLS identity for this invocation (`undefined` when bypassed,
+   * operator-plane, or unauthenticated on an un-gated trigger). The live
+   * query stack subscribes SSE streams under this exact stamp so per-event
+   * visibility re-checks are Postgres-authoritative — identical to what a
+   * read through {@link Fx.store} would see.
+   */
+  readonly rlsIdentity: import("../drivers/pg-rls.ts").RlsIdentity | undefined;
+  /**
    * Run thunks in parallel. On first rejection, abort sibling branches and
    * rethrow. Pass thunks (not started Promises) so abort scopes exist first.
    *
@@ -2130,6 +2138,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     get signal(): AbortSignal {
       return currentAbortSignal();
+    },
+    get rlsIdentity() {
+      return rlsInvokeContext().rls;
     },
     all(thunks) {
       return fxAll(thunks);

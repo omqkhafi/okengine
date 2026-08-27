@@ -10,9 +10,8 @@ token exchange carries the code verifier but no secret. PKCE is the only
 proof the callback is yours.
 
 <Callout title="The one rule">
-  Enable OAuth 2.0 in the X Developer Portal, set up your exact callback URI,
-  and request `users.email` access if you need addresses. No
-  `OAUTH_X_CLIENT_SECRET` exists — none is read.
+  Enable OAuth 2.0 in the X Developer Portal, set up your exact callback URI, and request
+  `users.email` access if you need addresses. No `OAUTH_X_CLIENT_SECRET` exists — none is read.
 </Callout>
 
 ## Quick start
@@ -23,7 +22,7 @@ proof the callback is yours.
 ### Configure the app
 
 X Developer Portal → Project → User authentication settings → **Set up**.
-Choose *Web App*, enable OAuth 2.0, and add
+Choose _Web App_, enable OAuth 2.0, and add
 `https://app.example.com/auth/oauth/callback/x` as a callback URI.
 
 </Step>
@@ -57,12 +56,12 @@ That is the whole setup — no Vault contract for this provider.
 
 ## How identity works
 
-| Aspect | Behavior |
-| ------ | -------- |
-| Token exchange | `POST https://api.x.com/2/oauth2/token` with the code verifier, no secret |
-| Profile | `GET /2/users/me?user.fields=id,name,username,confirmed_email` |
-| Subject | the string `id` inside `data` |
-| Email trust | **always unverified** — `confirmed_email` gates API access, it does not attest verification |
+| Aspect         | Behavior                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| Token exchange | `POST https://api.x.com/2/oauth2/token` with the code verifier, no secret                   |
+| Profile        | `GET /2/users/me?user.fields=id,name,username,confirmed_email`                              |
+| Subject        | the string `id` inside `data`                                                               |
+| Email trust    | **always unverified** — `confirmed_email` gates API access, it does not attest verification |
 
 **Consequence:** an X email never claims an existing account during sign-up.
 It can attach to a fresh account or to an existing one you already control via
@@ -72,21 +71,21 @@ Default scopes: `users.read`, `tweet.read`.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_X_CLIENT_ID` |
-| `redirectUri` | `string` | `{baseUrl}…/x` | Exact registered URI |
-| `scopes` | `string[]` | driver defaults | Extra scopes (`offline.access`, …) |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default         | Meaning                            |
+| --------------------- | ---------- | --------------- | ---------------------------------- |
+| `enabled`             | `boolean`  | `false`         | Turn the provider on               |
+| `clientId`            | `string`   | Vault/env\*     | `\*OAUTH_X_CLIENT_ID`              |
+| `redirectUri`         | `string`   | `{baseUrl}…/x`  | Exact registered URI               |
+| `scopes`              | `string[]` | driver defaults | Extra scopes (`offline.access`, …) |
+| `storeProviderTokens` | `boolean`  | `false`         | Keep tokens in Vault               |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/x/start` |
+| Flow     | Path                              |
+| -------- | --------------------------------- |
+| Start    | `POST /auth/oauth/x/start`        |
 | Callback | `GET+POST /auth/oauth/callback/x` |
-| Link | `POST /auth/oauth/x/link` |
+| Link     | `POST /auth/oauth/x/link`         |
 
 ## Troubleshooting
 

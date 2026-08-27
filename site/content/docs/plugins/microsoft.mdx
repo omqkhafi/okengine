@@ -7,12 +7,11 @@ source: "docs/spec/unified-theory.md"
 
 Microsoft (Entra ID) is OIDC with a tenant twist: `common` discovery advertises
 an issuer with the `{tenantid}` placeholder, so the value you pin at start is
-a *template* validated against the concrete token at callback.
+a _template_ validated against the concrete token at callback.
 
 <Callout title="The one rule">
-  Pick the audience first: `tenant: "common"` for everyone, `organizations`
-  for work/school only, `consumers` for personal accounts, or a tenant GUID to
-  lock sign-in to one directory.
+  Pick the audience first: `tenant: "common"` for everyone, `organizations` for work/school only,
+  `consumers` for personal accounts, or a tenant GUID to lock sign-in to one directory.
 </Callout>
 
 ## Quick start
@@ -23,8 +22,8 @@ a *template* validated against the concrete token at callback.
 ### Register an app
 
 In the Azure portal → Microsoft Entra ID → App registrations → New
-registration. Choose *Accounts in any organizational directory and personal
-Microsoft accounts* for `common`. Add your redirect URI under **Web**.
+registration. Choose _Accounts in any organizational directory and personal
+Microsoft accounts_ for `common`. Add your redirect URI under **Web**.
 
 </Step>
 
@@ -68,15 +67,15 @@ form field.
 
 ## How identity works
 
-| Aspect | Behavior |
-| ------ | -------- |
-| Discovery | `{tenant}/oauth2/v2.0/.well-known/openid-configuration`, cached |
+| Aspect         | Behavior                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| Discovery      | `{tenant}/oauth2/v2.0/.well-known/openid-configuration`, cached                                       |
 | Issuer pinning | flow stores `https://login.microsoftonline.com/{tenantid}/v2.0`; tokens must match it shape-for-shape |
-| Tenant claim | the token's `tid` must be GUID-shaped and consistent with `iss` |
-| Signature | RS256 against the tenant's published keys |
-| Email trust | OIDC `email_verified` claim |
+| Tenant claim   | the token's `tid` must be GUID-shaped and consistent with `iss`                                       |
+| Signature      | RS256 against the tenant's published keys                                                             |
+| Email trust    | OIDC `email_verified` claim                                                                           |
 
-**Consequence:** an ID token minted by a *different* tenant fails the issuer
+**Consequence:** an ID token minted by a _different_ tenant fails the issuer
 template even though its signature is perfectly valid — the mix-up defense
 survives multi-tenancy.
 
@@ -84,29 +83,29 @@ Default scopes: `openid`, `email`, `profile`.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `enabled` | `boolean` | `false` | Turn the provider on |
-| `clientId` | `string` | Vault/env\* | `\*OAUTH_MICROSOFT_CLIENT_ID` |
-| `tenant` | `string` | `"common"` | `organizations`, `consumers`, or a GUID |
-| `redirectUri` | `string` | `{baseUrl}…/microsoft` | Exact registered URI |
-| `scopes` | `string[]` | driver defaults | Extra scopes |
-| `storeProviderTokens` | `boolean` | `false` | Keep tokens in Vault |
+| Option                | Type       | Default                | Meaning                                 |
+| --------------------- | ---------- | ---------------------- | --------------------------------------- |
+| `enabled`             | `boolean`  | `false`                | Turn the provider on                    |
+| `clientId`            | `string`   | Vault/env\*            | `\*OAUTH_MICROSOFT_CLIENT_ID`           |
+| `tenant`              | `string`   | `"common"`             | `organizations`, `consumers`, or a GUID |
+| `redirectUri`         | `string`   | `{baseUrl}…/microsoft` | Exact registered URI                    |
+| `scopes`              | `string[]` | driver defaults        | Extra scopes                            |
+| `storeProviderTokens` | `boolean`  | `false`                | Keep tokens in Vault                    |
 
 ## Surfaces
 
-| Flow | Path |
-| ---- | ---- |
-| Start | `POST /auth/oauth/microsoft/start` |
+| Flow     | Path                                      |
+| -------- | ----------------------------------------- |
+| Start    | `POST /auth/oauth/microsoft/start`        |
 | Callback | `GET+POST /auth/oauth/callback/microsoft` |
-| Link | `POST /auth/oauth/microsoft/link` |
+| Link     | `POST /auth/oauth/microsoft/link`         |
 
 ## Troubleshooting
 
 <Accordions>
 <Accordion title="issuer_mismatch on every login">
 
-Your app registration's *supported account types* disagree with the configured
+Your app registration's _supported account types_ disagree with the configured
 `tenant`. `common` requires multi-tenant + personal accounts; a single-tenant
 GUID needs the matching registration.
 
@@ -134,7 +133,19 @@ in without one — exactly like Discord phone-only accounts.
 ## Next
 
 <Cards>
-  <Card title="Apple" description="form_post + ES256 client-secret JWT." href="/docs/plugins/apple" />
-  <Card title="Discord" description="Nullable emails, verified flag." href="/docs/plugins/discord" />
-  <Card title="GitHub" description="OAuth2 with verified-email lookup." href="/docs/plugins/github" />
+  <Card
+    title="Apple"
+    description="form_post + ES256 client-secret JWT."
+    href="/docs/plugins/apple"
+  />
+  <Card
+    title="Discord"
+    description="Nullable emails, verified flag."
+    href="/docs/plugins/discord"
+  />
+  <Card
+    title="GitHub"
+    description="OAuth2 with verified-email lookup."
+    href="/docs/plugins/github"
+  />
 </Cards>

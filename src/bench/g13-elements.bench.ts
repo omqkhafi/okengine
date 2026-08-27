@@ -16,10 +16,7 @@ import { openSmtpChannel } from "../drivers/channel-smtp.ts";
 import { openRedisKv } from "../drivers/redis.ts";
 import type { KvNamespace } from "../drivers/types.ts";
 import { channel } from "../elements/channel.ts";
-import {
-  createChannelRuntime,
-  type TemplateCatalog,
-} from "../elements/channel/runtime.ts";
+import { createChannelRuntime, type TemplateCatalog } from "../elements/channel/runtime.ts";
 import { takeRate } from "../elements/gate/strategies.ts";
 import { ai } from "../elements/ai.ts";
 import type { AiDriver } from "../drivers/ai-types.ts";
@@ -104,7 +101,8 @@ describe.skipIf(!process.env.OKE_BENCH)("G13 — remaining elements", () => {
       expect(allowed).toBe(MAX * subjects.length);
 
       const issues: string[] = [];
-      if (metrics.takesPerSec! < 200) issues.push(`takeRate throughput low: ${metrics.takesPerSec}/s`);
+      if (metrics.takesPerSec! < 200)
+        issues.push(`takeRate throughput low: ${metrics.takesPerSec}/s`);
 
       const path = await writeArtifact({
         group: "G13a",
@@ -124,172 +122,178 @@ describe.skipIf(!process.env.OKE_BENCH)("G13 — remaining elements", () => {
   );
 
   // ------------------------------------------------------------- b. gated() cost
-  test("gated() cumulative cost — 1k/10k/50k capability+ledger calls", async () => {
-    resetBindings();
-    resetFlowSeq();
+  test(
+    "gated() cumulative cost — 1k/10k/50k capability+ledger calls",
+    async () => {
+      resetBindings();
+      resetFlowSeq();
 
-    let reportedUs = 0;
-    // Every stub-store op routes through gated("read"/"write"):
-    // capability.assert + effect ledger per call.
-    const gatedBench = flow("g13.gated", {
-      do: async (input, fx) => {
-        const n = Math.max(1, Math.min(100_000, Number((input as { n?: number }).n ?? 1)));
-        const store = fx.store(`kv:g13cost` as never) as unknown as {
-          set(key: string, value: number): Promise<void>;
-          get(key: string): Promise<unknown>;
-        };
-        const t0 = performance.now();
-        for (let i = 0; i < n; i++) {
-          await store.set(`k${i}`, i);
-        }
-        for (let i = 0; i < n; i++) {
-          await store.get(`k${i}`);
-        }
-        reportedUs = Number(((performance.now() - t0) * 1000).toFixed(3));
-        return { us: reportedUs, n };
-      },
-    });
+      let reportedUs = 0;
+      // Every stub-store op routes through gated("read"/"write"):
+      // capability.assert + effect ledger per call.
+      const gatedBench = flow("g13.gated", {
+        do: async (input, fx) => {
+          const n = Math.max(1, Math.min(100_000, Number((input as { n?: number }).n ?? 1)));
+          const store = fx.store(`kv:g13cost` as never) as unknown as {
+            set(key: string, value: number): Promise<void>;
+            get(key: string): Promise<unknown>;
+          };
+          const t0 = performance.now();
+          for (let i = 0; i < n; i++) {
+            await store.set(`k${i}`, i);
+          }
+          for (let i = 0; i < n; i++) {
+            await store.get(`k${i}`);
+          }
+          reportedUs = Number(((performance.now() - t0) * 1000).toFixed(3));
+          return { us: reportedUs, n };
+        },
+      });
 
-    const bindings: Binding[] = [
-      { trigger: http.post("/g13/gated").public(), flow: gatedBench as AnyFlowDef },
-    ];
-    const app13b = oke({
-      name: "g13-gated-cost",
-      env: "test",
-      startScheduler: false,
-      gate: { unguardedHttp: "allow" },
-      bindings,
-    });
+      const bindings: Binding[] = [
+        { trigger: http.post("/g13/gated").public(), flow: gatedBench as AnyFlowDef },
+      ];
+      const app13b = oke({
+        name: "g13-gated-cost",
+        env: "test",
+        startScheduler: false,
+        gate: { unguardedHttp: "allow" },
+        bindings,
+      });
 
-    const metrics: Record<string, number> = {};
-    for (const n of CAL ? [1_000] : [1_000, 10_000, 50_000]) {
-      const res = await app13b.fetch(
-        new Request("http://localhost/g13/gated", {
-          method: "POST",
-          body: JSON.stringify({ n }),
-          headers: { "content-type": "application/json" },
-        }),
-      );
-      if (!res.ok) throw new Error(`g13 gated HTTP ${res.status}`);
-      const wallUs = reportedUs;
-      const perOpUs = Number((wallUs / (2 * n)).toFixed(4));
-      metrics[`n${n}.wallMs`] = Number((wallUs / 1000).toFixed(3));
-      metrics[`n${n}.perOpUs`] = perOpUs;
-      console.log(`[G13b] n=${n}: ${metrics[`n${n}.wallMs`]}ms total, ${perOpUs}µs/gated-op`);
-    }
-    console.log("[G13b] metrics:", JSON.stringify(metrics));
+      const metrics: Record<string, number> = {};
+      for (const n of CAL ? [1_000] : [1_000, 10_000, 50_000]) {
+        const res = await app13b.fetch(
+          new Request("http://localhost/g13/gated", {
+            method: "POST",
+            body: JSON.stringify({ n }),
+            headers: { "content-type": "application/json" },
+          }),
+        );
+        if (!res.ok) throw new Error(`g13 gated HTTP ${res.status}`);
+        const wallUs = reportedUs;
+        const perOpUs = Number((wallUs / (2 * n)).toFixed(4));
+        metrics[`n${n}.wallMs`] = Number((wallUs / 1000).toFixed(3));
+        metrics[`n${n}.perOpUs`] = perOpUs;
+        console.log(`[G13b] n=${n}: ${metrics[`n${n}.wallMs`]}ms total, ${perOpUs}µs/gated-op`);
+      }
+      console.log("[G13b] metrics:", JSON.stringify(metrics));
 
-    const issues: string[] = [];
-    if ((metrics["n50000.perOpUs"] ?? 0) > (metrics["n1000.perOpUs"] ?? 0) * 5) {
-      issues.push("gated() per-op cost grows super-linearly with cumulative calls");
-    }
+      const issues: string[] = [];
+      if ((metrics["n50000.perOpUs"] ?? 0) > (metrics["n1000.perOpUs"] ?? 0) * 5) {
+        issues.push("gated() per-op cost grows super-linearly with cumulative calls");
+      }
 
-    const path = await writeArtifact({
-      group: "G13b",
-      hardware: HARDWARE,
-      disclaimer: DISCLAIMER,
-      command:
-        "OKE_BENCH=1 bun test ./src/bench/g13-elements.bench.ts --timeout 300000",
-      metrics,
-      issues,
-      fixes: [],
-      remeasured: null,
-    });
-    console.log(`[G13b] artifact: ${path}`);
-    expect(issues.length).toBe(0);
-  }, CAL ? 60_000 : 240_000);
+      const path = await writeArtifact({
+        group: "G13b",
+        hardware: HARDWARE,
+        disclaimer: DISCLAIMER,
+        command: "OKE_BENCH=1 bun test ./src/bench/g13-elements.bench.ts --timeout 300000",
+        metrics,
+        issues,
+        fixes: [],
+        remeasured: null,
+      });
+      console.log(`[G13b] artifact: ${path}`);
+      expect(issues.length).toBe(0);
+    },
+    CAL ? 60_000 : 240_000,
+  );
 
   // --------------------------------------------------------- c. fx.json.stream
-  test("concurrent fx.json.stream via encodeSseStream", async () => {
-    resetBindings();
-    resetFlowSeq();
-    const CHUNKS = CAL ? 8 : 32;
+  test(
+    "concurrent fx.json.stream via encodeSseStream",
+    async () => {
+      resetBindings();
+      resetFlowSeq();
+      const CHUNKS = CAL ? 8 : 32;
 
-    function tokenDriver(chunks: number): AiDriver {
-      return {
-        id: "mock",
-        async open() {
-          return {
-            driverId: "mock" as const,
-            model: "smart",
-            async complete() {
-              return { text: "", model: "smart", driverId: "mock" as const };
-            },
-            async *stream() {
-              for (let i = 0; i < chunks; i++) yield { text: `t${i}` };
-            },
-          };
-        },
-      };
-    }
+      function tokenDriver(chunks: number): AiDriver {
+        return {
+          id: "mock",
+          async open() {
+            return {
+              driverId: "mock" as const,
+              model: "smart",
+              async complete() {
+                return { text: "", model: "smart", driverId: "mock" as const };
+              },
+              async *stream() {
+                for (let i = 0; i < chunks; i++) yield { text: `t${i}` };
+              },
+            };
+          },
+        };
+      }
 
-    const smart = ai.model("smart");
-    on(
-      http.get("/chat").public(),
-      flow("g13.chat", {
-        do: (_input, fx) => fx.json.stream(fx.stream(smart, { prompt: "hi" })),
-      }),
-    );
-    const app13c = oke({
-      name: "g13-stream",
-      env: "test",
-      startScheduler: false,
-      gate: { unguardedHttp: "allow" },
-      ai: { models: [smart], defaultDriver: tokenDriver(CHUNKS) },
-    });
+      const smart = ai.model("smart");
+      on(
+        http.get("/chat").public(),
+        flow("g13.chat", {
+          do: (_input, fx) => fx.json.stream(fx.stream(smart, { prompt: "hi" })),
+        }),
+      );
+      const app13c = oke({
+        name: "g13-stream",
+        env: "test",
+        startScheduler: false,
+        gate: { unguardedHttp: "allow" },
+        ai: { models: [smart], defaultDriver: tokenDriver(CHUNKS) },
+      });
 
-    const STREAMS = CAL ? 20 : 200;
-    const CONCURRENCY = CAL ? 5 : 25;
-    const latencies: number[] = [];
-    let framesTotal = 0;
-    let nextId = 0;
+      const STREAMS = CAL ? 20 : 200;
+      const CONCURRENCY = CAL ? 5 : 25;
+      const latencies: number[] = [];
+      let framesTotal = 0;
+      let nextId = 0;
 
-    const t0 = performance.now();
-    await Promise.all(
-      Array.from({ length: CONCURRENCY }, async () => {
-        for (;;) {
-          const id = ++nextId;
-          if (id > STREAMS) return;
-          const s = performance.now();
-          const res = await app13c.fetch(new Request("http://localhost/chat"));
-          if (!res.headers.get("content-type")?.includes("text/event-stream")) {
-            throw new Error("g13 stream: not SSE");
+      const t0 = performance.now();
+      await Promise.all(
+        Array.from({ length: CONCURRENCY }, async () => {
+          for (;;) {
+            const id = ++nextId;
+            if (id > STREAMS) return;
+            const s = performance.now();
+            const res = await app13c.fetch(new Request("http://localhost/chat"));
+            if (!res.headers.get("content-type")?.includes("text/event-stream")) {
+              throw new Error("g13 stream: not SSE");
+            }
+            const body = await res.text();
+            framesTotal += body.split("\n").filter((l) => l.startsWith("data:")).length;
+            latencies.push(performance.now() - s);
           }
-          const body = await res.text();
-          framesTotal += body.split("\n").filter((l) => l.startsWith("data:")).length;
-          latencies.push(performance.now() - s);
-        }
-      }),
-    );
-    const wallS = (performance.now() - t0) / 1000;
-    const metrics: Record<string, number> = {
-      streams: latencies.length,
-      streamsPerSec: Number((latencies.length / wallS).toFixed(1)),
-      sseFramesPerSec: Number((framesTotal / wallS).toFixed(1)),
-      framesPerStream: CHUNKS + 1,
-      streamP50Ms: Number(percentile(latencies, 50).toFixed(3)),
-      streamP99Ms: Number(percentile(latencies, 99).toFixed(3)),
-      concurrency: CONCURRENCY,
-    };
-    console.log("[G13c] metrics:", JSON.stringify(metrics));
+        }),
+      );
+      const wallS = (performance.now() - t0) / 1000;
+      const metrics: Record<string, number> = {
+        streams: latencies.length,
+        streamsPerSec: Number((latencies.length / wallS).toFixed(1)),
+        sseFramesPerSec: Number((framesTotal / wallS).toFixed(1)),
+        framesPerStream: CHUNKS + 1,
+        streamP50Ms: Number(percentile(latencies, 50).toFixed(3)),
+        streamP99Ms: Number(percentile(latencies, 99).toFixed(3)),
+        concurrency: CONCURRENCY,
+      };
+      console.log("[G13c] metrics:", JSON.stringify(metrics));
 
-    const issues: string[] = [];
-    if (!latencies.every((ms) => ms < 30_000)) issues.push("stream latency outlier > 30s");
+      const issues: string[] = [];
+      if (!latencies.every((ms) => ms < 30_000)) issues.push("stream latency outlier > 30s");
 
-    const path = await writeArtifact({
-      group: "G13c",
-      hardware: HARDWARE,
-      disclaimer: DISCLAIMER,
-      command:
-        "OKE_BENCH=1 bun test ./src/bench/g13-elements.bench.ts --timeout 300000",
-      metrics,
-      issues,
-      fixes: [],
-      remeasured: null,
-    });
-    console.log(`[G13c] artifact: ${path}`);
-    expect(latencies.length).toBe(STREAMS);
-  }, CAL ? 60_000 : 180_000);
+      const path = await writeArtifact({
+        group: "G13c",
+        hardware: HARDWARE,
+        disclaimer: DISCLAIMER,
+        command: "OKE_BENCH=1 bun test ./src/bench/g13-elements.bench.ts --timeout 300000",
+        metrics,
+        issues,
+        fixes: [],
+        remeasured: null,
+      });
+      console.log(`[G13c] artifact: ${path}`);
+      expect(latencies.length).toBe(STREAMS);
+    },
+    CAL ? 60_000 : 180_000,
+  );
 
   // ------------------------------------------------------- d. Channel bulk send
   test(
@@ -387,8 +391,7 @@ describe.skipIf(!process.env.OKE_BENCH)("G13 — remaining elements", () => {
         group: "G13d",
         hardware: HARDWARE,
         disclaimer: DISCLAIMER,
-        command:
-          "OKE_BENCH=1 bun test ./src/bench/g13-elements.bench.ts --timeout 300000",
+        command: "OKE_BENCH=1 bun test ./src/bench/g13-elements.bench.ts --timeout 300000",
         metrics,
         issues,
         fixes: [
