@@ -11,9 +11,7 @@
     "ok": true,
     "where": {
       "clause": "\"status\" = ?",
-      "params": [
-        "open"
-      ],
+      "params": ["open"],
       "predicates": [
         {
           "column": "status",
@@ -32,9 +30,7 @@
     "ok": true,
     "where": {
       "clause": "\"status\" != ?",
-      "params": [
-        "open"
-      ],
+      "params": ["open"],
       "predicates": [
         {
           "column": "status",
@@ -53,9 +49,7 @@
     "ok": true,
     "where": {
       "clause": "\"status\" = ?",
-      "params": [
-        "open"
-      ],
+      "params": ["open"],
       "predicates": [
         {
           "column": "status",
@@ -74,9 +68,7 @@
     "ok": true,
     "where": {
       "clause": "\"priority\" >= ?",
-      "params": [
-        "3"
-      ],
+      "params": ["3"],
       "predicates": [
         {
           "column": "priority",
@@ -95,9 +87,7 @@
     "ok": true,
     "where": {
       "clause": "\"priority\" < ?",
-      "params": [
-        "5"
-      ],
+      "params": ["5"],
       "predicates": [
         {
           "column": "priority",
@@ -116,9 +106,7 @@
     "ok": true,
     "where": {
       "clause": "\"title\" like ?",
-      "params": [
-        "%task%"
-      ],
+      "params": ["%task%"],
       "predicates": [
         {
           "column": "title",
@@ -137,9 +125,7 @@
     "ok": true,
     "where": {
       "clause": "\"title\" ilike ?",
-      "params": [
-        "%URGENT%"
-      ],
+      "params": ["%URGENT%"],
       "predicates": [
         {
           "column": "title",
@@ -158,20 +144,12 @@
     "ok": true,
     "where": {
       "clause": "\"status\" in (?, ?, ?)",
-      "params": [
-        "open",
-        "done",
-        "in,review"
-      ],
+      "params": ["open", "done", "in,review"],
       "predicates": [
         {
           "column": "status",
           "op": "in",
-          "value": [
-            "open",
-            "done",
-            "in,review"
-          ]
+          "value": ["open", "done", "in,review"]
         }
       ]
     },
@@ -203,9 +181,7 @@
     "ok": true,
     "where": {
       "clause": "\"title\" = ?",
-      "params": [
-        true
-      ],
+      "params": [true],
       "predicates": [
         {
           "column": "title",
@@ -224,10 +200,7 @@
     "ok": true,
     "where": {
       "clause": "(\"status\" = ?) OR (\"priority\" > ?)",
-      "params": [
-        "open",
-        "5"
-      ],
+      "params": ["open", "5"],
       "predicates": [
         {
           "column": "status",
@@ -251,10 +224,7 @@
     "ok": true,
     "where": {
       "clause": "(\"status\" = ?) AND (\"title\" ilike ?)",
-      "params": [
-        "open",
-        "%urgent%"
-      ],
+      "params": ["open", "%urgent%"],
       "predicates": [
         {
           "column": "status",
@@ -278,11 +248,7 @@
     "ok": true,
     "where": {
       "clause": "(\"status\" = ?) OR ((\"priority\" >= ?) AND (\"title\" != ?))",
-      "params": [
-        "open",
-        "1",
-        "x"
-      ],
+      "params": ["open", "1", "x"],
       "predicates": [
         {
           "column": "status",
@@ -311,9 +277,7 @@
     "ok": true,
     "where": {
       "clause": "\"title\" like ?",
-      "params": [
-        "%task%"
-      ],
+      "params": ["%task%"],
       "predicates": [
         {
           "column": "title",
@@ -333,9 +297,7 @@
     "ok": true,
     "where": {
       "clause": "\"title\" like ?",
-      "params": [
-        "%task%"
-      ],
+      "params": ["%task%"],
       "predicates": [
         {
           "column": "title",
@@ -353,10 +315,7 @@
   },
   "offset:order multi desc": {
     "ok": true,
-    "orderBy": [
-      "[C(priority), T(\" desc\")]",
-      "[C(createdAt), T(\" asc\")]"
-    ],
+    "orderBy": ["[C(priority), T(\" desc\")]", "[C(createdAt), T(\" asc\")]"],
     "limit": 5,
     "meta": {
       "mode": "offset",
@@ -371,10 +330,7 @@
       "mode": "offset",
       "limit": 5
     },
-    "select": [
-      "id",
-      "title"
-    ]
+    "select": ["id", "title"]
   },
   "offset:limit": {
     "ok": true,
@@ -406,9 +362,7 @@
     "ok": true,
     "where": {
       "clause": "\"status\" = ?",
-      "params": [
-        "open"
-      ],
+      "params": ["open"],
       "predicates": [
         {
           "column": "status",
@@ -417,9 +371,7 @@
         }
       ]
     },
-    "orderBy": [
-      "[C(priority), T(\" desc\")]"
-    ],
+    "orderBy": ["[C(priority), T(\" desc\")]"],
     "limit": 3,
     "offset": 2,
     "meta": {
@@ -427,18 +379,13 @@
       "limit": 3,
       "order": "priority.desc"
     },
-    "select": [
-      "id",
-      "status"
-    ]
+    "select": ["id", "status"]
   },
   "offset:headers/cookie ignored": {
     "ok": true,
     "where": {
       "clause": "\"status\" = ?",
-      "params": [
-        "open"
-      ],
+      "params": ["open"],
       "predicates": [
         {
           "column": "status",
@@ -455,10 +402,7 @@
   },
   "cursor:default (cursor order implied)": {
     "ok": true,
-    "orderBy": [
-      "[C(createdAt), T(\" desc\")]",
-      "[C(id), T(\" desc\")]"
-    ],
+    "orderBy": ["[C(createdAt), T(\" desc\")]", "[C(id), T(\" desc\")]"],
     "limit": 6,
     "meta": {
       "mode": "cursor",
@@ -467,10 +411,7 @@
   },
   "cursor:keyset after": {
     "ok": true,
-    "orderBy": [
-      "[C(createdAt), T(\" desc\")]",
-      "[C(id), T(\" desc\")]"
-    ],
+    "orderBy": ["[C(createdAt), T(\" desc\")]", "[C(id), T(\" desc\")]"],
     "limit": 6,
     "after": "[[C(createdAt), T(\" < \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" < \"), ?[\"value\"]]]]",
     "meta": {
@@ -482,10 +423,7 @@
   },
   "cursor:keyset before (flipped)": {
     "ok": true,
-    "orderBy": [
-      "[C(createdAt), T(\" asc\")]",
-      "[C(id), T(\" asc\")]"
-    ],
+    "orderBy": ["[C(createdAt), T(\" asc\")]", "[C(id), T(\" asc\")]"],
     "limit": 6,
     "before": "[[C(createdAt), T(\" > \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" > \"), ?[\"value\"]]]]",
     "meta": {
@@ -497,10 +435,7 @@
   },
   "cursor:bare array cursor (legacy after)": {
     "ok": true,
-    "orderBy": [
-      "[C(createdAt), T(\" desc\")]",
-      "[C(id), T(\" desc\")]"
-    ],
+    "orderBy": ["[C(createdAt), T(\" desc\")]", "[C(id), T(\" desc\")]"],
     "limit": 6,
     "after": "[[C(createdAt), T(\" < \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" < \"), ?[\"value\"]]]]",
     "meta": {
@@ -514,9 +449,7 @@
     "ok": true,
     "where": {
       "clause": "\"status\" = ?",
-      "params": [
-        "open"
-      ],
+      "params": ["open"],
       "predicates": [
         {
           "column": "status",
@@ -525,10 +458,7 @@
         }
       ]
     },
-    "orderBy": [
-      "[C(createdAt), T(\" desc\")]",
-      "[C(id), T(\" desc\")]"
-    ],
+    "orderBy": ["[C(createdAt), T(\" desc\")]", "[C(id), T(\" desc\")]"],
     "limit": 6,
     "after": "[[C(createdAt), T(\" < \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" < \"), ?[\"value\"]]]]",
     "meta": {
@@ -548,9 +478,7 @@
           "issues": [
             {
               "message": "unknown or unfilterable column \"secret\"",
-              "path": [
-                "secret"
-              ]
+              "path": ["secret"]
             }
           ]
         },
@@ -568,9 +496,7 @@
           "issues": [
             {
               "message": "unknown or unfilterable column \"ghost\"",
-              "path": [
-                "ghost"
-              ]
+              "path": ["ghost"]
             }
           ]
         },
@@ -588,9 +514,7 @@
           "issues": [
             {
               "message": "unsupported filter op \"regex\"",
-              "path": [
-                "status"
-              ]
+              "path": ["status"]
             }
           ]
         },
@@ -608,9 +532,7 @@
           "issues": [
             {
               "message": "expected \"op.value\" (e.g. status=eq.x)",
-              "path": [
-                "status"
-              ]
+              "path": ["status"]
             }
           ]
         },
@@ -628,9 +550,7 @@
           "issues": [
             {
               "message": "is expects null|not_null|true|false|unknown",
-              "path": [
-                "title"
-              ]
+              "path": ["title"]
             }
           ]
         },
@@ -648,9 +568,7 @@
           "issues": [
             {
               "message": "in expects (a,b,c)",
-              "path": [
-                "status"
-              ]
+              "path": ["status"]
             }
           ]
         },
@@ -668,9 +586,7 @@
           "issues": [
             {
               "message": "in expects at least one value",
-              "path": [
-                "status"
-              ]
+              "path": ["status"]
             }
           ]
         },
@@ -688,9 +604,7 @@
           "issues": [
             {
               "message": "use either search or q, not both",
-              "path": [
-                "search"
-              ]
+              "path": ["search"]
             }
           ]
         },
@@ -708,9 +622,7 @@
           "issues": [
             {
               "message": "limit must be a positive integer",
-              "path": [
-                "limit"
-              ]
+              "path": ["limit"]
             }
           ]
         },
@@ -728,9 +640,7 @@
           "issues": [
             {
               "message": "offset must be a non-negative integer",
-              "path": [
-                "offset"
-              ]
+              "path": ["offset"]
             }
           ]
         },
@@ -748,9 +658,7 @@
           "issues": [
             {
               "message": "invalid cursor",
-              "path": [
-                "cursor"
-              ]
+              "path": ["cursor"]
             }
           ]
         },
@@ -768,9 +676,7 @@
           "issues": [
             {
               "message": "bad order term \"priority..desc\"",
-              "path": [
-                "order"
-              ]
+              "path": ["order"]
             }
           ]
         },
@@ -788,9 +694,7 @@
           "issues": [
             {
               "message": "unknown or unorderable column \"ghost\"",
-              "path": [
-                "order"
-              ]
+              "path": ["order"]
             }
           ]
         },
@@ -808,9 +712,7 @@
           "issues": [
             {
               "message": "unknown column \"ghost\"",
-              "path": [
-                "select"
-              ]
+              "path": ["select"]
             }
           ]
         },
@@ -828,9 +730,7 @@
           "issues": [
             {
               "message": "cursor pagination is not configured",
-              "path": [
-                "cursor"
-              ]
+              "path": ["cursor"]
             }
           ]
         },
@@ -848,9 +748,7 @@
           "issues": [
             {
               "message": "invalid cursor",
-              "path": [
-                "cursor"
-              ]
+              "path": ["cursor"]
             }
           ]
         },
@@ -868,9 +766,7 @@
           "issues": [
             {
               "message": "invalid cursor",
-              "path": [
-                "cursor"
-              ]
+              "path": ["cursor"]
             }
           ]
         },

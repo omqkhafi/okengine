@@ -35,11 +35,7 @@ import {
   type ResolvedListConfig,
 } from "./list-query.ts";
 
-export type {
-  ColumnScope,
-  ListCountMode,
-  ListPageMode,
-} from "./list-query.ts";
+export type { ColumnScope, ListCountMode, ListPageMode } from "./list-query.ts";
 export type { ResolvedListConfig } from "./list-query.ts";
 
 /** Options for {@link resource}. */

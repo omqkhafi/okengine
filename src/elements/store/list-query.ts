@@ -499,7 +499,8 @@ export function resolveListScope(table: unknown, list?: ListOptions): ResolvedLi
 
   const searchCols = scopeColumns(opts.search ?? "none", columns, tableColumns);
   const filterCols = scopeColumns(opts.filter ?? "none", columns, tableColumns);
-  const orderScope = opts.order ?? (resolvedCursor.length > 0 ? (cursorCols as readonly unknown[]) : "all");
+  const orderScope =
+    opts.order ?? (resolvedCursor.length > 0 ? (cursorCols as readonly unknown[]) : "all");
   const orderCols = scopeColumns(orderScope, columns, tableColumns);
   const selectScope = opts.select ?? "all";
 

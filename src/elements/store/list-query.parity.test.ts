@@ -131,11 +131,12 @@ function whereSnapshot(where: unknown): unknown {
     clause: compiled.clause.replace(/\?[a-zA-Z_][a-zA-Z0-9_]*/g, "?"),
     params: compiled.params,
     predicates: compiled.predicates.map((p) => ({
-      column: keyByColumn.get(
-        Array.from(keyByColumn.keys()).find(
-          (col) => (col as { name?: string }).name === p.column,
-        ),
-      ) ?? p.column,
+      column:
+        keyByColumn.get(
+          Array.from(keyByColumn.keys()).find(
+            (col) => (col as { name?: string }).name === p.column,
+          ),
+        ) ?? p.column,
       op: p.op,
       value: p.value,
     })),
@@ -194,7 +195,7 @@ const OFFSET_CASES: ReadonlyArray<[string, Record<string, unknown>]> = [
   ["lt", { priority: "lt.5" }],
   ["like pattern", { title: "like.*task*" }],
   ["ilike pattern", { title: "ilike.*URGENT*" }],
-  ["in list", { status: "in.(open,done,\"in,review\")" }],
+  ["in list", { status: 'in.(open,done,"in,review")' }],
   ["is null", { title: "is.null" }],
   ["is true", { title: "is.true" }],
   ["or group", { or: "(status.eq.open,priority.gt.5)" }],
@@ -207,7 +208,10 @@ const OFFSET_CASES: ReadonlyArray<[string, Record<string, unknown>]> = [
   ["limit", { limit: "3" }],
   ["offset", { offset: "4" }],
   ["offset cursor token", { cursor: btoa(JSON.stringify({ k: "off", o: 4 })) }],
-  ["combined", { status: "eq.open", order: "priority.desc", limit: "3", offset: "2", select: "id,status" }],
+  [
+    "combined",
+    { status: "eq.open", order: "priority.desc", limit: "3", offset: "2", select: "id,status" },
+  ],
   ["headers/cookie ignored", { headers: "x", cookie: "y", status: "eq.open" }],
 ];
 
@@ -216,7 +220,10 @@ const CURSOR_CASES: ReadonlyArray<[string, Record<string, unknown>]> = [
   ["keyset after", { cursor: btoa(JSON.stringify({ v: [100, "i5"], d: "after" })) }],
   ["keyset before (flipped)", { cursor: btoa(JSON.stringify({ v: [100, "i5"], d: "before" })) }],
   ["bare array cursor (legacy after)", { cursor: btoa(JSON.stringify([100, "i5"])) }],
-  ["filter + cursor", { status: "eq.open", cursor: btoa(JSON.stringify({ v: [100, "i5"], d: "after" })) }],
+  [
+    "filter + cursor",
+    { status: "eq.open", cursor: btoa(JSON.stringify({ v: [100, "i5"], d: "after" })) },
+  ],
 ];
 
 const OFFSET_FAILURES: ReadonlyArray<[string, Record<string, unknown>]> = [
@@ -236,9 +243,19 @@ const OFFSET_FAILURES: ReadonlyArray<[string, Record<string, unknown>]> = [
   ["unknown select column", { select: "ghost" }],
 ];
 
-const CURSOR_FAILURES: ReadonlyArray<[string, Record<string, unknown>, ("unconfigured" | "configured")]> = [
-  ["cursor pagination not configured", { cursor: btoa(JSON.stringify({ v: [100, "i5"], d: "after" })) }, "unconfigured"],
-  ["cursor with wrong arity", { cursor: btoa(JSON.stringify({ v: [100], d: "after" })) }, "configured"],
+const CURSOR_FAILURES: ReadonlyArray<
+  [string, Record<string, unknown>, "unconfigured" | "configured"]
+> = [
+  [
+    "cursor pagination not configured",
+    { cursor: btoa(JSON.stringify({ v: [100, "i5"], d: "after" })) },
+    "unconfigured",
+  ],
+  [
+    "cursor with wrong arity",
+    { cursor: btoa(JSON.stringify({ v: [100], d: "after" })) },
+    "configured",
+  ],
   ["garbage cursor", { cursor: "not-even-base64" }, "configured"],
 ];
 
@@ -327,11 +344,21 @@ describe("parseListQuery — identical URLs, identical rows (pglite e2e)", () =>
       routedRole: "primary",
       domainDdl: "ensure",
     });
-    await handle.insert(items).values({ id: "i1", title: "alpha task", status: "open", priority: 1, createdAt: 100 });
-    await handle.insert(items).values({ id: "i2", title: "beta task", status: "done", priority: 5, createdAt: 200 });
-    await handle.insert(items).values({ id: "i3", title: "urgent task", status: "open", priority: 9, createdAt: 300 });
-    await handle.insert(items).values({ id: "i4", title: "alpha follow-up", status: "open", priority: 3, createdAt: 400 });
-    await handle.insert(items).values({ id: "i5", title: "zzz archive", status: "done", priority: 2, createdAt: 500 });
+    await handle
+      .insert(items)
+      .values({ id: "i1", title: "alpha task", status: "open", priority: 1, createdAt: 100 });
+    await handle
+      .insert(items)
+      .values({ id: "i2", title: "beta task", status: "done", priority: 5, createdAt: 200 });
+    await handle
+      .insert(items)
+      .values({ id: "i3", title: "urgent task", status: "open", priority: 9, createdAt: 300 });
+    await handle
+      .insert(items)
+      .values({ id: "i4", title: "alpha follow-up", status: "open", priority: 3, createdAt: 400 });
+    await handle
+      .insert(items)
+      .values({ id: "i5", title: "zzz archive", status: "done", priority: 2, createdAt: 500 });
   }, 15_000);
 
   afterAll(async () => {
