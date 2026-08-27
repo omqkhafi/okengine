@@ -12,6 +12,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.18.1 — 2026-08-28
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Manual live-query HTTP e2e no longer waits for two SSE chunks after a
+  single tasks insert (one classified upsert is enough) and raises the
+  Bun test timeout so PGLite boot + CDC fan-out fit under CI load.
+
 ## v0.18.0 — 2026-08-28
 
 ### ✨ Added

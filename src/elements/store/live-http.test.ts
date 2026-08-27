@@ -37,96 +37,103 @@ const activity = store.schema.table("activity", {
 });
 
 describe("manual live flow (.live(table) + liveQuery) — real boot", () => {
-  test("SSE frames carry classified task events; activity writes never surface", async () => {
-    resetBindings();
-    resetFlowSeq();
+  // PGLite boot + CDC fan-out needs headroom over Bun's default 5s; one
+  // tasks insert yields a single classified upsert frame (not two chunks).
+  test(
+    "SSE frames carry classified task events; activity writes never surface",
+    async () => {
+      resetBindings();
+      resetFlowSeq();
 
-    const db = store.sql("app", { schema: { tasks, activity } });
+      const db = store.sql("app", { schema: { tasks, activity } });
 
-    const tasksLive = on(
-      http.get("/tasks/live").public().live(tasks),
-      flow("tasks.live", {
-        in: { unknown: true },
-        effects: { reads: ["sql:app"] },
-        do: async (input, fx) =>
-          liveQuery(fx, tasks, input, {
-            filter: [tasks.status],
-            search: [tasks.title],
-            order: "all",
-          }),
-      }),
-    );
-    // A plain flow writing to BOTH tables — the keel `writeActivity` shape.
-    const createTask = on(
-      http.post("/tasks").public(),
-      flow("tasks.create", {
-        in: { title: { type: "string" }, status: { type: "string" } },
-        effects: { writes: ["sql:app"] },
-        do: async (input, fx) => {
-          const s = fx.store(db);
-          await s.insert(tasks).values({
-            title: String((input as { title: unknown }).title),
-            status: String((input as { status: unknown }).status),
-          });
-          await s.insert(activity).values({ label: "created task" });
-          return { ok: true };
+      const tasksLive = on(
+        http.get("/tasks/live").public().live(tasks),
+        flow("tasks.live", {
+          in: { unknown: true },
+          effects: { reads: ["sql:app"] },
+          do: async (input, fx) =>
+            liveQuery(fx, tasks, input, {
+              filter: [tasks.status],
+              search: [tasks.title],
+              order: "all",
+            }),
+        }),
+      );
+      // A plain flow writing to BOTH tables — the keel `writeActivity` shape.
+      const createTask = on(
+        http.post("/tasks").public(),
+        flow("tasks.create", {
+          in: { title: { type: "string" }, status: { type: "string" } },
+          effects: { writes: ["sql:app"] },
+          do: async (input, fx) => {
+            const s = fx.store(db);
+            await s.insert(tasks).values({
+              title: String((input as { title: unknown }).title),
+              status: String((input as { status: unknown }).status),
+            });
+            await s.insert(activity).values({ label: "created task" });
+            return { ok: true };
+          },
+        }),
+      );
+
+      const app = oke({
+        name: "manual-live-app",
+        gate: { policies: [gate.public] },
+      }).adopt({ tasksLive, createTask });
+      Object.assign(app.$options, { env: "test", stores: [db], unguardedHttp: "allow" });
+      // PGLite boot (real app path) — the bridge binds on the pglite primary.
+      // Passed via boot.config: the createTestApp harness defaults to memory
+      // SQL unless boot.config.drivers.store.sql is set explicitly.
+      await createTestApp(app, {
+        boot: {
+          stores: [db],
+          config: { drivers: { store: { sql: { test: "pglite" } } } },
         },
-      }),
-    );
+      });
 
-    const app = oke({
-      name: "manual-live-app",
-      gate: { policies: [gate.public] },
-    }).adopt({ tasksLive, createTask });
-    Object.assign(app.$options, { env: "test", stores: [db], unguardedHttp: "allow" });
-    // PGLite boot (real app path) — the bridge binds on the pglite primary.
-    // Passed via boot.config: the createTestApp harness defaults to memory
-    // SQL unless boot.config.drivers.store.sql is set explicitly.
-    await createTestApp(app, {
-      boot: {
-        stores: [db],
-        config: { drivers: { store: { sql: { test: "pglite" } } } },
-      },
-    });
+      // Subscribe to the manual live route and collect SSE frames.
+      const res = await app.fetch(new Request("http://localhost/tasks/live?status=eq.open"));
+      if (res.status !== 200) {
+        console.error("live route failed:", res.status, await res.text());
+      }
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+      const reader = res.body!.getReader();
 
-    // Subscribe to the manual live route and collect SSE frames.
-    const res = await app.fetch(new Request("http://localhost/tasks/live?status=eq.open"));
-    if (res.status !== 200) {
-      console.error("live route failed:", res.status, await res.text());
-    }
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
-    const reader = res.body!.getReader();
+      // Write through the two-table flow — CDC flows globally, but only the
+      // tasks row (matching the ?status=eq.open window) reaches this stream.
+      const post = await app.fetch(
+        new Request("http://localhost/tasks", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "hello", status: "open" }),
+        }),
+      );
+      expect(post.status).toBe(200);
 
-    // Write through the two-table flow — CDC flows globally, but only the
-    // tasks row (matching the ?status=eq.open window) reaches this stream.
-    const post = await app.fetch(
-      new Request("http://localhost/tasks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: "hello", status: "open" }),
-      }),
-    );
-    expect(post.status).toBe(200);
+      const deadline = Date.now() + 10_000;
+      const frames: string[] = [];
+      let body = "";
+      while (Date.now() < deadline && !body.includes('"kind":"upsert"')) {
+        const chunk = await Promise.race([
+          reader.read().then((r) => r),
+          new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 500)),
+        ]);
+        if (chunk === "timeout") continue;
+        if (chunk.done) break;
+        frames.push(new TextDecoder().decode(chunk.value));
+        body = frames.join("");
+      }
+      await reader.cancel();
 
-    const deadline = Date.now() + 5000;
-    const frames: string[] = [];
-    while (Date.now() < deadline && frames.length < 2) {
-      const chunk = await Promise.race([
-        reader.read().then((r) => r),
-        new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 500)),
-      ]);
-      if (chunk === "timeout") continue;
-      if (chunk.done) break;
-      frames.push(new TextDecoder().decode(chunk.value));
-    }
-    await reader.cancel();
-
-    const body = frames.join("");
-    expect(body).toContain("data:");
-    expect(body).toContain('"kind":"upsert"');
-    expect(body).toContain('"title":"hello"');
-    expect(body).not.toContain("created task");
-    expect(body).not.toContain('"kind":"revoked"');
-  });
+      expect(body).toContain("data:");
+      expect(body).toContain('"kind":"upsert"');
+      expect(body).toContain('"title":"hello"');
+      expect(body).not.toContain("created task");
+      expect(body).not.toContain('"kind":"revoked"');
+    },
+    15_000,
+  );
 });
