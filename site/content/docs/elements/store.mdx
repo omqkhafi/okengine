@@ -5,109 +5,16 @@ icon: "Database"
 source: "docs/spec/unified-theory.md"
 ---
 
-Store is one handle, four independent facets — **sql · kv · files · index**. Each has its own
-shape; nothing forces you to use more than one. Flow code stays the same across environments;
-only the driver changes.
+Store is one handle, four independent facets — **sql · kv · files · index**. Each has its own shape; nothing forces you to use more than one. Flow code stays the same across environments; only the driver changes. Every facet accepts an optional `description` — a human title in the Console (falls back to the store name) — and auto-registers when its declaring module is imported before `oke()` (`oke({ stores })` is still valid and additive).
 
 <Callout title="The one rule">
-  Drivers are named after **protocols**, not vendors (`postgres`, `redis`, `s3` — never `neon` or
-  `minio`). Vendor choice lives in the `images` map of `oke.config.ts`.
+  Drivers are named after **protocols**, not vendors (`postgres`, `redis`, `s3` — never
+  `neon` or `minio`). Vendor choice lives in the `images` map of `oke.config.ts`.
 </Callout>
 
 <StoreFacets />
 
-Every facet accepts optional `description` — a human title in the Console (falls back to the store
-name).
-
-`store.sql` / `kv` / `files` / `index` auto-register when the declaring module is imported before
-`oke()`. `oke({ stores })` is still valid and additive.
-
-## SQL
-
-<StoreFacetMark facet="sql" />
-
-The relational facet: tables, schema, and typed single-table sessions through `fx.store`.
-
-The Console SQL band opens a query console (`POST /console/store/sql`) for
-DML and DDL. ⌘Enter runs the current statement or selection; ⌘⇧Enter runs
-the whole script sequentially and stops on the first error.
-
-EXPLAIN / EXPLAIN ANALYZE wrap the current statement. A script with more
-than one result opens a tab per statement.
-
-The table grid can insert a row (`POST /console/store/edit` without `id`).
-Double-click a tab to rename; Save keeps named queries. Completions cover
-Manifest tables, columns, and keywords.
-
-Classified PII stays masked unless the toolbar **PII** control is on
-(`revealPii: true`, audited).
-
-**Gate** views as Operator (bypass), public, a user, or a policy. SQL,
-browse, and grid edit send `{ asGate, asUserId }`. postgres / pglite stamp
-`oke.gate()` / `oke.user()` / `oke.has_scope()`; memory is catalog-only.
-
-The SQL band **Schema** control opens a visualizer of Manifest tables and
-relations — declared `.references()` plus inferred `*_id` columns — not the
-query-console Schema rail.
-
-<Callout title="Query performance">
-  SQL **Performance** reads `pg_stat_statements` and live locks
-  (`QUERY /console/store/sql/stats` and `/locks`).
-
-Alpine needs preload plus `CREATE EXTENSION`. Index Advisor is opt-in on
-[Postgres](/docs/recipes/postgres#query-performance).
-
-KV **Performance** reads Redis-wire `INFO` / `COMMANDSTATS` / `SLOWLOG`
-(`QUERY /console/store/kv/stats`). In-process `memory` is unsupported.
-
-INFO is instance-wide (`StoreKvStatsServerWideGap`). SLOWLOG args collapse
-until reveal (`StoreKvStatsSlowlogArgsGap`). No hot-key table.
-
-</Callout>
-
-**Colorize** groups tables by prefix and FK family. Click a related table to
-dim the rest; click the canvas to show all again.
-
-Edges mark cardinality with icons (many-to-one, one-to-one, many-to-many,
-self). Cards and the query Schema rail mark primary (key), foreign (link),
-and unique (diamond) columns.
-
-Each SQL store also lists **Indexes**, **Functions**, **Triggers**,
-**Extensions**, and **RLS Policies**.
-
-Indexes, Functions, and Triggers use the same flat form as RLS Policies —
-paired fields, compact templates, and a pinned SQL editor — then run
-`CREATE INDEX` / `CREATE FUNCTION` / `CREATE TRIGGER`.
-
-**Advanced** unlocks the leftover Postgres knobs (`CONCURRENTLY` / `INCLUDE`,
-`SECURITY DEFINER` / `PARALLEL`, `CONSTRAINT` / `UPDATE OF`).
-
-Extensions list built-in contrib plus a **Library** (featured cards, search,
-category filter) for TimescaleDB, PostGIS, and `pg_cron`.
-
-Install reviews the `CREATE EXTENSION` SQL; **Advanced** can set `SCHEMA`,
-`VERSION`, and `CASCADE` (`pg_catalog` is refused).
-
-When a newer packaged version exists, the name chip shows **Upgrade**
-(`ALTER EXTENSION … UPDATE`). Names link to the project or Postgres docs.
-
-SQL table rows and the resource header show RLS (emerald / muted shield;
-**N RLS** when policies exist) before **PII**. KV, files, and index have
-no badge — enabling RLS on create flips the shield.
-
-**RLS Policies** lists `pg_policies` plus Manifest `declared` / `live`.
-Two-finger click a row for its sheet, or empty grid to create. Create
-pins SQL | Code (`store.schema.policy` + `pgPolicy`); drag to resize.
-
-**Templates** use `oke.user()` / `oke.gate()` / `oke.has_scope()`.
-Owner cards pick a **Column** (guess `creator_email` / `owner_email`)
-with PK / FK marks. Create stays blocked until a column is picked.
-
-Create policy picks a Gate posture (Read / Write / Both), or **Policy &
-scope**. Those picks fill `USING` / `WITH CHECK`. `TO` stays `public` —
-Gate names are not Postgres roles.
-
-### Quick start
+## Quick start
 
 <Steps>
 
@@ -130,9 +37,9 @@ export const notes = store.schema.table("notes", {
 </Step>
 
 <Step>
-### Declare the store
+### Declare the store and push the schema
 
-Bind the schema to a SQL store in `src/core.ts`:
+Bind the schema to a SQL store in `src/core.ts`. `oke dev` auto-pushes on save — or run it by hand:
 
 ```typescript title="src/core.ts"
 import { store } from "okengine";
@@ -140,13 +47,6 @@ import { notes } from "./schema.decl";
 
 export const db = store.sql("notes", { schema: { notes } });
 ```
-
-</Step>
-
-<Step>
-### Push the schema
-
-`oke dev` runs this automatically on save; or run it by hand:
 
 ```bash
 oke db push   # dev — applies the schema to your local database
@@ -181,7 +81,13 @@ export const createNote = on(
 
 </Steps>
 
-### CRUD without boilerplate — `store.resource`
+## SQL
+
+<StoreFacetMark facet="sql" />
+
+The relational facet: tables, schema, and typed single-table sessions through `fx.store`.
+
+### Resource routes — `store.resource`
 
 Five conventional endpoints (list, create, get, update, remove) expand from one declaration. Each is an ordinary Flow underneath — same contracts, same `fx`:
 
@@ -214,13 +120,9 @@ const notesR = store.resource(db, notes, {
 const mounted = on(http.resource("/notes", notesR.all()).gate(member));
 ```
 
-**Consequence:** the live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. Clients consume it with `useLiveQuery` from `okengine/client-react`.
+The live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. Clients consume it with `useLiveQuery` from `okengine/client-react`.
 
-#### Hand-written live flows
-
-`store.resource` is optional. A hand-written flow declares the same live
-surface with the `.live(table)` trigger modifier and the `liveQuery` helper —
-identical signal, guardrails, and per-subscriber classification:
+`store.resource` is optional. A hand-written flow declares the same live surface with the `.live(table)` trigger modifier and the `liveQuery` helper — identical signal, guardrails, and per-subscriber classification:
 
 ```typescript
 import { liveQuery } from "okengine";
@@ -239,69 +141,34 @@ export const live = on(
 );
 ```
 
-`.live(tasks)` stamps the internal `oke/live/sql:tasks` signal at extract and
-enforces the same guardrails as `live: true` (PK required; `updatedAt` / RLS
-warnings).
+`.live(tasks)` stamps the internal `oke/live/sql:tasks` signal at extract and enforces the same guardrails as `live: true` (PK required; `updatedAt` / RLS warnings). The flow body parses the request's query params with the exact list grammar, then opens the classified CDC stream.
 
-**Consequence:** the flow body parses the request's query params with the
-exact list grammar, then opens the classified CDC stream.
+- `?status=eq.open` filters the live window the same way it filters `GET /tasks`.
+- A flow that also writes other tables (an activity log alongside the main write) never leaks those tables into the stream: classification is per-table.
 
-- `?status=eq.open` filters the live window the same way it filters
-  `GET /tasks`.
-- A flow that also writes other tables (an activity log alongside the main
-  write) never leaks those tables into the stream: classification is
-  per-table.
+`live: true` carries compile-time guardrails at extract, plus durable delivery and runtime watchtowers:
 
-`live: true` carries compile-time guardrails at extract, plus durable delivery
-and runtime watchtowers:
-
-- A table with **no primary key fails extract loud** — upsert/revoked/delete
-  address rows by PK.
-- Missing `updatedAt`/`updated_at` warns (no `rowVersion` LWW guard; races
-  rely on `X-Oke-Mutation-Id` echo dedupe), missing RLS policies warns
-  (every gated subscriber would see every row).
-- CDC events ride the durable `oke_cdc_outbox`; delivered rows prune on
-  retention defaults (24h / 50k) so the outbox never grows unbounded.
-- `oke doctor` findings watch the runtime side: `cdc_outbox_backlog`,
-  `cdc_outbox_retention`, `live_subscriber_pressure` (~150 subs/table in v1),
-  and `live_fanout_queue_saturated`.
+- A table with **no primary key fails extract loud** — upsert/revoked/delete address rows by PK.
+- Missing `updatedAt`/`updated_at` warns (no `rowVersion` LWW guard; races rely on `X-Oke-Mutation-Id` echo dedupe), missing RLS policies warns (every gated subscriber would see every row).
+- CDC events ride the durable `oke_cdc_outbox`; delivered rows prune on retention defaults (24h / 50k) so the outbox never grows unbounded.
+- `oke doctor` findings watch the runtime side: `cdc_outbox_backlog`, `cdc_outbox_retention`, `live_subscriber_pressure` (~150 subs/table in v1), and `live_fanout_queue_saturated`.
 
 The list endpoint's URL is the whole query language:
 
-| Param                               | Meaning                                                   | Example                               |
-| ----------------------------------- | --------------------------------------------------------- | ------------------------------------- |
-| `?cursor=` / `?offset=` / `?limit=` | paginate (keyset when `cursor` columns are set)           | `?limit=20&cursor=eyJ…`               |
-| `?search=` (`?q=`)                  | substring match over `search` columns                     | `?q=invoice`                          |
-| `?col=op.value`                     | filter — `eq neq gt gte lt lte like ilike in is` + `not.` | `?title=like.*draft*`                 |
-| `?or=(…)` / `?and=(…)`              | grouped filters, nested `not.and` / `not.or`              | `?or=(a.eq.1,not.and(b.gt.2,c.lt.9))` |
-| `?order=`                           | sort (`col.desc`, comma-separated)                        | `?order=createdAt.desc`               |
-| `?select=`                          | project columns                                           | `?select=id,title`                    |
+| Param | Meaning | Example |
+| --- | --- | --- |
+| `?cursor=` / `?offset=` / `?limit=` | paginate (keyset when `cursor` columns are set) | `?limit=20&cursor=eyJ…` |
+| `?search=` (`?q=`) | substring match over `search` columns | `?q=invoice` |
+| `?col=op.value` | filter — `eq neq gt gte lt lte like ilike in is` + `not.` | `?title=like.*draft*` |
+| `?or=(…)` / `?and=(…)` | grouped filters, nested `not.and` / `not.or` | `?or=(a.eq.1,not.and(b.gt.2,c.lt.9))` |
+| `?order=` | sort (`col.desc`, comma-separated) | `?order=createdAt.desc` |
+| `?select=` | project columns | `?select=id,title` |
 
 Responses follow the Stripe-style envelope: `{ data, meta, error }`. Clients page with `page.next()` or `for await (const page of api.notes.list({ limit: 20 }))` — `meta.next` / `meta.prev` are the next request (`{ cursor }`), not flags. `mode` is diagnostic. `create` answers **201**, `remove` answers **204**, and a missing row is a typed `NotFound` — never a crash.
 
-#### An admin table
+**Consequence:** `count: "exact"` (the offset default) runs `COUNT(*)` per page. Set `count: "none"` to return only `meta.offset`. Keyset (cursor) paging is the default when `cursor` columns are set — pages stay stable while new rows are inserted, where offset pages would shift and show duplicates.
 
-```typescript
-list: { mode: "offset", count: "exact", limit: 20 },
-```
-
-**Consequence:** `count: "exact"` (the offset default) runs `COUNT(*)` to fill `meta.total`. On a huge table that count is the real cost — set `count: "none"` to return only `meta.offset`.
-
-#### An infinite feed
-
-```typescript
-list: { cursor: [notes.createdAt, notes.id], direction: "desc", limit: 20, maxLimit: 100 },
-```
-
-**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set — pages stay stable while new rows are inserted, where offset pages would shift and show duplicates.
-
-#### A public, restricted endpoint
-
-```typescript
-list: { mode: "offset", filter: "none", limit: 20 },
-```
-
-**Consequence:** a request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
+A request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
 
 ### Handwritten HTTP lists
 
@@ -329,10 +196,6 @@ Zero-config: `?q=` searches every string field, extra keys auto-eq except path `
   shape matches `store.resource` and the typed client (`data` is the page, `meta` is the pager).
 </Callout>
 
-**Consequence:** returning `{ items, count }` from `do` nests as `{ data: { items, count }, error: null }` — the pager is no longer top-level `meta`.
-
-`fx.json.with({ data, meta })` stays for a page you already built. A third argument locks the surface or switches to keyset (`mode: "cursor"`, `cursor: ["createdAt", "id"]`).
-
 ### Querying by hand
 
 When the list is not conventional CRUD, `fx.store(db)` is the full single-table session:
@@ -353,8 +216,7 @@ await fx.store(db).update(notes).set({ title: input.title }).where(eq(notes.id, 
 await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 ```
 
-`select().from(notes)` infers the declared row (`string` / `number` / `null` from
-`field.*`). A `select({ title: notes.title })` projection stays untyped.
+`select().from(notes)` infers the declared row (`string` / `number` / `null` from `field.*`). A `select({ title: notes.title })` projection stays untyped.
 
 <Callout title="One table per call — no relational with:">
   `fx.store` is deliberately **single-table**: Drizzle's relational `findMany({ with: … })` is not
@@ -366,36 +228,36 @@ await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 
 The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle (`pgTable` for Postgres / PGLite) into `src/db/schema.drizzle.ts`.
 
-| Field API                                                    | Meaning                                                                                                                                                                                 |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field.text({ enum })`                                       | text; enum narrows to a literal union                                                                                                                                                   |
-| `field.id()`                                                 | id column with the default generation id (currently OK ID) minted on insert                                                                                                             |
-| `field.okid()`                                               | id column explicitly generated with OK ID                                                                                                                                               |
-| `field.varchar({ length })` · `field.char`                   | bounded strings (same enum support)                                                                                                                                                     |
-| `field.boolean()`                                            | boolean                                                                                                                                                                                 |
-| `field.smallint()` · `field.integer()`                       | ints (abstract integer emits as Drizzle `bigint`)                                                                                                                                       |
-| `field.bigint({ mode })`                                     | int8 — JS `number` (default) / `bigint` / `string`                                                                                                                                      |
-| `field.serial()` · `smallserial` · `bigserial`               | auto-increment — NOT NULL by SQL physics                                                                                                                                                |
-| `field.numeric({ precision, scale })`                        | exact decimals — infers `string`; `{ mode }` opts into `number` / `bigint`                                                                                                              |
-| `field.real()` · `doublePrecision()`                         | floats (~6 / ~15 significant digits)                                                                                                                                                    |
-| `field.json<T>()` · `jsonb<T>()`                             | JSON payloads with a generic type                                                                                                                                                       |
-| `field.uuid()`                                               | UUID strings                                                                                                                                                                            |
-| `field.time()` · `timestamp()` · `date()`                    | temporals — `Date` by default; `{ mode: "string" }` opts into ISO `string`                                                                                                              |
-| `field.interval({ fields })`                                 | time spans                                                                                                                                                                              |
-| `field.point({ mode })` · `line()`                           | geometric tuples or objects                                                                                                                                                             |
-| `field.bytea()`                                              | binary (`Buffer`)                                                                                                                                                                       |
-| `field.inet()` · `cidr` · `macaddr8`                         | network addresses as strings                                                                                                                                                            |
-| `.primaryKey()` · `.notNull()` · `.unique()`                 | constraints                                                                                                                                                                             |
-| `.default(v)` · `.defaultFn(id \| now \| nowIso \| nowDate)` | defaults — typed against the column's JS type                                                                                                                                           |
-| `.okid()` · `.now()`                                         | prepared defaults — fresh OKID / current instant. `.now()` resolves by column: epoch-ms on numbers, ISO-8601 on string-mode temporals, `Date` on default / `{ mode: "date" }` temporals |
-| `.type<T>()`                                                 | override the inferred JS type (mirrors Drizzle `$type<T>`)                                                                                                                              |
-| `.pii()` · `.sensitive()` · `.retain("30d")`                 | privacy classification                                                                                                                                                                  |
-| `.as("sql_name")`                                            | override the automatic `camelCase → snake_case`                                                                                                                                         |
-| `.describe("…")`                                             | human title in the Console (falls back to key)                                                                                                                                          |
-| `.references(() => col, { onDelete })`                       | foreign key                                                                                                                                                                             |
-| `store.schema.rls()`                                         | `pgTable.withRLS` when there are no policies                                                                                                                                            |
-| `store.schema.policy.gate/owner/scope/tenant`                | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`)                                                                                                       |
-| `store.schema.unscoped()`                                    | Shared table — required when tenancy is on and there is no tenant policy                                                                                                                |
+| Field API | Meaning |
+| --- | --- |
+| `field.text({ enum })` | text; enum narrows to a literal union |
+| `field.id()` | id column with the default generation id (currently OK ID) minted on insert |
+| `field.okid()` | id column explicitly generated with OK ID |
+| `field.varchar({ length })` · `field.char` | bounded strings (same enum support) |
+| `field.boolean()` | boolean |
+| `field.smallint()` · `field.integer()` | ints (abstract integer emits as Drizzle `bigint`) |
+| `field.bigint({ mode })` | int8 — JS `number` (default) / `bigint` / `string` |
+| `field.serial()` · `smallserial` · `bigserial` | auto-increment — NOT NULL by SQL physics |
+| `field.numeric({ precision, scale })` | exact decimals — infers `string`; `{ mode }` opts into `number` / `bigint` |
+| `field.real()` · `doublePrecision()` | floats (~6 / ~15 significant digits) |
+| `field.json<T>()` · `jsonb<T>()` | JSON payloads with a generic type |
+| `field.uuid()` | UUID strings |
+| `field.time()` · `timestamp()` · `date()` | temporals — `Date` by default; `{ mode: "string" }` opts into ISO `string` |
+| `field.interval({ fields })` | time spans |
+| `field.point({ mode })` · `line()` | geometric tuples or objects |
+| `field.bytea()` | binary (`Buffer`) |
+| `field.inet()` · `cidr` · `macaddr8` | network addresses as strings |
+| `.primaryKey()` · `.notNull()` · `.unique()` | constraints |
+| `.default(v)` · `.defaultFn(id \| now \| nowIso \| nowDate)` | defaults — typed against the column's JS type |
+| `.okid()` · `.now()` | prepared defaults — fresh OKID / current instant. `.now()` resolves by column: epoch-ms on numbers, ISO-8601 on string-mode temporals, `Date` on default / `{ mode: "date" }` temporals |
+| `.type<T>()` | override the inferred JS type (mirrors Drizzle `$type<T>`) |
+| `.pii()` · `.sensitive()` · `.retain("30d")` | privacy classification |
+| `.as("sql_name")` | override the automatic `camelCase → snake_case` |
+| `.describe("…")` | human title in the Console (falls back to key) |
+| `.references(() => col, { onDelete })` | foreign key |
+| `store.schema.rls()` | `pgTable.withRLS` when there are no policies |
+| `store.schema.policy.gate/owner/scope/tenant` | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`) |
+| `store.schema.unscoped()` | Shared table — required when tenancy is on and there is no tenant policy |
 
 Third argument on `store.schema.table` is Drizzle-shaped extras:
 
@@ -415,9 +277,7 @@ export const bookings = store.schema.table(
 );
 ```
 
-Helpers emit stable names (`gate_member_select`). Raw
-`store.schema.policy("name", { as, to, for, using, withCheck })` is the
-escape hatch — predicates use `oke.*`, never `current_setting`.
+Helpers emit stable names (`gate_member_select`). Raw `store.schema.policy("name", { as, to, for, using, withCheck })` is the escape hatch — predicates use `oke.*`, never `current_setting`.
 
 <Callout title="User-plane fx.store applies RLS">
   HTTP / resource flows stamp Gate identity (`SET LOCAL ROLE oke_app` + `set_config`). Operator /
@@ -432,10 +292,7 @@ Declare FKs on fields, and relation metadata once per schema:
 ```typescript
 export const daily = store.schema.table("daily", {
   id: field.text().primaryKey(),
-  code: field
-    .text()
-    .notNull()
-    .references(() => links.code),
+  code: field.text().notNull().references(() => links.code),
   day: field.text().notNull(),
   clicks: field.integer().notNull().default(0),
 });
@@ -453,29 +310,21 @@ export const relations = store.schema.relations({ links, daily }, (r) => ({
 
 #### Syncing the schema
 
-| Command           | When                                                           |
-| ----------------- | -------------------------------------------------------------- |
-| `oke db push`     | Dev — apply directly to the live local DB (no migration files) |
-| `oke db generate` | Write versioned SQL under `drizzle/` for review                |
-| `oke db migrate`  | Apply those files — human or CI, **never** at boot             |
+| Command | When |
+| --- | --- |
+| `oke db push` | Dev — apply directly to the live local DB (no migration files) |
+| `oke db generate` | Write versioned SQL under `drizzle/` for review |
+| `oke db migrate` | Apply those files — human or CI, **never** at boot |
 
-`oke dev` auto-pushes on schema _inputs_ (`schema.decl.ts`, hand-written `schema.ts`,
-`app.ts` plugin tables, `drizzle.config.ts`) — not when emit rewrites `schema.drizzle.ts`.
-A `schema.decl.ts` error prints `schema.decl.ts has an error — …` (red ●) and keeps running.
+`oke dev` auto-pushes on schema _inputs_ (`schema.decl.ts`, hand-written `schema.ts`, `app.ts` plugin tables, `drizzle.config.ts`) — not when emit rewrites `schema.drizzle.ts`. A `schema.decl.ts` error prints `schema.decl.ts has an error — …` (red ●) and keeps running.
 
-Opt out with `--no-db-push` or `db: { autoPush: false }`. `prod` **never**
-auto-applies DDL; a missing table fails as **OKE1101** (`oke db migrate`).
+Opt out with `--no-db-push` or `db: { autoPush: false }`. `prod` **never** auto-applies DDL; a missing table fails as **OKE1101** (`oke db migrate`).
 
 #### Multiple environments
 
-`dev` can `oke db push` freely — safe to wipe and regenerate.
-
-Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
-`oke db migrate` applies only unrecorded files in order — behind DBs catch up.
-
-| Environment    | Sync                                                           |
-| -------------- | -------------------------------------------------------------- |
-| `dev`          | `oke db push` (or auto-push from `oke dev`)                    |
+| Environment | Sync |
+| --- | --- |
+| `dev` | `oke db push` (or auto-push from `oke dev`) |
 | Staging / prod | `oke db generate` → review files → `oke db migrate` on that DB |
 
 <Callout title="Connection pooling is infrastructure, not app code" type="info">
@@ -484,27 +333,21 @@ Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
   that transaction — a leaked `BEGIN` exhausts checkout.
 </Callout>
 
-**Why PgDog (not PgBouncer as the default).** Transaction pooling fixes the
-math; naive poolers can leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`)
-across clients. PgDog re-applies those under transaction mode (PgBouncer is fine — not shipped).
+**Why PgDog (not PgBouncer as the default).** Transaction pooling fixes the math; naive poolers can leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`) across clients. PgDog re-applies those under transaction mode (PgBouncer is fine — not shipped).
 
-**Read replicas later, zero app changes.** Add `role = "replica"` in
-`pgdog.toml` later: `BEGIN READ ONLY` → replica, failover on promotion.
-Not wired this round — readiness only.
+**Read replicas later, zero app changes.** Add `role = "replica"` in `pgdog.toml` later: `BEGIN READ ONLY` → replica, failover on promotion. Not wired this round — readiness only.
 
 #### Seeding
 
-`oke db seed` loads `defineSeed` from `src/db/seed/index.ts` — a separate
-command, never at boot. Not every project has a seed. In `oke dev`, `s` runs
-the same command. `name` is this app's seed (template or example).
+`oke db seed` loads `defineSeed` from `src/db/seed/index.ts` — a separate command, never at boot. Not every project has a seed. In `oke dev`, `s` runs the same command. `name` is this app's seed (template or example).
 
 <StoreSeeding />
 
-| env    | `essential` | `dev` | `prod` |
-| ------ | ----------- | ----- | ------ |
-| `dev`  | yes         | yes   | no     |
-| `test` | yes         | no    | no     |
-| `prod` | yes         | no    | yes    |
+| env | `essential` | `dev` | `prod` |
+| --- | --- | --- | --- |
+| `dev` | yes | yes | no |
+| `test` | yes | no | no |
+| `prod` | yes | no | yes |
 
 Outside `test`, exactly one of seed-category `dev` / `prod` runs with `essential`.
 
@@ -519,22 +362,10 @@ export default defineSeed({
   name: "notes",
   description: "Welcome + sample notes",
   essential: async (fx: Fx) => {
-    await fx
-      .store(db)
-      .upsert(
-        notes,
-        { id: "welcome" },
-        { id: "welcome", title: "Welcome", body: "…", createdAt: 1 },
-      );
+    await fx.store(db).upsert(notes, { id: "welcome" }, { id: "welcome", title: "Welcome", body: "…", createdAt: 1 });
   },
   dev: async (fx: Fx) => {
-    await fx
-      .store(db)
-      .upsert(
-        notes,
-        { id: "sample-ideas" },
-        { id: "sample-ideas", title: "Ideas", body: "…", createdAt: 2 },
-      );
+    await fx.store(db).upsert(notes, { id: "sample-ideas" }, { id: "sample-ideas", title: "Ideas", body: "…", createdAt: 2 });
   },
   // prod: async (fx) => { /* e.g. register a real external webhook URL */ },
 });
@@ -557,49 +388,27 @@ export default defineSeed({
 });
 ```
 
-| `upsert` outcome  | When                                       |
-| ----------------- | ------------------------------------------ |
-| `upserted`        | no row matched `matchOn` — insert          |
-| `already-existed` | match found; default leaves it alone       |
-| `changed`         | match found and `{ onExisting: "update" }` |
+| `upsert` outcome | When |
+| --- | --- |
+| `upserted` | no row matched `matchOn` — insert |
+| `already-existed` | match found; default leaves it alone |
+| `changed` | match found and `{ onExisting: "update" }` |
 
-Default upsert is **insert-if-missing**. Pass `{ onExisting: "update" }` only when this
-call should also rewrite other columns on a match — opt-in per call, never global.
+Default upsert is **insert-if-missing**. Pass `{ onExisting: "update" }` only when this call should also rewrite other columns on a match — opt-in per call, never global.
 
 ```ts
 // Safe bootstrap — second seed run leaves the row alone
-await fx.store(db).upsert(
-  notes,
-  { id: "welcome" },
-  {
-    id: "welcome",
-    title: "Welcome",
-    body: "Your Notes API is ready.",
-    createdAt: 1,
-  },
-);
+await fx.store(db).upsert(notes, { id: "welcome" }, { id: "welcome", title: "Welcome", body: "Your Notes API is ready.", createdAt: 1 });
 
 // Refresh copy on every seed — match stays; title/body are rewritten
-await fx.store(db).upsert(
-  notes,
-  { id: "welcome" },
-  {
-    id: "welcome",
-    title: "Welcome (updated)",
-    body: "New bootstrap copy.",
-    createdAt: 1,
-  },
-  { onExisting: "update" },
-);
+await fx.store(db).upsert(notes, { id: "welcome" }, { id: "welcome", title: "Welcome (updated)", body: "New bootstrap copy.", createdAt: 1 }, { onExisting: "update" });
 ```
 
-**Consequence:** default keeps operator edits safe across re-seeds; `onExisting: "update"`
-is for seed-owned rows you intentionally overwrite. Schema-wide data fixes still belong in
-migrations, not seed.
+Default keeps operator edits safe across re-seeds; `onExisting: "update"` is for seed-owned rows you intentionally overwrite. Schema-wide data fixes still belong in migrations, not seed.
 
-| Env            | Confirm                                               |
-| -------------- | ----------------------------------------------------- |
-| `test`         | none                                                  |
+| Env | Confirm |
+| --- | --- |
+| `test` | none |
 | `dev` / `prod` | print DB target; type the env name (`--force` for CI) |
 
 ```bash
@@ -624,17 +433,17 @@ oke db seed --env prod --force
 
 Same flow code, different backends — configured once in `oke.config.ts`:
 
-| Facet | `dev` / `prod` | `test`   | Runs as                                       |
-| ----- | -------------- | -------- | --------------------------------------------- |
-| `sql` | `postgres`     | `pglite` | Compose / deploy Postgres → in-process PGLite |
+| Facet | `dev` / `prod` | `test` | Runs as |
+| --- | --- | --- | --- |
+| `sql` | `postgres` | `pglite` | Compose / deploy Postgres → in-process PGLite |
 
 Defaults: `postgres` for `dev`/`prod`, `pglite` for `test`. SQLite-family drivers (`sqlite`, `libsql`) are removed. Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
 
 #### Opt-in SQL drivers
 
-| Driver   | Install                                                  | Wire dialect | Choose for                                                |
-| -------- | -------------------------------------------------------- | ------------ | --------------------------------------------------------- |
-| `pglite` | `@electric-sql/pglite` + `@electric-sql/pglite-pgvector` | postgresql   | **required** for `store.sql.test`; also usable in-process |
+| Driver | Install | Wire dialect | Choose for |
+| --- | --- | --- | --- |
+| `pglite` | `@electric-sql/pglite` + `@electric-sql/pglite-pgvector` | postgresql | **required** for `store.sql.test`; also usable in-process |
 
 <Callout title="PGlite is the test SQL driver">
   `defineConfig` requires `drivers.store.sql.test` to be `pglite` when set. Use `oke test` (sets
@@ -648,14 +457,11 @@ SQL-backed index driver `pgvector` shares this facet's connection — see [Advan
 
 <StoreFacetMark facet="kv" />
 
-The key-value facet: short-lived cache and session data behind `fx.store`. One namespace per
-declaration; drivers swap `memory` ↔ `redis` per environment.
+The key-value facet: short-lived cache and session data behind `fx.store`. One namespace per declaration; drivers swap `memory` ↔ `redis` per environment.
 
-The Console KV band opens a query console for `list`, `get`, `set`, `delete`, and `ttl`.
-Prettify rewrites commands to call form and indents `set` JSON.
+The Console KV band opens a query console for `list`, `get`, `set`, `delete`, and `ttl`. Prettify rewrites commands to call form and indents `set` JSON.
 
-The same band’s **Performance** control opens engine telemetry on the `redis`
-driver. In-process `memory` is unsupported (`KvStatsUnsupported`).
+The same band's **Performance** control opens engine telemetry on the `redis` driver. In-process `memory` is unsupported (`KvStatsUnsupported`).
 
 ### Quick start
 
@@ -690,44 +496,60 @@ do: async ({ userId, data }, fx) => {
 
 ### Handle API
 
-| Call                    | Effect  | Returns          | Notes                                                                    |
-| ----------------------- | ------- | ---------------- | ------------------------------------------------------------------------ |
-| `get(key)`              | `read`  | `unknown`        | Missing keys resolve per driver                                          |
-| `set(key, value, ttl?)` | `write` | `void`           | Values should be JSON-serializable                                       |
-| `delete(key)`           | `write` | `boolean`        | Whether a key was removed                                                |
-| `list(prefix?)`         | `read`  | `string[]`       | Prefix filter; Console browse shows TTL and size                         |
-| `ttlMs(key)`            | `read`  | `number \| null` | Remaining expiry; `null` when the key has none. Console command is `ttl` |
+| Call | Effect | Returns | Notes |
+| --- | --- | --- | --- |
+| `get(key)` | `read` | `unknown` | Missing keys resolve per driver |
+| `set(key, value, ttl?)` | `write` | `void` | Values should be JSON-serializable |
+| `delete(key)` | `write` | `boolean` | Whether a key was removed |
+| `list(prefix?)` | `read` | `string[]` | Prefix filter; Console browse shows TTL and size |
+| `ttlMs(key)` | `read` | `number \| null` | Remaining expiry; `null` when the key has none. Console command is `ttl` |
 
 ### TTL
 
-Optional third argument on `set` is a duration string: `(\d+)(ms|s|m|h|d)` — e.g. `"30m"`, `"1h"`,
-`"5000ms"`. Same call — opposite physics under each driver. Console KV browse edits that TTL
-(empty clears expiry) and can add a key through the same `set` path.
+Optional third argument on `set` is a duration string: `(\d+)(ms|s|m|h|d)` — e.g. `"30m"`, `"1h"`, `"5000ms"`. Same call — opposite physics under each driver. Console KV browse edits that TTL (empty clears expiry) and can add a key through the same `set` path.
 
 <StoreKvTtl />
 
-**Consequence:** a TTL you rely on in prod does nothing under the `test` `memory` driver. Exercise
-expiry against `redis` under `oke dev` when lifetime matters.
+**Consequence:** a TTL you rely on in prod does nothing under the `test` `memory` driver. Exercise expiry against `redis` under `oke dev` when lifetime matters.
 
-### Examples — what follows from each choice
+### Durable KV
 
-#### A session with expiry
+Default `store.kv("sessions")` is cache-shaped — a Redis recreate drops keys.
 
-```typescript
-await fx.store(sessions).set(`sess:${token}`, { userId }, "7d");
-```
-
-**Consequence:** under `redis`, the key vanishes after seven days without a sweeper Flow. Under
-`memory`, it lives until process exit or an explicit `delete`.
-
-#### Browse by prefix
+`{ durable: true }` persists that namespace in your SQL database (`oke_kv` JSONB on `DATABASE_URL`). Not a per-key Redis flag, not Flow `durable`, not tier-1 auto-cache.
 
 ```typescript
-const keys = await fx.store(sessions).list("sess:");
+export const sessions = store.kv("sessions", { description: "Session cache" });
+export const ledger = store.kv("ledger", { durable: true, description: "Idempotency keys" });
+export const drafts = store.kv("drafts", { durable: true, description: "Compose drafts" });
 ```
 
-**Consequence:** `list` enumerates a namespace. Prefer stable key prefixes (`user:`, `sess:`) so
-your Flows and operator tools stay readable.
+**Consequence:** `oke db seed` into cache Redis looks fine until compose recreates the container — Console Store then shows **No rows.** Seeded namespaces need `{ durable: true }`.
+
+With `gate.auth.tenant` on, KV keys are prefixed `{tenantId}:` (logical keys in `do` stay unprefixed). Missing `fx.tenant.id` throws **OKE1015**. Opt out with `store.kv("sessions", { tenantScoped: false })`.
+
+Gate rates and Signal stay on `REDIS_URL`. Missing `DATABASE_URL` with the postgres driver fails boot: `oke boot: durable store.kv needs DATABASE_URL`.
+
+<Callout title="Not per-key, not Flow durable, not auto-cache">
+  Durable KV is a JSONB table on the same Postgres as `store.sql`. Flow `durable` journals steps.
+  Tier-1 auto-cache is an in-process Map and never reads `store.kv`.
+</Callout>
+
+Driver id stays `redis` for every image below — same `REDIS_URL`, zero Flow changes. Redis is the default because it is the most mature and battle-tested; Valkey and Dragonfly are equally legitimate opt-in pins.
+
+| Image | Pin | Why pick it | License |
+| --- | --- | --- | --- |
+| **Redis** | `redis:8-alpine` (default) | Most mature / battle-tested | RSALv2 / SSPLv1 / AGPLv3 (Redis ≥8) — service limits under RSAL/SSPL apply if you offer Redis as a managed service to third parties |
+| **Valkey** | `valkey/valkey:8-alpine` | BSD fork (Linux Foundation) | BSD-3-Clause — permissive; no managed-service restriction |
+| **Dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly` | Multi-threaded Redis-wire runtime | BSL 1.1 (converts to Apache 2.0 on a published change date) — free for self-hosting; restricts offering Dragonfly as a commercial managed service |
+
+<Callout title="Licenses bite managed-service resellers — read this once" type="warn">
+  RSAL, SSPL, and BSL service restrictions apply when you offer that specific datastore **as a service** to third parties — not when you run it for your own app. Pick for your situation; OKE does not pick a "safer" default for you.
+</Callout>
+
+<Callout title="Dry-run refuses KV writes">
+  `set` and `delete` throw `DryRunWriteIsolationError` during dry-run — the runtime will not risk a double-write against a shared Redis. Reads (`get` / `list`) still run.
+</Callout>
 
 ### Per-environment KV drivers
 
@@ -744,74 +566,23 @@ images: {
 },
 ```
 
-| Facet | `dev` / `prod` | `test`   | Runs as                |
-| ----- | -------------- | -------- | ---------------------- |
-| `kv`  | `redis`        | `memory` | container → in-process |
+| Facet | `dev` / `prod` | `test` | Runs as |
+| --- | --- | --- | --- |
+| `kv` | `redis` | `memory` | container → in-process |
 
-| Variable           | When                             |
-| ------------------ | -------------------------------- |
-| `REDIS_URL`        | Required for the `redis` driver  |
+| Variable | When |
+| --- | --- |
+| `REDIS_URL` | Required for the `redis` driver |
 | `OKE_STORE_KV_URL` | Override if `REDIS_URL` is unset |
-| `OKE_KV_DRIVER`    | Force a driver id                |
+| `OKE_KV_DRIVER` | Force a driver id |
 
 Missing Redis URL fails boot loudly: `oke boot: redis driver needs REDIS_URL`.
-
-### Durable KV
-
-Default `store.kv("sessions")` is cache-shaped — a Redis recreate drops keys.
-
-`{ durable: true }` persists that namespace in your SQL database (`oke_kv` JSONB on
-`DATABASE_URL`). Not a per-key Redis flag, not Flow `durable`, not tier-1 auto-cache.
-
-```typescript
-export const sessions = store.kv("sessions", { description: "Session cache" });
-export const ledger = store.kv("ledger", { durable: true, description: "Idempotency keys" });
-export const drafts = store.kv("drafts", { durable: true, description: "Compose drafts" });
-```
-
-**Consequence:** `oke db seed` into cache Redis looks fine until compose recreates the
-container — Console Store then shows **No rows.** Seeded namespaces need `{ durable: true }`.
-
-With `gate.auth.tenant` on, KV keys are prefixed `{tenantId}:` (logical keys in `do` stay
-unprefixed). Missing `fx.tenant.id` throws **OKE1015**. Opt out with
-`store.kv("sessions", { tenantScoped: false })`.
-
-Gate rates and Signal stay on `REDIS_URL`. Missing `DATABASE_URL` with the postgres driver
-fails boot: `oke boot: durable store.kv needs DATABASE_URL`.
-
-<Callout title="Not per-key, not Flow durable, not auto-cache">
-  Durable KV is a JSONB table on the same Postgres as `store.sql`. Flow `durable` journals steps.
-  Tier-1 auto-cache is an in-process Map and never reads `store.kv`.
-</Callout>
-
-Driver id stays `redis` for every image below — same `REDIS_URL`, zero Flow changes.
-Redis is the default because it is the most mature and battle-tested; Valkey and
-Dragonfly are equally legitimate opt-in pins.
-
-| Image         | Pin                                           | Why pick it                       | License                                                                                                                                           |
-| ------------- | --------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Redis**     | `redis:8-alpine` (default)                    | Most mature / battle-tested       | RSALv2 / SSPLv1 / AGPLv3 (Redis ≥8) — service limits under RSAL/SSPL apply if you offer Redis as a managed service to third parties               |
-| **Valkey**    | `valkey/valkey:8-alpine`                      | BSD fork (Linux Foundation)       | BSD-3-Clause — permissive; no managed-service restriction                                                                                         |
-| **Dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly` | Multi-threaded Redis-wire runtime | BSL 1.1 (converts to Apache 2.0 on a published change date) — free for self-hosting; restricts offering Dragonfly as a commercial managed service |
-
-<Callout title="Licenses bite managed-service resellers — read this once" type="warn">
-  RSAL, SSPL, and BSL service restrictions apply when you offer that specific datastore **as a
-  service** to third parties — not when you run it for your own app. Pick for your situation; OKE
-  does not pick a “safer” default for you.
-</Callout>
-
-<Callout title="Dry-run refuses KV writes">
-  `set` and `delete` throw `DryRunWriteIsolationError` during dry-run — the runtime will not risk a
-  double-write against a shared Redis. Reads (`get` / `list`) still run.
-</Callout>
 
 ## Files
 
 <StoreFacetMark facet="files" />
 
-The blob facet: opaque objects (`Uint8Array` or string) on the same handle as the optional image
-pipeline. Drivers swap `fs` ↔ `s3` (plus `memory` for tests). The Console Files band is a folder
-browser — upload, download, delete — not a signed-URL mint.
+The blob facet: opaque objects (`Uint8Array` or string) on the same handle as the optional image pipeline. Drivers swap `fs` ↔ `s3` (plus `memory` for tests). The Console Files band is a folder browser — upload, download, delete — not a signed-URL mint.
 
 ### Quick start
 
@@ -848,12 +619,12 @@ do: async ({ key, body }, fx) => {
 
 ### Blob CRUD — `put` / `get` / `delete` / `list`
 
-| Call             | Effect  | Returns              | Notes                                        |
-| ---------------- | ------- | -------------------- | -------------------------------------------- |
-| `put(key, data)` | `write` | `void`               | `data` is `Uint8Array` or `string`           |
-| `get(key)`       | `read`  | `Uint8Array \| null` | Missing key → `null`                         |
-| `delete(key)`    | `write` | `boolean`            | Whether an object was removed                |
-| `list(prefix?)`  | `read`  | `string[]`           | Prefix filter; Console folder browser source |
+| Call | Effect | Returns | Notes |
+| --- | --- | --- | --- |
+| `put(key, data)` | `write` | `void` | `data` is `Uint8Array` or `string` |
+| `get(key)` | `read` | `Uint8Array \| null` | Missing key → `null` |
+| `delete(key)` | `write` | `boolean` | Whether an object was removed |
+| `list(prefix?)` | `read` | `string[]` | Prefix filter; Console folder browser source |
 
 ```typescript
 const files = fx.store(uploads);
@@ -867,12 +638,12 @@ await files.delete("docs/readme.txt");
 
 Keys are opaque strings the driver stores as-is. Prefer path-like prefixes (`photos/`, `exports/`).
 
-| Helper / rule                      | Meaning                                                                                                                                                  |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contentAddressedKey(data)`        | From `okengine/store` — stable sha256 hex of the bytes (dedupe-friendly)                                                                                 |
-| `safeFileObjectKey(name, prefix?)` | URL-safe ASCII key (`file-a1b2c3d4.pdf`). Keep the original name in the catalog.                                                                         |
-| Leading `/` or `..`                | Rejected by the `fs` driver (`Invalid object key`)                                                                                                       |
-| Non-ASCII keys                     | Console warns `non_ascii_key`. Console puts rewrite the key and store `originalName` in `.oke/catalog.json` (and `file_objects` when that table exists). |
+| Helper / rule | Meaning |
+| --- | --- |
+| `contentAddressedKey(data)` | From `okengine/store` — stable sha256 hex of the bytes (dedupe-friendly) |
+| `safeFileObjectKey(name, prefix?)` | URL-safe ASCII key (`file-a1b2c3d4.pdf`). Keep the original name in the catalog. |
+| Leading `/` or `..` | Rejected by the `fs` driver (`Invalid object key`) |
+| Non-ASCII keys | Console warns `non_ascii_key`. Console puts rewrite the key and store `originalName` in `.oke/catalog.json` (and `file_objects` when that table exists). |
 
 ### Per-environment Files drivers
 
@@ -887,16 +658,16 @@ images: {
 },
 ```
 
-| Facet   | `dev` / `prod` | `test`   | Runs as                  |
-| ------- | -------------- | -------- | ------------------------ |
-| `files` | `s3`           | `memory` | RustFS / S3 → in-process |
+| Facet | `dev` / `prod` | `test` | Runs as |
+| --- | --- | --- | --- |
+| `files` | `s3` | `memory` | RustFS / S3 → in-process |
 
-| Variable                      | When                                   |
-| ----------------------------- | -------------------------------------- |
-| `S3_BUCKET`                   | Required bucket for the `s3` driver    |
-| `OKE_STORE_FILES_DB`          | Override bucket name                   |
+| Variable | When |
+| --- | --- |
+| `S3_BUCKET` | Required bucket for the `s3` driver |
+| `OKE_STORE_FILES_DB` | Override bucket name |
 | `S3_ENDPOINT` · keys · region | S3-compatible endpoint and credentials |
-| `OKE_FILES_DRIVER`            | Force a driver id                      |
+| `OKE_FILES_DRIVER` | Force a driver id |
 
 `memory` is the test default. Local `fs` writes under a temp root when no binding `root` is set.
 
@@ -909,8 +680,7 @@ images: {
 
 ### Images — `image` / `putImage`
 
-For photos, use Bun's built-in `Bun.Image` pipeline on the same handle (requires Bun `>=1.4.0`).
-`putImage` is one write that fans into several keys:
+For photos, use Bun's built-in `Bun.Image` pipeline on the same handle (requires Bun `>=1.4.0`). `putImage` is one write that fans into several keys:
 
 <StoreFilesVariants />
 
@@ -935,20 +705,20 @@ const result = await fx.store(uploads).putImage("photos/x.jpg", bytes, {
 // variants: photos/x.thumb.webp, photos/x.medium.webp
 ```
 
-| Call                                                                    | Effect                        | Notes                                                                                                                                                             |
-| ----------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `image(key\|bytes).metadata()` / `bytes()` / `blob()` / `placeholder()` | `read` when source is a key   | Chain `resize` · `rotate` · `flip` · `flop` · `modulate`, then `jpeg` / `png` / `webp` (portable); `heic` / `avif` fall back to WebP when the OS codec is missing |
-| `image(…).put(outKey)`                                                  | `read` + `write` (key source) | Persist the encoded result                                                                                                                                        |
-| `putImage(key, data, opts?)`                                            | `write`                       | Original + named variants; keys are `{stem}.{variant}.{ext}`                                                                                                      |
+| Call | Effect | Notes |
+| --- | --- | --- |
+| `image(key\|bytes).metadata()` / `bytes()` / `blob()` / `placeholder()` | `read` when source is a key | Chain `resize` · `rotate` · `flip` · `flop` · `modulate`, then `jpeg` / `png` / `webp` (portable); `heic` / `avif` fall back to WebP when the OS codec is missing |
+| `image(…).put(outKey)` | `read` + `write` (key source) | Persist the encoded result |
+| `putImage(key, data, opts?)` | `write` | Original + named variants; keys are `{stem}.{variant}.{ext}` |
 
 #### Image options
 
-| Option        | Default                 | Meaning                                              |
-| ------------- | ----------------------- | ---------------------------------------------------- |
-| `maxPixels`   | **16 MP** (`4096×4096`) | Decode ceiling — raise it or pass `false` to opt out |
-| `autoOrient`  | `true`                  | Apply JPEG EXIF orientation before transforms        |
-| `variants`    | —                       | Named `{ resize?, jpeg\|png\|webp\|… }` specs        |
-| `placeholder` | —                       | When `true`, return a ThumbHash LQIP data URL        |
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `maxPixels` | **16 MP** (`4096×4096`) | Decode ceiling — raise it or pass `false` to opt out |
+| `autoOrient` | `true` | Apply JPEG EXIF orientation before transforms |
+| `variants` | — | Named `{ resize?, jpeg\|png\|webp\|… }` specs |
+| `placeholder` | — | When `true`, return a ThumbHash LQIP data URL |
 
 `putImage` returns `{ key, meta, variants, placeholder? }` — `variants` maps name → object key.
 
@@ -956,8 +726,7 @@ const result = await fx.store(uploads).putImage("photos/x.jpg", bytes, {
 
 <StoreFacetMark facet="index" />
 
-The search / similarity facet: vector ANN and opt-in full-text, both behind `store.index`. The
-handle is a **discriminated union** on `driverId` — vector methods and text methods never mix.
+The search / similarity facet: vector ANN and opt-in full-text, both behind `store.index`. The handle is a **discriminated union** on `driverId` — vector methods and text methods never mix.
 
 ### Quick start
 
@@ -1002,38 +771,34 @@ One declaration shape — two search physics. The handle is a **discriminated un
 
 <StoreIndexModes />
 
-| Call (both)    | Effect  | Returns               |
-| -------------- | ------- | --------------------- |
-| `upsert(…)`    | `write` | `void`                |
-| `search(…)`    | `read`  | hits / result         |
-| `list(limit?)` | `read`  | documents (id + meta) |
-| `delete(id)`   | `write` | `boolean`             |
+| Call (both) | Effect | Returns |
+| --- | --- | --- |
+| `upsert(…)` | `write` | `void` |
+| `search(…)` | `read` | hits / result |
+| `list(limit?)` | `read` | documents (id + meta) |
+| `delete(id)` | `write` | `boolean` |
 
 <Callout title="Console Index is a search box">
   Type a phrase to find documents by id and stored meta. A comma-separated vector still runs an ANN
   probe. Meilisearch uses full-text `q`.
 </Callout>
 
-TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at
-runtime.
+TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at runtime.
 
 ### Vector ANN
 
-| `store.index` id | Shares connection from     | Real ANN via            |
-| ---------------- | -------------------------- | ----------------------- |
-| `memory`         | — (in-process, default)    | Full scan cosine        |
-| `pgvector`       | `postgres` or `pglite` sql | HNSW + `cosineDistance` |
+| `store.index` id | Shares connection from | Real ANN via |
+| --- | --- | --- |
+| `memory` | — (in-process, default) | Full scan cosine |
+| `pgvector` | `postgres` or `pglite` sql | HNSW + `cosineDistance` |
 
-**Consequence:** a configured SQL-backed index that cannot reach its engine — missing peer, missing
-`vector` extension, wrong sql driver — fails loudly at first use. It never silently falls back to
-`memory`. A vector whose length ≠ `dims` throws `vector dims X !== index dims Y`.
+**Consequence:** a configured SQL-backed index that cannot reach its engine — missing peer, missing `vector` extension, wrong sql driver — fails loudly at first use. It never silently falls back to `memory`. A vector whose length ≠ `dims` throws `vector dims X !== index dims Y`.
 
 Pair SQL + index under [Advanced — composing facets together](#advanced--composing-facets-together).
 
 ### Full-text search — `meilisearch` (opt-in)
 
-`meilisearch` is a fourth `store.index` backend, opt-in only — `memory` stays the default when
-`drivers.store.index` is unset. Typo-tolerant, faceted full-text relevance — not cosine similarity.
+`meilisearch` is a fourth `store.index` backend, opt-in only — `memory` stays the default when `drivers.store.index` is unset. Typo-tolerant, faceted full-text relevance — not cosine similarity.
 
 ```typescript
 export const kb = store.index("kb", { description: "Help articles" });
@@ -1050,11 +815,11 @@ do: async ({ id, doc, q }, fx) => {
 },
 ```
 
-| Search option | Meaning                                          |
-| ------------- | ------------------------------------------------ |
-| `topK`        | Max hits (Meilisearch `limit`, default 10)       |
-| `filter`      | Filter expression — attribute must be filterable |
-| `facets`      | Attributes to aggregate into `facetDistribution` |
+| Search option | Meaning |
+| --- | --- |
+| `topK` | Max hits (Meilisearch `limit`, default 10) |
+| `filter` | Filter expression — attribute must be filterable |
+| `facets` | Attributes to aggregate into `facetDistribution` |
 
 ```typescript title="oke.config.ts"
 drivers: {
@@ -1084,17 +849,15 @@ drivers: {
 },
 ```
 
-| Variable              | When                                              |
-| --------------------- | ------------------------------------------------- |
-| `OKE_INDEX_DRIVER`    | Force a driver id                                 |
-| `OKE_STORE_INDEX_URL` | Required for `meilisearch`                        |
+| Variable | When |
+| --- | --- |
+| `OKE_INDEX_DRIVER` | Force a driver id |
+| `OKE_STORE_INDEX_URL` | Required for `meilisearch` |
 | `OKE_STORE_INDEX_KEY` | Meilisearch API key (`MEILI_MASTER_KEY` fallback) |
 
 ### With AI embeddings
 
-`ai.embed` writes into a vector `store.index`; Flows search it with `fx.search` (or
-`fx.store(index).search`). See [AI](/docs/elements/ai) — this path is vector-only and will not
-target meilisearch.
+`ai.embed` writes into a vector `store.index`; Flows search it with `fx.search` (or `fx.store(index).search`). See [AI](/docs/elements/ai) — this path is vector-only and will not target meilisearch.
 
 ## Advanced — composing facets together
 
@@ -1129,84 +892,68 @@ Container images come from the `images` map — change the vendor by changing th
 
 Columns tagged `.pii()` or `.sensitive()` are masked at the store boundary — flows, logs, and the Console see a mask, not the value. Revealing cleartext PII requires an explicit `pii:reveal` gate on the flow, so access is a permission, not a convention.
 
-Optional `description` on a store (and `.describe("…")` on fields) becomes its human title in
-operator tools. Single-table `reads` / `writes` in the Manifest power cache invalidation and that
-same PII masking — see the Callout under [Querying by hand](#querying-by-hand).
+Optional `description` on a store (and `.describe("…")` on fields) becomes its human title in operator tools. Single-table `reads` / `writes` in the Manifest power cache invalidation and that same PII masking — see the Callout under [Querying by hand](#querying-by-hand).
 
 ## Troubleshooting
 
 <Accordions>
+
 <Accordion title="Unable to resolve table name from value">
-
-A `store.schema.table` column named `name` used to shadow the SQL table name.
-Inserts and selects now resolve it from the declaration. Keep the `name` column.
-
+A `store.schema.table` column named `name` used to shadow the SQL table name. Inserts and selects now resolve it from the declaration. Keep the `name` column.
 </Accordion>
+
 <Accordion title="OKE1101 — missing table in prod">
-
 Schema DDL never runs automatically in `prod`. Under `oke dev`, `db.autoPush` (default `true`) runs `oke db push`. For production use `oke db generate` + `oke db migrate`.
-
 </Accordion>
+
 <Accordion title="oke db push: missing_hints">
-
 New tables are created automatically. Push only manages `public` — it will not drop schema `oke` (RLS helpers) or `oke_console`. Remaining `missing_hints` are destructive (drop a non-empty public table, type change). Review with `oke db generate`.
-
 </Accordion>
+
 <Accordion title="I need a join — with: is not supported">
-
 `fx.store` is one table per call by design. Read each table separately and compose in the flow (or extract a shared flow and `fx.call` it). Every table then appears explicitly in the Manifest's effect graph — which is what powers cache invalidation and PII masking.
-
 </Accordion>
+
 <Accordion title="Pagination shows duplicates when rows are inserted">
-
 You are on offset paging. Switch `list` to keyset by setting `cursor` columns with a stable order (e.g. `[createdAt, id]`) — the page boundary becomes a row predicate, not a row count.
-
 </Accordion>
+
 <Accordion title="meta.total is slow on a big table">
-
 `count: "exact"` runs `COUNT(*)` per page. Set `count: "none"` in the `list` options to skip it, or use keyset mode where totals are rarely needed.
-
 </Accordion>
+
 <Accordion title="List data is { items, count } instead of an array">
-
 Success already wraps `{ data, error: null }`. Returning a page object from `do` nests the pager inside `data`. Prefer `out: z.array(Item)` and `return fx.json.withQuery(rows, input)`. Any other declared `out` is still valid.
-
 </Accordion>
+
 <Accordion title="KV TTL never expires in tests">
-
 The `test` default is `memory`, which ignores TTL on `set`. Under `oke dev`, KV is `redis` by default — use that when you need real expiry.
-
 </Accordion>
+
 <Accordion title="oke boot: redis / meilisearch / S3 URL missing">
-
 Driver-backed facets fail boot when their URL is absent — Redis needs `REDIS_URL`, meilisearch needs `OKE_STORE_INDEX_URL`, S3 needs `S3_BUCKET`. `oke dev` writes these into the Compose env.
-
 </Accordion>
+
 <Accordion title="vector dims X !== index dims Y">
-
 The vector length must match `store.index(…, { dims })` (runtime default `3` if unset). Align `dims` with your embedder, or fix the vector you pass to `upsert` / `search`.
-
 </Accordion>
+
 <Accordion title="Index stays on memory under oke dev">
-
 Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` in `dev` — it stays `memory`. Set the map explicitly (and pair SQL for `pgvector`).
-
 </Accordion>
+
 <Accordion title="Console warns Non-ASCII object key">
-
 `fx.store(files).put` stores the key as-is. Console uploads mint an ASCII key and keep the original name in `.oke/catalog.json`. Re-upload to rewrite an existing object.
-
 </Accordion>
+
 <Accordion title="oke dev skipped the seed prompt">
-
 `.oke/state.json` stores `seededAt` plus this app's `defineSeed({ name })` — notes vs keel are different ids. A new name re-asks. Clear those keys to prompt again.
-
 </Accordion>
+
 <Accordion title="Console KV shows No rows after oke db seed">
-
 Default `store.kv` is cache Redis with no AOF — a recreate drops keys. SQL seed still looks full. Mark seeded namespaces `{ durable: true }` so they live in `oke_kv`, then restart and seed again.
-
 </Accordion>
+
 </Accordions>
 
 ## Learn more

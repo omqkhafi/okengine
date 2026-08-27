@@ -1,5 +1,5 @@
 /**
- * Five triggers, one Flow species — fan-in diagram for the Flow element page.
+ * Six triggers, one Flow species — fan-in diagram for the Flow element page.
  *
  * The beat fires each trigger in turn: the row lights and a packet springs
  * across the lane into the Flow panel (contracts stay lit). Any trigger, same
@@ -27,6 +27,11 @@ const TRIGGERS: ReadonlyArray<{
     replaces: "CDC pipeline",
   },
   { syntax: "fx.call", starts: "another flow calls in", replaces: '"private" helper' },
+  {
+    syntax: 'mcp.tool("bookings.create")',
+    starts: "an agent calls a tool",
+    replaces: "OAuth tool route",
+  },
 ];
 
 const CONTRACTS = ["in", "out", "errors", "do"] as const;
@@ -50,10 +55,10 @@ export function FlowTriggers() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Five triggers — HTTP, signal, interval, row change, and fx.call — all binding to the same Flow species."
+      aria-label="Six triggers — HTTP, signal, interval, row change, fx.call, and an MCP tool — all binding to the same Flow species."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
-        <p className="text-sm font-medium text-fd-foreground">Five triggers, one species</p>
+        <p className="text-sm font-medium text-fd-foreground">Six triggers, one species</p>
         <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
           on(trigger, flow)
         </code>

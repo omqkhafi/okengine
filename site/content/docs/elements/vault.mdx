@@ -173,8 +173,8 @@ A value already in the vault / managed backend wins over a leftover env pin.
 If every layer misses a contract, boot **fails** before any request is served:
 
 ```text
-VaultBootError: 1 secret(s) missing:
-  STRIPE_KEY — Payments gateway key
+vault boot failed — 1 missing secret(s):
+  - STRIPE_KEY: Payments gateway key
 ```
 
 <Callout title="Good to know">
@@ -242,9 +242,9 @@ Backup stays on the CLI (`oke vault backup` / `restore`). The Console never
 accepts a master key in the HTTP body — unseal via `OKE_VAULT_MASTER_KEY`.
 
 <Callout title="Builtin concurrency (rotate / audit / backup)">
-  `rotate-master` uses SKIP LOCKED + lease TTL (one holder; crashed holders reclaim). Audit appends
-  under a transactional row lock. Backups use temp → fsync → rename with end marker + checksum —
-  restore rejects incomplete files before decrypt.
+  `rotate-master` holds a lease (`FOR UPDATE` + lease TTL) so exactly one batch runs at a time; a busy
+  audit append briefly waits rather than being misread as "lease held". Audit appends serialize under a
+  transactional write lock; backups use temp → fsync → rename with end marker + checksum.
 </Callout>
 
 <Callout title="Builtin master keys and expired rows">

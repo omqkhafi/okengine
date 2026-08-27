@@ -111,7 +111,7 @@ Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); 
   — that is the `as never` trap. See [fx](/docs/reference/fx).
 </Callout>
 
-## The five triggers
+## The triggers
 
 <FlowTriggers />
 
@@ -200,6 +200,28 @@ export const getOrder = flow("orders.get", {
 
 const order = await fx.call(getOrder, { id: orderId }); // from any other flow
 ```
+
+### mcp — an agent calls a tool
+
+`mcp.tool(name)` marks a flow for **OAuth-protected user-plane** exposure over MCP. Deny-by-default: a flow without this trigger is never listed over `tools/list`. A gate is required, exactly like a sensitive HTTP route:
+
+```typescript
+export const createBooking = on(
+  mcp.tool("bookings.create").gate(member), // gates required — deny-by-default
+  flow("bookings.create", {
+    plane: "user",
+    in: BookingRef,
+    out: Booking,
+    do: async ({ id }, fx) => { /* … */ },
+  }),
+);
+```
+
+- The tool name is namespaced (`bookings.create`) and appears in the Manifest under `trigger.mcp.name` with its gates.
+- Binding the **same tool name** twice fails boot with **OKE1018** (`MCP tool "{tool}" is bound twice`).
+- Ungated `mcp.tool(...)` fails gate posture at boot (`GateBootError`) — the trigger never exposes an unauthenticated tool.
+
+This is one direction of [MCP](/docs/ai/mcp): exposing your flows as tools. The other is consuming external servers as `ai.mcpServer` tools via `fx.ask` / `ai.agent`.
 
 ## fx — the only door
 

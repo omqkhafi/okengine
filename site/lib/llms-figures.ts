@@ -9,7 +9,7 @@
 /** aria-label text keyed by JSX component name. */
 export const TEACHING_FIGURE_FALLBACKS: Readonly<Record<string, string>> = {
   FlowTriggers:
-    "Five triggers — HTTP, signal, interval, row change, and fx.call — all binding to the same Flow species.",
+    "Six triggers — HTTP, signal, interval, row change, fx.call, and an MCP tool — all binding to the same Flow species.",
   FlowDurable:
     "Durable journal physics: with durable true, killing the process after create-intent resumes at confirm and create-intent never re-runs; without a journal, a restart re-runs create-intent.",
   SignalDelivery:
