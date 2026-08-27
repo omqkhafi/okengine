@@ -1,6 +1,6 @@
 {
   "name": "@omqkhafi/okengine",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "exports": {

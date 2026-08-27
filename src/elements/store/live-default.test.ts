@@ -78,22 +78,26 @@ describe("project-wide store.live default — real boot", () => {
       stores: [db],
       unguardedHttp: "allow",
     });
-    await createTestApp(app, {
-      boot: {
-        stores: [db],
-        config: { drivers: { store: { sql: { test: "pglite" } } } },
-      },
-    });
+    try {
+      await createTestApp(app, {
+        boot: {
+          stores: [db],
+          config: { drivers: { store: { sql: { test: "pglite" } } } },
+        },
+      });
 
-    // The pending resource live mount drained — GET /tasks/live streams 200.
-    const live = await app.fetch(new Request("http://localhost/tasks/live"));
-    expect(live.status).toBe(200);
-    expect(live.headers.get("content-type")).toMatch(/text\/event-stream/);
-    await live.body!.cancel();
+      // The pending resource live mount drained — GET /tasks/live streams 200.
+      const live = await app.fetch(new Request("http://localhost/tasks/live"));
+      expect(live.status).toBe(200);
+      expect(live.headers.get("content-type")).toMatch(/text\/event-stream/);
+      await live.body!.cancel();
 
-    // The archive table opted out via store.schema.live(false) — no /live route.
-    const archiveLive = await app.fetch(new Request("http://localhost/archive/live"));
-    expect(archiveLive.status).not.toBe(200);
+      // The archive table opted out via store.schema.live(false) — no /live route.
+      const archiveLive = await app.fetch(new Request("http://localhost/archive/live"));
+      expect(archiveLive.status).not.toBe(200);
+    } finally {
+      await app.stop();
+    }
   });
 
   test("flag off: omitted live stays today's behavior — no /live route", async () => {
@@ -113,16 +117,20 @@ describe("project-wide store.live default — real boot", () => {
       stores: [db],
       unguardedHttp: "allow",
     });
-    await createTestApp(app, {
-      boot: {
-        stores: [db],
-        config: { drivers: { store: { sql: { test: "pglite" } } } },
-      },
-    });
+    try {
+      await createTestApp(app, {
+        boot: {
+          stores: [db],
+          config: { drivers: { store: { sql: { test: "pglite" } } } },
+        },
+      });
 
-    const live = await app.fetch(new Request("http://localhost/tasks/live"));
-    expect(live.status).not.toBe(200);
-    const archiveLive = await app.fetch(new Request("http://localhost/archive/live"));
-    expect(archiveLive.status).not.toBe(200);
+      const live = await app.fetch(new Request("http://localhost/tasks/live"));
+      expect(live.status).not.toBe(200);
+      const archiveLive = await app.fetch(new Request("http://localhost/archive/live"));
+      expect(archiveLive.status).not.toBe(200);
+    } finally {
+      await app.stop();
+    }
   });
 });

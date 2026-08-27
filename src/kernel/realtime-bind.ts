@@ -49,6 +49,8 @@ const LIVE_STREAM_BUFFER_MAX = 512;
 
 /** Active bridge state (singleton per process). */
 let active: {
+  /** Primary connection the runtime / outbox classify and poll against. */
+  readonly primary: SqlConnection;
   readonly runtime: ReturnType<typeof liveQueryRuntimeFromConn>;
   readonly outbox: CdcOutbox;
   readonly runner?: CdcOutboxRunner;
@@ -63,8 +65,11 @@ export interface LiveSubscriptionHandle {
 }
 
 /**
- * Wire the realtime stack for this process. Idempotent — repeated boots in
- * one process reuse the first bridge (test graphs re-`oke()` freely).
+ * Wire the realtime stack for this process. Idempotent for the **same**
+ * primary connection (test graphs re-`oke()` freely). A different primary
+ * (e.g. a fresh PGLite instance on the next test) tears down the old bridge
+ * and rebinds — otherwise classification probes the previous DB and live
+ * SSE frames never fire.
  *
  * @param primary - Shared primary SQL connection (postgres/pglite only)
  * @param dispatchCdc - App-level dispatcher for user-declared CDC flows
@@ -79,7 +84,10 @@ export function bindRealtimeBridge(
   ) => Promise<unknown[]> | unknown[],
 ): ReturnType<typeof liveQueryRuntimeFromConn> | null {
   if (!RLS_CONTEXT_DRIVERS.has(primary.driverId)) return null;
-  if (active) return active.runtime;
+  if (active) {
+    if (active.primary === primary) return active.runtime;
+    unbindRealtimeBridge();
+  }
 
   const runtime = liveQueryRuntimeFromConn(primary);
   const outbox = new CdcOutbox(primary);
@@ -114,7 +122,7 @@ export function bindRealtimeBridge(
   );
   runner.start();
 
-  active = { runtime, outbox, runner };
+  active = { primary, runtime, outbox, runner };
   return runtime;
 }
 

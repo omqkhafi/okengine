@@ -12,6 +12,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.18.2 — 2026-08-28
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Realtime bridge rebinds when boot hands a new primary SQL connection
+  (fresh PGLite per test) instead of classifying CDC against a prior
+  instance; `createTestApp().close()` calls `app.stop()` so the process-wide
+  sink tears down with the harness.
+
 ## v0.18.1 — 2026-08-28
 
 ### 🐛 Fixed

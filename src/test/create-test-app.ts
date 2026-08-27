@@ -438,7 +438,10 @@ export async function createTestApp<App extends OkeApp>(
       return events;
     },
     async close() {
-      await app.bootResult?.close();
+      // Prefer `app.stop()` so the process-wide realtime bridge unbinds with
+      // the SQL connections — bare `bootResult.close()` left CDC classifying
+      // against a dead PGLite instance for later tests in the same process.
+      await app.stop();
     },
   };
 
