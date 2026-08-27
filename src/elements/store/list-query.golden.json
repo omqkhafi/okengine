@@ -1,0 +1,881 @@
+{
+  "offset:default (no params)": {
+    "ok": true,
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:eq": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" = ?",
+      "params": [
+        "open"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:neq": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" != ?",
+      "params": [
+        "open"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "!=",
+          "value": "open"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:not.eq inversion": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" = ?",
+      "params": [
+        "open"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:gte": {
+    "ok": true,
+    "where": {
+      "clause": "\"priority\" >= ?",
+      "params": [
+        "3"
+      ],
+      "predicates": [
+        {
+          "column": "priority",
+          "op": ">=",
+          "value": "3"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:lt": {
+    "ok": true,
+    "where": {
+      "clause": "\"priority\" < ?",
+      "params": [
+        "5"
+      ],
+      "predicates": [
+        {
+          "column": "priority",
+          "op": "<",
+          "value": "5"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:like pattern": {
+    "ok": true,
+    "where": {
+      "clause": "\"title\" like ?",
+      "params": [
+        "%task%"
+      ],
+      "predicates": [
+        {
+          "column": "title",
+          "op": "like",
+          "value": "%task%"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:ilike pattern": {
+    "ok": true,
+    "where": {
+      "clause": "\"title\" ilike ?",
+      "params": [
+        "%URGENT%"
+      ],
+      "predicates": [
+        {
+          "column": "title",
+          "op": "ilike",
+          "value": "%URGENT%"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:in list": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" in (?, ?, ?)",
+      "params": [
+        "open",
+        "done",
+        "in,review"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "in",
+          "value": [
+            "open",
+            "done",
+            "in,review"
+          ]
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:is null": {
+    "ok": true,
+    "where": {
+      "clause": "\"title\" is null",
+      "params": [],
+      "predicates": [
+        {
+          "column": "title",
+          "op": "is null"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:is true": {
+    "ok": true,
+    "where": {
+      "clause": "\"title\" = ?",
+      "params": [
+        true
+      ],
+      "predicates": [
+        {
+          "column": "title",
+          "op": "=",
+          "value": true
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:or group": {
+    "ok": true,
+    "where": {
+      "clause": "(\"status\" = ?) OR (\"priority\" > ?)",
+      "params": [
+        "open",
+        "5"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        },
+        {
+          "column": "priority",
+          "op": ">",
+          "value": "5"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:and group": {
+    "ok": true,
+    "where": {
+      "clause": "(\"status\" = ?) AND (\"title\" ilike ?)",
+      "params": [
+        "open",
+        "%urgent%"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        },
+        {
+          "column": "title",
+          "op": "ilike",
+          "value": "%urgent%"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:nested not.or group": {
+    "ok": true,
+    "where": {
+      "clause": "(\"status\" = ?) OR ((\"priority\" >= ?) AND (\"title\" != ?))",
+      "params": [
+        "open",
+        "1",
+        "x"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        },
+        {
+          "column": "priority",
+          "op": ">=",
+          "value": "1"
+        },
+        {
+          "column": "title",
+          "op": "!=",
+          "value": "x"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:search": {
+    "ok": true,
+    "where": {
+      "clause": "\"title\" like ?",
+      "params": [
+        "%task%"
+      ],
+      "predicates": [
+        {
+          "column": "title",
+          "op": "like",
+          "value": "%task%"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5,
+      "search": "task"
+    }
+  },
+  "offset:q alias": {
+    "ok": true,
+    "where": {
+      "clause": "\"title\" like ?",
+      "params": [
+        "%task%"
+      ],
+      "predicates": [
+        {
+          "column": "title",
+          "op": "like",
+          "value": "%task%"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5,
+      "search": "task"
+    }
+  },
+  "offset:order multi desc": {
+    "ok": true,
+    "orderBy": [
+      "[C(priority), T(\" desc\")]",
+      "[C(createdAt), T(\" asc\")]"
+    ],
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5,
+      "order": "priority.desc,createdAt.asc"
+    }
+  },
+  "offset:select projection": {
+    "ok": true,
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    },
+    "select": [
+      "id",
+      "title"
+    ]
+  },
+  "offset:limit": {
+    "ok": true,
+    "limit": 3,
+    "meta": {
+      "mode": "offset",
+      "limit": 3
+    }
+  },
+  "offset:offset": {
+    "ok": true,
+    "limit": 5,
+    "offset": 4,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:offset cursor token": {
+    "ok": true,
+    "limit": 5,
+    "offset": 4,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "offset:combined": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" = ?",
+      "params": [
+        "open"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        }
+      ]
+    },
+    "orderBy": [
+      "[C(priority), T(\" desc\")]"
+    ],
+    "limit": 3,
+    "offset": 2,
+    "meta": {
+      "mode": "offset",
+      "limit": 3,
+      "order": "priority.desc"
+    },
+    "select": [
+      "id",
+      "status"
+    ]
+  },
+  "offset:headers/cookie ignored": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" = ?",
+      "params": [
+        "open"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        }
+      ]
+    },
+    "limit": 5,
+    "meta": {
+      "mode": "offset",
+      "limit": 5
+    }
+  },
+  "cursor:default (cursor order implied)": {
+    "ok": true,
+    "orderBy": [
+      "[C(createdAt), T(\" desc\")]",
+      "[C(id), T(\" desc\")]"
+    ],
+    "limit": 6,
+    "meta": {
+      "mode": "cursor",
+      "limit": 5
+    }
+  },
+  "cursor:keyset after": {
+    "ok": true,
+    "orderBy": [
+      "[C(createdAt), T(\" desc\")]",
+      "[C(id), T(\" desc\")]"
+    ],
+    "limit": 6,
+    "after": "[[C(createdAt), T(\" < \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" < \"), ?[\"value\"]]]]",
+    "meta": {
+      "mode": "cursor",
+      "limit": 5,
+      "cursor": "eyJ2IjpbMTAwLCJpNSJdLCJkIjoiYWZ0ZXIifQ=="
+    },
+    "cursorDir": "after"
+  },
+  "cursor:keyset before (flipped)": {
+    "ok": true,
+    "orderBy": [
+      "[C(createdAt), T(\" asc\")]",
+      "[C(id), T(\" asc\")]"
+    ],
+    "limit": 6,
+    "before": "[[C(createdAt), T(\" > \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" > \"), ?[\"value\"]]]]",
+    "meta": {
+      "mode": "cursor",
+      "limit": 5,
+      "cursor": "eyJ2IjpbMTAwLCJpNSJdLCJkIjoiYmVmb3JlIn0="
+    },
+    "cursorDir": "before"
+  },
+  "cursor:bare array cursor (legacy after)": {
+    "ok": true,
+    "orderBy": [
+      "[C(createdAt), T(\" desc\")]",
+      "[C(id), T(\" desc\")]"
+    ],
+    "limit": 6,
+    "after": "[[C(createdAt), T(\" < \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" < \"), ?[\"value\"]]]]",
+    "meta": {
+      "mode": "cursor",
+      "limit": 5,
+      "cursor": "WzEwMCwiaTUiXQ=="
+    },
+    "cursorDir": "after"
+  },
+  "cursor:filter + cursor": {
+    "ok": true,
+    "where": {
+      "clause": "\"status\" = ?",
+      "params": [
+        "open"
+      ],
+      "predicates": [
+        {
+          "column": "status",
+          "op": "=",
+          "value": "open"
+        }
+      ]
+    },
+    "orderBy": [
+      "[C(createdAt), T(\" desc\")]",
+      "[C(id), T(\" desc\")]"
+    ],
+    "limit": 6,
+    "after": "[[C(createdAt), T(\" < \"), ?[\"value\"]], T(\" or \"), [[C(createdAt), T(\" = \"), ?[\"value\"]], T(\" and \"), [C(id), T(\" < \"), ?[\"value\"]]]]",
+    "meta": {
+      "mode": "cursor",
+      "limit": 5,
+      "cursor": "eyJ2IjpbMTAwLCJpNSJdLCJkIjoiYWZ0ZXIifQ=="
+    },
+    "cursorDir": "after"
+  },
+  "offset-fail:unknown list param (filter none)": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "unknown or unfilterable column \"secret\"",
+              "path": [
+                "secret"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:unknown or unfilterable column": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "unknown or unfilterable column \"ghost\"",
+              "path": [
+                "ghost"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:unsupported filter op": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "unsupported filter op \"regex\"",
+              "path": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:missing op.value": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "expected \"op.value\" (e.g. status=eq.x)",
+              "path": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:bad is value": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "is expects null|not_null|true|false|unknown",
+              "path": [
+                "title"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:in without parens": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "in expects (a,b,c)",
+              "path": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:in empty": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "in expects at least one value",
+              "path": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:search + q both": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "use either search or q, not both",
+              "path": [
+                "search"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:bad limit": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "limit must be a positive integer",
+              "path": [
+                "limit"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:bad offset": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "offset must be a non-negative integer",
+              "path": [
+                "offset"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:invalid cursor": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "invalid cursor",
+              "path": [
+                "cursor"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:bad order term": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "bad order term \"priority..desc\"",
+              "path": [
+                "order"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:unknown order column": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "unknown or unorderable column \"ghost\"",
+              "path": [
+                "order"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "offset-fail:unknown select column": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "unknown column \"ghost\"",
+              "path": [
+                "select"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "cursor-fail:cursor pagination not configured": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "cursor pagination is not configured",
+              "path": [
+                "cursor"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "cursor-fail:cursor with wrong arity": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "invalid cursor",
+              "path": [
+                "cursor"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  },
+  "cursor-fail:garbage cursor": {
+    "ok": false,
+    "failure": {
+      "data": null,
+      "error": {
+        "code": "ValidationError",
+        "data": {
+          "issues": [
+            {
+              "message": "invalid cursor",
+              "path": [
+                "cursor"
+              ]
+            }
+          ]
+        },
+        "message": "The request failed validation."
+      }
+    }
+  }
+}
