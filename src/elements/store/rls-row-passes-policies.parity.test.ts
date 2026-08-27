@@ -122,7 +122,7 @@ async function assertInsertParity(
   const h = handleFor(conn, identity);
   let accepted = false;
   try {
-    await h.raw(`INSERT INTO "${table}" (${columns}) VALUES (${placeholders})`, [...values]);
+    await h.raw(`INSERT INTO "${table}" ${columns} VALUES ${placeholders}`, [...values]);
     accepted = true;
   } catch {
     accepted = false;
@@ -464,6 +464,94 @@ describe("RLS parity — composition B: gate∧tenant compound + scope INSERT (p
       { id: "i3", tenant_id: "acme", total: 7 },
       ["i3", "acme", 7],
     );
+  });
+});
+
+describe("RLS parity — regression gate: TO-role + command-clause selection (pglite)", () => {
+  // Added after the adversarial audit (release-blocking finding round):
+  //
+  // 1. TO-ROLE LEAK — a PERMISSIVE policy granted `TO <role>` where the stamp
+  //    role is NOT a member must be invisible to native evaluation. The old
+  //    replay ignored pg_policies.roles entirely, so an internal wide policy
+  //    (TO internal_role USING (true)) falsely widened every subscriber's
+  //    visibility through the replay path.
+  //
+  // 2. INSERT CLAUSE SELECTION — native INSERT evaluates WITH CHECK only;
+  //    the old replay evaluated qual-first and skipped INSERT-only policies,
+  //    diverging whenever a table mixes ALL/UPDATE policies with distinct
+  //    USING/WITH CHECK clauses.
+
+  let conn: SqlConnection;
+
+  beforeAll(async () => {
+    conn = await freshPglite("parity-regressions");
+    await conn.exec(`CREATE TABLE tenant_wide (
+      id text PRIMARY KEY, tenant_id text NOT NULL, note text NOT NULL)`);
+    await conn.exec(`GRANT SELECT, INSERT ON tenant_wide TO oke_app`);
+    await conn.exec(`ALTER TABLE tenant_wide ENABLE ROW LEVEL SECURITY`);
+    await conn.exec(`CREATE POLICY tenant_sel ON tenant_wide
+      AS PERMISSIVE FOR SELECT TO public
+      USING (tenant_id = oke.tenant())`);
+    // Non-applicable role: oke_app has no membership in oke_internal —
+    // natively this policy never applies to stamped sessions.
+    await conn.exec(`DO $do$ BEGIN
+      CREATE ROLE oke_internal NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $do$`);
+    await conn.exec(`CREATE POLICY wide_internal ON tenant_wide
+      AS PERMISSIVE FOR SELECT TO oke_internal
+      USING (true)`);
+    await handleFor(conn).raw(`INSERT INTO tenant_wide VALUES ('1','acme','secret')`);
+
+    await conn.exec(`CREATE TABLE mixed_cmds (
+      id text PRIMARY KEY, tenant_id text NOT NULL)`);
+    await conn.exec(`GRANT SELECT, INSERT, UPDATE, DELETE ON mixed_cmds TO oke_app`);
+    await conn.exec(`ALTER TABLE mixed_cmds ENABLE ROW LEVEL SECURITY`);
+    // ALL policy with deliberately DISTINCT USING vs WITH CHECK:
+    await conn.exec(`CREATE POLICY upsert_all ON mixed_cmds
+      AS PERMISSIVE FOR ALL TO public
+      USING (tenant_id = oke.tenant())
+      WITH CHECK (tenant_id <> 'locked')`);
+    await handleFor(conn).raw(`INSERT INTO mixed_cmds VALUES ('0','base')`);
+  }, 30_000);
+
+  afterAll(async () => {
+    await conn.close();
+  });
+
+  test("regression: TO-restricted permissive policy must NOT widen replay visibility", async () => {
+    const globexMemberNoTenantMatch = { ...globexMember };
+    const h = handleFor(conn, globexMemberNoTenantMatch);
+    // Native ground truth: only tenant_sel applies (wide_internal is TO
+    // oke_internal); globex is not 'acme' → row invisible.
+    const rows = await h.raw(`SELECT 1 AS ok FROM "tenant_wide" WHERE id = ? LIMIT 1`, ["1"]);
+    expect(rows.length).toBe(0);
+    // Replay must agree — old fn returned true here (LEAK).
+    const inline = buildInlineRowPassesSql("tenant_wide", { id: "1", tenant_id: "acme", note: "secret" }, "SELECT");
+    const out = await h.raw(inline, []);
+    expect(out[0]?.ok === true).toBe(false);
+  });
+
+  test("regression: INSERT evaluates WITH CHECK even when ALL-policy USING denies", async () => {
+    // Native: INSERT on mixed_cmds evaluates ONLY WC (tenant<>'locked') →
+    // a globex-stamped insert of an 'acme' row is ACCEPTED despite the
+    // USING clause disagreeing with the stamp's tenant.
+    let accepted = false;
+    try {
+      await handleFor(conn, globexMember).raw(
+        `INSERT INTO "mixed_cmds" ("id", "tenant_id") VALUES (?, ?)`,
+        ["9", "acme"],
+      );
+      accepted = true;
+    } catch {
+      accepted = false;
+    }
+    expect(accepted).toBe(true);
+    // Replay must agree — old fn evaluated USING (qual) first and denied.
+    const out = await handleFor(conn, globexMember).raw(
+      buildInlineRowPassesSql("mixed_cmds", { id: "9", tenant_id: "acme" }, "INSERT"),
+      [],
+    );
+    expect(out[0]?.ok === true).toBe(true);
   });
 });
 

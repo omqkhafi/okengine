@@ -153,6 +153,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Adversarial audit of `oke.row_passes_policies` fixed two replay
+  divergences: policies scoped `TO <role>` were evaluated without checking
+  role applicability (a non-member policy could widen visibility through
+  the live-query replay path), and INSERT probes picked the USING clause
+  instead of WITH CHECK (fail-closed divergence vs native RLS). Permanent
+  regression gates added to `rls-row-passes-policies.parity.test.ts`
+  (TO-role leak + mixed-clause INSERT); parity re-verified on PGlite and
+  live Postgres 17.
 - OAuth mix-up defense (RFC 9700 / RFC 9207): per-provider callback routes,
   single-use hashed `state`, and issuer pinning on every assertion.
 - Unverified provider emails cannot take over existing accounts

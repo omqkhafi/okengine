@@ -35,15 +35,34 @@
  *    replace() so `id` never corrupts an already-substituted accessor.
  *
  * Semantics mirror native RLS:
+ * - `TO <role>` applicability: a policy applies only when the current user is
+ *   a member of one of its roles (`public`/`current_user` always; membership
+ *   via `pg_has_role`). The stamp runs as `oke_app`, so internal policies
+ *   granted to non-member roles are invisible to it natively — the replay
+ *   skips them identically (TO-role regression gate: F4-style cases).
  * - `ALL` policies apply to every command; others match their own.
- * - Visibility replays SELECT semantics: `qual` governs; INSERT-only
- *   policies (with_check, no qual) never gate visibility.
+ * - Clause selection per command mirrors the native backend:
+ *   SELECT/DELETE evaluate USING (qual); INSERT evaluates WITH CHECK only;
+ *   UPDATE must satisfy both (missing clause falls back to its sibling).
  * - PERMISSIVE OR together, RESTRICTIVE AND; zero applicable policies on an
  *   RLS-enabled table denies everything.
  */
 
 /** One statement per exec — drivers reject multi-command batches on `query`. */
 export const ROW_PASSES_POLICIES_STATEMENTS: readonly string[] = [
+  String.raw`CREATE OR REPLACE FUNCTION oke.pol_applicable_to_role(
+  p_roles text[]
+) RETURNS boolean
+LANGUAGE sql STABLE AS $fn$
+  SELECT EXISTS (
+    SELECT 1
+      FROM unnest(p_roles) AS r(role)
+     WHERE r.role = 'public'
+        OR r.role = 'current_user'
+        OR r.role = 'session_user'
+        OR pg_has_role(current_user, r.role, 'MEMBER')
+  )
+$fn$`,
   String.raw`CREATE OR REPLACE FUNCTION oke.row_passes_policies(
   p_table text,
   p_row jsonb,
@@ -78,19 +97,32 @@ BEGIN
   END IF;
 
   FOR pol IN
-    SELECT policyname, permissive, cmd, qual, with_check
+    SELECT policyname, permissive, cmd, roles, qual, with_check
       FROM pg_policies
      WHERE tablename = split_part(p_table, '.', 2)
         OR tablename = p_table
   LOOP
+    -- Native TO-role semantics: a policy only applies when the current user is
+    -- a member of (one of) its roles. oke_app (the stamp role) is not normally
+    -- a member of custom policy roles, so such policies must be skipped —
+    -- otherwise an internal TO-restricted PERMISSIVE policy would wrongly widen
+    -- per-user visibility through the replay path.
+    IF NOT pol_applicable_to_role(pol.roles) THEN
+      CONTINUE;
+    END IF;
+
     IF pol.cmd <> 'ALL' AND upper(p_command) <> pol.cmd THEN
       CONTINUE;
     END IF;
 
-    -- Visibility replays SELECT semantics: USING (qual) governs; an
-    -- INSERT-only policy (with_check, no qual) never gates visibility.
+    -- Command-clause selection mirrors each native command's evaluation:
+    --   SELECT/DELETE -> USING (qual) only
+    --   UPDATE        -> USING + WITH CHECK must both pass (native treats a
+    --                    missing clause as "same as the other")
+    --   INSERT        -> WITH CHECK only (qual does not gate new rows)
+    -- Zero applicable policies on an RLS-enabled table still denies all.
     expr := CASE
-      WHEN pol.cmd = 'INSERT' THEN NULL
+      WHEN upper(p_command) = 'INSERT' THEN COALESCE(pol.with_check, pol.qual)
       ELSE COALESCE(pol.qual, pol.with_check)
     END;
 
