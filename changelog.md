@@ -16,6 +16,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Manual live queries — hand-written flows declare live query surfaces with
+  `http.get("/tasks/live").gate(member).live(tasks)` plus
+  `liveQuery(fx, tasks, input, { filter, search, order })` in the flow body.
+  Compiles to the same internal `oke/live/sql:<table>` signal, guardrails,
+  and per-subscriber classified CDC stream as `store.resource({ live: true })`;
+  the PostgREST list grammar is extracted into a standalone shared module
+  (`parseListQuery` / `resolveListScope`) so resource lists, live windows,
+  and hand-written flows parse identically.
 - Realtime live queries — `store.resource({ live: true })` synthesizes
   `GET <path>/live` SSE with per-subscriber RLS classification
   (`upsert` / `revoked` / `delete`). Application-level CDC via the

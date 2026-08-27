@@ -216,6 +216,42 @@ const mounted = on(http.resource("/notes", notesR.all()).gate(member));
 
 **Consequence:** the live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. Clients consume it with `useLiveQuery` from `okengine/client-react`.
 
+#### Hand-written live flows
+
+`store.resource` is optional. A hand-written flow declares the same live
+surface with the `.live(table)` trigger modifier and the `liveQuery` helper —
+identical signal, guardrails, and per-subscriber classification:
+
+```typescript
+import { liveQuery } from "okengine";
+
+export const live = on(
+  http.get("/tasks/live").gate(member).live(tasks),
+  flow("tasks.live", {
+    in: { unknown: true },
+    do: async (input, fx) =>
+      liveQuery(fx, tasks, input, {
+        search: [tasks.title],
+        filter: [tasks.status], // same PostgREST grammar as list
+        order: "all",
+      }),
+  }),
+);
+```
+
+`.live(tasks)` stamps the internal `oke/live/sql:tasks` signal at extract and
+enforces the same guardrails as `live: true` (PK required; `updatedAt` / RLS
+warnings).
+
+**Consequence:** the flow body parses the request's query params with the
+exact list grammar, then opens the classified CDC stream.
+
+- `?status=eq.open` filters the live window the same way it filters
+  `GET /tasks`.
+- A flow that also writes other tables (an activity log alongside the main
+  write) never leaks those tables into the stream: classification is
+  per-table.
+
 `live: true` carries compile-time guardrails at extract, plus durable delivery
 and runtime watchtowers:
 
