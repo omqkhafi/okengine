@@ -108,50 +108,7 @@ const notesR = store.resource(db, notes, {
 const mounted = on(http.resource("/notes", notesR.all()).public());
 ```
 
-`.gate(...)` / `.public()` chain like `http.get` — gates on every verb. Pass `live: true` to also mount `GET <path>/live` — an SSE feed of per-subscriber classified events (`upsert` / `revoked` / `delete`), gated the same way as the CRUD verbs.
-
-```typescript
-const notesR = store.resource(db, notes, {
-  in: NewNote,
-  out: Note,
-  live: true, // synthesizes GET /notes/live + internal live signal
-});
-
-const mounted = on(http.resource("/notes", notesR.all()).gate(member));
-```
-
-The live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. Clients consume it with `useLiveQuery` from `okengine/client-react`.
-
-`store.resource` is optional. A hand-written flow declares the same live surface with the `.live(table)` trigger modifier and the `liveQuery` helper — identical signal, guardrails, and per-subscriber classification:
-
-```typescript
-import { liveQuery } from "okengine";
-
-export const live = on(
-  http.get("/tasks/live").gate(member).live(tasks),
-  flow("tasks.live", {
-    in: { unknown: true },
-    do: async (input, fx) =>
-      liveQuery(fx, tasks, input, {
-        search: [tasks.title],
-        filter: [tasks.status], // same PostgREST grammar as list
-        order: "all",
-      }),
-  }),
-);
-```
-
-`.live(tasks)` stamps the internal `oke/live/sql:tasks` signal at extract and enforces the same guardrails as `live: true` (PK required; `updatedAt` / RLS warnings). The flow body parses the request's query params with the exact list grammar, then opens the classified CDC stream.
-
-- `?status=eq.open` filters the live window the same way it filters `GET /tasks`.
-- A flow that also writes other tables (an activity log alongside the main write) never leaks those tables into the stream: classification is per-table.
-
-`live: true` carries compile-time guardrails at extract, plus durable delivery and runtime watchtowers:
-
-- A table with **no primary key fails extract loud** — upsert/revoked/delete address rows by PK.
-- Missing `updatedAt`/`updated_at` warns (no `rowVersion` LWW guard; races rely on `X-Oke-Mutation-Id` echo dedupe), missing RLS policies warns (every gated subscriber would see every row).
-- CDC events ride the durable `oke_cdc_outbox`; delivered rows prune on retention defaults (24h / 50k) so the outbox never grows unbounded.
-- `oke doctor` findings watch the runtime side: `cdc_outbox_backlog`, `cdc_outbox_retention`, `live_subscriber_pressure` (~150 subs/table in v1), and `live_fanout_queue_saturated`.
+`.gate(...)` / `.public()` chain like `http.get` — gates on every verb. Passing `live: true` also mounts an SSE `GET <path>/live`; see Live queries below.
 
 The list endpoint's URL is the whole query language:
 
@@ -169,6 +126,53 @@ Responses follow the Stripe-style envelope: `{ data, meta, error }`. Clients pag
 **Consequence:** `count: "exact"` (the offset default) runs `COUNT(*)` per page. Set `count: "none"` to return only `meta.offset`. Keyset (cursor) paging is the default when `cursor` columns are set — pages stay stable while new rows are inserted, where offset pages would shift and show duplicates.
 
 A request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
+
+### Live queries — `live: true` and `.live(table)`
+
+Pass `live: true` to also mount `GET <path>/live` — an SSE feed of per-subscriber classified events (`upsert` / `revoked` / `delete`), gated the same way as the CRUD verbs:
+
+```typescript
+const notesR = store.resource(db, notes, {
+  in: NewNote,
+  out: Note,
+  live: true, // synthesizes GET /notes/live + internal live signal
+});
+
+const mounted = on(http.resource("/notes", notesR.all()).gate(member));
+```
+
+The live route re-checks RLS for every CDC event under the subscriber's stamped identity. A row that leaves the caller's visibility window arrives as `{ kind: "revoked", id, reason: "rls" | "query" }` — never as a silent stale upsert. `"rls"` means the row no longer passes the subscriber's policies; `"query"` means RLS still allows it but it fell out of the filter or search window. Clients consume it with `useLiveQuery` from `okengine/client-react`.
+
+`store.resource` is optional. A hand-written flow declares the same live surface with the `.live(table)` trigger modifier and the `liveQuery` helper — identical stream, guardrails, and per-subscriber classification:
+
+```typescript
+import { liveQuery } from "okengine";
+
+export const live = on(
+  http.get("/tasks/live").gate(member).live(tasks),
+  flow("tasks.live", {
+    in: { unknown: true },
+    do: async (input, fx) =>
+      liveQuery(fx, tasks, input, {
+        search: [tasks.title],
+        filter: [tasks.status], // same list grammar as store.resource
+        order: "all",
+      }),
+  }),
+);
+```
+
+`.live(tasks)` stamps the internal `oke/live/sql:tasks` signal at extract and enforces the same guardrails as `live: true` (PK required; `updatedAt` / RLS warnings). The flow body parses the request's query params with the exact list grammar, then opens the classified CDC stream.
+
+- `?status=eq.open` filters the live window the same way it filters `GET /tasks`.
+- A flow that also writes other tables (an activity log alongside the main write) never leaks those tables into the stream: classification is per-table.
+
+`live: true` carries compile-time guardrails at extract, plus durable delivery and runtime watchtowers:
+
+- A table with **no primary key fails extract loud** — upsert/revoked/delete address rows by PK.
+- Missing `updatedAt` / `updated_at` warns (no `rowVersion` LWW guard; races rely on `X-Oke-Mutation-Id` echo dedupe), missing RLS policies warns (every gated subscriber would see every row).
+- CDC events ride the durable `oke_cdc_outbox`; delivered rows prune on retention defaults (24h / 50k) so the outbox never grows unbounded.
+- `oke doctor` findings watch the runtime side: `cdc_outbox_backlog`, `cdc_outbox_retention`, `live_subscriber_pressure` (~150 subs/table in v1), and `live_fanout_queue_saturated`.
 
 ### Handwritten HTTP lists
 
@@ -258,32 +262,6 @@ The recommended path: declare tables ORM-agnostically, then let `oke db` emit re
 | `store.schema.rls()` | `pgTable.withRLS` when there are no policies |
 | `store.schema.policy.gate/owner/scope/tenant` | happy-path RLS (`oke.gate()` / `oke.user()` / `oke.has_scope()` / `oke.tenant()`) |
 | `store.schema.unscoped()` | Shared table — required when tenancy is on and there is no tenant policy |
-
-Third argument on `store.schema.table` is Drizzle-shaped extras:
-
-```typescript
-export const bookings = store.schema.table(
-  "bookings",
-  {
-    id: field.text().primaryKey(),
-    owner: field.text().notNull(),
-  },
-  [
-    store.schema.policy.gate("member", { for: "select" }),
-    store.schema.policy.owner("owner", { for: "all" }),
-    store.schema.policy.scope("booking:create", { for: "insert" }),
-    store.schema.policy.tenant("tenant_id"),
-  ],
-);
-```
-
-Helpers emit stable names (`gate_member_select`). Raw `store.schema.policy("name", { as, to, for, using, withCheck })` is the escape hatch — predicates use `oke.*`, never `current_setting`.
-
-<Callout title="User-plane fx.store applies RLS">
-  HTTP / resource flows stamp Gate identity (`SET LOCAL ROLE oke_app` + `set_config`). Operator /
-  cron / CDC / signal stay unstamped. Tenancy on: also `oke.tenant()`; tables need `policy.tenant`
-  or `unscoped()`.
-</Callout>
 
 #### Foreign keys and relations
 
@@ -427,6 +405,34 @@ oke db seed --env prod --force
   Hand-written Drizzle in `src/schema.ts` stays supported — if there is nothing to emit, the emit
   step is skipped and your file is used as-is. Plugins may contribute **whole new tables**;
   extending an app-owned table with plugin columns is not supported in v1.
+</Callout>
+
+### Access policies — owner, tenant, scope
+
+Row-level security is declared per table as the third argument to `store.schema.table` — the policy list is Drizzle-shaped extras:
+
+```typescript
+export const bookings = store.schema.table(
+  "bookings",
+  {
+    id: field.text().primaryKey(),
+    owner: field.text().notNull(),
+  },
+  [
+    store.schema.policy.gate("member", { for: "select" }),
+    store.schema.policy.owner("owner", { for: "all" }),
+    store.schema.policy.scope("booking:create", { for: "insert" }),
+    store.schema.policy.tenant("tenant_id"),
+  ],
+);
+```
+
+Helpers emit stable names (`gate_member_select`). Raw `store.schema.policy("name", { as, to, for, using, withCheck })` is the escape hatch — predicates use `oke.*`, never `current_setting`. `policy.scope` takes a scope name or the `gate.scope("…")` declaration, so you can reuse the same scope in both the gate and the policy instead of repeating the string.
+
+<Callout title="User-plane fx.store applies RLS">
+  HTTP / resource flows stamp Gate identity (`SET LOCAL ROLE oke_app` + `set_config`). Operator /
+  cron / CDC / signal stay unstamped. Tenancy on: also `oke.tenant()`; tables need `policy.tenant`
+  or `unscoped()`.
 </Callout>
 
 ### Per-environment SQL drivers

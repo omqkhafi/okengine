@@ -128,6 +128,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - `defaultFn(id)` now emits native OKIDs, and `defaultFn(okid)` is recognized
   as an id default; the declarative schema surface accepts either.
 
+#### Docs
+
+- Store docs promote Access policies (owner / tenant / scope) and Live
+  queries (`live: true` and `.live(table)`) to dedicated H3s under SQL.
+
+
 ### 💥 Breaking Changes
 
 #### Runtime
