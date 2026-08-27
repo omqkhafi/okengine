@@ -6,7 +6,7 @@
  * registry is the checklist.
  *
  * Environment-model migrations (`local`/`docker` → `dev`, sqlite removal)
- * are documented only — see site docs `reference/migrating-environments`.
+ * are documented only in the site docs configuration reference.
  * No soft-compat rewriter for those.
  */
 

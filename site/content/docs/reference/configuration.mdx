@@ -28,8 +28,7 @@ export default defineConfig({
 | `prod` | Production deploy          | Shared durable backends                               |
 
 Missing `dev` pins fill from `prod` (`fillDevFromProd`). Only `dev` / `test` / `prod` keys are
-valid — see [Migrating environments](/docs/reference/migrating-environments) if you still have
-`local` / `docker` maps.
+valid — rename `local` → `dev` and `docker` → `prod` if you still have the old maps.
 
 ## Quick start
 
@@ -246,7 +245,7 @@ Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated t
 
 <Accordion title='oke.config: … uses removed driver "sqlite"'>
   The `sqlite` driver is gone. Pin `postgres` for `dev`/`prod` and `pglite` for `test`. Edit the
-  file by hand — see [Migrating environments](/docs/reference/migrating-environments).
+  file by hand — rename the env keys to `dev` / `test` / `prod` first.
 </Accordion>
 
 <Accordion title='drivers.store.sql.test must be "pglite"'>
@@ -268,7 +267,6 @@ Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated t
 
 ## Learn more
 
-- [Migrating environments](/docs/reference/migrating-environments) — four-key maps → `dev`/`test`/`prod`
 - [CLI Reference](/docs/reference/cli) — `oke dev` · `oke test` · `oke db`
 - [Environment Variables](/docs/reference/environment-variables) — URL and secret resolution
 - [Store](/docs/elements/store) — what the store drivers back

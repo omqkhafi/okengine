@@ -4,7 +4,6 @@
   "pages": [
     "index",
     "configuration",
-    "migrating-environments",
     "fx",
     "i18n",
     "client",

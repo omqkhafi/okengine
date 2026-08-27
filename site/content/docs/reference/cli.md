@@ -142,7 +142,7 @@ the hero (not once per process).
 that `@electric-sql/pglite` resolves, then forwards argv to `bun test`.
 
 `oke mode` and `oke dev --local` / `-l` are removed — they exit with an error.
-See [Migrating environments](/docs/reference/migrating-environments).
+Rename the env keys in `oke.config.ts` to `dev` / `test` / `prod`.
 
 ### create-oke
 
