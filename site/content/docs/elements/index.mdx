@@ -1,45 +1,76 @@
 ---
 title: "Elements"
-description: "The eight irreducible parts of an OKE backend — Flow through AI, one page each."
+description: "The eight closed semantic primitives of the OKEngine backend model."
 icon: "Boxes"
 source: "docs/spec/unified-theory.md"
 ---
 
-Every backend concern collapses to one of these eight. Pick the element you need.
+Forty backend concerns collapse into eight semantic primitives. An element earns its place only with **irreducible physics**.
 
-## Pages
+<Callout title="Closed primitive set">
+  There is no ninth element. New infrastructure creates a protocol driver or plugin, preserving a
+  small mental model.
+</Callout>
+
+```text
+Elements define the model.
+Plugins extend the model's capabilities.
+Drivers connect the model to infrastructure.
+Providers and Recipes choose where that infrastructure runs.
+```
+
+## The Eight Primitives
 
 <Cards>
-  <Card title="Flow" description="Behavior — on(Trigger) → Effects." href="/docs/elements/flow" />
+  <Card
+    title="Flow"
+    description="Behavior — on(Trigger) → Effects via fx."
+    href="/docs/elements/flow"
+  />
   <Card
     title="Signal"
-    description="Data in motion — queues, pub/sub, streams."
+    description="Data in motion — delivery physics as a property (once, broadcast, live)."
     href="/docs/elements/signal"
   />
   <Card
     title="Store"
-    description="Data at rest — sql, kv, files, index."
+    description="Data at rest — SQL, KV, files with image transforms, and search."
     href="/docs/elements/store"
   />
   <Card
     title="Clock"
-    description="Time — schedules, intervals, durable sleeps."
+    description="Time — schedules, intervals, durable sleeps, and time travel."
     href="/docs/elements/clock"
   />
   <Card
     title="Gate"
-    description="Permission to act — auth and rate limits."
+    description="Permission to act — auth, tenancy, ABAC, and rate limits at the trigger."
     href="/docs/elements/gate"
   />
   <Card
     title="Vault"
-    description="Protected knowledge — secrets and keys."
+    description="Protected knowledge — fail-loud secret contracts and redacted values."
     href="/docs/elements/vault"
   />
   <Card
     title="Channel"
-    description="Reaching humans — email, SMS, push."
+    description="Reaching humans — email, SMS, WhatsApp, and push with built-in consent."
     href="/docs/elements/channel"
   />
-  <Card title="AI" description="Reaching machine intelligence." href="/docs/elements/ai" />
+  <Card
+    title="AI"
+    description="Reaching machine intelligence — models, prompts, agents, and RAG."
+    href="/docs/elements/ai"
+  />
 </Cards>
+
+## See How They Compose
+
+The closed elements compose into full backend capabilities:
+
+| Composition Target | Formula                                         | How It Works                                              |
+| ------------------ | ----------------------------------------------- | --------------------------------------------------------- |
+| **Realtime**       | Store + Gate + Signal + Flow → Live Query       | CDC changes re-checked against Gate RLS, streamed as SSE  |
+| **Security**       | Gate + Store/RLS + Tenant + fx → Secure runtime | Tenant-isolated queries with least-privilege capability   |
+| **Agents**         | MCP + Gate + OAuth + Flow → Agent-ready backend | Declared Flows exposed on :6535 behind auth confirmation  |
+| **Operations**     | Manifest + Effects + Runs → Inspectable backend | Inferred effects feed Console (:6533) and wide-event logs |

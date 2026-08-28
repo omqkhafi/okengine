@@ -18,6 +18,27 @@ import type { Metadata } from "next";
 /** Product name shown in metadata, JSON-LD, and the llms.txt H1. */
 export const SITE_NAME = "okengine";
 
+/** Canonical positioning category. */
+export const SITE_CATEGORY = "A new programming model for backends.";
+
+/** Canonical compressed positioning tagline. */
+export const SITE_TAGLINE = "One law. Eight elements. One contract.";
+
+/** Canonical philosophy statement. */
+export const SITE_PHILOSOPHY =
+  "Keep the model small. Let the backend grow without growing the mental model.";
+
+/** Canonical inspectability thesis. */
+export const SITE_INSPECTABILITY = "Your backend is not just executable. It is inspectable.";
+
+/** Canonical vocabulary and taxonomy equation. */
+export const SITE_TAXONOMY_EQUATION =
+  "Elements define the model. Plugins extend the model's capabilities. Drivers connect the model to infrastructure. Providers and Recipes choose where that infrastructure runs.";
+
+/** Canonical Manifest distinction. */
+export const SITE_MANIFEST_DISTINCTION =
+  "The source of truth is the backend model expressed in code. The Manifest is the compiled, versioned contract representing that model. Operational surfaces are derived, not separately maintained.";
+
 /**
  * Site-wide description. Must stay identical to the layout `metadata.description`
  * that ships on every HTML page.

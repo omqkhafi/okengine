@@ -1,6 +1,6 @@
 {
   "name": "@omqkhafi/okengine",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "description": "One law. Eight elements. One contract. The backend model stays small; operational surfaces are derived from it instead of maintained separately.",
   "license": "MIT",
   "exports": {

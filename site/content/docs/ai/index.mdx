@@ -5,20 +5,39 @@ icon: "Bot"
 source: "docs/spec/unified-theory.md"
 ---
 
-Resources for AI agents that read or operate an OKE app — not the `ai` element itself. In OKE, **MCP is a surface of the model, not the model itself**. Gate governs agents calling in; the AI element governs apps calling out.
+Resources for AI agents that inspect, understand, or operate an OKEngine application.
 
-## Pages
+<Callout title="Two directions, one model">
+  **MCP is a surface of the model, not the model itself.** Gate governs agents calling in; the AI
+  element governs applications calling out to models.
+</Callout>
+
+```text
+External Agents → MCP (:6535) → Gate Check → Flow (inbound)
+Flow → fx.ask / fx.stream → AI Runtime → Models & External Tools (outbound)
+```
+
+## AI & Agent Surfaces
 
 <Cards>
-  <Card title="MCP" description="Runtime MCP on :6535; docs MCP on :6536." href="/docs/ai/mcp" />
   <Card
-    title="Skills"
-    description="AGENTS.md contract and installable skills."
+    title="MCP"
+    description="Runtime MCP on :6535 for running apps; Docs MCP on :6536 for handbook search."
+    href="/docs/ai/mcp"
+  />
+  <Card
+    title="Agent Skills"
+    description="AGENTS.md contract and autonomous maintenance skills."
     href="/docs/ai/skills"
   />
   <Card
     title="llms.txt"
-    description="Index, JSON catalogue, full dump, per-page markdown."
+    description="Standardized machine-readable feeds: /llms.txt, /llms.json, /llms-full.txt, and markdown twins."
     href="/docs/ai/llms-txt"
+  />
+  <Card
+    title="AI Element"
+    description="Calling out: models, prompts, agents, and RAG inside your application."
+    href="/docs/elements/ai"
   />
 </Cards>

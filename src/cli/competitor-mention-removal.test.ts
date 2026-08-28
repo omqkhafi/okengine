@@ -48,7 +48,7 @@ const OKID_PROMPT_ALLOW = [
   // Minified zod-core inside the vendored Console bundle registers string
   // format validators whose names collide with peer library names — vendor
   // identifiers, not authored comparisons. Hash changes on Console rebuilds.
-  "src/console/ui-next/dist/assets/index-DSEpMBPY.js:",
+  "src/console/ui-next/dist/",
 ];
 
 /**

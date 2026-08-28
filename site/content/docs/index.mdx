@@ -5,9 +5,9 @@ icon: "BookOpen"
 source: "docs/spec/unified-theory.md"
 ---
 
-Welcome to the okengine handbook. The backend model stays small; operational surfaces are derived from it instead of maintained separately.
+Welcome to the OKEngine handbook. Keep the model small; let the backend grow without growing the mental model.
 
-<Callout title="The one law">
+<Callout title="The Law">
   Every backend behavior is a Flow: `on(Trigger) → Effects`. One species; triggers are typed values.
 </Callout>
 
@@ -17,62 +17,83 @@ on(every("10m"), expireStale);
 on(orderPlaced, sendReceipt);
 ```
 
-## Understand OKE (Core Model)
+## 01 Understand (The Core Model)
+
+Master the mental model before exploring features:
 
 <Cards>
   <Card
     title="Why OKE"
-    description="From forty tools to one species — the problem, the law, and the Manifest contract."
+    description="The problem of seams across independent tools, the insight, and the smaller model."
     href="/docs/get-started/why"
   />
   <Card
-    title="Elements"
-    description="The eight closed core elements: Flow, Signal, Store, Clock, Gate, Vault, Channel, AI."
+    title="Introduction"
+    description="The Law, Flow anatomy, the fx rule, and the compiled Manifest contract."
+    href="/docs/get-started/introduction"
+  />
+  <Card
+    title="Eight Elements"
+    description="The closed primitive set: Flow, Signal, Store, Clock, Gate, Vault, Channel, AI."
     href="/docs/elements"
   />
   <Card
-    title="Introduction"
-    description="The one law, eight elements, and one contract."
-    href="/docs/get-started/introduction"
+    title="fx Surface"
+    description="The single door to the outside world — where effects become structurally observable."
+    href="/docs/reference/fx"
   />
 </Cards>
 
-## Build with OKE (Surfaces & Infrastructure)
+## 02 Build (Development)
+
+Build, test, and expose real applications:
 
 <Cards>
   <Card
     title="Get Started"
-    description="Installation, basic usage, project structure, and testing."
-    href="/docs/get-started"
+    description="Scaffold with create-oke, run the dev stack, and open the Console."
+    href="/docs/get-started/installation"
+  />
+  <Card
+    title="Basic Usage"
+    description="Write your first flow, call it with the typed client, and test with bun:test."
+    href="/docs/get-started/basic-usage"
+  />
+  <Card
+    title="Project Structure"
+    description="Folder layout, flow file routing conventions, and schema declarations."
+    href="/docs/get-started/project-structure"
+  />
+  <Card
+    title="AI & MCP Surface"
+    description="Runtime MCP (:6535), docs MCP (:6536), agent skills, and machine-readable docs."
+    href="/docs/ai"
+  />
+</Cards>
+
+## 03 Operate & 04 Extend
+
+Deploy to production and connect to infrastructure:
+
+<Cards>
+  <Card
+    title="Deployment"
+    description="Production runtime operations: Docker, Swarm, Kubernetes, and reverse proxy."
+    href="/docs/deployment"
   />
   <Card
     title="Plugins"
-    description="22 official extensions — authentication, OAuth, security, ops, performance."
+    description="Official extensions that add capabilities without creating a ninth element."
     href="/docs/plugins"
   />
   <Card
     title="Providers"
-    description="12 managed cloud infrastructure options behind protocol-named drivers."
+    description="Managed cloud infrastructure behind protocol-named drivers."
     href="/docs/providers"
   />
   <Card
     title="Recipes"
-    description="20 self-hosted infrastructure recipes via Docker compose."
+    description="Self-hosted Docker compose recipes for SQL, KV, search, and local AI."
     href="/docs/recipes"
-  />
-  <Card
-    title="Reference"
-    description="Configuration, fx ledger, environment variables, errors, client, and security."
-    href="/docs/reference"
-  />
-  <Card
-    title="AI Resources & MCP"
-    description="Runtime MCP (:6535), docs MCP (:6536), skills, and /llms.txt."
-    href="/docs/ai"
-  />
-  <Card
-    title="Deployment"
-    description="Docker, Swarm, Kubernetes, and reverse proxy deployment."
-    href="/docs/deployment"
   />
 </Cards>

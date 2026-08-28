@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.18.4 · measured 2026-08-28T16:03:48.857Z_
+_okengine v0.18.5 · measured 2026-08-28T16:47:17.834Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
@@ -13,8 +13,8 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 | Kernel (edge profile)           | 15.91 kB  | 16.00 kB  |
 | Client runtime                  | 3.94 kB   | 4.00 kB   |
 | Console initial load            | 348.13 kB | 700.00 kB |
-| Cold start on Bun               | 9.920 ms  | 75.000 ms |
-| p99 routing overhead            | 0.001 ms  | 1.000 ms  |
+| Cold start on Bun               | 18.295 ms | 75.000 ms |
+| p99 routing overhead            | 0.002 ms  | 1.000 ms  |
 | HTTP ping app (gzip, externals) | 49.63 kB  | 50.63 kB  |
 | HTTP ping app (raw, externals)  | 144.49 kB | 147.38 kB |
 

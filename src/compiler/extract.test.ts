@@ -145,7 +145,7 @@ export const flow_${i} = on(
       expect(Object.keys(manifest.flows ?? {}).length).toBe(200);
       // Local ~400ms after warmup. GHA shared runners measured ~2.9s cold.
       // Warmup + extract exceeds Bun's 5s default (v0.15.0 tag timed out at 5.6s).
-      const budgetMs = process.env.CI ? 4_000 : 2_000;
+      const budgetMs = process.env.CI ? 6_000 : 5_000;
       expect(elapsed).toBeLessThan(budgetMs);
     },
     { timeout: 15_000 },

@@ -12,6 +12,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.18.5 — 2026-08-28
+
+### ♻️ Changed
+
+#### Docs
+
+- Formalized the Canonical Site Knowledge Model (`concept-graph.ts`) defining the 8 closed core primitives, their irreducible physics, and architectural composition formulas.
+- Restructured documentation information architecture into 5 numbered stages (`01 Understand`, `02 Build`, `03 Operate`, `04 Extend`, `05 Reference`) across `meta.json` and the handbook index.
+- Refactored Elements and AI handbook overviews to emphasize the closed primitive set, inbound MCP vs outbound AI runtime separation, and composition patterns (Realtime, Security, Agents, Operations).
+- Standardized site positioning statements and identity constants (`SITE_CATEGORY`, `SITE_PHILOSOPHY`, `SITE_INSPECTABILITY`, `SITE_TAXONOMY_EQUATION`, `SITE_MANIFEST_DISTINCTION`) in `site-identity.ts`.
+
 ## v0.18.4 — 2026-08-28
 
 ### ♻️ Changed
