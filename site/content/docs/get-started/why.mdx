@@ -12,6 +12,11 @@ A booking API, a nightly cleanup job, a receipt email, a row-change hook — in 
 > **The one rule**
 > Every backend behavior is a **Flow**: `on(Trigger) → Effects`. There are no separate species called endpoints, handlers, consumers, jobs, or workflows.
 
+<Callout title="A note on the count">
+  'Forty' is a representative illustration of the number of backend concerns developers commonly
+  assemble across modern stacks, not a literal count of backend technologies.
+</Callout>
+
 ## The pain we solve
 
 Every TypeScript backend works on day one. The bill arrives later. None of these are router problems — they are **gaps** between what your code knows and what your tooling knows.
@@ -58,7 +63,7 @@ Every gap above is the same shape: knowledge the code already has, duplicated so
 
 ## One Manifest feeds every surface
 
-At build time OKE extracts a **Manifest** — a machine-readable description of your system from TypeScript source. You do not maintain a second source of truth; the Manifest is the _single artifact_ from which everything downstream is derived:
+At build time OKE extracts a **Manifest** — the compiled, versioned contract between your backend model and everything derived from it. The source of truth is your model expressed in code (`on(Trigger) → Flow → fx → Effects`); the Manifest freezes that model into a machine-readable, diffable contract. You do not write or hand-maintain the Manifest:
 
 | Surface                           | Port               | You maintain?                 |
 | --------------------------------- | ------------------ | ----------------------------- |
@@ -68,7 +73,7 @@ At build time OKE extracts a **Manifest** — a machine-readable description of 
 | Architecture diagram              | Console            | No — it _is_ the effect graph |
 | Capability matrix + cache keys    | compiler / runtime | No — inferred from `fx`       |
 
-Because every surface reads the same Manifest, they **cannot disagree** — there is only one source of truth.
+Because every surface reads the same Manifest contract, they **cannot disagree** — there is only one source of truth.
 
 ## The `fx` rule — one door to the world
 
@@ -109,16 +114,9 @@ Drivers are named after **protocols** (`postgres`, `redis`, `s3`) — never vend
 One pipeline. Only the trigger changes between an endpoint, a job, a consumer, and a row hook:
 
 ```ts
-import { on, flow, http } from "okengine";
-import { z } from "zod";
+import { on, flow, http } from "okengine/http";
 
-export const health = on(
-  http.get().public(),
-  flow({
-    out: z.object({ ok: z.literal(true) }),
-    do: () => ({ ok: true as const }),
-  }),
-);
+export const health = on(http.get().public(), flow({ do: () => ({ ok: true }) }));
 ```
 
 | Piece         | Role                                                           |
@@ -138,7 +136,7 @@ Consequence: **one documentation path, one trace shape, one Flow model, one thin
 
 ## Learn more
 
-- [Introduction](/docs/get-started/introduction) — the one law, eight elements, ten exports
+- [Introduction](/docs/get-started/introduction) — the one law, eight elements, one contract
 - [Flow](/docs/elements/flow) — how effects are recorded and inferred
 - [Vault](/docs/elements/vault) — fail-loud secret contracts
 - [Plugins](/docs/reference/plugins) — the official HTTP glue set
@@ -158,7 +156,7 @@ Consequence: **one documentation path, one trace shape, one Flow model, one thin
   />
   <Card
     title="Introduction"
-    description="The one law, eight elements, ten exports."
+    description="The one law, eight elements, one contract."
     href="/docs/get-started/introduction"
   />
 </Cards>

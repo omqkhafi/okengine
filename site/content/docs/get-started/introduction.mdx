@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Learn the one idea behind okengine — then the eight elements and ten exports you will use everywhere.
+description: Learn the one idea behind okengine — then the eight elements and core programming vocabulary you will use everywhere.
 source: docs/spec/unified-theory.md
 icon: BookOpen
 ---
@@ -19,16 +19,9 @@ A booking API, a nightly cleanup job, a receipt email, a row-change hook — in 
 Four contracts plus a `do`. This is the standard starter's health check:
 
 ```typescript
-import { on, flow, http } from "okengine";
-import { z } from "zod";
+import { on, flow, http } from "okengine/http";
 
-export const health = on(
-  http.get().public(),
-  flow({
-    out: z.object({ ok: z.literal(true) }),
-    do: () => ({ ok: true as const }),
-  }),
-);
+export const health = on(http.get().public(), flow({ do: () => ({ ok: true }) }));
 ```
 
 `main` omits the URL prefix, so this file is `GET /health` named `main.health`. See [Project structure](/docs/get-started/project-structure). Explicit `http.get("/health")` and `flow("main.health")` still win.
@@ -105,9 +98,9 @@ An element earns its place only if it has **irreducible physics**. New infrastru
 | **Channel** | Reaching humans               | email · SMS · WhatsApp · push                             |
 | **AI**      | Reaching machine intelligence | model calls · prompts · embeddings · agents · RAG         |
 
-## Ten Exports
+## Core Programming Vocabulary
 
-The entire public vocabulary fits in one import. Everything else in the docs is derived from these ten names:
+The core programming vocabulary fits in one import. Everything else in the docs is derived from these names:
 
 ```ts
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";

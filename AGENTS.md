@@ -1,5 +1,7 @@
 # OKE — Agent Contract
 
+One law. Eight elements. One contract. The backend model stays small; operational surfaces are derived from it instead of maintained separately.
+
 This file is loaded by every later session. It prevents drift. Product documentation lives in `site/content/docs/`. **If the documentation is silent, stop and ask.**
 
 ## The one law
@@ -27,13 +29,13 @@ There are no separate species called endpoints, handlers, consumers, jobs, subsc
 
 An element earns its place only if it has irreducible physics. New infrastructure becomes a new **driver** for an existing element — never a ninth element.
 
-## The ten exports
+## Core programming vocabulary
 
 ```typescript
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
-That is the entire public vocabulary. Everything else is derived.
+That is the core programming vocabulary. Everything else is derived.
 
 ## Governing rule
 
@@ -80,7 +82,7 @@ Published packages:
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./plugins`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
 - `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships Notes starters from `packages/create-oke/templates/{standard,advanced}`.
 
-Engine: Bun `>=1.3.14`.
+Engine: Bun `>=1.4.0`.
 
 ## Documentation authority
 

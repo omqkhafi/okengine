@@ -73,7 +73,7 @@ export const LLMS_EXTRA_LINKS: readonly {
   {
     title: "AGENTS.md",
     path: "/llms/agents",
-    note: "Agent contract — eight elements, ten exports, the fx rule.",
+    note: "Agent contract — one law, eight elements, one contract, the fx rule.",
     section: "For agents",
   },
   {

@@ -561,10 +561,7 @@ export const archive = on(
 <Tab value="(public)">
 
 ```typescript title="flows/main/(public)/health.ts"
-export const health = on(
-  http.get().public(),
-  flow({ out: z.object({ ok: z.literal(true) }), do: () => ({ ok: true as const }) }),
-);
+export const health = on(http.get().public(), flow({ do: () => ({ ok: true }) }));
 // still GET /health named main.health
 ```
 
@@ -635,13 +632,9 @@ Do not put `index.ts` next to `health.ts` — that mix is a generate error. Use 
 <Tab value="health.ts">
 
 ```typescript title="flows/main/health.ts"
-export const health = on(
-  http.get().public(),
-  flow({
-    out: z.object({ ok: z.literal(true) }),
-    do: () => ({ ok: true as const }),
-  }),
-);
+import { on, flow, http } from "okengine/http";
+
+export const health = on(http.get().public(), flow({ do: () => ({ ok: true }) }));
 // GET /health   name main.health
 ```
 

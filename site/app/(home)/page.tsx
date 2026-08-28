@@ -9,6 +9,7 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { Features } from "@/components/docs/features";
 import { AiOnboardButton } from "@/components/landing/ai-onboard-button";
+import { ArchitecturalProof } from "@/components/landing/architectural-proof";
 import { Band, BandHeading } from "@/components/landing/band";
 import { BudgetsGraph } from "@/components/landing/budgets-graph";
 import { CodePanel } from "@/components/landing/code-panel";
@@ -37,7 +38,7 @@ const START_HERE: ReadonlyArray<{
   {
     href: "/docs/get-started/introduction",
     title: "Introduction",
-    body: "One law, ten exports, eight elements.",
+    body: "One law, eight elements, one contract.",
   },
   {
     href: "/docs/get-started/installation",
@@ -71,60 +72,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      <Band label="readme" labelAs="h2">
-        <div className="flex flex-col gap-10 lg:gap-12">
-          <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
-            <Reveal>
-              <div className="flex h-full flex-col justify-center gap-4">
-                <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
-                  {POSITIONING}
-                </p>
-                <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
-                  All world access goes through <code className="text-fd-foreground">fx</code>. That
-                  one rule is why effects, cache keys, capability matrices, and traces are inferred
-                  instead of annotated by hand.
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay={0.08}>
-              <InstallTerminal />
-            </Reveal>
-          </div>
-          <Reveal delay={0.05} className="border-t border-fd-border pt-8 lg:pt-10">
-            <ProofStrip />
-          </Reveal>
-        </div>
-      </Band>
-
-      <Band label="stack" labelAs="h2">
-        <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
-          <div className="flex min-w-0 flex-col gap-3">
-            <h3 className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
-              Built with
-            </h3>
-            <Reveal>
-              <BuiltWithStrip />
-            </Reveal>
-          </div>
-          <div className="flex min-w-0 flex-col gap-3 border-t border-fd-border pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-            <h3 className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
-              Works with
-            </h3>
-            <Reveal delay={0.05}>
-              <WorksWithStrip />
-            </Reveal>
-          </div>
-        </div>
-      </Band>
-
+      {/* 1. The Problem */}
       <Band label="why">
         <div className="flex flex-col gap-6">
           <Reveal>
             <BandHeading title="A backend is not forty tools">
-              Router, queue, cron, websockets, cache, secrets, mailer, model calls — the §5 table
-              names forty such concerns, each arriving with its own config, client, and failure
-              mode, and you own every seam between them. The eight elements exist to collapse that
-              graph.
+              Router, queue, cron, websockets, cache, secrets, mailer, model calls — modern backends
+              became a pile of disconnected systems, each with its own config, client, and failure
+              mode. The eight elements exist to collapse that graph.
             </BandHeading>
           </Reveal>
           <Reveal delay={0.05}>
@@ -133,6 +88,7 @@ export default function HomePage() {
         </div>
       </Band>
 
+      {/* 2. The Law */}
       <Band label="the law">
         <div className="flex flex-col gap-8 lg:gap-10">
           <Reveal>
@@ -162,6 +118,7 @@ export default function HomePage() {
         </div>
       </Band>
 
+      {/* 3. The Eight Elements */}
       <Band label="elements">
         <div className="flex flex-col gap-6">
           <Reveal>
@@ -176,12 +133,94 @@ export default function HomePage() {
         </div>
       </Band>
 
+      {/* 4. The Mechanism (fx) */}
+      <Band label="readme" labelAs="h2">
+        <div className="flex flex-col gap-10 lg:gap-12">
+          <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
+            <Reveal>
+              <div className="flex h-full flex-col justify-center gap-4">
+                <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
+                  {POSITIONING}
+                </p>
+                <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
+                  All world access goes through <code className="text-fd-foreground">fx</code>. That
+                  one rule is why effects, cache keys, capability matrices, and traces are inferred
+                  instead of annotated by hand.
+                </p>
+              </div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <InstallTerminal />
+            </Reveal>
+          </div>
+        </div>
+      </Band>
+
+      {/* 5. The Manifest Contract */}
+      <Band label="manifest">
+        <div className="flex flex-col gap-6">
+          <Reveal>
+            <BandHeading title="One contract, many surfaces">
+              Code dies and frameworks die, but data formats survive. The Manifest is the compiled,
+              versioned contract describing the backend model — and every surface downstream is
+              derived from it with blast-radius diff classification.
+            </BandHeading>
+          </Reveal>
+          <Reveal delay={0.05}>
+            <ManifestPipeline />
+          </Reveal>
+        </div>
+      </Band>
+
+      {/* 6. Architectural Proof (Leading Proof) */}
+      <Band label="proof">
+        <div className="flex flex-col gap-6">
+          <Reveal>
+            <BandHeading title="Composing the model, not adding features">
+              Realtime, security, agents, and observability did not require new subsystems or
+              physics. Each emerges naturally by composing the eight elements and the Manifest.
+            </BandHeading>
+          </Reveal>
+          <Reveal delay={0.05}>
+            <ArchitecturalProof />
+          </Reveal>
+        </div>
+      </Band>
+
+      {/* 7. Ecosystem Proof & Stack (Secondary Proof) */}
+      <Band label="stack" labelAs="h2">
+        <div className="flex flex-col gap-10">
+          <Reveal>
+            <ProofStrip />
+          </Reveal>
+          <div className="grid gap-8 border-t border-fd-border pt-8 lg:grid-cols-2 lg:gap-10">
+            <div className="flex min-w-0 flex-col gap-3">
+              <h3 className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+                Built with
+              </h3>
+              <Reveal>
+                <BuiltWithStrip />
+              </Reveal>
+            </div>
+            <div className="flex min-w-0 flex-col gap-3 border-t border-fd-border pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+              <h3 className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+                Works with
+              </h3>
+              <Reveal delay={0.05}>
+                <WorksWithStrip />
+              </Reveal>
+            </div>
+          </div>
+        </div>
+      </Band>
+
+      {/* 8. Core Vocabulary */}
       <Band label="vocabulary">
         <div className="flex flex-col gap-6">
           <Reveal>
-            <BandHeading title="Ten exports, one import">
-              The entire public vocabulary fits on one line. Everything else in the docs is derived
-              from these ten names.
+            <BandHeading title="The core programming vocabulary">
+              The core programming vocabulary fits on one line. Everything else in the docs is
+              derived from these ten names.
             </BandHeading>
           </Reveal>
           <Reveal delay={0.05}>
@@ -196,6 +235,7 @@ export default function HomePage() {
         </div>
       </Band>
 
+      {/* 9. Budgets */}
       <Band label="budgets">
         <div className="flex flex-col gap-6">
           <Reveal>
@@ -213,21 +253,7 @@ export default function HomePage() {
         </div>
       </Band>
 
-      <Band label="manifest">
-        <div className="flex flex-col gap-6">
-          <Reveal>
-            <BandHeading title="One artifact, many surfaces">
-              Code dies and frameworks die, but data formats survive. So the real product is the
-              Manifest: a runtime-neutral description of your system, extracted from your TypeScript
-              at build time — and everything downstream is derived from it.
-            </BandHeading>
-          </Reveal>
-          <Reveal delay={0.05}>
-            <ManifestPipeline />
-          </Reveal>
-        </div>
-      </Band>
-
+      {/* 10. Surfaces */}
       <Band label="console">
         <div className="flex flex-col gap-6">
           <Reveal>
@@ -246,6 +272,7 @@ export default function HomePage() {
         </div>
       </Band>
 
+      {/* 11. Start Here */}
       <Band label="start here">
         <div className="flex flex-col gap-8">
           <Reveal>
@@ -278,6 +305,7 @@ export default function HomePage() {
         </div>
       </Band>
 
+      {/* 12. Ship */}
       <Band label="ship">
         <Reveal>
           <div className="relative overflow-hidden rounded-xl border border-fd-border px-6 py-12 sm:px-10 sm:py-16">
@@ -297,7 +325,7 @@ export default function HomePage() {
                 Scaffold, run, open the Console
               </h2>
               <p className="max-w-xl text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
-                One law, eight elements, ten exports. The Manifest, typed client, and MCP surface
+                One law, eight elements, one contract. The Manifest, typed client, and MCP surface
                 come with the starter — nothing to wire by hand.
               </p>
               <div className="flex flex-wrap items-center gap-3 pt-1">

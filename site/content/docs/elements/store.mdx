@@ -129,6 +129,8 @@ A request that filters on a forbidden column — `?secret=eq.x` — fails with *
 
 ### Live queries — `live: true` and `.live(table)`
 
+> **Realtime did not introduce a new subsystem. It composed existing Store, Signal, Gate/RLS, Flow, and Manifest semantics.**
+
 Pass `live: true` to also mount `GET <path>/live` — an SSE feed of per-subscriber classified events (`upsert` / `revoked` / `delete`), gated the same way as the CRUD verbs:
 
 ```typescript

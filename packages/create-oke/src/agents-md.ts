@@ -47,13 +47,13 @@ An element earns its place only if it has irreducible physics. New
 infrastructure becomes a new **driver** for an existing element — never a
 ninth element.
 
-## The ten exports
+## Core programming vocabulary
 
 \`\`\`typescript
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 \`\`\`
 
-That is the entire public vocabulary. Everything else is derived.
+That is the core programming vocabulary. Everything else is derived.
 
 ## The fx rule
 

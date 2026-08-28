@@ -5,7 +5,16 @@ icon: "Plug"
 source: "docs/spec/unified-theory.md"
 ---
 
-Two directions, same protocol. **Serve:** OKE exposes your running app on port **6535** so an agent can read the Manifest and take confirmed actions. **Consume:** your Flows call _external_ MCP servers as tools — declared on `ai.mcpServer`, dispatched through `fx.call`.
+## Two directions, same execution model
+
+> **MCP is a surface of the model, not the model itself.**
+
+Two genuinely distinct things share the protocol in OKE:
+
+1. **Gate Element (MCP Provider role):** Your app exposes Flows as MCP tools on port **6535** (or via `mcp.tool()` + OAuth 2.1 Authorization Server) so external AI agents (Claude, ChatGPT) can read the Manifest and call declared Flows.
+2. **AI Element (MCP Client role):** Your app consumes _external_ MCP tool servers via `ai.mcpServer(...)`, routing tool calls through `fx.call` inside prompts and agents.
+
+OKE does not create separate security models for users, operators, and agents. They enter the same execution model through different triggers and planes.
 
 The server on **6535** speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead.
 

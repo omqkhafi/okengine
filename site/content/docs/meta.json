@@ -3,13 +3,16 @@
   "icon": "BookOpen",
   "pages": [
     "index",
-    "get-started",
+    "---Understand OKE---",
     "elements",
-    "plugins",
+    "---Build with OKE---",
+    "get-started",
+    "ai",
     "deployment",
-    "recipes",
-    "providers",
     "reference",
-    "ai"
+    "plugins",
+    "---Drivers---",
+    "providers",
+    "recipes"
   ]
 }

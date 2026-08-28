@@ -2,11 +2,11 @@
   <picture>
     <source
       media="(prefers-color-scheme: dark)"
-      srcset="https://shieldcn.dev/header/grid.svg?title=okengine&subtitle=One+law.+Eight+elements.+Ten+exports.&logo=https://raw.githubusercontent.com/omqkhafi/okengine/main/site/public/logo/OKE-W.svg&theme=zinc&size=banner&mode=dark&font=geist&align=left"
+      srcset="https://shieldcn.dev/header/grid.svg?title=okengine&subtitle=One+law.+Eight+elements.+One+contract.&logo=https://raw.githubusercontent.com/omqkhafi/okengine/main/site/public/logo/OKE-W.svg&theme=zinc&size=banner&mode=dark&font=geist&align=left"
     />
     <img
-      alt="okengine — One law. Eight elements. Ten exports."
-      src="https://shieldcn.dev/header/grid.svg?title=okengine&subtitle=One+law.+Eight+elements.+Ten+exports.&logo=https://raw.githubusercontent.com/omqkhafi/okengine/main/site/public/logo/OKE-B.svg&theme=zinc&size=banner&mode=light&font=geist&align=left"
+      alt="okengine — One law. Eight elements. One contract."
+      src="https://shieldcn.dev/header/grid.svg?title=okengine&subtitle=One+law.+Eight+elements.+One+contract.&logo=https://raw.githubusercontent.com/omqkhafi/okengine/main/site/public/logo/OKE-B.svg&theme=zinc&size=banner&mode=light&font=geist&align=left"
       width="750"
     />
   </picture>
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <em>Stop gluing APIs, jobs, and queues into one backend. One law collapses them — client, Console, and infra come free. Yours to host.</em>
+  <em>Modern backends became a pile of disconnected systems. One law collapses them — client, Console, and infra derived from one contract. Yours to host.</em>
 </p>
 
 <p align="center">
@@ -104,7 +104,7 @@ Every backend behavior is a Flow: `on(Trigger) → Effects`. Endpoints, jobs, co
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
-That is the entire public vocabulary. World access goes through `fx` — effects are inferred, so the Manifest can derive the typed client, Console, and MCP without a second source of truth.
+That is the core programming vocabulary. World access goes through `fx` — effects are inferred, so the Manifest can derive the typed client, Console, and MCP without a second source of truth.
 
 | Element     | Essence                       |
 | ----------- | ----------------------------- |

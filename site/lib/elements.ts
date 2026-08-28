@@ -121,11 +121,11 @@ export const ELEMENTS: ReadonlyArray<{
  * (not a new claim).
  */
 export const TAGLINE =
-  "Stop gluing APIs, jobs, and queues into one backend. One law collapses them — client, Console, and infra come free. Yours to host.";
+  "Modern backends became a pile of disconnected systems. One law collapses them — client, Console, and infra derived from one contract. Yours to host.";
 
 /** Full positioning sentence from unified-theory §3 (docs that need the long form). */
 export const POSITIONING =
-  "OKE is the batteries-included TypeScript backend for the Bun era: contract-first APIs with end-to-end type safety, declarative infrastructure primitives, an OpenTelemetry-native Console, secure-by-default auth and ABAC — pure TypeScript, Web-Standards portable, MIT-licensed, self-hostable with zero cloud lock-in.";
+  "OKE is a backend programming model where behavior is expressed as Flows, effects are captured through fx, and the compiler turns that model into a versioned Manifest that powers the rest of the backend — pure TypeScript, Web-Standards portable, MIT-licensed, self-hostable with zero cloud lock-in.";
 
 /** Published `okengine` version (injected from the monorepo root package.json). */
 export const OKE_VERSION = process.env.NEXT_PUBLIC_OKE_VERSION ?? "0.0.0";
@@ -144,7 +144,7 @@ export const REAL_TODAY: ReadonlyArray<{
 ];
 
 /**
- * The ten exports — the entire public vocabulary (unified-theory §6).
+ * The core programming vocabulary (unified-theory §6).
  * Order matches the canonical import statement.
  */
 export const EXPORTS: ReadonlyArray<{

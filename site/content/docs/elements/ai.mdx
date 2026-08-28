@@ -129,7 +129,7 @@ const result = await fx.ask(triage, input, {
 });
 ```
 
-External MCP tools take the same path. Declare a server with a **required** allowlist, then pass `server.tool("…")` — never whatever `tools/list` happens to expose:
+External MCP tools take the same path. In OKE, **MCP is a surface of the model, not the model itself** — `ai.mcpServer` models the client role (consuming external tools), while `mcp.tool()` + Gate models the provider role (exposing your flows to agents). Declare a server with a **required** allowlist, then pass `server.tool("…")` — never whatever `tools/list` happens to expose:
 
 ```typescript
 export const github = ai.mcpServer("github", {

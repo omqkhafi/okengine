@@ -23,7 +23,7 @@ export const SITE_NAME = "okengine";
  * that ships on every HTML page.
  */
 export const SITE_DESCRIPTION =
-  "One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era.";
+  "A new programming model for backends. One law. Eight elements. One contract. Pure TypeScript, self-hostable with zero cloud lock-in.";
 
 /** Canonical public origin (no trailing slash). */
 export const SITE_URL = DOCS_ORIGIN;

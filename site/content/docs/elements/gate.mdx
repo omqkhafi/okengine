@@ -9,6 +9,8 @@ Gate answers **"may this happen?"** before it happens: is this a verified member
 burned its minute quota? Attach gates to the HTTP trigger — the pipeline checks them before a
 store write, emit, or channel send runs.
 
+> **Same Semantics Across Planes:** OKE does not create separate security models for users, operators, and agents. They enter the same execution model through different triggers and planes: users via sessions, operators via Console policies, and agents via `mcp.tool()` + OAuth 2.1 AS.
+
 <Callout title="The one rule">
   Every HTTP trigger declares posture: attach a real gate, or attach `.public()`. Omitting both
   fails boot. Denial is a typed error value — never a thrown exception mid-`do`.
@@ -63,8 +65,7 @@ import { member, canBook, fair } from "../../gates";
 export const health = on(
   http.get("/health").public(),
   flow("health.check", {
-    out: HealthOut,
-    do: () => ({ ok: true as const }),
+    do: () => ({ ok: true }),
   }),
 );
 

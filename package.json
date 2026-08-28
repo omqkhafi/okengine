@@ -1,7 +1,7 @@
 {
   "name": "okengine",
-  "version": "0.18.3",
-  "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
+  "version": "0.18.4",
+  "description": "One law. Eight elements. One contract. The backend model stays small; operational surfaces are derived from it instead of maintained separately.",
   "license": "MIT",
   "repository": {
     "type": "git",

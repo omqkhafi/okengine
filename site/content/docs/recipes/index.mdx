@@ -8,6 +8,8 @@ source: "docs/spec/unified-theory.md"
 Every recipe below is already wired into `oke docker` — pin an image in `oke.config.ts`
 and get env, healthcheck, and a connection URL for free.
 
+These recipes are real, working infrastructure choices behind the same two templates (`standard`, `advanced`) and the same eight elements — not alternative products or separate frameworks.
+
 <Callout title="The one rule">
   Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol ids
   (`postgres`, `redis`, `s3`, `smtp`, `meilisearch`, `openai-compatible`, `ollama`, …).

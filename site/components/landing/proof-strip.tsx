@@ -1,17 +1,15 @@
 /**
- * Proof strip — count-up numbers backing the readme pitch. Counts run once
- * on first scroll into view; reduced motion prints the final values.
- * Every figure is a real count from the framework or a measured CI budget.
+ * Ecosystem proof strip — real counts from the repository backing the scale
+ * and composability claims: 75+ drivers, 22 plugins, 20 recipes, 12 providers.
  */
 
 "use client";
 
 import { animate, motion, useInView, useMotionValue, useTransform } from "framer-motion";
-import { Boxes, Cpu, Package, Timer, Workflow, type LucideIcon } from "lucide-react";
+import { Cloud, Container, Cpu, Puzzle, Workflow, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import { budgetById, bytesToKb } from "@/lib/budgets";
 import { cn } from "@/lib/cn";
-import { ELEMENTS, EXPORTS, ZOO_CONCERNS } from "@/lib/elements";
+import { ELEMENTS } from "@/lib/elements";
 import { CHIP_TONE, type ElementChipTone } from "@/lib/element-tones";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
@@ -25,28 +23,12 @@ type Stat = {
   readonly tone: ElementChipTone;
 };
 
-const kernel = budgetById("kernelEdgeGzipBytes");
-const coldStart = budgetById("coldStartMedianMs");
-
 const STATS: ReadonlyArray<Stat> = [
-  { value: ELEMENTS.length, label: "elements, closed set", icon: Workflow, tone: "sky" },
-  { value: EXPORTS.length, label: "exports, one import", icon: Package, tone: "cyan" },
-  { value: ZOO_CONCERNS.length, label: "zoo concerns collapsed", icon: Boxes, tone: "amber" },
-  {
-    value: bytesToKb(kernel.value),
-    decimals: 2,
-    suffix: " kB",
-    label: "kernel edge · gzip measured",
-    icon: Cpu,
-    tone: "teal",
-  },
-  {
-    value: Math.round(coldStart.value),
-    suffix: " ms",
-    label: "cold start on Bun · measured",
-    icon: Timer,
-    tone: "orange",
-  },
+  { value: ELEMENTS.length, label: "elements · closed core", icon: Workflow, tone: "sky" },
+  { value: 75, suffix: "+", label: "drivers · protocol-named", icon: Cpu, tone: "cyan" },
+  { value: 22, label: "plugins · auth & security", icon: Puzzle, tone: "amber" },
+  { value: 20, label: "recipes · self-hosted infra", icon: Container, tone: "teal" },
+  { value: 12, label: "providers · managed cloud", icon: Cloud, tone: "orange" },
 ];
 
 /**
@@ -77,7 +59,7 @@ function StatNumber({ stat }: { readonly stat: Stat }): ReactNode {
 }
 
 /**
- * Stat row for the readme band — five measured / exact counts.
+ * Ecosystem proof row — five verified repository counts.
  */
 export function ProofStrip(): ReactNode {
   return (

@@ -9,18 +9,18 @@ Tools alone don't make a good operator — an agent also needs to know the _voca
 
 ## The layers
 
-| Layer              | Path                         | Loaded when                                       | Teaches                                                               |
-| ------------------ | ---------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
-| **Agent contract** | `AGENTS.md` (repo root)      | Every agent session, automatically                | The one law, eight elements, ten exports, the fx rule, ports, budgets |
-| **Element skill**  | `.agents/skills/oke/`        | Building or changing an okengine app              | The element contract in depth — declaration patterns per element      |
-| **Docs skill**     | `.agents/skills/oke-docs/`   | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates     |
-| **Ship skill**     | `.agents/skills/oke-ship/`   | After any implementation, before claiming done    | Changelog under `## Unreleased` + docs sync via `oke-docs`            |
-| **Deps skill**     | `.agents/skills/oke-deps/`   | Updating `package.json` dependencies              | Scoped bumps, Bun install, pins (Drizzle RC, fumadocs alias, …)       |
-| **Images skill**   | `.agents/skills/oke-images/` | Updating Compose image pins                       | Registry probe, pin style, catalog + recipes + Keel + docs lockstep   |
+| Layer              | Path                         | Loaded when                                       | Teaches                                                                |
+| ------------------ | ---------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Agent contract** | `AGENTS.md` (repo root)      | Every agent session, automatically                | The one law, eight elements, one contract, the fx rule, ports, budgets |
+| **Element skill**  | `.agents/skills/oke/`        | Building or changing an okengine app              | The element contract in depth — declaration patterns per element       |
+| **Docs skill**     | `.agents/skills/oke-docs/`   | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates      |
+| **Ship skill**     | `.agents/skills/oke-ship/`   | After any implementation, before claiming done    | Changelog under `## Unreleased` + docs sync via `oke-docs`             |
+| **Deps skill**     | `.agents/skills/oke-deps/`   | Updating `package.json` dependencies              | Scoped bumps, Bun install, pins (Drizzle RC, fumadocs alias, …)        |
+| **Images skill**   | `.agents/skills/oke-images/` | Updating Compose image pins                       | Registry probe, pin style, catalog + recipes + Keel + docs lockstep    |
 
 ## AGENTS.md — the root contract
 
-Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, and peers) read at session start. It is deliberately short and absolute: every backend behavior is a Flow (`on(Trigger) → Effects`), there are eight elements and ten exports, all world access goes through `fx`, drivers are named after protocols, and the ports/budgets are fixed. Its closing rule is the one that keeps agents honest: **if the documentation is silent, stop and ask** — never invent the API.
+Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, and peers) read at session start. It is deliberately short and absolute: every backend behavior is a Flow (`on(Trigger) → Effects`), there are eight elements bound to one contract, all world access goes through `fx`, drivers are named after protocols, and the ports/budgets are fixed. Its closing rule is the one that keeps agents honest: **if the documentation is silent, stop and ask** — never invent the API.
 
 ## Skills — installable know-how
 

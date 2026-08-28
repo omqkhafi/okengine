@@ -100,15 +100,22 @@ function TreeLink({
       data-active={active || undefined}
       onClick={onNavigate}
       className={cn(
-        "relative flex w-full items-center gap-2.5 py-1 pr-4 text-[14px] transition-colors duration-150",
-        depth === 0 ? "pl-4" : "pl-10 text-[13px]",
+        "group relative flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors duration-150",
+        depth === 1 && "pl-5 text-[12.5px]",
         active
-          ? "bg-fd-foreground/6 text-fd-foreground"
-          : "text-fd-muted-foreground hover:bg-fd-foreground/3 hover:text-fd-foreground/90",
+          ? "bg-fd-foreground/8 font-medium text-fd-foreground"
+          : "text-fd-muted-foreground hover:bg-fd-foreground/4 hover:text-fd-foreground",
       )}
     >
       {icon ? (
-        <span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+        <span
+          className={cn(
+            "flex size-4 shrink-0 items-center justify-center transition-opacity [&>svg]:size-[14px]",
+            active
+              ? "text-fd-foreground opacity-100"
+              : "text-fd-muted-foreground/70 group-hover:opacity-100",
+          )}
+        >
           {icon}
         </span>
       ) : null}
@@ -119,13 +126,13 @@ function TreeLink({
 
 /** Named separator inside the tree — a small label with a hairline rail. */
 function TreeSeparator({ name }: { name?: ReactNode }) {
-  if (!name) return <div className="mx-4 my-2 h-px bg-fd-border" />;
+  if (!name) return <div className="mx-2 my-2.5 h-px bg-fd-foreground/5" />;
   return (
-    <div className="mx-4 my-2 flex flex-row items-center gap-2">
-      <p className="font-mono text-[10px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+    <div className="mx-2 mt-4 mb-1.5 flex flex-row items-center gap-2 first:mt-1">
+      <p className="font-mono text-[10px] font-medium tracking-[0.16em] text-fd-muted-foreground/75 uppercase select-none">
         {name}
       </p>
-      <div className="h-px grow bg-fd-border" />
+      <div className="h-px grow bg-fd-foreground/8" />
     </div>
   );
 }
@@ -157,7 +164,7 @@ function GroupBody({
   onNavigate?: () => void;
 }) {
   return (
-    <div className="py-1 text-sm">
+    <div className="relative ml-3.5 my-0.5 flex flex-col gap-0.5 border-l border-fd-foreground/8 pl-2 py-0.5">
       {node.children.map((child, index) => {
         if (child.type === "separator") {
           return <TreeSeparator key={`sep-${index}`} name={child.name} />;
@@ -179,7 +186,7 @@ function GroupBody({
         }
         // Nested folder: flatten one level rather than nest a second accordion.
         return (
-          <div key={`nested-${index}`}>
+          <div key={`nested-${index}`} className="flex flex-col gap-0.5">
             <TreeSeparator name={child.name} />
             {child.children.map((leaf) =>
               leaf.type === "page" ? (
@@ -239,7 +246,7 @@ export function DocsTreeNav({
     override?.pathname === pathname ? override.key : defaultOpenKey(folders, pathname);
 
   return (
-    <>
+    <div className="flex flex-col gap-0.5">
       {tree.children.map((node, index) => {
         if (node.type === "separator") {
           return <TreeSeparator key={`root-sep-${index}`} name={node.name} />;
@@ -266,28 +273,35 @@ export function DocsTreeNav({
         const key = folderKey(node, index);
         const open = openKey === key;
         return (
-          <div key={key}>
+          <div key={key} className="flex flex-col">
             <button
               type="button"
               aria-expanded={open}
               onClick={() => setOverride({ pathname, key: open ? null : key })}
               className={cn(
-                "flex w-full items-center gap-2 border-b border-fd-foreground/6 px-4 py-2.5 text-left text-sm font-medium transition-colors",
+                "group flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors",
                 open
-                  ? "bg-fd-foreground/3 text-fd-foreground"
-                  : "text-fd-muted-foreground hover:bg-fd-foreground/3 hover:text-fd-foreground",
+                  ? "text-fd-foreground font-semibold"
+                  : "text-fd-muted-foreground hover:bg-fd-foreground/4 hover:text-fd-foreground",
               )}
             >
               {node.icon ? (
-                <span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[16px]">
+                <span
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center transition-opacity [&>svg]:size-[15px]",
+                    open
+                      ? "text-fd-foreground opacity-100"
+                      : "text-fd-muted-foreground/75 group-hover:opacity-100",
+                  )}
+                >
                   {node.icon}
                 </span>
               ) : null}
               <span className="grow truncate">{node.name}</span>
               <ChevronDown
                 className={cn(
-                  "size-4 shrink-0 text-fd-muted-foreground transition-transform duration-200",
-                  open && "rotate-180",
+                  "size-3.5 shrink-0 text-fd-muted-foreground/60 transition-transform duration-200 group-hover:text-fd-foreground/80",
+                  open && "rotate-180 text-fd-foreground/80",
                 )}
                 aria-hidden
               />
@@ -296,7 +310,7 @@ export function DocsTreeNav({
           </div>
         );
       })}
-    </>
+    </div>
   );
 }
 
@@ -305,13 +319,13 @@ function VersionRow() {
   return (
     <Link
       href="/changelog"
-      className="group/version flex w-full items-center gap-2 border-b border-fd-foreground/5 px-4 py-[9px] text-sm text-fd-muted-foreground transition-colors hover:bg-fd-foreground/3 hover:text-fd-foreground/80"
+      className="group/version flex w-full items-center gap-2 border-b border-fd-foreground/5 px-3.5 py-2 text-xs text-fd-muted-foreground transition-colors hover:bg-fd-foreground/3 hover:text-fd-foreground/80"
     >
       <GitBranch
-        className="size-4 shrink-0 opacity-55 transition-opacity group-hover/version:opacity-80"
+        className="size-3.5 shrink-0 opacity-55 transition-opacity group-hover/version:opacity-80"
         aria-hidden
       />
-      <span className="truncate">v{OKE_VERSION}</span>
+      <span className="font-mono text-xs">v{OKE_VERSION}</span>
       <span className="border border-dashed border-fd-foreground/20 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.16em] text-fd-muted-foreground uppercase">
         latest
       </span>
@@ -326,14 +340,14 @@ function SearchRow() {
     <button
       type="button"
       onClick={() => setOpenSearch(true)}
-      className="group/search flex w-full items-center gap-2 border-b border-fd-foreground/5 px-4 py-[9px] text-sm text-fd-muted-foreground transition-colors hover:bg-fd-foreground/3 hover:text-fd-foreground/80"
+      className="group/search flex w-full items-center gap-2 border-b border-fd-foreground/5 px-3.5 py-2 text-xs text-fd-muted-foreground transition-colors hover:bg-fd-foreground/3 hover:text-fd-foreground/80"
     >
       <Search
-        className="size-4 shrink-0 opacity-55 transition-opacity group-hover/search:opacity-80"
+        className="size-3.5 shrink-0 opacity-55 transition-opacity group-hover/search:opacity-80"
         aria-hidden
       />
-      <span className="truncate">Search</span>
-      <kbd className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md border border-fd-foreground/10 px-1.5 py-0.5 font-mono text-[10px] text-fd-muted-foreground">
+      <span className="truncate text-xs">Search</span>
+      <kbd className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded border border-fd-foreground/10 px-1.5 py-0.5 font-mono text-[10px] text-fd-muted-foreground">
         <span className="text-[11px]">&#8984;</span>K
       </kbd>
     </button>
@@ -350,13 +364,7 @@ export function DocsSidebar({ tree }: { tree: PageTree.Root }) {
     <aside className="fixed top-(--landing-topbar-height) bottom-0 left-0 z-30 hidden w-(--landing-left-pane-width) flex-col border-r border-fd-foreground/5 bg-fd-background lg:flex">
       <VersionRow />
       <SearchRow />
-      <nav
-        className="oke-sidebar-scroll flex-1 overflow-x-hidden overflow-y-auto pb-3"
-        style={{
-          maskImage:
-            "linear-gradient(to bottom, transparent, white 1rem, white calc(100% - 2rem), transparent 100%)",
-        }}
-      >
+      <nav className="oke-sidebar-scroll flex-1 overflow-x-hidden overflow-y-auto px-2.5 py-2">
         <DocsTreeNav tree={tree} />
       </nav>
       <div className="flex items-center gap-1 border-t border-fd-foreground/5 p-2 text-fd-muted-foreground">
@@ -365,7 +373,7 @@ export function DocsSidebar({ tree }: { tree: PageTree.Root }) {
           target="_blank"
           rel="noreferrer noopener"
           aria-label="GitHub repository"
-          className="inline-flex size-8 items-center justify-center transition-colors hover:bg-fd-foreground/5 hover:text-fd-foreground"
+          className="inline-flex size-8 items-center justify-center rounded-md transition-colors hover:bg-fd-foreground/5 hover:text-fd-foreground"
         >
           <GithubMark className="size-4" />
         </a>

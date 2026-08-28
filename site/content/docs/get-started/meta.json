@@ -3,8 +3,8 @@
   "icon": "Rocket",
   "pages": [
     "index",
-    "introduction",
     "why",
+    "introduction",
     "installation",
     "basic-usage",
     "testing",

@@ -1,5 +1,5 @@
 /**
- * `okengine` public entry — ten exports + HTTP runtime essentials.
+ * `okengine` public entry — core programming vocabulary + HTTP runtime essentials.
  *
  * Heavy surfaces live on subpaths: `okengine/full`, `okengine/runs`,
  * `okengine/i18n`, `okengine/compiler`, `okengine/journal`, `okengine/http`.

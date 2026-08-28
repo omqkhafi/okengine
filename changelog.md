@@ -12,6 +12,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.18.4 — 2026-08-28
+
+### ♻️ Changed
+
+#### Docs
+
+- Reorganized documentation information architecture into Layer 1 (Understand OKE) and Layer 2 (Build with OKE) per the positioning map.
+- Updated landing page hero and narrative arc to the 10-step argument with dedicated architectural proof stories (Realtime, Security, Agents, Observability).
+- Refined positioning vocabulary across package metadata, introduction, and why thesis: retired "10 exports" / "entire public vocabulary" in favor of "core programming vocabulary", and clarified MCP client vs Gate provider roles.
+
 ## v0.18.3 — 2026-08-28
 
 ### 🐛 Fixed

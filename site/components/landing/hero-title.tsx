@@ -28,7 +28,7 @@ const HERO_PILL_ICON: Record<(typeof REAL_TODAY)[number]["id"], ReactNode> = {
 };
 
 /** Beat ids — each number in the headline is a real count from the framework. */
-type BeatId = "law" | "elements";
+type BeatId = "law" | "elements" | "contract";
 
 /** One species, four names — from introduction / unified-theory §4. */
 const TRIGGERS: ReadonlyArray<{ readonly code: string; readonly zoo: string }> = [
@@ -44,6 +44,7 @@ const BEATS: ReadonlyArray<{
 }> = [
   { id: "law", label: "One law." },
   { id: "elements", label: "Eight elements." },
+  { id: "contract", label: "One contract." },
 ];
 
 /** Same spring as the sticky topbar so hero motion feels like one system. */
@@ -179,10 +180,15 @@ export function HeroTitle() {
           variants={beatsGroup}
           data-hero-interactive
         >
-          <span className="sr-only">One law. Eight elements.</span>
+          <span className="sr-only">
+            A new programming model for backends. One law. Eight elements. One contract.
+          </span>
+          <span className="block font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase pb-2">
+            A new programming model for backends
+          </span>
           <span
             role="tablist"
-            aria-label="Explore the two counts"
+            aria-label="Explore the three pillars"
             className="flex flex-col items-start"
           >
             {BEATS.map((beat) => {
@@ -316,6 +322,20 @@ function BeatPanel({ id }: { readonly id: BeatId }) {
             </li>
           ))}
         </ul>
+      </div>
+    );
+  }
+
+  if (id === "contract") {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground">
+          The <span className="text-fd-foreground">Manifest</span> is the compiled, versioned
+          contract between the backend model and everything derived from it.
+        </p>
+        <p className="font-mono text-[11px] text-fd-muted-foreground/70 sm:text-xs">
+          Client · Console · MCP · OpenAPI · Traces · Docker — one diffable contract.
+        </p>
       </div>
     );
   }

@@ -85,7 +85,7 @@ body.split("\n").forEach((l,i)=>{
 
 ## Authority
 
-`AGENTS.md` is the contract: eight elements, ten exports, drivers named after protocols, the fx rule. If the documentation would claim something the source does not support, **stop and ask** — do not invent the API.
+`AGENTS.md` is the contract: eight elements, core programming vocabulary, drivers named after protocols, the fx rule. If the documentation would claim something the source does not support, **stop and ask** — do not invent the API.
 
 ## Reference
 
