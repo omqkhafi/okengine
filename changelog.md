@@ -12,20 +12,58 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### 💥 Breaking Changes
+
+#### Kernel
+
+- Require named clock declarations instead of bare `every(interval)` trigger constructors: `on(clock.cron(...), flow)`, `on(clock.every(...), flow)`, etc.
+- Require store table receivers (`db.table(handle).changed(column)` / `table.changed(...)`) for CDC triggers instead of bare `table(name, store?)`.
+
+### 🔥 Removed
+
+#### Kernel
+
+- Removed bare top-level `every(interval)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
+- Removed bare top-level `table(name, store?)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
+
 ### ✨ Added
+
+#### Kernel
+
+- Added `ClockTrigger` interface and `isClockDecl` type guard for binding named clock declarations directly to `on(clockDecl, flow)`.
 
 #### Docs
 
-- Added "The Anatomy" documentation page under Understand (`/docs/understand/the-anatomy`) detailing the five components of `on(trigger, flow)` (`on`, `trigger`, `flow`, `do`, `fx`) and mapping the five element triggers.
+- Added "The Anatomy" documentation page under Understand (`/docs/understand/the-anatomy`) detailing the five components of `on(trigger, flow)` (`on`, `trigger`, `flow`, `do`, `fx`) and mapping the five element triggers with timeline resolution.
+- Added modular subpages for all eight core elements (`Flow`, `Signal`, `Store`, `Clock`, `Gate`, `Vault`, `Channel`, `AI`) covering architecture, execution patterns, and driver bindings.
+- Added new "Understand" section (`/docs/understand`) covering the problem, the model, the vocabulary, and architectural drift.
+- Added interactive `SixSystemsDrift` component illustrating architectural drift across fragmented backend stacks.
+- Added `ScrollToTop` helper component to the documentation layout.
 
 ### ♻️ Changed
+
+#### Compiler
+
+- Updated compiler trigger extraction (`extract.ts`, `effects-infer.ts`) to infer triggers from named clock bindings and store table receivers (`table.changed()`).
 
 #### Docs
 
 - Merged "See It Work" into "The Anatomy" (`/docs/understand/the-anatomy`) by incorporating the timeline resolution section into the anatomy guide and retiring `/docs/understand/see-it-work`.
-- Refined Flow and Elements documentation with updated FlowShape trigger tags (including MCP), deduplicated FlowTriggers presentation, and nameless flow auto-derivation annotations.
-- Enhanced Flow documentation with interactive trigger visualizer, step-by-step quickstart, schema validation guides (Standard Schema, Drizzle ORM v1 subpaths, `shapes.ts`), and dedicated Shiki focus/highlight styles.
+- Dissolved legacy Concepts section into modular Element guides (`elements/flow`, `elements/flow/routing`) and Reference (`reference/fx`, `reference/manifest`, `reference/architecture`).
+- Upgraded `FlowShape` figure (`flow-shape.tsx`) with interactive stage physics, active element triggers (including MCP), and nameless flow auto-derivation annotations.
+- Enhanced Flow documentation with interactive trigger visualizer (`flow-triggers.tsx`), step-by-step quickstart, comprehensive execution options (`compensate`, `retry`, `cache`, `plane`), schema validation guides (Standard Schema, Drizzle ORM v1 subpaths, `shapes.ts`), and dedicated Shiki focus/highlight styles.
 - Updated agent CI guidelines across `.cursorrules`, `AGENTS.md`, and skill definitions to prevent automatic CI execution after implementations.
+
+#### Dev, Keel & create-oke
+
+- Migrated all examples (`keel`), starters (`create-oke` standard and advanced templates), and test fixtures to the consolidated clock and table trigger syntax.
+
+### 🐛 Fixed
+
+#### Docs
+
+- Fixed trigger item row alignment, badge visibility, height symmetry, ambient auto-cycling (`useTick`), interactive tabbed contract inspector (`in`, `out`, `errors`, `do`), and unified domain pipeline examples (`orders.*`) in `FlowTriggers` (`flow-triggers.tsx`).
+- Fixed broken consumers doc example calling `users.changed()` without a store table receiver.
 
 ## v0.18.5 — 2026-08-28
 

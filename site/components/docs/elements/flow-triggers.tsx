@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { BeatPing, RevealGroup, RevealItem } from "@/components/docs/reveal";
+import { BeatPing, RevealGroup, RevealItem, useTick } from "@/components/docs/reveal";
 import { CHIP_TONE, type ElementChipTone } from "@/lib/element-tones";
 import { cn } from "@/lib/cn";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
@@ -34,7 +34,12 @@ interface TriggerSpec {
   readonly replaces: string;
   readonly binding: string;
   readonly flowName: string;
-  readonly inPayload: string;
+  readonly contracts: {
+    readonly in: string;
+    readonly out: string;
+    readonly errors: string;
+    readonly do: string;
+  };
   readonly description: string;
 }
 
@@ -49,7 +54,12 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     replaces: "endpoint · handler",
     binding: 'on(http.post("/orders"), createOrder)',
     flowName: "orders.create",
-    inPayload: '{ sku: "desk-mat", qty: 2 }',
+    contracts: {
+      in: '{ sku: "desk-mat", qty: 2 }',
+      out: '{ id: "ord_01jq7z", status: "pending" }',
+      errors: '{ OutOfStock: { available: 0 } }',
+      do: "async (input, fx) => { const id = fx.id(); ... }",
+    },
     description: "HTTP requests validate JSON body, query params, and headers directly into in.",
   },
   {
@@ -57,12 +67,17 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     element: "Signal",
     toneKey: "amber",
     icon: Radio,
-    syntax: "orderPlaced",
+    syntax: 'signal("orders.placed", { delivery: "once" })',
     starts: "another flow emits",
     replaces: "queue consumer",
     binding: "on(orderPlaced, fulfillOrder)",
     flowName: "orders.fulfill",
-    inPayload: '{ orderId: "ord_01jq7z", count: 2 }',
+    contracts: {
+      in: '{ orderId: "ord_01jq7z", count: 2 }',
+      out: '{ tracking: "trk_88291", fulfilled: true }',
+      errors: '{ InventoryMissing: { sku: "desk-mat" } }',
+      do: "async (event, fx) => { await fx.store(db)... }",
+    },
     description: "Queue messages or pub/sub broadcasts deliver the event payload straight to in.",
   },
   {
@@ -75,7 +90,12 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     replaces: "cron job",
     binding: "on(hourlyClock, syncInventory)",
     flowName: "inventory.sync",
-    inPayload: "{ scheduledAt: 1740844800000 }",
+    contracts: {
+      in: "{ scheduledAt: 1740844800000 }",
+      out: "{ syncedCount: 142, durationMs: 38 }",
+      errors: '{ VendorSyncTimeout: { source: "erp" } }',
+      do: "async ({ scheduledAt }, fx) => { ... }",
+    },
     description: "Intervals or cron schedules wake the flow with the execution timestamp in in.",
   },
   {
@@ -88,7 +108,12 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     replaces: "CDC pipeline",
     binding: 'on(db.table(orders).changed("status"), onStatusChange)',
     flowName: "orders.onStatusChange",
-    inPayload: '{ before: { ... }, after: { status: "paid" } }',
+    contracts: {
+      in: '{ before: { status: "pending" }, after: { status: "paid" } }',
+      out: '{ acknowledged: true }',
+      errors: '{ LockContention: { table: "orders" } }',
+      do: "async ({ before, after }, fx) => { ... }",
+    },
     description: "Database change-data-capture triggers pass row mutations directly to in.",
   },
   {
@@ -96,16 +121,22 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     element: "AI",
     toneKey: "rose",
     icon: Bot,
-    syntax: 'mcp.tool("bookings.create")',
+    syntax: 'mcp.tool("orders.inquire")',
     starts: "an agent calls a tool",
     replaces: "OAuth tool route",
-    binding: 'on(mcp.tool("bookings.create").gate(member), createBooking)',
-    flowName: "bookings.create",
-    inPayload: '{ date: "2026-09-01", guests: 4 }',
+    binding: 'on(mcp.tool("orders.inquire").gate(member), inquireOrder)',
+    flowName: "orders.inquire",
+    contracts: {
+      in: '{ orderId: "ord_01jq7z" }',
+      out: '{ status: "shipped", eta: "2026-09-02" }',
+      errors: '{ OrderNotFound: { orderId: "ord_01jq7z" } }',
+      do: "async ({ orderId }, fx) => { return await fx.store(db)... }",
+    },
     description: "Model Context Protocol exposes flow contracts as typed tools for AI agents.",
   },
 ];
 
+type ContractKind = (typeof CONTRACTS)[number];
 const CONTRACTS = ["in", "out", "errors", "do"] as const;
 
 const BOX_LINE = "var(--color-fd-border)";
@@ -121,16 +152,20 @@ const ELEMENT_VAR_MAP: Record<ElementChipTone, string> = {
   cyan: "var(--oke-el-channel)",
 };
 
+const TICK_MS = 1800;
+
 /**
  * One species, many triggers — visually the same `on(trigger, flow)` spine.
  */
 export function FlowTriggers() {
   const reduced = useClientReducedMotion();
+  const tick = useTick(TICK_MS);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [activeContract, setActiveContract] = useState<ContractKind>("in");
 
-  // Active trigger precedence: hovered > selected > default (first trigger)
+  // Active trigger precedence: hovered > selected > ambient tick
   const activeIndex = (() => {
     if (hoveredId !== null) {
       const idx = TRIGGERS.findIndex((t) => t.id === hoveredId);
@@ -140,18 +175,20 @@ export function FlowTriggers() {
       const idx = TRIGGERS.findIndex((t) => t.id === selectedId);
       if (idx !== -1) return idx;
     }
-    return 0;
+    if (reduced || tick === null) return 0;
+    return tick % TRIGGERS.length;
   })();
 
   const activeTrigger = TRIGGERS[activeIndex] ?? TRIGGERS[0]!;
   const activeTone = CHIP_TONE[activeTrigger.toneKey];
   const activePacket = ELEMENT_VAR_MAP[activeTrigger.toneKey];
-  const isManuallyControlled = selectedId !== null || hoveredId !== null;
-  const isLive = !reduced && isManuallyControlled;
+  const isLive = !reduced;
 
   const handleSelect = (id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
   };
+
+  const currentPayload = activeTrigger.contracts[activeContract];
 
   return (
     <figure
@@ -166,10 +203,10 @@ export function FlowTriggers() {
               type="button"
               onClick={() => setSelectedId(null)}
               className="inline-flex items-center gap-1 rounded border border-fd-border bg-fd-secondary/60 px-1.5 py-0.5 text-[10px] text-fd-muted-foreground hover:bg-fd-secondary hover:text-fd-foreground transition-colors cursor-pointer"
-              title="Reset trigger selection"
+              title="Resume automatic cycle"
             >
               <RotateCcw className="size-2.5" />
-              <span>Reset</span>
+              <span>Resume cycle</span>
             </button>
           )}
         </div>
@@ -199,14 +236,14 @@ export function FlowTriggers() {
                   onMouseEnter={() => setHoveredId(trigger.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   className={cn(
-                    "group w-full text-left flex min-w-0 flex-col gap-1 rounded-lg border px-3 py-2 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50",
+                    "group w-full text-left flex min-w-0 flex-col gap-1.5 rounded-lg border px-3 py-2.5 transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50",
                     firing
                       ? cn(itemTone.active, isSelected && "ring-1 ring-fd-border")
                       : "border-fd-border bg-fd-secondary/30 hover:bg-fd-secondary/60 hover:border-fd-border/80",
                   )}
                   aria-pressed={firing}
                 >
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                  <div className="flex min-w-0 items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Icon
                         className={cn(
@@ -216,12 +253,21 @@ export function FlowTriggers() {
                         aria-hidden
                         strokeWidth={1.75}
                       />
-                      <code className="min-w-0 font-mono text-[11px] font-medium break-all text-fd-foreground">
+                      <code className="min-w-0 font-mono text-[11px] font-medium truncate text-fd-foreground">
                         {trigger.syntax}
                       </code>
                     </div>
-                    <span className="flex items-center gap-1.5 text-[11px] text-fd-muted-foreground shrink-0">
-                      <span>{trigger.starts}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={cn(
+                          "rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider transition-colors duration-200",
+                          firing
+                            ? cn(itemTone.active, "font-semibold")
+                            : "border-fd-border/70 bg-fd-card/60 text-fd-muted-foreground group-hover:text-fd-foreground",
+                        )}
+                      >
+                        {trigger.element}
+                      </span>
                       <span className="relative flex size-1.5 shrink-0" aria-hidden>
                         {firing && isLive ? (
                           <BeatPing className={itemTone.wash} />
@@ -233,19 +279,12 @@ export function FlowTriggers() {
                           )}
                         />
                       </span>
-                    </span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 text-[10px] text-fd-muted-foreground/75">
-                    <span>replaces {trigger.replaces}</span>
-                    <span
-                      className={cn(
-                        "rounded px-1 py-0.2 font-mono text-[9px] uppercase tracking-wider transition-opacity",
-                        firing ? "opacity-100 font-semibold" : "opacity-0 group-hover:opacity-60",
-                      )}
-                    >
-                      {trigger.element}
-                    </span>
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-fd-muted-foreground/80">
+                    <span className="truncate">replaces {trigger.replaces}</span>
+                    <span className="shrink-0 text-fd-muted-foreground/70">{trigger.starts}</span>
                   </div>
                 </button>
               </RevealItem>
@@ -292,26 +331,32 @@ export function FlowTriggers() {
             </RevealItem>
 
             <RevealItem as="div" className="flex flex-col gap-1.5 min-w-0">
-              <div className="flex flex-wrap gap-1 items-center">
+              <div className="flex flex-wrap gap-1 items-center" role="tablist" aria-label="Flow contracts">
                 {CONTRACTS.map((c) => {
-                  const isInput = c === "in";
+                  const isActive = c === activeContract;
                   return (
-                    <code
+                    <button
+                      type="button"
                       key={c}
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActiveContract(c)}
                       className={cn(
-                        "rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors duration-300",
-                        isInput ? activeTone.active : "border-fd-border bg-fd-card text-fd-muted-foreground",
+                        "rounded border px-2 py-0.5 font-mono text-[10px] font-medium transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-500",
+                        isActive
+                          ? cn(activeTone.active, "shadow-xs")
+                          : "border-fd-border bg-fd-card/70 text-fd-muted-foreground hover:bg-fd-secondary hover:text-fd-foreground",
                       )}
                     >
                       {c}
-                    </code>
+                    </button>
                   );
                 })}
               </div>
 
               <div className="rounded border border-fd-border/60 bg-fd-card/60 px-2.5 py-1.5 text-[11px] font-mono text-fd-muted-foreground">
-                <span className="text-fd-foreground/70 font-semibold">in: </span>
-                <span className="break-all">{activeTrigger.inPayload}</span>
+                <span className="text-fd-foreground/80 font-semibold">{activeContract}: </span>
+                <span className="break-all">{currentPayload}</span>
               </div>
             </RevealItem>
           </div>
