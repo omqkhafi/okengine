@@ -1,0 +1,39 @@
+---
+title: "See It Work"
+description: "The signup story from The Problem, rebuilt as one Flow — and where Month 8 actually went."
+icon: "Eye"
+---
+
+## The same four lines, one door
+
+Back on The Problem, "email the user when they sign up" started as four lines and drifted into six files over eight months. Here's the same feature, written the way OKE asks for it:
+
+```typescript
+export const onSignup = on(
+  http.post("/signup"),
+  flow("users.signup", {
+    do: async (input, fx) => {
+      const user = await fx.store(db).insert(users).values(input);
+      await fx.send(welcomeEmail, { to: user.email, data: { name: user.name } });
+      return user;
+    },
+  }),
+);
+```
+
+Still four lines that matter. `fx.store` creates the user. `fx.send` reaches them. Nothing here looks more complicated than the version that started the drift — because it isn't. The difference is what happens when the same pressure hits it that hit the original.
+
+## Where Month 8 actually went
+
+Every fork from that timeline was really the same question, asked at a different point: *is this thing that touches the outside world safe to retry, safe to audit, safe to run twice?* On The Problem, each answer required a new system, because each system had to invent its own answer. Here, the question has one home:
+
+- **The traffic spike from Week 2** doesn't need a queue you build and wire up by hand — running this later, safely, is something you ask of the trigger or the effect itself, not infrastructure you assemble.
+- **The silent failure from Month 2** doesn't need a hand-picked retry count living in a worker nobody remembers the reasoning for. Retries are a property of the `fx` boundary every effect already passes through.
+- **The compliance question from Month 4** doesn't need a `sent_emails` table written by hand from inside a background job. What was sent, and when, is something the system already knows, because nothing was allowed to send anything outside of `fx` in the first place.
+- **The double-submit from Month 6** doesn't need dedup logic split across a queue and a database that never check each other. There's one call, through one door — there's no second path left for a duplicate to sneak through.
+
+None of that required new code above. It required the four lines to already be the kind of thing where those questions have a fixed answer, instead of a new one invented per team, per incident.
+
+## Where this goes next
+
+Reading this is one thing. The next page is running it — from an empty folder to this exact Flow answering a real request, in one sitting.

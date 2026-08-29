@@ -231,6 +231,7 @@ function GroupBody({
 
 /**
  * Unwraps intermediate grouping folders:
+ * - `Start`: renders flat as top-level links at the head of the sidebar.
  * - `Concepts`: renders flat as top-level links directly under `01 CONCEPTS`.
  * - `Elements`: each element (`Flow`, `Signal`, `Store`, etc.) becomes an accordion
  *   under `02 ELEMENTS`, omitting the redundant /docs/elements landing page.
@@ -239,7 +240,15 @@ function normalizeSidebarTree(tree: PageTree.Root): PageTree.Root {
   const children: PageTree.Node[] = [];
 
   for (const node of tree.children) {
-    if (isFolder(node) && (node.name === "Concepts" || node.$id === "concepts")) {
+    if (isFolder(node) && (node.name === "Understand" || node.$id === "understand")) {
+      for (const child of node.children) {
+        children.push(child);
+      }
+    } else if (isFolder(node) && (node.name === "Start" || node.$id === "start")) {
+      for (const child of node.children) {
+        children.push(child);
+      }
+    } else if (isFolder(node) && (node.name === "Concepts" || node.$id === "concepts")) {
       for (const child of node.children) {
         children.push(child);
       }

@@ -18,13 +18,13 @@ describe("buildLlmsTxt", () => {
     const lines = body.split("\n");
     expect(lines[0]).toBe("# okengine");
     expect(lines[2]?.startsWith("> ")).toBe(true);
-    expect(body).toContain("## Start here");
+    expect(body).toContain("## Understand");
     expect(body).toContain("## Optional");
     expect(body.lastIndexOf("## Optional")).toBeGreaterThan(body.lastIndexOf("## Reference"));
     expect(body).toContain(`${DOCS_ORIGIN}/llms.mdx/docs/elements/vault.md`);
     expect(body).not.toMatch(/\]\(\/docs\//);
     expect(body).toContain("## When to use this");
-    expect(body.indexOf("## When to use this")).toBeLessThan(body.indexOf("## Start here"));
+    expect(body.indexOf("## When to use this")).toBeLessThan(body.indexOf("## Understand"));
     expect(body).toContain("https://www.npmjs.com/package/okengine");
     expect(body).toContain("https://www.npmjs.com/package/create-oke");
     expect(body).toContain("https://github.com/omqkhafi/okengine");

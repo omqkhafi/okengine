@@ -1,0 +1,58 @@
+---
+title: "Try It"
+description: "From an empty folder to a Flow running in the Console — one sitting, minimal detour."
+icon: "Terminal"
+---
+
+## What you need
+
+Bun ≥ 1.4.0, and Docker running. `oke dev` starts everything else — Postgres, Redis, mail — for you.
+
+```bash
+bun --version
+docker info
+```
+
+## Scaffold and run
+
+```bash
+bunx create-oke@latest my-app
+cd my-app
+oke dev
+```
+
+Open the Console at the address printed in the terminal and claim it with the code shown there. The Flows listed weren't configured anywhere — they were derived from the code you just scaffolded.
+
+## Call it
+
+The starter ships a health Flow. Call it from a typed client, the same way your frontend would:
+
+```typescript
+import { createClient } from "okengine/client";
+import type { App } from "./app";
+
+const api = createClient<App>("http://localhost:6530");
+const { data, error } = await api.main.health({});
+```
+
+`data` and `error` are inferred straight from the Flow you just ran — not from a separate schema you maintain by hand.
+
+## Prove it, don't just believe it
+
+```typescript
+test("boots — health flow", async () => {
+  const t = await createTestApp(app);
+  const { data } = await t.api.main.health({});
+  expect(data).toEqual({ ok: true });
+});
+```
+
+```bash
+bun test
+```
+
+No mocked HTTP server, no real clock, no live mail provider. `createTestApp` swaps every driver behind `fx` for a deterministic one — because effects were never allowed to happen any other way.
+
+## Where this goes next
+
+If this went smoothly, the next page is the honest one: what's solid today, what's still moving, and who this is actually ready for right now.

@@ -11,7 +11,7 @@ import { DOCS_CONTENT_DIR, stripYamlFrontmatter } from "./markdown-source";
 const MAX_CONSECUTIVE = 3;
 
 const STRUCTURAL =
-  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|FlowTriggers|FlowDurable|SignalDelivery|SignalOnceLease|SignalLiveReplay|StoreFacets|StoreFacetMark|StoreKvTtl|StoreFilesVariants|StoreIndexModes|StoreSeeding|ClockSchedules|ClockCatchUp|ClockSleep|GatePipeline|VaultResolution|VaultRedacted|ChannelPhysics|AiBlocks|AiGuardrails|AiPiiEgress|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
+  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|SixSystemsDrift|FlowTriggers|FlowDurable|SignalDelivery|SignalOnceLease|SignalLiveReplay|StoreFacets|StoreFacetMark|StoreKvTtl|StoreFilesVariants|StoreIndexModes|StoreSeeding|ClockSchedules|ClockCatchUp|ClockSleep|GatePipeline|VaultResolution|VaultRedacted|ChannelPhysics|AiBlocks|AiGuardrails|AiPiiEgress|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
 
 /**
  * Whether a non-empty line counts as a plain prose paragraph line.
@@ -75,11 +75,11 @@ function maxConsecutivePlain(body: string): number {
 }
 
 describe("docs prose density", () => {
-  test(`index + get-started + elements + deployment + recipes + providers + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
+  test(`index + understand + elements + deployment + recipes + providers + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
     const files = [
       join(DOCS_CONTENT_DIR, "index.mdx"),
       ...(await listMdx("concepts")),
-      ...(await listMdx("get-started")),
+      ...(await listMdx("understand")),
       ...(await listMdx("elements")),
       ...(await listMdx("deployment")),
       ...(await listMdx("recipes")),

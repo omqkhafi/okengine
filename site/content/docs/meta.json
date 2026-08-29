@@ -3,20 +3,21 @@
   "icon": "BookOpen",
   "pages": [
     "index",
-    "---01 Concepts---",
+    "---01 Understand---",
+    "understand",
+    "---02 Concepts---",
     "concepts",
-    "---02 Elements---",
+    "---03 Elements---",
     "elements",
-    "---03 Build---",
-    "get-started",
+    "---04 Build---",
     "ai",
-    "---04 Operate---",
+    "---05 Operate---",
     "deployment",
-    "---05 Extend---",
+    "---06 Extend---",
     "plugins",
     "providers",
     "recipes",
-    "---06 Reference---",
+    "---07 Reference---",
     "reference"
   ]
 }

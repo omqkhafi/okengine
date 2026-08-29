@@ -33,6 +33,7 @@ import { VaultRedacted } from "@/components/docs/elements/vault-redacted";
 import { VaultResolution } from "@/components/docs/elements/vault-resolution";
 import { Features } from "@/components/docs/features";
 import { FlowShape } from "@/components/docs/flow-shape";
+import { SixSystemsDrift } from "@/components/docs/start/six-systems-drift";
 import { CollapseDiagram } from "@/components/landing/collapse-diagram";
 import { ManifestPipeline } from "@/components/landing/manifest-pipeline";
 import { Surfaces } from "@/components/landing/surfaces";
@@ -98,6 +99,7 @@ export function getMDXComponents(components?: MDXComponents) {
     AiBlocks,
     AiGuardrails,
     AiPiiEgress,
+    SixSystemsDrift,
     ...components,
   } satisfies MDXComponents;
 }

@@ -1,0 +1,29 @@
+---
+title: "The Model"
+description: "The one rule that removes the disagreement between systems — stated plainly, in two parts."
+icon: "Compass"
+---
+
+## The fix, stated as a rule
+
+Every seam on the last page came from the same root cause: each system involved had its own idea of when it should run and what it was allowed to touch, and nothing forced those ideas to agree with each other.
+
+OKE removes the disagreement by removing the choice. It's one rule, in two parts.
+
+**First: every trigger reduces to the same shape.** An HTTP request, a scheduled tick, a queue message, a database change — whatever wakes the code up, what follows has one identical anatomy: `on(Trigger) → Effects`. Not four systems that happen to look similar. One system, with four ways to wake it up.
+
+**Second: every effect passes through one door.** Nothing is allowed to touch a database, send an email, check a permission, or read the clock on its own — all of it goes through a single surface. Not because that's tidier. Because it's the only way retries, auditing, idempotency, and permission checks stop being infrastructure every team reinvents at the exact moment they get burned by not having it. Build the door once, correctly, and every trigger that walks through it inherits the same guarantees automatically.
+
+That's the whole model. Not a bigger toolbox — a smaller number of things that are allowed to happen at all.
+
+## Why the door has a fixed vocabulary
+
+A door that lets anything through isn't actually closed. So the door recognizes a fixed set of things it's willing to do, and nothing new gets added to that set unless it does something none of the existing ones can. What that set is, and why it stops at eight, is the next page.
+
+## What this project is called
+
+One shape for every trigger, one door for every effect, a fixed vocabulary for what the door allows — that's what this project built. It's called **OKE**.
+
+---
+
+<sub>*OKE isn't an acronym for anything in the code. It comes from Omq Khafi — the organization this engine grew out of — with "Engine" appended: **O**mq **K**hafi **E**ngine.*</sub>

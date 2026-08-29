@@ -36,12 +36,12 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
     ],
   },
   {
-    heading: "Start here",
+    heading: "Understand",
     slugs: [
-      "get-started/introduction",
-      "get-started/installation",
-      "get-started/basic-usage",
-      "get-started/why",
+      "understand/the-problem",
+      "understand/the-model",
+      "understand/the-vocabulary",
+      "understand/see-it-work",
     ],
   },
   {
@@ -213,8 +213,8 @@ export function buildLlmsTxt(
     "",
   ];
   const whenToUse = [
-    pageLinkFromSlug(bySlug, "get-started/introduction", origin),
-    pageLinkFromSlug(bySlug, "get-started/installation", origin),
+    pageLinkFromSlug(bySlug, "understand/the-problem", origin),
+    pageLinkFromSlug(bySlug, "understand/the-model", origin),
     linkLine("AGENTS.md", absoluteDocsUrl("/llms/agents", origin), extraNote("AGENTS.md")),
     pageLinkFromSlug(bySlug, "ai/mcp", origin),
     pageLinkFromSlug(bySlug, "reference/cli", origin),

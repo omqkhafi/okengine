@@ -1,0 +1,72 @@
+---
+title: "The Problem"
+description: "Three unrelated features that hit the exact same wall, and the timeline that shows why."
+icon: "TriangleAlert"
+---
+
+## Three features, same wall
+
+**A signup flow.** A user registers. Send them a welcome email. Four lines of code — until traffic spikes, the mail provider starts rate-limiting, and "send an email" quietly needs a queue, a worker, and a retry policy nobody designed on purpose.
+
+**A payment webhook.** A provider confirms a charge. Mark the order paid. Simple — until the provider retries the same webhook twice during a network hiccup, and "mark the order paid" needs to somehow know it already ran.
+
+**A nightly report.** Summarize yesterday's activity and email it to managers. Trivial — until a manager's access gets revoked at 11:58pm and the report that runs at midnight has no idea the permission it checked when the feature was built isn't the permission that holds right now.
+
+Three teams. Three domains. Nobody on any of them talked to the other two. And all three land on the identical fork: **something has to happen later, exactly once, provably — and nothing in the original four lines said what "provably" would end up costing.**
+
+## Follow one all the way through
+
+Take the first one. Just the signup flow, from the day it shipped.
+
+```typescript
+app.post("/signup", async (req, res) => {
+  const user = await db.users.create(req.body);
+  await sendMail(user.email, "Welcome!", welcomeTemplate(user));
+  res.json(user);
+});
+```
+
+It works. It ships. Two weeks later, a launch drives a traffic spike, the mail provider starts returning `429`, and signups start failing because an unrelated email is slow. You move the send off the request path:
+
+```typescript
+app.post("/signup", async (req, res) => {
+  const user = await db.users.create(req.body);
+  emailQueue.add("welcome", { userId: user.id });
+  res.json(user);
+});
+```
+
+The endpoint is fast again. It's also no longer one system — it's an endpoint, a queue, a worker, and a Redis connection nobody else on the team knew existed until a missing `REDIS_URL` broke staging.
+
+From here the same pattern repeats on a longer clock. A support ticket reveals a job failed silently — nobody had configured retries, so you add them, and now a specific number (3? 5? with what backoff?) lives in a file that nobody will remember the reasoning for in six weeks. Compliance asks for proof of every email sent — you add a table written to from inside the worker, and now that worker has two jobs instead of one, quietly capable of disagreeing with itself if the second write fails. Someone double-clicks submit — two jobs enqueue, two emails send, and idempotency becomes a fact that has to live in two systems that were never introduced to each other.
+
+None of these were mistakes. Each one was the correct call, made by a competent engineer, in direct response to something that actually happened. That's what makes the drift invisible while it's happening — there's no bad decision anywhere in this story to point at.
+
+## What's actually going on
+
+Look at what the six resulting files have in common: none of them agree with each other about the same three things. What counts as "done." What happens on failure. Who's allowed to do this at all.
+
+That's the real cost — not the number of tools, but what sits between them:
+
+- **Failure means something different in each one.** A queue retry, an HTTP 500, and a rejected promise from a mail SDK are three unrelated shapes that all happen to mean "this didn't work."
+- **Permission has no fixed address.** It lives wherever whoever wrote that file remembered to put it — which means a reviewer can't point at one place and ask "is this checked?"
+- **Two systems both think they own the same fact.** The database says an order is paid. The already-running webhook handler doesn't know that yet. Nothing keeps them honest with each other in the gap.
+- **Nobody can see the whole thing at once.** There is no file, diagram, or dashboard where "the signup flow" exists as one object — only as the sum of files that happen to call each other.
+
+## If you've been doing this a while
+
+None of the three stories above are hypothetical to you. You've shipped at least one of them — maybe with a different provider, a different table name, a different Slack channel where the incident got triaged. You've sat in the postmortem. You've written the line in the retro doc that says "we should have thought about retries from the start," knowing full well that thinking about it from the start wouldn't have told you which of forty possible failure modes was going to be the one that mattered.
+
+That's not a criticism of your judgment. It's the actual shape of the problem: every decision in that timeline was locally correct and still added a system that doesn't speak the same language as the five before it. You didn't do this wrong. The tools you were given don't leave room to do it any other way.
+
+## If you haven't yet
+
+If your code right now still looks like the four lines from Day 1 — on any feature, in any domain — this is the part that matters most: **you will hit this fork.** Not "might." Every one of the three stories above started as a sentence a product manager could say out loud in one breath. The traffic spike, the silent retry, the compliance question, the double-submit — these aren't edge cases that happen to unlucky teams. They're what happens to any trigger that lives long enough to matter, and right now you simply haven't reached that point in the timeline yet.
+
+The four lines were never wrong. They were just the first data point on a line that already knew where it was going.
+
+## The actual question
+
+Nothing above was avoidable by writing cleaner code inside any single file. The problem was never inside a file — it was that several files had to agree on things none of them were ever designed to agree on.
+
+What would have to be true on day one for month eight to never happen?
