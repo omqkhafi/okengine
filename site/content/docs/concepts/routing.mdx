@@ -1,0 +1,119 @@
+---
+title: "Routing"
+description: "File-system routing built on concepts: zero-config path inference from on(Trigger, Flow)."
+source: "docs/spec/unified-theory.md"
+icon: "GitFork"
+---
+
+OKEngine includes a convention-based file-system router designed around the core law: `on(Trigger) → Effects`.
+
+Rather than maintaining centralized route registries or string-based router tables, your file organization under `src/flows/` automatically stamps HTTP paths, parameter contracts, and client SDK bindings.
+
+<Callout title="Concept-Driven Routing">
+  Every file under `src/flows/` exports an `on(Trigger, Flow)` declaration. The compiler infers the URL path, HTTP method, and client unit directly from disk structure.
+</Callout>
+
+```text
+src/flows/notes/[id]/get.ts → GET /notes/:id → api.notes.get({ id })
+```
+
+## Directory Structure & Units
+
+The first directory level under `src/flows/` establishes the **client unit** (namespace), while subsequent folders and files define the URL path and HTTP verb:
+
+```text
+src/flows/
+├── notes/                     # Unit: 'notes'
+│   ├── list.ts                # GET /notes
+│   ├── create.ts              # POST /notes
+│   └── [id]/
+│       ├── get.ts             # GET /notes/:id
+│       ├── update.ts          # PATCH /notes/:id
+│       └── remove.ts          # DELETE /notes/:id
+└── billing/                   # Unit: 'billing'
+    └── (checkout)/            # Route group (omitted from URL)
+        └── charge.ts          # POST /billing/charge
+```
+
+## Pathless Trigger Declarations
+
+When a flow file is placed in the tree, HTTP triggers do not require duplicate string path definitions. Omit the path argument and OKEngine stamps the URL automatically:
+
+<Steps>
+  <Step>
+    ### Create the file in the tree
+    Place your flow file at `src/flows/notes/[id]/get.ts`.
+  </Step>
+
+  <Step>
+    ### Use pathless `http.get()`
+    The trigger automatically binds to `GET /notes/:id` and extracts `:id` into the input schema:
+
+    ```typescript title="src/flows/notes/[id]/get.ts"
+    import { on, flow, http } from "okengine";
+    import { z } from "zod";
+    import { notes, db } from "@/schema";
+
+    export const getNote = on(
+      http.get(),
+      flow("notes.get", {
+        in: z.object({ id: z.string() }),
+        out: z.object({ id: z.string(), title: z.string() }),
+        do: async ({ id }, fx) => {
+          return await fx.store(db).findById(notes, id);
+        },
+      }),
+    );
+    ```
+  </Step>
+</Steps>
+
+## File-Tree Conventions
+
+The compiler follows deterministic file naming rules:
+
+| Convention | File Path Example | Inferred HTTP Route |
+| --- | --- | --- |
+| **Dynamic Parameter** | `users/[id]/get.ts` | `GET /users/:id` |
+| **Catch-All Slug** | `files/[...path]/get.ts` | `GET /files/*` |
+| **Route Group** | `auth/(oauth)/callback.ts` | `POST /auth/callback` |
+| **Reserved Leaf** | `orders/list.ts` | `GET /orders` |
+| **Root Unit** | `main/health.ts` | `GET /health` |
+
+### Reserved Leaf Names
+
+To avoid redundant URL segments like `/notes/get` or `/orders/list`, OKEngine treats standard REST operations as reserved leaf names:
+
+- `list` → Collection root (`GET /notes`)
+- `create` → Collection create (`POST /notes`)
+- `get` → Item retrieve (`GET /notes/:id`)
+- `update` → Item mutation (`PATCH /notes/:id`)
+- `remove` → Item deletion (`DELETE /notes/:id`)
+- `index` / `route` → Folder root
+
+## Smart Router Architecture
+
+At runtime, OKEngine compiles all discovered and adopted routes into a multi-tier routing engine:
+
+- **O(1) Static Bucket Map:** Static paths match instantly with zero regex overhead.
+- **Compiled RegExp Buckets:** Parametric routes (`:id`, `*`) are bucketed by first segment and compiled into optimized regular expressions.
+- **Microsecond Matching Budget:** Single-match routing latency stays strictly under 1 millisecond.
+
+```text
+HTTP Request → O(1) Static Match → Compiled RegExp Bucket → Flow Pipeline
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Architecture"
+    description="Runtime kernel, execution planes, driver mechanics, and standard ports."
+    href="/docs/concepts/architecture"
+  />
+  <Card
+    title="Manifest"
+    description="The derived JSON contract powering Client, Console, and MCP without codegen."
+    href="/docs/concepts/manifest"
+  />
+</Cards>

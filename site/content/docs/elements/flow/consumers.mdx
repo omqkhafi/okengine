@@ -1,0 +1,82 @@
+---
+title: "Consumers"
+description: "Asynchronous event handlers reacting to Signal emissions and database table row changes."
+icon: "Radio"
+---
+
+Consumers trigger Flows asynchronously in response to emitted Signals or Change Data Capture (CDC) events on database tables.
+
+## What it is
+
+A Consumer is a Flow bound with `on(signal)` or `on(store.table.changed())`. It handles decoupled asynchronous processing, background notifications, and event-driven data propagation without manual queue subscription plumbing.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define the Signal and Consumer
+
+```typescript title="src/flows/notifications/welcome.ts"
+import { on, flow } from "okengine";
+import { userSignedUp } from "@/signals";
+
+export const sendWelcome = on(
+  userSignedUp,
+  flow("notifications.welcome", {
+    do: async ({ userId, email }, fx) => {
+      await fx.send(welcomeTemplate, {
+        to: email,
+        data: { userId },
+      });
+    },
+  }),
+);
+```
+</Step>
+
+<Step>
+### Emit from any Flow
+
+```typescript
+await fx.emit(userSignedUp, { userId: "usr_123", email: "alice@example.com" });
+```
+
+</Step>
+
+</Steps>
+
+## Database CDC Triggers
+
+Flows can also trigger automatically whenever records in a database table are inserted, updated, or deleted:
+
+```typescript
+import { on, flow } from "okengine";
+import { users } from "@/schema";
+
+export const onUserInsert = on(
+  users.changed("insert"),
+  flow("audit.users", {
+    do: async ({ record }, fx) => {
+      await fx.store(db).insert(auditLogs).values({
+        table: "users",
+        recordId: record.id,
+        action: "created",
+      });
+    },
+  }),
+);
+```
+
+## Execution & Retries
+
+- **Delivery Semantics**: Governed by the Signal's declared physics (`once`, `broadcast`, `live`).
+- **Retries**: Configured exponential backoff with jitter. Exhausted retries route directly to dead-letter storage.
+- **Ordered Keys**: Messages with the same partition key process strictly sequentially.
+
+## Next
+
+<Cards>
+  <Card title="Durable Workflows" description="Build multi-step resilient sagas with fx.step." href="/docs/elements/flow/workflows" />
+  <Card title="Signal Element" description="Understand delivery physics and queue semantics." href="/docs/elements/signal" />
+</Cards>

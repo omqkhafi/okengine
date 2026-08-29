@@ -1,0 +1,67 @@
+---
+title: "Effects"
+description: "The fx surface, the explicit effects ledger, and deterministic backend physics."
+source: "docs/spec/unified-theory.md"
+icon: "Braces"
+---
+
+In OKEngine, flows are pure execution structures. Direct interaction with the outside world is strictly confined to a single doorway: the `fx` argument passed into every flow's `do` handler.
+
+<Callout title="The fx Rule">
+  All world access goes through `fx`. Calling global `fetch`, importing `node:fs`, or reading unmanaged `Date.now()` inside a flow is a structural defect.
+</Callout>
+
+```typescript
+flow("orders.process", {
+  do: async (input, fx) => {
+    // Every read, write, emit, call, secret, and send happens here
+    const user = await fx.store(db).findById(users, input.userId);
+    const token = await fx.vault.get(stripeSecret);
+    await fx.emit(orderProcessed, { orderId: input.id });
+    return { ok: true };
+  },
+});
+```
+
+## The Observable Effects Ledger
+
+Every action executed via `fx` records an entry on the runtime effect ledger. Effects are categorized into seven explicit types:
+
+| Effect | Action via `fx` | Example Resource Reference |
+| --- | --- | --- |
+| **`reads`** | Reading data from a store or stream | `sql:users`, `kv:sessions`, `files:invoices` |
+| **`writes`** | Mutating data in a store facet | `sql:orders`, `kv:rate_limits` |
+| **`emits`** | Publishing an event to a Signal | `signal:orderPlaced` |
+| **`sends`** | Delivering a notification via Channel | `template:orderConfirmation` |
+| **`asks`** | Invoking an AI model or prompt | `prompt:fraudScore` |
+| **`secrets`** | Accessing a Vault secret capability | `secret:stripeApiKey` |
+| **`calls`** | Invoking another Flow transitively | `flow:billing.charge` |
+
+## What the Effects Ledger Powers
+
+Because all side-effects are structured data rather than invisible network calls, the engine automatically derives critical runtime behaviors:
+
+- **Automatic Cache Invalidation:** The engine knows which tables a flow writes to and automatically invalidates corresponding cached reads.
+- **CDC & Live Queries:** Subscriptions observe `writes` on the store and broadcast real-time updates over SSE without manual event pumps.
+- **Least-Privilege Security:** The compiler generates exact capability matrices for tokens and API keys based on the declared effects.
+- **Deterministic Testing:** Clocks, stores, and channels are mocked deterministically without monkey-patching globals.
+- **Native Observability:** Every run records a wide event in `fx.runs`, eliminating the need for fragmented metric counter libraries.
+
+```text
+Flow → fx → Observable Effects Ledger → Compiler → Manifest → Surfaces
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Manifest"
+    description="The derived JSON contract powering Client, Console, and MCP without codegen."
+    href="/docs/concepts/manifest"
+  />
+  <Card
+    title="Architecture"
+    description="Runtime kernel, compiler, execution planes, drivers, and standard ports."
+    href="/docs/concepts/architecture"
+  />
+</Cards>

@@ -1,0 +1,60 @@
+---
+title: "SQL"
+description: "Drizzle-powered relational schemas, typed migrations, column classification (PII, sensitive), and store.resource CRUD."
+icon: "Table"
+---
+
+The SQL facet provides complete relational database access using Drizzle ORM Relational Query Builder v2 (RQB v2).
+
+## What it is
+
+Relational schemas are defined using `store.schema.table` and typed `field.*` helpers. Columns can be decorated with security tags (`pii`, `sensitive`, `retain`) which automatically trigger posture audits and masking during AI prompt evaluation.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define schema tables
+
+```typescript title="src/schema/posts.ts"
+import { store, field } from "okengine";
+
+export const posts = store.schema.table("posts", {
+  id: field.text().primaryKey(),
+  title: field.text().notNull(),
+  authorId: field.text().notNull(),
+  publishedAt: field.timestamp(),
+});
+```
+</Step>
+
+<Step>
+### Query in a Flow
+
+```typescript title="src/flows/posts/list.ts"
+import { on, flow, http } from "okengine";
+import { posts } from "@/schema/posts";
+
+export const listPosts = on(
+  http.get("/posts"),
+  flow("posts.list", {
+    do: async (_, fx) => {
+      return await fx.store(db).query.posts.findMany({
+        columns: { id: true, title: true },
+        limit: 20,
+      });
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Key-Value Store" description="Fast caching and durable key-value storage." href="/docs/elements/store/kv" />
+  <Card title="Store Overview" description="Return to Store overview." href="/docs/elements/store" />
+</Cards>

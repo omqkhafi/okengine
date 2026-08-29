@@ -1,0 +1,96 @@
+---
+title: "Overview"
+description: "Data at rest — SQL, Key-Value, Blob Files, and Search indexes accessed through one unified typed handle."
+icon: "Database"
+source: "docs/spec/unified-theory.md"
+---
+
+Store is how your backend **holds data at rest**. Instead of maintaining distinct clients for Postgres, Redis, AWS S3, and Meilisearch with four connection pools and differing error shapes, Store provides one handle (`store`) with four typed facets.
+
+<Callout title="The one rule">
+  Drivers are **protocol-named** in the manifest and swapped by environment in `oke.config.ts`. Application code writes against the unified `store` facets, never importing vendor-specific driver libraries directly.
+</Callout>
+
+## What is Store?
+
+Store models the four fundamental access patterns of backend storage:
+
+1. **SQL Relational (`sql`)**: Relational tables, typed joins, foreign keys, migrations, and Row-Level Security via Drizzle ORM.
+2. **Key-Value (`kv`)**: Ephemeral caches and durable key-value pairs with automatic TTL expiration.
+3. **Blob Files (`files`)**: Object storage buckets with pre-signed upload URLs and server-side image resizing.
+4. **Search & Index (`search`)**: Vector similarity search (embeddings) and full-text search indexes.
+
+```typescript title="src/schema/index.ts"
+import { store, field } from "okengine";
+
+export const db = store.sql({
+  users: store.schema.table("users", {
+    id: field.text().primaryKey(),
+    email: field.text().unique().pii(),
+    createdAt: field.timestamp().defaultNow(),
+  }),
+});
+```
+
+## How Store Executes Through fx
+
+Inside any flow, accessing storage occurs via `fx.store`:
+
+```typescript
+// SQL query
+const user = await fx.store(db).query.users.findFirst({
+  where: (users, { eq }) => eq(users.id, id),
+});
+
+// KV read/write
+await fx.store.kv.set(`session:${token}`, userId, { ttl: "1h" });
+
+// File upload
+await fx.store.files.put("avatars/alice.png", imageBuffer);
+
+// Vector search
+const matches = await fx.store.index("articles").search(embedding, { limit: 5 });
+```
+
+## Manifest Inference
+
+Every read and write through `fx.store` is statically recorded by the compiler:
+
+```json
+"effects": {
+  "reads": ["sql:users", "kv:session"],
+  "writes": ["files:avatars"]
+}
+```
+
+## The Capabilities of Store
+
+<Cards>
+  <Card
+    title="SQL Relational"
+    description="Drizzle-powered relational tables, column classification (PII, sensitive), and store.resource CRUD."
+    href="/docs/elements/store/sql"
+  />
+  <Card
+    title="Key-Value"
+    description="Fast in-memory caching, durable key-value storage, and automatic TTL expiration."
+    href="/docs/elements/store/kv"
+  />
+  <Card
+    title="Blob Files"
+    description="S3/RustFS object storage with pre-signed URLs, image transformations, and LQIP blur generation."
+    href="/docs/elements/store/files"
+  />
+  <Card
+    title="Search & Index"
+    description="Hybrid search combining pgvector vector embeddings and Meilisearch full-text indexing."
+    href="/docs/elements/store/search"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="SQL Relational" description="Design schema tables and relations." href="/docs/elements/store/sql" />
+  <Card title="Clock Element" description="Manage schedules, intervals, and sleep." href="/docs/elements/clock" />
+</Cards>

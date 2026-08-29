@@ -1,0 +1,54 @@
+---
+title: "Streams"
+description: "Retained event tapes streamed to client browsers over Server-Sent Events with automatic replay on reconnection."
+icon: "Activity"
+---
+
+Live Streams broadcast events directly to client user interfaces using Server-Sent Events (SSE) over standard HTTP connections.
+
+## What it is
+
+Declaring `delivery: "live"` configures a durable event tape. The OKE engine automatically exposes an SSE endpoint. When browsers reconnect after network drops, the `Last-Event-ID` header replays missed events automatically.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Declare the live signal
+
+```typescript title="src/signals/chat.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const chatMessage = signal("chat.message", {
+  delivery: "live",
+  schema: z.object({
+    room: z.string(),
+    text: z.string(),
+    author: z.string(),
+  }),
+});
+```
+</Step>
+
+<Step>
+### Subscribe from frontend
+
+```typescript
+const eventSource = new EventSource("/api/signals/chat.message?room=general");
+eventSource.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  console.log("New chat message:", msg);
+};
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Store Element" description="Learn how data is stored at rest across SQL, KV, and files." href="/docs/elements/store" />
+  <Card title="Signal Overview" description="Return to Signal overview." href="/docs/elements/signal" />
+</Cards>

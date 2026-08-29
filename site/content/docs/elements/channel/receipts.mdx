@@ -1,0 +1,38 @@
+---
+title: "Receipts"
+description: "Unified message delivery ledger, automated bounce tracking, and spam complaint suppression."
+icon: "ReceiptText"
+---
+
+Receipts & Webhooks (`channel.receipts`) provide auditable delivery tracking for every sent message.
+
+## What it is
+
+Every message dispatched via `fx.send` generates a traceable receipt stored in `oke_receipts`. When upstream email or SMS providers emit delivery webhooks (delivered, opened, bounced, spam complaint), OKE automatically updates the receipt status and marks invalid addresses on the suppression list.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Query delivery receipt
+
+```typescript title="src/flows/messages/status.ts"
+import { flow } from "okengine";
+
+export const getDeliveryStatus = flow("messages.status", {
+  do: async ({ messageId }, fx) => {
+    return await fx.channel.getReceipt(messageId);
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="AI Element" description="Integrate AI models, versioned prompts, and MCP tools." href="/docs/elements/ai" />
+  <Card title="Channel Overview" description="Return to Channel overview." href="/docs/elements/channel" />
+</Cards>

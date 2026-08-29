@@ -1,0 +1,49 @@
+---
+title: "Search"
+description: "Vector similarity search for AI embeddings and full-text search indexing across structured data."
+icon: "Search"
+---
+
+The Search facet (`store.index`) provides vector similarity search and full-text search across documents and records.
+
+## What it is
+
+Search unifies vector embeddings for AI semantic retrieval (using pgvector or Qdrant) and keyword-based search (using Meilisearch or PostgreSQL tsvector).
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Index and search documents
+
+```typescript title="src/flows/docs/search.ts"
+import { flow } from "okengine";
+import { z } from "zod";
+
+export const searchDocs = flow("docs.search", {
+  in: z.object({ query: z.string() }),
+  do: async ({ query }, fx) => {
+    // Generate embedding via AI model
+    const vector = await fx.embed("text-embedding-3-small", query);
+
+    // Query index
+    const results = await fx.store.index("kb_articles").search(vector, {
+      limit: 5,
+      filter: { category: "billing" },
+    });
+
+    return { results };
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Clock Element" description="Manage schedules, intervals, and durable sleep." href="/docs/elements/clock" />
+  <Card title="Store Overview" description="Return to Store overview." href="/docs/elements/store" />
+</Cards>

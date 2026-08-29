@@ -1,0 +1,122 @@
+---
+title: "Overview"
+description: "Behavior — endpoints, jobs, consumers, and durable workflows as one species: a typed trigger, declared contracts, and a do that touches the world only through fx."
+icon: "Workflow"
+source: "docs/spec/unified-theory.md"
+---
+
+Flow is how your backend **does anything**. An HTTP endpoint, a queue consumer, a cron job, a multi-step payment workflow — in other stacks these are four frameworks; here they are one species with one shape: `on(trigger, flow)`. Learn the shape once, and only the trigger ever changes.
+
+<Callout title="The one rule">
+  All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside a
+  flow is a defect — effects are **inferred from what a flow touches through `fx`**, and that
+  inference is what powers the Manifest, the Console, caching, and durability.
+</Callout>
+
+## What is Flow?
+
+Backend systems typically fracture business logic across disparate paradigms: Express/Hono controllers for HTTP requests, BullMQ/Celery workers for queues, node-cron for recurring jobs, and Temporal/Cadence orchestrators for multi-step sagas.
+
+Flow collapses these four distinct tools into a single semantic element. A Flow combines three core parts:
+1. **Trigger**: What starts the execution (`http`, `signal`, `every`, `cdc`, `mcp`).
+2. **Contracts**: Validated input (`in`), output (`out`), and typed failures (`errors`).
+3. **Work (`do`)**: Pure business logic that accesses the outside world strictly via `fx`.
+
+```typescript title="src/flows/orders/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const createOrder = on(
+  http.post("/orders"),
+  flow("orders.create", {
+    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+    out: z.object({ id: z.string() }),
+    errors: { OutOfStock: z.object({ left: z.number() }) },
+    do: async (input, fx) => {
+      const id = fx.id();
+      await fx
+        .store(db)
+        .insert(orders)
+        .values({ id, ...input, status: "pending" });
+      return { id };
+    },
+  }),
+);
+```
+
+## How Flow Executes Through fx
+
+The `fx` surface is the sole boundary between application logic and the host runtime. Everything a flow may touch is exposed as a method on `fx`:
+
+| Surface | Effect Recorded | What it does |
+| ------- | --------------- | ------------ |
+| `fx.store(db)` | `read` / `write` | SQL, KV, files, and index sessions |
+| `fx.emit(signal, payload)` | `emit` | Publish a signal to background consumers |
+| `fx.send(template, opts)` | `send` | Dispatch email, SMS, push, or WhatsApp |
+| `fx.ask(prompt, input)` | `ask` | Execute versioned AI prompts |
+| `fx.run(agent, input)` | `ask` | Launch bounded autonomous agents |
+| `fx.call(flow, input)` | `call` | Invoke another flow directly |
+| `fx.vault.get(contract)` | `secret` | Read protected credentials as `Redacted` values |
+| `fx.clock.now() / sleep()` | — | Injected deterministic timestamps and durable sleep |
+| `fx.step(name, fn, opts)` | — | Named durable step with automatic replay and undo |
+| `fx.all / fx.race / fx.retry` | — | Structured concurrency with ambient signal cancellation |
+
+## How Flow Appears in the Manifest
+
+When `oke build` or `oke dev` compiles your project, it statically inspects every `on()` and `flow()` declaration. The compiler records:
+
+```json
+{
+  "name": "orders.create",
+  "trigger": { "kind": "http", "method": "POST", "path": "/orders" },
+  "gates": ["member"],
+  "in": { "type": "object", "properties": { "sku": { "type": "string" }, "qty": { "type": "number" } } },
+  "out": { "type": "object", "properties": { "id": { "type": "string" } } },
+  "errors": { "OutOfStock": { "type": "object", "properties": { "left": { "type": "number" } } } },
+  "effects": {
+    "reads": [],
+    "writes": ["sql:orders"],
+    "emits": [],
+    "sends": [],
+    "asks": [],
+    "secrets": [],
+    "calls": []
+  }
+}
+```
+
+This single manifest powers OpenAPI route generation, typed client generation (`api.orders.create`), Console architecture visualization, and least-privilege token derivation.
+
+## The Capabilities of Flow
+
+Flow provides four execution capabilities across synchronous, asynchronous, and durable paradigms:
+
+<Cards>
+  <Card
+    title="HTTP Triggers"
+    description="Synchronous request-response endpoints, REST verbs, RFC 10008 QUERY, and route conventions."
+    href="/docs/elements/flow/http"
+  />
+  <Card
+    title="Jobs & Schedules"
+    description="Periodic intervals and cron expressions bound directly with on(every(...), flow)."
+    href="/docs/elements/flow/jobs"
+  />
+  <Card
+    title="Consumers & CDC"
+    description="Asynchronous event handlers reacting to Signal emissions and database table row changes."
+    href="/docs/elements/flow/consumers"
+  />
+  <Card
+    title="Durable Workflows"
+    description="Fault-tolerant multi-step execution with fx.step journaling, automatic replay, and LIFO compensation."
+    href="/docs/elements/flow/workflows"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="HTTP Triggers" description="Explore synchronous endpoints and REST verbs." href="/docs/elements/flow/http" />
+  <Card title="Signal Element" description="Explore data in motion and delivery physics." href="/docs/elements/signal" />
+</Cards>

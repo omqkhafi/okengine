@@ -1,0 +1,5 @@
+{
+  "title": "Flow",
+  "icon": "Workflow",
+  "pages": ["index", "http", "jobs", "consumers", "workflows"]
+}

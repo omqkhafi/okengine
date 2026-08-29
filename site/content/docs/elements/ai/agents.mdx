@@ -1,0 +1,45 @@
+---
+title: "Agents"
+description: "Autonomous tool-calling agents with Flow tools, step limits, cost boundaries, and loop prevention."
+icon: "Bot"
+---
+
+Bounded Agents (`ai.agent`) allow models to execute multi-step plans using backend Flows as tools.
+
+## What it is
+
+In OKE, you do not write custom function-calling wrappers for agents. Any existing Flow can be passed directly to `tools: [myFlow]`. The agent loop terminates automatically when reaching `maxSteps` or exceeding `maxCostPerRun`.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Declare an agent
+
+```typescript title="src/ai/researcher.ts"
+import { ai } from "okengine";
+import { z } from "zod";
+import { searchDocs } from "@/flows/docs/search";
+import { createTicket } from "@/flows/tickets/create";
+
+export const supportAgent = ai.agent("support.assistant", {
+  model: "fast-cloud",
+  instructions: "You are a helpful customer support agent. Search docs before answering.",
+  tools: [searchDocs, createTicket],
+  maxSteps: 5,
+  maxCostPerRun: 0.10,
+  in: z.object({ query: z.string() }),
+  out: z.object({ answer: z.string(), ticketCreated: z.boolean() }),
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Model Context Protocol" description="Expose your backend to MCP clients and Cursor." href="/docs/elements/ai/mcp" />
+  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
+</Cards>

@@ -1,0 +1,69 @@
+---
+title: "Overview"
+description: "Protected knowledge — declared secret contracts, runtime KMS unsealing, and typed environment configuration."
+icon: "KeyRound"
+source: "docs/spec/unified-theory.md"
+---
+
+Vault is how your backend **holds secrets and configuration safely**. Storing API keys in plain `process.env` leaks credentials into stack traces, logs, and telemetry. In OKE, secrets are declared as contracts, unsealed on demand, and typed as `Redacted<T>`.
+
+<Callout title="The one rule">
+  **Contracts, never values**. Application code declares what secret capabilities it requires (e.g. `vault.secret("stripe.apiKey")`). Values are unsealed strictly through `fx.vault.get()` and never exist in plain JavaScript strings.
+</Callout>
+
+## What is Vault?
+
+Vault spans three capabilities:
+
+1. **Secret Contracts (`vault.secret`)**: Typed declarations of sensitive credentials.
+2. **Dynamic Config (`vault.config`)**: Typed non-secret parameters and feature flags.
+3. **Key Rotation (`vault.rotate`)**: Graceful multi-key rollover without downtime.
+
+```typescript title="src/vault/stripe.ts"
+import { vault } from "okengine";
+import { z } from "zod";
+
+export const stripeKey = vault.secret("stripe.secretKey", {
+  schema: z.string().startsWith("sk_"),
+  description: "Stripe production secret API key",
+});
+```
+
+## How Vault Executes Through fx
+
+```typescript
+// Inside a flow:
+const key = await fx.vault.get(stripeKey);
+
+// key is Redacted<string> — cannot be console.log'd or leaked to client
+const client = new Stripe(key.reveal());
+```
+
+The compiler stamps `secrets: ["stripe.secretKey"]` onto the flow's manifest effects.
+
+## The Capabilities of Vault
+
+<Cards>
+  <Card
+    title="Secret Contracts"
+    description="Schema-validated secret declarations unsealed via AWS KMS, GCP Secrets, or HashiCorp Vault."
+    href="/docs/elements/vault/secrets"
+  />
+  <Card
+    title="Dynamic Config"
+    description="Validated runtime configuration values, tenant overrides, and live reloadable settings."
+    href="/docs/elements/vault/config"
+  />
+  <Card
+    title="Key Rotation"
+    description="Multi-version key resolution allowing seamless zero-downtime secret rollover."
+    href="/docs/elements/vault/rotation"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="Secret Contracts" description="Declare typed secret keys." href="/docs/elements/vault/secrets" />
+  <Card title="Channel Element" description="Send emails, SMS, push notifications, and WhatsApp." href="/docs/elements/channel" />
+</Cards>

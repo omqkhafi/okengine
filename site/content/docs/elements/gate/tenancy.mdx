@@ -1,0 +1,45 @@
+---
+title: "Multi-Tenancy Gate"
+description: "Automatic tenant boundary resolution from headers, subdomains, or API keys with fx.tenant injection."
+icon: "Building2"
+---
+
+The Tenancy Gate (`gate.auth.tenant`) extracts organization context and enforces tenant isolation boundaries.
+
+## What it is
+
+Multi-tenant SaaS applications need to ensure one customer cannot view or modify another customer's data. `gate.auth.tenant` resolves tenant identity from the request (e.g. `X-Tenant-Id` header, subdomain, or authenticated session) and attaches it to `fx.tenant`.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Protect tenant routes
+
+```typescript title="src/flows/invoices/list.ts"
+import { on, flow, http, gate } from "okengine";
+
+export const listInvoices = on(
+  http.get("/invoices"),
+  flow("invoices.list", {
+    gates: [gate.auth, gate.auth.tenant],
+    do: async (_, fx) => {
+      // fx.tenant contains active tenant context
+      return await fx.store(db).query.invoices.findMany({
+        where: (inv, { eq }) => eq(inv.tenantId, fx.tenant.id),
+      });
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Authorization Policies" description="Implement role-based and attribute-based permissions." href="/docs/elements/gate/authorization" />
+  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
+</Cards>

@@ -17,30 +17,30 @@ on(every("10m"), expireStale);
 on(orderPlaced, sendReceipt);
 ```
 
-## 01 Understand (The Core Model)
+## 01 Understand (Concepts)
 
 Master the mental model before exploring features:
 
 <Cards>
   <Card
-    title="Why OKE"
+    title="Why"
     description="The problem of seams across independent tools, the insight, and the smaller model."
-    href="/docs/get-started/why"
+    href="/docs/concepts/why"
   />
   <Card
-    title="Introduction"
-    description="The Law, Flow anatomy, the fx rule, and the compiled Manifest contract."
-    href="/docs/get-started/introduction"
-  />
-  <Card
-    title="Eight Elements"
+    title="Model"
     description="The closed primitive set: Flow, Signal, Store, Clock, Gate, Vault, Channel, AI."
-    href="/docs/elements"
+    href="/docs/concepts/model"
   />
   <Card
-    title="fx Surface"
-    description="The single door to the outside world — where effects become structurally observable."
-    href="/docs/reference/fx"
+    title="Law"
+    description="The single execution law: every behavior is a Flow on(Trigger) -> Effects."
+    href="/docs/concepts/law"
+  />
+  <Card
+    title="Routing"
+    description="File-system routing built on concepts: zero-config path inference from on(Trigger, Flow)."
+    href="/docs/concepts/routing"
   />
 </Cards>
 

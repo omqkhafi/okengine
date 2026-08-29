@@ -1,0 +1,60 @@
+---
+title: "Files"
+description: "Object storage buckets, pre-signed upload URLs, image transformations, and Low-Quality Image Placeholders."
+icon: "Files"
+---
+
+The Files facet (`store.files`) handles unstructured media files, PDFs, and user uploads with built-in resizing and CDN acceleration.
+
+## What it is
+
+Files abstracts object storage protocols (S3, Cloudflare R2, MinIO, or local RustFS). It includes pre-signed URL generation for direct client uploads and automatic server-side image processing.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Generate pre-signed upload URL
+
+```typescript title="src/flows/uploads/presign.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const presignUpload = on(
+  http.post("/uploads/presign"),
+  flow("uploads.presign", {
+    in: z.object({ filename: z.string(), contentType: z.string() }),
+    do: async ({ filename, contentType }, fx) => {
+      const path = `uploads/${fx.id()}-${filename}`;
+      const url = await fx.store.files.presignPut(path, {
+        contentType,
+        expiresIn: "5m",
+      });
+      return { url, path };
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Server-Side Image Transforms
+
+OKE integrates with native image transformers to resize, crop, and generate blurhash placeholders on upload:
+
+```typescript
+const optimized = await fx.store.files.transform("photos/hero.jpg", {
+  width: 800,
+  format: "webp",
+  quality: 80,
+});
+```
+
+## Next
+
+<Cards>
+  <Card title="Search & Index" description="Vector similarity search and full-text indexing." href="/docs/elements/store/search" />
+  <Card title="Store Overview" description="Return to Store overview." href="/docs/elements/store" />
+</Cards>

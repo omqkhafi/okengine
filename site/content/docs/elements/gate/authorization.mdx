@@ -1,0 +1,40 @@
+---
+title: "RBAC"
+description: "Fine-grained policy evaluations and scope checks for role-based (RBAC) and attribute-based (ABAC) access control."
+icon: "ShieldAlert"
+---
+
+Authorization Gates (`gate.policy` and `gate.scope`) enforce domain rules and role permissions.
+
+## What it is
+
+While authentication verifies identity, authorization checks capability. Policies are declared as reusable functions that inspect the active user, tenant, and request payload.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define custom policies
+
+```typescript title="src/gates/permissions.ts"
+import { gate } from "okengine";
+
+export const canEditProject = gate.policy("projects.edit", async (ctx) => {
+  if (ctx.user.role === "admin") return true;
+  const project = await ctx.store(db).query.projects.findFirst({
+    where: (p, { eq }) => eq(p.id, ctx.input.projectId),
+  });
+  return project?.ownerId === ctx.user.id;
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Rate Limits" description="Throttling strategies backed by Redis/KV." href="/docs/elements/gate/rate-limits" />
+  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
+</Cards>

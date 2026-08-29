@@ -1,0 +1,84 @@
+---
+title: "Overview"
+description: "Permission to act — authentication, tenant boundaries, authorization policies, and rate limits in one chain."
+icon: "ShieldCheck"
+source: "docs/spec/unified-theory.md"
+---
+
+Gate is how your backend **decides whether a caller has permission to act**. In other frameworks, security is an afterthought spread across Express middlewares, Passport strategies, rate-limiter libraries, and ad-hoc tenant decorators. In OKE, Gate provides an explicit security posture.
+
+<Callout title="The one rule">
+  **First denial wins**. When multiple gates protect a Flow, they evaluate left-to-right. The first gate to reject the caller terminates execution immediately without evaluating subsequent gates or entering the flow body.
+</Callout>
+
+## What is Gate?
+
+Gate spans four unified protection surfaces:
+
+1. **Authentication (`gate.auth`)**: Session validation, JWT verification, and API key resolution.
+2. **Multi-Tenancy (`gate.auth.tenant`)**: Automatic tenant isolation injected into `fx.tenant`.
+3. **Authorization Policies (`gate.policy`, `gate.scope`)**: Role-based (RBAC) and Attribute-based (ABAC) permission checks.
+4. **Rate Limiting (`gate.rate`)**: High-performance sliding-window and token-bucket throttling backed by KV.
+
+```typescript title="src/gates/roles.ts"
+import { gate } from "okengine";
+
+export const requireAdmin = gate.policy("adminOnly", async (ctx) => {
+  return ctx.user?.role === "admin";
+});
+
+export const apiRateLimit = gate.rate("apiThrottling", {
+  strategy: "sliding-window-counter",
+  limit: 100,
+  window: "1m",
+});
+```
+
+## Attaching Gates to Flows
+
+Gates attach directly to any Flow definition:
+
+```typescript
+export const deleteUser = on(
+  http.delete("/users/:id"),
+  flow("users.delete", {
+    gates: [gate.auth, requireAdmin, apiRateLimit],
+    do: async ({ id }, fx) => {
+      // Guaranteed: user is authenticated, has admin role, and caller is within rate limits
+      await fx.store(db).delete(users).where(eq(users.id, id));
+    },
+  }),
+);
+```
+
+## The Capabilities of Gate
+
+<Cards>
+  <Card
+    title="Authentication"
+    description="Built-in user sessions, password validation, HaveIBeenPwned checks, and OAuth integration."
+    href="/docs/elements/gate/auth"
+  />
+  <Card
+    title="Multi-Tenancy"
+    description="Tenant identification from subdomains, headers, or API keys with automatic fx.tenant injection."
+    href="/docs/elements/gate/tenancy"
+  />
+  <Card
+    title="Authorization Policies"
+    description="Fine-grained policy evaluations and scope checks for role-based and attribute-based security."
+    href="/docs/elements/gate/authorization"
+  />
+  <Card
+    title="Rate Limits"
+    description="5 high-throughput throttling algorithms implemented directly in Redis/KV Lua scripts."
+    href="/docs/elements/gate/rate-limits"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="Authentication" description="Configure session auth and credentials." href="/docs/elements/gate/auth" />
+  <Card title="Vault Element" description="Manage secrets and protected configuration." href="/docs/elements/vault" />
+</Cards>

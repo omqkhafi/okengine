@@ -1,0 +1,46 @@
+---
+title: "Schedules"
+description: "Cron expressions, explicit IANA timezones, distributed leader locks, and missed-run policies."
+icon: "Calendar"
+---
+
+Named Schedules define persistent calendar triggers using standard cron syntax.
+
+## What it is
+
+A Schedule declared with `clock(name, { cron, tz })` registers a first-class named clock in the application manifest. Flows bind to it using `on(mySchedule, flow)`.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Declare schedule and flow
+
+```typescript title="src/flows/reports/generate.ts"
+import { clock, on, flow } from "okengine";
+
+export const dailyReport = clock("reports.daily", {
+  cron: "0 6 * * *", // 6:00 AM daily
+  tz: "UTC",
+});
+
+export const runDailyReport = on(
+  dailyReport,
+  flow("reports.runDaily", {
+    do: async (_, fx) => {
+      // Runs every morning at 6:00 AM UTC
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Intervals" description="Execute recurring tasks on fixed time durations." href="/docs/elements/clock/intervals" />
+  <Card title="Clock Overview" description="Return to Clock overview." href="/docs/elements/clock" />
+</Cards>

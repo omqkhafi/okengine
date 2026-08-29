@@ -139,8 +139,6 @@ function TreeSeparator({ name }: { name?: ReactNode }) {
 
 /**
  * Whether a page is this folder's landing (`…/section/index.mdx` → `/docs/section`).
- * Fumadocs may leave it in `children` instead of `folder.index`; either way, the
- * sidebar omits it — the URL stays reachable from Cards / direct links.
  *
  * @param folder - Accordion folder
  * @param pageUrl - Candidate page URL
@@ -151,6 +149,29 @@ function isFolderLandingPage(folder: PageTree.Folder, pageUrl: string): boolean 
     (child): child is PageTree.Item => child.type === "page" && child.url !== pageUrl,
   );
   return siblings.length > 0 && siblings.every((child) => child.url.startsWith(`${pageUrl}/`));
+}
+
+/**
+ * Resolves the display label for a page in the sidebar.
+ * Landing pages (`index.mdx` / folder root / matching folder name) are labeled "Overview".
+ *
+ * @param child - Page tree item
+ * @param folder - Parent folder
+ */
+function pageDisplayName(child: PageTree.Item, folder?: PageTree.Folder): ReactNode {
+  if (child.name === "Index") return "Overview";
+  if (folder) {
+    if (folder.index?.url === child.url) return "Overview";
+    if (folder.name === child.name) return "Overview";
+    if (isFolderLandingPage(folder, child.url)) return "Overview";
+  }
+  if (
+    child.$id?.endsWith("index.mdx") ||
+    (typeof child.$ref === "string" && child.$ref.endsWith("index.mdx"))
+  ) {
+    return "Overview";
+  }
+  return child.name;
 }
 
 /** Children of one accordion group. */
@@ -170,7 +191,6 @@ function GroupBody({
           return <TreeSeparator key={`sep-${index}`} name={child.name} />;
         }
         if (child.type === "page") {
-          if (isFolderLandingPage(node, child.url)) return null;
           return (
             <TreeLink
               key={child.url}
@@ -180,7 +200,7 @@ function GroupBody({
               depth={0}
               onNavigate={onNavigate}
             >
-              {child.name}
+              {pageDisplayName(child, node)}
             </TreeLink>
           );
         }
@@ -198,7 +218,7 @@ function GroupBody({
                   depth={1}
                   onNavigate={onNavigate}
                 >
-                  {leaf.name}
+                  {pageDisplayName(leaf, child)}
                 </TreeLink>
               ) : null,
             )}
@@ -210,6 +230,34 @@ function GroupBody({
 }
 
 /**
+ * Unwraps intermediate grouping folders:
+ * - `Concepts`: renders flat as top-level links directly under `01 CONCEPTS`.
+ * - `Elements`: each element (`Flow`, `Signal`, `Store`, etc.) becomes an accordion
+ *   under `02 ELEMENTS`, omitting the redundant /docs/elements landing page.
+ */
+function normalizeSidebarTree(tree: PageTree.Root): PageTree.Root {
+  const children: PageTree.Node[] = [];
+
+  for (const node of tree.children) {
+    if (isFolder(node) && (node.name === "Concepts" || node.$id === "concepts")) {
+      for (const child of node.children) {
+        children.push(child);
+      }
+    } else if (isFolder(node) && (node.name === "Elements" || node.$id === "elements")) {
+      for (const child of node.children) {
+        // Skip the /docs/elements landing page in the sidebar list
+        if (child.type === "page") continue;
+        children.push(child);
+      }
+    } else {
+      children.push(node);
+    }
+  }
+
+  return { ...tree, children };
+}
+
+/**
  * The page-tree navigation: root pages render flat, folders as a single-open
  * accordion. Shared by the desktop sidebar and the mobile overlay.
  *
@@ -217,13 +265,14 @@ function GroupBody({
  * @param onNavigate - Called after any link click (closes the mobile overlay)
  */
 export function DocsTreeNav({
-  tree,
+  tree: rawTree,
   onNavigate,
 }: {
   tree: PageTree.Root;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const tree = useMemo(() => normalizeSidebarTree(rawTree), [rawTree]);
   const folders = useMemo(
     () =>
       tree.children

@@ -1,0 +1,55 @@
+---
+title: "KV"
+description: "Fast in-memory caching, durable key-value pairs, duration TTL expiration, and atomic operations."
+icon: "Key"
+---
+
+The Key-Value facet (`store.kv`) provides fast dictionary storage for sessions, distributed locks, rate limiter buckets, and temporary cache entries.
+
+## What it is
+
+The KV store supports string, JSON, and numeric values with optional time-to-live (`ttl`) durations. In development, it runs in-memory or on SQLite; in production, it maps to Redis, Valkey, Dragonfly, or Upstash.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Set and get values
+
+```typescript title="src/flows/cache/example.ts"
+import { flow } from "okengine";
+
+export const cacheExample = flow("cache.example", {
+  do: async ({ key, value }, fx) => {
+    // Write with 15 minute TTL
+    await fx.store.kv.set(key, value, { ttl: "15m" });
+
+    // Read cached value
+    const cached = await fx.store.kv.get(key);
+    return { cached };
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Atomic Operations
+
+The KV facet includes atomic counters for distributed synchronization:
+
+```typescript
+// Increment counter
+const visits = await fx.store.kv.incr("page:views:home");
+
+// Set if not exists (distributed lock)
+const acquired = await fx.store.kv.setNx("lock:sync", "worker-1", { ttl: "30s" });
+```
+
+## Next
+
+<Cards>
+  <Card title="Blob Files Store" description="Object storage and server-side image processing." href="/docs/elements/store/files" />
+  <Card title="Store Overview" description="Return to Store overview." href="/docs/elements/store" />
+</Cards>

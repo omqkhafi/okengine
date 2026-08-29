@@ -1,0 +1,75 @@
+---
+title: "Overview"
+description: "Reaching humans — transactional email, SMS, push notifications, and WhatsApp with delivery receipts and consent rules."
+icon: "Mail"
+source: "docs/spec/unified-theory.md"
+---
+
+Channel is how your backend **communicates with human beings across mediums**. Sending an email, an SMS verification code, or a push notification requires localized templates, provider retries, rate limits, unsubscribe headers, and delivery webhooks. Channel abstracts these behind a unified interface.
+
+<Callout title="The one rule">
+  **Explicit consent and medium bindings**. Every message specifies its human recipient and medium. Outgoing deliveries emit standardized audit receipts regardless of the underlying vendor (Resend, Taqnyat, Twilio, or FCM).
+</Callout>
+
+## What is Channel?
+
+Channel unifies four messaging mediums:
+
+1. **Email (`channel.email`)**: Transactional and broadcast emails (via SMTP, Mailpit, Resend, SNDR, Taqnyat).
+2. **SMS (`channel.sms`)**: Direct SMS messages and OTP verifications (via Taqnyat, Msegat, Twilio).
+3. **Push & WhatsApp (`channel.push`)**: Mobile/Web push notifications and WhatsApp Cloud messages.
+4. **Receipts & Webhooks (`channel.receipts`)**: Standardized delivery status records and bounce suppression.
+
+```typescript title="src/channels/welcome.ts"
+import { channel } from "okengine";
+import { z } from "zod";
+
+export const welcomeEmail = channel.email("welcome", {
+  subject: (data) => `Welcome to ${data.appName}!`,
+  schema: z.object({ appName: z.string(), name: z.string() }),
+});
+```
+
+## How Channel Executes Through fx
+
+```typescript
+// Inside any flow:
+await fx.send(welcomeEmail, {
+  to: "user@example.com",
+  data: { appName: "Acme", name: "Alice" },
+});
+```
+
+The compiler stamps `sends: ["email:welcome"]` onto the flow's manifest effects.
+
+## The Capabilities of Channel
+
+<Cards>
+  <Card
+    title="Email Medium"
+    description="SMTP/Mailpit in development, Resend/SNDR/Taqnyat in production with React templates."
+    href="/docs/elements/channel/email"
+  />
+  <Card
+    title="SMS Medium"
+    description="Transactional SMS, high-speed OTP delivery, and localized phone number normalization."
+    href="/docs/elements/channel/sms"
+  />
+  <Card
+    title="Push & WhatsApp"
+    description="WebPush (VAPID), Firebase Cloud Messaging (FCM), and Meta WhatsApp Cloud API."
+    href="/docs/elements/channel/push"
+  />
+  <Card
+    title="Receipts & Webhooks"
+    description="Unified delivery receipt ledger, automated bounce processing, and spam suppression."
+    href="/docs/elements/channel/receipts"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="Email Medium" description="Design and send transactional emails." href="/docs/elements/channel/email" />
+  <Card title="AI Element" description="Integrate AI models, versioned prompts, and agents." href="/docs/elements/ai" />
+</Cards>

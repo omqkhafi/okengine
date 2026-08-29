@@ -1,0 +1,89 @@
+---
+title: "Overview"
+description: "Data in motion — queues, pub/sub, and live streams under a single element with mandatory delivery physics."
+icon: "Radio"
+source: "docs/spec/unified-theory.md"
+---
+
+Signal is how your backend **moves data when the producer and consumer should not wait for each other**. In other frameworks you configure SQS, RabbitMQ, Redis Pub/Sub, Kafka, or SSE as distinct systems with conflicting semantics. In OKE, they are one typed declaration where the physics of delivery are declared explicitly.
+
+<Callout title="The one rule">
+  Signal delivery physics are **mandatory**: every signal must explicitly declare `delivery: "once"`,
+  `delivery: "broadcast"`, or `delivery: "live"`. Omitting delivery physics is a compile-time error.
+</Callout>
+
+## What is Signal?
+
+When an event occurs in a backend (e.g. `order.created`, `user.logged_in`, `stock.price_changed`), different consumers require fundamentally different delivery guarantees:
+
+1. **Queues (`once`)**: Competing worker pools where exactly one worker handles each message.
+2. **Pub/Sub (`broadcast`)**: Ephemeral fan-out where every active listener receives a copy.
+3. **Live Streams (`live`)**: Retained event logs streamed over HTTP/SSE with reconnection resumes.
+
+Signal unifies all three patterns under `signal(name, options)`.
+
+```typescript title="src/signals/orders.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderPlaced = signal("orders.placed", {
+  delivery: "once",
+  schema: z.object({
+    orderId: z.string(),
+    amount: z.number(),
+    userId: z.string(),
+  }),
+  retries: 5,
+  deadLetter: "orders.placed.dlq",
+});
+```
+
+## The Delivery Physics Matrix
+
+| Physics | Pattern | Consumer Semantics | Replay & Resume | Storage Engine |
+| ------- | ------- | ------------------ | --------------- | -------------- |
+| `once` | Work Queue | Competing workers, lease locks | Exponential retry + DLQ | Postgres `oke_queue` / Redis stream |
+| `broadcast` | Pub/Sub | Ephemeral fan-out | None (dropped if offline) | Redis Pub/Sub / In-memory |
+| `live` | Live SSE Stream | Client HTTP feed | `Last-Event-ID` resume | Retained tape / Store |
+
+## How Signal Executes Through fx
+
+Publishing an event occurs through `fx.emit`:
+
+```typescript
+// Inside any flow:
+await fx.emit(orderPlaced, {
+  orderId: "ord_99",
+  amount: 150,
+  userId: "usr_1",
+});
+```
+
+The compiler records an `emits: ["orders.placed"]` effect in the Flow's manifest.
+
+## The Capabilities of Signal
+
+<Cards>
+  <Card
+    title="Queues (Once)"
+    description="Competing workers, visibility timeouts, retries, dead-letter routing, and ordered partition keys."
+    href="/docs/elements/signal/queues"
+  />
+  <Card
+    title="Pub/Sub (Broadcast)"
+    description="Ephemeral fan-out, cache invalidation, and multi-node cluster synchronization."
+    href="/docs/elements/signal/pubsub"
+  />
+  <Card
+    title="Live Streams (Live)"
+    description="Retained event tapes streamed to browsers over Server-Sent Events with automatic replay."
+    href="/docs/elements/signal/streams"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="Queues Capability" description="Configure background worker queues with retry policies." href="/docs/elements/signal/queues" />
+  <Card title="Store Element" description="Explore data at rest across SQL, KV, files, and search." href="/docs/elements/store" />
+</Cards>

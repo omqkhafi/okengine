@@ -1,0 +1,57 @@
+---
+title: "Limits"
+description: "High-throughput traffic throttling and DDoS protection powered by 5 Lua strategies on KV."
+icon: "Gauge"
+---
+
+The Rate Limit Gate (`gate.rate`) protects APIs from abuse, runaway loops, and denial-of-service traffic.
+
+## What it is
+
+Rate limit gates execute high-speed atomic algorithms (such as sliding window counters or token buckets) on the KV store before allowing requests through.
+
+## Supported Strategies
+
+1. `sliding-window-counter` (Default recommended)
+2. `token-bucket` (Ideal for bursting traffic)
+3. `leaky-bucket` (Smooth request rate)
+4. `fixed-window` (Simple reset intervals)
+5. `sliding-log` (Strict precision)
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define and attach rate limit
+
+```typescript title="src/flows/auth/login.ts"
+import { on, flow, http, gate } from "okengine";
+
+const loginThrottle = gate.rate("auth.loginThrottle", {
+  strategy: "sliding-window-counter",
+  limit: 5,
+  window: "1m",
+  by: (ctx) => ctx.ip,
+});
+
+export const login = on(
+  http.post("/login"),
+  flow("auth.login", {
+    gates: [loginThrottle],
+    do: async (input, fx) => {
+      // Maximum 5 attempts per minute per IP
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Vault Element" description="Manage secret keys, KMS unsealing, and config." href="/docs/elements/vault" />
+  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
+</Cards>

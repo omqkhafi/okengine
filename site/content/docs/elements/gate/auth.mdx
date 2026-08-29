@@ -1,0 +1,43 @@
+---
+title: "Authentication Gate"
+description: "Built-in session management, password hashing, credential validation, and HaveIBeenPwned breach checks."
+icon: "Lock"
+---
+
+The Authentication Gate (`gate.auth`) validates caller identity before flow execution.
+
+## What it is
+
+`gate.auth` inspects Bearer tokens, session cookies, or API keys on incoming requests. On success, it populates `fx.user` and `fx.session`. If authentication fails, it rejects the request with HTTP 401 Unauthorized.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Protect a flow with gate.auth
+
+```typescript title="src/flows/profile/me.ts"
+import { on, flow, http, gate } from "okengine";
+
+export const getProfile = on(
+  http.get("/profile"),
+  flow("profile.me", {
+    gates: [gate.auth],
+    do: async (_, fx) => {
+      // fx.user is guaranteed non-null
+      return { user: fx.user };
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Multi-Tenancy" description="Isolate tenant data across organizations." href="/docs/elements/gate/tenancy" />
+  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
+</Cards>

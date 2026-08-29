@@ -1,0 +1,32 @@
+---
+title: "Key Rotation"
+description: "Zero-downtime multi-version secret rollover, graceful deprecation, and automated cryptographic key rotation."
+icon: "RefreshCw"
+---
+
+Key Rotation (`vault.rotation`) ensures secrets can be swapped without dropping active requests or invalidating sessions.
+
+## What it is
+
+When rotating API keys or JWT signing secrets, Vault allows defining active and previous key versions. Signatures verified with the previous key succeed while all new tokens are signed with the active key.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Rotate secret via CLI
+
+```bash
+oke vault rotate stripe.secretKey --value sk_live_new_key
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Channel Element" description="Send emails, SMS, push notifications, and WhatsApp." href="/docs/elements/channel" />
+  <Card title="Vault Overview" description="Return to Vault overview." href="/docs/elements/vault" />
+</Cards>

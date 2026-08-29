@@ -1,0 +1,410 @@
+---
+title: "HTTP"
+description: "Synchronous REST endpoints, RFC 10008 QUERY, CRUD mounts, live SSE streams, and gate chains on Flow."
+icon: "Globe"
+---
+
+HTTP triggers bind web requests directly to Flows. Every standard REST verb is available alongside RFC 10008 QUERY for safe body reads, multi-verb CRUD mounts, and live Server-Sent Events (SSE).
+
+<Callout title="The one rule">
+  An HTTP trigger parses the request, checks attached gates, and invokes `flow()`. All business logic runs inside the Flow via `fx`.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define the HTTP route and Flow
+
+```typescript title="src/flows/ping.ts"
+import { on, flow, http } from "okengine";
+
+export const ping = on(
+  http.get("/ping"),
+  flow({
+    do: () => ({ status: "ok" }),
+  }),
+);
+```
+</Step>
+
+<Step>
+### Call the endpoint
+
+```bash
+curl -X GET http://localhost:6530/ping -H "accept: application/json"
+```
+
+Response:
+
+```json
+{
+  "data": { "status": "ok" },
+  "error": null
+}
+```
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+Explore HTTP flow patterns from minimal handlers to schema-validated, error-handling, and gate-protected endpoints:
+
+<Tabs items={["Minimal", "Validated Contract", "Typed Failures", "Protected Gates"]}>
+
+<Tab value="Minimal">
+
+Return data directly with automatic JSON response enveloping and zero boilerplate:
+
+```typescript title="src/flows/health.ts"
+import { on, flow, http } from "okengine";
+
+export const health = on(
+  http.get("/health"),
+  flow({
+    do: () => ({ ok: true }),
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Validated Contract">
+
+Extract URL parameters and JSON body with runtime schema validation (`in`/`out`):
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const createNote = on(
+  http.post("/notes"),
+  flow("notes.create", {
+    in: z.object({ title: z.string().min(1) }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    do: async ({ title }, fx) => {
+      const id = fx.id();
+      return { id, title };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Typed Failures">
+
+Declare typed domain errors and return clean failure responses using `fx.fail`:
+
+```typescript title="src/flows/orders/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const getOrder = on(
+  http.get("/orders/:id"),
+  flow("orders.get", {
+    in: z.object({ id: z.string() }),
+    out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id }, fx) => {
+      const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id));
+      if (!order) return fx.fail("NotFound", { id });
+      return order;
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Protected Gates">
+
+Chain authentication, role permissions, and rate limits directly on the trigger:
+
+```typescript title="src/flows/account/delete.ts"
+import { on, flow, http } from "okengine";
+import { authGate, role, rateLimit } from "@/gates";
+
+export const deleteAccount = on(
+  http.delete("/account")
+    .gate(authGate, role("admin"), rateLimit({ max: 5, window: "1m" })),
+  flow("account.delete", {
+    do: async (_, fx) => {
+      await fx.store(db).deleteUser(fx.auth.userId);
+      return fx.json(undefined, { status: 204 });
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+## Trigger Methods
+
+The `http` trigger namespace exposes constructor methods for all standard HTTP verbs, query extensions, and compound resources.
+
+### Standard REST Methods
+
+```typescript
+import { http } from "okengine";
+
+// GET — Retrieve resources or collections
+http.get("/notes/:id");
+
+// POST — Create resources or run commands
+http.post("/notes");
+
+// PUT — Full replacement of a resource
+http.put("/notes/:id");
+
+// PATCH — Partial modification of a resource
+http.patch("/notes/:id");
+
+// DELETE — Remove a resource
+http.delete("/notes/:id");
+
+// HEAD — Read response headers without body
+http.head("/notes/:id");
+
+// OPTIONS — Inspect allowed verbs and capabilities
+http.options("/notes");
+```
+
+### Safe Body Reads (`http.query`)
+
+RFC 10008 defines the `QUERY` method for safe, idempotent reads that carry a JSON request body. This avoids URL length limits and URL encoding leaks for complex search filters and analytics payloads.
+
+```typescript title="src/flows/search/query.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const searchOrders = on(
+  http.query("/orders/search"),
+  flow("orders.search", {
+    in: z.object({
+      filters: z.array(z.string()),
+      dateRange: z.object({ from: z.string(), to: z.string() }),
+    }),
+    out: z.array(z.object({ id: z.string(), total: z.number() })),
+    do: async ({ filters, dateRange }, fx) => {
+      return await fx.store(db).queryOrders(filters, dateRange);
+    },
+  }),
+);
+```
+
+### Resource Mounts (`http.resource`)
+
+Mounts the standard five CRUD operations (`list`, `create`, `get`, `update`, `remove`) plus an optional live stream in a single declaration:
+
+```typescript title="src/flows/notes/resource.ts"
+import { on, http, store } from "okengine";
+import { notesTable } from "@/schema";
+
+const notesCrud = store.resource(notesTable, { live: true });
+
+export const notesResource = on(
+  http.resource("/notes", notesCrud.all()).gate(member),
+);
+```
+
+Mounted paths:
+- `GET /notes` → `list`
+- `POST /notes` → `create`
+- `GET /notes/:id` → `get`
+- `PATCH /notes/:id` → `update`
+- `DELETE /notes/:id` → `remove`
+- `GET /notes/live` → Real-time SSE stream
+
+### Live Stream Firehose (`http.live`)
+
+Exposes a `delivery: "live"` Signal as a dedicated Server-Sent Events endpoint on `/_oke/live/{signal}`:
+
+```typescript title="src/flows/notifications/feed.ts"
+import { on, http } from "okengine";
+import { liveNotifications } from "@/signals";
+
+export const notificationStream = on(
+  http.live(liveNotifications).gate(authGate),
+);
+```
+
+## Method Reference
+
+| Method | Signature | Purpose | Body Allowed | Idempotent |
+| --- | --- | --- | --- | --- |
+| `http.get` | `http.get(path?)` | Fetch a resource or list | No | Yes |
+| `http.post` | `http.post(path?)` | Create resource / command | Yes | No |
+| `http.put` | `http.put(path?)` | Replace entire resource | Yes | Yes |
+| `http.patch` | `http.patch(path?)` | Partial resource update | Yes | No |
+| `http.delete` | `http.delete(path?)` | Remove resource | Optional | Yes |
+| `http.query` | `http.query(path?)` | Safe read with JSON body | Yes (RFC 10008) | Yes |
+| `http.head` | `http.head(path?)` | Retrieve response headers | No | Yes |
+| `http.options` | `http.options(path?)` | Discover allowed methods | No | Yes |
+| `http.resource` | `http.resource(path, ops)` | Mount 5 CRUD verbs + live | Verb-dependent | Verb-dependent |
+| `http.live` | `http.live(signal)` | Firehose SSE stream on GET | No | Yes |
+
+## Trigger Chaining & Modifiers
+
+Every HTTP trigger supports fluent modifier chaining before binding to `on()`.
+
+### Attaching Gates (`.gate`)
+
+Attach authentication, permission checks, or rate limits. Gates evaluate in declaration order:
+
+```typescript
+http.post("/documents")
+  .gate(authGate, role("editor"), rateLimit({ max: 100, window: "1m" }))
+```
+
+### Public Access (`.public`)
+
+Explicitly marks the endpoint as open without authentication:
+
+```typescript
+http.get("/health").public()
+```
+
+### Live SSE Feeds (`.live`)
+
+Turn a `GET` route into an active Server-Sent Events stream by binding a live Signal or table:
+
+```typescript
+// Stream matching Signal emissions to connected clients
+http.get("/rooms/:id/live").live(roomEvents).gate(authGate)
+```
+
+## Path Conventions: Explicit vs Pathless
+
+Routes can be defined with an explicit path or inferred automatically from the project file structure.
+
+### Explicit Path
+
+Pass the URL template directly to the method:
+
+```typescript
+http.get("/organizations/:orgId/members/:memberId")
+```
+
+### Pathless File-Tree Stamp
+
+Omit the path argument to allow the file-tree compiler to stamp the route from its disk location:
+
+```typescript title="src/flows/users/[id]/get.ts"
+import { on, flow, http } from "okengine";
+
+// Stamped automatically to GET /users/:id
+export default on(http.get(), flow({ do: async ({ id }, fx) => ({ id }) }));
+```
+
+## Request Parsing & Input Assembly
+
+Before invoking `flow()`, the HTTP engine extracts and merges incoming request parts into a single typed object checked against the `in` schema:
+
+1. **Path Parameters**: Extracted from `:param` URL segments (e.g., `{ id: "123" }`).
+2. **Query Parameters**: Parsed from the URL query string (`?sort=desc`).
+3. **Request Body**: JSON payloads are parsed and merged into the root object.
+4. **Headers & Cookies**: Accessible under `headers` and `cookie` when declared in schema.
+
+```typescript title="src/flows/items/update.ts"
+export const updateItem = on(
+  http.patch("/items/:id"),
+  flow("items.update", {
+    // Merges path param :id with JSON body { title: string }
+    in: z.object({
+      id: z.string(),
+      title: z.string().min(1),
+    }),
+    do: async ({ id, title }, fx) => {
+      await fx.store(db).update(items).set({ title }).where(eq(items.id, id));
+      return { id, title };
+    },
+  }),
+);
+```
+
+## Response Envelopes & Custom Statuses
+
+Every HTTP flow produces a predictable response structure.
+
+### Standard Success
+
+Returning a value from `do` produces a `200 OK` response:
+
+```json
+{ "data": { "id": "123" }, "error": null }
+```
+
+Returning `undefined` produces a `204 No Content` response with an empty body.
+
+### Custom Status Codes & Metadata
+
+Use `fx.json()` to override the HTTP status code (such as `201 Created`) or append top-level metadata:
+
+```typescript
+return fx.json({ id: "ord_1" }, {
+  status: 201,
+  meta: { traceId: fx.runId },
+});
+```
+
+### Typed Failures
+
+Calling `fx.fail(code, data)` formats a failure envelope and maps the status code automatically:
+
+```typescript
+return fx.fail("NotFound", { id: "123" });
+```
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "NotFound",
+    "message": "Resource not found",
+    "data": { "id": "123" }
+  }
+}
+```
+
+Standard status code mappings:
+- `ValidationError` → `422 Unprocessable Entity`
+- `Unauthorized` → `401 Unauthorized`
+- `Forbidden` → `403 Forbidden`
+- `RateLimited` → `429 Too Many Requests`
+- Custom error codes → `400 Bad Request`
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="405 Method Not Allowed on valid route">
+The path exists but has not been bound to the requested HTTP verb. The response contains an `Allow` header listing valid methods for that path.
+</Accordion>
+
+<Accordion title="415 Unsupported Media Type on QUERY">
+RFC 10008 requires `Content-Type: application/json` for `http.query` requests. Ensure your client sends this header with a valid JSON payload.
+</Accordion>
+
+<Accordion title="422 ValidationError on request">
+The merged input payload failed validation against the flow's `in` schema. Check the `error.data.issues` array for the specific field validation failure.
+</Accordion>
+
+<Accordion title="TypeError: live exposure must be GET">
+Live SSE feeds declared via `.live(signal)` can only be attached to `GET` triggers (`http.get(...)` or `http.live(...)`). Other verbs reject live stream synthesis.
+</Accordion>
+
+</Accordions>
+
+## Next
+
+<Cards>
+  <Card title="Jobs & Schedules" description="Trigger flows based on recurring intervals and cron." href="/docs/elements/flow/jobs" />
+  <Card title="Consumers & CDC" description="React to Signals and database table change events." href="/docs/elements/flow/consumers" />
+  <Card title="Durable Workflows" description="Step journaling and multi-step distributed execution." href="/docs/elements/flow/workflows" />
+  <Card title="Gate Element" description="Configure authentication, authorization, and rate limiting." href="/docs/elements/gate" />
+</Cards>

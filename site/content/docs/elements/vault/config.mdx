@@ -1,0 +1,38 @@
+---
+title: "Config"
+description: "Validated application settings, runtime feature flags, and environment overrides using vault.config."
+icon: "Sliders"
+---
+
+Dynamic Config (`vault.config`) manages cleartext operational settings.
+
+## What it is
+
+Config values represent non-secret application settings (e.g. `app.url`, `email.sender`, `feature.newDashboard`). They are validated at build/boot time and can be updated at runtime without rebuilding container images.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define config contract
+
+```typescript title="src/vault/app.ts"
+import { vault } from "okengine";
+import { z } from "zod";
+
+export const appUrl = vault.config("app.url", {
+  schema: z.string().url(),
+  default: "http://localhost:6530",
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Key Rotation" description="Zero-downtime secret rotation policies." href="/docs/elements/vault/rotation" />
+  <Card title="Vault Overview" description="Return to Vault overview." href="/docs/elements/vault" />
+</Cards>

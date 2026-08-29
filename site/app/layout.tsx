@@ -2,6 +2,7 @@ import localFont from "next/font/local";
 import { Provider } from "@/components/provider";
 import { Topbar } from "@/components/chrome/topbar";
 import { OkeFaviconCycle } from "@/components/oke-logo-icon";
+import { ScrollToTop } from "@/components/scroll-to-top";
 import { UnregisterServiceWorkers } from "@/components/unregister-service-workers";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site-identity";
 import { source } from "@/lib/source";
@@ -42,6 +43,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
       <body className="flex flex-col min-h-screen">
         <Provider>
           <OkeFaviconCycle />
+          <ScrollToTop />
           <UnregisterServiceWorkers />
           <Topbar tree={source.getPageTree()} />
           {children}

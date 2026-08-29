@@ -1,0 +1,72 @@
+---
+title: "Workflows"
+description: "Fault-tolerant multi-step execution with fx.step journaling, automatic replay, and LIFO compensation."
+icon: "GitFork"
+---
+
+Durable Workflows allow Flows to survive process crashes, server restarts, network timeouts, and days-long pauses without external orchestrator engines.
+
+## What it is
+
+Marking a flow with `durable: true` enables transparent execution journaling. Each step wrapped in `fx.step(...)` records its result to the store. If the process crashes mid-workflow, the runner restarts the flow, skips completed steps instantly using cached results, and resumes exactly where it failed.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define a durable saga
+
+```typescript title="src/flows/onboarding/process.ts"
+import { flow } from "okengine";
+import { z } from "zod";
+
+export const onboardUser = flow("users.onboard", {
+  durable: true,
+  in: z.object({ userId: z.string(), email: z.string() }),
+  do: async ({ userId, email }, fx) => {
+    // Step 1: Charge setup fee (with compensation if subsequent steps fail)
+    const charge = await fx.step("charge", async () => {
+      return await fx.call(chargeCard, { userId, amount: 50 });
+    }, {
+      undo: async (res) => fx.call(refundCard, { chargeId: res.id }),
+    });
+
+    // Step 2: Provision workspace
+    const workspace = await fx.step("provision", async () => {
+      return await fx.call(createWorkspace, { userId });
+    });
+
+    // Step 3: Sleep until morning before sending notification
+    await fx.clock.sleep("8h");
+
+    // Step 4: Dispatch welcome message
+    await fx.step("notify", async () => {
+      await fx.send(welcomeEmail, { to: email, data: { workspaceId: workspace.id } });
+    });
+
+    return { workspaceId: workspace.id };
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Compensation (LIFO Rollback)
+
+When any step throws an unhandled error, the workflow stops forward execution and runs `undo` handlers in reverse (LIFO) order for all completed steps that declared compensation logic.
+
+| Step | State | Action on Error in Step 2 |
+| ---- | ----- | ------------------------- |
+| 1. Charge | Succeeded | `undo(res)` called (Refund) |
+| 2. Provision | Failed | Throws error, triggers undo chain |
+| 3. Sleep | Pending | Never executed |
+| 4. Notify | Pending | Never executed |
+
+## Next
+
+<Cards>
+  <Card title="Flow Overview" description="Return to Flow element overview." href="/docs/elements/flow" />
+  <Card title="Signal Element" description="Learn about asynchronous Signals and queues." href="/docs/elements/signal" />
+</Cards>

@@ -1,0 +1,75 @@
+---
+title: "Overview"
+description: "Machine intelligence — LLM models, versioned prompts, bounded agents, and Model Context Protocol (MCP) tools."
+icon: "Sparkles"
+source: "docs/spec/unified-theory.md"
+---
+
+AI is how your backend **incorporates machine intelligence into business processes**. Calling OpenAI or Anthropic through arbitrary SDKs creates unversioned prompts, unmonitored costs, and PII leakage. In OKE, AI is an explicit architectural primitive.
+
+<Callout title="The one rule">
+  **Bounded execution and declared budgets**. Every prompt and agent must specify input/output schemas and maximum cost budgets. Flows expose themselves directly as MCP tools to autonomous agents.
+</Callout>
+
+## What is AI?
+
+AI spans four tightly integrated capabilities:
+
+1. **Model Providers (`ai.model`)**: Swappable LLMs across local inference (Ollama, llama.cpp, vLLM) and cloud APIs (OpenAI, Anthropic).
+2. **Versioned Prompts (`model.prompt`)**: Typed input/output contracts with cost caps and fallback routes.
+3. **Bounded Agents (`ai.agent`)**: Multi-step tool-calling loops where tools are simply other Flows.
+4. **Model Context Protocol (`ai.mcpServer` & `mcp.tool()`)**: Exposing your backend to external agents and Cursor.
+
+```typescript title="src/ai/summary.ts"
+import { ai } from "okengine";
+import { z } from "zod";
+
+export const summarizeDoc = ai.prompt("docs.summarize", {
+  model: "openai/gpt-4o-mini",
+  in: z.object({ text: z.string() }),
+  out: z.object({ summary: z.string(), tags: z.array(z.string()) }),
+  template: "Summarize the following document and extract 3 tags:\n\n{{text}}",
+  budget: { maxCostPerCall: 0.02 },
+});
+```
+
+## How AI Executes Through fx
+
+```typescript
+// Inside any flow:
+const result = await fx.ask(summarizeDoc, { text: "..." });
+```
+
+The compiler records `asks: ["docs.summarize"]` in the Flow's manifest.
+
+## The Capabilities of AI
+
+<Cards>
+  <Card
+    title="Model Providers"
+    description="Local runtime inference (Ollama, llama.cpp, vLLM) and cloud providers (OpenAI, Anthropic, Gemini)."
+    href="/docs/elements/ai/models"
+  />
+  <Card
+    title="Versioned Prompts"
+    description="Strict input/output Zod schemas, per-call budget caps, fallback models, and eval assertions."
+    href="/docs/elements/ai/prompts"
+  />
+  <Card
+    title="Bounded Agents"
+    description="Autonomous step-loops with FlowRef tools, step limits, cost boundaries, and loop prevention."
+    href="/docs/elements/ai/agents"
+  />
+  <Card
+    title="Model Context Protocol"
+    description="Native MCP client connections and automatic Flow-to-MCP tool server publishing."
+    href="/docs/elements/ai/mcp"
+  />
+</Cards>
+
+## Next Steps
+
+<Cards>
+  <Card title="Model Providers" description="Configure local and cloud model drivers." href="/docs/elements/ai/models" />
+  <Card title="Versioned Prompts" description="Author typed prompts with budget boundaries." href="/docs/elements/ai/prompts" />
+</Cards>

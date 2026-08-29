@@ -1,0 +1,50 @@
+---
+title: "Email"
+description: "Transactional email delivery, localized templates, SMTP/Mailpit local testing, and Resend/SNDR production drivers."
+icon: "Mail"
+---
+
+The Email medium (`channel.email`) sends transactional and notification emails.
+
+## What it is
+
+Email templates are declared with Zod schemas for dynamic data. In local development, emails are routed to a local Mailpit inbox (`localhost:8025`). In production, OKE connects to Resend, SNDR, AWS SES, or custom SMTP servers.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define email channel
+
+```typescript title="src/channels/reset.ts"
+import { channel } from "okengine";
+import { z } from "zod";
+
+export const passwordResetEmail = channel.email("auth.resetPassword", {
+  subject: () => "Reset your password",
+  schema: z.object({ resetLink: z.string().url() }),
+  body: ({ resetLink }) => `Click here to reset: ${resetLink}`,
+});
+```
+</Step>
+
+<Step>
+### Send in flow
+
+```typescript
+await fx.send(passwordResetEmail, {
+  to: "alice@example.com",
+  data: { resetLink: "https://example.com/reset?token=123" },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="SMS Medium" description="Send SMS text messages and OTP codes." href="/docs/elements/channel/sms" />
+  <Card title="Channel Overview" description="Return to Channel overview." href="/docs/elements/channel" />
+</Cards>

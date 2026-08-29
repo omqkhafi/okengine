@@ -1,0 +1,5 @@
+{
+  "title": "Signal",
+  "icon": "Radio",
+  "pages": ["index", "queues", "pubsub", "streams"]
+}

@@ -1,0 +1,56 @@
+---
+title: "PubSub"
+description: "Ephemeral fan-out, multi-instance cache invalidation, and non-blocking cluster event distribution."
+icon: "Share2"
+---
+
+Pub/Sub delivers events to every active subscriber across all running backend instances simultaneously.
+
+## What it is
+
+Declaring `delivery: "broadcast"` configures high-throughput, low-latency fan-out messaging. If an instance is offline or restarts during emission, it does not receive past events.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define the broadcast signal
+
+```typescript title="src/signals/cache.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const cacheInvalidated = signal("cache.invalidated", {
+  delivery: "broadcast",
+  schema: z.object({ key: z.string() }),
+});
+```
+</Step>
+
+<Step>
+### React on all nodes
+
+```typescript title="src/flows/cache/sync.ts"
+import { on, flow } from "okengine";
+import { cacheInvalidated } from "@/signals/cache";
+
+export const purgeLocalCache = on(
+  cacheInvalidated,
+  flow("cache.purgeLocal", {
+    do: async ({ key }, fx) => {
+      await fx.store.kv.delete(key);
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Live Streams" description="Stream events over HTTP SSE with reconnection replays." href="/docs/elements/signal/streams" />
+  <Card title="Signal Overview" description="Return to Signal overview." href="/docs/elements/signal" />
+</Cards>

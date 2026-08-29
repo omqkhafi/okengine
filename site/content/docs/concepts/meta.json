@@ -1,0 +1,13 @@
+{
+  "title": "Concepts",
+  "icon": "Sparkles",
+  "pages": [
+    "why",
+    "model",
+    "law",
+    "effects",
+    "routing",
+    "manifest",
+    "architecture"
+  ]
+}

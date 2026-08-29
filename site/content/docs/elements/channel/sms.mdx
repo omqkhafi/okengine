@@ -1,0 +1,43 @@
+---
+title: "SMS"
+description: "Transactional SMS, one-time passwords (OTP), and regional telecom provider drivers (Taqnyat, Msegat, Twilio)."
+icon: "MessageSquare"
+---
+
+The SMS medium (`channel.sms`) delivers short text messages and OTP verification codes.
+
+## What it is
+
+The SMS channel integrates with global and regional providers (Taqnyat, Msegat, Unifonic, Twilio). It supports dedicated OTP generation and verification through `fx.sendOtp` and `fx.verifyOtp`.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Send SMS code
+
+```typescript title="src/flows/auth/sms.ts"
+import { flow } from "okengine";
+
+export const sendPhoneCode = flow("auth.sendCode", {
+  do: async ({ phone }, fx) => {
+    await fx.sendOtp({
+      to: phone,
+      channel: "sms",
+      digits: 6,
+      ttl: "5m",
+    });
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Push & WhatsApp" description="Push notifications and WhatsApp messaging." href="/docs/elements/channel/push" />
+  <Card title="Channel Overview" description="Return to Channel overview." href="/docs/elements/channel" />
+</Cards>

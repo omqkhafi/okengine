@@ -1,0 +1,88 @@
+---
+title: "Law"
+description: "The single execution law: every backend behavior is a Flow on(Trigger) -> Effects."
+source: "docs/spec/unified-theory.md"
+icon: "Workflow"
+---
+
+The central axiom of OKEngine is that all backend computation shares the exact same anatomy:
+
+<Callout title="The One Law">
+  Every backend behavior is a Flow: `on(Trigger) → Effects`.
+</Callout>
+
+```typescript
+import { on, flow, http } from "okengine/http";
+
+export const health = on(http.get("/health").public(), flow({ do: () => ({ ok: true }) }));
+```
+
+An HTTP endpoint, a nightly cleanup job, a queue message handler, and a row-change CDC listener are not four separate frameworks. They are **one species** with one shape. Only the trigger changes.
+
+## Changing Only the Trigger
+
+Triggers define what initiates execution while preserving identical contracts, validation pipelines, and effect tracking:
+
+| Trigger | Starts When | Replaces |
+| --- | --- | --- |
+| `http.post("/orders")` | An incoming request arrives | HTTP route · endpoint handler |
+| `every("10m")` | A time interval elapses | Cron job · scheduled worker |
+| `orderPlaced` (signal) | Another flow emits a message | Queue worker · event consumer |
+| `db.table(users).changed("email")` | A database row changes | CDC pipeline · trigger hook |
+
+```typescript
+import { on, flow, http } from "okengine";
+
+on(http.post("/orders"), createOrder);
+on(every("10m"), cleanStaleSessions);
+on(orderPlaced, sendReceipt);
+on(db.table(users).changed("email"), sendVerification);
+```
+
+## Anatomy of a Flow
+
+Every Flow consists of four deterministic parts:
+
+| Part | Purpose |
+| --- | --- |
+| **Trigger** | Defines how and when the flow is invoked |
+| **Contracts** | Validates input (`in`), output (`out`), and typed `errors` |
+| **`do` Body** | The execution logic — all I/O must pass through the `fx` argument |
+| **Effects** | Inferred automatically from `fx` calls or explicitly declared on the ledger |
+
+```typescript
+import { on, flow, http } from "okengine";
+import { OrderInput, OrderResult, orders, orderPlaced, db } from "./schema";
+
+export const createOrder = on(
+  http.post("/orders"),
+  flow("orders.create", {
+    in: OrderInput,
+    out: OrderResult,
+    do: async (input, fx) => {
+      const order = await fx.store(db).insert(orders).values(input);
+      await fx.emit(orderPlaced, { orderId: order.id });
+      return order;
+    },
+  }),
+);
+```
+
+<Callout title="Call-Only Flows">
+  A Flow defined without a trigger is an internal, private flow. It can only be called from other flows using `fx.call(flowRef, input)`.
+</Callout>
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Effects"
+    description="The fx surface, explicit effects ledger, and automatic cache invalidation."
+    href="/docs/concepts/effects"
+  />
+  <Card
+    title="Manifest"
+    description="The derived JSON contract powering Client, Console, and MCP without codegen."
+    href="/docs/concepts/manifest"
+  />
+</Cards>

@@ -1,0 +1,5 @@
+{
+  "title": "Vault",
+  "icon": "KeyRound",
+  "pages": ["index", "secrets", "config", "rotation"]
+}

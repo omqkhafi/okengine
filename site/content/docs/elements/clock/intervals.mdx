@@ -1,0 +1,41 @@
+---
+title: "Intervals"
+description: "Recurring duration-based timers (every 30s) and per-tenant isolated clocks."
+icon: "Timer"
+---
+
+Intervals trigger Flows on fixed repeating intervals without the rigidity of full cron syntax.
+
+## What it is
+
+The `every(duration)` trigger accepts human-readable durations (`"10s"`, `"5m"`, `"1h"`). It includes optional jitter to avoid the "thundering herd" problem across large clusters.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Trigger flow on interval
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow, every } from "okengine";
+
+export const pingExternalApi = on(
+  every("30s"),
+  flow("health.pingExternal", {
+    do: async (_, fx) => {
+      // Periodic health check
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Durable Sleep" description="Pause workflow execution safely across days or hours." href="/docs/elements/clock/sleep" />
+  <Card title="Clock Overview" description="Return to Clock overview." href="/docs/elements/clock" />
+</Cards>

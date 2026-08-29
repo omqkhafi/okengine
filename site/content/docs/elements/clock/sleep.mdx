@@ -1,0 +1,43 @@
+---
+title: "Durable Sleep"
+description: "Process-safe workflow pauses that resume reliably across server reboots without holding OS threads."
+icon: "Moon"
+---
+
+Durable Sleep (`fx.clock.sleep`) suspends flow execution until a specified point in the future.
+
+## What it is
+
+Calling `await fx.clock.sleep("7d")` inside a durable workflow writes a wake-up record into the store and releases the worker thread immediately. When the target time arrives, any available cluster node awakens the workflow and continues execution.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Sleep inside a durable flow
+
+```typescript title="src/flows/trials/reminder.ts"
+import { flow } from "okengine";
+
+export const trialReminder = flow("trials.reminder", {
+  durable: true,
+  do: async ({ userId }, fx) => {
+    // Wait 3 days
+    await fx.clock.sleep("3d");
+
+    // Send trial expiring email
+    await fx.send(trialExpiringEmail, { to: userId });
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Gate Element" description="Authenticate users and protect endpoints with Gates." href="/docs/elements/gate" />
+  <Card title="Clock Overview" description="Return to Clock overview." href="/docs/elements/clock" />
+</Cards>

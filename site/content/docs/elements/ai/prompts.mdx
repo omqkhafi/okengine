@@ -1,0 +1,44 @@
+---
+title: "Prompts"
+description: "Typed input and output schemas, token budgets, automatic model fallbacks, and evaluation assertions."
+icon: "FileCode"
+---
+
+Versioned Prompts (`ai.prompt`) enforce structured inputs and outputs when calling LLMs.
+
+## What it is
+
+Prompts define strict Zod contracts for both the variables injected into templates and the structured JSON output returned by the model. If a model generates invalid JSON, OKE retries automatically with schema error corrections.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define prompt contract
+
+```typescript title="src/ai/classify.ts"
+import { ai } from "okengine";
+import { z } from "zod";
+
+export const classifyTicket = ai.prompt("support.classify", {
+  model: "fast-cloud",
+  in: z.object({ message: z.string() }),
+  out: z.object({
+    category: z.enum(["billing", "technical", "feature_request"]),
+    urgency: z.enum(["low", "medium", "high"]),
+  }),
+  template: "Classify this support inquiry:\n\n{{message}}",
+  budget: { maxCostPerCall: 0.01 },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Bounded Agents" description="Build autonomous agents where tools are Flows." href="/docs/elements/ai/agents" />
+  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
+</Cards>

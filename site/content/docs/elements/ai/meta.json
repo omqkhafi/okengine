@@ -1,0 +1,5 @@
+{
+  "title": "AI",
+  "icon": "Sparkles",
+  "pages": ["index", "models", "prompts", "agents", "mcp"]
+}

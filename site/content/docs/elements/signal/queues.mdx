@@ -1,0 +1,68 @@
+---
+title: "Queues"
+description: "Competing worker pools, visibility timeouts, exponential retries, dead-letter queues, and ordered partition keys."
+icon: "ListOrdered"
+---
+
+Queues ensure background tasks are processed reliably by worker pools. Exactly one consumer receives and processes each item.
+
+## What it is
+
+Declaring `delivery: "once"` instructs the OKE engine to treat emissions as persistent work items. In dev mode, items are backed by SQLite/PGLite with lease locks. In production, items use transactional Postgres or Redis streams.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Define the queue signal
+
+```typescript title="src/signals/email.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const emailTask = signal("tasks.email", {
+  delivery: "once",
+  schema: z.object({ to: z.string().email(), body: z.string() }),
+  retries: 3,
+  deadLetter: "tasks.email.dlq",
+});
+```
+</Step>
+
+<Step>
+### Attach a worker flow
+
+```typescript title="src/flows/workers/email.ts"
+import { on, flow } from "okengine";
+import { emailTask } from "@/signals/email";
+
+export const processEmail = on(
+  emailTask,
+  flow("workers.email", {
+    do: async ({ to, body }, fx) => {
+      await fx.send(rawEmail, { to, body });
+    },
+  }),
+);
+```
+</Step>
+
+</Steps>
+
+## Key Ordering & Partitioning
+
+To process items sequentially per user or tenant without blocking the entire queue, provide a `key` during emission:
+
+```typescript
+await fx.emit(emailTask, payload, { key: user.id });
+```
+
+The queue guarantees items sharing the same `key` process strictly in FIFO order.
+
+## Next
+
+<Cards>
+  <Card title="Pub/Sub (Broadcast)" description="Ephemeral fan-out and multi-node messaging." href="/docs/elements/signal/pubsub" />
+  <Card title="Signal Overview" description="Return to Signal element overview." href="/docs/elements/signal" />
+</Cards>

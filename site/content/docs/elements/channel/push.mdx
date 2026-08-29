@@ -1,0 +1,42 @@
+---
+title: "Push"
+description: "WebPush (VAPID), Firebase Cloud Messaging (FCM), and Meta WhatsApp Business Cloud API integration."
+icon: "Bell"
+---
+
+The Push medium (`channel.push`) and WhatsApp integration reach users directly on mobile devices and browsers.
+
+## What it is
+
+Channel handles VAPID key signing for WebPush, FCM token dispatch for iOS/Android, and WhatsApp interactive template messaging.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Send WebPush notification
+
+```typescript title="src/flows/notifications/push.ts"
+import { flow } from "okengine";
+
+export const sendPush = flow("notifications.push", {
+  do: async ({ subscription, message }, fx) => {
+    await fx.sendWebPush(subscription, {
+      title: "New Order",
+      body: message,
+      icon: "/icons/icon-192.png",
+    });
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Receipts & Webhooks" description="Track delivery receipts and bounce suppression." href="/docs/elements/channel/receipts" />
+  <Card title="Channel Overview" description="Return to Channel overview." href="/docs/elements/channel" />
+</Cards>

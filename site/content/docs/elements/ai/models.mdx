@@ -1,0 +1,48 @@
+---
+title: "Models"
+description: "Local inference (Ollama, llama.cpp, vLLM, SGLang) and Cloud LLM providers (OpenAI, Anthropic, Google)."
+icon: "Cpu"
+---
+
+Model Providers (`ai.model`) configure connection endpoints for AI models.
+
+## What it is
+
+OKE supports local offline inference for cost savings and privacy, alongside cloud API models. Providers are declared once and referenced across prompts.
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Configure model in oke.config.ts
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  ai: {
+    models: {
+      "local-llama": {
+        provider: "ollama",
+        model: "llama3.2:latest",
+        endpoint: "http://localhost:11434",
+      },
+      "fast-cloud": {
+        provider: "openai",
+        model: "gpt-4o-mini",
+      },
+    },
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Next
+
+<Cards>
+  <Card title="Versioned Prompts" description="Define typed prompts with budget caps." href="/docs/elements/ai/prompts" />
+  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
+</Cards>
