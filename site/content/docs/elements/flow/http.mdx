@@ -23,6 +23,7 @@ import { on, flow, http } from "okengine";
 
 export const ping = on(
   http.get("/ping"),
+  // Name is optional — auto-derived from the file path when omitted
   flow({
     do: () => ({ status: "ok" }),
   }),

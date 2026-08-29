@@ -1,0 +1,111 @@
+---
+title: "The Anatomy"
+description: "The five pieces behind on(trigger, flow) — on, trigger, flow, do, and fx — explained one at a time, then combined."
+icon: "PenTool"
+---
+
+Everything a Flow does reduces to one line:
+
+```typescript
+on(trigger, flow(name, { do: (input, fx) => { /* ... */ } }))
+```
+
+If that line doesn't mean much yet, that's what this page is for. Five pieces make it up. We'll take them one at a time, then put them together using a complete signup example.
+
+## `on(...)` — wires a trigger to a flow
+
+`on` does exactly one thing: it connects "something that can happen" to "code that should run when it does." Nothing executes until this connection exists.
+
+```typescript
+on(someTrigger, someFlow);
+```
+
+That's the whole job. The interesting parts are what goes in each slot.
+
+## A trigger — the answer to "when"
+
+The first argument to `on` is the trigger: whatever wakes the code up. A trigger doesn't run any of your logic — it only answers one question: *when should this happen?*
+
+```typescript
+http.post("/signup"); // when a POST request arrives at /signup
+```
+
+There are five kinds of trigger in total — the table at the end of this page lists them. For now: the trigger is the *when*, and it's the only thing that changes between an endpoint, a scheduled job, and everything else.
+
+## `flow(...)` — the actual unit of work
+
+The second argument to `on` is a Flow — declared with the `flow()` function. It answers *what*: what work is this, and what does it promise about its inputs and outputs?
+
+```typescript
+flow("users.signup", {
+  do: /* the actual code — next */,
+});
+```
+
+The name (`"users.signup"`) is optional — omit it and it's derived automatically from the file it lives in. Pass one explicitly when you want it stable across file moves, or referenceable by `fx.call`.
+
+## `do` — the code that actually runs
+
+`do` is a function you write. It answers *how*. It receives two things: `input` (your data) and `fx` (next). Everything your Flow actually does lives here.
+
+```typescript
+do: async (input, fx) => {
+  return { ok: true };
+};
+```
+
+## `fx` — the only door to the outside world
+
+`fx` is the second argument to `do`, and it's the piece the other four exist to protect. The rule is simple and absolute: **your Flow is not allowed to read a database, send an email, check a clock, or touch anything outside itself except through `fx`.**
+
+```typescript
+do: async (input, fx) => {
+  const user = await fx.store(db).insert(users).values(input); // the database, through fx
+  await fx.send(welcomeEmail, { to: user.email }); // another system, through fx
+  return user;
+};
+```
+
+This one rule is what made the Month 8 drift from The Problem avoidable: if `fx` is the only door, retries, auditing, and idempotency stop being separate systems teams build by hand, and become properties of the one boundary everything already passes through.
+
+## Putting the five pieces together
+
+Here is the complete signup flow, with every piece labeled where it sits:
+
+```typescript
+export const onSignup = on(
+  http.post("/signup"), // ← trigger: when
+  flow("users.signup", {
+    // ↑ flow: what
+    do: async (input, fx) => {
+      // ← do: how
+      const user = await fx.store(db).insert(users).values(input); // ← fx: the only way out
+      await fx.send(welcomeEmail, { to: user.email, data: { name: user.name } });
+      return user;
+    },
+  }),
+);
+```
+
+<Callout title="Call-only flows">
+  A `flow(...)` declared without `on(...)` around it is internal — nothing outside your code can
+  start it. Other flows invoke it directly with `fx.call(flowRef, input)`.
+</Callout>
+
+## Five kinds of trigger
+
+`flow`, `do`, and `fx` never change shape. Only the trigger does — and there are exactly five kinds, one per element that can independently wake a Flow up:
+
+| Trigger                            | Element | Starts When                       |
+| ----------------------------------- | ------- | ------------------------------------ |
+| `http.post("/signup")`             | Flow    | A request arrives                  |
+| `clock("name", { every: "10m" })`  | Clock   | A time interval elapses            |
+| `signal("name", {...})`            | Signal  | Another flow announces something   |
+| `db.table(users).changed("email")` | Store   | A database row changes             |
+| `mcp.tool("name")`                 | AI      | An AI agent calls it               |
+
+The next section walks through each element in depth — this is just enough to recognize them when you see them.
+
+## Where this goes next
+
+You've seen the problem, the model, the vocabulary, and now the exact anatomy behind every Flow. The next step is seeing the full signup story rebuilt as one Flow — and where Month 8 actually went.

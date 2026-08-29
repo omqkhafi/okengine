@@ -71,11 +71,17 @@ export function RevealItem({
   lift = false,
   className,
   children,
+  onClick,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   readonly as?: keyof typeof ITEM_TAG;
   readonly lift?: boolean;
   readonly className?: string;
   readonly children: ReactNode;
+  readonly onClick?: () => void;
+  readonly onMouseEnter?: () => void;
+  readonly onMouseLeave?: () => void;
 }) {
   const reduced = useClientReducedMotion();
   const Tag = ITEM_TAG[as];
@@ -85,6 +91,9 @@ export function RevealItem({
       variants={ITEM}
       transition={REVEAL}
       whileHover={reduced || !lift ? undefined : { y: -3 }}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {children}
     </Tag>

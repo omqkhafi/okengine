@@ -1,11 +1,11 @@
 ---
 title: "Overview"
-description: "Behavior — endpoints, jobs, consumers, and durable workflows as one species: a typed trigger, declared contracts, and a do that touches the world only through fx."
+description: "The Flow element — one shape for every kind of backend behavior — and the five kinds of trigger that can start it."
 icon: "Workflow"
 source: "docs/spec/unified-theory.md"
 ---
 
-Flow is how your backend **does anything**. An HTTP endpoint, a queue consumer, a cron job, or a multi-step workflow are all the exact same shape: `on(trigger, flow)`. Learn this single pattern once, and only the trigger ever changes.
+Flow is the element responsible for *behavior* — the `on(trigger, flow)` shape covered on the [Elements overview](/docs/elements) applies here directly. An HTTP endpoint, a scheduled job, a queue consumer, and a multi-step workflow are all the same Flow, wired to a different trigger.
 
 <Callout title="The one rule">
   All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside a
@@ -15,210 +15,38 @@ Flow is how your backend **does anything**. An HTTP endpoint, a queue consumer, 
 
 <FlowShape />
 
-## Quick start
-
-Build, bind, and execute your first Flow in three simple steps:
-
-<Steps>
-
-<Step>
-### Define the Flow
-
-Declare input/output contracts and write your business logic using `fx`:
-
-```typescript title="src/flows/orders.ts"
-import { flow } from "okengine";
-import { z } from "zod";
-
-export const createOrder = flow("orders.create", {
-  in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-  out: z.object({ id: z.string(), status: z.string() }),
-  errors: { OutOfStock: z.object({ left: z.number() }) },
-  do: async (input, fx) => {
-    const id = fx.id();
-    return { id, status: "confirmed" };
-  },
-});
-```
-
-</Step>
-
-<Step>
-### Attach a Trigger
-
-Use `on()` to bind an HTTP endpoint, a schedule, or a background queue event:
-
-```typescript title="src/routes/orders.ts"
-import { on, http } from "okengine";
-import { createOrder } from "../flows/orders";
-
-export const orderRoute = on(http.post("/orders"), createOrder);
-```
-
-</Step>
-
-<Step>
-### Invoke and Observe
-
-Send a request to test contract validation and automatic response serialization:
-
-```bash
-curl -X POST http://localhost:6530/orders \
-  -H "content-type: application/json" \
-  -d '{"sku": "desk-mat", "qty": 2}'
-```
-
-```json
-{
-  "data": {
-    "id": "ord_01jq7z3x",
-    "status": "confirmed"
-  },
-  "error": null
-}
-```
-
-</Step>
-
-</Steps>
-
-## Anatomy of a Flow
-
-Every Flow consists of four deterministic parts:
-
-| Part          | Purpose                                                              | Where it lives               |
-| ------------- | -------------------------------------------------------------------- | ---------------------------- |
-| **Trigger**   | What starts execution (HTTP request, queue message, cron schedule)   | First arg to `on(trigger, …)` |
-| **Contracts** | Validates payload boundaries (`in`, `out`) and typed domain `errors` | Flow definition options      |
-| **`do` Body** | Pure business logic executed via the `fx` runtime handle             | Flow `do` function           |
-| **Effects**   | Inferred capabilities (SQL tables, signals, secrets, AI prompts)     | Derived automatically        |
-
-<Tabs items={["1. Trigger", "2. Contracts", "3. do & fx", "4. Effects"]}>
-
-<Tab value="1. Trigger">
-
-Triggers define how execution starts. You can attach auth gates or keep endpoints public:
-
-```typescript title="src/flows/orders/create.ts"
-import { on, flow, http } from "okengine";
-import { z } from "zod";
-
-export const createOrder = on(
-  http.post("/orders"), // [!code focus]
-  flow("orders.create", {
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-    out: z.object({ id: z.string() }),
-    errors: { OutOfStock: z.object({ left: z.number() }) },
-    do: async (input, fx) => {
-      const id = fx.id();
-      await fx.store(db).insert(orders).values({ id, ...input, status: "pending" });
-      await fx.emit(orderPlaced, { orderId: id });
-      return { id };
-    },
-  }),
-);
-```
-
-</Tab>
-
-<Tab value="2. Contracts">
-
-Schemas validate input and output with standard schema libraries (e.g. Zod). Return typed failures with `fx.fail`:
-
-```typescript title="src/flows/orders/create.ts"
-import { on, flow, http } from "okengine";
-import { z } from "zod";
-
-export const createOrder = on(
-  http.post("/orders"),
-  flow("orders.create", {
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }), // [!code focus]
-    out: z.object({ id: z.string() }), // [!code focus]
-    errors: { OutOfStock: z.object({ left: z.number() }) }, // [!code focus]
-    do: async (input, fx) => {
-      const id = fx.id();
-      await fx.store(db).insert(orders).values({ id, ...input, status: "pending" });
-      await fx.emit(orderPlaced, { orderId: id });
-      return { id };
-    },
-  }),
-);
-```
-
-</Tab>
-
-<Tab value="3. do & fx">
-
-The `do` function receives validated `input` and `fx`. All I/O passes through `fx`:
-
-```typescript title="src/flows/orders/create.ts"
-import { on, flow, http } from "okengine";
-import { z } from "zod";
-
-export const createOrder = on(
-  http.post("/orders"),
-  flow("orders.create", {
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-    out: z.object({ id: z.string() }),
-    errors: { OutOfStock: z.object({ left: z.number() }) },
-    do: async (input, fx) => { // [!code focus]
-      const id = fx.id(); // [!code focus]
-      await fx.store(db).insert(orders).values({ id, ...input, status: "pending" }); // [!code focus]
-      await fx.emit(orderPlaced, { orderId: id }); // [!code focus]
-      return { id }; // [!code focus]
-    }, // [!code focus]
-  }),
-);
-```
-
-</Tab>
-
-<Tab value="4. Effects">
-
-Effects track every resource your flow touches without manual ledger maintenance:
-
-```typescript title="src/flows/orders/create.ts"
-// Statically inferred from fx calls inside `do`: // [!code focus]
-// - writes:  ["sql:orders"]                      // [!code focus]
-// - emits:   ["orders.placed"]                   // [!code focus]
-//                                                // [!code focus]
-export const createOrder = on(
-  http.post("/orders"),
-  flow("orders.create", {
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-    out: z.object({ id: z.string() }),
-    errors: { OutOfStock: z.object({ left: z.number() }) },
-    do: async (input, fx) => {
-      const id = fx.id();
-      await fx.store(db).insert(orders).values({ id, ...input, status: "pending" }); // [!code focus]
-      await fx.emit(orderPlaced, { orderId: id }); // [!code focus]
-      return { id };
-    },
-  }),
-);
-```
-
-</Tab>
-
-</Tabs>
-
 <Callout title="Call-Only Flows">
-  A Flow defined without a trigger is an internal flow. Other flows invoke it directly using `fx.call(flowRef, input)`.
+  A Flow defined without a trigger — just `flow(name, { ... })` on its own — is internal. Nothing
+  outside your code can start it; other flows invoke it directly with `fx.call(flowRef, input)`.
 </Callout>
+
+```typescript title="src/flows/orders/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const createOrder = on(
+  http.post("/orders"),
+  // Name is optional — auto-derived from this file's path when omitted;
+  // pass flow("custom.name", { ... }) to override it
+  flow({
+    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+    out: z.object({ id: z.string() }),
+    errors: { OutOfStock: z.object({ left: z.number() }) },
+    do: async (input, fx) => {
+      const id = fx.id();
+      await fx.store(db).insert(orders).values({ id, ...input, status: "pending" });
+      await fx.emit(orderPlaced, { orderId: id });
+      return { id };
+    },
+  }),
+);
+```
 
 ## Only the Trigger Changes
 
+Same contracts, same `do`, same effect tracking — swap the trigger and the Flow reacts to a completely different element:
+
 <FlowTriggers />
-
-Swap the trigger and the same Flow reacts to a completely different element in your architecture:
-
-| Trigger                            | Element | Starts When                  | Replaces                      |
-| ---------------------------------- | ------- | ---------------------------- | ----------------------------- |
-| `http.post("/orders")`             | Flow    | An incoming request arrives  | HTTP route · endpoint handler |
-| `cleanupClock` (`clock(...)`)      | Clock   | A time interval elapses      | Cron job · scheduled worker   |
-| `orderPlaced` (`signal(...)`)      | Signal  | Another flow emits a message | Queue worker · event consumer |
-| `db.table(users).changed("email")` | Store   | A database row changes       | CDC pipeline · trigger hook   |
-| `mcp.tool("bookings.create")`      | AI      | An AI agent calls the tool   | Hand-written tool schema      |
 
 ```typescript
 on(http.post("/orders"), createOrder);
@@ -230,94 +58,50 @@ on(mcp.tool("bookings.create").gate(memberGate), createBooking);
 
 ## Options Reference
 
-| Option        | Type                                           | Default     | Meaning                                                                 |
-| ------------- | ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `in`          | `SchemaInput`                                  | `undefined` | Input validation schema (Zod, Standard Schema).                         |
-| `out`         | `SchemaInput`                                  | `undefined` | Output validation schema.                                               |
-| `errors`      | `Record<string, SchemaInput>`                  | `{}`        | Declared map of typed domain failure schemas.                           |
-| `durable`     | `boolean`                                      | `false`     | Enables transparent `fx.step` execution journaling and crash recovery.  |
-| `retry`       | `FxRetryOptions`                               | `undefined` | Automatic retry policy for the entire flow execution.                   |
-| `cache`       | `boolean \| string`                            | `true`      | Cache policy for read-only flows (`"30s"` adds TTL).                    |
-| `compensate`  | `(ctx, fx) => Promise<unknown>`                | `undefined` | Rollback hook executed if a durable flow fails terminally.               |
-| `plane`       | `"user" \| "operator"`                         | `"user"`    | Execution boundary separating app flows from Console operator tools.    |
-| `do`          | `(input, fx) => Promise<Output \| FlowFailure>`| *(required)*| The execution logic receiving validated input and `fx`.                 |
+| Option       | Type                                            | Default      | Meaning                                                                |
+| ------------ | ------------------------------------------------ | ------------ | ------------------------------------------------------------------------ |
+| `in`         | `SchemaInput`                                    | `undefined`  | Input validation schema (Zod, Standard Schema).                       |
+| `out`        | `SchemaInput`                                    | `undefined`  | Output validation schema.                                             |
+| `errors`     | `Record<string, SchemaInput>`                    | `{}`         | Declared map of typed domain failure schemas.                         |
+| `durable`    | `boolean`                                        | `false`      | Enables transparent `fx.step` execution journaling and crash recovery.|
+| `retry`      | `FxRetryOptions`                                 | `undefined`  | Automatic retry policy for the entire flow execution.                 |
+| `cache`      | `boolean \| string`                              | `true`       | Cache policy for read-only flows (`"30s"` adds TTL).                  |
+| `compensate` | `(ctx, fx) => Promise<unknown>`                  | `undefined`  | Rollback hook executed if a durable flow fails terminally.            |
+| `plane`      | `"user" \| "operator"`                           | `"user"`     | Execution boundary separating app flows from Console operator tools.  |
+| `do`         | `(input, fx) => Promise<Output \| FlowFailure>`  | *(required)* | The execution logic receiving validated input and `fx`.               |
 
-## Reaching the World
-
-Every interaction with state, time, or third-party networks occurs through `fx`:
-
-```typescript
-// Data and state
-const user = await fx.store(db).query.users.findFirst({ where: (u, { eq }) => eq(u.id, id) });
-await fx.store.kv.set(`cache:${id}`, user, { ttl: "10m" });
-
-// Events and communications
-await fx.emit(userRegistered, { userId: id });
-await fx.send(welcomeEmail, { to: user.email });
-
-// AI and external capabilities
-const reply = await fx.ask(supportPrompt, { query: "Help" });
-const secret = await fx.vault.get(stripeKey);
-```
-
-See the [full `fx` reference](/docs/reference/fx) for every available method.
+See the [full `fx` reference](/docs/reference/fx) for every method available inside `do`.
 
 ## Troubleshooting
 
 <Accordions>
 
 <Accordion title="Direct side-effect or fetch inside a flow">
-
 Directly importing `node:fs`, `Date.now()`, or calling global `fetch()` bypasses effect tracking and breaks deterministic replay.
 
 **Fix:** Use `fx.clock.now()`, `fx.store`, or pass external calls through `fx.step()` to ensure effects are tracked on the ledger.
-
 </Accordion>
 
 <Accordion title="Flow throws mystery status code instead of typed failure">
-
 Throwing unhandled JavaScript errors causes uncaught runtime exceptions instead of returning clean client error envelopes.
 
 **Fix:** Declare typed errors in the `errors` contract and return `fx.fail("ErrorName", payload)` from inside `do`.
-
 </Accordion>
 
 <Accordion title="Trigger path params mismatch with input schema">
-
 If an HTTP trigger uses `/users/:id` but the `in` schema expects `{ userId: z.string() }`, parameter validation fails before `do`.
 
 **Fix:** Align parameter names in the path pattern with the `in` schema object keys (e.g. `z.object({ id: z.string() })`).
-
 </Accordion>
 
 </Accordions>
 
-## Explore Deep Dives
+## Where to go next
 
 <Cards>
-  <Card
-    title="HTTP Triggers"
-    description="Synchronous request-response endpoints, REST verbs, and route conventions."
-    href="/docs/elements/flow/http"
-  />
-  <Card
-    title="Jobs & Schedules"
-    description="Periodic intervals and cron expressions bound with on(clockDecl, flow)."
-    href="/docs/elements/flow/jobs"
-  />
-  <Card
-    title="Consumers & CDC"
-    description="Asynchronous event handlers reacting to Signal emissions and database table row changes."
-    href="/docs/elements/flow/consumers"
-  />
-  <Card
-    title="Durable Workflows"
-    description="Fault-tolerant multi-step execution with fx.step journaling, automatic replay, and compensation."
-    href="/docs/elements/flow/workflows"
-  />
-  <Card
-    title="Routing"
-    description="File-system routing: zero-config path inference from on(Trigger, Flow)."
-    href="/docs/elements/flow/routing"
-  />
+  <Card title="HTTP Triggers" description="Route conventions, REST verbs, and request/response shape." href="/docs/elements/flow/http" />
+  <Card title="Jobs & Schedules" description="Named clocks, cron expressions, and per-tenant schedules." href="/docs/elements/flow/jobs" />
+  <Card title="Consumers & CDC" description="Signal-based events and database change triggers, side by side." href="/docs/elements/flow/consumers" />
+  <Card title="Durable Workflows" description="Multi-step execution that survives a crash and resumes exactly where it left off." href="/docs/elements/flow/workflows" />
+  <Card title="Routing" description="File-system routing: zero-config path inference from on(Trigger, Flow)." href="/docs/elements/flow/routing" />
 </Cards>

@@ -30,7 +30,7 @@ const STAGES: ReadonlyArray<StageSpec> = [
   {
     index: "01",
     title: "Trigger",
-    tags: ["http", "every", "signal", "cdc"],
+    tags: ["http", "clock", "signal", "cdc", "mcp"],
     icon: Globe,
     code: 'on(http.post("/orders"), createOrder)',
     body: "How work starts. Only this piece changes between an endpoint, a job, a consumer, and a row hook.",
