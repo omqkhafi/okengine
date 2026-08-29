@@ -19,9 +19,20 @@ Backend systems typically fracture business logic across disparate paradigms: co
 
 Flow collapses these four distinct tools into a single semantic element. A Flow combines three core parts:
 
-1. **Trigger**: What starts the execution (`http`, `signal`, `every`, `cdc`, `mcp`).
+1. **Trigger**: What starts the execution: HTTP (`http`), signals (`signal`), clock schedules (named, via `clock(name, options)`), CDC (via `db.table(handle).changed(column)`), or MCP tools (`mcp`).
 2. **Contracts**: Validated input (`in`), output (`out`), and typed failures (`errors`).
 3. **Work (`do`)**: Pure business logic that accesses the outside world strictly via `fx`.
+
+## Anatomy of a Flow
+
+Every Flow consists of four deterministic parts:
+
+| Part          | Purpose                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| **Trigger**   | Defines how and when the flow is invoked                                    |
+| **Contracts** | Validates input (`in`), output (`out`), and typed `errors`                  |
+| **`do` Body** | The execution logic — all I/O must pass through the `fx` argument           |
+| **Effects**   | Inferred automatically from `fx` calls or explicitly declared on the ledger |
 
 ```typescript title="src/flows/orders/create.ts"
 import { on, flow, http } from "okengine";
@@ -39,10 +50,36 @@ export const createOrder = on(
         .store(db)
         .insert(orders)
         .values({ id, ...input, status: "pending" });
+      await fx.emit(orderPlaced, { orderId: id });
       return { id };
     },
   }),
 );
+```
+
+<Callout title="Call-Only Flows">
+  A Flow defined without a trigger is an internal, private flow. It can only be called from other
+  flows using `fx.call(flowRef, input)`.
+</Callout>
+
+## Changing Only the Trigger
+
+Triggers define what initiates execution while preserving identical contracts, validation pipelines, and effect tracking:
+
+| Trigger                            | Starts When                  | Replaces                      |
+| ---------------------------------- | ---------------------------- | ----------------------------- |
+| `http.post("/orders")`             | An incoming request arrives  | HTTP route · endpoint handler |
+| `cleanupClock` (`clock(...)`)      | A time interval elapses      | Cron job · scheduled worker   |
+| `orderPlaced` (signal)             | Another flow emits a message | Queue worker · event consumer |
+| `db.table(users).changed("email")` | A database row changes       | CDC pipeline · trigger hook   |
+
+```typescript
+import { on, flow, http } from "okengine";
+
+on(http.post("/orders"), createOrder);
+on(cleanupClock, cleanStaleSessions);
+on(orderPlaced, sendReceipt);
+on(db.table(users).changed("email"), sendVerification);
 ```
 
 ## How Flow Executes Through fx

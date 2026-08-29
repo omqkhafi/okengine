@@ -24,18 +24,6 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
   readonly slugs: readonly string[];
 }[] = [
   {
-    heading: "Concepts",
-    slugs: [
-      "concepts/why",
-      "concepts/model",
-      "concepts/law",
-      "concepts/effects",
-      "concepts/routing",
-      "concepts/manifest",
-      "concepts/architecture",
-    ],
-  },
-  {
     heading: "Understand",
     slugs: [
       "understand/the-problem",
@@ -49,6 +37,7 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
     slugs: [
       "elements/flow",
       "elements/flow/http",
+      "elements/flow/routing",
       "elements/flow/jobs",
       "elements/flow/consumers",
       "elements/flow/workflows",
@@ -93,13 +82,16 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
   {
     heading: "Reference",
     slugs: [
+      "reference/architecture",
+      "reference/manifest",
       "reference/configuration",
       "reference/fx",
       "reference/client",
-      "reference/cli",
       "reference/errors",
-      "reference/security",
       "reference/environment-variables",
+      "reference/okid",
+      "reference/i18n",
+      "reference/plugins",
     ],
   },
 ];

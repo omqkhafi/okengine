@@ -13,12 +13,6 @@ import { BRAND_MARKS, type BrandMarkId } from "@/components/chrome/brand-marks";
  */
 const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs": "BookOpen",
-  "/docs/concepts": "Sparkles",
-  "/docs/concepts/law": "Workflow",
-  "/docs/concepts/effects": "Braces",
-  "/docs/concepts/routing": "GitFork",
-  "/docs/concepts/manifest": "FileCode",
-  "/docs/concepts/architecture": "Cpu",
   "/docs/understand": "Compass",
   "/docs/understand/the-problem": "TriangleAlert",
   "/docs/understand/the-model": "Compass",
@@ -28,6 +22,7 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/elements": "Boxes",
   "/docs/elements/flow": "Workflow",
   "/docs/elements/flow/http": "Globe",
+  "/docs/elements/flow/routing": "GitFork",
   "/docs/elements/flow/jobs": "Clock",
   "/docs/elements/flow/consumers": "Radio",
   "/docs/elements/flow/workflows": "GitFork",
@@ -74,6 +69,8 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/recipes/sglang": "Sparkles",
   "/docs/providers": "Cloud",
   "/docs/reference": "BookMarked",
+  "/docs/reference/architecture": "Cpu",
+  "/docs/reference/manifest": "FileCode",
   "/docs/reference/plugins": "Puzzle",
   "/docs/reference/client": "Cable",
   "/docs/reference/cli": "Terminal",
@@ -146,7 +143,6 @@ const PATH_BRANDS: Readonly<Record<string, BrandMarkId>> = {
 /** Folder display name → docs path for icon lookup. */
 const FOLDER_PATHS: Readonly<Record<string, string>> = {
   Documentation: "/docs",
-  Concepts: "/docs/concepts",
   Understand: "/docs/understand",
   Elements: "/docs/elements",
   Flow: "/docs/elements/flow",

@@ -3,6 +3,8 @@
   "icon": "BookMarked",
   "pages": [
     "index",
+    "architecture",
+    "manifest",
     "configuration",
     "fx",
     "i18n",
@@ -10,8 +12,6 @@
     "environment-variables",
     "errors",
     "plugins",
-    "cli",
-    "security",
     "okid"
   ]
 }

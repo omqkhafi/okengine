@@ -19,6 +19,16 @@ flow("orders.example", {
   type will not match `store()` overloads. See [Flow](/docs/elements/flow).
 </Callout>
 
+## What the Effects Ledger Powers
+
+Because all side-effects are structured data rather than invisible network calls, the engine automatically derives critical runtime behaviors:
+
+- **Automatic Cache Invalidation:** The engine knows which tables a flow writes to and automatically invalidates corresponding cached reads.
+- **CDC & Live Queries:** Subscriptions observe `writes` on the store and broadcast real-time updates over SSE without manual event pumps.
+- **Least-Privilege Security:** The compiler generates exact capability matrices for tokens and API keys based on the declared effects.
+- **Deterministic Testing:** Clocks, stores, and channels are mocked deterministically without monkey-patching globals.
+- **Native Observability:** Every run records a wide event in `fx.runs`, eliminating the need for fragmented metric counter libraries.
+
 ## Stores
 
 | Signature                                                           | Records      | Returns                                                                                     |

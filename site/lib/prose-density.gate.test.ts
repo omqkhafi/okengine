@@ -78,7 +78,6 @@ describe("docs prose density", () => {
   test(`index + understand + elements + deployment + recipes + providers + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
     const files = [
       join(DOCS_CONTENT_DIR, "index.mdx"),
-      ...(await listMdx("concepts")),
       ...(await listMdx("understand")),
       ...(await listMdx("elements")),
       ...(await listMdx("deployment")),

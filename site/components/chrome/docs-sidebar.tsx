@@ -248,10 +248,6 @@ function normalizeSidebarTree(tree: PageTree.Root): PageTree.Root {
       for (const child of node.children) {
         children.push(child);
       }
-    } else if (isFolder(node) && (node.name === "Concepts" || node.$id === "concepts")) {
-      for (const child of node.children) {
-        children.push(child);
-      }
     } else if (isFolder(node) && (node.name === "Elements" || node.$id === "elements")) {
       for (const child of node.children) {
         // Skip the /docs/elements landing page in the sidebar list
