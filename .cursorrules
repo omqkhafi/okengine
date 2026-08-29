@@ -75,11 +75,18 @@
 - Use `oke db generate` or `oke db migrate` for production migrations.
 - Drizzle Kit is the migration tool; config is in `drizzle.config.ts`.
 
-# ---------- Testing ----------
-- Use `bun test --pass-with-no-tests` as the default test runner.
+# ---------- Testing & CI ----------
+- Use `bun test --pass-with-no-tests` as the default test runner for targeted tests.
 - Playwright is used for Console smoke tests (`tests/console/smoke.spec.ts`).
 - Budget tests exist for kernel, client, console, and runtime — respect them.
 - Fixtures for compiler tests live in `src/compiler/fixtures/` — excluded from tsconfig.
+- NEVER run `bun run ci` automatically after finishing an implementation. Only run `bun run ci` when the user explicitly asks for CI / pre-push gate.
+
+# ---------- Post-Implementation & Changelog ----------
+- After completing ANY implementation (feature, bug fix, refactor, CLI, driver, plugins, etc.), ALWAYS update `changelog.md` under `## Unreleased`.
+- Place bullets under the appropriate group (`### ✨ Added`, `### 💥 Breaking Changes`, `### ♻️ Changed`, `### ⚠️ Deprecated`, `### 🔥 Removed`, `### 🐛 Fixed`, `### 🔒 Security`) and `####` area (e.g., `Console — Chrome`, `Console — Observability`, `Console — Store`, `Console — Vault`, `Console — Flows & traces`, `Console — Units & Call API`, `Console — Auth & shell`, `Runtime`, `Dev, Keel & create-oke`, `Docs`).
+- Never append to an already-released `## vX.Y.Z` section.
+- Version bump is separate (`bun run bump`).
 
 # ---------- Monorepo Structure ----------
 - Workspaces: `packages/*` and `site`.
@@ -95,6 +102,7 @@
 - Use `oxlint` rules; do not introduce lint errors.
 
 # ---------- What NOT to do ----------
+- Do NOT run `bun run ci` automatically after finishing tasks unless the user explicitly requested it.
 - Do NOT import from `node_modules` paths directly — always use package names.
 - Do NOT hand-edit `manifest.v1.schema.json` — it is a derived artifact.
 - Do NOT use CommonJS (`require`, `module.exports`) anywhere.

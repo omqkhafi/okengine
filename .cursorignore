@@ -65,10 +65,10 @@ manifest.v1.schema.json
 !site/content/docs/**
 
 # Root docs files (AI doesn't need to read these on every prompt)
-AGENTS.md
+!AGENTS.md
 README.md
 BUDGETS.md
-CHANGELOG*
+!changelog.md
 LICENSE*
 CONTRIBUTING*
 

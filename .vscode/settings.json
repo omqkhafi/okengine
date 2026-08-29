@@ -7,7 +7,7 @@
     "**/.intlayer": true,
     "**/.wrangler": true,
     "**/bun.lock": true,
-    // "**/node_÷modules": true,
+    "**/node_÷modules": true,
     "**/next-env.d.ts": true,
     "**/worker-configuration.d.ts": true
   },

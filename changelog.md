@@ -12,6 +12,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+#### Docs
+
+- Enhanced Flow documentation with interactive trigger visualizer, step-by-step quickstart, and dedicated Shiki focus/highlight styles.
+- Updated agent CI guidelines across `.cursorrules`, `AGENTS.md`, and skill definitions to prevent automatic CI execution after implementations.
+
 ## v0.18.5 — 2026-08-28
 
 ### ♻️ Changed

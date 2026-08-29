@@ -2,10 +2,8 @@
 name: oke-ci
 description: >-
   Runs `bun run ci` (local pre-push gate) and fixes every failure until green.
-  Use when the user asks to run CI, fix CI, make CI pass, pre-push check, or
-  `/oke-ci`; also after a large implementation before claiming the work is done
-  when they want the full local gate (fmt, lint, typecheck, tests, budgets,
-  gate, site build).
+  Use ONLY when the user explicitly asks to run CI, fix CI, make CI pass,
+  pre-push check, or `/oke-ci`. NEVER run automatically after implementations.
 ---
 
 # OKE CI — run and fix until green

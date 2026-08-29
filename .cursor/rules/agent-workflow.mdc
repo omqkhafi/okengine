@@ -1,0 +1,18 @@
+---
+description: Post-implementation workflow - update changelog and do not run CI automatically
+globs: *
+alwaysApply: true
+---
+
+# Agent Workflow & Post-Implementation Rules
+
+1. **Do NOT run `bun run ci` automatically**:
+   - Never run `bun run ci` (or the full CI gate suite) automatically after finishing implementation tasks.
+   - Only run `bun run ci` when the user explicitly requests it (e.g., "run CI", "run pre-push check", "/oke-ci").
+   - For verifying edits, use targeted tests like `bun test <file>` or linter/typecheck only if needed.
+
+2. **Always update `changelog.md` after implementation**:
+   - After completing any implementation (feature, bug fix, refactor, CLI, driver, plugins, docs), append the changes to `changelog.md` under `## Unreleased`.
+   - Place entries under the appropriate category (`### ✨ Added`, `### 💥 Breaking Changes`, `### ♻️ Changed`, `### ⚠️ Deprecated`, `### 🔥 Removed`, `### 🐛 Fixed`, `### 🔒 Security`).
+   - For larger groups, organize by area (`#### Console — Chrome`, `#### Console — Observability`, `#### Console — Store`, `#### Console — Vault`, `#### Console — Flows & traces`, `#### Console — Units & Call API`, `#### Console — Auth & shell`, `#### Runtime`, `#### Dev, Keel & create-oke`, `#### Docs`).
+   - Never append changes under an existing released version (`## vX.Y.Z`).
