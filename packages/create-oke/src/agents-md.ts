@@ -97,6 +97,7 @@ App \`:6530\` · Console \`:6533\` · MCP \`:6535\`. Vite web is \`bun run web\`
 ## Learn more
 
 - Handbook: ${handbook}
-- Get started: ${docsUrl("/docs/get-started/introduction")}
+- Understand: ${docsUrl("/docs/understand/the-problem")}
+- See it work: ${docsUrl("/docs/understand/see-it-work")}
 `;
 }

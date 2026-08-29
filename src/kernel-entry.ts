@@ -9,7 +9,6 @@ export {
   on,
   flow,
   http,
-  every,
   internal,
   fail,
   createFx,

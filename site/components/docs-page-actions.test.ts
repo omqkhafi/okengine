@@ -8,9 +8,9 @@ import { cursorPromptForMarkdown, cursorPromptHref } from "./docs-page-actions";
 describe("honest docs page actions", () => {
   test("cursor deeplink uses the documented prompt URL scheme", () => {
     const prompt = cursorPromptForMarkdown(
-      "https://example.com/llms.mdx/docs/get-started/introduction",
+      "https://example.com/llms.mdx/docs/understand/the-problem",
     );
-    expect(prompt).toContain("https://example.com/llms.mdx/docs/get-started/introduction");
+    expect(prompt).toContain("https://example.com/llms.mdx/docs/understand/the-problem");
     const href = cursorPromptHref(prompt);
     expect(href.startsWith("https://cursor.com/link/prompt?")).toBe(true);
     expect(href).not.toContain("chatgpt.com");

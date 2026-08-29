@@ -33,14 +33,14 @@ import { VaultRedacted } from "@/components/docs/elements/vault-redacted";
 import { VaultResolution } from "@/components/docs/elements/vault-resolution";
 import { Features } from "@/components/docs/features";
 import { FlowShape } from "@/components/docs/flow-shape";
-import { SixSystemsDrift } from "@/components/docs/start/six-systems-drift";
+import { SixSystemsDrift } from "@/components/docs/understand/six-systems-drift";
 import { CollapseDiagram } from "@/components/landing/collapse-diagram";
 import { ManifestPipeline } from "@/components/landing/manifest-pipeline";
 import { Surfaces } from "@/components/landing/surfaces";
 import { Vocabulary } from "@/components/landing/vocabulary";
 
 /**
- * MDX component map — Fumadocs defaults, docs toolkit, and get-started visuals
+ * MDX component map — Fumadocs defaults, docs toolkit, and handbook visuals
  * (Features, CollapseDiagram, ManifestPipeline, Surfaces, Vocabulary, plus
  * custom FlowShape / DevModes / ClientLoop / DriftBoard / CollapseBoard) and
  * per-element visuals

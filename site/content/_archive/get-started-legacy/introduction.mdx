@@ -24,7 +24,7 @@ Triggers determine what starts the flow while preserving identical anatomy and e
 | Trigger                            | Starts when        | Replaces           |
 | ---------------------------------- | ------------------ | ------------------ |
 | `http.post("/bookings")`           | A request arrives  | Endpoint · handler |
-| `every("10m")`                     | Time passes        | Cron job           |
+| `expireStaleClock` (`clock(...)`)  | Time passes        | Cron job           |
 | `orderPlaced` (a signal)           | Another flow emits | Queue consumer     |
 | `db.table(users).changed("email")` | A row changes      | CDC pipeline       |
 
@@ -32,7 +32,7 @@ Triggers determine what starts the flow while preserving identical anatomy and e
 import { on, flow, http } from "okengine";
 
 on(http.post("/bookings"), createBooking);
-on(every("10m"), expireStale);
+on(expireStaleClock, expireStale);
 on(orderPlaced, sendReceipt);
 on(db.table(users).changed("email"), reverify);
 ```

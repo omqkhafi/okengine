@@ -26,11 +26,15 @@ export const onboardUser = flow("users.onboard", {
   in: z.object({ userId: z.string(), email: z.string() }),
   do: async ({ userId, email }, fx) => {
     // Step 1: Charge setup fee (with compensation if subsequent steps fail)
-    const charge = await fx.step("charge", async () => {
-      return await fx.call(chargeCard, { userId, amount: 50 });
-    }, {
-      undo: async (res) => fx.call(refundCard, { chargeId: res.id }),
-    });
+    const charge = await fx.step(
+      "charge",
+      async () => {
+        return await fx.call(chargeCard, { userId, amount: 50 });
+      },
+      {
+        undo: async (res) => fx.call(refundCard, { chargeId: res.id }),
+      },
+    );
 
     // Step 2: Provision workspace
     const workspace = await fx.step("provision", async () => {
@@ -49,6 +53,7 @@ export const onboardUser = flow("users.onboard", {
   },
 });
 ```
+
 </Step>
 
 </Steps>
@@ -57,16 +62,24 @@ export const onboardUser = flow("users.onboard", {
 
 When any step throws an unhandled error, the workflow stops forward execution and runs `undo` handlers in reverse (LIFO) order for all completed steps that declared compensation logic.
 
-| Step | State | Action on Error in Step 2 |
-| ---- | ----- | ------------------------- |
-| 1. Charge | Succeeded | `undo(res)` called (Refund) |
-| 2. Provision | Failed | Throws error, triggers undo chain |
-| 3. Sleep | Pending | Never executed |
-| 4. Notify | Pending | Never executed |
+| Step         | State     | Action on Error in Step 2         |
+| ------------ | --------- | --------------------------------- |
+| 1. Charge    | Succeeded | `undo(res)` called (Refund)       |
+| 2. Provision | Failed    | Throws error, triggers undo chain |
+| 3. Sleep     | Pending   | Never executed                    |
+| 4. Notify    | Pending   | Never executed                    |
 
 ## Next
 
 <Cards>
-  <Card title="Flow Overview" description="Return to Flow element overview." href="/docs/elements/flow" />
-  <Card title="Signal Element" description="Learn about asynchronous Signals and queues." href="/docs/elements/signal" />
+  <Card
+    title="Flow Overview"
+    description="Return to Flow element overview."
+    href="/docs/elements/flow"
+  />
+  <Card
+    title="Signal Element"
+    description="Learn about asynchronous Signals and queues."
+    href="/docs/elements/signal"
+  />
 </Cards>

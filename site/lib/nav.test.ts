@@ -28,7 +28,7 @@ describe("NAV_TABS", () => {
     const pathnames = [
       "/",
       "/docs",
-      "/docs/get-started/introduction",
+      "/docs/understand/the-problem",
       "/docs/elements/flow",
       "/changelog",
       "/changelog/0.17",

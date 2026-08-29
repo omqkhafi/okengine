@@ -1,12 +1,12 @@
-import { on, flow, every } from "okengine";
+import { on, flow } from "okengine";
 import { eq } from "drizzle-orm";
 
-import { db } from "@/core";
+import { db, spawnRecurringClock } from "@/core";
 import { recurrence, spaces, tasks } from "@/db/schema.decl";
 
 /** Spawn due recurring tasks — named clock `spawn-recurring`. */
 export const spawn = on(
-  every("1h"),
+  spawnRecurringClock,
   flow("recurring.spawn", {
     plane: "operator",
     do: async (_input, fx) => {

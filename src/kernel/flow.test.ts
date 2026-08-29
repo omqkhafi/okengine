@@ -1,8 +1,10 @@
 import { describe, expect, test, beforeEach } from "bun:test";
+import { clock } from "../elements/clock/declare.ts";
+import { field, store } from "../elements/store.ts";
 import { oke } from "./app.ts";
 import { flow, isFlow, resetFlowSeq } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
-import { every, http, internal, table } from "./triggers.ts";
+import { http, internal } from "./triggers.ts";
 
 beforeEach(() => {
   resetBindings();
@@ -71,8 +73,9 @@ describe("five trigger kinds", () => {
       }),
     );
 
+    const hourly = clock("hourly", { every: "1h" });
     on(
-      every("1h"),
+      hourly,
       flow("t.every", {
         do: () => {
           seen.push("every");
@@ -89,8 +92,14 @@ describe("five trigger kinds", () => {
       }),
     );
 
+    const db = store.sql("main");
+    const orders = store.schema.table("orders", {
+      id: field.text().primaryKey(),
+      status: field.text(),
+    });
+
     on(
-      table("orders").changed("status"),
+      db.table(orders).changed("status"),
       flow("t.cdc", {
         do: (p: { before: { status: string }; after: { status: string } }) => {
           seen.push(`cdc:${p.before.status}->${p.after.status}`);
@@ -114,7 +123,7 @@ describe("five trigger kinds", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ data: { code: "abc" }, error: null });
 
-    await app.dispatchEvery("1h");
+    await app.dispatchEvery("hourly");
     await app.dispatchSignal("link-clicked", { code: "sa" });
     await app.dispatchCdc(
       "orders",

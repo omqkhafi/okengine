@@ -6,6 +6,7 @@
  */
 
 import { flattenGateArgs, GATE_PUBLIC_NAME, type GateAllDecl } from "../elements/gate/flatten.ts";
+import type { ClockDecl } from "../elements/clock/declare.ts";
 import type { NamedRef } from "./fx.ts";
 import { HTTP_PATH_PENDING, type HttpPathPending } from "./http-path-pending.ts";
 import { lazyRequire } from "./lazy-require.ts";
@@ -83,6 +84,13 @@ export interface LiveHttpTrigger<
   public(): LiveHttpTrigger<M, P>;
 }
 
+/** Clock / cron trigger (`clock("daily", { every: "1d" })`). */
+export interface ClockTrigger {
+  readonly kind: "clock";
+  readonly name: string;
+  readonly clock?: ClockDecl;
+}
+
 /** Clock / interval trigger (`every("1h")`). */
 export interface EveryTrigger {
   readonly kind: "every";
@@ -135,6 +143,7 @@ export interface McpToolTrigger {
 /** Discriminated union of all trigger kinds. */
 export type Trigger =
   | HttpTrigger
+  | ClockTrigger
   | EveryTrigger
   | SignalAsTrigger
   | CdcTrigger
@@ -378,12 +387,19 @@ export const http: HttpTriggerNamespace = {
 };
 
 /**
- * Clock trigger — run on an interval (`every("10m")`, `every("1h")`).
+ * True when `value` is a declared clock handle (`clock("daily", { every: "1d" })`).
  *
- * @param interval - Duration string
+ * @param value - Unknown
  */
-export function every(interval: string): EveryTrigger {
-  return { kind: "every", interval };
+export function isClockDecl(value: unknown): value is ClockDecl {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.name === "string" &&
+    !("kind" in v) &&
+    !("do" in v) &&
+    ("cron" in v || "every" in v || "timezone" in v)
+  );
 }
 
 /**
@@ -427,34 +443,6 @@ export function isSignalTriggerSource(value: unknown): value is SignalSource {
   return true;
 }
 
-/** Table handle returned by {@link table}. */
-export interface TableHandle {
-  readonly name: string;
-  /**
-   * CDC trigger when `column` (or any column) changes.
-   *
-   * @param column - Optional column name
-   */
-  changed(column?: string): CdcTrigger;
-}
-
-/**
- * CDC table handle — `table("orders").changed("status")`.
- *
- * @param name - Table name
- * @param store - Optional store name
- */
-export function table(name: string, store?: string): TableHandle {
-  return {
-    name,
-    changed(column?: string): CdcTrigger {
-      return column === undefined
-        ? { kind: "cdc", table: name, store }
-        : { kind: "cdc", table: name, column, store };
-    },
-  };
-}
-
 /**
  * Explicit internal / call-only trigger.
  * Prefer an untriggered `flow(name, {…})` when no trigger value is needed.
@@ -495,9 +483,9 @@ function withMcpGates(name: string, gates: readonly GateRef[]): McpToolTrigger {
 /**
  * Normalize anything accepted by {@link on} into a {@link Trigger}.
  *
- * @param value - Trigger or signal handle
+ * @param value - Trigger, clock, or signal handle
  */
-export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
+export function normalizeTrigger(value: Trigger | SignalSource | ClockDecl): Trigger {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("on() expected a trigger or signal handle");
   }
@@ -505,6 +493,7 @@ export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
     const kind = (value as Trigger).kind;
     if (
       kind === "http" ||
+      kind === "clock" ||
       kind === "every" ||
       kind === "signal" ||
       kind === "cdc" ||
@@ -513,6 +502,9 @@ export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
     ) {
       return value as Trigger;
     }
+  }
+  if (isClockDecl(value)) {
+    return { kind: "clock", name: value.name, clock: value };
   }
   if (isSignalTriggerSource(value)) {
     return asSignalTrigger(value);
@@ -527,6 +519,8 @@ export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
  */
 export type BoundTriggerOf<T> = T extends Trigger
   ? T
-  : T extends SignalSource
-    ? SignalAsTrigger
-    : Trigger;
+  : T extends ClockDecl
+    ? ClockTrigger
+    : T extends SignalSource
+      ? SignalAsTrigger
+      : Trigger;

@@ -6,18 +6,18 @@ icon: "Boxes"
 
 ## What the door recognizes
 
-The door from the last page isn't open-ended — it recognizes a fixed set of things it's willing to do. Each one made the cut because it has *irreducible physics*: behavior that breaks if you tried to fake it using one of the others. A queue's retry and lease semantics aren't a database's job. A secret's rotation lifecycle isn't a config value's job. Where that distinction is real, it gets a name. Where it isn't, it doesn't — which is why the list stops at eight instead of growing indefinitely.
+The door from the last page isn't open-ended — it recognizes a fixed set of things it's willing to do. Each one made the cut because it has _irreducible physics_: behavior that breaks if you tried to fake it using one of the others. A queue's retry and lease semantics aren't a database's job. A secret's rotation lifecycle isn't a config value's job. Where that distinction is real, it gets a name. Where it isn't, it doesn't — which is why the list stops at eight instead of growing indefinitely.
 
-| Element | What it is | What it replaces |
-| --- | --- | --- |
-| **Flow** | Execution & behavior | endpoint, handler, consumer, job, workflow, webhook |
-| **Signal** | Data in motion | queue, pub/sub, stream, websocket, SSE, event bus |
-| **Store** | Data at rest | relational database, cache, key-value store, file storage, search index |
-| **Clock** | Time & schedules | cron, delay, timeout, durable sleep, TTL |
-| **Gate** | Permission to act | auth, session, tenancy, RBAC, rate limit, quota |
-| **Vault** | Protected knowledge | secrets, encryption keys, rotation, environment variables |
-| **Channel** | Reaching a human | transactional email, SMS, push notifications, receipts |
-| **AI** | Machine intelligence | model calls, structured prompts, agents, MCP tools |
+| Element     | What it is           | What it replaces                                                        |
+| ----------- | -------------------- | ----------------------------------------------------------------------- |
+| **Flow**    | Execution & behavior | endpoint, handler, consumer, job, workflow, webhook                     |
+| **Signal**  | Data in motion       | queue, pub/sub, stream, websocket, SSE, event bus                       |
+| **Store**   | Data at rest         | relational database, cache, key-value store, file storage, search index |
+| **Clock**   | Time & schedules     | cron, delay, timeout, durable sleep, TTL                                |
+| **Gate**    | Permission to act    | auth, session, tenancy, RBAC, rate limit, quota                         |
+| **Vault**   | Protected knowledge  | secrets, encryption keys, rotation, environment variables               |
+| **Channel** | Reaching a human     | transactional email, SMS, push notifications, receipts                  |
+| **AI**      | Machine intelligence | model calls, structured prompts, agents, MCP tools                      |
 
 Read the right column as the honest answer to "what would I have reached for before this?" Every item in it is a separate tool with its own configuration, its own failure modes, and its own place to go wrong. The left column is the same ground, covered by something with one shared door and one shared set of guarantees.
 

@@ -8,7 +8,8 @@ icon: "Braces"
 In OKEngine, flows are pure execution structures. Direct interaction with the outside world is strictly confined to a single doorway: the `fx` argument passed into every flow's `do` handler.
 
 <Callout title="The fx Rule">
-  All world access goes through `fx`. Calling global `fetch`, importing `node:fs`, or reading unmanaged `Date.now()` inside a flow is a structural defect.
+  All world access goes through `fx`. Calling global `fetch`, importing `node:fs`, or reading
+  unmanaged `Date.now()` inside a flow is a structural defect.
 </Callout>
 
 ```typescript
@@ -27,15 +28,15 @@ flow("orders.process", {
 
 Every action executed via `fx` records an entry on the runtime effect ledger. Effects are categorized into seven explicit types:
 
-| Effect | Action via `fx` | Example Resource Reference |
-| --- | --- | --- |
-| **`reads`** | Reading data from a store or stream | `sql:users`, `kv:sessions`, `files:invoices` |
-| **`writes`** | Mutating data in a store facet | `sql:orders`, `kv:rate_limits` |
-| **`emits`** | Publishing an event to a Signal | `signal:orderPlaced` |
-| **`sends`** | Delivering a notification via Channel | `template:orderConfirmation` |
-| **`asks`** | Invoking an AI model or prompt | `prompt:fraudScore` |
-| **`secrets`** | Accessing a Vault secret capability | `secret:stripeApiKey` |
-| **`calls`** | Invoking another Flow transitively | `flow:billing.charge` |
+| Effect        | Action via `fx`                       | Example Resource Reference                   |
+| ------------- | ------------------------------------- | -------------------------------------------- |
+| **`reads`**   | Reading data from a store or stream   | `sql:users`, `kv:sessions`, `files:invoices` |
+| **`writes`**  | Mutating data in a store facet        | `sql:orders`, `kv:rate_limits`               |
+| **`emits`**   | Publishing an event to a Signal       | `signal:orderPlaced`                         |
+| **`sends`**   | Delivering a notification via Channel | `template:orderConfirmation`                 |
+| **`asks`**    | Invoking an AI model or prompt        | `prompt:fraudScore`                          |
+| **`secrets`** | Accessing a Vault secret capability   | `secret:stripeApiKey`                        |
+| **`calls`**   | Invoking another Flow transitively    | `flow:billing.charge`                        |
 
 ## What the Effects Ledger Powers
 

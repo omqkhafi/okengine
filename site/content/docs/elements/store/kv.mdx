@@ -31,6 +31,7 @@ export const cacheExample = flow("cache.example", {
   },
 });
 ```
+
 </Step>
 
 </Steps>
@@ -50,6 +51,14 @@ const acquired = await fx.store.kv.setNx("lock:sync", "worker-1", { ttl: "30s" }
 ## Next
 
 <Cards>
-  <Card title="Blob Files Store" description="Object storage and server-side image processing." href="/docs/elements/store/files" />
-  <Card title="Store Overview" description="Return to Store overview." href="/docs/elements/store" />
+  <Card
+    title="Blob Files Store"
+    description="Object storage and server-side image processing."
+    href="/docs/elements/store/files"
+  />
+  <Card
+    title="Store Overview"
+    description="Return to Store overview."
+    href="/docs/elements/store"
+  />
 </Cards>

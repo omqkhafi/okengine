@@ -948,12 +948,13 @@ export const attach = on(
 
   test("fx.store(files).list(...) infers a read, unannotated", async () => {
     const source = `
-import { on, flow, every, store } from "okengine";
+import { on, flow, clock, store } from "okengine";
 
 export const files = store.files("uploads");
+export const sweepClock = clock("notes.sweep", { every: "1d" });
 
 export const sweep = on(
-  every("1d"),
+  sweepClock,
   flow("notes.sweep", {
     do: async (_input, fx) => {
       const keys = await fx.store(files).list();
@@ -971,13 +972,14 @@ export const sweep = on(
 describe("extractManifest — kv key methods", () => {
   test("fx.store(kv).delete(key) writes kv:<namespace>, not kv:<identifier>", async () => {
     const source = `
-import { on, flow, every, store, signal } from "okengine";
+import { on, flow, clock, store, signal } from "okengine";
 
 export const draftsKv = store.kv("drafts");
 export const draftExpired = signal("draft-expired", { delivery: "broadcast", retries: 0, deadLetter: false });
+export const expireClock = clock("drafts.expire", { every: "10m" });
 
 export const expire = on(
-  every("10m"),
+  expireClock,
   flow("drafts.expire", {
     do: async (_input, fx) => {
       const keys = await fx.store(draftsKv).list();

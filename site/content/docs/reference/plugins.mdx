@@ -133,7 +133,7 @@ Plugin options are static by default — changing them means a redeploy. Every o
 ### Declare the source and its sync flow
 
 ```typescript title="src/app.ts"
-import { every, oke, on, store } from "okengine";
+import { clock, oke, on, store } from "okengine";
 import { configSource, maintenanceMode } from "okengine/plugins";
 
 const db = store.sql("app");
@@ -146,7 +146,8 @@ const maintenance = configSource({
   kv: cache, // read-through cache (optional)
 });
 
-on(every("30s"), maintenance.sync()); // one clock flow refreshes the box
+const maintenanceSyncClock = clock("maintenance.sync", { every: "30s" });
+on(maintenanceSyncClock, maintenance.sync()); // one clock flow refreshes the box
 
 export const app = oke({ name: "shop", env: "dev" }).plug(maintenanceMode(maintenance));
 ```

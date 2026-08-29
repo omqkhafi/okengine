@@ -59,7 +59,7 @@ export interface ConfigSourceOptions<T extends object> {
 /**
  * A live config box for one plugin. `current()` is synchronous and never
  * throws — safe to read from any hook. `sync()` is the refresh flow the
- * app binds once: `on(every("30s"), source.sync())`.
+ * app binds once: `on(syncClock, source.sync())`.
  */
 export interface ConfigSource<T extends object> {
   readonly [configSourceBrand]: true;

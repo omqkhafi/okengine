@@ -1,11 +1,11 @@
-import { on, flow, every } from "okengine";
+import { on, flow } from "okengine";
 
-import { dailyDigestMail, db, slackWebhook, weeklySummaryPrompt } from "@/core";
+import { dailyDigestClock, dailyDigestMail, db, slackWebhook, weeklySummaryPrompt } from "@/core";
 import { goals, tasks } from "@/db/schema.decl";
 
 /** Morning inbox + goal digest — named clock `daily-digest`. */
 export const daily = on(
-  every("1d"),
+  dailyDigestClock,
   flow("digest.daily", {
     plane: "operator",
     do: async (_input, fx) => {

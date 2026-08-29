@@ -1,13 +1,13 @@
 ---
-title: "Why OKE?"
+title: "Why"
 description: "The problem of seams across independent backend tools, the insight, and the smaller model."
-source: docs/spec/unified-theory.md
-icon: Compass
+source: "docs/spec/unified-theory.md"
+icon: "Compass"
 ---
 
-## The Problem: The Seams You Own
+Modern backends accumulate many independently adopted systems: routers, queues, crons, websockets, caches, vaults, mailers, AI wrappers, and observability agents.
 
-Modern backends accumulate many independently adopted systems: router, queue, cron, websockets, cache, secrets, mailer, AI wrappers, and observability.
+Each tool brings its own configuration format, lifecycle semantics, error taxonomy, and operational dashboard.
 
 <Callout title="A note on the count">
   'Forty' is a representative illustration of the number of backend concerns developers commonly
@@ -18,16 +18,18 @@ Modern backends accumulate many independently adopted systems: router, queue, cr
 many systems → many seams → many contracts → many mental models
 ```
 
-Every TypeScript backend works on day one. The bill arrives later in the seams:
+## The Seams You Own
 
-- **Cache that lies:** You update a writer, but forget the cache key in checkout.
-- **Secret that fails at 2am:** Deploy boots fine; the first charge fails because the env var was missed.
-- **Permission checks in the wrong place:** Auth logic scattered across handlers instead of verified at the trigger.
+Every backend works on day one. The real operational tax arrives later in the seams between systems:
+
+- **Cache that lies:** You update a database record, but forget to invalidate the cache key in another service.
+- **Secret that fails at 2am:** Deploy boots fine, but the first charge fails because an environment variable was missing.
+- **Permission checks in the wrong place:** Auth logic is scattered across handlers instead of verified at the trigger.
 - **The dashboard that doesn't know you:** Observability tools learn routes from traffic samples instead of the compiled model.
 
 ## The Insight: One Programming Model
 
-These concerns do not need to become separate programming concepts. They collapse into one closed set:
+These operational concerns do not need to become separate programming concepts. They collapse into one closed set:
 
 ```text
 Many backend concerns → One programming model
@@ -37,7 +39,7 @@ Many backend concerns → One programming model
 
 ## Wrong vs. Right Mental Model
 
-Understanding OKE begins by rejecting the conventional feature-pile model:
+Understanding OKEngine begins by rejecting the conventional feature-pile model:
 
 | ❌ Wrong Mental Model (Feature Bundle) | ✅ OKEngine Model (Unified Primitives) |
 | -------------------------------------- | -------------------------------------- |
@@ -47,68 +49,33 @@ Understanding OKE begins by rejecting the conventional feature-pile model:
 | Hand-maintained glue & OpenAPI         | Compiled Manifest contract             |
 | Unchecked runtime drift                | Derived, inspectable surfaces          |
 
-The difference is not how many features OKE has. It is how few concepts you need to understand.
-
-## The Law and the `fx` Rule
-
-Every backend behavior is a Flow:
-
-```typescript
-import { on, flow, http } from "okengine/http";
-
-export const health = on(http.get().public(), flow({ do: () => ({ ok: true }) }));
-```
-
-**All world access goes through `fx`.** A Flow that calls `fetch` directly, imports `node:fs`, or uses `Date.now()` is a defect.
-
-```text
-Flow → fx → observable Effects → Compiler → Manifest → Surfaces
-```
-
-Because all effects pass through `fx`, the compiler infers cache keys, capability matrices, and trace trees without manual annotations.
-
-## One Contract, Many Surfaces
-
-The source of truth is the backend model expressed in code. The **Manifest** is the compiled, versioned contract representing that model.
-
-| Surface                           | Port               | You Maintain?                 |
-| --------------------------------- | ------------------ | ----------------------------- |
-| Typed client (`okengine/client`)  | your app code      | No — derived from Manifest    |
-| Console panels, traces, explorers | `:6533`            | No — reads the Manifest       |
-| MCP for agents                    | `:6535`            | No — reads the Manifest       |
-| Architecture diagram              | Console            | No — it _is_ the effect graph |
-| Capability matrix + cache keys    | compiler / runtime | No — inferred from `fx`       |
-
-Operational surfaces are derived, not separately maintained.
+The difference is not how many features OKEngine has. It is how few concepts you need to understand.
 
 ## See the Model Compose
 
-OKE does not add new subsystems when new architectural requirements emerge. The eight closed primitives compose naturally:
+OKEngine does not add new subsystems when new architectural requirements emerge. The eight closed primitives compose naturally:
 
 - **Realtime:** `Store + Gate + Signal + Flow → Live Query` (Global CDC + RLS re-check + SSE).
 - **Security:** `Gate + Store/RLS + Tenant + fx → Secure execution` (Unified user, operator, and agent boundaries).
-- **Agents:** `MCP + Gate + OAuth + Flow → Agent-accessible backend` (Exposing Flows as MCP tools).
+- **Agents:** `AI + Gate + Flow → Agent-accessible backend` (Exposing Flows as MCP tools).
 - **Operations:** `Manifest + Effects + Runs → Inspectable backend` (Wide-event telemetry and live graphs).
 
-> **None of these required a ninth primitive.**
-
-## Core Philosophy
-
-> **Keep the model small. Let the backend grow without growing the mental model.**
-
-Your backend is not just executable. It is inspectable.
+<Callout title="Zero Subsystem Sprawl">
+  None of these capabilities required a ninth primitive. New infrastructure arrives as a driver for
+  an existing element.
+</Callout>
 
 ## Next Steps
 
 <Cards>
   <Card
-    title="Introduction"
-    description="The Law, Flow anatomy, and the eight elements."
-    href="/docs/get-started/introduction"
+    title="Model"
+    description="The four architectural pillars: the one law, eight closed elements, explicit effects, and the compiled manifest."
+    href="/docs/concepts/model"
   />
   <Card
-    title="Installation"
-    description="Scaffold your first project with create-oke."
-    href="/docs/get-started/installation"
+    title="Law"
+    description="The single execution law: every behavior is a Flow on(Trigger) -> Effects."
+    href="/docs/concepts/law"
   />
 </Cards>

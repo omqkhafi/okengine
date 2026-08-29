@@ -8,7 +8,7 @@ Consumers trigger Flows asynchronously in response to emitted Signals or Change 
 
 ## What it is
 
-A Consumer is a Flow bound with `on(signal)` or `on(store.table.changed())`. It handles decoupled asynchronous processing, background notifications, and event-driven data propagation without manual queue subscription plumbing.
+A Consumer is a Flow bound with `on(signal)` or `on(db.table(schema).changed())`. It handles decoupled asynchronous processing, background notifications, and event-driven data propagation without manual queue subscription plumbing.
 
 ## Smallest Example
 
@@ -33,6 +33,7 @@ export const sendWelcome = on(
   }),
 );
 ```
+
 </Step>
 
 <Step>
@@ -52,10 +53,11 @@ Flows can also trigger automatically whenever records in a database table are in
 
 ```typescript
 import { on, flow } from "okengine";
+import { db } from "@/core";
 import { users } from "@/schema";
 
 export const onUserInsert = on(
-  users.changed("insert"),
+  db.table(users).changed("insert"),
   flow("audit.users", {
     do: async ({ record }, fx) => {
       await fx.store(db).insert(auditLogs).values({
@@ -77,6 +79,14 @@ export const onUserInsert = on(
 ## Next
 
 <Cards>
-  <Card title="Durable Workflows" description="Build multi-step resilient sagas with fx.step." href="/docs/elements/flow/workflows" />
-  <Card title="Signal Element" description="Understand delivery physics and queue semantics." href="/docs/elements/signal" />
+  <Card
+    title="Durable Workflows"
+    description="Build multi-step resilient sagas with fx.step."
+    href="/docs/elements/flow/workflows"
+  />
+  <Card
+    title="Signal Element"
+    description="Understand delivery physics and queue semantics."
+    href="/docs/elements/signal"
+  />
 </Cards>

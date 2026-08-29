@@ -1,11 +1,18 @@
 /**
  * All five trigger kinds — effects inferred through `fx` for each.
  */
-import { on, flow, http, every, internal, table, signal, store } from "okengine";
+import { on, flow, http, internal, signal, store, clock, field } from "okengine";
 
 export const db = store.sql("db");
-export const orders = { name: "orders" };
-export const links = { name: "links" };
+export const orders = store.schema.table("orders", {
+  id: field.text().primaryKey(),
+  status: field.text(),
+});
+export const links = store.schema.table("links", {
+  code: field.text().primaryKey(),
+  clicks: field.integer(),
+  createdAt: field.integer(),
+});
 
 export const linkClicked = signal("link-clicked", {
   delivery: "once",
@@ -25,8 +32,9 @@ export const create = on(
 );
 
 // ② CLOCK / every
+export const cleanup = clock("cleanup", { every: "10m" });
 on(
-  every("10m"),
+  cleanup,
   flow("triggers.every", {
     do: (_, fx) => fx.store(db).delete(links).where({ createdAt: 0 }),
   }),
@@ -45,7 +53,7 @@ on(
 
 // ④ CDC
 on(
-  table("orders").changed("status"),
+  db.table(orders).changed("status"),
   flow("triggers.cdc", {
     do: ({ before, after }, fx) => fx.store(db).insert(orders).values({ before, after }),
   }),

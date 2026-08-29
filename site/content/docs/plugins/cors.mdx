@@ -71,7 +71,8 @@ const origins = configSource({
   db: { store: db },
   kv: cache,
 });
-on(every("30s"), origins.sync());
+const corsSyncClock = clock("cors.sync", { every: "30s" });
+on(corsSyncClock, origins.sync());
 export const app = oke({ name: "shop", env: "dev" }).plug(cors(origins));
 ```
 

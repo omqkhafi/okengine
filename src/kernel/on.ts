@@ -6,6 +6,7 @@
  * The return type carries the bound trigger so `typeof app` can derive REST.
  */
 
+import type { ClockDecl } from "../elements/clock/declare.ts";
 import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import {
@@ -42,11 +43,11 @@ const bindings: Binding[] = [];
  * Bind a trigger to a Flow. Returns the same Flow (one species) with the
  * trigger stamped into the type parameter for client route derivation.
  *
- * @param trigger - HTTP, every, signal handle, CDC, or internal
+ * @param trigger - HTTP, named clock, signal handle, CDC, or internal
  * @param flowDef - Flow definition
  */
 export function on<
-  T extends Trigger | SignalSource,
+  T extends Trigger | SignalSource | ClockDecl,
   I = unknown,
   O = unknown,
   E extends FlowErrorMap = FlowErrorMap,
@@ -73,7 +74,7 @@ export function on<T extends LiveHttpTrigger<HttpMethod, string>>(
  */
 export function on(mount: ResourceMount): ResourceFlowBag;
 export function on(
-  triggerOrMount: Trigger | SignalSource | ResourceMount,
+  triggerOrMount: Trigger | SignalSource | ClockDecl | ResourceMount,
   flowDef?: FlowDef<any, any, any, any, Trigger | undefined>,
 ): unknown {
   if (isResourceMount(triggerOrMount)) {

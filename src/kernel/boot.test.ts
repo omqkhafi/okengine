@@ -16,7 +16,7 @@ import { store } from "../elements/store.ts";
 import { vault, VaultBootError } from "../elements/vault.ts";
 import { bootApplication, resolveElementNeeds } from "./boot.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
-import { every, http } from "./triggers.ts";
+import { http } from "./triggers.ts";
 import { oke } from "./app.ts";
 import { on, resetBindings } from "./on.ts";
 
@@ -152,8 +152,9 @@ describe("boot — cron fires without manual dispatch", () => {
     resetFlowSeq();
 
     let ran = 0;
+    const expireStale = clock("expire-stale", { every: "1h" });
     on(
-      every("1h"),
+      expireStale,
       flow("cleanup.expire", {
         do: () => {
           ran += 1;
@@ -163,14 +164,14 @@ describe("boot — cron fires without manual dispatch", () => {
 
     const app = oke({
       name: "cron-boot",
-      clocks: [clock("expire-stale", { every: "1h" })],
+      clocks: [expireStale],
       env: "test",
     });
 
     await app.boot({
       env: "test",
       startScheduler: false,
-      clocks: [clock("expire-stale", { every: "1h" })],
+      clocks: [expireStale],
     });
 
     const rt = app.bootResult!.clock!;
@@ -251,8 +252,9 @@ describe("boot — cron autostart via real timer loop", () => {
     jest.useFakeTimers({ now: 1_000_000 });
 
     let ran = 0;
+    const autostartClock = clock("cleanup.autostart", { every: "10m" });
     on(
-      every("10m"),
+      autostartClock,
       flow("cleanup.autostart", {
         do: () => {
           ran += 1;
@@ -263,6 +265,7 @@ describe("boot — cron autostart via real timer loop", () => {
     // Non-test env → startScheduler defaults ON. No createTestApp / advance.
     const app = oke({
       name: "cron-autostart",
+      clocks: [autostartClock],
       env: "dev",
       schedulerIntervalMs: 1000,
       config: {

@@ -1024,6 +1024,13 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
             : {}),
           perTenant: true,
         };
+        const bindingName = enclosingConstName(call, program);
+        if (bindingName) {
+          scope.bindings.set(bindingName, {
+            kind: "clock",
+            ref: name,
+          });
+        }
       }
     }
 
@@ -1325,6 +1332,13 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           : {}),
         ...(boolProp(opts, "perTenant") === true ? { perTenant: true } : {}),
       };
+      const bindingName = enclosingConstName(call, program);
+      if (bindingName) {
+        scope.bindings.set(bindingName, {
+          kind: "clock",
+          ref: name,
+        });
+      }
     }
   }
 
@@ -2153,13 +2167,22 @@ function parseTrigger(
   scope: ProjectScope,
   filePath?: string,
 ): ParsedTrigger | undefined {
-  // every("10m")
   if (node.type === "CallExpression") {
     const call = node as CallExpression;
     const name = identifierName(call.callee);
-    if (name === "every") {
-      const interval = stringArg(call.arguments[0]);
-      if (interval) return { trigger: { every: interval } };
+    if (name === "clock") {
+      const clockName = stringArg(call.arguments[0]);
+      const opts = objectArg(call.arguments[1]);
+      const cron = stringProp(opts, "cron");
+      const every = stringProp(opts, "every");
+      if (cron) return { trigger: { cron } };
+      if (every) return { trigger: { every } };
+      if (clockName) {
+        const clockDef = scope.clocks[clockName];
+        if (clockDef?.cron) return { trigger: { cron: clockDef.cron } };
+        if (clockDef?.every) return { trigger: { every: clockDef.every } };
+        return { trigger: { cron: clockName } };
+      }
     }
     if (name === "internal") {
       return { trigger: {} };
@@ -2173,8 +2196,8 @@ function parseTrigger(
     const http = parseHttpTrigger(call, scope, filePath);
     if (http) return http;
 
-    // table("orders").changed("status") / db.table(orders).changed(...)
-    const cdc = parseCdcTrigger(call);
+    // db.table(orders).changed(...) / <storeName>.table(orders).changed(...)
+    const cdc = parseCdcTrigger(call, scope);
     if (cdc) return { trigger: { cdc } };
 
     // on(signalHandle, …) — Identifier referring to a signal binding
@@ -2191,6 +2214,18 @@ function parseTrigger(
     const id = (node as Identifier).name;
     if (id === "internal") return { trigger: {} };
     const binding = scope.bindings.get(id);
+    if (binding?.kind === "clock") {
+      const clockDef = scope.clocks[binding.ref];
+      if (clockDef?.cron) return { trigger: { cron: clockDef.cron } };
+      if (clockDef?.every) return { trigger: { every: clockDef.every } };
+      return { trigger: { cron: binding.ref } };
+    }
+    if (scope.clocks[id]) {
+      const clockDef = scope.clocks[id];
+      if (clockDef?.cron) return { trigger: { cron: clockDef.cron } };
+      if (clockDef?.every) return { trigger: { every: clockDef.every } };
+      return { trigger: { cron: id } };
+    }
     if (binding?.kind === "signal") {
       return { trigger: { signal: binding.ref } };
     }
@@ -2326,7 +2361,7 @@ function parseHttpTrigger(
   };
 }
 
-function parseCdcTrigger(call: CallExpression): Trigger["cdc"] | undefined {
+function parseCdcTrigger(call: CallExpression, scope?: ProjectScope): Trigger["cdc"] | undefined {
   // *.changed("col") or *.changed()
   const callee = call.callee;
   if (callee.type !== "MemberExpression") return undefined;
@@ -2334,21 +2369,22 @@ function parseCdcTrigger(call: CallExpression): Trigger["cdc"] | undefined {
   if (identifierName(member.property) !== "changed") return undefined;
 
   const column = stringArg(call.arguments[0]);
-  // object is table("orders") or db.table(orders) or table(orders)
+  // object is db.table(orders) or <storeName>.table(orders)
   const obj = member.object;
   if (obj.type === "CallExpression") {
     const inner = obj as CallExpression;
     const innerCallee = inner.callee;
-    if (identifierName(innerCallee) === "table") {
-      const tableName = stringArg(inner.arguments[0]) ?? identifierName(inner.arguments[0]);
-      if (!tableName) return undefined;
-      return column ? { table: tableName, column } : { table: tableName };
-    }
     if (
       innerCallee.type === "MemberExpression" &&
       identifierName((innerCallee as AstNode & { property: AstNode }).property) === "table"
     ) {
-      const tableName = stringArg(inner.arguments[0]) ?? identifierName(inner.arguments[0]);
+      const argId = identifierName(inner.arguments[0]);
+      const resolvedName = argId
+        ? scope?.bindings.get(argId)?.kind === "table"
+          ? scope.bindings.get(argId)?.ref
+          : argId
+        : undefined;
+      const tableName = stringArg(inner.arguments[0]) ?? resolvedName;
       if (!tableName) return undefined;
       return column ? { table: tableName, column } : { table: tableName };
     }

@@ -5,10 +5,12 @@ icon: "ShieldCheck"
 source: "docs/spec/unified-theory.md"
 ---
 
-Gate is how your backend **decides whether a caller has permission to act**. In other frameworks, security is an afterthought spread across Express middlewares, Passport strategies, rate-limiter libraries, and ad-hoc tenant decorators. In OKE, Gate provides an explicit security posture.
+Gate is how your backend **decides whether a caller has permission to act**. In traditional stacks, security is an afterthought spread across routing middlewares, authentication strategies, rate-limiter libraries, and ad-hoc tenant decorators. In OKE, Gate provides an explicit security posture.
 
 <Callout title="The one rule">
-  **First denial wins**. When multiple gates protect a Flow, they evaluate left-to-right. The first gate to reject the caller terminates execution immediately without evaluating subsequent gates or entering the flow body.
+  **First denial wins**. When multiple gates protect a Flow, they evaluate left-to-right. The first
+  gate to reject the caller terminates execution immediately without evaluating subsequent gates or
+  entering the flow body.
 </Callout>
 
 ## What is Gate?
@@ -79,6 +81,14 @@ export const deleteUser = on(
 ## Next Steps
 
 <Cards>
-  <Card title="Authentication" description="Configure session auth and credentials." href="/docs/elements/gate/auth" />
-  <Card title="Vault Element" description="Manage secrets and protected configuration." href="/docs/elements/vault" />
+  <Card
+    title="Authentication"
+    description="Configure session auth and credentials."
+    href="/docs/elements/gate/auth"
+  />
+  <Card
+    title="Vault Element"
+    description="Manage secrets and protected configuration."
+    href="/docs/elements/vault"
+  />
 </Cards>

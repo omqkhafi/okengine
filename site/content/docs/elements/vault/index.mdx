@@ -8,7 +8,9 @@ source: "docs/spec/unified-theory.md"
 Vault is how your backend **holds secrets and configuration safely**. Storing API keys in plain `process.env` leaks credentials into stack traces, logs, and telemetry. In OKE, secrets are declared as contracts, unsealed on demand, and typed as `Redacted<T>`.
 
 <Callout title="The one rule">
-  **Contracts, never values**. Application code declares what secret capabilities it requires (e.g. `vault.secret("stripe.apiKey")`). Values are unsealed strictly through `fx.vault.get()` and never exist in plain JavaScript strings.
+  **Contracts, never values**. Application code declares what secret capabilities it requires (e.g.
+  `vault.secret("stripe.apiKey")`). Values are unsealed strictly through `fx.vault.get()` and never
+  exist in plain JavaScript strings.
 </Callout>
 
 ## What is Vault?
@@ -64,6 +66,14 @@ The compiler stamps `secrets: ["stripe.secretKey"]` onto the flow's manifest eff
 ## Next Steps
 
 <Cards>
-  <Card title="Secret Contracts" description="Declare typed secret keys." href="/docs/elements/vault/secrets" />
-  <Card title="Channel Element" description="Send emails, SMS, push notifications, and WhatsApp." href="/docs/elements/channel" />
+  <Card
+    title="Secret Contracts"
+    description="Declare typed secret keys."
+    href="/docs/elements/vault/secrets"
+  />
+  <Card
+    title="Channel Element"
+    description="Send emails, SMS, push notifications, and WhatsApp."
+    href="/docs/elements/channel"
+  />
 </Cards>

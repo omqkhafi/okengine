@@ -36,19 +36,19 @@ const START_HERE: ReadonlyArray<{
   readonly body: string;
 }> = [
   {
-    href: "/docs/get-started/introduction",
-    title: "Introduction",
+    href: "/docs/understand/the-problem",
+    title: "The Problem",
+    body: "Why backends become fragmented across forty tools.",
+  },
+  {
+    href: "/docs/understand/the-model",
+    title: "The Model",
     body: "One law, eight elements, one contract.",
   },
   {
-    href: "/docs/get-started/installation",
-    title: "Installation",
-    body: "Scaffold with create-oke and open the Console.",
-  },
-  {
-    href: "/docs/get-started/basic-usage",
-    title: "Basic usage",
-    body: "Flows, typed client, and bun:test.",
+    href: "/docs/understand/see-it-work",
+    title: "See It Work",
+    body: "First flow, live execution, and typed verification.",
   },
 ];
 
@@ -330,7 +330,7 @@ export default function HomePage() {
               </p>
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Link
-                  href="/docs/get-started/installation"
+                  href="/docs/understand/see-it-work"
                   className="group inline-flex items-center bg-fd-foreground px-5 py-2.5 text-sm font-medium text-fd-background transition-opacity hover:opacity-90"
                 >
                   Get started

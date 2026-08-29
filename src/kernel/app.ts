@@ -131,7 +131,6 @@ import { isPendingHttpPath } from "./http-path-pending.ts";
 import { drainPendingResourceLiveMounts } from "./resource-live.ts";
 import type {
   CdcTrigger,
-  EveryTrigger,
   HttpTrigger,
   InternalTrigger,
   SignalAsTrigger,
@@ -2305,8 +2304,11 @@ export function oke(options: OkeOptions): OkeApp {
     async dispatchEvery(interval, extras) {
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
-        if (b.trigger.kind === "every" && b.trigger.interval === interval) {
-          results.push(await execute(b.flow, undefined, b.trigger as EveryTrigger, extras));
+        if (
+          (b.trigger.kind === "clock" && b.trigger.name === interval) ||
+          (b.trigger.kind === "every" && b.trigger.interval === interval)
+        ) {
+          results.push(await execute(b.flow, undefined, b.trigger, extras));
         }
       }
       return results;

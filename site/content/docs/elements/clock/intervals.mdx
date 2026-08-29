@@ -8,7 +8,7 @@ Intervals trigger Flows on fixed repeating intervals without the rigidity of ful
 
 ## What it is
 
-The `every(duration)` trigger accepts human-readable durations (`"10s"`, `"5m"`, `"1h"`). It includes optional jitter to avoid the "thundering herd" problem across large clusters.
+The `clock(name, { every: duration })` declaration accepts human-readable durations (`"10s"`, `"5m"`, `"1h"`). It includes optional jitter to avoid the "thundering herd" problem across large clusters.
 
 ## Smallest Example
 
@@ -18,10 +18,12 @@ The `every(duration)` trigger accepts human-readable durations (`"10s"`, `"5m"`,
 ### Trigger flow on interval
 
 ```typescript title="src/flows/health/ping.ts"
-import { on, flow, every } from "okengine";
+import { on, flow, clock } from "okengine";
+
+export const pingClock = clock("health.pingExternal", { every: "30s" });
 
 export const pingExternalApi = on(
-  every("30s"),
+  pingClock,
   flow("health.pingExternal", {
     do: async (_, fx) => {
       // Periodic health check
@@ -29,6 +31,7 @@ export const pingExternalApi = on(
   }),
 );
 ```
+
 </Step>
 
 </Steps>
@@ -36,6 +39,14 @@ export const pingExternalApi = on(
 ## Next
 
 <Cards>
-  <Card title="Durable Sleep" description="Pause workflow execution safely across days or hours." href="/docs/elements/clock/sleep" />
-  <Card title="Clock Overview" description="Return to Clock overview." href="/docs/elements/clock" />
+  <Card
+    title="Durable Sleep"
+    description="Pause workflow execution safely across days or hours."
+    href="/docs/elements/clock/sleep"
+  />
+  <Card
+    title="Clock Overview"
+    description="Return to Clock overview."
+    href="/docs/elements/clock"
+  />
 </Cards>

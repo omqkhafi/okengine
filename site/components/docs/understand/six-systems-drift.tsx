@@ -1,5 +1,5 @@
 /**
- * Six systems drift — visual teaching figure for the Start onboarding narrative.
+ * Six systems drift — visual teaching figure for the Understand onboarding narrative.
  *
  * Demonstrates the 8-month sprawl: how a 4-line signup route explodes into 6 decoupled
  * files across separate boundaries as production requirements accumulate.

@@ -28,6 +28,7 @@ export const emailTask = signal("tasks.email", {
   deadLetter: "tasks.email.dlq",
 });
 ```
+
 </Step>
 
 <Step>
@@ -46,6 +47,7 @@ export const processEmail = on(
   }),
 );
 ```
+
 </Step>
 
 </Steps>
@@ -63,6 +65,14 @@ The queue guarantees items sharing the same `key` process strictly in FIFO order
 ## Next
 
 <Cards>
-  <Card title="Pub/Sub (Broadcast)" description="Ephemeral fan-out and multi-node messaging." href="/docs/elements/signal/pubsub" />
-  <Card title="Signal Overview" description="Return to Signal element overview." href="/docs/elements/signal" />
+  <Card
+    title="Pub/Sub (Broadcast)"
+    description="Ephemeral fan-out and multi-node messaging."
+    href="/docs/elements/signal/pubsub"
+  />
+  <Card
+    title="Signal Overview"
+    description="Return to Signal element overview."
+    href="/docs/elements/signal"
+  />
 </Cards>

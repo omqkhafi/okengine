@@ -220,7 +220,7 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: "every", icon: Timer, tone: primary },
+            { label: "clock", icon: Timer, tone: primary },
             { label: "delay", icon: Hourglass, tone: "amber" },
             { label: "sleep", icon: Moon, tone: "teal" },
             { label: "ttl", icon: AlarmClock, tone: "cyan" },

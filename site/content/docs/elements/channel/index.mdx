@@ -8,7 +8,9 @@ source: "docs/spec/unified-theory.md"
 Channel is how your backend **communicates with human beings across mediums**. Sending an email, an SMS verification code, or a push notification requires localized templates, provider retries, rate limits, unsubscribe headers, and delivery webhooks. Channel abstracts these behind a unified interface.
 
 <Callout title="The one rule">
-  **Explicit consent and medium bindings**. Every message specifies its human recipient and medium. Outgoing deliveries emit standardized audit receipts regardless of the underlying vendor (Resend, Taqnyat, Twilio, or FCM).
+  **Explicit consent and medium bindings**. Every message specifies its human recipient and medium.
+  Outgoing deliveries emit standardized audit receipts regardless of the underlying vendor (Resend,
+  Taqnyat, Twilio, or FCM).
 </Callout>
 
 ## What is Channel?
@@ -70,6 +72,14 @@ The compiler stamps `sends: ["email:welcome"]` onto the flow's manifest effects.
 ## Next Steps
 
 <Cards>
-  <Card title="Email Medium" description="Design and send transactional emails." href="/docs/elements/channel/email" />
-  <Card title="AI Element" description="Integrate AI models, versioned prompts, and agents." href="/docs/elements/ai" />
+  <Card
+    title="Email Medium"
+    description="Design and send transactional emails."
+    href="/docs/elements/channel/email"
+  />
+  <Card
+    title="AI Element"
+    description="Integrate AI models, versioned prompts, and agents."
+    href="/docs/elements/ai"
+  />
 </Cards>

@@ -346,15 +346,15 @@ export {
 
 export {
   asSignalTrigger,
-  every,
   http,
   internal,
+  isClockDecl,
   isResourceMount,
   isSignalTriggerSource,
   normalizeTrigger,
-  table,
   type BoundTriggerOf,
   type CdcTrigger,
+  type ClockTrigger,
   type EveryTrigger,
   type GateRef,
   type HttpMethod,
@@ -365,7 +365,6 @@ export {
   type ResourceMount,
   type SignalAsTrigger,
   type SignalSource,
-  type TableHandle,
   type Trigger,
   type TriggerKind,
 } from "./triggers.ts";

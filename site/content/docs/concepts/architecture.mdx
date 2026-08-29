@@ -10,7 +10,8 @@ OKEngine runs as a unified, high-performance runtime built on Bun. Rather than r
 The internal architecture separates compile-time static contracts from runtime dynamic execution.
 
 <Callout title="Single Binary, Pluggable Drivers">
-  In development, OKEngine runs completely self-contained with in-process or embedded drivers. In production, drivers swap to managed cloud infrastructure without altering your flow code.
+  In development, OKEngine runs completely self-contained with in-process or embedded drivers. In
+  production, drivers swap to managed cloud infrastructure without altering your flow code.
 </Callout>
 
 ```text
@@ -29,11 +30,11 @@ The internal architecture separates compile-time static contracts from runtime d
 
 The engine is organized into three architectural layers:
 
-| Layer | Responsibility | Components |
-| --- | --- | --- |
-| **Compiler** | Static analysis, effect extraction, schema validation | TypeScript AST analyzer, Manifest generator |
-| **Kernel** | Flow execution, fx dispatch, telemetry ledger, journal | Effect router, wide-event recorder, durable state machine |
-| **Drivers** | Protocol-specific I/O adapters across environments | SQLite / Postgres, Memory / Redis, Local / S3 |
+| Layer        | Responsibility                                         | Components                                                |
+| ------------ | ------------------------------------------------------ | --------------------------------------------------------- |
+| **Compiler** | Static analysis, effect extraction, schema validation  | TypeScript AST analyzer, Manifest generator               |
+| **Kernel**   | Flow execution, fx dispatch, telemetry ledger, journal | Effect router, wide-event recorder, durable state machine |
+| **Drivers**  | Protocol-specific I/O adapters across environments     | SQLite / Postgres, Memory / Redis, Local / S3             |
 
 ## Execution Planes
 
@@ -47,12 +48,12 @@ To enforce strict security and prevent privilege escalation, OKEngine partitions
 
 OKEngine uses fixed standard ports across environments to guarantee predictable routing and automated tooling integration:
 
-| Port | Service | Role |
-| --- | --- | --- |
-| **`:6530`** | **Backend API** | Main HTTP server handling user and trigger traffic |
-| **`:6533`** | **Developer Console** | Visual dashboard, effect graph, and live traces |
-| **`:6535`** | **App MCP** | Model Context Protocol server exposing backend tools to agents |
-| **`:6536`** | **Docs MCP** | Semantic documentation search server for coding agents |
+| Port        | Service               | Role                                                           |
+| ----------- | --------------------- | -------------------------------------------------------------- |
+| **`:6530`** | **Backend API**       | Main HTTP server handling user and trigger traffic             |
+| **`:6533`** | **Developer Console** | Visual dashboard, effect graph, and live traces                |
+| **`:6535`** | **App MCP**           | Model Context Protocol server exposing backend tools to agents |
+| **`:6536`** | **Docs MCP**          | Semantic documentation search server for coding agents         |
 
 ## Next Steps
 
@@ -63,8 +64,8 @@ OKEngine uses fixed standard ports across environments to guarantee predictable 
     href="/docs/elements"
   />
   <Card
-    title="Installation"
-    description="Scaffold a production-ready OKEngine project with create-oke."
-    href="/docs/get-started/installation"
+    title="Try It"
+    description="From an empty folder to a Flow running in the Console — one sitting, minimal detour."
+    href="/docs/ai/try-it"
   />
 </Cards>

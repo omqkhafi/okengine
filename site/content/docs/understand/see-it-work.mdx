@@ -25,7 +25,7 @@ Still four lines that matter. `fx.store` creates the user. `fx.send` reaches the
 
 ## Where Month 8 actually went
 
-Every fork from that timeline was really the same question, asked at a different point: *is this thing that touches the outside world safe to retry, safe to audit, safe to run twice?* On The Problem, each answer required a new system, because each system had to invent its own answer. Here, the question has one home:
+Every fork from that timeline was really the same question, asked at a different point: _is this thing that touches the outside world safe to retry, safe to audit, safe to run twice?_ On The Problem, each answer required a new system, because each system had to invent its own answer. Here, the question has one home:
 
 - **The traffic spike from Week 2** doesn't need a queue you build and wire up by hand — running this later, safely, is something you ask of the trigger or the effect itself, not infrastructure you assemble.
 - **The silent failure from Month 2** doesn't need a hand-picked retry count living in a worker nobody remembers the reasoning for. Retries are a property of the `fx` boundary every effect already passes through.

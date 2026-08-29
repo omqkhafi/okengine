@@ -1,6 +1,6 @@
 ---
 title: "Jobs"
-description: "Periodic recurring intervals, cron schedules, and leader election using on(every(...), flow)."
+description: "Periodic recurring intervals, cron schedules, and leader election using on(clockDecl, flow)."
 icon: "Clock"
 ---
 
@@ -8,13 +8,18 @@ Jobs trigger Flows automatically according to wall-clock time, recurring interva
 
 ## What it is
 
-Rather than spinning up external daemons or separate background runners, recurring tasks are declared directly alongside other Flows using the `every(...)` trigger or by referencing named Clock elements.
+Rather than spinning up external daemons or separate background runners, recurring tasks are declared directly alongside other Flows by referencing named Clock declarations.
 
 ```typescript
-import { on, flow, every } from "okengine";
+import { on, flow, clock } from "okengine";
+
+export const nightlyDigestClock = clock("digest.nightly", {
+  cron: "0 0 * * *",
+  timezone: "Asia/Riyadh",
+});
 
 export const nightlyDigest = on(
-  every("1d", { at: "00:00", tz: "Asia/Riyadh" }),
+  nightlyDigestClock,
   flow("digest.nightly", {
     do: async (_, fx) => {
       // Runs every night at midnight Riyadh time
@@ -31,10 +36,12 @@ export const nightlyDigest = on(
 ### Create a recurring flow
 
 ```typescript title="src/flows/metrics/cleanup.ts"
-import { on, flow, every } from "okengine";
+import { on, flow, clock } from "okengine";
+
+export const cleanupClock = clock("metrics.cleanup", { every: "1h" });
 
 export const cleanupMetrics = on(
-  every("1h"),
+  cleanupClock,
   flow("metrics.cleanup", {
     do: async (_, fx) => {
       const oneWeekAgo = new Date(fx.clock.now() - 7 * 86400000);
@@ -43,6 +50,7 @@ export const cleanupMetrics = on(
   }),
 );
 ```
+
 </Step>
 
 <Step>
@@ -63,6 +71,14 @@ The runner registers the schedule at startup. In multi-instance deployments, lea
 ## Next
 
 <Cards>
-  <Card title="Consumers & CDC" description="React to Signals and database table changes." href="/docs/elements/flow/consumers" />
-  <Card title="Clock Element" description="Deep dive on schedules, intervals, and sleep." href="/docs/elements/clock" />
+  <Card
+    title="Consumers & CDC"
+    description="React to Signals and database table changes."
+    href="/docs/elements/flow/consumers"
+  />
+  <Card
+    title="Clock Element"
+    description="Deep dive on schedules, intervals, and sleep."
+    href="/docs/elements/clock"
+  />
 </Cards>

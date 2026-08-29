@@ -300,7 +300,7 @@ export function buildLlmsCatalog(
 
 /**
  * @param bySlug - Pages keyed by joined slug
- * @param slug - Handbook slug such as `get-started/introduction`
+ * @param slug - Handbook slug such as `understand/the-problem`
  * @param origin - Absolute origin
  */
 function pageLinkFromSlug(bySlug: Map<string, LlmsPageRef>, slug: string, origin: string): string {

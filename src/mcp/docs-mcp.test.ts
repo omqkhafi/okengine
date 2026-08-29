@@ -112,7 +112,7 @@ describe("docs MCP tools", () => {
 
   test("oke.docs.get returns body byte-identical to on-disk source", async () => {
     const mcp = await createDocsMcpServer({ contentDir: CONTENT });
-    const slug = "get-started/introduction";
+    const slug = "understand/the-problem";
     const res = await mcpPost(mcp.fetch, {
       jsonrpc: "2.0",
       id: 2,
@@ -133,7 +133,7 @@ describe("docs MCP tools", () => {
     const content = envelope.content as { body: string; slug: string };
     expect(content.slug).toBe(slug);
 
-    const raw = await Bun.file(join(CONTENT, "get-started", "introduction.mdx")).text();
+    const raw = await Bun.file(join(CONTENT, "understand", "the-problem.mdx")).text();
     expect(content.body).toBe(stripYamlFrontmatter(raw));
   });
 

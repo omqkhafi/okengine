@@ -10,7 +10,8 @@ OKEngine includes a convention-based file-system router designed around the core
 Rather than maintaining centralized route registries or string-based router tables, your file organization under `src/flows/` automatically stamps HTTP paths, parameter contracts, and client SDK bindings.
 
 <Callout title="Concept-Driven Routing">
-  Every file under `src/flows/` exports an `on(Trigger, Flow)` declaration. The compiler infers the URL path, HTTP method, and client unit directly from disk structure.
+  Every file under `src/flows/` exports an `on(Trigger, Flow)` declaration. The compiler infers the
+  URL path, HTTP method, and client unit directly from disk structure.
 </Callout>
 
 ```text
@@ -65,6 +66,7 @@ When a flow file is placed in the tree, HTTP triggers do not require duplicate s
       }),
     );
     ```
+
   </Step>
 </Steps>
 
@@ -72,13 +74,13 @@ When a flow file is placed in the tree, HTTP triggers do not require duplicate s
 
 The compiler follows deterministic file naming rules:
 
-| Convention | File Path Example | Inferred HTTP Route |
-| --- | --- | --- |
-| **Dynamic Parameter** | `users/[id]/get.ts` | `GET /users/:id` |
-| **Catch-All Slug** | `files/[...path]/get.ts` | `GET /files/*` |
-| **Route Group** | `auth/(oauth)/callback.ts` | `POST /auth/callback` |
-| **Reserved Leaf** | `orders/list.ts` | `GET /orders` |
-| **Root Unit** | `main/health.ts` | `GET /health` |
+| Convention            | File Path Example          | Inferred HTTP Route   |
+| --------------------- | -------------------------- | --------------------- |
+| **Dynamic Parameter** | `users/[id]/get.ts`        | `GET /users/:id`      |
+| **Catch-All Slug**    | `files/[...path]/get.ts`   | `GET /files/*`        |
+| **Route Group**       | `auth/(oauth)/callback.ts` | `POST /auth/callback` |
+| **Reserved Leaf**     | `orders/list.ts`           | `GET /orders`         |
+| **Root Unit**         | `main/health.ts`           | `GET /health`         |
 
 ### Reserved Leaf Names
 

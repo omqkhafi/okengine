@@ -1,7 +1,7 @@
-import { on, flow, http, every } from "okengine";
+import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-import { draftsKv, member } from "@/core";
+import { draftsKv, expireDraftsClock, member } from "@/core";
 import { listIn, pageOut } from "@/lib/http";
 import { IdIn, IdOut, Ok } from "@/lib/shapes";
 import { draftExpired } from "./signals";
@@ -60,7 +60,7 @@ export const discard = on(
 
 /** Expire stale drafts — named clock `expire-drafts`. */
 export const expire = on(
-  every("10m"),
+  expireDraftsClock,
   flow("drafts.expire", {
     plane: "operator",
     do: async (_input, fx) => {

@@ -9,6 +9,7 @@ Model Context Protocol (MCP) connects your OKE backend directly to developer too
 ## What it is
 
 OKE includes two-way MCP support:
+
 1. **Server**: Automatically exposes public and operator Flows as an MCP tool endpoint (`/api/mcp`).
 2. **Client**: Connects to external MCP servers (Figma, GitHub, Postgres) so Flows can consume their tools via `fx`.
 
@@ -29,12 +30,14 @@ export default defineConfig({
   },
 });
 ```
+
 </Step>
 
 <Step>
 ### Connect from Cursor or Claude Desktop
 
 Add your backend endpoint to Cursor MCP settings:
+
 ```json
 {
   "mcpServers": {
@@ -44,6 +47,7 @@ Add your backend endpoint to Cursor MCP settings:
   }
 }
 ```
+
 </Step>
 
 </Steps>
@@ -52,5 +56,9 @@ Add your backend endpoint to Cursor MCP settings:
 
 <Cards>
   <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
-  <Card title="Flow Overview" description="Explore Flows as the primary behavior primitive." href="/docs/elements/flow" />
+  <Card
+    title="Flow Overview"
+    description="Explore Flows as the primary behavior primitive."
+    href="/docs/elements/flow"
+  />
 </Cards>

@@ -15,9 +15,10 @@ Flow is how your backend **does anything**. An HTTP endpoint, a queue consumer, 
 
 ## What is Flow?
 
-Backend systems typically fracture business logic across disparate paradigms: Express/Hono controllers for HTTP requests, BullMQ/Celery workers for queues, node-cron for recurring jobs, and Temporal/Cadence orchestrators for multi-step sagas.
+Backend systems typically fracture business logic across disparate paradigms: controllers for HTTP requests, background workers for queues, schedulers for recurring jobs, and orchestrators for multi-step sagas.
 
 Flow collapses these four distinct tools into a single semantic element. A Flow combines three core parts:
+
 1. **Trigger**: What starts the execution (`http`, `signal`, `every`, `cdc`, `mcp`).
 2. **Contracts**: Validated input (`in`), output (`out`), and typed failures (`errors`).
 3. **Work (`do`)**: Pure business logic that accesses the outside world strictly via `fx`.
@@ -48,18 +49,18 @@ export const createOrder = on(
 
 The `fx` surface is the sole boundary between application logic and the host runtime. Everything a flow may touch is exposed as a method on `fx`:
 
-| Surface | Effect Recorded | What it does |
-| ------- | --------------- | ------------ |
-| `fx.store(db)` | `read` / `write` | SQL, KV, files, and index sessions |
-| `fx.emit(signal, payload)` | `emit` | Publish a signal to background consumers |
-| `fx.send(template, opts)` | `send` | Dispatch email, SMS, push, or WhatsApp |
-| `fx.ask(prompt, input)` | `ask` | Execute versioned AI prompts |
-| `fx.run(agent, input)` | `ask` | Launch bounded autonomous agents |
-| `fx.call(flow, input)` | `call` | Invoke another flow directly |
-| `fx.vault.get(contract)` | `secret` | Read protected credentials as `Redacted` values |
-| `fx.clock.now() / sleep()` | — | Injected deterministic timestamps and durable sleep |
-| `fx.step(name, fn, opts)` | — | Named durable step with automatic replay and undo |
-| `fx.all / fx.race / fx.retry` | — | Structured concurrency with ambient signal cancellation |
+| Surface                       | Effect Recorded  | What it does                                            |
+| ----------------------------- | ---------------- | ------------------------------------------------------- |
+| `fx.store(db)`                | `read` / `write` | SQL, KV, files, and index sessions                      |
+| `fx.emit(signal, payload)`    | `emit`           | Publish a signal to background consumers                |
+| `fx.send(template, opts)`     | `send`           | Dispatch email, SMS, push, or WhatsApp                  |
+| `fx.ask(prompt, input)`       | `ask`            | Execute versioned AI prompts                            |
+| `fx.run(agent, input)`        | `ask`            | Launch bounded autonomous agents                        |
+| `fx.call(flow, input)`        | `call`           | Invoke another flow directly                            |
+| `fx.vault.get(contract)`      | `secret`         | Read protected credentials as `Redacted` values         |
+| `fx.clock.now() / sleep()`    | —                | Injected deterministic timestamps and durable sleep     |
+| `fx.step(name, fn, opts)`     | —                | Named durable step with automatic replay and undo       |
+| `fx.all / fx.race / fx.retry` | —                | Structured concurrency with ambient signal cancellation |
 
 ## How Flow Appears in the Manifest
 
@@ -70,7 +71,10 @@ When `oke build` or `oke dev` compiles your project, it statically inspects ever
   "name": "orders.create",
   "trigger": { "kind": "http", "method": "POST", "path": "/orders" },
   "gates": ["member"],
-  "in": { "type": "object", "properties": { "sku": { "type": "string" }, "qty": { "type": "number" } } },
+  "in": {
+    "type": "object",
+    "properties": { "sku": { "type": "string" }, "qty": { "type": "number" } }
+  },
   "out": { "type": "object", "properties": { "id": { "type": "string" } } },
   "errors": { "OutOfStock": { "type": "object", "properties": { "left": { "type": "number" } } } },
   "effects": {
@@ -99,7 +103,7 @@ Flow provides four execution capabilities across synchronous, asynchronous, and 
   />
   <Card
     title="Jobs & Schedules"
-    description="Periodic intervals and cron expressions bound directly with on(every(...), flow)."
+    description="Periodic intervals and cron expressions bound directly with on(clockDecl, flow)."
     href="/docs/elements/flow/jobs"
   />
   <Card
@@ -117,6 +121,14 @@ Flow provides four execution capabilities across synchronous, asynchronous, and 
 ## Next Steps
 
 <Cards>
-  <Card title="HTTP Triggers" description="Explore synchronous endpoints and REST verbs." href="/docs/elements/flow/http" />
-  <Card title="Signal Element" description="Explore data in motion and delivery physics." href="/docs/elements/signal" />
+  <Card
+    title="HTTP Triggers"
+    description="Explore synchronous endpoints and REST verbs."
+    href="/docs/elements/flow/http"
+  />
+  <Card
+    title="Signal Element"
+    description="Explore data in motion and delivery physics."
+    href="/docs/elements/signal"
+  />
 </Cards>

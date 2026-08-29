@@ -1,10 +1,5 @@
 {
   "title": "Understand",
   "icon": "Compass",
-  "pages": [
-    "the-problem",
-    "the-model",
-    "the-vocabulary",
-    "see-it-work"
-  ]
+  "pages": ["the-problem", "the-model", "the-vocabulary", "see-it-work"]
 }

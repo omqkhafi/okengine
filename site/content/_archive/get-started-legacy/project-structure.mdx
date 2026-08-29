@@ -399,7 +399,7 @@ export const noteCreated = signal("note-created", {
 | `notes/[id]/get.ts` + `export const get`         | `GET /notes/:id`          | `notes.get`       |
 | `notes/[id]/archive.ts` + `export const archive` | `POST /notes/:id/archive` | `notes.archive`   |
 | `notes/on-created.ts`                            | (signal — no URL)         | `notes.onCreated` |
-| `notes/digest.ts` + `on(every("1d"), …)`         | (clock — no URL)          | `notes.digest`    |
+| `notes/digest.ts` + `on(digestClock, …)`         | (clock — no URL)          | `notes.digest`    |
 
 `[id]` / `(group)` never enter the Flow name. Renaming an export renames the Flow (`fx.call`, agent tools, Console).
 
@@ -421,8 +421,10 @@ export const onCreated = on(
 <Tab value="clock">
 
 ```typescript title="flows/notes/digest.ts"
+export const digestClock = clock("notes.digest", { every: "1d" });
+
 export const digest = on(
-  every("1d"),
+  digestClock,
   flow({
     out: z.object({ active: z.number(), at: z.number() }),
     do: async (_input, fx) => ({

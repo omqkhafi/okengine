@@ -73,7 +73,8 @@ const rules = configSource({
   db: { store: db },
   kv: cache,
 });
-on(every("30s"), rules.sync());
+const csrfSyncClock = clock("csrf.sync", { every: "30s" });
+on(csrfSyncClock, rules.sync());
 export const app = oke({ name: "shop", env: "dev" }).plug(csrf(rules));
 ```
 

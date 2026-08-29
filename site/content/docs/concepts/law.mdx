@@ -7,9 +7,7 @@ icon: "Workflow"
 
 The central axiom of OKEngine is that all backend computation shares the exact same anatomy:
 
-<Callout title="The One Law">
-  Every backend behavior is a Flow: `on(Trigger) → Effects`.
-</Callout>
+<Callout title="The One Law">Every backend behavior is a Flow: `on(Trigger) → Effects`.</Callout>
 
 ```typescript
 import { on, flow, http } from "okengine/http";
@@ -23,18 +21,18 @@ An HTTP endpoint, a nightly cleanup job, a queue message handler, and a row-chan
 
 Triggers define what initiates execution while preserving identical contracts, validation pipelines, and effect tracking:
 
-| Trigger | Starts When | Replaces |
-| --- | --- | --- |
-| `http.post("/orders")` | An incoming request arrives | HTTP route · endpoint handler |
-| `every("10m")` | A time interval elapses | Cron job · scheduled worker |
-| `orderPlaced` (signal) | Another flow emits a message | Queue worker · event consumer |
-| `db.table(users).changed("email")` | A database row changes | CDC pipeline · trigger hook |
+| Trigger                            | Starts When                  | Replaces                      |
+| ---------------------------------- | ---------------------------- | ----------------------------- |
+| `http.post("/orders")`             | An incoming request arrives  | HTTP route · endpoint handler |
+| `cleanupClock` (`clock(...)`)      | A time interval elapses      | Cron job · scheduled worker   |
+| `orderPlaced` (signal)             | Another flow emits a message | Queue worker · event consumer |
+| `db.table(users).changed("email")` | A database row changes       | CDC pipeline · trigger hook   |
 
 ```typescript
 import { on, flow, http } from "okengine";
 
 on(http.post("/orders"), createOrder);
-on(every("10m"), cleanStaleSessions);
+on(cleanupClock, cleanStaleSessions);
 on(orderPlaced, sendReceipt);
 on(db.table(users).changed("email"), sendVerification);
 ```
@@ -43,12 +41,12 @@ on(db.table(users).changed("email"), sendVerification);
 
 Every Flow consists of four deterministic parts:
 
-| Part | Purpose |
-| --- | --- |
-| **Trigger** | Defines how and when the flow is invoked |
-| **Contracts** | Validates input (`in`), output (`out`), and typed `errors` |
-| **`do` Body** | The execution logic — all I/O must pass through the `fx` argument |
-| **Effects** | Inferred automatically from `fx` calls or explicitly declared on the ledger |
+| Part          | Purpose                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| **Trigger**   | Defines how and when the flow is invoked                                    |
+| **Contracts** | Validates input (`in`), output (`out`), and typed `errors`                  |
+| **`do` Body** | The execution logic — all I/O must pass through the `fx` argument           |
+| **Effects**   | Inferred automatically from `fx` calls or explicitly declared on the ledger |
 
 ```typescript
 import { on, flow, http } from "okengine";
@@ -69,7 +67,8 @@ export const createOrder = on(
 ```
 
 <Callout title="Call-Only Flows">
-  A Flow defined without a trigger is an internal, private flow. It can only be called from other flows using `fx.call(flowRef, input)`.
+  A Flow defined without a trigger is an internal, private flow. It can only be called from other
+  flows using `fx.call(flowRef, input)`.
 </Callout>
 
 ## Next Steps

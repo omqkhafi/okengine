@@ -30,6 +30,7 @@ export const chatMessage = signal("chat.message", {
   }),
 });
 ```
+
 </Step>
 
 <Step>
@@ -42,6 +43,7 @@ eventSource.onmessage = (e) => {
   console.log("New chat message:", msg);
 };
 ```
+
 </Step>
 
 </Steps>
@@ -49,6 +51,14 @@ eventSource.onmessage = (e) => {
 ## Next
 
 <Cards>
-  <Card title="Store Element" description="Learn how data is stored at rest across SQL, KV, and files." href="/docs/elements/store" />
-  <Card title="Signal Overview" description="Return to Signal overview." href="/docs/elements/signal" />
+  <Card
+    title="Store Element"
+    description="Learn how data is stored at rest across SQL, KV, and files."
+    href="/docs/elements/store"
+  />
+  <Card
+    title="Signal Overview"
+    description="Return to Signal overview."
+    href="/docs/elements/signal"
+  />
 </Cards>

@@ -281,7 +281,7 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
     if ((e?.sends?.length ?? 0) > 0) channel = true;
     if ((e?.asks?.length ?? 0) > 0) ai = true;
     for (const t of f.triggers) {
-      if (t.kind === "every") clock = true;
+      if (t.kind === "clock" || t.kind === "every") clock = true;
       if (t.kind === "signal") signal = true;
       if (t.kind === "cdc") store = true;
       if (t.kind === "http" && t.gates.length > 0) gate = true;
@@ -292,7 +292,7 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
   for (const b of options.bindings ?? []) {
     considerFlow(b.flow);
     const t = b.trigger;
-    if (t.kind === "every") clock = true;
+    if (t.kind === "clock" || t.kind === "every") clock = true;
     if (t.kind === "signal") signal = true;
     if (t.kind === "cdc") store = true;
     if (t.kind === "http" && t.gates.length > 0) gate = true;

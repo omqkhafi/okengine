@@ -26,6 +26,7 @@ export const cacheInvalidated = signal("cache.invalidated", {
   schema: z.object({ key: z.string() }),
 });
 ```
+
 </Step>
 
 <Step>
@@ -44,6 +45,7 @@ export const purgeLocalCache = on(
   }),
 );
 ```
+
 </Step>
 
 </Steps>
@@ -51,6 +53,14 @@ export const purgeLocalCache = on(
 ## Next
 
 <Cards>
-  <Card title="Live Streams" description="Stream events over HTTP SSE with reconnection replays." href="/docs/elements/signal/streams" />
-  <Card title="Signal Overview" description="Return to Signal overview." href="/docs/elements/signal" />
+  <Card
+    title="Live Streams"
+    description="Stream events over HTTP SSE with reconnection replays."
+    href="/docs/elements/signal/streams"
+  />
+  <Card
+    title="Signal Overview"
+    description="Return to Signal overview."
+    href="/docs/elements/signal"
+  />
 </Cards>

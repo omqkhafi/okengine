@@ -28,6 +28,7 @@ export const canEditProject = gate.policy("projects.edit", async (ctx) => {
   return project?.ownerId === ctx.user.id;
 });
 ```
+
 </Step>
 
 </Steps>
@@ -35,6 +36,10 @@ export const canEditProject = gate.policy("projects.edit", async (ctx) => {
 ## Next
 
 <Cards>
-  <Card title="Rate Limits" description="Throttling strategies backed by Redis/KV." href="/docs/elements/gate/rate-limits" />
+  <Card
+    title="Rate Limits"
+    description="Throttling strategies backed by Redis/KV."
+    href="/docs/elements/gate/rate-limits"
+  />
   <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
 </Cards>

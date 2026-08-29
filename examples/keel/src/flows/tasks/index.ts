@@ -1,4 +1,4 @@
-import { on, flow, http, fail, table, liveQuery, type Fx } from "okengine";
+import { on, flow, http, fail, liveQuery, type Fx } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -490,7 +490,7 @@ export const remove = on(
 
 /** CDC — status changed → activity. */
 export const onStatus = on(
-  table("tasks").changed("status"),
+  db.table(tasks).changed("status"),
   flow("tasks.onStatus", {
     plane: "operator",
     do: async (input, fx) => {

@@ -40,6 +40,8 @@ The endpoint is fast again. It's also no longer one system — it's an endpoint,
 
 From here the same pattern repeats on a longer clock. A support ticket reveals a job failed silently — nobody had configured retries, so you add them, and now a specific number (3? 5? with what backoff?) lives in a file that nobody will remember the reasoning for in six weeks. Compliance asks for proof of every email sent — you add a table written to from inside the worker, and now that worker has two jobs instead of one, quietly capable of disagreeing with itself if the second write fails. Someone double-clicks submit — two jobs enqueue, two emails send, and idempotency becomes a fact that has to live in two systems that were never introduced to each other.
 
+<SixSystemsDrift />
+
 None of these were mistakes. Each one was the correct call, made by a competent engineer, in direct response to something that actually happened. That's what makes the drift invisible while it's happening — there's no bad decision anywhere in this story to point at.
 
 ## What's actually going on

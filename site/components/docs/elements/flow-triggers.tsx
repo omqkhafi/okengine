@@ -20,7 +20,7 @@ const TRIGGERS: ReadonlyArray<{
 }> = [
   { syntax: 'http.post("/orders")', starts: "a request arrives", replaces: "endpoint · handler" },
   { syntax: "orderPlaced", starts: "another flow emits", replaces: "queue consumer" },
-  { syntax: 'every("1h")', starts: "time passes", replaces: "cron job" },
+  { syntax: 'clock("hourly", { every: "1h" })', starts: "time passes", replaces: "cron job" },
   {
     syntax: 'db.table(orders).changed("status")',
     starts: "a row changes",

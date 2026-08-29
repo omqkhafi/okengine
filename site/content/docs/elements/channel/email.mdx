@@ -27,6 +27,7 @@ export const passwordResetEmail = channel.email("auth.resetPassword", {
   body: ({ resetLink }) => `Click here to reset: ${resetLink}`,
 });
 ```
+
 </Step>
 
 <Step>
@@ -38,6 +39,7 @@ await fx.send(passwordResetEmail, {
   data: { resetLink: "https://example.com/reset?token=123" },
 });
 ```
+
 </Step>
 
 </Steps>
@@ -45,6 +47,14 @@ await fx.send(passwordResetEmail, {
 ## Next
 
 <Cards>
-  <Card title="SMS Medium" description="Send SMS text messages and OTP codes." href="/docs/elements/channel/sms" />
-  <Card title="Channel Overview" description="Return to Channel overview." href="/docs/elements/channel" />
+  <Card
+    title="SMS Medium"
+    description="Send SMS text messages and OTP codes."
+    href="/docs/elements/channel/sms"
+  />
+  <Card
+    title="Channel Overview"
+    description="Return to Channel overview."
+    href="/docs/elements/channel"
+  />
 </Cards>

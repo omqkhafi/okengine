@@ -8,7 +8,9 @@ source: "docs/spec/unified-theory.md"
 Store is how your backend **holds data at rest**. Instead of maintaining distinct clients for Postgres, Redis, AWS S3, and Meilisearch with four connection pools and differing error shapes, Store provides one handle (`store`) with four typed facets.
 
 <Callout title="The one rule">
-  Drivers are **protocol-named** in the manifest and swapped by environment in `oke.config.ts`. Application code writes against the unified `store` facets, never importing vendor-specific driver libraries directly.
+  Drivers are **protocol-named** in the manifest and swapped by environment in `oke.config.ts`.
+  Application code writes against the unified `store` facets, never importing vendor-specific driver
+  libraries directly.
 </Callout>
 
 ## What is Store?
@@ -91,6 +93,14 @@ Every read and write through `fx.store` is statically recorded by the compiler:
 ## Next Steps
 
 <Cards>
-  <Card title="SQL Relational" description="Design schema tables and relations." href="/docs/elements/store/sql" />
-  <Card title="Clock Element" description="Manage schedules, intervals, and sleep." href="/docs/elements/clock" />
+  <Card
+    title="SQL Relational"
+    description="Design schema tables and relations."
+    href="/docs/elements/store/sql"
+  />
+  <Card
+    title="Clock Element"
+    description="Manage schedules, intervals, and sleep."
+    href="/docs/elements/clock"
+  />
 </Cards>

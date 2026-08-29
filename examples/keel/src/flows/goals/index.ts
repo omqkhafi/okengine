@@ -1,7 +1,7 @@
-import { on, flow, every } from "okengine";
+import { on, flow } from "okengine";
 import { z } from "zod";
 
-import { db, member, projectAdminWrite, weeklySummaryPrompt } from "@/core";
+import { db, member, projectAdminWrite, rollupGoalsClock, weeklySummaryPrompt } from "@/core";
 import { goals, projects } from "@/db/schema.decl";
 import { goalsZod } from "@/db/zod";
 import { bindCrud } from "@/lib/resource";
@@ -30,7 +30,7 @@ export const { list, create, get, update, remove } = bindCrud({
 
 /** Weekly goal rollup — named clock `rollup-goals`. */
 export const rollup = on(
-  every("7d"),
+  rollupGoalsClock,
   flow("goals.rollup", {
     plane: "operator",
     do: async (_input, fx) => {

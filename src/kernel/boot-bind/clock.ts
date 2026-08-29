@@ -108,6 +108,9 @@ export async function bindClock(
   }
   const coveredEvery = new Set([...clockDecls.values()].flatMap((c) => (c.every ? [c.every] : [])));
   for (const b of options.bindings ?? []) {
+    if (b.trigger.kind === "clock" && b.trigger.clock && !clockDecls.has(b.trigger.name)) {
+      clockDecls.set(b.trigger.name, b.trigger.clock);
+    }
     if (b.trigger.kind !== "every") continue;
     if (clockDecls.has(b.trigger.interval) || coveredEvery.has(b.trigger.interval)) continue;
     clockDecls.set(

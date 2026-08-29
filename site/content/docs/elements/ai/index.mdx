@@ -8,7 +8,9 @@ source: "docs/spec/unified-theory.md"
 AI is how your backend **incorporates machine intelligence into business processes**. Calling OpenAI or Anthropic through arbitrary SDKs creates unversioned prompts, unmonitored costs, and PII leakage. In OKE, AI is an explicit architectural primitive.
 
 <Callout title="The one rule">
-  **Bounded execution and declared budgets**. Every prompt and agent must specify input/output schemas and maximum cost budgets. Flows expose themselves directly as MCP tools to autonomous agents.
+  **Bounded execution and declared budgets**. Every prompt and agent must specify input/output
+  schemas and maximum cost budgets. Flows expose themselves directly as MCP tools to autonomous
+  agents.
 </Callout>
 
 ## What is AI?
@@ -70,6 +72,14 @@ The compiler records `asks: ["docs.summarize"]` in the Flow's manifest.
 ## Next Steps
 
 <Cards>
-  <Card title="Model Providers" description="Configure local and cloud model drivers." href="/docs/elements/ai/models" />
-  <Card title="Versioned Prompts" description="Author typed prompts with budget boundaries." href="/docs/elements/ai/prompts" />
+  <Card
+    title="Model Providers"
+    description="Configure local and cloud model drivers."
+    href="/docs/elements/ai/models"
+  />
+  <Card
+    title="Versioned Prompts"
+    description="Author typed prompts with budget boundaries."
+    href="/docs/elements/ai/prompts"
+  />
 </Cards>

@@ -53,6 +53,7 @@ export interface InferBinding {
   readonly kind:
     | "store"
     | "signal"
+    | "clock"
     | "prompt"
     | "secret"
     | "template"

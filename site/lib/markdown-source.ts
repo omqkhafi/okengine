@@ -36,7 +36,7 @@ export function stripYamlFrontmatter(raw: string): string {
 /**
  * Resolve the absolute path for a docs content-relative path.
  *
- * @param relativePath - e.g. `get-started/introduction.md`
+ * @param relativePath - e.g. `understand/the-problem.md`
  */
 export function docsContentPath(relativePath: string): string {
   return join(DOCS_CONTENT_DIR, relativePath);

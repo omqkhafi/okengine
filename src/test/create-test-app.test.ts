@@ -12,7 +12,7 @@ import { vault, VaultBootError } from "../elements/vault.ts";
 import { oke } from "../kernel/app.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
-import { every, http } from "../kernel/triggers.ts";
+import { http } from "../kernel/triggers.ts";
 import { createTestApp } from "./create-test-app.ts";
 
 describe("createTestApp — four-applications surface", () => {
@@ -62,8 +62,9 @@ describe("createTestApp — four-applications surface", () => {
       }),
     );
 
+    const expireStale = clock("expire-stale", { every: "1h" });
     on(
-      every("1h"),
+      expireStale,
       flow("orders.expire", {
         do: (_i, fx) => {
           fx.log.info("expire");
@@ -75,7 +76,7 @@ describe("createTestApp — four-applications surface", () => {
       name: "harness",
       gate: { policies: [member] },
       signals: [orderPlaced],
-      clocks: [clock("expire-stale", { every: "1h" })],
+      clocks: [expireStale],
       channel: { templates: [orderConfirmed] },
       env: "test",
     });
@@ -84,7 +85,7 @@ describe("createTestApp — four-applications surface", () => {
       gates: [member],
       signals: [orderPlaced],
       boot: {
-        clocks: [clock("expire-stale", { every: "1h" })],
+        clocks: [expireStale],
         channel: { templates: [orderConfirmed] },
       },
     });

@@ -8,8 +8,9 @@ source: "docs/spec/unified-theory.md"
 Signal is how your backend **moves data when the producer and consumer should not wait for each other**. In other frameworks you configure SQS, RabbitMQ, Redis Pub/Sub, Kafka, or SSE as distinct systems with conflicting semantics. In OKE, they are one typed declaration where the physics of delivery are declared explicitly.
 
 <Callout title="The one rule">
-  Signal delivery physics are **mandatory**: every signal must explicitly declare `delivery: "once"`,
-  `delivery: "broadcast"`, or `delivery: "live"`. Omitting delivery physics is a compile-time error.
+  Signal delivery physics are **mandatory**: every signal must explicitly declare `delivery:
+  "once"`, `delivery: "broadcast"`, or `delivery: "live"`. Omitting delivery physics is a
+  compile-time error.
 </Callout>
 
 ## What is Signal?
@@ -40,11 +41,11 @@ export const orderPlaced = signal("orders.placed", {
 
 ## The Delivery Physics Matrix
 
-| Physics | Pattern | Consumer Semantics | Replay & Resume | Storage Engine |
-| ------- | ------- | ------------------ | --------------- | -------------- |
-| `once` | Work Queue | Competing workers, lease locks | Exponential retry + DLQ | Postgres `oke_queue` / Redis stream |
-| `broadcast` | Pub/Sub | Ephemeral fan-out | None (dropped if offline) | Redis Pub/Sub / In-memory |
-| `live` | Live SSE Stream | Client HTTP feed | `Last-Event-ID` resume | Retained tape / Store |
+| Physics     | Pattern         | Consumer Semantics             | Replay & Resume           | Storage Engine                      |
+| ----------- | --------------- | ------------------------------ | ------------------------- | ----------------------------------- |
+| `once`      | Work Queue      | Competing workers, lease locks | Exponential retry + DLQ   | Postgres `oke_queue` / Redis stream |
+| `broadcast` | Pub/Sub         | Ephemeral fan-out              | None (dropped if offline) | Redis Pub/Sub / In-memory           |
+| `live`      | Live SSE Stream | Client HTTP feed               | `Last-Event-ID` resume    | Retained tape / Store               |
 
 ## How Signal Executes Through fx
 
@@ -84,6 +85,14 @@ The compiler records an `emits: ["orders.placed"]` effect in the Flow's manifest
 ## Next Steps
 
 <Cards>
-  <Card title="Queues Capability" description="Configure background worker queues with retry policies." href="/docs/elements/signal/queues" />
-  <Card title="Store Element" description="Explore data at rest across SQL, KV, files, and search." href="/docs/elements/store" />
+  <Card
+    title="Queues Capability"
+    description="Configure background worker queues with retry policies."
+    href="/docs/elements/signal/queues"
+  />
+  <Card
+    title="Store Element"
+    description="Explore data at rest across SQL, KV, files, and search."
+    href="/docs/elements/store"
+  />
 </Cards>

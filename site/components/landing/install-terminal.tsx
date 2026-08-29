@@ -1,6 +1,6 @@
 /**
  * Install terminal — tabbed CLI widget for the hero README band.
- * Commands mirror `site/content/docs/get-started/installation.mdx`; the port
+ * Commands mirror `site/content/docs/understand/see-it-work.mdx`; the port
  * table is the same one the docs publish (O·K·E = 6·5·3).
  */
 

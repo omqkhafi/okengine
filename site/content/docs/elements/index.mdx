@@ -8,7 +8,8 @@ source: "docs/spec/unified-theory.md"
 Forty backend concerns collapse into eight semantic primitives. An element earns its place only with **irreducible physics**.
 
 <Callout title="Closed primitive set">
-  There is no ninth element. Every backend capability belongs to one of the eight elements. New infrastructure creates a protocol driver or plugin, preserving a small mental model.
+  There is no ninth element. Every backend capability belongs to one of the eight elements. New
+  infrastructure creates a protocol driver or plugin, preserving a small mental model.
 </Callout>
 
 ```text
@@ -22,11 +23,11 @@ Providers and Recipes choose where that infrastructure runs.
 
 Every backend concern is mapped across three conceptual tiers:
 
-| Tier | Question Answered | Definition & Scope |
-| ---- | ----------------- | ------------------ |
-| **Elements** | *What is the thing?* | The 8 closed primitives representing irreducible backend physics. |
-| **Capabilities** | *What can it do?* | Explicit facets, triggers, and execution mechanics within each element. |
-| **Composition** | *What happens when they cooperate?* | Emergent system properties (Realtime, Live Queries, Multi-Tenancy, Agents). |
+| Tier             | Question Answered                   | Definition & Scope                                                          |
+| ---------------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| **Elements**     | _What is the thing?_                | The 8 closed primitives representing irreducible backend physics.           |
+| **Capabilities** | _What can it do?_                   | Explicit facets, triggers, and execution mechanics within each element.     |
+| **Composition**  | _What happens when they cooperate?_ | Emergent system properties (Realtime, Live Queries, Multi-Tenancy, Agents). |
 
 ## The Eight Primitives
 
@@ -77,10 +78,9 @@ Every backend concern is mapped across three conceptual tiers:
 
 The closed elements compose into full backend capabilities:
 
-| Composition Target | Formula | How It Works |
-| ------------------ | ------- | ------------ |
-| **Realtime** | Store + Gate + Signal + Flow → Live Query | CDC changes re-checked against Gate RLS, streamed as SSE |
-| **Security** | Gate + Store/RLS + Tenant + fx → Secure runtime | Tenant-isolated queries with least-privilege capability |
-| **Agents** | MCP + Gate + OAuth + Flow → Agent-ready backend | Declared Flows exposed on :6535 behind auth confirmation |
-| **Operations** | Manifest + Effects + Runs → Inspectable backend | Inferred effects feed Console (:6533) and wide-event logs |
-
+| Composition Target | Formula                                         | How It Works                                              |
+| ------------------ | ----------------------------------------------- | --------------------------------------------------------- |
+| **Realtime**       | Store + Gate + Signal + Flow → Live Query       | CDC changes re-checked against Gate RLS, streamed as SSE  |
+| **Security**       | Gate + Store/RLS + Tenant + fx → Secure runtime | Tenant-isolated queries with least-privilege capability   |
+| **Agents**         | MCP + Gate + OAuth + Flow → Agent-ready backend | Declared Flows exposed on :6535 behind auth confirmation  |
+| **Operations**     | Manifest + Effects + Runs → Inspectable backend | Inferred effects feed Console (:6533) and wide-event logs |

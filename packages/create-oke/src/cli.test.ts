@@ -339,7 +339,7 @@ describe("interactive branches", () => {
       expect(existsSync(join(dir, "src", "flows", "notes", "digest.ts"))).toBe(true);
       expect(existsSync(join(dir, "src", "flows", "notes", "[id]", "attach.ts"))).toBe(true);
       const digest = readFileSync(join(dir, "src", "flows", "notes", "digest.ts"), "utf8");
-      expect(digest).toContain('every("1d")');
+      expect(digest).toContain('clock("notes.digest", { every: "1d" })');
       const attach = readFileSync(join(dir, "src", "flows", "notes", "[id]", "attach.ts"), "utf8");
       expect(attach).toContain("export const attach");
       expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toMatch(

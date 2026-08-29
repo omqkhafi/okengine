@@ -98,13 +98,13 @@ Rules:
 
 When the change touches a documented surface, update the matching page(s):
 
-| Surface                                                  | Path                             |
-| -------------------------------------------------------- | -------------------------------- |
-| Elements                                                 | `site/content/docs/elements/`    |
-| Official plugins                                         | `site/content/docs/plugins/`     |
-| Plugin API / config / errors / fx / env / CLI / security | `site/content/docs/reference/`   |
-| AI / MCP / skills / llms.txt                             | `site/content/docs/ai/`          |
-| Get started                                              | `site/content/docs/get-started/` |
+| Surface                                                  | Path                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| Elements                                                 | `site/content/docs/elements/`                                  |
+| Official plugins                                         | `site/content/docs/plugins/`                                   |
+| Plugin API / config / errors / fx / env / CLI / security | `site/content/docs/reference/`                                 |
+| AI / MCP / skills / llms.txt                             | `site/content/docs/ai/`                                        |
+| Understand / concepts                                    | `site/content/docs/understand/`, `site/content/docs/concepts/` |
 
 **Authoring standard:** read and follow [oke-docs](../oke-docs/SKILL.md) for any new page or substantive rewrite (source-verified claims, skeleton, prose density ≤3).
 

@@ -69,7 +69,8 @@ const rules = configSource({
   db: { store: db },
   kv: cache,
 });
-on(every("30s"), rules.sync());
+const ipRulesSyncClock = clock("ip-allowlist.sync", { every: "30s" });
+on(ipRulesSyncClock, rules.sync());
 export const app = oke({ name: "shop", env: "dev" }).plug(ipAllowlist(rules));
 ```
 

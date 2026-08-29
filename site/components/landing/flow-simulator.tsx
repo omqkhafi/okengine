@@ -33,7 +33,7 @@ const TRIGGERS: ReadonlyArray<{
   readonly zoo: string;
 }> = [
   { kind: "http", code: 'http.post("/bookings")', zoo: "an API endpoint" },
-  { kind: "cron", code: 'every("10m")', zoo: "a cron job" },
+  { kind: "cron", code: 'clock("cleanup", { every: "10m" })', zoo: "a cron job" },
   { kind: "signal", code: "orderPlaced", zoo: "a queue consumer" },
   { kind: "cdc", code: 'db.table(users).changed("email")', zoo: "a CDC trigger" },
 ];

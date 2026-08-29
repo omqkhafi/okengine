@@ -1,11 +1,11 @@
-import { on, flow, every } from "okengine";
+import { on, flow } from "okengine";
 
-import { db, taskOverdueMail } from "@/core";
+import { db, taskOverdueMail, watchOverdueClock } from "@/core";
 import { inbox, taskAssignees, tasks } from "@/db/schema.decl";
 
 /** Scan overdue tasks — named clock `watch-overdue`. */
 export const watch = on(
-  every("15m"),
+  watchOverdueClock,
   flow("overdue.watch", {
     plane: "operator",
     do: async (_input, fx) => {

@@ -78,7 +78,8 @@ const maintenance = configSource({
   db: { store: db },
   kv: cache,
 });
-on(every("30s"), maintenance.sync());
+const maintenanceSyncClock = clock("maintenance.sync", { every: "30s" });
+on(maintenanceSyncClock, maintenance.sync());
 export const app = oke({ name: "shop", env: "dev" }).plug(maintenanceMode(maintenance));
 ```
 

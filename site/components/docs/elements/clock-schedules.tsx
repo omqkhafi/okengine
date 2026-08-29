@@ -1,8 +1,8 @@
 /**
- * Two schedule kinds, one Flow species — Clock overview figure.
+ * Two schedule shapes, one Flow species — Clock overview figure.
  *
- * `every("1h")` and `clock(name, opts)` take turns firing; a packet crosses
- * into the same Flow panel. The flow never sees which kind woke it.
+ * `clock(name, { every })` and `clock(name, { cron, timezone })` take turns firing;
+ * a packet crosses into the same Flow panel. The flow never sees which kind woke it.
  * Deterministic from one tick, never Math.random.
  */
 
@@ -18,7 +18,7 @@ const tone = CHIP_TONE.orange;
 const TICK_MS = 1300;
 
 const KINDS: ReadonlyArray<{
-  readonly id: "every" | "clock";
+  readonly id: "every" | "cron";
   readonly icon: LucideIcon;
   readonly syntax: string;
   readonly starts: string;
@@ -28,13 +28,13 @@ const KINDS: ReadonlyArray<{
   {
     id: "every",
     icon: Timer,
-    syntax: 'every("1h")',
+    syntax: 'clock("sweep", { every: "1h" })',
     starts: "fixed interval",
-    console: "Not listed",
-    shape: "Interval only — purge, sweep",
+    console: "Listed, with health",
+    shape: "Interval — purge, sweep, ping",
   },
   {
-    id: "clock",
+    id: "cron",
     icon: CalendarClock,
     syntax: 'clock("daily-report", { cron, timezone })',
     starts: "cron + timezone",
@@ -44,7 +44,7 @@ const KINDS: ReadonlyArray<{
 ];
 
 /**
- * Anonymous interval vs named schedule — same `on(trigger, flow)` underneath.
+ * Interval vs cron schedule — same `on(clockRef, flow)` underneath.
  */
 export function ClockSchedules() {
   const tick = useTick(TICK_MS);
@@ -53,7 +53,7 @@ export function ClockSchedules() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Two schedule kinds — every is a fixed interval, clock is a named cron or interval — both bind with on(trigger, flow) to the same Flow species."
+      aria-label="Two schedule shapes — clock with every is a fixed interval, clock with cron is a named cron — both bind with on(clockRef, flow) to the same Flow species."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Two kinds, one species</p>

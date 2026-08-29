@@ -1,0 +1,94 @@
+---
+title: "Model"
+description: "The four architectural pillars: the one law, eight closed elements, explicit effects, and the compiled manifest."
+source: "docs/spec/unified-theory.md"
+icon: "Boxes"
+---
+
+The OKEngine programming model is strictly closed. A backend concept earns a place as a first-class primitive only if it possesses **irreducible physics**—behavior that cannot be expressed by composing other elements without losing semantic guarantees.
+
+Every backend operational concern maps onto four foundational pillars: **The One Law**, **The Eight Elements**, **The Explicit Effects Ledger**, and **The Compiled Manifest**.
+
+<Callout title="Irreducible Physics">
+  A message queue has retry and lease semantics (`Signal`). A database has relational constraints
+  (`Store`). A secret has cryptographic lifecycle guarantees (`Vault`). These physics cannot be
+  merged without semantic loss.
+</Callout>
+
+## The Four Pillars
+
+The architecture rests on four deterministic pillars:
+
+| Pillar                    | Concept                 | Essence                                                           |
+| ------------------------- | ----------------------- | ----------------------------------------------------------------- |
+| **The One Law**           | `on(Trigger) → Effects` | Every backend behavior is a single Flow shape                     |
+| **The Eight Elements**    | Closed Primitives       | The complete vocabulary replacing disparate backend subsystems    |
+| **The Effects Ledger**    | `fx` Surface            | All world mutations and side effects are explicit and inspectable |
+| **The Compiled Manifest** | Single Contract         | Source of truth derived from code for Client, Console, and MCP    |
+
+## The Eight Elements
+
+The entire universe of backend engineering collapses into eight closed primitives:
+
+| Element     | Essence              | Replaces the Zoo                                               |
+| ----------- | -------------------- | -------------------------------------------------------------- |
+| **Flow**    | Execution & Behavior | endpoint · handler · consumer · job · workflow · webhook       |
+| **Signal**  | Data in Motion       | queue · pub/sub · stream · websocket · SSE · event bus         |
+| **Store**   | Data at Rest         | relational database · cache · KV · file storage · search index |
+| **Clock**   | Time & Schedules     | cron · delay · timeout · durable sleep · TTL                   |
+| **Gate**    | Permission to Act    | auth · session · tenancy · RBAC · rate limit · quota           |
+| **Vault**   | Protected Knowledge  | secrets · encryption keys · rotation · environment             |
+| **Channel** | Reaching Humans      | transactional email · SMS · push notifications · receipts      |
+| **AI**      | Machine Intelligence | model calls · structured prompts · agents · MCP tools          |
+
+## Extensibility: Plugins & Drivers
+
+OKEngine scales to new requirements without breaking or expanding the closed primitive set. Extensibility is governed by a strict taxonomy:
+
+```text
+Elements define the model.
+Plugins extend what the model can do.
+Drivers connect the model to infrastructure.
+```
+
+### Plugins
+
+Plugins extend model capabilities (such as Auth methods, security headers, rate limit stores, and lifecycle hooks) without introducing a ninth element:
+
+| Extension Type           | Role                                      | Examples                               |
+| ------------------------ | ----------------------------------------- | -------------------------------------- |
+| **Auth Methods**         | Turnkey authentication strategies         | `oauth`, `passkey`, `magicLink`, `otp` |
+| **Edge & Hooks**         | Execution lifecycle interceptors          | `cors`, `headers`, `auditLog`          |
+| **Schema Contributions** | Isolated database tables for plugin state | `oke_auth_users`, `oke_sessions`       |
+
+### Drivers
+
+When new external technologies or third-party infrastructure emerge, they enter the system as **drivers** underneath an existing element:
+
+```text
+PostgreSQL / LibSQL / Memory ──────► Store (SQL facet)
+Redis / Dragonfly / In-Memory ─────► Store (KV facet) / Signal (PubSub)
+S3 / RustFS / Local Disk ──────────► Store (Files facet)
+OpenAI / Anthropic / Ollama ───────► AI (Models & Agents)
+Resend / Mailpit / Twilio ─────────► Channel (Email & SMS)
+```
+
+<Callout title="The Taxonomy Rule">
+  Elements define the programming contract. Plugins extend capabilities. Drivers supply the
+  environment engine. Your application code never targets infrastructure directly.
+</Callout>
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Law"
+    description="The single execution law: every behavior is a Flow on(Trigger) -> Effects."
+    href="/docs/concepts/law"
+  />
+  <Card
+    title="Effects"
+    description="The fx surface, explicit effects ledger, and automatic cache invalidation."
+    href="/docs/concepts/effects"
+  />
+</Cards>

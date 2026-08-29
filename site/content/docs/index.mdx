@@ -13,56 +13,56 @@ Welcome to the OKEngine handbook. Keep the model small; let the backend grow wit
 
 ```ts
 on(http.post("/bookings"), createBooking);
-on(every("10m"), expireStale);
+on(expireStaleClock, expireStale);
 on(orderPlaced, sendReceipt);
 ```
 
-## 01 Understand (Concepts)
+## 01 Understand
 
 Master the mental model before exploring features:
 
 <Cards>
   <Card
-    title="Why"
-    description="The problem of seams across independent tools, the insight, and the smaller model."
-    href="/docs/concepts/why"
+    title="The Problem"
+    description="Three unrelated features that hit the exact same wall, and the timeline that shows why."
+    href="/docs/understand/the-problem"
   />
   <Card
-    title="Model"
-    description="The closed primitive set: Flow, Signal, Store, Clock, Gate, Vault, Channel, AI."
-    href="/docs/concepts/model"
+    title="The Model"
+    description="The one rule that removes the disagreement between systems — stated plainly, in two parts."
+    href="/docs/understand/the-model"
   />
   <Card
-    title="Law"
-    description="The single execution law: every behavior is a Flow on(Trigger) -> Effects."
-    href="/docs/concepts/law"
+    title="The Vocabulary"
+    description="The ten words that make up the entire framework, and how to read any flow."
+    href="/docs/understand/the-vocabulary"
   />
   <Card
-    title="Routing"
-    description="File-system routing built on concepts: zero-config path inference from on(Trigger, Flow)."
-    href="/docs/concepts/routing"
+    title="See It Work"
+    description="The single command that starts the runtime, and what happens in the first three seconds."
+    href="/docs/understand/see-it-work"
   />
 </Cards>
 
-## 02 Build (Development)
+## 02 Concepts & 03 Elements
 
-Build, test, and expose real applications:
+Deep primitives and execution law:
 
 <Cards>
   <Card
-    title="Get Started"
-    description="Scaffold with create-oke, run the dev stack, and open the Console."
-    href="/docs/get-started/installation"
+    title="Concepts"
+    description="The Law, explicit Effects, file-system Routing, Manifest, and Architecture."
+    href="/docs/concepts"
   />
   <Card
-    title="Basic Usage"
-    description="Write your first flow, call it with the typed client, and test with bun:test."
-    href="/docs/get-started/basic-usage"
+    title="Elements"
+    description="Flow, Signal, Store, Clock, Gate, Vault, Channel, AI."
+    href="/docs/elements"
   />
   <Card
-    title="Project Structure"
-    description="Folder layout, flow file routing conventions, and schema declarations."
-    href="/docs/get-started/project-structure"
+    title="Architecture"
+    description="Unified backend architecture and multi-port layout."
+    href="/docs/concepts/architecture"
   />
   <Card
     title="AI & MCP Surface"
@@ -71,7 +71,7 @@ Build, test, and expose real applications:
   />
 </Cards>
 
-## 03 Operate & 04 Extend
+## 04 Operate & 05 Extend
 
 Deploy to production and connect to infrastructure:
 

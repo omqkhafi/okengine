@@ -28,11 +28,12 @@ export const supportAgent = ai.agent("support.assistant", {
   instructions: "You are a helpful customer support agent. Search docs before answering.",
   tools: [searchDocs, createTicket],
   maxSteps: 5,
-  maxCostPerRun: 0.10,
+  maxCostPerRun: 0.1,
   in: z.object({ query: z.string() }),
   out: z.object({ answer: z.string(), ticketCreated: z.boolean() }),
 });
 ```
+
 </Step>
 
 </Steps>
@@ -40,6 +41,10 @@ export const supportAgent = ai.agent("support.assistant", {
 ## Next
 
 <Cards>
-  <Card title="Model Context Protocol" description="Expose your backend to MCP clients and Cursor." href="/docs/elements/ai/mcp" />
+  <Card
+    title="Model Context Protocol"
+    description="Expose your backend to MCP clients and Cursor."
+    href="/docs/elements/ai/mcp"
+  />
   <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
 </Cards>
