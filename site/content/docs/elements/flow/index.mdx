@@ -5,7 +5,7 @@ icon: "Workflow"
 source: "docs/spec/unified-theory.md"
 ---
 
-Flow is the element responsible for *behavior* — the `on(trigger, flow)` shape covered on the [Elements overview](/docs/elements) applies here directly. An HTTP endpoint, a scheduled job, a queue consumer, and a multi-step workflow are all the same Flow, wired to a different trigger.
+Flow is the element responsible for *behavior* — the `on(trigger, flow)` shape covered on [The Anatomy](/docs/understand/the-anatomy) applies here directly. An HTTP endpoint, a scheduled job, a queue consumer, and a multi-step workflow are all the same Flow, wired to a different trigger.
 
 <Callout title="The one rule">
   All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside a
