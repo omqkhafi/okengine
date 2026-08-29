@@ -22,9 +22,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
-- Streamlined "See It Work" (`/docs/understand/see-it-work`) by removing duplicate code block already covered in "The Anatomy", and corrected Flow overview link to point directly to The Anatomy.
+- Merged "See It Work" into "The Anatomy" (`/docs/understand/the-anatomy`) by incorporating the timeline resolution section into the anatomy guide and retiring `/docs/understand/see-it-work`.
 - Refined Flow and Elements documentation with updated FlowShape trigger tags (including MCP), deduplicated FlowTriggers presentation, and nameless flow auto-derivation annotations.
-- Enhanced Flow documentation with interactive trigger visualizer, step-by-step quickstart, and dedicated Shiki focus/highlight styles.
+- Enhanced Flow documentation with interactive trigger visualizer, step-by-step quickstart, schema validation guides (Standard Schema, Drizzle ORM v1 subpaths, `shapes.ts`), and dedicated Shiki focus/highlight styles.
 - Updated agent CI guidelines across `.cursorrules`, `AGENTS.md`, and skill definitions to prevent automatic CI execution after implementations.
 
 ## v0.18.5 — 2026-08-28

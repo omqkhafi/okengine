@@ -98,6 +98,6 @@ App \`:6530\` · Console \`:6533\` · MCP \`:6535\`. Vite web is \`bun run web\`
 
 - Handbook: ${handbook}
 - Understand: ${docsUrl("/docs/understand/the-problem")}
-- See it work: ${docsUrl("/docs/understand/see-it-work")}
+- See it work: ${docsUrl("/docs/understand/the-anatomy")}
 `;
 }

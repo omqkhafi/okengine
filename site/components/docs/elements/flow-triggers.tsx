@@ -1,10 +1,9 @@
 /**
- * Six triggers, one Flow species — fan-in diagram for the Flow element page.
+ * Five triggers, one Flow species — fan-in diagram for the Flow element page.
  *
- * The ambient beat cycles through each trigger in turn, or the reader can click
- * and hover any trigger to inspect its binding and payload contract. A packet
- * springs across the lane into the Flow panel with matching element ink.
- * Any trigger, same flow — that is the whole diagram. Deterministic from one tick.
+ * Readers can click and hover any trigger to inspect its binding and payload
+ * contract. A packet springs across the lane into the Flow panel with matching
+ * element ink. Any trigger, same flow — that is the whole diagram.
  */
 
 "use client";
@@ -16,12 +15,11 @@ import {
   Globe,
   Radio,
   Timer,
-  Workflow,
   RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { BeatPing, RevealGroup, RevealItem, useTick } from "@/components/docs/reveal";
+import { BeatPing, RevealGroup, RevealItem } from "@/components/docs/reveal";
 import { CHIP_TONE, type ElementChipTone } from "@/lib/element-tones";
 import { cn } from "@/lib/cn";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
@@ -94,19 +92,6 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     description: "Database change-data-capture triggers pass row mutations directly to in.",
   },
   {
-    id: "call",
-    element: "Flow",
-    toneKey: "sky",
-    icon: Workflow,
-    syntax: "fx.call",
-    starts: "another flow calls in",
-    replaces: '"private" helper',
-    binding: "fx.call(calculateTax, { amount: 120 })",
-    flowName: "orders.calculateTax",
-    inPayload: "{ amount: 120, rate: 0.08 }",
-    description: "Private internal flows execute via fx.call with typed input validation.",
-  },
-  {
     id: "mcp",
     element: "AI",
     toneKey: "rose",
@@ -123,7 +108,6 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
 
 const CONTRACTS = ["in", "out", "errors", "do"] as const;
 
-const TICK_MS = 2000;
 const BOX_LINE = "var(--color-fd-border)";
 
 const ELEMENT_VAR_MAP: Record<ElementChipTone, string> = {
@@ -142,12 +126,11 @@ const ELEMENT_VAR_MAP: Record<ElementChipTone, string> = {
  */
 export function FlowTriggers() {
   const reduced = useClientReducedMotion();
-  const tick = useTick(TICK_MS);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  // Active trigger precedence: hovered > selected > ambient tick
+  // Active trigger precedence: hovered > selected > default (first trigger)
   const activeIndex = (() => {
     if (hoveredId !== null) {
       const idx = TRIGGERS.findIndex((t) => t.id === hoveredId);
@@ -157,15 +140,14 @@ export function FlowTriggers() {
       const idx = TRIGGERS.findIndex((t) => t.id === selectedId);
       if (idx !== -1) return idx;
     }
-    if (reduced || tick === null) return 0;
-    return tick % TRIGGERS.length;
+    return 0;
   })();
 
   const activeTrigger = TRIGGERS[activeIndex] ?? TRIGGERS[0]!;
   const activeTone = CHIP_TONE[activeTrigger.toneKey];
   const activePacket = ELEMENT_VAR_MAP[activeTrigger.toneKey];
   const isManuallyControlled = selectedId !== null || hoveredId !== null;
-  const isLive = !reduced && (!isManuallyControlled || hoveredId !== null || selectedId !== null);
+  const isLive = !reduced && isManuallyControlled;
 
   const handleSelect = (id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
@@ -174,20 +156,20 @@ export function FlowTriggers() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Six triggers — HTTP, signal, interval, row change, fx.call, and an MCP tool — all binding to the same Flow species."
+      aria-label="Five triggers — HTTP, signal, interval, row change, and an MCP tool — all binding to the same Flow species."
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-fd-foreground">Six triggers, one species</p>
+          <p className="text-sm font-medium text-fd-foreground">Five triggers, one species</p>
           {selectedId !== null && (
             <button
               type="button"
               onClick={() => setSelectedId(null)}
               className="inline-flex items-center gap-1 rounded border border-fd-border bg-fd-secondary/60 px-1.5 py-0.5 text-[10px] text-fd-muted-foreground hover:bg-fd-secondary hover:text-fd-foreground transition-colors cursor-pointer"
-              title="Resume automatic cycle"
+              title="Reset trigger selection"
             >
               <RotateCcw className="size-2.5" />
-              <span>Resume cycle</span>
+              <span>Reset</span>
             </button>
           )}
         </div>
@@ -242,7 +224,7 @@ export function FlowTriggers() {
                       <span>{trigger.starts}</span>
                       <span className="relative flex size-1.5 shrink-0" aria-hidden>
                         {firing && isLive ? (
-                          <BeatPing key={`${trigger.id}-${tick}`} className={itemTone.wash} />
+                          <BeatPing className={itemTone.wash} />
                         ) : null}
                         <span
                           className={cn(
@@ -293,7 +275,6 @@ export function FlowTriggers() {
               </div>
               <FanInPacket
                 firing={isLive}
-                beat={tick ?? 0}
                 color={activePacket}
                 key={activeTrigger.id}
               />
@@ -349,14 +330,12 @@ export function FlowTriggers() {
   );
 }
 
-/** Packet crosses the “all become” lane into the Flow panel on each beat. */
+/** Packet crosses the “all become” lane into the Flow panel on trigger change/interaction. */
 function FanInPacket({
   firing,
-  beat,
   color,
 }: {
   readonly firing: boolean;
-  readonly beat: number;
   readonly color: string;
 }) {
   return (
@@ -372,7 +351,6 @@ function FanInPacket({
         ALL BECOME
       </text>
       <motion.circle
-        key={firing ? beat : "static"}
         cy="8"
         r="2.5"
         fill={color}
@@ -380,7 +358,7 @@ function FanInPacket({
         animate={firing ? { cx: [6, 94], opacity: [0, 1, 1, 0] } : { cx: 94, opacity: 0.9 }}
         transition={
           firing
-            ? { duration: 0.85, ease: "easeInOut" }
+            ? { duration: 0.65, ease: "easeInOut" }
             : { type: "spring", stiffness: 380, damping: 32, mass: 0.7, duration: 0 }
         }
       />

@@ -17,7 +17,7 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/understand/the-problem": "TriangleAlert",
   "/docs/understand/the-model": "Compass",
   "/docs/understand/the-vocabulary": "Boxes",
-  "/docs/understand/see-it-work": "Eye",
+  "/docs/understand/the-anatomy": "PenTool",
   "/docs/ai/try-it": "Terminal",
   "/docs/elements": "Boxes",
   "/docs/elements/flow": "Workflow",

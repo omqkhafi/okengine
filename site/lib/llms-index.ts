@@ -29,7 +29,7 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
       "understand/the-problem",
       "understand/the-model",
       "understand/the-vocabulary",
-      "understand/see-it-work",
+      "understand/the-anatomy",
     ],
   },
   {

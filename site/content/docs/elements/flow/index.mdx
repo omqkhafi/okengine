@@ -7,6 +7,8 @@ source: "docs/spec/unified-theory.md"
 
 Flow is the element responsible for *behavior* — the `on(trigger, flow)` shape covered on [The Anatomy](/docs/understand/the-anatomy) applies here directly. An HTTP endpoint, a scheduled job, a queue consumer, and a multi-step workflow are all the same Flow, wired to a different trigger.
 
+## The Shape at a Glance
+
 <Callout title="The one rule">
   All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside a
   flow is a defect — effects are **inferred from what a flow touches through `fx`**, and that
@@ -15,10 +17,9 @@ Flow is the element responsible for *behavior* — the `on(trigger, flow)` shape
 
 <FlowShape />
 
-<Callout title="Call-Only Flows">
-  A Flow defined without a trigger — just `flow(name, { ... })` on its own — is internal. Nothing
-  outside your code can start it; other flows invoke it directly with `fx.call(flowRef, input)`.
-</Callout>
+## A Complete Example
+
+Here's the shape above as a working Flow — an HTTP trigger, contracts, and a `do` that reaches the world only through `fx`:
 
 ```typescript title="src/flows/orders/create.ts"
 import { on, flow, http } from "okengine";
@@ -42,25 +43,22 @@ export const createOrder = on(
 );
 ```
 
+<Callout title="Call-Only Flows">
+  A Flow defined without a trigger — just `flow(name, { ... })` on its own — is internal. Nothing
+  outside your code can start it; other flows invoke it directly with `fx.call(flowRef, input)`.
+</Callout>
+
 ## Only the Trigger Changes
 
 Same contracts, same `do`, same effect tracking — swap the trigger and the Flow reacts to a completely different element:
 
 <FlowTriggers />
 
-```typescript
-on(http.post("/orders"), createOrder);
-on(cleanupClock, cleanStaleSessions);
-on(orderPlaced, sendReceipt);
-on(db.table(users).changed("email"), sendVerification);
-on(mcp.tool("bookings.create").gate(memberGate), createBooking);
-```
-
 ## Options Reference
 
 | Option       | Type                                            | Default      | Meaning                                                                |
 | ------------ | ------------------------------------------------ | ------------ | ------------------------------------------------------------------------ |
-| `in`         | `SchemaInput`                                    | `undefined`  | Input validation schema (Zod, Standard Schema).                       |
+| `in`         | `SchemaInput`                                    | `undefined`  | Input validation schema (Zod, Valibot, ArkType, Standard Schema).     |
 | `out`        | `SchemaInput`                                    | `undefined`  | Output validation schema.                                             |
 | `errors`     | `Record<string, SchemaInput>`                    | `{}`         | Declared map of typed domain failure schemas.                         |
 | `durable`    | `boolean`                                        | `false`      | Enables transparent `fx.step` execution journaling and crash recovery.|
@@ -69,6 +67,190 @@ on(mcp.tool("bookings.create").gate(memberGate), createBooking);
 | `compensate` | `(ctx, fx) => Promise<unknown>`                  | `undefined`  | Rollback hook executed if a durable flow fails terminally.            |
 | `plane`      | `"user" \| "operator"`                           | `"user"`     | Execution boundary separating app flows from Console operator tools.  |
 | `do`         | `(input, fx) => Promise<Output \| FlowFailure>`  | *(required)* | The execution logic receiving validated input and `fx`.               |
+
+### Schema Validation (`in`, `out`)
+
+OKE implements **[Standard Schema V1](https://standardschema.dev/)** (`~standard`), meaning you are not locked into a single validation tool. Any library adhering to the standard works out of the box with full type inference:
+
+- **Zod** (`z.object({...})`): Default choice for wide ecosystem compatibility.
+- **Valibot** (`v.object({...})`): Lightweight, modular, and tree-shakeable.
+- **ArkType** (`type({...})`): Expressive 1:1 TypeScript syntax with high runtime speed.
+
+```typescript
+flow({
+  in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+  out: z.object({ id: z.string() }),
+  do: async (input, fx) => {
+    // If input fails validation, OKE rejects before entering `do`.
+    return { id: fx.id() };
+  },
+});
+```
+
+<Callout title="Automatic CRUD with store.resource">
+  When using `store.resource(db, table)`, OKE internally derives insert, update, and select schemas directly from your Drizzle table definitions (`drizzle-orm/zod`). You only need custom `in`/`out` schemas for custom business flows.
+</Callout>
+
+<Callout title="Best Practice: Centralized Shapes (shapes.ts)">
+  For shared schemas, DTOs, and reusable types across custom flows, define them in a central `src/shapes.ts` (or `src/shapes/` directory) and export derived TypeScript types (`z.infer<typeof ...>`). This keeps domain contracts reusable between client and server.
+</Callout>
+
+### Typed Failures (`errors` & `fx.fail`)
+
+Errors in OKE are **typed values, not uncaught exceptions**. Throwing unexpected errors results in runtime defects; predictable domain failures should be declared in the `errors` map and returned with `fx.fail`:
+
+```typescript
+export const createOrder = on(
+  http.post("/orders"),
+  flow({
+    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+    out: z.object({ id: z.string() }),
+    errors: {
+      OutOfStock: z.object({ available: z.number(), backorderDate: z.string().optional() }),
+      PaymentDeclined: z.object({ reason: z.string() }),
+    },
+    do: async (input, fx) => {
+      const stock = await checkStock(input.sku);
+      if (stock.available < input.qty) {
+        // Returns a structured { data: null, error: { code: "OutOfStock", data: { ... } } }
+        return fx.fail("OutOfStock", { available: stock.available });
+      }
+
+      return { id: fx.id() };
+    },
+  }),
+);
+```
+
+#### How Errors Behave Across Surfaces
+
+1. **Client Envelope**: Clients receive standard envelopes `{ data, error }`. On failure, `data` is `null` and `error` contains `{ code: "OutOfStock", data: { available: 0 } }`. TypeScript client SDKs narrow the error union automatically by checking `res.error.code`.
+2. **HTTP Status Mapping**: OKE automatically maps standard domain error codes (e.g. `NotFound` → 404, `Unauthorized` → 401, `Forbidden` → 403, `Conflict` / `Duplicate` → 409, custom domain errors → 400).
+3. **Manifest & Console**: Declared errors are written to the Manifest and inspected in the Console Trace timeline, showing exact error payloads and triggers.
+
+### `durable`
+
+Wraps every `fx.step(...)` call in a persistent journal. If the process crashes mid-execution, the flow resumes from the last completed step instead of restarting from scratch:
+
+```typescript
+flow({
+  durable: true,
+  do: async (input, fx) => {
+    const chargeId = await fx.step("charge-card", () => paymentProvider.charge(input.amount));
+    const orderId = await fx.step("create-order", () => db.orders.create({ chargeId }));
+    return { orderId };
+  },
+});
+```
+
+If this crashes after `"charge-card"` completes but before `"create-order"` runs, resuming re-enters at `"create-order"` — the card is never charged twice.
+
+#### Step Rollbacks (`{ undo }`)
+
+Steps can register an `undo` handler directly inside `fx.step(name, fn, { undo })`. If any subsequent step fails terminally, OKE automatically runs registered `undo` handlers in reverse order (LIFO), passing each step's journaled return value:
+
+```typescript title="src/flows/checkout.ts"
+export const checkout = flow({
+  durable: true,
+  do: async (input, fx) => {
+    // Step 1: Charge card — registers refund handler
+    const chargeId = await fx.step(
+      "charge-card",
+      () => paymentProvider.charge(input.amount),
+      { undo: (id) => paymentProvider.refund(id) },
+    );
+
+    // Step 2: Provision license key — registers revoke handler
+    const licenseKey = await fx.step(
+      "provision-license",
+      () => licenseService.create({ user: input.userId }),
+      { undo: (key) => licenseService.revoke(key) },
+    );
+
+    // Step 3: Fails terminally (e.g. database constraint or network outage)
+    await fx.step("send-receipt", () => emailService.send(input.email, licenseKey));
+
+    return { chargeId, licenseKey };
+  },
+});
+```
+
+If `"send-receipt"` fails terminally, OKE executes `undo` handlers backwards:
+1. Revokes `licenseKey` from `"provision-license"`.
+2. Refunds `chargeId` from `"charge-card"`.
+3. Commits the run journal as failed. Side effects stay clean without manual try/catch rollback boilerplate.
+
+#### Flow Compensation (`compensate`)
+
+While per-step `undo` handles localized step cleanups, the flow-level `compensate` option acts as a top-level rollback hook. It runs once after all per-step `undo` handlers finish, receiving the original `input`, terminal `error`, and `completedSteps`:
+
+```typescript
+flow({
+  durable: true,
+  do: async (input, fx) => {
+    const chargeId = await fx.step(
+      "charge-card",
+      () => paymentProvider.charge(input.amount),
+      { undo: (id) => paymentProvider.refund(id) },
+    );
+    await fx.step("reserve-inventory", () => inventory.reserve(input.sku)); // fails here
+    return { chargeId };
+  },
+  compensate: async (ctx, fx) => {
+    // Cross-cutting notifications or cleanup requiring full run context
+    await fx.channel(slack).send("alerts", {
+      text: `Order failed after steps: ${ctx.completedSteps.join(", ")}. Error: ${ctx.error}`,
+    });
+  },
+});
+```
+
+When `"reserve-inventory"` fails:
+1. Step-level `undo` refunds `"charge-card"`.
+2. Flow-level `compensate` executes with `completedSteps: ["charge-card"]` to alert operators or perform global cleanup.
+
+### `retry`
+
+Retries the *entire* flow execution — not one step — when it throws. `retries` counts extra attempts after the first; `delay` is the initial wait (ms or a duration string); `backoff` multiplies that delay after each attempt:
+
+```typescript
+flow({
+  retry: { retries: 3, delay: "200ms", backoff: 2 },
+  do: async (input, fx) => {
+    return await fx.ask(flakyModel, { prompt: input.text });
+  },
+});
+```
+
+This retries up to 3 extra times (200ms, then 400ms, then 800ms apart) before giving up. `jitter` defaults to `true`, and a `when(err)` predicate can narrow which errors qualify.
+
+### `cache`
+
+Automatic for read-only flows inferred from their effects; pass a duration string to add a TTL instead of relying on the default:
+
+```typescript
+flow({
+  cache: "30s",
+  do: async (input, fx) => {
+    return await fx.store(db).select().from(products).where(eq(products.id, input.id));
+  },
+});
+```
+
+Identical calls within the 30-second window return the cached result instead of re-running `do`.
+
+### `plane`
+
+Separates flows meant for end users (`"user"`, the default) from flows meant for Console operators (`"operator"`), which bypass row-level security:
+
+```typescript
+flow({
+  plane: "operator",
+  do: async (input, fx) => {
+    return await fx.store(db).select().from(allOrders); // sees every tenant's rows
+  },
+});
+```
 
 See the [full `fx` reference](/docs/reference/fx) for every method available inside `do`.
 

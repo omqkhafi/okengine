@@ -269,9 +269,11 @@ function StageDemo({ index, live }: { readonly index: string; readonly live: boo
 /** 01 Trigger: External events fan-in into the on() gate */
 function TriggerDemo({ live }: { readonly live: boolean }) {
   const triggers = [
-    { label: "http", y: 4 },
-    { label: "cron", y: 11 },
-    { label: "sig", y: 18 },
+    { label: "http", y: 3 },
+    { label: "clock", y: 7 },
+    { label: "signal", y: 11 },
+    { label: "cdc", y: 15 },
+    { label: "mcp", y: 19 },
   ] as const;
 
   return (
@@ -279,7 +281,7 @@ function TriggerDemo({ live }: { readonly live: boolean }) {
       <svg viewBox="0 0 84 22" className="h-5 w-21 shrink-0" role="presentation" aria-hidden>
         {triggers.map((t) => (
           <g key={t.label}>
-            <circle cx="8" cy={t.y} r="2" fill={IDLE} />
+            <circle cx="8" cy={t.y} r="1.5" fill={IDLE} />
             <line
               x1="12"
               y1={t.y}
