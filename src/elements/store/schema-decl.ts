@@ -167,6 +167,8 @@ export interface SchemaColumnDecl<
   readonly typeOptions?: FieldTypeOptions;
   /** Optional human description for Console / docs (falls back to the JS key). */
   readonly description?: string;
+  /** Hybrid search (BM25 ± LSH) when `.searchable()` / `.embed()` was chained. */
+  readonly search?: ColumnSearchDecl;
   /**
    * Drizzle `SQLWrapper` structural match — never invoked at runtime.
    *
@@ -213,6 +215,37 @@ export interface SchemaTenantScopedDecl {
 export interface SchemaLiveDecl {
   readonly kind: "schema-live";
   readonly live: false;
+}
+
+/**
+ * Options for {@link FieldBuilder.searchable}.
+ *
+ * `weight` is a BM25F field weight applied to term frequency **before**
+ * saturation / IDF — pure SQL math, zero AI cost. Default `1`.
+ */
+export interface SearchableOptions {
+  readonly weight?: number;
+}
+
+/**
+ * Options for {@link FieldBuilder.embed} — separate from {@link SearchableOptions}
+ * because embedding is an async, costed AI pipeline.
+ */
+export interface EmbedFieldOptions {
+  /** Embedding model handle or name. */
+  readonly model?: { readonly name: string } | string;
+  /** Required vector dimensionality — mismatch fails loud at write time. */
+  readonly dims: number;
+}
+
+/** Column-level hybrid search declaration stamped on {@link SchemaColumnDecl}. */
+export interface ColumnSearchDecl {
+  readonly searchable: true;
+  readonly weight: number;
+  readonly embed?: {
+    readonly model?: string;
+    readonly dims: number;
+  };
 }
 
 /** Third-arg extra for {@link schemaTable}. */
@@ -299,6 +332,20 @@ export interface FieldBuilder<TData = unknown, TNotNull extends boolean = false>
   pii(): FieldBuilder<TData, TNotNull>;
   sensitive(): FieldBuilder<TData, TNotNull>;
   retain(duration: string): FieldBuilder<TData, TNotNull>;
+  /**
+   * Participate in built-in BM25 full-text ranking on the primary SQL table.
+   * Zero AI dependency. Optional {@link SearchableOptions.weight} is BM25F
+   * field weight (default `1`).
+   *
+   * Chain `.embed({ dims })` separately when semantic LSH is also required.
+   */
+  searchable(options?: SearchableOptions): FieldBuilder<TData, TNotNull>;
+  /**
+   * Opt into async embedding + LSH for this searchable field.
+   * Requires a prior `.searchable()` and a configured `ai` element.
+   * Never a boolean flag inside searchable options — cost/mechanism differ.
+   */
+  embed(options: EmbedFieldOptions): FieldBuilder<TData, TNotNull>;
   /** Override snake_case SQL name. */
   as(sqlName: string): FieldBuilder<TData, TNotNull>;
   /** Optional human description for Console / docs (falls back to the JS key). */
@@ -342,7 +389,10 @@ interface FieldState {
   readonly description?: string;
   readonly references?: ColumnReference;
   readonly typeOptions?: FieldTypeOptions;
+  readonly search?: ColumnSearchDecl;
 }
+
+const TEXT_SEARCHABLE_TYPES = new Set<FieldSqlType>(["text", "varchar", "char"]);
 
 function camelToSnake(key: string): string {
   return key
@@ -428,6 +478,54 @@ function createBuilder<TData, TNotNull extends boolean>(
       next<TNotNull>({
         classification: mergeClassification(state.classification, { retain: duration }),
       }),
+    searchable: (options) => {
+      if (!TEXT_SEARCHABLE_TYPES.has(state.sqlType)) {
+        throw new Error(
+          `field.${state.sqlType}().searchable() is only valid on text / varchar / char columns`,
+        );
+      }
+      const weight = options?.weight ?? 1;
+      if (!(typeof weight === "number" && Number.isFinite(weight) && weight > 0)) {
+        throw new Error(`searchable({ weight }) must be a finite number > 0 (got ${String(weight)})`);
+      }
+      return next<TNotNull>({
+        search: {
+          searchable: true,
+          weight,
+          ...(state.search?.embed ? { embed: state.search.embed } : {}),
+        },
+      });
+    },
+    embed: (options) => {
+      if (!state.search?.searchable) {
+        throw new Error(
+          `.embed() requires a prior .searchable() on the same field — weight is free SQL math; embed is an async AI pipeline`,
+        );
+      }
+      if (!TEXT_SEARCHABLE_TYPES.has(state.sqlType)) {
+        throw new Error(`field.${state.sqlType}().embed() is only valid on text / varchar / char columns`);
+      }
+      const dims = options.dims;
+      if (!(typeof dims === "number" && Number.isInteger(dims) && dims > 0)) {
+        throw new Error(`.embed({ dims }) requires a positive integer (got ${String(dims)})`);
+      }
+      const model =
+        typeof options.model === "string"
+          ? options.model
+          : options.model && typeof options.model === "object" && "name" in options.model
+            ? String(options.model.name)
+            : undefined;
+      return next<TNotNull>({
+        search: {
+          searchable: true,
+          weight: state.search.weight,
+          embed: {
+            dims,
+            ...(model !== undefined ? { model } : {}),
+          },
+        },
+      });
+    },
     as: (sqlName) => next<TNotNull>({ sqlName }),
     describe: (description) => next<TNotNull>({ description }),
     type: () => createBuilder<unknown, TNotNull>(state) as FieldBuilder<never, TNotNull> as never,
@@ -450,6 +548,7 @@ function createBuilder<TData, TNotNull extends boolean>(
         ...(state.defaultFnKind ? { defaultFnKind: state.defaultFnKind } : {}),
         ...(state.classification ? { classification: state.classification } : {}),
         ...(state.description !== undefined ? { description: state.description } : {}),
+        ...(state.search ? { search: state.search } : {}),
         ...(state.references ? { references: state.references } : {}),
         ...(state.typeOptions !== undefined && Object.keys(state.typeOptions).length > 0
           ? { typeOptions: state.typeOptions }

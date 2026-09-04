@@ -1,7 +1,7 @@
 /**
  * Dry-run effect stubbing + write isolation (console §9.1 · §9.3 · §9.4).
  *
- * - Irreversible effects (`send` / `ask`) are intercepted and recorded as
+ * - Irreversible effects (`send` / `ask` / `embed`) are intercepted and recorded as
  *   "would have fired" — never contact a real channel or model.
  * - Store writes run against real data for an honest pass/fail verdict, then
  *   are always rolled back (snapshot / restore) when the dry-run scope exits.
@@ -14,8 +14,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 /** One intercepted irreversible effect during a dry run. */
 export interface DryRunWouldHaveFired {
   /** Irreversible kind. */
-  readonly kind: "send" | "ask";
-  /** Template / prompt name. */
+  readonly kind: "send" | "ask" | "embed";
+  /** Template / prompt / model name. */
   readonly resource: string;
   /** Optional correlating message id (signal dry-run). */
   readonly messageId?: string;

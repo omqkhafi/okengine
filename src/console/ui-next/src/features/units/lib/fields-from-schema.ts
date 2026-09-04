@@ -25,6 +25,12 @@ export interface FormField {
   readonly pii?: boolean;
   /** When true, column is sensitive-classified (Store schema pills). */
   readonly sensitive?: boolean;
+  /** Built-in hybrid search — BM25 via `.searchable()`. */
+  readonly searchable?: boolean;
+  readonly searchWeight?: number;
+  /** Async LSH embed via `.embed()`. */
+  readonly embed?: boolean;
+  readonly embedDims?: number;
   /** When true, column is a primary key (Store schema pills). */
   readonly primaryKey?: boolean;
   /** When true, column is a foreign key (declared or inferred). */

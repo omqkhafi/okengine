@@ -182,6 +182,46 @@ export {
 export type { FileKeyWarning } from "./store/files-policy.ts";
 
 export {
+  SearchConfigError,
+  SEARCH_LOW_CORPUS_WARN_N,
+  RRF_DEFAULT_K,
+  LSH_DEFAULT_K,
+  BM25_K1,
+  BM25_B,
+} from "./store/search-errors.ts";
+export { bm25fScore, tokenize, termFrequencies } from "./store/search-bm25.ts";
+export {
+  generateHyperplanes,
+  hyperplaneSeed,
+  lshBucket,
+  cosineSimilarity,
+  neighborBuckets,
+  serializePlanes,
+  deserializePlanes,
+} from "./store/search-lsh.ts";
+export { fuseRrf, fuseWeighted, fuseLists } from "./store/search-fusion.ts";
+export type { FuseOptions, FuseStrategy, RankedHit } from "./store/search-fusion.ts";
+export { runSqlSearch } from "./store/search-runtime.ts";
+export type { SqlSearchOptions, SqlSearchResult, SearchColumnMeta } from "./store/search-runtime.ts";
+export {
+  searchDdlForTable,
+  ensureHyperplaneInserts,
+  embColumn,
+  lshColumn,
+  OKE_TSV_COL,
+  SEARCH_PG_MIN_MAJOR,
+  parsePgMajor,
+} from "./store/search-ddl.ts";
+export { runSearchBackfill } from "./store/search-backfill.ts";
+export type { SearchBackfillOptions, SearchBackfillResult } from "./store/search-backfill.ts";
+export {
+  searchEmbedFlowName,
+  tablesNeedingSearchEmbed,
+  applySearchEmbedCdc,
+} from "./store/search-embed-flow.ts";
+export { bindSearchEmbedFlows } from "./store/search-bind.ts";
+export type { SearchableOptions, EmbedFieldOptions, ColumnSearchDecl } from "./store/schema-decl.ts";
+export {
   createFilesImagePipeline,
   putImageToBucket,
   variantObjectKey,

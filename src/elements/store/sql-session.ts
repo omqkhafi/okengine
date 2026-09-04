@@ -17,13 +17,7 @@ import { throwOke } from "../../kernel/errors.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { maskRows, tableFromSql } from "./classify.ts";
 import { isMissingDomainRelationError } from "./missing-relation.ts";
-import {
-  andWhere,
-  compileOrderBy,
-  compileWhere,
-  resolveSelectColumns,
-  type WhereMap,
-} from "./sql-condition.ts";
+import { andWhere, compileWhere, compileOrderBy, resolveSelectColumns, type WhereMap } from "./sql-condition.ts";
 import {
   mapRowToJs,
   prepareInsertRow,
@@ -32,6 +26,8 @@ import {
   resolveTableName,
   type TableHandle,
 } from "./table.ts";
+import { isSchemaTableDecl } from "./schema-decl.ts";
+import { runSqlSearch, type SearchColumnMeta, type SqlSearchOptions } from "./search-runtime.ts";
 
 export type { WhereMap } from "./sql-condition.ts";
 
@@ -204,6 +200,11 @@ export interface SqlSessionOptions {
   readonly domainDdl?: DomainDdlMode;
   /** Gate identity — stamps `oke.*` on postgres / pglite. */
   readonly rls?: RlsIdentity;
+  /**
+   * Optional query-time embedding for hybrid LSH (wired from `fx.embed` at boot).
+   * When omitted, search is BM25-only even if columns declare `.embed()`.
+   */
+  readonly embedQuery?: (text: string, model?: string) => Promise<readonly number[]>;
 }
 
 /**
@@ -454,6 +455,18 @@ export interface SqlStoreHandle {
    */
   page(table: TableHandle | unknown, options: SqlPageOptions): Promise<SqlRow[]>;
   /**
+   * Built-in hybrid search (BM25 ± LSH ± fusion) on `.searchable()` columns.
+   * Reuses {@link parseListQuery} for filters / limit / cursor; `query` is
+   * the relevance string (not list-grammar `?search=` LIKE).
+   *
+   * @param table - Table with searchable columns
+   * @param options - query + list filters + optional fuse / rerank
+   */
+  search(
+    table: TableHandle | unknown,
+    options: import("./search-runtime.ts").SqlSearchOptions,
+  ): Promise<import("./search-runtime.ts").SqlSearchResult>;
+  /**
    * Ensure a simple table exists (test / bootstrap helper).
    *
    * @param table - Table handle
@@ -507,7 +520,7 @@ export function createSqlStoreHandle(
   ref: `sql:${string}`,
   options: SqlSessionOptions,
 ): SqlStoreHandle {
-  const { connection, classifications, revealPii, rls } = options;
+  const { connection, classifications, revealPii, rls, embedQuery } = options;
   const domainDdl: DomainDdlMode = options.domainDdl ?? "ensure";
 
   function mask(rows: SqlRow[], table?: string): SqlRow[] {
@@ -1134,6 +1147,20 @@ export function createSqlStoreHandle(
       });
     },
 
+    async search(table: TableHandle | unknown, searchOptions: SqlSearchOptions) {
+      await ensureFromMeta(table);
+      const columns = searchColumnsFromTable(table);
+      const pk = resolvePkColumn(table);
+      return runSqlSearch({
+        conn: connection,
+        table,
+        columns,
+        pkSqlName: pk,
+        options: searchOptions,
+        ...(embedQuery ? { embedQuery } : {}),
+      });
+    },
+
     async ensureTable(table: TableHandle) {
       const cols = Object.values(table.columns);
       const pk = resolvePkColumn(table);
@@ -1167,6 +1194,37 @@ export function resolvePkColumn(table: unknown): string {
     if ("code" in t) return "code";
   }
   return "id";
+}
+
+/**
+ * Collect `.searchable()` / `.embed()` column meta from a schema table.
+ *
+ * @param table - Table handle
+ */
+function searchColumnsFromTable(table: unknown): SearchColumnMeta[] {
+  if (!isSchemaTableDecl(table)) {
+    throw new Error(
+      "search(): table must be a store.schema.table() declaration with .searchable() columns",
+    );
+  }
+  const out: SearchColumnMeta[] = [];
+  for (const [key, col] of Object.entries(table.columns)) {
+    if (!col.search?.searchable) continue;
+    out.push({
+      key,
+      sqlName: col.sqlName,
+      weight: col.search.weight,
+      ...(col.search.embed
+        ? {
+            embed: {
+              dims: col.search.embed.dims,
+              ...(col.search.embed.model ? { model: col.search.embed.model } : {}),
+            },
+          }
+        : {}),
+    });
+  }
+  return out;
 }
 
 function asNumber(value: unknown, column: string): number {

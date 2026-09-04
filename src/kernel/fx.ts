@@ -774,6 +774,14 @@ export interface Fx {
    */
   ask(prompt: NamedRef, input?: unknown, opts?: FxAskOptions): Promise<Record<string, unknown>>;
   /**
+   * Embed text via a named model (records `embed` — distinct from `ask`).
+   * Returns the vector; does not write an index.
+   *
+   * @param model - Model name or handle
+   * @param text - Text to embed
+   */
+  embed(model: NamedRef, text: string): Promise<readonly number[]>;
+  /**
    * Similarity search over an index/embed (records `read` on the embed ref).
    *
    * @param embed - Index / embed name or handle
@@ -1443,6 +1451,42 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           return h.page(table, pageOptions);
         });
       },
+      search(table, searchOptions) {
+        return gatedTable("read", table, async () => {
+          const h = await ensure();
+          const result = await h.search(table, searchOptions);
+          // Optional rerank via fx.ask — only when explicitly requested.
+          if (
+            searchOptions.rerank &&
+            typeof searchOptions.rerank === "object" &&
+            searchOptions.rerank.model
+          ) {
+            const model = searchOptions.rerank.model;
+            const pk = "id";
+            const docs = result.data.map((row) => ({
+              id: String(row[pk] ?? ""),
+              text: Object.values(row)
+                .filter((v) => typeof v === "string")
+                .join("\n"),
+              score: 0,
+            }));
+            const out = (await fx.ask(model, {
+              query: searchOptions.query,
+              docs,
+            })) as { rankedIds?: string[] };
+            if (out.rankedIds && out.rankedIds.length > 0) {
+              const byId = new Map(result.data.map((r) => [String(r[pk] ?? ""), r]));
+              return {
+                ...result,
+                data: out.rankedIds
+                  .map((id) => byId.get(id))
+                  .filter((r): r is NonNullable<typeof r> => r !== undefined),
+              };
+            }
+          }
+          return result;
+        });
+      },
       ensureTable(table) {
         return gatedTable("write", table, async () => {
           refuseDryRunWrite();
@@ -2003,6 +2047,19 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           }
         }
         throw new Error(`fx.ask: AI runtime is not configured for prompt "${name}"`);
+      });
+    },
+    embed(model, text) {
+      const name = resolveName(model);
+      return gated("embed", name, async () => {
+        if (isDryRun()) {
+          recordWouldHaveFired("embed", name);
+          return [];
+        }
+        if (options.aiRuntime && typeof options.aiRuntime.embedVector === "function") {
+          return options.aiRuntime.embedVector(name, text);
+        }
+        throw new Error(`fx.embed: AI runtime is not configured for model "${name}"`);
       });
     },
     search(embed, query, opts) {

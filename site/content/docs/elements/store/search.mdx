@@ -1,39 +1,57 @@
 ---
 title: "Search"
-description: "Vector similarity search for AI embeddings and full-text search indexing across structured data."
+description: "Built-in hybrid search on SQL tables — BM25 full-text, LSH vectors, RRF fusion — plus optional external index engines."
 icon: "Search"
 ---
 
-The Search facet (`store.index`) provides vector similarity search and full-text search across documents and records.
+Built-in hybrid search lives on ordinary `store.schema.table()` columns via `.searchable()` and `.embed()`. It runs on PostgreSQL 15+ with plain SQL (GIN + B-tree) — **zero required extensions**. The separate `store.index` facet (Meilisearch / pgvector) remains for genuinely external engines.
 
-## What it is
+## One rule
 
-Search unifies vector embeddings for AI semantic retrieval (using pgvector or Qdrant) and keyword-based search (using Meilisearch or PostgreSQL tsvector).
+`.searchable()` is free, synchronous BM25 math. `.embed()` is a separate chain that starts an **async, costed** AI pipeline — never a boolean flag next to `weight`.
 
-## Smallest Example
+## Quick start
 
 <Steps>
 
 <Step>
-### Index and search documents
+### Declare searchable columns
 
-```typescript title="src/flows/docs/search.ts"
+```typescript title="src/db/schema.decl.ts"
+import { field, store, ai } from "okengine";
+
+const embedModel = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  title: field.text().searchable({ weight: 2 }).notNull(),
+  body: field.text().searchable().embed({ model: embedModel, dims: 768 }),
+});
+```
+
+Bare `.searchable()` works with **no** `ai` element. Adding `.embed()` without AI fails loud (`SearchConfigError`).
+
+</Step>
+
+<Step>
+### Query with `fx.store(db).search`
+
+```typescript title="src/flows/articles/search.ts"
 import { flow } from "okengine";
 import { z } from "zod";
+import { articles, db } from "../../db/schema.ts";
 
-export const searchDocs = flow("docs.search", {
-  in: z.object({ query: z.string() }),
-  do: async ({ query }, fx) => {
-    // Generate embedding via AI model
-    const vector = await fx.embed("text-embedding-3-small", query);
-
-    // Query index
-    const results = await fx.store.index("kb_articles").search(vector, {
-      limit: 5,
-      filter: { category: "billing" },
+export const searchArticles = flow("articles.search", {
+  in: z.object({ q: z.string() }),
+  do: async ({ q }, fx) => {
+    const { data, meta } = await fx.store(db).search(articles, {
+      query: q,
+      // optional: fuse: { strategy: "rrf" }  // default RRF k=60 (Cormack et al. 2009)
+      // optional: fuse: { strategy: "weighted", weights: { bm25: 0.4, vector: 0.6 } }
+      // optional: rerank: { model: "search.rerank" }  // default false — never silent ask
+      limit: 20,
     });
-
-    return { results };
+    return { data, meta };
   },
 });
 ```
@@ -42,17 +60,61 @@ export const searchDocs = flow("docs.search", {
 
 </Steps>
 
+## `?search=` / `?q=` vs hybrid `query` (do not confuse)
+
+These are **two different surfaces** that share English words. Mixing them up has caused real confusion elsewhere in this project — treat them as unrelated.
+
+| Surface | Where | Parameter | Meaning |
+| -------- | ----- | --------- | ------- |
+| List / live grammar | `parseListQuery` · resource lists · `liveQuery` | `?search=` or `?q=` | Substring `LIKE %term%` across whitelisted columns (default scope `"none"`) |
+| Hybrid search | `fx.store(db).search(table, { query })` | `query` | BM25 (± LSH) relevance ranking |
+
+Side by side:
+
+```typescript
+// 1) List grammar — substring filter (NOT BM25)
+// GET /articles?search=refund&status=eq.active
+await liveQuery(fx, articles, input, {
+  search: [articles.title], // enables ?search= / ?q= LIKE
+  filter: [articles.status],
+});
+
+// 2) Hybrid search — BM25 / LSH relevance (NOT LIKE)
+await fx.store(db).search(articles, {
+  query: "refund policy", // relevance string
+  // ...same PostgREST filters / limit / cursor via parseListQuery:
+  filterInput: { status: "eq.active", limit: "20" },
+});
+```
+
+`search()` reuses `parseListQuery` for ordinary column filters, limit, and cursor pagination. Only `query`, `fuse`, and `rerank` are search-specific.
+
+## Async embedding (eventual consistency)
+
+Writes from your app flow **never** call `fx.embed`. A system-owned durable CDC flow (`_oke_search_embed_<table>`) embeds after commit via the Realtime CDC bridge + Journal `fx.step`. A just-written row may be missing from semantic results for a short interval — that window is intentional and documented.
+
+## Backfill
+
+`oke db push` applies shadow columns / indexes but **never** silently backfills a large table. Run deliberately:
+
+```bash
+oke db search-backfill <table> [--batch=32]
+```
+
+Resumable via Journal durable steps; embed batches pause for provider rate limits.
+
+## Fusion defaults
+
+- **Default:** Reciprocal Rank Fusion with **k = 60** (Cormack, Clarke, Büttcher — SIGIR 2009; MAP flat for k ∈ [20, 100]). Override with `fuse.k`.
+- **Opt-in:** `fuse: { strategy: "weighted", weights: { bm25, vector } }` — tuned weighted fusion can outperform RRF on some benchmarks; RRF is the robust default, not unconditionally superior.
+
+## External engines
+
+`store.index` + Meilisearch / pgvector remain available for external engines. They are **not** this capability.
+
 ## Next
 
 <Cards>
-  <Card
-    title="Clock Element"
-    description="Manage schedules, intervals, and durable sleep."
-    href="/docs/elements/clock"
-  />
-  <Card
-    title="Store Overview"
-    description="Return to Store overview."
-    href="/docs/elements/store"
-  />
+  <Card title="Store Overview" description="SQL · KV · files · index." href="/docs/elements/store" />
+  <Card title="AI Element" description="Models, prompts, fx.ask / fx.embed." href="/docs/elements/ai" />
 </Cards>

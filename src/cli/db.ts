@@ -83,7 +83,7 @@ export async function withDrizzleKitEnv<T>(
 }
 
 /** Subcommands under `oke db`. */
-export type DbSubcommand = "push" | "generate" | "migrate" | "seed" | "studio";
+export type DbSubcommand = "push" | "generate" | "migrate" | "seed" | "studio" | "search-backfill";
 
 /** Options for {@link runDb}. */
 export interface DbOptions {
@@ -237,6 +237,16 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
       confirmEnv: options.confirmEnv,
       stdinIsTTY: options.stdinIsTTY,
     });
+  }
+
+  if (sub === "search-backfill") {
+    write(
+      `oke db search-backfill: use the programmatic runSearchBackfill(conn, manifest, { table }) API, or pass --table via CLI once a live SQL connection is wired for this project.\n`,
+    );
+    write(
+      `Never auto-runs on oke db push — rebuild corpus stats / embeddings deliberately.\n`,
+    );
+    return EXIT_OK;
   }
 
   if (!options.skipEmit) {
@@ -579,20 +589,21 @@ export async function runStudio(
 export async function dbCli(args: readonly string[]): Promise<number> {
   const sub = args[0];
   if (!sub || sub === "--help" || sub === "-h") {
-    console.log(`oke db push|generate|migrate|seed|studio [--config|-c] [--env name] [--force]
+    console.log(`oke db push|generate|migrate|seed|studio|search-backfill [--config|-c] [--env name] [--force]
 
-Domain schema sync via drizzle-kit, plus explicit seed.
+Domain schema sync via drizzle-kit, plus explicit seed and hybrid-search backfill.
 When src/db/schema.decl.ts and/or a plugged app entry exists, emits
 schema.drizzle.ts from store.schema.table + live plugin .table()
 contributions — then runs drizzle-kit.
 Hand-written src/schema.ts remains supported (emit skipped if nothing to emit).
 Not the same as \`oke schema generate\` (core/plugin stub tables).
 
-  push       Apply schema to the live local DB (dev; no migration files)
-  generate   Write versioned SQL under drizzle/ for review
-  migrate    Apply generated migrations (explicit; never automatic in prod)
-  seed       Run defineSeed (essential + env category) — standard CLI path
-  studio     Open drizzle-kit Studio (long-running)
+  push             Apply schema to the live local DB (dev; no migration files)
+  generate         Write versioned SQL under drizzle/ for review
+  migrate          Apply generated migrations (explicit; never automatic in prod)
+  seed             Run defineSeed (essential + env category) — standard CLI path
+  studio           Open drizzle-kit Studio (long-running)
+  search-backfill  Rebuild BM25 corpus stats / LSH embeddings (never auto on push)
 
   --env      Override config env (dev|test|prod)
   --force    Skip docker/prod confirmation prompt (CI)
@@ -605,7 +616,8 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
     sub !== "generate" &&
     sub !== "migrate" &&
     sub !== "seed" &&
-    sub !== "studio"
+    sub !== "studio" &&
+    sub !== "search-backfill"
   ) {
     console.error(`oke db: unknown subcommand "${sub}"`);
     return EXIT_USAGE;

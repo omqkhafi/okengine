@@ -7,16 +7,24 @@
 
 import { resolveDurationMs } from "./elapsed.ts";
 
-/** The seven load-bearing effect kinds (manifest `effects` keys, singular). */
-export type EffectKind = "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
+/** The eight load-bearing effect kinds (manifest `effects` keys, singular). */
+export type EffectKind =
+  | "read"
+  | "write"
+  | "emit"
+  | "send"
+  | "ask"
+  | "embed"
+  | "secret"
+  | "call";
 
 /**
- * Reversibility tier — console §9.1 ranking, applied to all seven kinds.
+ * Reversibility tier — console §9.1 ranking, applied to all effect kinds.
  *
  * - `none` — reads; no world change
  * - `reversible` — writes; undoable in-transaction
  * - `deferred` — emits; commit with the txn, then fan-out
- * - `irreversible` — sends / asks; cannot be undone by the runtime
+ * - `irreversible` — sends / asks / embeds; cannot be undone by the runtime
  * - `capability` — secrets; authority held, not an effect caused
  * - `portal` — calls; expands to the callee's transitive effects
  */
@@ -30,9 +38,9 @@ export type ReversibilityTier =
 
 /** One recorded effect call. */
 export interface EffectEntry {
-  /** Which of the seven kinds. */
+  /** Which of the eight kinds. */
   readonly kind: EffectKind;
-  /** Resource / signal / template / prompt / secret / flow ref. */
+  /** Resource / signal / template / prompt / embed-model / secret / flow ref. */
   readonly resource: string;
   /** Epoch-ms when the call started. */
   readonly timestamp: number;
@@ -63,6 +71,7 @@ const TIER_BY_KIND: Readonly<Record<EffectKind, ReversibilityTier>> = {
   emit: "deferred",
   send: "irreversible",
   ask: "irreversible",
+  embed: "irreversible",
   secret: "capability",
   call: "portal",
 };
@@ -70,7 +79,7 @@ const TIER_BY_KIND: Readonly<Record<EffectKind, ReversibilityTier>> = {
 /**
  * Reversibility tier for an effect kind.
  *
- * @param kind - One of the seven effect kinds
+ * @param kind - One of the eight effect kinds
  */
 export function reversibilityOf(kind: EffectKind): ReversibilityTier {
   return TIER_BY_KIND[kind];

@@ -335,6 +335,14 @@ export interface AiRuntime {
    * @param text - Text to embed
    */
   embed(embed: string, id: string, text: string): Promise<void>;
+  /**
+   * Produce an embedding vector for text via a named model (no index write).
+   * Used by built-in hybrid search (`fx.embed`) and the system embed CDC flow.
+   *
+   * @param model - Model name
+   * @param text - Text to embed
+   */
+  embedVector(model: string, text: string): Promise<readonly number[]>;
 }
 
 /**
@@ -1004,6 +1012,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         );
       }
       const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
+      const vector = await this.embedVector(modelName, text);
+      await index.upsert(id, vector, { text });
+    },
+
+    async embedVector(modelName, text) {
       const client = await clientFor(modelName);
       if (!client.embed) {
         throw new Error(`ai: model "${modelName}" does not support embed`);
@@ -1011,7 +1024,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const { vectors } = await client.embed({ input: text, model: modelName });
       const vector = vectors[0];
       if (!vector) throw new Error("ai: empty embedding");
-      await index.upsert(id, vector, { text });
+      return vector;
     },
   };
 }

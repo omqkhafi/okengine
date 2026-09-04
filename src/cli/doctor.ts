@@ -102,7 +102,8 @@ export interface DoctorFinding {
     | "cdc_outbox_backlog"
     | "cdc_outbox_retention"
     | "live_subscriber_pressure"
-    | "live_fanout_queue_saturated";
+    | "live_fanout_queue_saturated"
+    | "search_backfill_required";
   readonly severity: "error" | "warn";
   readonly message: string;
 }
@@ -414,6 +415,18 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
   }
 
   if (manifest) {
+    for (const store of Object.values(manifest.stores ?? {})) {
+      if (store.facet !== "sql" || !store.tables) continue;
+      for (const [tableName, table] of Object.entries(store.tables)) {
+        if (table.search?.backfillRequired === true) {
+          findings.push({
+            code: "search_backfill_required",
+            severity: "warn",
+            message: `table "${tableName}" has searchable/embed columns on existing data — run \`oke db search-backfill ${tableName}\` (never auto on push)`,
+          });
+        }
+      }
+    }
     findings.push(...checkManifestPiiAsks(manifest));
   }
 

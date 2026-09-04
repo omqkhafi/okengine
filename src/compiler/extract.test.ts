@@ -246,6 +246,50 @@ export const db = store.sql("app", { schema: { notes } });
     });
   });
 
+  test("extracts searchable / embed column meta and table.search engines", async () => {
+    const source = `
+import { store, field, ai } from "okengine";
+
+export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  title: field.text().searchable({ weight: 2 }).notNull(),
+  body: field.text().searchable().embed({ dims: 8, model: embedder }),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    const table = manifest.stores?.app?.tables?.articles;
+    expect(table?.columns?.title).toMatchObject({
+      searchable: { weight: 2 },
+    });
+    expect(table?.columns?.body).toMatchObject({
+      searchable: { weight: 1 },
+      embed: { dims: 8, model: "embedder" },
+    });
+    expect(table?.search?.engines).toEqual(["bm25", "lsh"]);
+  });
+
+  test("embed without ai element fails SearchConfigError", async () => {
+    const source = `
+import { store, field } from "okengine";
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  body: field.text().searchable().embed({ dims: 8 }),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+`;
+    await expect(
+      extractFromSources({ "src/schema.decl.ts": source }),
+    ).rejects.toThrow(/SearchConfigError|ai element/);
+  });
+
   test("extracts RLS helpers onto store.tables", async () => {
     const source = `
 import { store, field } from "okengine";

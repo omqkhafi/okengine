@@ -10,6 +10,7 @@ import type {
   AuthApiKeysResourceRef,
   AuthTenantsResourceRef,
   Effects,
+  EmbedRef,
   PromptRef,
   ResourceRef,
   SecretRef,
@@ -97,7 +98,7 @@ export interface InferredEffects {
    * the flow must opt out of auto-caching.
    */
   readonly cacheIneligible: boolean;
-  /** True when any `fx.ask` was seen (implies nondeterministic). */
+  /** True when any `fx.ask` or `fx.embed` was seen (implies nondeterministic). */
   readonly nondeterministic: boolean;
   /** True when the body references `fx.auth.userId`. */
   readonly readsUserId: boolean;
@@ -113,6 +114,10 @@ const READ_METHODS = new Set([
   "find",
   "list",
   "ttlMs",
+  "count",
+  "page",
+  "search",
+  "raw",
 ]);
 
 const WRITE_METHODS = new Set([
@@ -140,6 +145,9 @@ const TABLE_ARG_METHODS = new Set([
   "upsert",
   "increment",
   "delete",
+  "count",
+  "page",
+  "search",
 ]);
 
 /**
@@ -155,6 +163,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   const emits = new Set<SignalRef>();
   const sends = new Set<TemplateRef>();
   const asks = new Set<PromptRef>();
+  const embeds = new Set<EmbedRef>();
   const secrets = new Set<SecretRef>();
   const calls = new Set<FlowRef>();
   const steps: string[] = [];
@@ -207,6 +216,24 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
       if (askOpts && askOpts.type === "ObjectExpression") {
         for (const toolRef of toolsFromAskOptions(askOpts, options.bindings)) {
           calls.add(toolRef);
+        }
+      }
+      continue;
+    }
+
+    if (chain.rootMethod === "embed" && call === chain.rootCall) {
+      // fx.embed(model, text) — distinct from fx.ask; never classified as asks.
+      // Prefer model binding; also accept embed-pipeline and string literals.
+      const lit = stringArg(call.arguments[0]);
+      if (lit) {
+        embeds.add(lit);
+      } else {
+        const binding = resolveBinding(call.arguments[0], options.bindings);
+        if (binding && (binding.kind === "embed" || binding.kind === "unknown")) {
+          embeds.add(binding.ref);
+        } else {
+          const name = identifierName(call.arguments[0]);
+          if (name) embeds.add(name);
         }
       }
       continue;
@@ -290,6 +317,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   if (emits.size > 0) effects.emits = sortUnique([...emits]);
   if (sends.size > 0) effects.sends = sortUnique([...sends]);
   if (asks.size > 0) effects.asks = sortUnique([...asks]);
+  if (embeds.size > 0) effects.embeds = sortUnique([...embeds]);
   if (secrets.size > 0) effects.secrets = sortUnique([...secrets]);
   if (calls.size > 0) effects.calls = sortUnique([...calls]);
 
@@ -298,7 +326,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     steps,
     usesRaw,
     cacheIneligible: usesRaw && !options.hasExplicitEffects,
-    nondeterministic: asks.size > 0,
+    nondeterministic: asks.size > 0 || embeds.size > 0,
     readsUserId: containsAuthUserId(options.doNode),
   };
 }

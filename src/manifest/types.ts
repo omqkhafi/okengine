@@ -89,7 +89,7 @@ export type JsonSchema = string | Record<string, unknown>;
  *
  * `secrets` is a capability (not an irreversible effect).
  * `calls` portals to the callee's transitive effects.
- * `sends` / `asks` are irreversible (asks also nondeterministic + cost).
+ * `sends` / `asks` / `embeds` are irreversible (asks/embeds also nondeterministic + cost).
  */
 export interface Effects {
   /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters` / `fx.live`. */
@@ -108,11 +108,19 @@ export interface Effects {
   sends?: TemplateRef[];
   /** AI prompt asks (irreversible, nondeterministic, cost). */
   asks?: PromptRef[];
+  /**
+   * AI embedding model refs from `fx.embed` (irreversible, nondeterministic, cost).
+   * Distinct from {@link asks} — never conflated with prompt asks.
+   */
+  embeds?: EmbedRef[];
   /** Vault secret capabilities. */
   secrets?: SecretRef[];
   /** Nested flow calls (transitive effects). */
   calls?: FlowRef[];
 }
+
+/** Embedding model ref for `effects.embeds` / `fx.embed` (model name). */
+export type EmbedRef = string;
 
 /** HTTP trigger surface. */
 export interface HttpTrigger {
@@ -299,6 +307,13 @@ export interface DeclaredColumn extends ColumnClassification {
   description?: string;
   /** Foreign key when `.references()` was declared. */
   references?: DeclaredColumnReference;
+  /**
+   * Built-in hybrid search — BM25 when present; LSH when `embed` is set.
+   * Weight is BM25F field weight (default 1).
+   */
+  searchable?: { weight: number };
+  /** Async embedding + LSH — requires `searchable` and a configured AI element. */
+  embed?: { model?: string; dims: number };
 }
 
 /** Field classification value forms. */
@@ -331,6 +346,15 @@ export interface Table {
    * defaulting.
    */
   live?: boolean;
+  /**
+   * Derived hybrid-search posture for Console / doctor inspectability.
+   * Present when any column has `.searchable()` / `.embed()`.
+   */
+  search?: {
+    engines: Array<"bm25" | "lsh">;
+    /** True when push detected existing rows needing `oke db search-backfill`. */
+    backfillRequired?: boolean;
+  };
 }
 
 /** One Store declaration. */

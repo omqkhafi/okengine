@@ -224,7 +224,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "db",
-    summary: "domain schema — push · generate · migrate · seed · studio",
+    summary: "domain schema — push · generate · migrate · seed · studio · search-backfill",
     subcommands: [
       {
         name: "push",
@@ -314,6 +314,26 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             takesValue: true,
             valueName: "path",
             summary: "drizzle.config.ts path",
+          },
+          {
+            long: "--env",
+            takesValue: true,
+            valueName: "name",
+            summary: "Config env (dev|test|prod)",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "search-backfill",
+        summary: "Rebuild hybrid-search stats / embeddings (never auto on push)",
+        positionals: "<table>",
+        flags: [
+          {
+            long: "--batch",
+            takesValue: true,
+            valueName: "n",
+            summary: "Rows per page (default 32)",
           },
           {
             long: "--env",

@@ -8,6 +8,8 @@
 
 import { parseSync } from "oxc-parser";
 
+import { SearchConfigError } from "../elements/store/search-errors.ts";
+
 import type {
   Ai,
   AiAgent,
@@ -238,6 +240,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   applyTenancyDefaults(manifest);
   assertTenantSafeSchema(manifest);
   applyLiveDefaults(manifest, scope);
+  assertSearchConfig(manifest);
 
   return manifest;
 }
@@ -495,14 +498,33 @@ function tableFromDeclared(t: DeclaredSchemaTable): {
   policies?: Record<string, TablePolicy>;
   tenantScoped?: boolean;
   live?: boolean;
+  search?: { engines: Array<"bm25" | "lsh"> };
 } {
+  const engines = searchEnginesFromColumns(t.columns);
   return {
     columns: t.columns,
     ...(t.rls ? { rls: true } : {}),
     ...(t.policies ? { policies: t.policies } : {}),
     ...(t.tenantScoped === false ? { tenantScoped: false } : {}),
     ...(t.live === false ? { live: false } : {}),
+    ...(engines ? { search: { engines } } : {}),
   };
+}
+
+function searchEnginesFromColumns(
+  columns: Record<string, DeclaredColumn>,
+): Array<"bm25" | "lsh"> | undefined {
+  let bm25 = false;
+  let lsh = false;
+  for (const col of Object.values(columns)) {
+    if (col.searchable) bm25 = true;
+    if (col.embed) lsh = true;
+  }
+  if (!bm25 && !lsh) return undefined;
+  const engines: Array<"bm25" | "lsh"> = [];
+  if (bm25) engines.push("bm25");
+  if (lsh) engines.push("lsh");
+  return engines;
 }
 
 function parseSchemaTableExtras(
@@ -814,6 +836,83 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
     ...(methods.has("sensitive") ? { sensitive: true } : {}),
     ...parseFieldOptions(optionsNode),
   };
+  if (methods.has("searchable")) {
+    let weight = 1;
+    let probe: AstNode | undefined = node;
+    while (probe && probe.type === "CallExpression") {
+      const call = probe as CallExpression;
+      const callee = call.callee;
+      if (callee.type === "MemberExpression") {
+        const member = callee as AstNode & { object: AstNode; property: AstNode };
+        if (identifierName(member.property) === "searchable") {
+          const arg0 = call.arguments[0];
+          if (arg0?.type === "ObjectExpression") {
+            const w = numberProp(arg0, "weight");
+            if (w !== undefined) weight = w;
+          }
+          break;
+        }
+        probe = member.object;
+        continue;
+      }
+      break;
+    }
+    col.searchable = { weight };
+  }
+  if (methods.has("embed")) {
+    if (!methods.has("searchable")) {
+      throw new Error(
+        `extract: .embed() on column "${key}" requires a prior .searchable() — weight is free SQL math; embed is an async AI pipeline`,
+      );
+    }
+    let dims: number | undefined;
+    let model: string | undefined;
+    let probe: AstNode | undefined = node;
+    while (probe && probe.type === "CallExpression") {
+      const call = probe as CallExpression;
+      const callee = call.callee;
+      if (callee.type === "MemberExpression") {
+        const member = callee as AstNode & { object: AstNode; property: AstNode };
+        if (identifierName(member.property) === "embed") {
+          const arg0 = call.arguments[0];
+          if (arg0?.type === "ObjectExpression") {
+            dims = numberProp(arg0, "dims");
+            const modelNode = objectProp(arg0, "model");
+            if (modelNode) {
+              const lit = stringArg(modelNode);
+              if (lit) model = lit;
+              else {
+                const bindingName = identifierName(modelNode);
+                if (bindingName) model = bindingName;
+                else if (modelNode.type === "MemberExpression") {
+                  const m = modelNode as AstNode & { property: AstNode };
+                  const prop = identifierName(m.property);
+                  if (prop === "name") {
+                    // model.name — fall back to object identifier if any
+                    const obj = (modelNode as AstNode & { object: AstNode }).object;
+                    model = identifierName(obj) ?? model;
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
+        probe = member.object;
+        continue;
+      }
+      break;
+    }
+    if (dims === undefined || !(Number.isInteger(dims) && dims > 0)) {
+      throw new Error(
+        `extract: .embed() on column "${key}" requires { dims: positive integer }`,
+      );
+    }
+    col.embed = {
+      dims,
+      ...(model !== undefined ? { model } : {}),
+    };
+  }
   if (methods.has("retain")) {
     // retain("7y") — find the call in the original chain by re-walk
     let probe: AstNode | undefined = node;
@@ -2461,6 +2560,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   const emits = stringArrayProp(node, "emits");
   const sends = stringArrayProp(node, "sends");
   const asks = stringArrayProp(node, "asks");
+  const embeds = stringArrayProp(node, "embeds");
   const secrets = stringArrayProp(node, "secrets");
   const calls = stringArrayProp(node, "calls");
   if (reads) effects.reads = reads as Effects["reads"];
@@ -2468,6 +2568,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   if (emits) effects.emits = emits;
   if (sends) effects.sends = sends;
   if (asks) effects.asks = asks;
+  if (embeds) effects.embeds = embeds;
   if (secrets) effects.secrets = secrets;
   if (calls) effects.calls = calls;
   return effects;
@@ -2930,6 +3031,41 @@ function assertTenantSafeSchema(manifest: Manifest): void {
         throw new Error(
           `extract: table "${storeName}.${tableName}" needs store.schema.policy.tenant(...) or store.schema.unscoped() when gate.auth.tenant is on`,
         );
+      }
+    }
+  }
+}
+
+/**
+ * Fail-loud hybrid-search config: `.embed()` requires an `ai` element;
+ * `.embed()` without `searchable` is already rejected in parseFieldChain.
+ */
+function assertSearchConfig(manifest: Manifest): void {
+  const hasAi =
+    manifest.ai !== undefined &&
+    (Object.keys(manifest.ai.models ?? {}).length > 0 ||
+      Object.keys(manifest.ai.prompts ?? {}).length > 0 ||
+      Object.keys(manifest.ai.agents ?? {}).length > 0);
+  for (const store of Object.values(manifest.stores ?? {})) {
+    if (store.facet !== "sql" || !store.tables) continue;
+    for (const [tableName, table] of Object.entries(store.tables)) {
+      for (const [colName, col] of Object.entries(table.columns ?? {})) {
+        if (!col || typeof col !== "object") continue;
+        const declared = col as DeclaredColumn;
+        if (declared.embed && !hasAi) {
+          throw new SearchConfigError(
+            tableName,
+            colName,
+            `.embed() requires a configured ai element (ai.model / ai.embed). Remove .embed() for BM25-only search, or declare an embedding model.`,
+          );
+        }
+        if (declared.embed && !declared.searchable) {
+          throw new SearchConfigError(
+            tableName,
+            colName,
+            `.embed() requires a prior .searchable() on the same field`,
+          );
+        }
       }
     }
   }

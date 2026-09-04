@@ -66,6 +66,8 @@ function fieldFromColumn(
     ...(description !== undefined ? { description } : {}),
     ...(col.pii === true ? { pii: true } : {}),
     ...(col.sensitive === true ? { sensitive: true } : {}),
+    ...(declared?.searchable ? { searchable: true, searchWeight: declared.searchable.weight } : {}),
+    ...(declared?.embed ? { embed: true, embedDims: declared.embed.dims } : {}),
     ...(declared?.primaryKey === true ? { primaryKey: true } : {}),
     ...(declared?.unique === true && declared.primaryKey !== true ? { unique: true } : {}),
     ...(declared?.references?.table

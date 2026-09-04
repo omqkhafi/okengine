@@ -174,3 +174,17 @@ Artifact: `G15-postgres-degradation-…json` (+ extra stress-level artifacts)
 2. G3b wave-2 steady-state sat below the ~500-subscriber target; fd-per-subscriber trend unaffected.
 3. Channel bulk throughput now bounded by per-transport serialization (correctness over throughput); revisit if fan-out email volume matters.
 4. G15 is in-process backpressure only (see honesty note).
+
+---
+
+## G17 — Hybrid SQL search (BM25 / LSH / fusion)
+
+**Status:** scaffold only (`src/bench/g17-hybrid-search.bench.ts`).  
+**Do not publish latency / recall / throughput numbers** until full sweeps land:
+
+- Corpus sizes 1k / 10k / 100k / 1M × text-only / vector-only / hybrid
+- p50/p99 + precision@10 vs exact brute-force cosine baseline
+- Backfill timing + Journal resume
+- Real `EXPLAIN` artifact for GIN + LSH B-tree candidate retrieval
+
+Run: `OKE_BENCH=1 bun test src/bench/g17-hybrid-search.bench.ts --timeout 600000`

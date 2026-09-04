@@ -149,6 +149,12 @@ export const OKE_ERRORS = {
     cause: 'Flow "{flow}" asks "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.asks.',
   },
+  /** Flow embeds via a model not listed in `effects.embeds`. */
+  UNDECLARED_EMBED: {
+    code: 1015,
+    cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
+    fix: 'Add "{resource}" to this flow\'s effects.embeds.',
+  },
   /** Flow reads a secret not listed in `effects.secrets`. */
   UNDECLARED_SECRET: {
     code: 1006,

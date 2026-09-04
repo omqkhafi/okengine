@@ -41,6 +41,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Built-in hybrid SQL search on `store.schema.table()` columns: `field.text().searchable({ weight? })` (BM25F) and separate `.embed({ model?, dims })` (async LSH). `fx.store(db).search(table, { query, fuse?, rerank?, …listFilters })` reuses `parseListQuery`. Default fusion is RRF with **k = 60** (Cormack et al., SIGIR 2009); weighted fusion is opt-in. `fx.embed(model, text)` is a distinct effect kind from `fx.ask` (`effects.embeds`). CDC-driven durable system flow embeds asynchronously (writer flows never gain embed effects). `oke db search-backfill <table>` rebuilds corpus stats / embeddings (never auto on push). PostgreSQL 15+, zero required extensions. G17 bench scaffold at `src/bench/g17-hybrid-search.bench.ts` — no published latency/recall numbers until that gate runs.
+
 - `twoFactor` step-up / change-method / confirm-change / request-email-otp surfaces;
   shared pending-challenge + step-up stores on Gate auth context; email OTP as a
   configurable second-factor method.
@@ -51,6 +53,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Rewrote Store Search docs for built-in hybrid search, with a prominent side-by-side of list-grammar `?search=`/`?q=` (LIKE) vs hybrid `query` (BM25/LSH).
 - Added "The Anatomy" documentation page under Understand (`/docs/understand/the-anatomy`) detailing the five components of `on(trigger, flow)` (`on`, `trigger`, `flow`, `do`, `fx`) and mapping the five element triggers with timeline resolution.
 - Added modular subpages for all eight core elements (`Flow`, `Signal`, `Store`, `Clock`, `Gate`, `Vault`, `Channel`, `AI`) covering architecture, execution patterns, and driver bindings.
 - Added new "Understand" section (`/docs/understand`) covering the problem, the model, the vocabulary, and architectural drift.

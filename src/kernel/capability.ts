@@ -17,6 +17,7 @@ const UNDECLARED_KEY: Readonly<Record<EffectKind, keyof typeof OKE_ERRORS>> = {
   emit: "UNDECLARED_EMIT",
   send: "UNDECLARED_SEND",
   ask: "UNDECLARED_ASK",
+  embed: "UNDECLARED_EMBED",
   secret: "UNDECLARED_SECRET",
   call: "UNDECLARED_CALL",
 };
@@ -28,6 +29,7 @@ const EFFECTS_FIELD: Readonly<Record<EffectKind, keyof Effects>> = {
   emit: "emits",
   send: "sends",
   ask: "asks",
+  embed: "embeds",
   secret: "secrets",
   call: "calls",
 };
@@ -83,6 +85,7 @@ export function createCapabilityToken(flow: string, declared?: Effects): Capabil
     emit: new Set(effects.emits ?? []),
     send: new Set(effects.sends ?? []),
     ask: new Set(effects.asks ?? []),
+    embed: new Set(effects.embeds ?? []),
     secret: new Set(effects.secrets ?? []),
     call: new Set(effects.calls ?? []),
   };
