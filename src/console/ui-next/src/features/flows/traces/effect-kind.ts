@@ -2,8 +2,8 @@
  * EffectKind presentation for the trace detail Sheet.
  *
  * Kernel {@link EffectKind} values (singular): read · write · emit · send ·
- * ask · secret · call. Graph edge strokes use the plural Manifest keys
- * (reads/writes/emits/calls/asks) — map through {@link effectBarColor}.
+ * ask · embed · secret · call. Graph edge strokes use the plural Manifest keys
+ * (reads/writes/emits/calls/asks/embeds) — map through {@link effectBarColor}.
  * Icons reuse the same eight-element HugeIcons vocabulary as Flow graph
  * nodes (store / signal / flow / ai / channel / vault).
  */
@@ -23,6 +23,7 @@ export const EFFECT_KIND_LABEL: Readonly<Record<RunEffectKind, string>> = {
   emit: "Emit",
   send: "Send",
   ask: "Ask",
+  embed: "Embed",
   secret: "Secret",
   call: "Call",
 };
@@ -40,6 +41,7 @@ export function effectKindSummaryLabel(kind: RunEffectKind, count: number): stri
     emit: "emit",
     send: "send",
     ask: "ask",
+    embed: "embed",
     secret: "secret",
     call: "call",
   };
@@ -49,6 +51,7 @@ export function effectKindSummaryLabel(kind: RunEffectKind, count: number): stri
     emit: "emits",
     send: "sends",
     ask: "asks",
+    embed: "embeds",
     secret: "secrets",
     call: "calls",
   };
@@ -73,6 +76,7 @@ export function effectBarColor(kind: RunEffectKind): string {
     case "call":
       return EDGE_STROKE.calls;
     case "ask":
+    case "embed":
       return EDGE_STROKE.asks;
     case "send":
       return EDGE_STROKE.sends;
@@ -99,6 +103,7 @@ export function effectKindIcon(kind: RunEffectKind, resource?: string): ElementH
     case "call":
       return ELEMENT_ICONS.flow.icon;
     case "ask":
+    case "embed":
       return ELEMENT_ICONS.ai.icon;
     case "send":
       return ELEMENT_ICONS.channel.icon;

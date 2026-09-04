@@ -926,7 +926,8 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
     }
     // Stamp partial embed; resolveSearchEmbedDefaults fills model/dims from
     // oke({ store: { search: { embed } } }) before assertSearchConfig.
-    col.embed = {
+    // Cast: Manifest DeclaredColumn requires concrete dims after resolution.
+    (col as { embed?: { model?: string; dims?: number } }).embed = {
       ...(dims !== undefined ? { dims } : {}),
       ...(model !== undefined ? { model } : {}),
     };

@@ -534,7 +534,9 @@ export const live = on(
       "src/flows/live.ts": source,
     });
     expect(manifest.flows?.["tasks.live"]).toBeDefined();
-    expect(manifest.stores?.app?.tables?.tasks?.columns?.id?.primaryKey).toBe(true);
+    expect(manifest.stores?.app?.tables?.tasks?.columns?.id).toMatchObject({
+      primaryKey: true,
+    });
   });
 
   test("decimal head collapses to numeric in the manifest", async () => {

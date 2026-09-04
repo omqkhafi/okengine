@@ -76,7 +76,7 @@ export interface AgentDenial {
 
 /** Effect on a tool flow — same vocabulary as Flows / Traces. */
 export interface AgentToolEffect {
-  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "embed" | "secret" | "call";
   readonly resource: string;
 }
 

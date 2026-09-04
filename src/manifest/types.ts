@@ -313,7 +313,8 @@ export interface DeclaredColumn extends ColumnClassification {
    */
   searchable?: { weight: number };
   /** Async embedding + LSH — requires `searchable` and a configured AI element. */
-  embed?: { model?: string; dims?: number };
+  /** Concrete after extract resolves project defaults — `dims` is always set. */
+  embed?: { model?: string; dims: number };
 }
 
 /** Field classification value forms. */

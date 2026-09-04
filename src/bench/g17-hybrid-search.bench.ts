@@ -17,7 +17,7 @@ import { RRF_DEFAULT_K } from "../elements/store/search-errors.ts";
 import { DISCLAIMER, HARDWARE, writeArtifact } from "./lib/report.ts";
 
 const ENABLED = process.env.OKE_BENCH === "1";
-const CAL = process.env.OKE_BENCH_CAL === "1";
+// OKE_BENCH_CAL=1 will shrink corpora when full sweeps land.
 
 describe.skipIf(!ENABLED)("G17 hybrid search", () => {
   test("scaffold records RRF constant + disclaimer (full corpus sweeps TBD)", () => {

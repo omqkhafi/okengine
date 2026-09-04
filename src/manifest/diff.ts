@@ -42,7 +42,16 @@ const CATEGORY_RANK: Record<DiffCategory, number> = {
   "no-impact": 0,
 };
 
-const EFFECT_KEYS = ["reads", "writes", "emits", "sends", "asks", "secrets", "calls"] as const;
+const EFFECT_KEYS = [
+  "reads",
+  "writes",
+  "emits",
+  "sends",
+  "asks",
+  "embeds",
+  "secrets",
+  "calls",
+] as const;
 
 /** Isolation strength: higher = stronger tenant separation. */
 const ISOLATION_RANK: Record<string, number> = {

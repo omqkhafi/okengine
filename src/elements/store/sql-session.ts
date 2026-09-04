@@ -27,6 +27,7 @@ import {
   type TableHandle,
 } from "./table.ts";
 import { isSchemaTableDecl } from "./schema-decl.ts";
+import { SearchConfigError } from "./search-errors.ts";
 import { runSqlSearch, type SearchColumnMeta, type SqlSearchOptions } from "./search-runtime.ts";
 
 export type { WhereMap } from "./sql-condition.ts";
@@ -1208,20 +1209,29 @@ function searchColumnsFromTable(table: unknown): SearchColumnMeta[] {
     );
   }
   const out: SearchColumnMeta[] = [];
+  const tableName = resolveTableName(table);
   for (const [key, col] of Object.entries(table.columns)) {
     if (!col.search?.searchable) continue;
+    let embed: SearchColumnMeta["embed"];
+    if (col.search.embed) {
+      const dims = col.search.embed.dims;
+      if (dims === undefined) {
+        throw new SearchConfigError(
+          tableName,
+          key,
+          `.embed() needs dims — set oke({ store: { search: { embed: { model, dims } } } }) or pass dims on .embed({ dims })`,
+        );
+      }
+      embed = {
+        dims,
+        ...(col.search.embed.model ? { model: col.search.embed.model } : {}),
+      };
+    }
     out.push({
       key,
       sqlName: col.sqlName,
       weight: col.search.weight,
-      ...(col.search.embed
-        ? {
-            embed: {
-              dims: col.search.embed.dims,
-              ...(col.search.embed.model ? { model: col.search.embed.model } : {}),
-            },
-          }
-        : {}),
+      ...(embed ? { embed } : {}),
     });
   }
   return out;

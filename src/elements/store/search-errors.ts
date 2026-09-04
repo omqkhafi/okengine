@@ -4,7 +4,7 @@
 
 /** Thrown when `.embed()` / search config is invalid or AI is missing. */
 export class SearchConfigError extends Error {
-  readonly name = "SearchConfigError";
+  override readonly name = "SearchConfigError";
   readonly table: string;
   readonly column: string;
 

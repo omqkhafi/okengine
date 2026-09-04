@@ -23,7 +23,7 @@ export interface DryRunWouldHaveFired {
 
 /** Active dry-run bag. */
 export interface DryRunContext {
-  /** Intercepted send/ask calls in order. */
+  /** Intercepted send/ask/embed calls in order. */
   readonly wouldHaveFired: DryRunWouldHaveFired[];
   /** Optional message id stamped onto subsequent intercepts. */
   messageId?: string;
@@ -89,12 +89,12 @@ export function setDryRunMessageId(messageId: string): void {
 }
 
 /**
- * Record that a send/ask would have fired. No-op outside dry-run.
+ * Record that a send/ask/embed would have fired. No-op outside dry-run.
  *
  * @param kind - Irreversible kind
- * @param resource - Template / prompt name
+ * @param resource - Template / prompt / embed-model name
  */
-export function recordWouldHaveFired(kind: "send" | "ask", resource: string): void {
+export function recordWouldHaveFired(kind: "send" | "ask" | "embed", resource: string): void {
   const ctx = storage.getStore();
   if (!ctx) return;
   ctx.wouldHaveFired.push({

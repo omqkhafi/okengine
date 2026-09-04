@@ -92,7 +92,7 @@ const ManifestOut = z.object({
 });
 
 const EffectEntryOut = z.object({
-  kind: z.enum(["read", "write", "emit", "send", "ask", "secret", "call"]),
+  kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call"]),
   resource: z.string(),
   timestamp: z.number(),
   duration: z.number(),
@@ -259,7 +259,7 @@ const SignalsReplayOut = z.object({
   ),
   wouldHaveFired: z.array(
     z.object({
-      kind: z.enum(["send", "ask"]),
+      kind: z.enum(["send", "ask", "embed"]),
       resource: z.string(),
       messageId: z.string().optional(),
     }),
@@ -893,7 +893,7 @@ const AiListOut = z.object({
           status: z.enum(["ok", "denied"]),
           effects: z.array(
             z.object({
-              kind: z.enum(["read", "write", "emit", "send", "ask", "secret", "call"]),
+              kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call"]),
               resource: z.string(),
             }),
           ),
@@ -1541,7 +1541,7 @@ const StoreEditOut = z.object({
   willNotFire: WillNotFireOut,
   wouldHaveFired: z.array(
     z.object({
-      kind: z.enum(["send", "ask"]),
+      kind: z.enum(["send", "ask", "embed"]),
       resource: z.string(),
     }),
   ),
@@ -1754,7 +1754,7 @@ const StorePreviewOut = z.object({
   willNotFire: WillNotFireOut,
   wouldHaveFired: z.array(
     z.object({
-      kind: z.enum(["send", "ask"]),
+      kind: z.enum(["send", "ask", "embed"]),
       resource: z.string(),
     }),
   ),

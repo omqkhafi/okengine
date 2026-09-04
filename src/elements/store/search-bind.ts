@@ -4,7 +4,7 @@
  */
 
 import type { Manifest } from "../../manifest/types.ts";
-import type { App } from "../../kernel/app.ts";
+import type { OkeApp } from "../../kernel/app.ts";
 import { flow } from "../../kernel/flow.ts";
 import {
   applySearchEmbedCdc,
@@ -21,7 +21,7 @@ import {
  */
 export function bindSearchEmbedFlows(app: {
   readonly adopt?: (flows: unknown[]) => void;
-  readonly dispatchCdc?: App["dispatchCdc"];
+  readonly dispatchCdc?: OkeApp["dispatchCdc"];
 }, manifest: Manifest): readonly string[] {
   const tables = tablesNeedingSearchEmbed(manifest);
   const names: string[] = [];

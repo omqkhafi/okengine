@@ -485,6 +485,9 @@ describe("fx — wholesale swap", () => {
       async ask() {
         return {};
       },
+      async embed() {
+        return [];
+      },
       async search() {
         return [];
       },

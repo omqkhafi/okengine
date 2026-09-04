@@ -883,7 +883,7 @@ export interface StoreEditResult {
   readonly willNotFire: ConsoleWillNotFire;
   readonly applied: boolean;
   readonly wouldHaveFired: ReadonlyArray<{
-    readonly kind: "send" | "ask";
+    readonly kind: "send" | "ask" | "embed";
     readonly resource: string;
   }>;
   readonly rls?: {

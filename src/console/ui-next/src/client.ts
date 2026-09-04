@@ -331,7 +331,7 @@ export async function gatesList(): Promise<ConsoleApiResult<GatesListPayload>> {
 
 /** Effect entry on a run row (matches server `RunsListOut`). */
 export type RunEffect = {
-  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "embed" | "secret" | "call";
   readonly resource: string;
   readonly timestamp: number;
   readonly duration: number;
@@ -876,7 +876,7 @@ export type StoreEditResult = {
   readonly applied: boolean;
   readonly willNotFire: StoreWillNotFire;
   readonly wouldHaveFired: ReadonlyArray<{
-    readonly kind: "send" | "ask";
+    readonly kind: "send" | "ask" | "embed";
     readonly resource: string;
   }>;
   readonly at: string;

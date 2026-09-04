@@ -86,6 +86,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### 🐛 Fixed
 
+#### Runtime
+
+- Threaded EffectKind `"embed"` through dry-run, signal replay stubs, Console run/effect schemas, Manifest diff `EFFECT_KEYS`, and Fx test doubles so `bun run typecheck` is clean after hybrid search. Restored concrete `dims` on Manifest `DeclaredColumn.embed` (project defaults still resolve at extract); runtime schema search fails loud when `.embed()` dims are unresolved. Fixed `search-bind` to import `OkeApp`, `SearchConfigError` `override` on `name`, and related compiler/bench typecheck noise.
+
 #### Docs
 
 - Fixed trigger item row alignment, badge visibility, height symmetry, ambient auto-cycling (`useTick`), interactive tabbed contract inspector (`in`, `out`, `errors`, `do`), and unified domain pipeline examples (`orders.*`) in `FlowTriggers` (`flow-triggers.tsx`).

@@ -9,7 +9,7 @@ import { inferEffects, type AstNode, type InferBinding } from "./effects-infer.t
 function doNodeFrom(source: string): AstNode {
   const wrapped = `const __fn = ${source}`;
   const result = parseSync("t.ts", wrapped);
-  const program = result.program as AstNode & { body: AstNode[] };
+  const program = result.program as unknown as AstNode & { body: AstNode[] };
   const decl = program.body[0] as AstNode & {
     declarations: Array<{ init: AstNode }>;
   };
