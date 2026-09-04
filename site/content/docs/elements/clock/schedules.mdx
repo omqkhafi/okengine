@@ -63,13 +63,17 @@ config; a per-clock `timezone` wins over both.
 Every morning at 06:00 in the declared zone, the leader instance runs `reports.runDaily`.
 `do` receives no payload — use `fx.clock.now()` when you need the fire instant.
 
+With `oke dev`, the scheduler reconciles `reports.daily` into the Store and leader-elects
+before each tick. Under `drivers.clock.test = "frozen"`, advance time in tests instead of
+waiting for dawn.
+
 </Step>
 
 </Steps>
 
-<Callout title="Detailed section">
-  Below: helpers, intervals, per-tenant rows, structured cron fields, leader locks,
-  catch-up `"one"`, DST warnings, and Console overrides.
+<Callout title="Jobs are Flows">
+  `on(clockDecl, flow)` is the same species as HTTP handlers and Signal consumers. There is
+  no separate job runner — see [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs).
 </Callout>
 
 ## Progressive Patterns
@@ -214,6 +218,264 @@ Without it, a Console edit fails with `ScheduleNotOverridableError`
 
 </Tabs>
 
+## Helper Reference
+
+| Helper / form | Signature | Compiles to | Purpose |
+| ------------- | --------- | ----------- | ------- |
+| `clock` | `clock(name, { cron? \| every?, … })` | same | Raw cron and/or interval |
+| `clock.daily` | `clock.daily(name, { at?, … })` | five-field cron | Once per day (default `00:00`) |
+| `clock.hourly` | `clock.hourly(name, { minute?, … })` | five-field cron | Once per hour (default minute `0`) |
+| `clock.weekly` | `clock.weekly(name, { on, at?, … })` | five-field cron | Weekday(s) + wall time |
+| `clock.monthly` | `clock.monthly(name, { on, at?, … })` | five-field cron | Day(s) of month + wall time |
+| `clock.cron` | `clock.cron(name, expr \| fields, opts?)` | five-field / nickname | String or structured bag |
+| `clock.every` | `clock.every(name, duration, opts?)` | `every` string | Fixed interval loop |
+| `clock.perTenant` | `clock.perTenant(name, opts)` | same + `perTenant` | One Store row per tenant |
+
+At least one of `cron` or `every` is required on the callable form. Empty options throw
+`clock("name"): require cron or every`. Invalid cron throws at declare (`invalid cron …`).
+
+## Timezone Resolution
+
+Cron math needs an IANA zone. Resolve it once; override only when a schedule must differ.
+
+| Source | Wins when | Example |
+| ------ | --------- | ------- |
+| Per-clock `timezone` | Always | `clock.daily("x", { at: "06:00", timezone: "UTC" })` |
+| `oke({ clock: { timezone } })` | No per-clock zone | `oke({ name: "app", clock: { timezone: "Asia/Riyadh" } })` |
+| `defineConfig({ clock: { timezone } })` | No `oke({ clock })` | config default |
+| Built-in default | Nothing else set | `"UTC"` |
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { clock } from "okengine";
+
+export const app = oke({
+  name: "notes",
+  clock: { timezone: "Asia/Riyadh" },
+});
+
+// Inherits Asia/Riyadh
+export const digest = clock.daily("notes.digest", { at: "08:00" });
+
+// Explicit UTC wins over the app default
+export const utcRollup = clock.hourly("metrics.utc", {
+  minute: 0,
+  timezone: "UTC",
+});
+```
+
+`{ tz: "…" }` is not an option — it is ignored. Intervals (`every`) are duration-based and
+do not consult the zone for tick spacing; the zone still lands on the Store row.
+
+## Binding & Input
+
+Bind the returned handle with `on(clockDecl, flow)`. The scheduler invokes `do` with **no
+payload** — destructure `_` and read time through `fx.clock`:
+
+```typescript title="src/flows/metrics/cleanup.ts"
+import { on, flow, clock } from "okengine";
+import { lt } from "drizzle-orm";
+import { db, metricLogs } from "@/schema";
+
+export const cleanupClock = clock.every("metrics.cleanup", "1h");
+
+export const cleanup = on(
+  cleanupClock,
+  flow("metrics.cleanup", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx
+        .store(db)
+        .delete(metricLogs)
+        .where(lt(metricLogs.timestamp, fx.clock.ago("7d")));
+      return { at: fx.clock.now() };
+    },
+  }),
+);
+```
+
+| Concern | Rule |
+| ------- | ---- |
+| Trigger | `on(clockDecl, flow)` — same Flow species as HTTP / Signal |
+| Input | none — use `_` |
+| Time | `fx.clock.now` / `ago` / `fromNow` / `duration` only |
+| Plane | Prefer `plane: "operator"` for background work |
+| Import | The `clock(…)` module must load at boot so reconcile sees the decl |
+
+## Helpers
+
+Each helper binds with `on(helperDecl, flow(…))`:
+
+<Tabs items={["daily", "hourly", "weekly", "monthly", "cron", "every"]}>
+
+<Tab value="daily">
+
+Once per day. Default `at` is midnight (`00:00`):
+
+```typescript title="src/flows/reports/daily.ts"
+import { on, flow, clock } from "okengine";
+
+export const dailyReportClock = clock.daily("reports.daily", {
+  at: "06:00",
+  description: "Build the overnight ops digest",
+});
+
+export const runDailyReport = on(
+  dailyReportClock,
+  flow("reports.runDaily", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(buildDailyReport, { at: fx.clock.now() });
+    },
+  }),
+);
+```
+
+Compiles to `cron: "0 6 * * *"`. Invalid `at` throws
+`cron at: expected "HH:MM"`.
+
+</Tab>
+
+<Tab value="hourly">
+
+Once per hour. Default `minute` is `0` (top of the hour):
+
+```typescript title="src/flows/metrics/rollup.ts"
+import { on, flow, clock } from "okengine";
+
+export const rollupClock = clock.hourly("metrics.rollup", { minute: 15 });
+
+export const rollup = on(
+  rollupClock,
+  flow("metrics.rollup", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(rollupMetrics, { at: fx.clock.now() });
+    },
+  }),
+);
+```
+
+Compiles to `cron: "15 * * * *"`.
+
+</Tab>
+
+<Tab value="weekly">
+
+`on` is required — weekday token(s). Optional `at` (default `"00:00"`):
+
+```typescript title="src/flows/notes/digest.ts"
+import { on, flow, clock } from "okengine";
+
+export const digestClock = clock.weekly("notes.digest", {
+  on: ["mon", "fri"],
+  at: "09:00",
+});
+
+export const digest = on(
+  digestClock,
+  flow("notes.digest", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(sendDigest, { at: fx.clock.now() });
+    },
+  }),
+);
+```
+
+Weekday names map to `0–6` (`sun` … `sat`). Lists, ranges (`"1-5"`), and numbers all work.
+
+</Tab>
+
+<Tab value="monthly">
+
+`on` is required — day(s) of month. Optional `at` (default `"00:00"`):
+
+```typescript title="src/flows/billing/close.ts"
+import { on, flow, clock } from "okengine";
+
+export const closeClock = clock.monthly("billing.close", {
+  on: [1, 15],
+  at: "00:00",
+});
+
+export const close = on(
+  closeClock,
+  flow("billing.close", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(closeBillingPeriod, { at: fx.clock.now() });
+    },
+  }),
+);
+```
+
+No “last day of month” token — pin the calendar day(s) you need.
+
+</Tab>
+
+<Tab value="cron">
+
+String expression / Bun nickname, or a structured field bag:
+
+```typescript title="src/clocks/ops.ts"
+import { clock } from "okengine";
+
+export const nick = clock.cron("metrics.hourly", "@hourly");
+
+export const sweep = clock.cron("ops.sweep", {
+  minute: "*/15",
+  hour: [9, 12, 17],
+  dayOfWeek: "1-5",
+});
+
+export const legacy = clock.cron(
+  "ops.legacy",
+  "0 6 * * *",
+  { timezone: "UTC", overridable: true },
+);
+```
+
+| Field | Examples |
+| ----- | -------- |
+| `minute` / `hour` / `dayOfMonth` / `month` | `0` · `[9, 12, 17]` · `"1-5"` · `"*/15"` |
+| `dayOfWeek` | `1` · `"mon"` · `["mon", "fri"]` · `"1-5"` |
+| `at` | `"06:00"` — fills minute + hour when unset |
+
+An empty field bag throws
+`cron fields: require at least one of at, minute, hour, dayOfMonth, month, dayOfWeek`.
+Invalid strings throw at declare via `Bun.cron.parse`.
+
+</Tab>
+
+<Tab value="every">
+
+Fixed interval. Same duration grammar as `fx.clock.ago` / sleep:
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow, clock } from "okengine";
+
+export const pingClock = clock.every("health.pingExternal", "30s", {
+  description: "Probe upstream health",
+});
+
+export const pingExternal = on(
+  pingClock,
+  flow("health.pingExternal", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(pingUpstream);
+    },
+  }),
+);
+```
+
+Equivalent: `clock("health.pingExternal", { every: "30s" })`.
+
+</Tab>
+
+</Tabs>
+
 ## Options Reference
 
 Shared options on `clock(name, options)` and helpers:
@@ -228,13 +490,6 @@ Shared options on `clock(name, options)` and helpers:
 | `description` | `string` | the name | Console / docs blurb |
 | `oke({ clock: { timezone } })` | app option | — | Default zone when `timezone` omitted |
 | `defineConfig({ clock: { timezone } })` | config | — | Same; overridden by `oke({ clock })` |
-| `clock.daily` / `hourly` / `weekly` / `monthly` | helpers | — | Wall-clock presets |
-| `clock.every(name, duration)` | helper | — | Same as `{ every }` |
-| `clock.cron(name, expr \| fields)` | helper | — | String or structured fields |
-| `clock.perTenant(name, opts)` | helper | — | One Store row per tenant |
-
-At least one of `cron` or `every` is required on the callable form. Empty options throw
-`clock("name"): require cron or every`. Invalid cron throws at declare (`invalid cron …`).
 
 ### Duration units (`every`)
 
@@ -246,7 +501,62 @@ At least one of `cron` or `every` is required on the callable form. Empty option
 | `h` | `"1h"` | 3_600_000 |
 | `d` | `"7d"` | 604_800_000 |
 
+## Per-tenant Schedules
+
+<Callout title="Detailed section">
+  If you only need a global interval, jump past this section. `clock.perTenant` expands one
+  Store row per tenant (`{name}#{tenantId}`). The bare template name never ticks —
+  `runNow("invoices")` returns `false`.
+</Callout>
+
+Tenant ids come from reconcile (`tenantIds`). New tenants get rows; deleted tenants mark
+those rows `orphaned`.
+
+<Tabs items={["Declare", "Row names"]}>
+
+<Tab value="Declare">
+
+```typescript title="src/clocks/invoices.ts"
+import { on, flow, clock } from "okengine";
+
+export const invoicesClock = clock.perTenant("invoices", {
+  every: "1h",
+  overridable: true,
+});
+
+export const runInvoices = on(
+  invoicesClock,
+  flow("billing.invoices", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(closeOpenInvoices);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Row names">
+
+| Shape | Example | Fires? |
+| ----- | ------- | ------ |
+| Template (declared name) | `invoices` | No — never ticked |
+| Expanded row | `invoices#acme` | Yes — leader-elected |
+
+**Consequence:** ten tenants → ten leases. Catch-up is `"one"` **per row**, so downtime
+does not replay a burst of missed hours for each tenant.
+
+</Tab>
+
+</Tabs>
+
 ## Leader Lock
+
+<Callout title="Detailed section">
+  If you run a single process, the lease is invisible. Multi-instance deploys need a shared
+  clock driver — otherwise every pod fires the same tick.
+</Callout>
 
 Dev/prod clock driver is **postgres** (test is **frozen**). A short lease (default **30s**)
 means only one instance runs each tick.
@@ -254,12 +564,24 @@ means only one instance runs each tick.
 **Consequence:** three pods calling `runNow` still execute the Flow once. After the lease
 expires, another instance may take the next tick.
 
-| Driver | Cross-instance lock |
-| ------ | ------------------- |
-| `postgres` | Yes — shared `oke_crons` |
-| `file` | Yes — on one host (`.oke/crons.json`) |
-| `memory` | No — single process only |
-| `frozen` | Test harness — you drive `tick` / advance |
+| Driver | Cross-instance lock | Best for |
+| ------ | ------------------- | -------- |
+| `postgres` | Yes — shared `oke_crons` | Dev/prod multi-instance (default) |
+| `file` | Yes — on one host (`.oke/crons.json`) | Single-host multi-process |
+| `memory` | No — single process only | Local single process |
+| `frozen` | Test harness — you drive `tick` / advance | Tests |
+
+Pin only when you diverge from starter defaults:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // clock: { dev: "postgres", test: "frozen", prod: "postgres" },
+  },
+});
+```
 
 ## Catch-up Policy
 
@@ -270,19 +592,87 @@ Missed slots are visible as `missedRuns` — they are not replayed as a burst.
 
 **Consequence:** a digest that missed the night still runs once at boot, not 24 times.
 
-## DST & Overrides
+Console health on each row exposes `driftMs`, `overdue`, `missedRuns`, and `catchUp: "one"`.
+Flow `retry` is separate — it retries a failed fire, not missed calendar slots.
 
-Cron + a DST-observing zone that lands in a spring-forward gap or fall-back overlap attaches
-a **warning** on the Store row (`gap` / `overlap`). UTC never warns. The scheduler still ticks.
+## Store Lifecycle & Console
 
-Removed declarations become `orphaned` rows and do not fire. Paused rows are skipped until
-resumed.
+Named clocks reconcile into the Store at boot. The scheduler reads **effective** state from
+the Store, never the source declaration directly.
 
-| Console / Store action | Requirement |
-| ---------------------- | ----------- |
-| Edit effective cron/every | `overridable: true` |
-| Pause | Operator action on an existing row |
-| Missing name | `ClockResourceNotFoundError` — `cron "{id}" not found` |
+```text
+Declared  (Manifest / code)     ← truth for names and defaults
+Override  (Store, overridable)  ← operational drift
+Effective = declared + override ← what actually runs
+```
+
+<Accordions>
+
+<Accordion title="Row Status">
+
+| Status | Meaning | Fires? |
+| ------ | ------- | ------ |
+| `active` | Reconciled and enabled | Yes (when due + lease) |
+| `paused` | Operator paused via Console | No — skipped until status is `active` again |
+| `orphaned` | Decl removed from code (or tenant gone) | No — row kept, never deleted |
+
+Reconcile upserts still-declared clocks as `active` (preserving lease / `lastRunAt` /
+overrides when `overridable`). Removed declarations become `orphaned`.
+
+</Accordion>
+
+<Accordion title="Console Actions">
+
+| Action | Requirement | Error when missing |
+| ------ | ----------- | ------------------ |
+| Run now | Existing active row + lease | `ClockResourceNotFoundError` — `cron "{id}" not found` |
+| Pause | Existing row | same |
+| Edit cron/every | `overridable: true` | `ScheduleNotOverridableError` — `clock "{name}" is not overridable` |
+
+```typescript title="src/clocks/digest.ts"
+import { clock } from "okengine";
+
+export const digestClock = clock.daily("notes.digest", {
+  at: "08:00",
+  overridable: true,
+});
+```
+
+**Consequence:** without `overridable: true`, operators change the schedule in source and
+redeploy — Console edits are refused.
+
+</Accordion>
+
+<Accordion title="DST Ambiguity">
+  Cron + a DST-observing zone that lands in a spring-forward gap or fall-back overlap
+  attaches a **warning** on the Store row (`gap` / `overlap`). UTC never warns. The
+  scheduler still ticks.
+
+Detection covers simple wall-clock forms (`M H * * *` / `M H * * DOW`). Complex lists /
+steps / ranges do not attach a spurious always-on warning.
+
+On fall-back overlap days, crontab fires **once** (first occurrence); the next slot is
+the following day — not a double-run of the ambiguous local hour.
+
+| Fix | When |
+| --- | ---- |
+| Use `timezone: "UTC"` | You want no DST warnings |
+| Pick a non-ambiguous local hour | Digests at `08:00` instead of `02:00` |
+| Accept the warning | Job still schedules; Console shows the reason |
+
+</Accordion>
+
+<Accordion title="Effective vs Declared">
+  Overrides live only when `overridable: true`. Edit writes `overrideCron` /
+  `overrideEvery`; the scheduler uses `effectiveCron` / `effectiveEvery`.
+
+Redeploying a still-overridable clock **preserves** Console overrides. Clearing
+`overridable` (or removing the override fields) returns to the declared schedule on the
+next reconcile that drops them.
+
+</Accordion>
+
+</Accordions>
 
 ## Troubleshooting
 
@@ -295,7 +685,13 @@ resumed.
 
 <Accordion title="invalid cron at declare">
   Cause: the expression failed `Bun.cron.parse`. Fix the five-field string / nickname, or
-  fix structured fields (`at` must be `"HH:MM"`).
+  fix structured fields (`at` must be `"HH:MM"`). Error shape:
+  `clock("…"): invalid cron "…" (…)`.
+</Accordion>
+
+<Accordion title='cron at: expected "HH:MM"'>
+  `at` on helpers / field bags must be `"HH:MM"` or `"H:MM"` with hour `0–23` and minute
+  `0–59`. `"6am"` and `"06:00:00"` fail.
 </Accordion>
 
 <Accordion title="Interval never fires">
@@ -338,6 +734,11 @@ resumed.
 <Accordion title="DST gap / overlap warning on the row">
   Informational. Pick a UTC cron, a non-ambiguous local hour, or accept the warning. The
   job still schedules.
+</Accordion>
+
+<Accordion title="Paused schedule never fires">
+  Console pause sets `status: "paused"`. The scheduler skips it. A later reconcile of a
+  still-declared clock restores `active` (and keeps overrides when `overridable`).
 </Accordion>
 
 </Accordions>

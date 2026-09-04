@@ -41,6 +41,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Elevated [`Clock · Schedules`](/docs/elements/clock/schedules) to HTTP-trigger
+  docs depth: Helper Reference, Timezone Resolution, Binding & Input, per-helper
+  tabs (`daily` / `hourly` / `weekly` / `monthly` / `cron` / `every`), Per-tenant
+  + Leader Lock detailed sections, Store Lifecycle & Console accordions (status,
+  Console actions, DST, effective vs declared), and expanded Troubleshooting
+  (`cron at`, paused rows).
 - Clock schedules + intervals docs merged into one
   [`/docs/elements/clock/schedules`](/docs/elements/clock/schedules) page
   (helpers, `every`, per-tenant, catch-up, DST); overview teaching figure
