@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMDX } from "fumadocs-mdx/next";
+import type { NextConfig } from "next";
 
 const withMDX = createMDX();
 
@@ -9,10 +10,11 @@ const withMDX = createMDX();
 const siteDir = dirname(fileURLToPath(import.meta.url));
 /** Monorepo root — owns the single `bun.lock` for workspaces. */
 const rootDir = join(siteDir, "..");
-const { version: okeVersion } = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
+const { version: okeVersion } = JSON.parse(
+  readFileSync(join(rootDir, "package.json"), "utf8"),
+) as { version: string };
 
-/** @type {import('next').NextConfig} */
-const config = {
+const config: NextConfig = {
   // Do not set `output: "export"`: `proxy.ts` negotiates `Accept: text/markdown`,
   // and that file convention does not run on a static export (Next.js).
   reactStrictMode: true,
@@ -43,60 +45,6 @@ const config = {
   // turbopack.root to that root so workspace-hoisted deps resolve.
   turbopack: {
     root: rootDir,
-  },
-  async redirects() {
-    return [
-      {
-        source: "/docs/elements/signal/queues",
-        destination: "/docs/elements/signal/once",
-        permanent: true,
-      },
-      {
-        source: "/docs/elements/signal/pubsub",
-        destination: "/docs/elements/signal/broadcast",
-        permanent: true,
-      },
-      {
-        source: "/docs/elements/signal/streams",
-        destination: "/docs/elements/signal/live",
-        permanent: true,
-      },
-      {
-        source: "/docs/elements/flow/jobs",
-        destination: "/docs/elements/flow/consumers",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/llama-cpp",
-        destination: "/docs/recipes/local-ai",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/vllm",
-        destination: "/docs/recipes/local-ai",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/sglang",
-        destination: "/docs/recipes/local-ai",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/openai-compatible-local",
-        destination: "/docs/recipes/local-ai",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/openai-compatible",
-        destination: "/docs/recipes/local-ai",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/ollama",
-        destination: "/docs/recipes/local-ai",
-        permanent: true,
-      },
-    ];
   },
 };
 

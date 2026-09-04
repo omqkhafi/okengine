@@ -124,6 +124,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Site Next / PostCSS configs are `next.config.ts` (typed `NextConfig`) and
+  `postcss.config.ts` instead of `*.mjs`.
 - Moved docs sidebar stage **Extend** from `05` to `03` (Plugins / Providers /
   Recipes after Elements); Build → `04`, Operate → `05`. Handbook index card
   groups updated to match.
@@ -191,15 +193,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### 🔥 Removed
 
+#### Docs
+
+- Dropped all permanent redirects from `site/next.config.ts` (legacy Signal
+  delivery paths, Flow jobs → consumers, and old Local AI recipe URLs).
+
 #### Kernel
 
 - Removed bare top-level `every(interval)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
 - Removed bare top-level `table(name, store?)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
-
-#### Docs
-
-- Dropped all permanent redirects from `site/next.config.mjs` (legacy Signal
-  delivery paths, Flow jobs → consumers, and Local AI recipe aliases).
 
 ### ✨ Added
 
