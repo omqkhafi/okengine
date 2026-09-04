@@ -1,217 +1,439 @@
 ---
 title: "Overview"
-description: "The Flow element — one shape for every kind of backend behavior — and the five kinds of trigger that can start it."
+description: "One Flow species for HTTP, Signal, Clock, CDC, and call-only work — contracts, fx, and options in one place."
 icon: "Workflow"
 source: "docs/spec/unified-theory.md"
 ---
 
-Flow is the element responsible for *behavior* — the `on(trigger, flow)` shape covered on [The Anatomy](/docs/understand/the-anatomy) applies here directly. An HTTP endpoint, a scheduled job, a queue consumer, and a multi-step workflow are all the same Flow, wired to a different trigger.
+Flow is the element for **behavior**. An HTTP endpoint, a Signal worker, a named Clock tick, a SQL change handler, and a multi-step checkout are the same shape: `on(trigger, flow)`. Only the trigger changes.
 
-## The Shape at a Glance
+For developers writing backend work on okengine — declare the contract, keep `do` on `fx`.
 
 <Callout title="The one rule">
-  All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside a
-  flow is a defect — effects are **inferred from what a flow touches through `fx`**, and that
-  inference powers the Manifest, the Console, caching, and durability.
+  All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside
+  `do` is a defect. Effects are inferred from what the Flow touches through `fx` — that inference
+  powers the Manifest, Console, cache, and durability.
 </Callout>
 
 <FlowShape />
 
-## A Complete Example
+## Smallest Example
 
-Here's the shape above as a working Flow — an HTTP trigger, contracts, and a `do` that reaches the world only through `fx`:
+<Steps>
 
-```typescript title="src/flows/orders/create.ts"
+<Step>
+### Define a Flow
+
+```typescript title="src/flows/main/health.ts"
+import { on, flow, http } from "okengine";
+
+export const health = on(
+  http.get("/health").public(),
+  // Name is optional — auto-derived from the file path when omitted
+  flow({
+    do: () => ({ ok: true }),
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Call it
+
+```bash
+curl -X GET http://localhost:6530/health -H "accept: application/json"
+```
+
+Response:
+
+```json
+{
+  "data": { "ok": true },
+  "error": null
+}
+```
+
+</Step>
+
+</Steps>
+
+<Callout title="Call-only Flows">
+  A Flow with no trigger — just `flow("payments.charge", { … })` — is internal. Nothing outside
+  your code can start it. Other Flows invoke it with `fx.call(flowRef, input)`.
+</Callout>
+
+## Progressive Patterns
+
+Same `on` + `flow` + `do` from a ping to a typed failure to a private callee:
+
+<Tabs items={["Minimal", "Validated", "Failures", "Call-only"]}>
+
+<Tab value="Minimal">
+
+Return a value. HTTP wraps it as `{ data, error: null }`:
+
+```typescript title="src/flows/main/ping.ts"
+import { on, flow, http } from "okengine";
+
+export const ping = on(
+  http.get("/ping").public(),
+  flow({
+    do: () => ({ status: "ok" }),
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Validated">
+
+`in` / `out` are Standard Schema. Invalid input never enters `do`:
+
+```typescript title="src/flows/notes/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const createOrder = on(
-  http.post("/orders"),
-  // Name is optional — auto-derived from this file's path when omitted;
-  // pass flow("custom.name", { ... }) to override it
-  flow({
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-    out: z.object({ id: z.string() }),
-    errors: { OutOfStock: z.object({ left: z.number() }) },
-    do: async (input, fx) => {
+export const createNote = on(
+  http.post("/notes"),
+  flow("notes.create", {
+    in: z.object({ title: z.string().min(1) }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    do: async ({ title }, fx) => {
       const id = fx.id();
-      await fx.store(db).insert(orders).values({ id, ...input, status: "pending" });
-      await fx.emit(orderPlaced, { orderId: id });
-      return { id };
+      return { id, title };
     },
   }),
 );
 ```
 
-<Callout title="Call-Only Flows">
-  A Flow defined without a trigger — just `flow(name, { ... })` on its own — is internal. Nothing
-  outside your code can start it; other flows invoke it directly with `fx.call(flowRef, input)`.
-</Callout>
+</Tab>
 
-## Only the Trigger Changes
+<Tab value="Failures">
 
-Same contracts, same `do`, same effect tracking — swap the trigger and the Flow reacts to a completely different element:
+Declare domain errors and return `fx.fail` — do not throw for expected failures:
+
+```typescript title="src/flows/orders/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, orders } from "@/schema";
+
+export const getOrder = on(
+  http.get("/orders/:id"),
+  flow("orders.get", {
+    in: z.object({ id: z.string() }),
+    out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id }, fx) => {
+      const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id));
+      if (!order) return fx.fail("NotFound", { id });
+      return order;
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Call-only">
+
+No `on()`. The parent records `calls: ["payments.charge"]`. `fx.call` waits for the callee:
+
+```typescript title="src/flows/payments/charge.ts"
+import { flow } from "okengine";
+import { z } from "zod";
+import { db, charges } from "@/schema";
+
+export const chargeCard = flow("payments.charge", {
+  in: z.object({ amount: z.number() }),
+  out: z.object({ chargeId: z.string() }),
+  do: async ({ amount }, fx) => {
+    const chargeId = fx.id();
+    await fx.store(db).insert(charges).values({ id: chargeId, amount });
+    return { chargeId };
+  },
+});
+```
+
+```typescript
+const { chargeId } = await fx.call(chargeCard, { amount: 50 });
+```
+
+</Tab>
+
+</Tabs>
+
+## Trigger Reference
+
+`flow`, `do`, and `fx` never change. Bind a different trigger:
 
 <FlowTriggers />
 
+| Trigger | Bind | Starts when | `do` input |
+| ------- | ---- | ----------- | ---------- |
+| HTTP | `on(http.get(path), flow)` | A request | Merged path / query / body |
+| Signal | `on(signalHandle, flow)` | `fx.emit` | Payload (`schema`) |
+| Clock | `on(clockDecl, flow)` | Scheduler tick | none (`_`) |
+| CDC | `on(db.table(t).changed(), flow)` | Committed SQL write | `{ before, after }` |
+| Call-only | `flow(name, { … })` or `on(internal, flow)` | `fx.call` | Callee `in` |
+| MCP | `on(mcp.tool("x").gate(…), flow)` | MCP `tools/call` | Tool args |
+
+`delivery: "live"` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
+
+## The Capabilities of Flow
+
+<Cards>
+  <Card
+    title="HTTP"
+    description="REST verbs, RFC 10008 QUERY, CRUD mounts, and live SSE."
+    href="/docs/elements/flow/http"
+  />
+  <Card
+    title="Routing"
+    description="File-tree stamps for HTTP paths, Flow names, and client units."
+    href="/docs/elements/flow/routing"
+  />
+  <Card
+    title="Consumers"
+    description="Signal workers, named Clock jobs, and SQL CDC — one species."
+    href="/docs/elements/flow/consumers"
+  />
+  <Card
+    title="Durable Workflows"
+    description="fx.step replay, LIFO undo, durable sleep, and crash resume."
+    href="/docs/elements/flow/workflows"
+  />
+</Cards>
+
 ## Options Reference
 
-| Option       | Type                                            | Default      | Meaning                                                                |
-| ------------ | ------------------------------------------------ | ------------ | ------------------------------------------------------------------------ |
-| `in`         | `SchemaInput`                                    | `undefined`  | Input validation schema (Zod, Valibot, ArkType, Standard Schema).     |
-| `out`        | `SchemaInput`                                    | `undefined`  | Output validation schema.                                             |
-| `errors`     | `Record<string, SchemaInput>`                    | `{}`         | Declared map of typed domain failure schemas.                         |
-| `durable`    | `boolean`                                        | `false`      | Enables transparent `fx.step` execution journaling and crash recovery.|
-| `retry`      | `FxRetryOptions`                                 | `undefined`  | Automatic retry policy for the entire flow execution.                 |
-| `cache`      | `boolean \| string`                              | `true`       | Cache policy for read-only flows (`"30s"` adds TTL).                  |
-| `compensate` | `(ctx, fx) => Promise<unknown>`                  | `undefined`  | Rollback hook executed if a durable flow fails terminally.            |
-| `plane`      | `"user" \| "operator"`                           | `"user"`     | Execution boundary separating app flows from Console operator tools.  |
-| `do`         | `(input, fx) => Promise<Output \| FlowFailure>`  | *(required)* | The execution logic receiving validated input and `fx`.               |
+Second argument to `flow(name, options)` — or the only argument to a nameless `flow({ do })`.
 
-### Schema Validation (`in`, `out`)
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `do` | `(input, fx) => output \| FlowFailure` | *(required)* | Handler. Missing `do` throws `flow() expected an options bag with a do handler` |
+| `in` | Standard Schema | omitted | Validated before `do` |
+| `out` | Standard Schema | omitted | Validated after `do` |
+| `errors` | `Record<string, Schema>` | omitted | Typed domain failures for `fx.fail` |
+| `durable` | `boolean` | `false` | Journal `fx.step` / sleep / gated `fx` calls |
+| `retry` | `FxRetryOptions` | omitted | Whole-`do` retry on throw (same journal when durable) |
+| `cache` | `boolean \| string` | omitted (auto) | Read-only Flows cache automatically; `false` opts out; `"30s"` adds TTL |
+| `compensate` | `(ctx, fx) => unknown` | omitted | After LIFO `{ undo }`, before the run commits `failed` |
+| `plane` | `"user" \| "operator"` | `"user"` | Operator bypasses RLS; user must not `fx.call` operator |
+| `effects` | `Effects` | inferred | Capability token — write this only when inference cannot see the body |
+| `slo` | `{ availability?, latency? }` | omitted | Manifest metadata (Console / docs) |
+| `breaking` | `boolean` | `false` | Acknowledge a Manifest contract break (`oke doctor --diff`) |
+| `tenantScoped` | `boolean` | `true` when tenancy is on | `false` skips tenant-role scope union |
 
-OKE implements **[Standard Schema V1](https://standardschema.dev/)** (`~standard`), meaning you are not locked into a single validation tool. Any library adhering to the standard works out of the box with full type inference:
+**Consequence:** `durable: true` disables automatic read-cache for that Flow.
 
-- **Zod** (`z.object({...})`): Default choice for wide ecosystem compatibility.
-- **Valibot** (`v.object({...})`): Lightweight, modular, and tree-shakeable.
-- **ArkType** (`type({...})`): Expressive 1:1 TypeScript syntax with high runtime speed.
+## Contracts
+
+<Callout title="Detailed section">
+  If you only need `in` / `out`, jump to Standard Schema below. `in` runs before `do`; `out` runs
+  after a successful return. `fx.fail` skips `out`. HTTP status for typed failures is a small
+  fixed map — custom codes are **400**, not 404.
+</Callout>
+
+<Tabs items={["Standard Schema", "Failures", "Envelope"]}>
+
+<Tab value="Standard Schema">
+
+Any library with `~standard` (Standard Schema V1) works. Zod is the usual choice:
 
 ```typescript
+import { z } from "zod";
+
 flow({
   in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
   out: z.object({ id: z.string() }),
+  do: async (input, fx) => ({ id: fx.id() }),
+});
+```
+
+Valibot (`v.object`) and ArkType (`type({…})`) bind the same way. Shared DTOs belong in
+`shapes.ts` next to the unit — that filename is never a route.
+
+</Tab>
+
+<Tab value="Failures">
+
+Errors at the Flow boundary are **values**. Throw only for bugs. Expected failures go in
+`errors` and return from `do`:
+
+```typescript
+flow("orders.create", {
+  in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+  out: z.object({ id: z.string() }),
+  errors: {
+    OutOfStock: z.object({ available: z.number() }),
+  },
   do: async (input, fx) => {
-    // If input fails validation, OKE rejects before entering `do`.
+    const [row] = await fx.store(db).select().from(stock).where(eq(stock.sku, input.sku));
+    if (!row || row.available < input.qty) {
+      return fx.fail("OutOfStock", { available: row?.available ?? 0 });
+    }
     return { id: fx.id() };
   },
 });
 ```
 
-<Callout title="Automatic CRUD with store.resource">
-  When using `store.resource(db, table)`, OKE internally derives insert, update, and select schemas directly from your Drizzle table definitions (`drizzle-orm/zod`). You only need custom `in`/`out` schemas for custom business flows.
+`fx.fail(code, data, { message? })` builds `{ data: null, error: { code, data, message? } }`.
+The typed client narrows on `res.error.code`.
+
+</Tab>
+
+<Tab value="Envelope">
+
+HTTP success from a returned value is `200` + `{ data, error: null }`. `undefined` is
+`204` with an empty body. Typed failures use `{ data: null, error }`:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "OutOfStock",
+    "data": { "available": 0 }
+  }
+}
+```
+
+Status for `error.code`:
+
+| Code | Status |
+| ---- | ------ |
+| `ValidationError` | `422` |
+| `Unauthorized` | `401` |
+| `Forbidden` | `403` |
+| `RateLimited` | `429` |
+| Any other declared code (`NotFound`, `OutOfStock`, …) | `400` |
+
+A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("NotFound")`.
+
+</Tab>
+
+</Tabs>
+
+<Accordions>
+
+<Accordion title="store.resource schemas">
+  `store.resource(db, table, { in, out })` requires `in` (create body) and `out` (item
+  shape). List / get / update / remove Flows are built for you. Handwritten `in` / `out`
+  are for custom business Flows — see [HTTP · Resources](/docs/elements/flow/http#resources).
+</Accordion>
+
+<Accordion title="ValidationError payload">
+  Failed `in` (or `out`) is `ValidationError` with `error.data.issues` — each issue has
+  `message` and `path`. HTTP status is **422**. The handler never ran.
+</Accordion>
+
+<Accordion title="Name stamping">
+  `flow({ do })` starts nameless. The file tree, `.adopt()`, or an explicit
+  `flow("notes.create", { … })` stamps `unit.export`. HTTP Flows that stay nameless fail
+  **OKE1012**. See [Routing · Names](/docs/elements/flow/routing#names).
+</Accordion>
+
+</Accordions>
+
+## The fx door
+
+<Callout title="Detailed section">
+  If you only need store / emit, jump to the table. `fx` is the only I/O surface inside `do`.
+  The compiler records what you touch as `effects` on the Manifest.
 </Callout>
 
-<Callout title="Best Practice: Centralized Shapes (shapes.ts)">
-  For shared schemas, DTOs, and reusable types across custom flows, define them in a central `src/shapes.ts` (or `src/shapes/` directory) and export derived TypeScript types (`z.infer<typeof ...>`). This keeps domain contracts reusable between client and server.
+| Call | Records | Use |
+| ---- | ------- | --- |
+| `fx.store(db)` | `reads` / `writes` `sql:…` | SQL (and other Store facets) |
+| `fx.emit(signal, payload)` | `emits` | Signal outbox |
+| `fx.send(template, opts)` | `sends` | Channel template |
+| `fx.ask(prompt, opts)` | `asks` | AI prompt |
+| `fx.vault.get(secret)` | `secrets` | Declared secret (never a raw value in source) |
+| `fx.call(flow, input?)` | `calls` | Another Flow — waits for return |
+| `fx.id()` | — | UUID |
+| `fx.clock.now()` | — | Deterministic time |
+| `fx.fail(code, data)` | — | Typed failure value |
+| `fx.step(name, fn)` | journal | Durable checkpoint |
+
+<Accordions>
+
+<Accordion title="Side channels">
+  `Date.now()`, `new Date()`, `setTimeout`, global `fetch`, and `node:fs` skip the ledger.
+  Tests cannot time-travel; durable replay cannot skip the work; cache cannot see the read.
+
+  **Fix:** `fx.clock.now()`, `fx.store`, `fx.send`, or wrap a provider in `fx.step`.
+</Accordion>
+
+<Accordion title="fx.call identity">
+  `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed). `fx.tenant.id`
+  propagates. For audit only, read `fx.principal` — gates never consult it. See
+  [fx](/docs/reference/fx).
+</Accordion>
+
+<Accordion title="Undeclared effects (OKE1001–1007)">
+  Explicit `effects` that drift from the body throw at runtime (`Flow "{flow}" writes
+  "{resource}" without declaring it.`). Most apps never write `effects` — inference
+  covers them. **OKE1008** is deploy-shaped boot with neither inference nor a block.
+</Accordion>
+
+</Accordions>
+
+## Call-only
+
+<Callout title="Detailed section">
+  Prefer an untriggered `flow(name, { … })`. `internal` exists so call-only is a trigger
+  *value* — `on(internal, flow)` — when you need all kinds addressable the same way.
 </Callout>
 
-### Typed Failures (`errors` & `fx.fail`)
+```typescript title="src/flows/orders/checkout.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { chargeCard } from "@/flows/payments/charge";
 
-Errors in OKE are **typed values, not uncaught exceptions**. Throwing unexpected errors results in runtime defects; predictable domain failures should be declared in the `errors` map and returned with `fx.fail`:
-
-```typescript
-export const createOrder = on(
-  http.post("/orders"),
-  flow({
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-    out: z.object({ id: z.string() }),
-    errors: {
-      OutOfStock: z.object({ available: z.number(), backorderDate: z.string().optional() }),
-      PaymentDeclined: z.object({ reason: z.string() }),
-    },
-    do: async (input, fx) => {
-      const stock = await checkStock(input.sku);
-      if (stock.available < input.qty) {
-        // Returns a structured { data: null, error: { code: "OutOfStock", data: { ... } } }
-        return fx.fail("OutOfStock", { available: stock.available });
-      }
-
-      return { id: fx.id() };
+export const checkout = on(
+  http.post("/orders/checkout"),
+  flow("orders.checkout", {
+    in: z.object({ sku: z.string() }),
+    do: async ({ sku }, fx) => {
+      const { chargeId } = await fx.call(chargeCard, { amount: 50 });
+      return { sku, chargeId };
     },
   }),
 );
 ```
 
-#### How Errors Behave Across Surfaces
+Do **not** `fx.call` a Flow that parks on `fx.clock.sleep` — the caller receives
+`undefined` and continues; the child wakes later as its own run. Sleep on the root
+durable Flow, or split with `fx.emit`. See [Workflows](/docs/elements/flow/workflows).
 
-1. **Client Envelope**: Clients receive standard envelopes `{ data, error }`. On failure, `data` is `null` and `error` contains `{ code: "OutOfStock", data: { available: 0 } }`. TypeScript client SDKs narrow the error union automatically by checking `res.error.code`.
-2. **HTTP Status Mapping**: OKE automatically maps standard domain error codes (e.g. `NotFound` → 404, `Unauthorized` → 401, `Forbidden` → 403, `Conflict` / `Duplicate` → 409, custom domain errors → 400).
-3. **Manifest & Console**: Declared errors are written to the Manifest and inspected in the Console Trace timeline, showing exact error payloads and triggers.
+## Cache, retry, and plane
 
-### `durable`
+<Tabs items={["Cache", "Retry", "Plane"]}>
 
-Wraps every `fx.step(...)` call in a persistent journal. If the process crashes mid-execution, the flow resumes from the last completed step instead of restarting from scratch:
+<Tab value="Cache">
 
-```typescript
-flow({
-  durable: true,
-  do: async (input, fx) => {
-    const chargeId = await fx.step("charge-card", () => paymentProvider.charge(input.amount));
-    const orderId = await fx.step("create-order", () => db.orders.create({ chargeId }));
-    return { orderId };
-  },
-});
-```
-
-If this crashes after `"charge-card"` completes but before `"create-order"` runs, resuming re-enters at `"create-order"` — the card is never charged twice.
-
-#### Step Rollbacks (`{ undo }`)
-
-Steps can register an `undo` handler directly inside `fx.step(name, fn, { undo })`. If any subsequent step fails terminally, OKE automatically runs registered `undo` handlers in reverse order (LIFO), passing each step's journaled return value:
-
-```typescript title="src/flows/checkout.ts"
-export const checkout = flow({
-  durable: true,
-  do: async (input, fx) => {
-    // Step 1: Charge card — registers refund handler
-    const chargeId = await fx.step(
-      "charge-card",
-      () => paymentProvider.charge(input.amount),
-      { undo: (id) => paymentProvider.refund(id) },
-    );
-
-    // Step 2: Provision license key — registers revoke handler
-    const licenseKey = await fx.step(
-      "provision-license",
-      () => licenseService.create({ user: input.userId }),
-      { undo: (key) => licenseService.revoke(key) },
-    );
-
-    // Step 3: Fails terminally (e.g. database constraint or network outage)
-    await fx.step("send-receipt", () => emailService.send(input.email, licenseKey));
-
-    return { chargeId, licenseKey };
-  },
-});
-```
-
-If `"send-receipt"` fails terminally, OKE executes `undo` handlers backwards:
-1. Revokes `licenseKey` from `"provision-license"`.
-2. Refunds `chargeId` from `"charge-card"`.
-3. Commits the run journal as failed. Side effects stay clean without manual try/catch rollback boilerplate.
-
-#### Flow Compensation (`compensate`)
-
-While per-step `undo` handles localized step cleanups, the flow-level `compensate` option acts as a top-level rollback hook. It runs once after all per-step `undo` handlers finish, receiving the original `input`, terminal `error`, and `completedSteps`:
+Read-only Flows (Store `reads`, no `writes`, no `asks`, not durable) cache automatically.
+No `cache:` option required. Mutations and `durable: true` stay uncached:
 
 ```typescript
-flow({
-  durable: true,
-  do: async (input, fx) => {
-    const chargeId = await fx.step(
-      "charge-card",
-      () => paymentProvider.charge(input.amount),
-      { undo: (id) => paymentProvider.refund(id) },
-    );
-    await fx.step("reserve-inventory", () => inventory.reserve(input.sku)); // fails here
-    return { chargeId };
-  },
-  compensate: async (ctx, fx) => {
-    // Cross-cutting notifications or cleanup requiring full run context
-    await fx.channel(slack).send("alerts", {
-      text: `Order failed after steps: ${ctx.completedSteps.join(", ")}. Error: ${ctx.error}`,
-    });
+flow("catalog.get", {
+  cache: "30s",
+  do: async ({ id }, fx) => {
+    const [row] = await fx.store(db).select().from(products).where(eq(products.id, id));
+    return row;
   },
 });
 ```
 
-When `"reserve-inventory"` fails:
-1. Step-level `undo` refunds `"charge-card"`.
-2. Flow-level `compensate` executes with `completedSteps: ["charge-card"]` to alert operators or perform global cleanup.
+`cache: false` opts out. A duration string adds TTL on top of write invalidation.
 
-### `retry`
+</Tab>
 
-Retries the *entire* flow execution — not one step — when it throws. `retries` counts extra attempts after the first; `delay` is the initial wait (ms or a duration string); `backoff` multiplies that delay after each attempt:
+<Tab value="Retry">
+
+`flow({ retry })` re-enters the whole `do`. `retries` is extra attempts after the first.
+Prefer `fx.retry` **inside** `fx.step` so a completed charge never re-runs:
 
 ```typescript
 flow({
@@ -222,68 +444,156 @@ flow({
 });
 ```
 
-This retries up to 3 extra times (200ms, then 400ms, then 800ms apart) before giving up. `jitter` defaults to `true`, and a `when(err)` predicate can narrow which errors qualify.
+| `retry` option | Default | Meaning |
+| -------------- | ------- | ------- |
+| `retries` | `0` | Extra attempts after the first |
+| `delay` | `50` (ms) | Initial wait (`"200ms"` allowed) |
+| `backoff` | `2` | Multiplier after each retry |
+| `jitter` | `true` | Full jitter |
+| `when` | thrown errors | Skips abort and durable-sleep park |
 
-### `cache`
+</Tab>
 
-Automatic for read-only flows inferred from their effects; pass a duration string to add a TTL instead of relying on the default:
+<Tab value="Plane">
 
-```typescript
-flow({
-  cache: "30s",
-  do: async (input, fx) => {
-    return await fx.store(db).select().from(products).where(eq(products.id, input.id));
-  },
-});
-```
-
-Identical calls within the 30-second window return the cached result instead of re-running `do`.
-
-### `plane`
-
-Separates flows meant for end users (`"user"`, the default) from flows meant for Console operators (`"operator"`), which bypass row-level security:
+`"user"` is the application default. `"operator"` is Console — RLS is bypassed,
+`fx.operator` is the principal, `fx.auth` must not appear in that body:
 
 ```typescript
-flow({
+flow("ops.allOrders", {
   plane: "operator",
-  do: async (input, fx) => {
-    return await fx.store(db).select().from(allOrders); // sees every tenant's rows
+  do: async (_, fx) => {
+    return await fx.store(db).select().from(orders);
   },
 });
 ```
 
-See the [full `fx` reference](/docs/reference/fx) for every method available inside `do`.
+A user-plane Flow that `fx.call`s an operator Flow fails compile:
+`cross-plane call: user flow "…" calls operator flow "…"`.
+
+</Tab>
+
+</Tabs>
+
+<Accordions>
+
+<Accordion title="compensate context">
+  Durable-only. Runs after reverse `{ undo }`, never on success, retry attempts, or sleep
+  park. Context: `{ input, error, completedSteps }` — forward step names only. Full
+  physics: [Workflows · Compensation](/docs/elements/flow/workflows#compensation).
+</Accordion>
+
+<Accordion title="breaking and tenantScoped">
+  `breaking: true` lets `oke doctor --diff` accept that Flow's contract break. It does
+  not cover a different Flow.
+
+  `tenantScoped: false` skips tenant-role scope union even when `fx.tenant.id` is set.
+  Default is `true` once `gate.auth.tenant` is on.
+</Accordion>
+
+<Accordion title="Hooks and plugins">
+  `flowDef.hook(stage, fn)` registers a per-Flow hook (`onRequest` · `onParse` ·
+  `onAuth` · `beforeHandle` · `afterHandle` · `onError` · `onResponse`).
+  `flowDef.plug(plugin)` scopes a plugin to that Flow — see [Plugins](/docs/reference/plugins).
+</Accordion>
+
+</Accordions>
 
 ## Troubleshooting
 
 <Accordions>
 
-<Accordion title="Direct side-effect or fetch inside a flow">
-Directly importing `node:fs`, `Date.now()`, or calling global `fetch()` bypasses effect tracking and breaks deterministic replay.
-
-**Fix:** Use `fx.clock.now()`, `fx.store`, or pass external calls through `fx.step()` to ensure effects are tracked on the ledger.
+<Accordion title='TypeError: flow() expected an options bag with a do handler'>
+  `flow()` requires `{ do }`. `flow("name")` with no options, or a bag without `do`,
+  throws at declaration — before `on()`.
 </Accordion>
 
-<Accordion title="Flow throws mystery status code instead of typed failure">
-Throwing unhandled JavaScript errors causes uncaught runtime exceptions instead of returning clean client error envelopes.
-
-**Fix:** Declare typed errors in the `errors` contract and return `fx.fail("ErrorName", payload)` from inside `do`.
+<Accordion title="TypeError: on() expected a trigger or signal handle">
+  First argument must be an HTTP trigger, Signal handle, Clock handle,
+  `db.table(…).changed()`, `internal`, or `mcp.tool(…)`. A bare interval string is not
+  a trigger — wrap it in `clock("name", { every: "1h" })`.
 </Accordion>
 
-<Accordion title="Trigger path params mismatch with input schema">
-If an HTTP trigger uses `/users/:id` but the `in` schema expects `{ userId: z.string() }`, parameter validation fails before `do`.
+<Accordion title="TypeError: on() expected a flow() definition as the second argument">
+  Second argument must be the object `flow()` returned. Passing a plain function or
+  forgetting `flow({ do })` fails here. Resource mounts take **no** second argument —
+  see [HTTP · Resources](/docs/elements/flow/http#resources).
+</Accordion>
 
-**Fix:** Align parameter names in the path pattern with the `in` schema object keys (e.g. `z.object({ id: z.string() })`).
+<Accordion title="Direct Date.now, fetch, or node: import inside do">
+  Side channels skip effect tracking and durable replay.
+
+  **Fix:** `fx.clock.now()`, `fx.store`, `fx.send`, or `fx.step` around the provider.
+</Accordion>
+
+<Accordion title="Thrown Error becomes a mystery 500 instead of a typed envelope">
+  Uncaught exceptions are defects. Declare the code in `errors` and
+  `return fx.fail("OutOfStock", payload)` from `do`.
+</Accordion>
+
+<Accordion title="422 ValidationError — path param missing from in">
+  `http.get("/users/:id")` merges `{ id }`. A schema that expects `userId` fails before
+  `do`. Align path keys with `in` object keys. See
+  [HTTP · Request Parsing](/docs/elements/flow/http#request-parsing).
+</Accordion>
+
+<Accordion title="fx.fail('NotFound') is 400, not 404">
+  Custom domain codes map to **400**. A bare `404` `Not Found` means the router found
+  no method + path. Use `fx.fail` for domain misses; fix the route for missing bindings.
+</Accordion>
+
+<Accordion title="Read-only Flow never cache-hits">
+  Auto-cache needs Store `reads`, no `writes`, no `asks`, and `durable` off. Empty
+  effect sets stay uncached. Opt in with a duration (`cache: "30s"`) only after a real
+  read is inferred — or pass `cache: false` to disable.
+</Accordion>
+
+<Accordion title='cross-plane call: user flow "…" calls operator flow "…"'>
+  User-plane Flows cannot `fx.call` operator Flows. Keep operator work on `plane:
+  "operator"` and invoke it from Console, or split a user-safe callee.
+</Accordion>
+
+<Accordion title="OKE1008 — no declared effects">
+  Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.`
+  Boot with `oke build` / `oke dev` so extract can infer, or set explicit `effects`.
+  Deploy-shaped environments refuse an open capability token.
 </Accordion>
 
 </Accordions>
 
-## Where to go next
+## Learn more
+
+- [The Anatomy](/docs/understand/the-anatomy) — `on`, trigger, `flow`, `do`, `fx`
+- [HTTP](/docs/elements/flow/http) — verbs, envelopes, resources, live SSE
+- [Routing](/docs/elements/flow/routing) — file-tree stamps, barrels, OKE1009–1012
+- [Consumers](/docs/elements/flow/consumers) — Signal / Clock / CDC
+- [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step`
+- [fx](/docs/reference/fx) — every method inside `do`
+- [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the trigger
+- [Errors](/docs/reference/errors) — OKE1001–1008 · ValidationError · denials
+- [MCP](/docs/elements/ai/mcp) — `mcp.tool` exposure
+
+## Next
 
 <Cards>
-  <Card title="HTTP Triggers" description="Route conventions, REST verbs, and request/response shape." href="/docs/elements/flow/http" />
-  <Card title="Jobs & Schedules" description="Named clocks, cron expressions, and per-tenant schedules." href="/docs/elements/flow/jobs" />
-  <Card title="Consumers & CDC" description="Signal-based events and database change triggers, side by side." href="/docs/elements/flow/consumers" />
-  <Card title="Durable Workflows" description="Multi-step execution that survives a crash and resumes exactly where it left off." href="/docs/elements/flow/workflows" />
-  <Card title="Routing" description="File-system routing: zero-config path inference from on(Trigger, Flow)." href="/docs/elements/flow/routing" />
+  <Card
+    title="HTTP"
+    description="Synchronous REST, QUERY, resources, and live SSE."
+    href="/docs/elements/flow/http"
+  />
+  <Card
+    title="Consumers"
+    description="Signal workers, named Clock jobs, and SQL CDC — one Flow species."
+    href="/docs/elements/flow/consumers"
+  />
+  <Card
+    title="Durable Workflows"
+    description="Step journaling and multi-step distributed execution."
+    href="/docs/elements/flow/workflows"
+  />
+  <Card
+    title="The Anatomy"
+    description="Five pieces behind on(trigger, flow)."
+    href="/docs/understand/the-anatomy"
+  />
 </Cards>
