@@ -95,6 +95,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Store Search (`elements/store/search`): rewritten to the HTTP page’s depth —
+  Smallest Example, Progressive Patterns, field/query reference, two-surface
+  distinction (`?search=` LIKE vs hybrid `query` vs `store.index`), embedding
+  pipeline, fusion, backfill, external indexes, troubleshooting.
 - Two-factor docs: method-locked login challenges, step-up enrollment / method
   change, `Forbidden` mid-challenge; OTP docs clarify primary `/auth/otp` vs
   second-factor email OTP.

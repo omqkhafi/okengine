@@ -38,6 +38,7 @@ Because all side-effects are structured data rather than invisible network calls
 | `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`      | `Promise<void>`                                                                             |
 | `fx.store(sqlDecl).delete(t).where(…)`                              | `write`      | `Promise<void>`                                                                             |
 | `fx.store(sqlDecl).findById(t, id)`                                 | `read`       | row \| undefined                                                                            |
+| `fx.store(sqlDecl).search(table, { query, fuse?, rerank?, … })`     | `read` (+ `ask` if rerank) | `{ data, meta }` hybrid BM25 ± LSH — see [Search](/docs/elements/store/search)     |
 | `fx.store(kv).get / set(key, value, ttl?) / delete / list(prefix?)` | read / write | per op                                                                                      |
 | `fx.store(files).put / get / delete / list(prefix?)`                | read / write | per op                                                                                      |
 | `fx.store(files).image(key\|bytes).…`                               | read / write | Bun.Image chain; terminals gate (see [Store](/docs/elements/store#images--image--putimage)) |

@@ -2,25 +2,125 @@
 title: "Search"
 description: "Built-in hybrid search on SQL tables — BM25 full-text, LSH vectors, RRF fusion — plus optional external index engines."
 icon: "Search"
+source: "docs/spec/unified-theory.md"
 ---
 
-Built-in hybrid search lives on ordinary `store.schema.table()` columns via `.searchable()` and `.embed()`. It runs on PostgreSQL 15+ with plain SQL (GIN + B-tree) — **zero required extensions**. The separate `store.index` facet (Meilisearch / pgvector) remains for genuinely external engines.
+Built-in hybrid search ranks ordinary SQL rows. Mark text columns with `.searchable()` for BM25, chain `.embed()` when you also want semantic LSH, then call `fx.store(db).search` from a Flow.
 
-## One rule
+It runs on PostgreSQL 15+ (`postgres` / `pglite`) with GIN + B-tree — **no extra extensions**. `store.index` (Meilisearch / pgvector) stays for engines you host separately.
 
-`.searchable()` is free, synchronous BM25 math. `.embed()` is a separate chain that starts an **async, costed** AI pipeline — never a boolean flag next to `weight`.
+For developers ranking rows on okengine — mark columns, query with `fx.store(db).search`, read `data` + `meta`.
 
-## Quick start
+<Callout title="The one rule">
+  `.searchable()` is free BM25 math on the table. `.embed()` is a separate chain that starts an
+  async, costed AI pipeline — never a boolean next to `weight`. Bare `.searchable()` needs no
+  `ai` element.
+</Callout>
+
+## Smallest Example
 
 <Steps>
 
 <Step>
-### Declare searchable columns
+### Mark columns and bind a route
+
+```typescript title="src/db/schema.decl.ts"
+import { field, store } from "okengine";
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  title: field.text().searchable({ weight: 2 }).notNull(),
+  body: field.text().searchable(),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+```
+
+```typescript title="src/flows/articles/search.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { articles, db } from "@/schema";
+
+export const searchArticles = on(
+  http.get("/articles/search"),
+  flow("articles.search", {
+    in: z.object({ q: z.string() }),
+    do: async ({ q }, fx) => {
+      const result = await fx.store(db).search(articles, {
+        query: q,
+        limit: 20,
+      });
+      return fx.json.ok(result.data, { meta: result.meta });
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Call the endpoint
+
+```bash
+curl -X GET "http://localhost:6530/articles/search?q=refund" \
+  -H "accept: application/json"
+```
+
+Response:
+
+```json
+{
+  "data": [{ "id": "a1", "title": "Refund policy", "body": "…" }],
+  "error": null,
+  "meta": { "engine": ["bm25"], "limit": 20 }
+}
+```
+
+</Step>
+
+</Steps>
+
+<Callout title="BM25 needs no AI">
+  The smallest loop is full-text only. Chain `.embed()` when you want semantic
+  neighbors — see [Progressive Patterns](#progressive-patterns). `.embed()` without a
+  resolvable `model` + `dims` fails loud (`SearchConfigError`).
+</Callout>
+
+## Progressive Patterns
+
+Explore search from BM25-only ranking to hybrid LSH, fusion, and opt-in rerank:
+
+<Tabs items={["BM25", "Hybrid", "Fusion", "Rerank"]}>
+
+<Tab value="BM25">
+
+Title carries twice the BM25F field weight of body. No `ai` element, no `.embed()`:
+
+```typescript title="src/db/schema.decl.ts"
+import { field, store } from "okengine";
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  title: field.text().searchable({ weight: 2 }).notNull(),
+  body: field.text().searchable(),
+});
+```
+
+`weight` must be a finite number **> 0** (default `1`). Only `text` / `varchar` / `char`.
+
+</Tab>
+
+<Tab value="Hybrid">
+
+Set the project default once. Bare `.embed()` inherits; per-field `{ model?, dims? }` overrides:
 
 ```typescript title="src/db/schema.decl.ts"
 import { field, store, ai, oke } from "okengine";
 
-const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+const embedder = ai.model("embedder", {
+  provider: "ollama",
+  model: "nomic-embed-text",
+});
 const captionEmbedder = ai.model("caption-embedder", {
   provider: "ollama",
   model: "nomic-embed-text",
@@ -37,50 +137,150 @@ oke({
 export const articles = store.schema.table("articles", {
   id: field.text().primaryKey(),
   title: field.text().searchable({ weight: 2 }).notNull(),
-  body: field.text().searchable().embed(), // inherits model + dims
-  caption: field.text().searchable().embed({ model: captionEmbedder }), // override model; dims from default
+  body: field.text().searchable().embed(),
+  caption: field.text().searchable().embed({ model: captionEmbedder }),
 });
 ```
 
-Set the project default once under `oke({ store: { search: { embed } } })`. Bare `.embed()` inherits; per-field `{ model?, dims? }` overrides. Bare `.searchable()` still needs **no** `ai` element. `.embed()` without a resolvable model/dims (and without AI) fails loud (`SearchConfigError`).
+**Consequence:** `meta.engine` becomes `["bm25", "lsh"]` once embeddings exist.
 
-</Step>
+</Tab>
 
-<Step>
-### Query with `fx.store(db).search`
+<Tab value="Fusion">
+
+Default fusion is Reciprocal Rank Fusion with **k = 60**. Weighted fusion is opt-in:
 
 ```typescript title="src/flows/articles/search.ts"
-import { flow } from "okengine";
-import { z } from "zod";
-import { articles, db } from "../../db/schema.ts";
-
-export const searchArticles = flow("articles.search", {
-  in: z.object({ q: z.string() }),
-  do: async ({ q }, fx) => {
-    const { data, meta } = await fx.store(db).search(articles, {
-      query: q,
-      // optional: fuse: { strategy: "rrf" }  // default RRF k=60 (Cormack et al. 2009)
-      // optional: fuse: { strategy: "weighted", weights: { bm25: 0.4, vector: 0.6 } }
-      // optional: rerank: { model: "search.rerank" }  // default false — never silent ask
-      limit: 20,
-    });
-    return { data, meta };
-  },
+const result = await fx.store(db).search(articles, {
+  query: q,
+  fuse: { strategy: "rrf", k: 60 },
+  // fuse: { strategy: "weighted", weights: { bm25: 0.4, vector: 0.6 } },
+  limit: 20,
 });
 ```
 
-</Step>
+RRF is the robust default, not unconditionally superior. Weighted scores are min-max
+normalized per list first.
 
-</Steps>
+</Tab>
 
-## `?search=` / `?q=` vs hybrid `query` (do not confuse)
+<Tab value="Rerank">
 
-These are **two different surfaces** that share English words. Mixing them up has caused real confusion elsewhere in this project — treat them as unrelated.
+Rerank is **off** until you pass a prompt. It never silently calls `fx.ask`:
 
-| Surface | Where | Parameter | Meaning |
-| -------- | ----- | --------- | ------- |
-| List / live grammar | `parseListQuery` · resource lists · `liveQuery` | `?search=` or `?q=` | Substring `LIKE %term%` across whitelisted columns (default scope `"none"`) |
-| Hybrid search | `fx.store(db).search(table, { query })` | `query` | BM25 (± LSH) relevance ranking |
+```typescript title="src/ai/search-rerank.ts"
+import { ai } from "okengine";
+import { z } from "zod";
+
+const reranker = ai.model("reranker", {
+  provider: "ollama",
+  model: "llama3.1",
+});
+
+export const searchRerank = reranker.prompt("search.rerank", {
+  in: z.object({
+    query: z.string(),
+    docs: z.array(
+      z.object({ id: z.string(), text: z.string(), score: z.number() }),
+    ),
+  }),
+  out: z.object({ rankedIds: z.array(z.string()) }),
+  budget: { maxCostPerCall: 0.02 },
+});
+```
+
+```typescript
+const result = await fx.store(db).search(articles, {
+  query: q,
+  rerank: { model: "search.rerank" },
+  limit: 20,
+});
+```
+
+The prompt receives `{ query, docs }` and should return `{ rankedIds }`. Missing or empty
+`rankedIds` leaves the fused order unchanged.
+
+</Tab>
+
+</Tabs>
+
+## Field Reference
+
+| Chain | Signature | Default | AI? | Meaning |
+| ----- | --------- | ------- | --- | ------- |
+| `.searchable()` | `.searchable({ weight? })` | `weight: 1` | No | BM25F field weight (applied to term frequency **before** saturation / IDF) |
+| `.embed()` | `.embed({ model?, dims? })` | inherit project default | Yes | Async embedding + LSH on that searchable column |
+
+`.embed()` without a prior `.searchable()` throws:
+
+```text
+.embed() requires a prior .searchable() on the same field — weight is free SQL math; embed is an async AI pipeline
+```
+
+| `oke({ store: { search: { embed } } })` | Type | Meaning |
+| --------------------------------------- | ---- | ------- |
+| `embed.model` | `ai.model` handle or name string | Required when the block is present |
+| `embed.dims` | positive integer | Required when the block is present |
+
+Per-field values win when set. Bare `.embed()` with neither a field option nor a project
+default throws `SearchConfigError`:
+
+```text
+SearchConfigError: articles.body: .embed() needs model and dims — set oke({ store: { search: { embed: { model, dims } } } }) or pass them on .embed({ model, dims })
+```
+
+## Query Options
+
+`fx.store(db).search(table, options)` — `query` / `fuse` / `rerank` are search-specific.
+The rest is the same list grammar used by `store.resource` lists and `liveQuery`.
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `query` | `string` | *(required)* | Relevance string (BM25 ± LSH). **Not** list-grammar `?search=` |
+| `fuse` | `{ strategy?, k?, weights? }` | RRF, `k: 60` | Rank fusion when LSH hits exist |
+| `rerank` | `false` \| `{ model }` | `false` | Opt-in `fx.ask` after fusion |
+| `limit` | `number` | `20` | Page size (capped by `maxLimit`) |
+| `maxLimit` | `number` | `100` | Cap on `limit` / `?limit=` |
+| `filter` | `"all"` \| columns \| `"none"` | `"none"` | Whitelist for `filterInput` column filters |
+| `filterInput` | object | `{}` | PostgREST-shaped filters (`status: "eq.active"`, `limit`, `cursor`, …) |
+| `mode` | `"cursor"` \| `"offset"` | `"offset"` unless `cursor` is set | Pagination |
+| `cursor` | columns | `[]` | Keyset columns |
+| `order` | column scope | cursor columns, else `"all"` | `?order=` |
+| `search` | column scope | `"none"` | List-grammar `?search=` / `?q=` LIKE — unused by hybrid `query` |
+
+Result:
+
+| Field | Meaning |
+| ----- | ------- |
+| `data` | Ranked rows (PK + searchable text + stored embeddings when present) |
+| `meta.engine` | `["bm25"]` or `["bm25", "lsh"]` |
+| `meta.fusedBy` | `"rrf"` or `"weighted"` — omitted when there are no vector hits |
+| `meta.rrfK` | RRF damping constant — omitted unless RRF ran |
+| `meta.limit` | Effective page size |
+
+```typescript title="src/flows/articles/search.ts"
+const { data, meta } = await fx.store(db).search(articles, {
+  query: "refund policy",
+  filter: [articles.status],
+  filterInput: { status: "eq.active" },
+  limit: 20,
+});
+```
+
+**Consequence:** `filter: "none"` (the default) rejects unknown column keys in
+`filterInput` — `unknown list param "status"`. Pass `filter: [articles.status]` or
+`filter: "all"` before sending column filters.
+
+## Two Surfaces
+
+These share English words and are **not** the same API. Mixing them up ranks the
+wrong way (or does not rank at all).
+
+| Surface | Call | Parameter | Physics |
+| ------- | ---- | --------- | ------- |
+| List / live grammar | `store.resource` lists, `liveQuery` | `?search=` or `?q=` | Substring `LIKE %term%` on a column whitelist (default `"none"`) |
+| Hybrid SQL search | `fx.store(db).search(table, { query })` | `query` | BM25 (± LSH) relevance ranking |
+| Index / embed helper | `fx.search(embed, query)` / `fx.store(indexDecl).search` | vector or text | External `store.index` engine — not this table |
 
 Side by side:
 
@@ -88,46 +288,308 @@ Side by side:
 // 1) List grammar — substring filter (NOT BM25)
 // GET /articles?search=refund&status=eq.active
 await liveQuery(fx, articles, input, {
-  search: [articles.title], // enables ?search= / ?q= LIKE
+  search: [articles.title],
   filter: [articles.status],
 });
 
 // 2) Hybrid search — BM25 / LSH relevance (NOT LIKE)
 await fx.store(db).search(articles, {
-  query: "refund policy", // relevance string
-  // ...same PostgREST filters / limit / cursor via parseListQuery:
+  query: "refund policy",
+  filter: [articles.status],
   filterInput: { status: "eq.active", limit: "20" },
 });
 ```
 
-`search()` reuses `parseListQuery` for ordinary column filters, limit, and cursor pagination. Only `query`, `fuse`, and `rerank` are search-specific.
+`search()` reuses the list grammar for ordinary column filters, limit, and cursor
+pagination. Only `query`, `fuse`, and `rerank` are search-specific.
 
-## Async embedding (eventual consistency)
+## Embedding Pipeline
 
-Writes from your app flow **never** call `fx.embed`. A system-owned durable CDC flow (`_oke_search_embed_<table>`) embeds after commit via the Realtime CDC bridge + Journal `fx.step`. A just-written row may be missing from semantic results for a short interval — that window is intentional and documented.
+<Callout title="Detailed section">
+  If you only need BM25, skip this. Writer Flows **never** call `fx.embed` — a
+  system-owned durable CDC flow embeds after commit. A just-written row may be
+  missing from semantic results for a short interval.
+</Callout>
+
+`.embed()` starts an async pipeline: after the row commits, the runtime embeds
+changed text, packs an LSH bucket (64 hyperplanes), and stores both beside the row.
+
+```typescript
+body: field.text().searchable().embed(), // inherits oke({ store: { search: { embed } } })
+```
+
+<Accordions>
+
+<Accordion title="What your Flow does not do">
+  App writers insert and update as usual. They do **not** gain `effects.embeds`.
+  The operator-plane flow `_oke_search_embed_<table>` owns `fx.embed` + journaled
+  `fx.step`. Deletes drop the row (and its shadow columns) — nothing extra to run.
+</Accordion>
+
+<Accordion title="Eventual consistency">
+  BM25 candidates update with the generated `tsvector` on write. LSH neighbors
+  wait on the embed step.
+
+**Consequence:** lexical hits can appear before semantic ones. That window is
+intentional. Do not poll `fx.embed` from the writer to “close” it.
+</Accordion>
+
+<Accordion title="What push creates">
+  `oke db push` adds search DDL when columns are `.searchable()` / `.embed()`:
+
+| Object | Role |
+| ------ | ---- |
+| Generated `tsvector` + GIN | BM25 candidate retrieval (`plainto_tsquery('english', …)`) |
+| `real[]` embedding column | Stored vector per `.embed()` field |
+| `bigint` LSH column + B-tree | Bucket lookup (Hamming-1 neighbors included) |
+| Corpus stats / DF / hyperplane tables | IDF, average length, stable LSH planes |
+
+Hyperplanes insert once (`ON CONFLICT DO NOTHING`) and are **never** regenerated.
+Changing `dims` on a live column leaves the old planes in place — you will hit a
+length `SearchConfigError` until those rows are rebuilt.
+</Accordion>
+
+<Accordion title="Missing AI / missing dims">
+  `.embed()` without a configured `ai` element:
+
+```text
+SearchConfigError: articles.body: .embed() requires a configured ai element (ai.model / ai.embed). Remove .embed() for BM25-only search, or declare an embedding model.
+```
+
+Project default block without `dims` or `model`:
+
+```text
+extract: oke({ store: { search: { embed } } }) requires dims: positive integer
+extract: oke({ store: { search: { embed } } }) requires model (ai.model handle or name string)
+```
+
+</Accordion>
+
+</Accordions>
+
+## Fusion
+
+When both BM25 and LSH lists exist, ranks are fused then truncated to `limit`.
+Candidates are oversampled (`max(limit × 5, 50)`, capped at 500) before fusion.
+
+| `fuse.strategy` | Formula | Default knobs |
+| --------------- | ------- | ------------- |
+| `"rrf"` (default) | Σ `1 / (k + rank)` | `k: 60` (Cormack, Clarke, Büttcher — SIGIR 2009; MAP flat for k ∈ [20, 100]) |
+| `"weighted"` | min-max per list, then linear mix | `weights.bm25` / `weights.vector` default `0.5` each |
+
+BM25F itself uses Robertson–Zaragoza saturation: **k1 = 1.2**, **b = 0.75**. Field
+`weight` multiplies term frequency *before* that saturation — a `weight: 2` title
+is not “twice the final score”.
+
+LSH uses **64** hyperplanes (fits a `bigint` bit pack). Query-time lookup includes
+the exact bucket and Hamming-1 neighbors.
+
+If no query embedding is wired at boot, search stays BM25-only even on `.embed()`
+columns — `meta.engine` is `["bm25"]` and `fusedBy` is omitted.
 
 ## Backfill
 
-`oke db push` applies shadow columns / indexes but **never** silently backfills a large table. Run deliberately:
+`oke db push` applies shadow columns and indexes. It **never** silently backfills
+a large table. Run the rebuild yourself:
 
 ```bash
 oke db search-backfill <table> [--batch=32]
 ```
 
-Resumable via Journal durable steps; embed batches pause for provider rate limits.
+| Flag | Default | Meaning |
+| ---- | ------- | ------- |
+| `<table>` | *(required)* | SQL table name in the Manifest |
+| `--batch` | `32` | Rows per page (embed batches pause between pages for provider rate limits) |
+| `--env` | config env | `dev` \| `test` \| `prod` |
 
-## Fusion defaults
+Doctor warns when searchable columns land on existing rows:
 
-- **Default:** Reciprocal Rank Fusion with **k = 60** (Cormack, Clarke, Büttcher — SIGIR 2009; MAP flat for k ∈ [20, 100]). Override with `fuse.k`.
-- **Opt-in:** `fuse: { strategy: "weighted", weights: { bm25, vector } }` — tuned weighted fusion can outperform RRF on some benchmarks; RRF is the robust default, not unconditionally superior.
+```text
+table "articles" has searchable/embed columns on existing data — run `oke db search-backfill articles` (never auto on push)
+```
 
-## External engines
+Corpus stats below **100** rows print:
 
-`store.index` + Meilisearch / pgvector remain available for external engines. They are **not** this capability.
+```text
+[oke db search-backfill] warn: table "articles" has only 12 rows — IDF/BM25 corpus statistics are not meaningful yet (threshold 100)
+```
+
+Unknown table:
+
+```text
+search-backfill: table "articles" not found in Manifest
+```
+
+## External Indexes
+
+<Callout title="Not this capability">
+  `store.index` is a separate facet with its own drivers. Use it when you need
+  typo-tolerant HTTP search or a hosted vector engine — not as a substitute for
+  `.searchable()` on the primary table.
+</Callout>
+
+<StoreIndexModes />
+
+Index stays `memory` until you set `drivers.store.index` explicitly — there is no
+silent fallback to Meilisearch or pgvector.
+
+<Tabs items={["Meilisearch", "pgvector"]}>
+
+<Tab value="Meilisearch">
+
+Omit `{ dims }` — dimensions select a vector driver. Search takes a **string**:
+
+```typescript title="src/db/indexes.ts"
+import { store } from "okengine";
+
+export const articlesIndex = store.index("articles");
+```
+
+```typescript
+const idx = fx.store(articlesIndex);
+if (idx.driverId === "meilisearch") {
+  const { hits } = await idx.search(q, { topK: 20 });
+  return hits;
+}
+```
+
+See [Meilisearch](/docs/recipes/meilisearch) for `oke.config.ts` pins and keys.
+
+</Tab>
+
+<Tab value="pgvector">
+
+Pass `{ dims }`. Search takes a **vector** (usually from `fx.embed`):
+
+```typescript title="src/db/indexes.ts"
+import { store } from "okengine";
+
+export const articlesIndex = store.index("articles", { dims: 768 });
+```
+
+```typescript
+const idx = fx.store(articlesIndex);
+if (idx.driverId === "pgvector" || idx.driverId === "memory") {
+  const vector = await fx.embed(embedder, q);
+  return await idx.search(vector, 20);
+}
+```
+
+`memory` is the same vector shape (cosine) for tests. Driver ids:
+`memory` · `pgvector` · `meilisearch`.
+
+</Tab>
+
+</Tabs>
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="SearchConfigError — .embed() needs model and dims">
+  Cause: `SearchConfigError: {table}.{column}: .embed() needs model and dims — set oke({ store: { search: { embed: { model, dims } } } }) or pass them on .embed({ model, dims })`.
+  Set the project default, or pass `{ model, dims }` on that field.
+</Accordion>
+
+<Accordion title="SearchConfigError — .embed() requires a configured ai element">
+  Cause: `.embed() requires a configured ai element (ai.model / ai.embed). Remove .embed() for BM25-only search, or declare an embedding model.`
+  Drop `.embed()` for BM25-only, or declare `ai.model` / `ai.embed`.
+</Accordion>
+
+<Accordion title=".embed() requires a prior .searchable()">
+  Cause: `.embed() requires a prior .searchable() on the same field — weight is free SQL math; embed is an async AI pipeline`.
+  Chain `.searchable()` first: `field.text().searchable().embed()`.
+</Accordion>
+
+<Accordion title="searchable() is only valid on text / varchar / char">
+  Cause: `field.{type}().searchable() is only valid on text / varchar / char columns`.
+  Hybrid search is a text pipeline — do not mark integers or timestamps.
+</Accordion>
+
+<Accordion title="searchable({ weight }) must be a finite number > 0">
+  Cause: `searchable({ weight }) must be a finite number > 0 (got …)`.
+  Omit `weight` for `1`, or pass a positive finite number.
+</Accordion>
+
+<Accordion title="search(): table must be a store.schema.table()">
+  Cause: `search(): table must be a store.schema.table() declaration with .searchable() columns`.
+  Pass the schema table, not a string name. At least one column needs `.searchable()`.
+</Accordion>
+
+<Accordion title="SearchConfigError — no .searchable() columns">
+  Cause: `SearchConfigError: {table}.*: no .searchable() columns on this table`.
+  Mark the text fields you want ranked before calling `.search()`.
+</Accordion>
+
+<Accordion title="unknown list param / unfilterable column">
+  Default `filter: "none"` rejects extra keys (`unknown list param "status"`).
+  Whitelist with `filter: […]` or `filter: "all"`. `limit` / `cursor` / `order` are always parsed.
+</Accordion>
+
+<Accordion title="missing hyperplanes">
+  Cause: `missing hyperplanes — run oke db search-backfill or ensure push applied search DDL`.
+  Push (or backfill) must run after `.embed()` is declared so LSH planes exist.
+</Accordion>
+
+<Accordion title="embedding length !== declared dims">
+  Cause: `query embedding length {n} !== declared dims {d}` / `stored embedding length {n} !== declared dims {d}`.
+  Model output, field `dims`, and stored planes must match. Changing `dims` on a live column does not regenerate planes.
+</Accordion>
+
+<Accordion title="Just-written row missing from semantic results">
+  Expected. Writer Flows do not embed. Wait for the CDC embed step, or rank with
+  BM25 (`meta.engine` includes `"bm25"` immediately after the `tsvector` write).
+</Accordion>
+
+<Accordion title="Doctor says run search-backfill">
+  Cause: `table "{name}" has searchable/embed columns on existing data — run oke db search-backfill {name} (never auto on push)`.
+  Push created shadow columns; corpus stats / embeddings still need an explicit rebuild.
+</Accordion>
+
+<Accordion title="IDF/BM25 corpus statistics are not meaningful yet">
+  Cause: `[oke db search-backfill] warn: table "{name}" has only {n} rows — IDF/BM25 corpus statistics are not meaningful yet (threshold 100)`.
+  Ranking still runs; IDF is unstable until the corpus grows past 100 rows.
+</Accordion>
+
+<Accordion title="CLI prints programmatic API / live SQL not wired">
+  Cause: `oke db search-backfill: use the programmatic runSearchBackfill(conn, manifest, { table }) API, or pass --table via CLI once a live SQL connection is wired for this project.`
+  The subcommand is registered (`--batch` default 32) and never auto-runs on push. Wire a live SQL connection, then rerun.
+</Accordion>
+
+<Accordion title="I passed ?search= and got LIKE, not BM25">
+  Resource lists and `liveQuery` treat `?search=` / `?q=` as substring `LIKE`.
+  Hybrid ranking is `fx.store(db).search(table, { query })` — see
+  [Two Surfaces](#two-surfaces).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Store](/docs/elements/store) — four facets; `fx.store` handles
+- [SQL](/docs/elements/store/sql) — `store.schema.table`, `field.*`
+- [HTTP · Resources](/docs/elements/flow/http#resources) — list grammar (`?search=` LIKE, filters, cursor)
+- [AI](/docs/elements/ai) — `ai.model`, `ai.prompt`, `fx.ask` / `fx.embed`
+- [fx](/docs/reference/fx) — `fx.store(db).search` is a SQL read; `fx.search(embed, query)` is the index helper
+- [Meilisearch](/docs/recipes/meilisearch) — `store.index` full-text driver
+- [Configuration](/docs/reference/configuration) — `drivers.store.index` (`memory` · `pgvector` · `meilisearch`)
 
 ## Next
 
 <Cards>
-  <Card title="Store Overview" description="SQL · KV · files · index." href="/docs/elements/store" />
-  <Card title="AI Element" description="Models, prompts, fx.ask / fx.embed." href="/docs/elements/ai" />
+  <Card
+    title="SQL"
+    description="Schema tables, field helpers, and store.resource CRUD."
+    href="/docs/elements/store/sql"
+  />
+  <Card
+    title="AI"
+    description="Embedding models, prompts, and fx.embed."
+    href="/docs/elements/ai"
+  />
+  <Card
+    title="Store Overview"
+    description="SQL · KV · files · index — one handle."
+    href="/docs/elements/store"
+  />
 </Cards>

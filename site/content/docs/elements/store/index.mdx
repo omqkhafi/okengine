@@ -20,7 +20,7 @@ Store models the four fundamental access patterns of backend storage:
 1. **SQL Relational (`sql`)**: Relational tables, typed joins, foreign keys, migrations, and Row-Level Security via Drizzle ORM.
 2. **Key-Value (`kv`)**: Ephemeral caches and durable key-value pairs with automatic TTL expiration.
 3. **Blob Files (`files`)**: Object storage buckets with pre-signed upload URLs and server-side image resizing.
-4. **Search & Index (`search`)**: Vector similarity search (embeddings) and full-text search indexes.
+4. **Search (`search`)**: Built-in BM25 ± LSH on SQL columns, plus optional `store.index` engines (Meilisearch / pgvector).
 
 ```typescript title="src/schema/index.ts"
 import { store, field } from "okengine";
@@ -50,8 +50,8 @@ await fx.store.kv.set(`session:${token}`, userId, { ttl: "1h" });
 // File upload
 await fx.store.files.put("avatars/alice.png", imageBuffer);
 
-// Vector search
-const matches = await fx.store.index("articles").search(embedding, { limit: 5 });
+// Hybrid SQL search (BM25 ± LSH)
+const { data } = await fx.store(db).search(articles, { query: "refund" });
 ```
 
 ## Manifest Inference
@@ -84,8 +84,8 @@ Every read and write through `fx.store` is statically recorded by the compiler:
     href="/docs/elements/store/files"
   />
   <Card
-    title="Search & Index"
-    description="Hybrid search combining pgvector vector embeddings and Meilisearch full-text indexing."
+    title="Search"
+    description="Built-in BM25 ± LSH on SQL tables, plus optional Meilisearch / pgvector indexes."
     href="/docs/elements/store/search"
   />
 </Cards>
