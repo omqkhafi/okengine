@@ -503,16 +503,6 @@
       "ok": true
     },
     {
-      "id": "export:./drivers/ai-ollama",
-      "label": "ai-ollama",
-      "value": 2011,
-      "limit": 2267,
-      "unit": "bytes",
-      "gate": "regression",
-      "group": "drivers",
-      "ok": true
-    },
-    {
       "id": "export:./drivers/ai-openai-compatible",
       "label": "ai-openai-compatible",
       "value": 1816,
@@ -857,16 +847,6 @@
       "label": "oauth2-token",
       "value": 796,
       "limit": 1052,
-      "unit": "bytes",
-      "gate": "regression",
-      "group": "drivers",
-      "ok": true
-    },
-    {
-      "id": "export:./drivers/ollama",
-      "label": "ollama",
-      "value": 2012,
-      "limit": 2268,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

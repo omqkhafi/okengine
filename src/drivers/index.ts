@@ -245,13 +245,3 @@ export {
   isOpenaiCloudBase,
   openaiCompatibleHeaders,
 } from "./ai-openai-compatible.ts";
-export {
-  ollamaAiDriver,
-  openOllama,
-  OllamaUnavailableError,
-  OLLAMA_DEFAULT_MODEL,
-  OLLAMA_DEFAULT_BASE_URL,
-  normalizeOllamaBaseUrl,
-  resolveOllamaBaseUrl,
-  resolveOllamaModel,
-} from "./ai-ollama.ts";

@@ -573,50 +573,200 @@ export function formatModalities(modalities: readonly ModelModality[]): string {
 }
 
 /** Thin cloud provider menu (non-Ollama). */
-export const CLOUD_PROVIDERS = [
+export type CloudProviderMenuEntry = {
+  readonly value: string;
+  readonly label: string;
+  readonly hint?: string;
+  readonly driver: "openai-compatible" | "anthropic";
+  /** Registry / declare provider name (defaults to `value`). */
+  readonly provider?: string;
+  readonly baseUrl?: string;
+  readonly apiKeyEnv?: string;
+  /** When true, wizard asks for base URL even if a default exists. */
+  readonly promptBaseUrl?: boolean;
+};
+
+/**
+ * Cloud / openai-compatible menu — URLs from the verified provider registry
+ * where known; Anthropic stays native.
+ */
+export const CLOUD_PROVIDERS: readonly CloudProviderMenuEntry[] = [
+  {
+    value: "openrouter",
+    label: "OpenRouter",
+    hint: "recommended · zero Docker · openrouter/free",
+    driver: "openai-compatible",
+    baseUrl: "https://openrouter.ai/api/v1",
+    apiKeyEnv: "OPENROUTER_API_KEY",
+  },
   {
     value: "openai",
     label: "OpenAI",
-    driver: "openai-compatible" as const,
+    driver: "openai-compatible",
     baseUrl: "https://api.openai.com/v1",
     apiKeyEnv: "OPENAI_API_KEY",
   },
   {
     value: "anthropic",
     label: "Anthropic",
-    driver: "anthropic" as const,
+    hint: "native Messages API",
+    driver: "anthropic",
+    provider: "anthropic",
     baseUrl: undefined,
     apiKeyEnv: "ANTHROPIC_API_KEY",
   },
   {
+    value: "groq",
+    label: "Groq",
+    driver: "openai-compatible",
+    baseUrl: "https://api.groq.com/openai/v1",
+    apiKeyEnv: "GROQ_API_KEY",
+  },
+  {
+    value: "together",
+    label: "Together AI",
+    driver: "openai-compatible",
+    baseUrl: "https://api.together.ai/v1",
+    apiKeyEnv: "TOGETHER_API_KEY",
+  },
+  {
+    value: "deepseek",
+    label: "DeepSeek",
+    driver: "openai-compatible",
+    baseUrl: "https://api.deepseek.com",
+    apiKeyEnv: "DEEPSEEK_API_KEY",
+  },
+  {
+    value: "mistral",
+    label: "Mistral",
+    driver: "openai-compatible",
+    baseUrl: "https://api.mistral.ai/v1",
+    apiKeyEnv: "MISTRAL_API_KEY",
+  },
+  {
+    value: "xai",
+    label: "xAI (Grok)",
+    driver: "openai-compatible",
+    baseUrl: "https://api.x.ai/v1",
+    apiKeyEnv: "XAI_API_KEY",
+  },
+  {
+    value: "deepinfra",
+    label: "DeepInfra",
+    driver: "openai-compatible",
+    baseUrl: "https://api.deepinfra.com/v1/openai",
+    apiKeyEnv: "DEEPINFRA_API_KEY",
+  },
+  {
+    value: "meta",
+    label: "Meta Model API",
+    hint: "Muse Spark",
+    driver: "openai-compatible",
+    baseUrl: "https://api.meta.ai/v1",
+    apiKeyEnv: "MODEL_API_KEY",
+  },
+  {
+    value: "vercel",
+    label: "Vercel AI Gateway",
+    driver: "openai-compatible",
+    baseUrl: "https://ai-gateway.vercel.sh/v1",
+    apiKeyEnv: "AI_GATEWAY_API_KEY",
+  },
+  {
     value: "gemini",
-    label: "Gemini",
-    driver: "openai-compatible" as const,
-    baseUrl: undefined,
-    apiKeyEnv: "OPENAI_API_KEY",
+    label: "Google Gemini",
+    hint: "Limited OpenAI-compat — tool schemas constrained",
+    driver: "openai-compatible",
+    provider: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    apiKeyEnv: "GEMINI_API_KEY",
   },
   {
     value: "lmstudio",
     label: "LM Studio",
-    driver: "openai-compatible" as const,
+    driver: "openai-compatible",
+    provider: "openai-compatible",
     baseUrl: "http://127.0.0.1:1234/v1",
     apiKeyEnv: undefined,
   },
   {
-    value: "openrouter",
-    label: "OpenRouter",
-    driver: "openai-compatible" as const,
-    baseUrl: "https://openrouter.ai/api/v1",
-    apiKeyEnv: "OPENAI_API_KEY",
-  },
-  {
     value: "custom",
     label: "Custom OpenAI Compatible",
-    driver: "openai-compatible" as const,
+    hint: "requires base URL",
+    driver: "openai-compatible",
+    provider: "openai-compatible",
     baseUrl: undefined,
     apiKeyEnv: "OPENAI_API_KEY",
+    promptBaseUrl: true,
   },
-] as const;
+];
+
+/** One row in the AI Provider select. */
+export type AiProviderSelectOption = {
+  readonly value: string;
+  readonly label: string;
+  readonly hint?: string;
+};
+
+/**
+ * AI Provider menu — OpenRouter first (recommended), then other cloud,
+ * then local / self-hosted, then optional mock.
+ *
+ * @param options - Include Mock (create-oke Customize)
+ */
+export function aiProviderSelectOptions(
+  options: { readonly includeMock?: boolean } = {},
+): readonly AiProviderSelectOption[] {
+  const local: readonly AiProviderSelectOption[] = [
+    {
+      value: "llama-cpp",
+      label: "llama.cpp (Local)",
+      hint: "Docker Hub ai/ · recommend for your RAM",
+    },
+    {
+      value: "ollama",
+      label: "Ollama (Local)",
+      hint: "detect models · recommend for your RAM",
+    },
+    {
+      value: "vllm",
+      label: "vLLM (self-hosted GPU)",
+      hint: "multi-user / production concurrency",
+    },
+    {
+      value: "sglang",
+      label: "SGLang (self-hosted GPU)",
+      hint: "structured / agent workloads",
+    },
+  ];
+  const cloud = CLOUD_PROVIDERS.map((p) => ({
+    value: p.value,
+    label: p.label,
+    ...(p.hint !== undefined ? { hint: p.hint } : {}),
+  }));
+  const mock: readonly AiProviderSelectOption[] = options.includeMock
+    ? [{ value: "mock", label: "Mock (dev only)", hint: "no network" }]
+    : [];
+  return [...cloud, ...local, ...mock];
+}
+
+/**
+ * Protocol driver for an AI Provider menu id.
+ *
+ * @param provider - Menu value
+ */
+export function aiDriverForMenuProvider(provider: string): string {
+  if (provider === "mock") return "mock";
+  if (
+    provider === "llama-cpp" ||
+    provider === "ollama" ||
+    provider === "vllm" ||
+    provider === "sglang"
+  ) {
+    return "openai-compatible";
+  }
+  return CLOUD_PROVIDERS.find((p) => p.value === provider)?.driver ?? "openai-compatible";
+}
 
 /** Cloud chat model entry (no RAM tier). */
 export type CloudModel = {
@@ -716,20 +866,98 @@ export const CLOUD_CHAT_MODELS: Readonly<Record<string, readonly CloudModel[]>> 
   ],
   openrouter: [
     {
-      id: "openai/gpt-4o-mini",
-      label: "GPT-4o mini",
-      hint: "via OpenRouter",
+      id: "openrouter/free",
+      label: "openrouter/free",
+      hint: "Free router · zero cost",
       recommended: true,
     },
+    { id: "openrouter/auto", label: "openrouter/auto", hint: "Market pick by task + cost" },
+    {
+      id: "openrouter/pareto-code",
+      label: "openrouter/pareto-code",
+      hint: "Strong coding router",
+    },
+    {
+      id: "openrouter/fusion",
+      label: "openrouter/fusion",
+      hint: "Multi-model panel",
+    },
+    { id: "openai/gpt-4o-mini", label: "GPT-4o mini", hint: "via OpenRouter" },
     { id: "openai/gpt-4.1", label: "GPT-4.1", hint: "via OpenRouter" },
-    { id: "openai/o4-mini", label: "o4-mini", hint: "via OpenRouter" },
     { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", hint: "via OpenRouter" },
-    { id: "anthropic/claude-opus-4", label: "Claude Opus 4", hint: "via OpenRouter" },
-    { id: "anthropic/claude-haiku-4", label: "Claude Haiku 4", hint: "via OpenRouter" },
     { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", hint: "via OpenRouter" },
-    { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", hint: "via OpenRouter" },
     { id: "meta-llama/llama-4-scout", label: "Llama 4 Scout", hint: "via OpenRouter" },
     { id: "deepseek/deepseek-r1", label: "DeepSeek R1", hint: "via OpenRouter" },
+  ],
+  groq: [
+    {
+      id: "llama-3.1-8b-instant",
+      label: "Llama 3.1 8B Instant",
+      hint: "Fast default",
+      recommended: true,
+    },
+    { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B", hint: "Higher quality" },
+    { id: "mixtral-8x7b-32768", label: "Mixtral 8x7B", hint: "Long context" },
+  ],
+  together: [
+    {
+      id: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+      label: "Llama 3.1 8B Turbo",
+      hint: "Fast",
+      recommended: true,
+    },
+    {
+      id: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+      label: "Llama 3.1 70B Turbo",
+      hint: "Higher quality",
+    },
+  ],
+  deepseek: [
+    {
+      id: "deepseek-v4-flash",
+      label: "DeepSeek V4 Flash",
+      hint: "Fast default",
+      recommended: true,
+    },
+    { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", hint: "Higher quality" },
+  ],
+  mistral: [
+    {
+      id: "mistral-small-latest",
+      label: "Mistral Small",
+      hint: "Fast default",
+      recommended: true,
+    },
+    { id: "mistral-large-latest", label: "Mistral Large", hint: "Higher quality" },
+  ],
+  xai: [
+    { id: "grok-4.6", label: "Grok 4.6", hint: "Current default", recommended: true },
+    { id: "grok-3-mini", label: "Grok 3 Mini", hint: "Faster / cheaper" },
+  ],
+  deepinfra: [
+    {
+      id: "meta-llama/Meta-Llama-3.1-8B-Instruct",
+      label: "Llama 3.1 8B",
+      hint: "Fast",
+      recommended: true,
+    },
+  ],
+  meta: [
+    {
+      id: "muse-spark-1.2",
+      label: "Muse Spark",
+      hint: "Meta Model API",
+      recommended: true,
+    },
+  ],
+  vercel: [
+    {
+      id: "openai/gpt-4o-mini",
+      label: "GPT-4o mini",
+      hint: "via AI Gateway",
+      recommended: true,
+    },
+    { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", hint: "via AI Gateway" },
   ],
   lmstudio: [
     {
@@ -775,6 +1003,57 @@ export function cloudChatModels(provider: string): readonly CloudModel[] {
 export function recommendCloudChat(provider: string): string {
   const list = cloudChatModels(provider);
   return list.find((m) => m.recommended)?.id ?? list[0]?.id ?? "gpt-4o-mini";
+}
+
+/**
+ * Resolve apply fields for a cloud menu id (interactive + `--yes`).
+ *
+ * @param menuValue - CLOUD_PROVIDERS value
+ * @param overrides - Chat model / API key / base URL overrides
+ */
+export function cloudApplyDefaults(
+  menuValue: string,
+  overrides: {
+    readonly chatModel?: string;
+    readonly apiKey?: string;
+    readonly baseUrl?: string;
+  } = {},
+): {
+  readonly driver: "openai-compatible" | "anthropic";
+  readonly provider: string;
+  readonly baseUrl?: string;
+  readonly chatModel: string;
+  readonly visionModel: null;
+  readonly embedModel: null;
+  readonly apiKeyEnv?: string;
+  readonly apiKey?: string;
+} {
+  const meta = CLOUD_PROVIDERS.find((p) => p.value === menuValue);
+  if (!meta) {
+    throw new Error(`oke ai setup: unknown cloud provider "${menuValue}"`);
+  }
+  const provider = meta.provider ?? meta.value;
+  const registryKnown = new Set([
+    "openai", "openrouter", "groq", "together", "deepinfra", "meta", "xai",
+    "mistral", "deepseek", "vercel", "google", "gemini", "anthropic",
+  ]);
+  // Registry openai-compat: omit baseUrl so ai.model auto-resolves.
+  const omitBase = registryKnown.has(provider) && meta.driver === "openai-compatible";
+  const baseUrl = omitBase ? undefined : (overrides.baseUrl ?? meta.baseUrl);
+  return {
+    driver: meta.driver,
+    provider,
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
+    chatModel: overrides.chatModel ?? recommendCloudChat(menuValue),
+    visionModel: null,
+    embedModel: null,
+    ...(meta.apiKeyEnv
+      ? {
+          apiKeyEnv: meta.apiKeyEnv,
+          ...(overrides.apiKey ? { apiKey: overrides.apiKey } : {}),
+        }
+      : {}),
+  };
 }
 
 /**

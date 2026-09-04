@@ -13,6 +13,7 @@ import {
 } from "../../kernel/element-registries.ts";
 import { mcpToolRef, type McpToolRef } from "../../manifest/mcp-ref.ts";
 import type { VaultSecretDecl } from "../vault/declare.ts";
+import { formatAiProviderTier2Warn, resolveAiModelBaseUrl } from "./providers.ts";
 
 /** Budget for a prompt or agent. */
 export interface AiBudgetDecl {
@@ -27,14 +28,15 @@ export interface AiModelOptions {
   readonly model?: string;
   /**
    * Optional endpoint override for this logical binding (openai-compatible /
-   * ollama). Lets `fx.ask(…, { via: ["smart", "local"] })` reach cloud then
-   * local without sharing one process-wide base URL.
+   * local). When omitted and `provider` is a known OpenAI-compatible name,
+   * the verified registry base URL is filled in automatically. Explicit
+   * `baseUrl` always wins (self-hosted proxy / mirror).
    */
   readonly baseUrl?: string;
   /** Optional API key override for this binding (cloud providers). */
   readonly apiKey?: string;
   /**
-   * Protocol driver for this binding (`anthropic`, `ollama`, …).
+   * Protocol driver for this binding (`anthropic`, `openai-compatible`, …).
    * When omitted, the app-level default driver is used.
    */
   readonly driverId?: string;
@@ -260,13 +262,24 @@ export const ai: AiNamespace = {
    */
   model(name: string, options: AiModelOptions = {}): AiModelDecl {
     if (!name) throw new TypeError("ai.model: name is required");
+    const resolved = resolveAiModelBaseUrl({
+      ...(options.provider !== undefined ? { provider: options.provider } : {}),
+      ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
+      ...(options.driverId !== undefined ? { driverId: options.driverId } : {}),
+    });
+    if (resolved.tier2Caveat !== undefined && resolved.tier2Provider !== undefined) {
+      console.warn(
+        formatAiProviderTier2Warn(resolved.tier2Provider, resolved.tier2Caveat, "ai.model"),
+      );
+    }
+    const baseUrl = resolved.baseUrl;
     const decl: AiModelDecl = {
       kind: "model",
       name,
       ...(options.provider !== undefined ? { provider: options.provider } : {}),
       ...(options.tier !== undefined ? { tier: options.tier } : {}),
       ...(options.model !== undefined ? { model: options.model } : {}),
-      ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
+      ...(baseUrl !== undefined ? { baseUrl } : {}),
       ...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
       ...(options.driverId !== undefined ? { driverId: options.driverId } : {}),
       prompt(promptName, promptOpts = {}) {

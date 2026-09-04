@@ -47,7 +47,7 @@ export const TEACHING_FIGURE_FALLBACKS: Readonly<Record<string, string>> = {
   AiGuardrails:
     "AI guardrails: prompts are versioned typed artifacts, PII to third-party models fails the build unless acknowledged, agents are bounded by steps and budget, and there is no production model default.",
   AiPiiEgress:
-    "PII egress physics: sending a .pii() field to anthropic fails the build without allowPii; the same ask against ollama is on-premise and proceeds.",
+    "PII egress physics: sending a .pii() field to anthropic fails the build without allowPii; the same ask against openai-compatible local is on-premise and proceeds.",
   SixSystemsDrift:
     "Evolution of a signup feature from 1 route file into 6 disparate subsystem files over 8 months in production.",
 };

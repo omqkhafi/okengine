@@ -47,21 +47,15 @@ describe("catalog labels", () => {
 });
 
 describe("recommendedAiApply", () => {
-  test("returns llama.cpp (openai-compatible) with curated ai/ model", () => {
-    const prev = process.env.OKE_AI_URL;
-    delete process.env.OKE_AI_URL;
-    try {
-      const apply = recommendedAiApply();
-      expect(apply.driver).toBe("openai-compatible");
-      expect(apply.chatModel).toBe("granite3.3:2b");
-      expect(apply.baseUrl).toContain("8080");
-      expect(apply.image).toContain("llama.cpp");
-      expect(apply.image).not.toContain("latest");
-      expect(apply.visionModel).toBeNull();
-    } finally {
-      if (prev !== undefined) process.env.OKE_AI_URL = prev;
-      else delete process.env.OKE_AI_URL;
-    }
+  test("returns OpenRouter with openrouter/free (no Docker image)", () => {
+    const apply = recommendedAiApply();
+    expect(apply.driver).toBe("openai-compatible");
+    expect(apply.provider).toBe("openrouter");
+    expect(apply.chatModel).toBe("openrouter/free");
+    expect(apply.baseUrl).toBeUndefined();
+    expect(apply.apiKeyEnv).toBe("OPENROUTER_API_KEY");
+    expect(apply.image).toBeUndefined();
+    expect(apply.visionModel).toBeNull();
   });
 });
 

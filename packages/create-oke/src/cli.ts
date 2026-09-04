@@ -494,7 +494,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     source: sourceFromArgs(args),
     agentsMd: args.agentsMd,
     sqlDriver: args.sqlDriver,
-    aiApply: args.ai === "force" ? nonInteractiveAiApply("llama-cpp") : null,
+    aiApply: args.ai === "force" ? nonInteractiveAiApply("openrouter") : null,
     locales: args.locales,
     pgdog: args.pgdog ?? false,
     proxy: args.proxy ?? "none",
@@ -893,15 +893,14 @@ async function askProxy(initial: CreateProxyId = "none"): Promise<CreateProxyId 
 }
 
 /**
- * Provider passed to `oke ai setup` — prefer native Ollama when either env uses it.
+ * Provider passed to `oke ai setup` — keep menu Ollama when chosen; map mock
+ * pins to a local server id when openai-compatible is already pinned.
  *
  * @param menuProvider - Menu id chosen in the wizard
  * @param pins - Resolved driver pins
  */
 export function aiSetupProviderFor(menuProvider: string, pins: EnvDriverPins): string {
-  if (menuProvider === "ollama" || pins.dev === "ollama" || pins.prod === "ollama") {
-    return "ollama";
-  }
+  if (menuProvider === "ollama") return "ollama";
   if (menuProvider === "llama-cpp") return "llama-cpp";
   if (menuProvider === "vllm" || menuProvider === "sglang") return menuProvider;
   if (menuProvider === "mock") {

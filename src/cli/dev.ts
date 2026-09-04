@@ -502,6 +502,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   } | null = null;
   /** Hero AI status dot (yellow while model loads). */
   let heroAiStatus: DevStatus | undefined;
+  /** Compose AI service name when `images.ai` is pinned — undefined for cloud AI. */
+  let stackAiServiceName: string | undefined;
   let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null = null;
   try {
     loadedConfig = (await loadOkeConfig(cwd)).config;
@@ -628,7 +630,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         const up =
           options.composeUp ??
           (async (files, dir) => {
-            const args = ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"];
+            const args = [
+              "compose",
+              ...files.flatMap((f) => ["-f", f]),
+              "up",
+              "-d",
+              "--remove-orphans",
+            ];
             const proc = Bun.spawn(["docker", ...args], {
               cwd: dir,
               stdout: "pipe",
@@ -661,6 +669,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
         // Stream compose health until infra is up (AI may stay pending — model load).
         const aiServiceName = derived.specs.find((s) => s.role === "ai")?.serviceName;
+        stackAiServiceName = aiServiceName;
         const labelForService = (serviceName: string): string => {
           const spec = derived.specs.find((s) => s.serviceName === serviceName);
           return spec ? roleLabel(spec.role) : serviceName;
@@ -840,7 +849,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const one = (name: string) => h.get(name);
     switch (element) {
       case "ai": {
-        const container = one("ai");
+        // Cloud / host AI has no compose service — ignore orphaned exited
+        // containers left over after `images.ai` was removed.
+        if (!stackAiServiceName) return aiStatus;
+        const container = one(stackAiServiceName);
         if (container === "error") return "error";
         return aiStatus ?? container;
       }
@@ -883,7 +895,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           st === "ready" || st === "idle"
             ? null
             : st === "error"
-              ? liveComposeHealth.get("ai") === "error"
+              ? stackAiServiceName && liveComposeHealth.get(stackAiServiceName) === "error"
                 ? "stopped"
                 : "error"
               : "loading";
@@ -901,7 +913,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
             const fromHealth = svc.serviceName ? liveComposeHealth.get(svc.serviceName) : undefined;
             let status = fromHealth ?? svc.status ?? "pending";
             let detail = svc.detail;
-            if (svc.serviceName === "ai") {
+            if (stackAiServiceName && svc.serviceName === stackAiServiceName) {
               if (fromHealth === "error") {
                 status = "error";
                 detail = heroAiModel ? `${heroAiModel} · stopped` : "stopped";
@@ -963,7 +975,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       onStatus: (_line, status) => {
         const st = devStatusFromAiPhase(status.phase);
         // Container stopped wins over model-phase "loading".
-        if (liveComposeHealth.get("ai") === "error") {
+        if (
+          stackAiServiceName &&
+          liveComposeHealth.get(stackAiServiceName) === "error"
+        ) {
           heroAiStatus = "error";
           repaintBoard("error");
           if (!sawAiPaint) {
@@ -1478,7 +1493,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         env: started.env,
         run: composeHealthRun,
       });
-      if (liveComposeHealth.get("ai") === "error") heroAiStatus = "error";
+      if (
+        started.aiServiceName &&
+        liveComposeHealth.get(started.aiServiceName) === "error"
+      ) {
+        heroAiStatus = "error";
+      }
       repaintBoard();
     };
     const refreshChrome = async (): Promise<void> => {
@@ -1501,7 +1521,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           );
         },
       });
-      if (liveComposeHealth.get("ai") === "error") heroAiStatus = "error";
+      if (aiServiceName && liveComposeHealth.get(aiServiceName) === "error") {
+        heroAiStatus = "error";
+      }
     };
 
     const composeAction = async (action: DevComposeControlAction): Promise<void> => {

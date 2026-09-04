@@ -176,7 +176,8 @@ export const OKE_ERRORS = {
     cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.',
     fix:
       "Add explicit `effects` to this flow, or boot with a Manifest (`oke build`) / " +
-      "`rootDir` so effects can be derived. dev+compose/prod refuse an open capability token.",
+      "`rootDir` so effects can be derived. If extract failed, ensure `oxc-parser` is " +
+      "installed (okengine dependency). dev+compose/prod refuse an open capability token.",
   },
   /**
    * A `src/flows/<unit>` folder exists on disk but no adopted flow carries

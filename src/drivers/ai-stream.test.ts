@@ -7,7 +7,6 @@ import { withAbortSignal } from "../kernel/abort-scope.ts";
 import { createFx, createFxContext } from "../kernel/fx.ts";
 import { ai, createAiRuntime } from "../elements/ai.ts";
 import { openOpenaiCompatible } from "./ai-openai-compatible.ts";
-import { openOllama } from "./ai-ollama.ts";
 import { mockAiDriver } from "./ai-mock.ts";
 
 describe("openai-compatible SSE stream", () => {
@@ -56,39 +55,6 @@ describe("openai-compatible SSE stream", () => {
     // Consumer abort should mark the signal; driver checks between reads.
     expect(ac.signal.aborted).toBe(true);
     void aborted;
-  });
-});
-
-describe("ollama NDJSON stream", () => {
-  test("yields message.content deltas", async () => {
-    const ndjson =
-      JSON.stringify({ message: { content: "A" }, done: false }) +
-      "\n" +
-      JSON.stringify({ message: { content: "B" }, done: true }) +
-      "\n";
-    const fetchFn: typeof fetch = Object.assign(
-      async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url.endsWith("/api/tags")) {
-          return new Response(JSON.stringify({ models: [] }), { status: 200 });
-        }
-        return new Response(ndjson, { status: 200 });
-      },
-      { preconnect: () => {} },
-    ) as typeof fetch;
-
-    const client = await openOllama({
-      model: "llama3.2:1b",
-      baseUrl: "http://ollama.test:11434",
-      fetch: fetchFn,
-    });
-    const parts: string[] = [];
-    for await (const chunk of client.stream!({
-      messages: [{ role: "user", content: "x" }],
-    })) {
-      if (chunk.text) parts.push(chunk.text);
-    }
-    expect(parts.join("")).toBe("AB");
   });
 });
 

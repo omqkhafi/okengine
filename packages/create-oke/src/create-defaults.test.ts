@@ -73,9 +73,9 @@ describe("read/write round-trip", () => {
           clock: pinsDockerReady("file", "frozen"),
           vault: pinsDockerReady("vault", "memory"),
           channel: { email: pinsDockerReady("smtp", "console") },
-          ai: pinsDockerReady("ollama", "mock"),
+          ai: pinsDockerReady("openai-compatible", "mock"),
         },
-        ai: { enabled: true, provider: "ollama", driver: "ollama" },
+        ai: { enabled: true, provider: "ollama", driver: "openai-compatible" },
         locales: ["ar"],
         pgdog: true,
         proxy: "caddy",
@@ -85,7 +85,7 @@ describe("read/write round-trip", () => {
       expect(loaded).not.toBeNull();
       expect(loaded!.template).toBe("advanced");
       expect(loaded!.drivers.store.sql.dev).toBe("postgres");
-      expect(loaded!.drivers.ai?.dev).toBe("ollama");
+      expect(loaded!.drivers.ai?.dev).toBe("openai-compatible");
       expect(loaded!.ai.provider).toBe("ollama");
       expect(loaded!.profile).toBe("docker-ready");
       expect(loaded!.locales).toEqual(["ar"]);

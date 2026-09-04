@@ -282,22 +282,22 @@ describe("wizard ← Back", () => {
 });
 
 describe("aiSetupProviderFor", () => {
-  test("prefers ollama when prod/dev is ollama even if menu is mock", () => {
+  test("maps mock menu to llama-cpp when openai-compatible is pinned", () => {
     expect(
       aiSetupProviderFor("mock", {
-        dev: "mock",
+        dev: "openai-compatible",
         test: "mock",
-        prod: "ollama",
+        prod: "openai-compatible",
       }),
-    ).toBe("ollama");
+    ).toBe("llama-cpp");
   });
 
   test("keeps menu ollama", () => {
     expect(
       aiSetupProviderFor("ollama", {
-        dev: "ollama",
+        dev: "openai-compatible",
         test: "mock",
-        prod: "anthropic",
+        prod: "openai-compatible",
       }),
     ).toBe("ollama");
   });
@@ -616,7 +616,11 @@ describe("scaffold structure", () => {
         expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
-          dependencies: { okengine: string; "@duckdb/node-api"?: string };
+          dependencies: {
+            okengine: string;
+            "@duckdb/node-api"?: string;
+            "oxc-parser"?: string;
+          };
           trustedDependencies?: readonly string[];
           scripts: { typecheck?: string; test?: string; web?: string; "web:build"?: string };
           devDependencies: {
@@ -629,6 +633,7 @@ describe("scaffold structure", () => {
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
         expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.2");
+        expect(pkg.dependencies["oxc-parser"]).toBe("^0.142.0");
         expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
         expect(pkg.scripts.typecheck).toContain("tsc --noEmit");
         expect(pkg.scripts.typecheck).toContain("tsc -b -p web/tsconfig.json");

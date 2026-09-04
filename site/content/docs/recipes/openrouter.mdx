@@ -1,0 +1,283 @@
+---
+title: "OpenRouter"
+description: "Cloud path for fx.ask — provider openrouter auto-resolves base URL; router aliases pick free, auto, coding, fusion, and latest models."
+icon: "Globe"
+source: "docs/spec/unified-theory.md"
+---
+
+OpenRouter is the simplest way to call a real model from OKE: no Docker, no
+Python, no local weights. Set `provider: "openrouter"` and an API key —
+`baseUrl` resolves from the verified registry.
+
+<Callout title="The one rule">
+  Use a dedicated OpenRouter API key on the binding (`apiKey`), prefer the stable
+  `openrouter/free` router alias for zero-cost smoke tests, and keep other
+  providers on their own `ai.model` + `apiKey` so keys never collide.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Declare the cloud binding
+
+```typescript
+import { ai } from "okengine";
+
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+export const triage = smart.prompt("triage");
+```
+
+`baseUrl` becomes `https://openrouter.ai/api/v1` automatically. Pass an explicit
+`baseUrl` only to point at a proxy or mirror.
+
+</Step>
+
+<Step>
+### Ask from a flow
+
+```typescript
+import { on, flow, http } from "okengine";
+
+export const ask = on(
+  http.post("/ask"),
+  flow({ asks: ["triage"] }, async (fx, input) => {
+    return await fx.ask("triage", input);
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Optional setup via CLI
+
+create-oke **AI setup → Recommended** picks OpenRouter with `openrouter/free`
+(no Docker) and prompts for `OPENROUTER_API_KEY`. `oke ai setup --provider openrouter`
+writes the same `openai-compatible` driver wiring. Or create a key at
+[openrouter.ai](https://openrouter.ai) and set `OPENROUTER_API_KEY`.
+
+</Step>
+
+</Steps>
+
+## Router aliases
+
+OpenRouter **routers** are model slugs that pick (or compose) upstream models for
+you. Pass the slug as `model` on `ai.model` — same as any other OpenRouter id.
+
+| Slug | What it does | Cost |
+| ---- | ------------ | ---- |
+| [`openrouter/free`](https://openrouter.ai/docs/guides/routing/routers/free-router) | Random free model that supports your request features | Free |
+| [`openrouter/auto`](https://openrouter.ai/docs/guides/routing/routers/auto-router) | Market-based pick by task type + cost tier | Selected model rate |
+| [`openrouter/pareto-code`](https://openrouter.ai/docs/guides/routing/routers/pareto-router) | Strong coding model by `min_coding_score` | Selected model rate |
+| [`openrouter/fusion`](https://openrouter.ai/docs/guides/routing/routers/fusion-router) | Multi-model panel + analyst deliberation | ~4–5× one completion |
+| [`openrouter/bodybuilder`](https://openrouter.ai/docs/guides/routing/routers/body-builder) | NL → parallel request bodies (you run them) | Builder free; executions billed |
+| [`~author/family-latest`](https://openrouter.ai/docs/guides/routing/routers/latest-resolution) | Newest concrete version in a family | Target model rate |
+
+**Consequence:** the response `model` field is the concrete upstream that answered —
+log it for auditability.
+
+Router plugin knobs (`cost_tier`, `allowed_models`, `min_coding_score`, fusion
+panel) live on OpenRouter’s request `plugins` / account Routing defaults; OKE
+passes the `model` slug through the openai-compatible driver.
+
+### Free Models Router — `openrouter/free`
+
+Ideal for smoke tests, demos, and learning. The router filters free models for
+capabilities your request needs (vision, tools, structured outputs), then picks
+one at random.
+
+```typescript
+export const smoke = ai.model("smoke", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+| Detail | Behavior |
+| ------ | -------- |
+| Selection | Random among eligible free models |
+| Pin a free model | Use `author/model:free` instead of the router |
+| Limits | Lower rate limits; availability and latency vary |
+
+Official guide:
+[Free Models Router](https://openrouter.ai/docs/guides/routing/routers/free-router).
+
+### Auto Router — `openrouter/auto`
+
+Classifies the prompt (~30 task types), ranks by community spend share over a
+trailing 7-day window, then applies your cost band and fallbacks.
+
+```typescript
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/auto",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+| Detail | Behavior |
+| ------ | -------- |
+| Early track | `openrouter/auto-beta` (plugin id `auto-beta-router`) |
+| Cost bands | `low` · `medium` · `high` · `xhigh` · `max` (default ≈ `low`) |
+| Allow / deny | Wildcard patterns via `allowed_models` / `excluded_models` |
+| Sessions | Prefers the prior model while it stays a top candidate |
+| Pricing | No router fee — pay the selected model |
+
+Official guide:
+[Auto Router](https://openrouter.ai/docs/guides/routing/routers/auto-router).
+
+### Pareto Router — `openrouter/pareto-code`
+
+Coding-only. You set a minimum coding score (`0`–`1`); the router maps it to a
+tier and picks the cheapest (or fastest with `:nitro`) eligible model.
+
+```typescript
+export const coder = ai.model("coder", {
+  provider: "openrouter",
+  model: "openrouter/pareto-code",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+| `min_coding_score` | Tier |
+| ------------------ | ---- |
+| `>= 0.66` (default if omitted) | high — top of AA coding field |
+| `>= 0.33`, `< 0.66` | medium |
+| `< 0.33` | low |
+
+Within the tier: cheapest available (+ same-tier fallbacks on provider errors).
+Use `session_id` for multi-turn stickiness. Official guide:
+[Pareto Router](https://openrouter.ai/docs/guides/routing/routers/pareto-router).
+
+### Fusion Router — `openrouter/fusion`
+
+A panel of models answers in parallel; an analyst returns structured consensus /
+contradictions / gaps; your outer model writes the final answer.
+
+```typescript
+export const deliberate = ai.model("deliberate", {
+  provider: "openrouter",
+  model: "openrouter/fusion",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+| Detail | Behavior |
+| ------ | -------- |
+| Fast preset | `openrouter/fusion-flash` (`general-fast` panel) |
+| Default panel | Quality: Claude Opus / GPT / Gemini latest aliases |
+| Cost | N panel + 1 analyst + outer — expect ~4–5× with 3 models |
+| Force fusion | OpenRouter `tool_choice: "required"` (model decides by default) |
+
+Official guide:
+[Fusion Router](https://openrouter.ai/docs/guides/routing/routers/fusion-router).
+
+### Body Builder — `openrouter/bodybuilder`
+
+Describe a multi-model job in natural language. The response is JSON
+`{ requests: [...] }` — generate is free; you execute each body yourself.
+Useful for A/B checks, not a single `fx.ask` answer.
+
+```typescript
+export const builder = ai.model("builder", {
+  provider: "openrouter",
+  model: "openrouter/bodybuilder",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+Official guide:
+[Body Builder](https://openrouter.ai/docs/guides/routing/routers/body-builder).
+
+### Latest resolution — `~author/family-latest`
+
+Stable family alias that always retargets to the newest visible model in that
+family. Response `model` reports the concrete slug.
+
+```typescript
+export const opus = ai.model("opus", {
+  provider: "openrouter",
+  model: "~anthropic/claude-opus-latest",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+| Detail | Behavior |
+| ------ | -------- |
+| Reproducibility | Pin a concrete slug (e.g. `anthropic/claude-opus-4.8`) |
+| Reasoning params | Unsupported `none` / disabled may remap on `~latest` only |
+| Pricing | Listed as the current target’s rates |
+
+Official guide:
+[Latest Model Resolution](https://openrouter.ai/docs/guides/routing/routers/latest-resolution).
+
+## Multi-provider projects
+
+```typescript
+export const viaOr = ai.model("via-or", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+export const viaGroq = ai.model("via-groq", {
+  provider: "groq",
+  model: "llama-3.1-8b-instant",
+  apiKey: process.env.GROQ_API_KEY,
+});
+```
+
+Each binding keeps its own `apiKey` and auto-resolved `baseUrl`. No shared
+process-wide token.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="401 / invalid API key">
+
+Pass `apiKey` on the binding (or the env your setup wrote). OpenRouter does not
+accept an OpenAI key against its base URL.
+
+</Accordion>
+<Accordion title="Unknown provider error">
+
+Typos fail loud: unknown names require an explicit `baseUrl`. Known names are
+listed on [Models](/docs/elements/ai/models).
+
+</Accordion>
+<Accordion title="Free router feels flaky or rate-limited">
+
+`openrouter/free` picks randomly among eligible free models — availability and
+limits change. Pin `author/model:free` or move to `openrouter/auto` / a paid id
+for stable prod paths.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Models](/docs/elements/ai/models) — verified providers and limited compatibility
+- [Local AI](/docs/recipes/local-ai) — local `/v1`
+- [AI](/docs/elements/ai) — prompts and `fx.ask`
+- [OpenRouter routers](https://openrouter.ai/docs/guides/routing/routers/auto-router) — Auto, Free, Pareto, Fusion, Body Builder, Latest
+
+## Next
+
+<Cards>
+  <Card title="Models" description="Provider registry." href="/docs/elements/ai/models" />
+  <Card
+    title="Local AI"
+    description="llama.cpp / vLLM / SGLang."
+    href="/docs/recipes/local-ai"
+  />
+  <Card title="AI" description="Prompts and guardrails." href="/docs/elements/ai" />
+</Cards>

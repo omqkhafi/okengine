@@ -118,11 +118,11 @@ Set the project default once. Bare `.embed()` inherits; per-field `{ model?, dim
 import { field, store, ai, oke } from "okengine";
 
 const embedder = ai.model("embedder", {
-  provider: "ollama",
+  provider: "openai-compatible",
   model: "nomic-embed-text",
 });
 const captionEmbedder = ai.model("caption-embedder", {
-  provider: "ollama",
+  provider: "openai-compatible",
   model: "nomic-embed-text",
 });
 
@@ -173,7 +173,7 @@ import { ai } from "okengine";
 import { z } from "zod";
 
 const reranker = ai.model("reranker", {
-  provider: "ollama",
+  provider: "openai-compatible",
   model: "llama3.1",
 });
 

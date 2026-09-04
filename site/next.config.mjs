@@ -51,6 +51,36 @@ const config = {
         destination: "/docs/elements/flow/consumers",
         permanent: true,
       },
+      {
+        source: "/docs/recipes/llama-cpp",
+        destination: "/docs/recipes/local-ai",
+        permanent: true,
+      },
+      {
+        source: "/docs/recipes/vllm",
+        destination: "/docs/recipes/local-ai",
+        permanent: true,
+      },
+      {
+        source: "/docs/recipes/sglang",
+        destination: "/docs/recipes/local-ai",
+        permanent: true,
+      },
+      {
+        source: "/docs/recipes/openai-compatible-local",
+        destination: "/docs/recipes/local-ai",
+        permanent: true,
+      },
+      {
+        source: "/docs/recipes/openai-compatible",
+        destination: "/docs/recipes/local-ai",
+        permanent: true,
+      },
+      {
+        source: "/docs/recipes/ollama",
+        destination: "/docs/recipes/local-ai",
+        permanent: true,
+      },
     ];
   },
 };

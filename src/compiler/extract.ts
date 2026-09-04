@@ -8,6 +8,11 @@
 
 import { parseSync } from "oxc-parser";
 
+import {
+  AI_NATIVE_DRIVER_IDS,
+  formatAiProviderTier2Warn,
+  getAiProviderEntry,
+} from "../elements/ai/providers.ts";
 import { SearchConfigError } from "../elements/store/search-errors.ts";
 
 import type {
@@ -1286,13 +1291,29 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       const modelName = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
       if (modelName) {
+        const provider = stringProp(opts, "provider");
+        const driverId = stringProp(opts, "driverId");
+        const baseUrl = stringProp(opts, "baseUrl");
         const model: AiModel = {
-          ...(stringProp(opts, "provider") ? { provider: stringProp(opts, "provider") } : {}),
+          ...(provider ? { provider } : {}),
           ...(stringProp(opts, "tier") ? { tier: stringProp(opts, "tier") } : {}),
-          ...(stringProp(opts, "driverId") ? { driverId: stringProp(opts, "driverId") } : {}),
+          ...(driverId ? { driverId } : {}),
         };
         scope.ai.models = scope.ai.models ?? {};
         scope.ai.models[modelName] = model;
+        // Limited OpenAI-compat caveat — same honesty as declare-time warn.
+        if (
+          provider &&
+          !baseUrl &&
+          !(driverId && AI_NATIVE_DRIVER_IDS.has(driverId))
+        ) {
+          const entry = getAiProviderEntry(provider);
+          if (entry?.tier === 2 && entry.caveat) {
+            console.warn(
+              formatAiProviderTier2Warn(provider, entry.caveat, "[oke extract] warn"),
+            );
+          }
+        }
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {
           scope.bindings.set(bindingName, {

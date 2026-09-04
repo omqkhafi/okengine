@@ -23,9 +23,7 @@
     "mailpit",
     "meilisearch",
     "---AI---",
-    "llama-cpp",
-    "ollama",
-    "vllm",
-    "sglang"
+    "openrouter",
+    "local-ai"
   ]
 }

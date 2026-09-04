@@ -10,7 +10,7 @@ describe("hybrid search — writer effect isolation", () => {
     const source = `
 import { on, flow, http, store, field, ai } from "okengine";
 
-export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+export const embedder = ai.model("embedder", { provider: "openai-compatible", model: "nomic-embed-text" });
 
 export const articles = store.schema.table("articles", {
   id: field.text().primaryKey(),

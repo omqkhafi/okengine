@@ -138,16 +138,16 @@ describe("vault backend defaults", () => {
 });
 
 describe("upsertAiDrivers", () => {
-  const ollamaPins: EnvDriverPins = {
-    dev: "ollama",
+  const localAiPins: EnvDriverPins = {
+    dev: "openai-compatible",
     test: "mock",
-    prod: "ollama",
+    prod: "openai-compatible",
   };
 
   test("inserts drivers.ai inside drivers (not images / channel)", () => {
-    const next = upsertAiDrivers(templateConfig("advanced"), ollamaPins);
+    const next = upsertAiDrivers(templateConfig("advanced"), localAiPins);
     const config = evalConfig(next);
-    expect(config.drivers?.ai).toEqual(ollamaPins);
+    expect(config.drivers?.ai).toEqual(localAiPins);
     expect(config.drivers?.channel?.ai).toBeUndefined();
     // Sparse templates omit drivers.channel — images.channel stays a string pin.
     expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.30.7");
@@ -190,5 +190,47 @@ describe("upsertAiDrivers", () => {
       expect(config.drivers?.channel?.ai, id).toBeUndefined();
       expect(config.images?.ai, id).toBe("ghcr.io/ggml-org/llama.cpp:server-b10450");
     }
+  });
+
+  test("applyCreateAnswers with OpenRouter does not pin images.ai", () => {
+    const cloudPins = pinsDockerReady("openai-compatible", "mock");
+    const next = applyCreateAnswers(
+      templateConfig("advanced"),
+      toCreateDefaults({
+        template: "advanced",
+        profile: "docker-ready",
+        drivers: {
+          store: {
+            sql: pinsDockerReady("postgres", "pglite"),
+            kv: pinsDockerReady("redis", "memory"),
+            files: pinsDockerReady("s3", "memory"),
+            index: null,
+          },
+          signal: pinsDockerReady("redis", "memory"),
+          clock: pinsDockerReady("postgres", "frozen"),
+          vault: pinsDockerReady("vault", "memory"),
+          channel: { email: pinsDockerReady("smtp", "console") },
+          ai: cloudPins,
+        },
+        ai: {
+          enabled: true,
+          provider: "openrouter",
+          driver: "openai-compatible",
+          chatModel: "openrouter/free",
+          apiKeyEnv: "OPENROUTER_API_KEY",
+        },
+        locales: [],
+        pgdog: false,
+        proxy: "none",
+      }),
+    );
+    const config = evalConfig(next);
+    expect(config.drivers?.ai).toEqual({
+      dev: "openai-compatible",
+      test: "mock",
+      prod: "openai-compatible",
+    });
+    expect(config.images?.ai).toBeUndefined();
+    expect(extractImages(next).ai).toBeUndefined();
   });
 });

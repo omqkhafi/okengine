@@ -653,21 +653,21 @@ describe("ask budget and cancel", () => {
 
   test("driverId opens the matching protocol driver", async () => {
     let opened = "";
-    const local = ai.model("local", { driverId: "ollama", model: "llama" });
+    const local = ai.model("local", { driverId: "openai-compatible", model: "llama" });
     const prompt = local.prompt("ping");
     const runtime = createAiRuntime({
       models: [local],
       prompts: [prompt],
       drivers: {
-        ollama: {
-          id: "ollama",
+        "openai-compatible": {
+          id: "openai-compatible",
           async open() {
-            opened = "ollama";
+            opened = "openai-compatible";
             return {
-              driverId: "ollama",
+              driverId: "openai-compatible",
               model: "llama",
               async complete() {
-                return { text: "{}", raw: {}, model: "llama", driverId: "ollama" };
+                return { text: "{}", raw: {}, model: "llama", driverId: "openai-compatible" };
               },
             };
           },
@@ -675,7 +675,7 @@ describe("ask budget and cancel", () => {
       },
     });
     await runtime.ask("ping", {});
-    expect(opened).toBe("ollama");
+    expect(opened).toBe("openai-compatible");
   });
 });
 

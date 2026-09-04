@@ -462,7 +462,7 @@ describe("image recipes", () => {
       password: "unused",
       database: "oke",
     });
-    expect(url).toBe("http://127.0.0.1:11434");
+    expect(url).toBe("http://127.0.0.1:11434/v1");
   });
 
   test("llama-cpp is the default local AI recipe — OpenAI /v1, loopback publish, pinned ≥ b8146", () => {
@@ -1026,7 +1026,7 @@ describe("deriveInfrastructure", () => {
     expect(yml).toContain("qwen3.5:9b");
     expect(yml).toContain("127.0.0.1:11434:11434");
     expect(yml).not.toMatch(/ports:\s*\n\s*-\s*"?11434:11434"?/);
-    expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434");
+    expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434/v1");
     const envText = formatStackEnv(result.stackEnv);
     expect(envText).toContain("# ── ai — local inference");
     expect(envText.match(/^OKE_AI_URL=/gm)?.length).toBe(1);

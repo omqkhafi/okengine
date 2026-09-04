@@ -36,6 +36,12 @@ export type SqlDriverId = (typeof SQL_DRIVERS)[number];
 export const DEFAULT_SQL_DRIVER: SqlDriverId = "postgres";
 
 /**
+ * Manifest extract peer for `oke dev` / boot effects stamping.
+ * Kept in sync with root `okengine` `dependencies["oxc-parser"]`.
+ */
+export const OXC_PARSER_RANGE = "^0.142.0";
+
+/**
  * Whether `value` is a known {@link SqlDriverId}.
  *
  * @param value - Candidate string
@@ -88,6 +94,9 @@ export function transformPackageJson(
   if (dependencies["okengine"] !== undefined) {
     dependencies["okengine"] = okengineDep;
   }
+  // Always pin — published okengine ≤0.18.5 left oxc-parser optional; without it,
+  // Docker-first `oke dev` hard-fails OKE1008 (Manifest extract cannot run).
+  dependencies["oxc-parser"] ??= OXC_PARSER_RANGE;
 
   return {
     ...source,
@@ -503,14 +512,9 @@ function syncImages(source: string, defaults: CreateDefaults): string {
   if (d.store.index?.dev === "meilisearch") {
     pin("store.index", DEFAULT_IMAGES["store.index"]!);
   }
-  if (
-    d.ai &&
-    (d.ai.dev === "ollama" ||
-      d.ai.prod === "ollama" ||
-      d.ai.dev === "openai-compatible" ||
-      d.ai.prod === "openai-compatible")
-  ) {
-    pin("ai", aiImageForDefaults(defaults));
+  const aiImage = selfHostedAiImage(defaults);
+  if (aiImage) {
+    pin("ai", aiImage);
   }
   if (defaults.proxy !== "none") {
     pin("proxy", PROXY_IMAGES[defaults.proxy]);
@@ -520,21 +524,19 @@ function syncImages(source: string, defaults: CreateDefaults): string {
 }
 
 /**
- * Resolve `images.ai` from create-defaults provider / driver pins.
+ * Container image for self-hosted local AI only. Cloud registry providers
+ * (OpenRouter, OpenAI, …) and host-side tools (LM Studio) must not pin
+ * `images.ai` — Compose would start an unused llama.cpp/Ollama service.
  *
  * @param defaults - Create answers
  */
-function aiImageForDefaults(defaults: CreateDefaults): string {
+function selfHostedAiImage(defaults: CreateDefaults): string | undefined {
   const provider = defaults.ai.provider;
-  if (provider === "ollama" || defaults.drivers.ai?.dev === "ollama") {
-    return OLLAMA_IMAGE;
-  }
+  if (provider === "ollama") return OLLAMA_IMAGE;
   if (provider === "vllm") return VLLM_IMAGE;
   if (provider === "sglang") return SGLANG_IMAGE;
-  if (provider === "llama-cpp" || defaults.drivers.ai?.dev === "openai-compatible") {
-    return LLAMA_CPP_IMAGE;
-  }
-  return DEFAULT_IMAGES.ai!;
+  if (provider === "llama-cpp") return LLAMA_CPP_IMAGE;
+  return undefined;
 }
 
 /**

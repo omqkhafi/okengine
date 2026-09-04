@@ -1,13 +1,14 @@
 /**
  * Ollama image recipe — local model server (`ollama/ollama`).
  *
- * Fully supported alternative to the default llama.cpp recipe. Pin ≥
+ * Fully supported local model server via OpenAI-compatible `/v1`. Pin ≥
  * {@link OLLAMA_MIN_SAFE_VERSION} (CVE-2026-7482 floor). Host publish is
  * loopback-only — never expose `:11434` on `0.0.0.0`. Load models only from
  * Ollama's library; do not feed arbitrary untrusted GGUF into `/api/create`.
  *
  * Model pull is **not** done here: after compose is up,
- * {@link ensureOllamaModel} POSTs `/api/pull` to this container's loopback URL.
+ * {@link ensureOllamaModel} POSTs `/api/pull` to this container's loopback URL
+ * (origin without `/v1`). OKE apps use `openai-compatible` + `OKE_AI_URL` …`/v1`.
  */
 
 import type { ImageRecipe } from "../types.ts";
@@ -40,5 +41,5 @@ export const ollama: ImageRecipe = {
       start_period: "10s",
     },
   }),
-  url: (_s, c) => `http://${c.host}:${c.port}`,
+  url: (_s, c) => `http://${c.host}:${c.port}/v1`,
 };

@@ -5,7 +5,7 @@
 # ============================================================
 
 # ---------- Runtime & Tooling ----------
-- okengine requires Bun &gt;=1.4.0. All code MUST be ESNext ESM modules (no CommonJS).
+- okengine requires Bun &gt;=1.4.1. All code MUST be ESNext ESM modules (no CommonJS).
 - Use `bun test` for tests, `oxlint` for linting, `oxfmt` for formatting.
 - TypeScript strict mode is enforced: `noUnusedLocals`, `noUnusedParameters`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `erasableSyntaxOnly`.
 - Prefer `verbatimModuleSyntax: true` — use `import type` for type-only imports.

@@ -1,0 +1,142 @@
+---
+title: "Local AI"
+description: "Self-host llama.cpp, Ollama, vLLM, or SGLang — one openai-compatible driver, different images and ports."
+icon: "Cpu"
+source: "docs/spec/unified-theory.md"
+---
+
+llama.cpp, Ollama, vLLM, and SGLang all speak OpenAI Chat Completions. OKE uses
+one driver id — `openai-compatible` — and picks the image by workload.
+
+<Callout title="The one rule">
+  Pin an explicit image tag (never `latest`), publish only on loopback, and set
+  `OKE_AI_URL` to that server’s `/v1` base. Unlisted cloud providers and
+  Cloudflare account-scoped URLs still need an explicit `baseUrl` on `ai.model`.
+</Callout>
+
+## Which server?
+
+| Workload | Server | Host port | Typical image pin |
+| -------- | ------ | --------- | ----------------- |
+| Lightweight single-user / dev (default local) | **llama.cpp** | `8080` | `ghcr.io/ggml-org/llama.cpp:server-b10450` (≥ b8146) |
+| Library pull UX | **Ollama** | `11434` | `ollama/ollama:0.32.13` (≥ 0.17.1) |
+| Multi-user production GPU concurrency | **vLLM** | `8000` | `vllm/vllm-openai:v0.27.1` |
+| Structured / agent-heavy GPU | **SGLang** | `30000` | `lmsysorg/sglang:v0.5.17-runtime` |
+
+Want zero Docker and a free cloud path? Use [OpenRouter](/docs/recipes/openrouter)
+with `provider: "openrouter"` (base URL auto-resolved).
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin driver + image
+
+```typescript title="oke.config.ts"
+drivers: {
+  ai: { dev: "openai-compatible", test: "mock", prod: "openai-compatible" },
+},
+images: {
+  // Pick one — never :latest
+  ai: "ghcr.io/ggml-org/llama.cpp:server-b10450",
+  // ai: "ollama/ollama:0.32.13",
+  // ai: "vllm/vllm-openai:v0.27.1",
+  // ai: "lmsysorg/sglang:v0.5.17-runtime",
+},
+```
+
+Or `oke ai setup --provider llama-cpp` / `ollama` / `vllm` / `sglang`.
+
+</Step>
+
+<Step>
+### Env for the chosen port
+
+```bash title=".env.local"
+# llama.cpp
+OKE_AI_URL=http://127.0.0.1:8080/v1
+OKE_AI_MODEL=granite3.3:2b
+
+# Ollama — OKE_AI_URL=http://127.0.0.1:11434/v1  ·  OKE_AI_MODEL=qwen3.5:9b
+# vLLM — OKE_AI_URL=http://127.0.0.1:8000/v1
+# SGLang — OKE_AI_URL=http://127.0.0.1:30000/v1
+```
+
+vLLM and SGLang need the NVIDIA Container Toolkit (`ipc: host` + device
+reservation). llama.cpp is the lightest CPU/dev path. Ollama uses library
+pulls (`oke ai setup` / compose ensure) — never arbitrary untrusted GGUF.
+
+</Step>
+
+<Step>
+### Declare a model binding
+
+```typescript
+import { ai } from "okengine";
+
+export const local = ai.model("local", {
+  provider: "openai-compatible",
+  model: process.env.OKE_AI_MODEL ?? "granite3.3:2b",
+  ...(process.env.OKE_AI_URL?.trim()
+    ? { baseUrl: process.env.OKE_AI_URL.trim() }
+    : {}),
+});
+```
+
+</Step>
+
+</Steps>
+
+## Security
+
+| Control | Requirement |
+| ------- | ----------- |
+| Host publish | Loopback only (`127.0.0.1:<port>:<port>`) — never `0.0.0.0` |
+| Image pin | Explicit tag; llama.cpp ≥ **b8146**; Ollama ≥ **0.17.1** |
+| Model source | Curated registries / Ollama library / trusted HF — never arbitrary untrusted GGUF |
+
+## What each recipe configures
+
+| Field | llama.cpp | Ollama | vLLM | SGLang |
+| ----- | --------- | ------ | ---- | ------ |
+| Container port | `8080` | `11434` | `8000` | `30000` |
+| Host publish | `127.0.0.1:8080:8080` | `127.0.0.1:11434:11434` | `127.0.0.1:8000:8000` | `127.0.0.1:30000:30000` |
+| GPU | optional | optional | NVIDIA reservation | NVIDIA reservation |
+| Connection URL | `http://host:8080/v1` | `http://host:11434/v1` | `http://host:8000/v1` | `http://host:30000/v1` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection refused on the published port">
+
+Confirm compose published `127.0.0.1:<port>:<port>` (not bare `port:port` on all
+interfaces). `OKE_AI_URL` must include `/v1`.
+
+</Accordion>
+<Accordion title="GPU not visible / vLLM or SGLang exits">
+
+Install the NVIDIA Container Toolkit. Without a GPU, use llama.cpp or Ollama.
+
+</Accordion>
+<Accordion title="llama.cpp model fails to load / slow first boot">
+
+First start Hub-pulls the curated `ai/` model. Prefer `oke ai setup` tiers for
+smoke tests. Watch `oke dev` until AI status is `ready`.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OpenRouter](/docs/recipes/openrouter) — zero-local cloud default
+- [Models](/docs/elements/ai/models) — provider registry and `ai.model`
+- [AI](/docs/elements/ai) — `fx.ask`, prompts, drivers
+
+## Next
+
+<Cards>
+  <Card title="OpenRouter" description="Zero Docker cloud path." href="/docs/recipes/openrouter" />
+  <Card title="Models" description="Provider registry." href="/docs/elements/ai/models" />
+  <Card title="AI" description="Element overview." href="/docs/elements/ai" />
+</Cards>

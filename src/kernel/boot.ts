@@ -635,6 +635,13 @@ export function resetNoEffectsWarnForTests(): void {
   noEffectsWarned = false;
 }
 
+/** Result of a best-effort Manifest extract (never throws). */
+type AutoExtractResult = {
+  readonly manifest?: Manifest;
+  /** Present when extract threw — surfaced before OKE1008 in strict boots. */
+  readonly error?: string;
+};
+
 /**
  * Best-effort AoT extraction from `rootDir` — mirrors the CLI's own lazy,
  * defensive `extractManifest` use (`oke dev`'s `tryLoadProjectManifest`).
@@ -647,13 +654,14 @@ export function resetNoEffectsWarnForTests(): void {
  *
  * @param rootDir - Project root to extract from
  */
-async function tryAutoExtractManifest(rootDir: string): Promise<Manifest | undefined> {
+async function tryAutoExtractManifest(rootDir: string): Promise<AutoExtractResult> {
   try {
     const url = new URL("../compiler/extract.ts", import.meta.url);
     const { extractManifest } = (await import(url.href)) as typeof import("../compiler/extract.ts");
-    return await extractManifest({ rootDir });
-  } catch {
-    return undefined;
+    return { manifest: await extractManifest({ rootDir }) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: message.length > 0 ? message : "unknown extract failure" };
   }
 }
 
@@ -683,10 +691,15 @@ export async function mintCapabilities(
   const map = new Map<string, CapabilityToken>();
 
   let manifest = options.manifest;
+  let extractError: string | undefined;
   const needsManifest = manifest === undefined && flows.some((f) => f.effects === undefined);
   if (needsManifest) {
     const rootDir = options.rootDir ?? process.env["OKE_ROOT_DIR"];
-    if (rootDir) manifest = await tryAutoExtractManifest(rootDir);
+    if (rootDir) {
+      const extracted = await tryAutoExtractManifest(rootDir);
+      manifest = extracted.manifest;
+      extractError = extracted.error;
+    }
   }
 
   for (const f of flows) {
@@ -703,15 +716,24 @@ export async function mintCapabilities(
 
     const strict = env === "prod" || (env === "dev" && options.docker === true);
     if (strict) {
+      if (extractError !== undefined) {
+        emitBootWarn(`oke boot: Manifest extract failed — ${extractError}`);
+      }
       throwOke("NO_EFFECTS_DECLARED", { flow: f.name });
     }
     if (!noEffectsWarned) {
       noEffectsWarned = true;
+      const extractHint =
+        extractError !== undefined
+          ? ` Manifest extract failed (${extractError}).`
+          : "";
       emitBootWarn(
         `oke boot: flow "${f.name}" (and possibly others) has no declared effects and no ` +
           "Manifest-derived effects — running with an OPEN capability token (every access " +
-          "allowed, ledgered but not gated). Run `oke build`, or boot with `manifest` / " +
-          "`rootDir`, before deploying — dev+compose/prod refuse to boot this way.",
+          "allowed, ledgered but not gated)." +
+          extractHint +
+          " Run `oke build`, or boot with `manifest` / `rootDir`, before deploying — " +
+          "dev+compose/prod refuse to boot this way.",
       );
     }
     map.set(f.name, createCapabilityToken(f.name, undefined));

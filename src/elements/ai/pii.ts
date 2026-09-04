@@ -70,7 +70,7 @@ function isPiiTags(tags: ColumnClassification | string | readonly string[] | und
 function isThirdParty(provider: string | undefined): boolean {
   if (!provider) return true;
   const p = provider.toLowerCase();
-  return p !== "mock" && p !== "ollama" && p !== "local";
+  return p !== "mock" && p !== "local" && p !== "openai-compatible";
 }
 
 /**

@@ -13,6 +13,7 @@ Read from [SKILL.md](SKILL.md) when a bump looks suspicious. Update this file wh
 | `@fumadocs/base-ui`   | site                    | `^` aligned with core            | Real package name (not `fumadocs-ui` npm alias)                                     |
 | `fumadocs-core`       | site                    | exact or `^` aligned with ui     | Pair with `@fumadocs/base-ui` version                                               |
 | peer optional drivers | root `peerDependencies` | ranges like `>=0.5.0`            | Widen only when supported floor changes                                             |
+| `oxc-parser`          | root `dependencies`     | `^` aligned with `@oxc-project/types` | Hard dep — `oke dev` / boot Manifest extract needs it (not optional peer)        |
 
 ## Reject defaults for bulk `ncu`
 

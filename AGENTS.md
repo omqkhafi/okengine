@@ -82,7 +82,7 @@ Published packages:
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./plugins`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
 - `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships Notes starters from `packages/create-oke/templates/{standard,advanced}`.
 
-Engine: Bun `>=1.4.0`.
+Engine: Bun `>=1.4.1`.
 
 ## Documentation authority
 

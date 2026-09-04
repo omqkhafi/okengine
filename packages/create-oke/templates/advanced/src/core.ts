@@ -67,4 +67,9 @@ export const noteCreatedMail = mail.template("note-created", {
 });
 
 // --- AI ----------------------------------------------------------------------
-// `oke ai setup` / create-oke --ai appends models here.
+// Appended by `oke ai setup` / `create-oke --ai`.
+// When an embed model is chosen, setup also wires Notes hybrid search:
+//   oke({ store: { search: { embed: { model: embedModel, dims: 768 } } } })
+//   body: field.text().searchable().embed()
+// Registry cloud: provider "openrouter" + OPENROUTER_API_KEY (no baseUrl).
+// Local self-host still needs an explicit baseUrl (or OKE_AI_URL on the binding).

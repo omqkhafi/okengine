@@ -120,18 +120,31 @@ export const VLLM_IMAGE = "vllm/vllm-openai:v0.27.1";
 /** @see LLAMA_CPP_IMAGE */
 export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.17-runtime";
 
-/** AI menu providers → protocol driver. */
+/** AI menu providers → protocol driver (kept for call-site compat). */
 export const AI_PROVIDERS = [
-  { value: "llama-cpp", label: "llama.cpp (Local)", driver: "openai-compatible" },
-  { value: "ollama", label: "Ollama (Local)", driver: "ollama" },
-  { value: "vllm", label: "vLLM (self-hosted GPU)", driver: "openai-compatible" },
-  { value: "sglang", label: "SGLang (self-hosted GPU)", driver: "openai-compatible" },
+  {
+    value: "openrouter",
+    label: "OpenRouter",
+    driver: "openai-compatible",
+    hint: "recommended · zero Docker · openrouter/free",
+  },
   { value: "openai", label: "OpenAI", driver: "openai-compatible" },
   { value: "anthropic", label: "Anthropic", driver: "anthropic" },
-  { value: "gemini", label: "Gemini", driver: "openai-compatible" },
+  { value: "groq", label: "Groq", driver: "openai-compatible" },
+  { value: "together", label: "Together AI", driver: "openai-compatible" },
+  { value: "deepseek", label: "DeepSeek", driver: "openai-compatible" },
+  { value: "mistral", label: "Mistral", driver: "openai-compatible" },
+  { value: "xai", label: "xAI (Grok)", driver: "openai-compatible" },
+  { value: "deepinfra", label: "DeepInfra", driver: "openai-compatible" },
+  { value: "meta", label: "Meta Model API", driver: "openai-compatible" },
+  { value: "vercel", label: "Vercel AI Gateway", driver: "openai-compatible" },
+  { value: "gemini", label: "Google Gemini", driver: "openai-compatible" },
   { value: "lmstudio", label: "LM Studio", driver: "openai-compatible" },
-  { value: "openrouter", label: "OpenRouter", driver: "openai-compatible" },
   { value: "custom", label: "Custom OpenAI Compatible", driver: "openai-compatible" },
+  { value: "llama-cpp", label: "llama.cpp (Local)", driver: "openai-compatible" },
+  { value: "ollama", label: "Ollama (Local)", driver: "openai-compatible" },
+  { value: "vllm", label: "vLLM (self-hosted GPU)", driver: "openai-compatible" },
+  { value: "sglang", label: "SGLang (self-hosted GPU)", driver: "openai-compatible" },
   { value: "mock", label: "Mock (dev only)", driver: "mock" },
 ] as const;
 

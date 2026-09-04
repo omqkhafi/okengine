@@ -5,6 +5,7 @@
 import type { CreateAiPref } from "../create-defaults.ts";
 import { LLAMA_CPP_IMAGE, OLLAMA_IMAGE, SGLANG_IMAGE, VLLM_IMAGE } from "../drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
+import { cloudApplyDefaults } from "./catalog.ts";
 
 /**
  * Build apply input from saved create-defaults (reuse path).
@@ -15,7 +16,6 @@ export function applyInputFromAiPref(pref: CreateAiPref): AiSetupApplyInput | nu
   if (!pref.enabled || !pref.driver) return null;
   const driver = pref.driver as AiSetupApplyInput["driver"];
   if (
-    driver !== "ollama" &&
     driver !== "anthropic" &&
     driver !== "openai-compatible" &&
     driver !== "mock"
@@ -67,6 +67,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
   if (provider === "llama-cpp") {
     return {
       driver: "openai-compatible",
+      provider: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
       chatModel: "granite3.3:2b",
       visionModel: null,
@@ -76,8 +77,9 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
   }
   if (provider === "ollama") {
     return {
-      driver: "ollama",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434",
+      driver: "openai-compatible",
+      provider: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434/v1",
       chatModel: "gemma4:e4b",
       visionModel: "qwen3-vl:4b",
       embedModel: "nomic-embed-text",
@@ -87,6 +89,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
   if (provider === "vllm") {
     return {
       driver: "openai-compatible",
+      provider: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8000/v1",
       chatModel: "Qwen/Qwen3-0.6B",
       visionModel: null,
@@ -97,6 +100,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
   if (provider === "sglang") {
     return {
       driver: "openai-compatible",
+      provider: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:30000/v1",
       chatModel: "Qwen/Qwen3-0.6B",
       visionModel: null,
@@ -104,28 +108,5 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
       image: SGLANG_IMAGE,
     };
   }
-  if (provider === "anthropic") {
-    return {
-      driver: "anthropic",
-      chatModel: "claude-sonnet-4-20250514",
-      visionModel: null,
-      embedModel: null,
-      apiKeyEnv: "ANTHROPIC_API_KEY",
-    };
-  }
-  const baseUrls: Record<string, string | undefined> = {
-    openai: "https://api.openai.com/v1",
-    openrouter: "https://openrouter.ai/api/v1",
-    lmstudio: "http://127.0.0.1:1234/v1",
-    gemini: undefined,
-    custom: undefined,
-  };
-  return {
-    driver: "openai-compatible",
-    ...(baseUrls[provider] !== undefined ? { baseUrl: baseUrls[provider] } : {}),
-    chatModel: "gpt-4o-mini",
-    visionModel: null,
-    embedModel: null,
-    apiKeyEnv: "OPENAI_API_KEY",
-  };
+  return cloudApplyDefaults(provider);
 }

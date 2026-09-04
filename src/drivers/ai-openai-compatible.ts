@@ -309,7 +309,7 @@ async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerat
 function responseTextStream(res: Response): AsyncIterable<string> {
   const stream = (res as Response & { textStream?: () => AsyncIterable<string> }).textStream;
   if (typeof stream !== "function") {
-    throw new Error("openai-compatible: Response.textStream is required (Bun >= 1.4.0)");
+    throw new Error("openai-compatible: Response.textStream is required (Bun >= 1.4.1)");
   }
   return stream.call(res);
 }

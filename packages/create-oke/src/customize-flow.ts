@@ -2,6 +2,7 @@
  * Customize wizard — walk Docker-first facets once, assemble `{ dev, test, prod }`.
  */
 
+import { isCancel, password } from "@clack/prompts";
 import { toCreateDefaults, type CreateDefaults, type EnvDriverPins } from "./create-defaults.ts";
 import {
   CLOCK_CHOICES,
@@ -14,20 +15,22 @@ import {
   TEMPLATE_DEV,
   TEMPLATE_TEST,
   VAULT_CHOICES,
-  AI_PROVIDERS,
   LLAMA_CPP_IMAGE,
   OLLAMA_IMAGE,
   SGLANG_IMAGE,
   VLLM_IMAGE,
-  aiDriverForProvider,
   customizeFacetsFor,
   pinsDockerReady,
   pinsEnv,
-  type AiProviderId,
   type CustomizeFacetId,
   type DriverChoice,
 } from "./drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./ai-setup/apply.ts";
+import {
+  aiDriverForMenuProvider,
+  aiProviderSelectOptions,
+  cloudApplyDefaults,
+} from "./ai-setup/catalog.ts";
 import { aiPrefWithModels } from "./ai-setup/from-pref.ts";
 import { askAiSetup } from "./ai-setup/prompts.ts";
 import type { TemplateId } from "./templates.ts";
@@ -95,18 +98,30 @@ export function assembleDriverDefaults(picked: SidePins): CreateDefaults["driver
 }
 
 /**
- * Balanced llama.cpp defaults for "AI setup → Recommended" (no quiz).
- * openai-compatible + curated Docker Hub `ai/` model (`granite3.3:2b`).
+ * Cloud defaults for "AI setup → Recommended" (no quiz).
+ * OpenRouter registry provider + `openrouter/free` (zero Docker).
  */
 export function recommendedAiApply(): AiSetupApplyInput {
-  return {
-    driver: "openai-compatible",
-    baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-    chatModel: "granite3.3:2b",
-    visionModel: null,
-    embedModel: null,
-    image: LLAMA_CPP_IMAGE,
-  };
+  return cloudApplyDefaults("openrouter");
+}
+
+/**
+ * Recommended path — OpenRouter defaults, then prompt for `OPENROUTER_API_KEY`.
+ *
+ * @returns Apply input with token, or null on cancel
+ */
+export async function askRecommendedAiApply(): Promise<AiSetupApplyInput | null> {
+  const base = recommendedAiApply();
+  const apiKeyEnv = base.apiKeyEnv ?? "OPENROUTER_API_KEY";
+  const token = await password({
+    message: `API token (${apiKeyEnv})`,
+    validate: (v) => {
+      if (!v?.trim()) return "API token is required";
+      return undefined;
+    },
+  });
+  if (isCancel(token)) return null;
+  return { ...base, apiKey: String(token).trim() };
 }
 
 /**
@@ -170,7 +185,7 @@ export async function askCustomizeFlow(
         {
           value: "recommended",
           label: "Recommended",
-          hint: "llama.cpp · openai-compatible · granite3.3:2b",
+          hint: "openrouter · openrouter/free",
         },
         {
           value: "customize",
@@ -193,11 +208,13 @@ export async function askCustomizeFlow(
     if (aiSetup === "off") break;
     if (aiSetup === "recommended") {
       aiPins = pinsDockerReady("openai-compatible", "mock");
-      aiApply = recommendedAiApply();
+      const picked = await askRecommendedAiApply();
+      if (picked === null) return null;
+      aiApply = picked;
       aiPref = aiPrefWithModels(
         {
           enabled: true,
-          provider: "llama-cpp",
+          provider: "openrouter",
           driver: "openai-compatible",
         },
         aiApply,
@@ -205,15 +222,15 @@ export async function askCustomizeFlow(
       break;
     }
 
-    const options = AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label }));
-    const providerValue = await selectWithBack("AI Provider", options, "llama-cpp", {
+    const options = aiProviderSelectOptions({ includeMock: true });
+    const providerValue = await selectWithBack("AI Provider", options, "openrouter", {
       allowBack: true,
     });
     if (providerValue === null) return null;
     if (providerValue === WIZARD_BACK) continue;
 
-    const provider = providerValue as AiProviderId;
-    const driver = aiDriverForProvider(provider);
+    const provider = providerValue;
+    const driver = aiDriverForMenuProvider(provider);
     aiPins = pinsDockerReady(driver, "mock");
 
     if (provider !== "mock") {

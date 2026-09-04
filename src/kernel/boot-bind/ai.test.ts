@@ -4,27 +4,31 @@
 
 import { describe, expect, test } from "bun:test";
 import { mockAiDriver } from "../../drivers/ai-mock.ts";
-import { ollamaAiDriver } from "../../drivers/ai-ollama.ts";
-import { aiDriverFor, aiUrlFor, bindAi, openDefaultsFor, resolveAiDriverId } from "./ai.ts";
+import { openaiCompatibleAiDriver } from "../../drivers/ai-openai-compatible.ts";
+import { aiDriverFor, bindAi, openDefaultsFor, resolveAiDriverId } from "./ai.ts";
 
 describe("ai boot binder", () => {
   test("aiDriverFor maps protocol ids; unknown / reserved throw", () => {
     expect(aiDriverFor("mock").id).toBe("mock");
-    expect(aiDriverFor("ollama")).toBe(ollamaAiDriver);
+    expect(aiDriverFor("openai-compatible")).toBe(openaiCompatibleAiDriver);
+    expect(() => aiDriverFor("ollama")).toThrow(/unknown AI driver/);
     expect(() => aiDriverFor("bedrock")).toThrow(/not implemented/);
     expect(() => aiDriverFor("nope")).toThrow(/unknown AI driver/);
   });
 
   test("resolveAiDriverId defaults to mock; honours config + OKE_AI_DRIVER in docker", () => {
     expect(resolveAiDriverId({}, "test")).toBe("mock");
-    expect(resolveAiDriverId({ config: { drivers: { ai: { test: "ollama" } } } }, "test")).toBe(
-      "ollama",
-    );
+    expect(
+      resolveAiDriverId(
+        { config: { drivers: { ai: { test: "openai-compatible" } } } },
+        "test",
+      ),
+    ).toBe("openai-compatible");
 
     const prev = process.env.OKE_AI_DRIVER;
-    process.env.OKE_AI_DRIVER = "ollama";
+    process.env.OKE_AI_DRIVER = "openai-compatible";
     try {
-      expect(resolveAiDriverId({}, "test", true)).toBe("ollama");
+      expect(resolveAiDriverId({}, "test", true)).toBe("openai-compatible");
     } finally {
       if (prev === undefined) delete process.env.OKE_AI_DRIVER;
       else process.env.OKE_AI_DRIVER = prev;
@@ -51,37 +55,39 @@ describe("ai boot binder", () => {
     }
   });
 
-  test("openDefaultsFor openai-compatible fails loud in docker without OKE_AI_URL", () => {
+  test("openDefaultsFor openai-compatible allows docker without OKE_AI_URL (cloud registry)", () => {
     const prevUrl = process.env.OKE_AI_URL;
     const prevBase = process.env.OPENAI_BASE_URL;
     delete process.env.OKE_AI_URL;
     delete process.env.OPENAI_BASE_URL;
     try {
-      expect(() => openDefaultsFor("openai-compatible", true)).toThrow(/OKE_AI_URL/);
+      expect(openDefaultsFor("openai-compatible", true)).toEqual({});
     } finally {
       if (prevUrl !== undefined) process.env.OKE_AI_URL = prevUrl;
       if (prevBase !== undefined) process.env.OPENAI_BASE_URL = prevBase;
     }
   });
 
-  test("aiUrlFor fails loud in docker without OKE_AI_URL", () => {
+  test("openDefaultsFor openai-compatible keeps compose URL when present", () => {
     const prevUrl = process.env.OKE_AI_URL;
-    const prevHost = process.env.OLLAMA_HOST;
-    delete process.env.OKE_AI_URL;
-    delete process.env.OLLAMA_HOST;
+    const prevBase = process.env.OPENAI_BASE_URL;
+    process.env.OKE_AI_URL = "http://127.0.0.1:8080/v1";
+    delete process.env.OPENAI_BASE_URL;
     try {
-      expect(() => aiUrlFor(true)).toThrow(/OKE_AI_URL/);
-      expect(aiUrlFor(false)).toBe("http://127.0.0.1:11434");
+      expect(openDefaultsFor("openai-compatible", true)).toEqual({
+        baseUrl: "http://127.0.0.1:8080/v1",
+      });
     } finally {
-      if (prevUrl !== undefined) process.env.OKE_AI_URL = prevUrl;
-      if (prevHost !== undefined) process.env.OLLAMA_HOST = prevHost;
+      if (prevUrl === undefined) delete process.env.OKE_AI_URL;
+      else process.env.OKE_AI_URL = prevUrl;
+      if (prevBase !== undefined) process.env.OPENAI_BASE_URL = prevBase;
     }
   });
 
   test("bindAi uses injected defaultDriver over config (tests stay on mock)", () => {
     const runtime = bindAi(
       {
-        config: { drivers: { ai: { test: "ollama" } } },
+        config: { drivers: { ai: { test: "openai-compatible" } } },
         ai: { defaultDriver: mockAiDriver },
       },
       undefined,

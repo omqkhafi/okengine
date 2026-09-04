@@ -17,7 +17,7 @@ AI is how your backend **incorporates machine intelligence into business process
 
 AI spans four tightly integrated capabilities:
 
-1. **Model Providers (`ai.model`)**: Swappable LLMs across local inference (Ollama, llama.cpp, vLLM) and cloud APIs (OpenAI, Anthropic).
+1. **Model Providers (`ai.model`)**: Swappable LLMs — local (Ollama, llama.cpp / vLLM / SGLang) and cloud (OpenRouter, OpenAI, …) with a verified provider registry for `baseUrl`.
 2. **Versioned Prompts (`model.prompt`)**: Typed input/output contracts with cost caps and fallback routes.
 3. **Bounded Agents (`ai.agent`)**: Multi-step tool-calling loops where tools are simply other Flows.
 4. **Model Context Protocol (`ai.mcpServer` & `mcp.tool()`)**: Exposing your backend to external agents and Cursor.
@@ -26,11 +26,15 @@ AI spans four tightly integrated capabilities:
 import { ai } from "okengine";
 import { z } from "zod";
 
-export const summarizeDoc = ai.prompt("docs.summarize", {
-  model: "openai/gpt-4o-mini",
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+export const summarizeDoc = smart.prompt("docs.summarize", {
   in: z.object({ text: z.string() }),
   out: z.object({ summary: z.string(), tags: z.array(z.string()) }),
-  template: "Summarize the following document and extract 3 tags:\n\n{{text}}",
   budget: { maxCostPerCall: 0.02 },
 });
 ```
@@ -49,7 +53,7 @@ The compiler records `asks: ["docs.summarize"]` in the Flow's manifest.
 <Cards>
   <Card
     title="Model Providers"
-    description="Local runtime inference (Ollama, llama.cpp, vLLM) and cloud providers (OpenAI, Anthropic, Gemini)."
+    description="Verified providers, limited-compatibility caveats, local and cloud bindings."
     href="/docs/elements/ai/models"
   />
   <Card

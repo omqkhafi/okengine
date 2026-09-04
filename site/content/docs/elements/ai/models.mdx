@@ -1,53 +1,177 @@
 ---
 title: "Models"
-description: "Local inference (Ollama, llama.cpp, vLLM, SGLang) and Cloud LLM providers (OpenAI, Anthropic, Google)."
+description: "Declare ai.model bindings — known providers auto-resolve baseUrl; Anthropic and Google OpenAI-compat have documented limits."
 icon: "Cpu"
+source: "docs/spec/unified-theory.md"
 ---
 
-Model Providers (`ai.model`) configure connection endpoints for AI models.
+An `ai.model` binding names a logical model (`smart`, `local`, …), the wire
+`model` id, and how to reach it (`provider`, optional `baseUrl` / `apiKey` /
+`driverId`).
 
-## What it is
+<Callout title="The one rule">
+  Known OpenAI-compatible `provider` names resolve `baseUrl` automatically.
+  Explicit `baseUrl` always wins. Unknown providers require `baseUrl` — they fail
+  loud. Per-binding `apiKey` isolates tokens when several providers run together.
+</Callout>
 
-OKE supports local offline inference for cost savings and privacy, alongside cloud API models. Providers are declared once and referenced across prompts.
-
-## Smallest Example
+## Quick start
 
 <Steps>
 
 <Step>
-### Configure model in oke.config.ts
+### Declare cloud + local bindings
 
-```typescript title="oke.config.ts"
-import { defineConfig } from "okengine/config";
+```typescript
+import { ai } from "okengine";
 
-export default defineConfig({
-  ai: {
-    models: {
-      "local-llama": {
-        provider: "ollama",
-        model: "llama3.2:latest",
-        endpoint: "http://localhost:11434",
-      },
-      "fast-cloud": {
-        provider: "openai",
-        model: "gpt-4o-mini",
-      },
-    },
-  },
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+export const local = ai.model("local", {
+  provider: "openai-compatible",
+  model: process.env.OKE_AI_MODEL ?? "granite3.3:2b",
+  ...(process.env.OKE_AI_URL?.trim()
+    ? { baseUrl: process.env.OKE_AI_URL.trim() }
+    : {}),
+});
+```
+
+OpenRouter fills `https://openrouter.ai/api/v1` without typing it. See
+[OpenRouter](/docs/recipes/openrouter) for the zero-Docker path. Local servers
+(llama.cpp, Ollama, vLLM, SGLang) use the same `openai-compatible` binding with
+`OKE_AI_URL` ending in `/v1`.
+
+</Step>
+
+<Step>
+### Attach a versioned prompt
+
+```typescript
+export const triage = smart.prompt("ticket-triage", {
+  version: 1,
+  via: ["smart", "local"],
 });
 ```
 
 </Step>
 
+<Step>
+### Ask from a flow
+
+`fx.ask("ticket-triage", input)` uses the prompt’s model chain. Recovery via
+`via` opens a **separate** client per binding — keys and base URLs do not mix.
+
+</Step>
+
 </Steps>
+
+## Verified providers
+
+These names auto-resolve a verified OpenAI-compatible `baseUrl`:
+
+| Provider | Base URL (auto) |
+| -------- | --------------- |
+| `openai` | `https://api.openai.com/v1` |
+| `openrouter` | `https://openrouter.ai/api/v1` |
+| `groq` | `https://api.groq.com/openai/v1` |
+| `together` | `https://api.together.ai/v1` |
+| `deepinfra` | `https://api.deepinfra.com/v1/openai` |
+| `meta` | `https://api.meta.ai/v1` |
+| `xai` | `https://api.x.ai/v1` |
+| `mistral` | `https://api.mistral.ai/v1` |
+| `deepseek` | `https://api.deepseek.com` |
+| `vercel` | `https://ai-gateway.vercel.sh/v1` |
+
+Cloudflare Workers AI is **not** registered — account-scoped URL; pass `baseUrl`.
+
+Exempt labels (no registry URL): `mock`, `local`, `openai-compatible`.
+
+## Limited compatibility
+
+`anthropic`, `google`, and alias `gemini` also auto-resolve a URL, with
+documented limits. Prefer native Anthropic for production Claude.
+
+| Provider | Base URL (auto) |
+| -------- | --------------- |
+| `anthropic` | `https://api.anthropic.com/v1` |
+| `google` / `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+
+<Callout type="warn" title="Anthropic OpenAI-compat is evaluation-only">
+  Anthropic’s OpenAI-compatible endpoint is for testing/comparison only.
+
+  `tools[].function.strict` is ignored; `n` must be 1; no embeddings here.
+
+  **Production:** `driverId: "anthropic"` (native Messages API).
+</Callout>
+
+<Callout type="warn" title="Google OpenAI-compat tool schemas">
+  Tool/parameter schemas are not full OpenAI JSON Schema fidelity.
+
+  Complex Flow-as-tool schemas can fail — do not rely on this path for agent
+  tool calling in production.
+</Callout>
+
+Declare-time and `oke extract` both warn when these providers auto-resolve.
+
+## Native vs OpenAI-compat Anthropic
+
+| Path | When |
+| ---- | ---- |
+| `driverId: "anthropic"` | Production Claude — native Messages API |
+| `provider: "anthropic"` without native driver | Quick eval via openai-compatible + registry URL |
+
+They are not interchangeable for agents that depend on reliable tool calling.
+
+## Options
+
+| Option | Type | Meaning |
+| ------ | ---- | ------- |
+| `provider` | `string` | Registry name or exempt/local label |
+| `model` | `string` | Wire model id sent to the provider |
+| `baseUrl` | `string` | Override (always wins over registry) |
+| `apiKey` | `string` | Per-binding key (isolates multi-provider apps) |
+| `driverId` | `string` | Protocol driver (`openai-compatible`, `anthropic`, `mock`, …) |
+| `tier` | `string` | Optional label for your app (not the registry status above) |
+
+## Local recipes
+
+| Path | Recipe |
+| ---- | ------ |
+| llama.cpp / Ollama / vLLM / SGLang | [Local AI](/docs/recipes/local-ai) |
+| Zero local infra | [OpenRouter](/docs/recipes/openrouter) |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title='ai.model: unknown provider "…" requires an explicit baseUrl'>
+
+The name is not in the registry (and not an exempt local label). Pass `baseUrl`,
+or use a known provider id from the tables above.
+
+</Accordion>
+<Accordion title="Limited-compatibility warn on extract / declare">
+
+Expected for `anthropic` / `google` / `gemini` when auto-resolving the
+OpenAI-compat URL. Switch to native `driverId: "anthropic"` for production Claude.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [OpenRouter](/docs/recipes/openrouter)
+- [Local AI](/docs/recipes/local-ai)
+- [AI](/docs/elements/ai)
+- [Prompts](/docs/elements/ai/prompts)
 
 ## Next
 
 <Cards>
-  <Card
-    title="Versioned Prompts"
-    description="Define typed prompts with budget caps."
-    href="/docs/elements/ai/prompts"
-  />
-  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
+  <Card title="Prompts" description="Versioned prompts and via chains." href="/docs/elements/ai/prompts" />
+  <Card title="OpenRouter" description="Zero-cost cloud default." href="/docs/recipes/openrouter" />
+  <Card title="AI" description="Element overview." href="/docs/elements/ai" />
 </Cards>

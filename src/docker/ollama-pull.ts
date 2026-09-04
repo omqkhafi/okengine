@@ -40,7 +40,7 @@ export class OllamaPullError extends Error {
  * @param url - Raw base URL
  */
 export function normalizeOllamaPullUrl(url: string): string {
-  return url.replace(/\/+$/, "");
+  return url.replace(/\/+$/, "").replace(/\/v1$/i, "");
 }
 
 /**

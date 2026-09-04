@@ -16,7 +16,7 @@
   <a href="https://www.npmjs.com/package/okengine"><img alt="npm" src="https://shieldcn.dev/npm/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://jsr.io/@omqkhafi/okengine"><img alt="JSR" src="https://shieldcn.dev/jsr/@omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="MIT" src="https://shieldcn.dev/npm/license/okengine.svg?size=sm&variant=outline" /></a>
-  <a href="https://bun.sh"><img alt="Bun >=1.4.0" src="https://shieldcn.dev/badge/Bun-%3E%3D1.4.0.svg?logo=bun&size=sm&variant=outline" /></a>
+  <a href="https://bun.sh"><img alt="Bun >=1.4.1" src="https://shieldcn.dev/badge/Bun-%3E%3D1.4.1.svg?logo=bun&size=sm&variant=outline" /></a>
   <a href="https://github.com/omqkhafi/okengine/actions"><img alt="CI" src="https://shieldcn.dev/github/ci/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://github.com/omqkhafi/okengine/commits"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
 </p>
@@ -39,7 +39,7 @@
 
 ## Install
 
-Requires [Bun](https://bun.sh) `>=1.4.0`.
+Requires [Bun](https://bun.sh) `>=1.4.1`.
 
 ```bash
 bunx create-oke@latest my-app                      # scaffold (recommended)

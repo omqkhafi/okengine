@@ -12,7 +12,84 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Runtime
+
+- OpenAI-compatible provider registry on `ai.model({ provider })`: verified
+  names (`openai`, `openrouter`, `groq`, `together`, `deepinfra`, `meta`,
+  `xai`, `mistral`, `deepseek`, `vercel`) plus limited-compatibility
+  `anthropic` / `google`/`gemini` auto-resolve `baseUrl`; explicit `baseUrl`
+  always wins; unknown providers without `baseUrl` fail loud. Limited-
+  compatibility caveats warn at declare and `[oke extract]`. Native
+  `driverId: "anthropic"` skips the openai-compat URL. Per-binding `apiKey`
+  isolation unchanged.
+
+#### Docs
+
+- Consolidated llama.cpp / Ollama / vLLM / SGLang into one
+  [Local AI](/docs/recipes/local-ai) recipe (comparison table); removed the
+  standalone Ollama recipe (`/docs/recipes/ollama` redirects). Added OpenRouter
+  recipe recommending `openrouter/free`; rewrote Models docs (Verified
+  providers / Limited compatibility). Old
+  `/docs/recipes/{llama-cpp,vllm,sglang,ollama,openai-compatible,openai-compatible-local}`
+  URLs redirect permanently to `/docs/recipes/local-ai`.
+- OpenRouter recipe documents router aliases (`openrouter/free`, `auto`,
+  `pareto-code`, `fusion`, `bodybuilder`, `~…-latest`) with OKE `ai.model`
+  examples and links to OpenRouter’s router guides.
+- create-oke template `.env.example` / `core.ts` AI notes and Keel example
+  `src/core/ai.ts` document registry cloud (`openrouter`) vs self-host
+  `openai-compatible` + explicit `baseUrl`.
+- Docs sidebar OpenRouter recipe uses the official OpenRouter glyph from
+  [openrouter.ai/brand](https://openrouter.ai/brand) instead of Lucide Globe.
+
+#### Dev, Keel & create-oke
+
+- Notes starters (`standard` / `advanced`) declare `.searchable()` on `title` /
+  `body`. When `oke ai setup` / create-oke picks an embed model, setup stamps
+  bare `body.embed()` plus `oke({ store: { search: { embed: { model: embedModel, dims: 768 } } } })`
+  (distinct from the index-facet `ai.embed("docs", …)` pipeline).
+
+### ♻️ Changed
+
+#### Runtime
+
+- Minimum Bun is ≥ 1.4.1 (`engines.bun`, CI `bun-version`, feature-gate
+  error messages). `@types/bun` / `bun-types` lockfile resolve to 1.4.1.
+  Generated Dockerfiles stay on the `oven/bun:1.4` line.
+
+#### Dev, Keel & create-oke
+
+- `oke ai setup` (and create-oke AI wizard) emit real registry `provider` names
+  on `ai.model` (e.g. `openrouter`, `groq`) with matching API key env vars;
+  known cloud base URLs are omitted so the registry resolves them. OpenRouter
+  defaults to `openrouter/free`. Menu lists verified registry providers plus
+  Gemini (limited compatibility). Anthropic stays native `driverId: "anthropic"`.
+  Ollama setup emits `openai-compatible` + `…:11434/v1` (no native driver).
+- create-oke **AI setup → Recommended** (and `--yes --ai`) defaults to OpenRouter
+  + `openrouter/free` (was llama.cpp · `granite3.3:2b`). Local engines remain
+  under Customize / `--provider llama-cpp`.
+- create-oke **Recommended** prompts for `OPENROUTER_API_KEY` (same as Customize
+  cloud path) and writes it into `.env.local`.
+- **AI Provider** select (create-oke Customize + `oke ai setup`) leads with
+  OpenRouter and lists the full cloud registry set; OpenRouter **Select model**
+  includes router aliases (`free` / `auto` / `pareto-code` / `fusion`).
+- create-oke `engines.bun` and Notes starter GitHub Actions use Bun 1.4.1.
+
+#### Docs
+
+- Installation / Try it / README badges and agent contracts document Bun ≥ 1.4.1.
+
 ### 💥 Breaking Changes
+
+#### Runtime
+
+- Removed the native `ollama` AI driver (`driverId: "ollama"` /
+  `drivers.ai: "ollama"`). Talk to Ollama via `openai-compatible` +
+  `OKE_AI_URL=http://127.0.0.1:11434/v1`. Docker recipe, library pull, and
+  `oke ai setup --provider ollama` remain (they emit `openai-compatible`).
+  Package paths `okengine/drivers/ai-ollama` and `okengine/drivers/ollama` are
+  gone.
 
 #### Kernel
 
@@ -88,12 +165,37 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `oxc-parser` is a hard `okengine` dependency again (no longer an optional peer).
+  Published scaffolds with Docker Compose were dying on **OKE1008** for
+  `main.health` because Manifest extract could not resolve `oxc-parser` and
+  boot treated that as “no Manifest.” Strict boots now also warn
+  `Manifest extract failed — …` before throwing OKE1008.
 - Threaded EffectKind `"embed"` through dry-run, signal replay stubs, Console run/effect schemas, Manifest diff `EFFECT_KEYS`, and Fx test doubles so `bun run typecheck` is clean after hybrid search. Restored concrete `dims` on Manifest `DeclaredColumn.embed` (project defaults still resolve at extract); runtime schema search fails loud when `.embed()` dims are unresolved. Fixed `search-bind` to import `OkeApp`, `SearchConfigError` `override` on `name`, and related compiler/bench typecheck noise.
+
+#### Dev, Keel & create-oke
+
+- Notes starters (`standard` / `advanced`) list `oxc-parser` so create-oke
+  installs it even against older published `okengine` builds.
+- `oke ai setup` / create-oke no longer treats template comment examples of
+  `ai.model("smart", …)` as an already-configured core — that path skipped
+  the `ai` import and `smart` binding, leaving only `local` + `summarizeNote`
+  and crashing boot with `ReferenceError: ai is not defined`. A second setup
+  pass now also repairs those incomplete stubs (strip + rewrite `smart` /
+  `local` / `summarizeNote` with the `ai` import) instead of leaving them.
+- Cloud AI (OpenRouter / OpenAI / …) no longer pins `images.ai` to llama.cpp.
+  Compose only starts a local AI container for self-hosted providers
+  (`llama-cpp` · `ollama` · `vllm` · `sglang`). Switching to cloud clears a
+  leftover `images.ai` pin.
+- `oke boot` no longer requires `OKE_AI_URL` for `openai-compatible` just
+  because Docker is up for Postgres — cloud models resolve `baseUrl` from the
+  provider registry. `oke dev` also uses `compose up --remove-orphans` and
+  ignores orphaned exited AI containers when painting element status.
 
 #### Docs
 
 - Fixed trigger item row alignment, badge visibility, height symmetry, ambient auto-cycling (`useTick`), interactive tabbed contract inspector (`in`, `out`, `errors`, `do`), and unified domain pipeline examples (`orders.*`) in `FlowTriggers` (`flow-triggers.tsx`).
 - Fixed broken consumers doc example calling `users.changed()` without a store table receiver.
+- OKE1008 troubleshooting notes missing `oxc-parser` when Manifest extract fails.
 
 ### ♻️ Changed
 

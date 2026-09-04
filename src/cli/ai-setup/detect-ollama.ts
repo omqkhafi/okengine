@@ -2,7 +2,10 @@
  * Detect local Ollama — CLI (`ollama list` / `ps`) and HTTP `/api/tags`.
  */
 
-import { OLLAMA_DEFAULT_BASE_URL, normalizeOllamaBaseUrl } from "../../drivers/ai-ollama.ts";
+import {
+  OLLAMA_DEFAULT_BASE_URL,
+  normalizeOllamaBaseUrl,
+} from "../../docker/ollama-url.ts";
 import { ALL_CURATED, type CatalogModel } from "./catalog.ts";
 
 /** Result of probing the local Ollama install. */

@@ -556,7 +556,9 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 <Accordion title="OKE1008 — no declared effects">
   Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.`
   Boot with `oke build` / `oke dev` so extract can infer, or set explicit `effects`.
-  Deploy-shaped environments refuse an open capability token.
+  Deploy-shaped environments refuse an open capability token. If extract itself
+  failed (boot warns `Manifest extract failed`), install `oxc-parser` (okengine
+  dependency) and retry.
 </Accordion>
 
 </Accordions>

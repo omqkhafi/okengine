@@ -3,7 +3,7 @@
  *
  * Physics: inference · prompts · embeddings · agents.
  * Drivers: `mock` (dev) · `anthropic` · `openai-compatible` · `bedrock` ·
- * `vertex` · `ollama`. No production default — prod must declare.
+ * `vertex`. No production default — prod must declare.
  *
  * Prompts are versioned artifacts with validated output shapes and eval sets
  * (`oke eval` gates CI). Agents' tools are the app's own flows (gates apply).
@@ -78,6 +78,22 @@ export { AI_RATE_PRESETS, aiRateGate, createAiRateGates } from "./ai/rate.ts";
 export type { AiRatePreset } from "./ai/rate.ts";
 
 export { assertAllowPiiForAsk, AiPiiBuildError, type PiiAskCheckInput } from "./ai/pii.ts";
+
+export {
+  AI_NATIVE_DRIVER_IDS,
+  AI_OPENAI_COMPAT_PROVIDERS,
+  AI_PROVIDER_BASEURL_EXEMPT,
+  formatAiProviderTier2Warn,
+  getAiProviderEntry,
+  resolveAiModelBaseUrl,
+  unknownAiProviderBaseUrlError,
+} from "./ai/providers.ts";
+export type {
+  AiProviderEntry,
+  AiProviderTier,
+  ResolveAiModelBaseUrlInput,
+  ResolveAiModelBaseUrlResult,
+} from "./ai/providers.ts";
 
 export {
   runPromptEvals,

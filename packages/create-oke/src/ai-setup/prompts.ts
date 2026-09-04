@@ -6,6 +6,7 @@ import { isCancel, note, password, select, text } from "@clack/prompts";
 import {
   CLOUD_PROVIDERS,
   MODEL_TIERS,
+  aiProviderSelectOptions,
   cloudChatModels,
   llamaCppModelsForTier,
   modelsForTier,
@@ -17,7 +18,7 @@ import {
   type ModelTier,
 } from "./catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
-import { LLAMA_CPP_IMAGE } from "../drivers-catalog.ts";
+import { LLAMA_CPP_IMAGE, OLLAMA_IMAGE } from "../drivers-catalog.ts";
 import {
   detectMachineInfo,
   detectOllama,
@@ -39,11 +40,19 @@ export type AiSetupProvider =
   | "ollama"
   | "vllm"
   | "sglang"
+  | "openrouter"
   | "openai"
   | "anthropic"
+  | "groq"
+  | "together"
+  | "deepseek"
+  | "mistral"
+  | "xai"
+  | "deepinfra"
+  | "meta"
+  | "vercel"
   | "gemini"
   | "lmstudio"
-  | "openrouter"
   | "custom";
 
 /** Sentinel for Back in AI setup selects. */
@@ -70,34 +79,8 @@ export async function askAiSetup(
   if (!provider) {
     const value = await select({
       message: "AI Provider",
-      options: [
-        {
-          value: "llama-cpp",
-          label: "llama.cpp (Local)",
-          hint: "default · Docker Hub ai/ · recommend for your RAM",
-        },
-        {
-          value: "ollama",
-          label: "Ollama (Local)",
-          hint: "detect models · recommend for your RAM",
-        },
-        {
-          value: "vllm",
-          label: "vLLM (self-hosted GPU)",
-          hint: "multi-user / production concurrency",
-        },
-        {
-          value: "sglang",
-          label: "SGLang (self-hosted GPU)",
-          hint: "structured / agent workloads",
-        },
-        { value: "openai", label: "OpenAI" },
-        { value: "anthropic", label: "Anthropic" },
-        { value: "gemini", label: "Gemini", hint: "OpenAI-compatible proxy URL" },
-        { value: "lmstudio", label: "LM Studio" },
-        { value: "openrouter", label: "OpenRouter" },
-        { value: "custom", label: "Custom OpenAI Compatible" },
-      ],
+      options: [...aiProviderSelectOptions()],
+      initialValue: "openrouter",
     });
     if (isCancel(value)) return null;
     provider = String(value) as AiSetupProvider;
@@ -232,6 +215,7 @@ function finishLlamaCpp(chatId: string, catalog?: CatalogModel): AiSetupApplyInp
   const id = chatId.replace(/^ai\//, "");
   return {
     driver: "openai-compatible",
+    provider: "openai-compatible",
     baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
     chatModel: id,
     visionModel: catalog?.modalities.includes("vision") ? id : null,
@@ -263,6 +247,7 @@ async function askSelfHostedGpuPath(
   if (isCancel(model)) return null;
   return {
     driver: "openai-compatible",
+    provider: "openai-compatible",
     baseUrl: process.env.OKE_AI_URL ?? `http://127.0.0.1:${port}/v1`,
     chatModel: String(model).trim(),
     visionModel: null,
@@ -402,11 +387,13 @@ async function finishOllama(
   }
 
   return {
-    driver: "ollama",
-    baseUrl: detected.baseUrl,
+    driver: "openai-compatible",
+    provider: "openai-compatible",
+    baseUrl: `${detected.baseUrl.replace(/\/v1\/?$/i, "").replace(/\/$/, "")}/v1`,
     chatModel: chatId,
     visionModel,
     embedModel: embed.id,
+    image: OLLAMA_IMAGE,
   };
 }
 
@@ -417,26 +404,29 @@ async function finishOllama(
  */
 async function askCloudPath(provider: AiSetupProvider): Promise<AiSetupApplyInput | null> {
   const meta = CLOUD_PROVIDERS.find((p) => p.value === provider);
-  const driver = meta?.driver ?? "openai-compatible";
+  if (!meta) {
+    throw new Error(`oke ai setup: unknown cloud provider "${provider}"`);
+  }
+  const driver = meta.driver;
+  const declProvider = meta.provider ?? meta.value;
 
-  let baseUrl: string | undefined = meta?.baseUrl;
-  if (provider === "custom" || provider === "gemini" || !baseUrl) {
-    if (provider !== "anthropic") {
-      const urlValue = await text({
-        message:
-          provider === "gemini"
-            ? "OpenAI-compatible base URL for Gemini"
-            : "OpenAI-compatible base URL",
-        placeholder: baseUrl ?? "https://api.example.com/v1",
-        initialValue: baseUrl ?? "",
-      });
-      if (isCancel(urlValue)) return null;
-      const trimmed = String(urlValue).trim();
-      baseUrl = trimmed.length > 0 ? trimmed : undefined;
-    }
+  let baseUrl: string | undefined = meta.baseUrl;
+  const needsUrlPrompt = meta.promptBaseUrl === true || (baseUrl === undefined && driver !== "anthropic");
+  if (needsUrlPrompt) {
+    const urlValue = await text({
+      message: "OpenAI-compatible base URL",
+      placeholder: baseUrl ?? "https://api.example.com/v1",
+      initialValue: baseUrl ?? "",
+      validate: (v) => {
+        if (!v?.trim()) return "Base URL is required for this provider";
+        return undefined;
+      },
+    });
+    if (isCancel(urlValue)) return null;
+    baseUrl = String(urlValue).trim();
   }
 
-  const apiKeyEnv = meta?.apiKeyEnv;
+  const apiKeyEnv = meta.apiKeyEnv;
   let apiKey: string | undefined;
   if (apiKeyEnv) {
     const token = await password({
@@ -450,14 +440,33 @@ async function askCloudPath(provider: AiSetupProvider): Promise<AiSetupApplyInpu
     apiKey = String(token).trim();
   }
 
+  const finish = (chatModel: string): AiSetupApplyInput => {
+    // Registry openai-compat: omit baseUrl so ai.model auto-resolves.
+    const omitBase = meta.baseUrl !== undefined && !meta.promptBaseUrl && driver === "openai-compatible";
+    return {
+      driver,
+      provider: declProvider,
+      ...(omitBase || baseUrl === undefined ? {} : { baseUrl }),
+      chatModel,
+      visionModel: null,
+      embedModel: null,
+      ...(apiKeyEnv ? { apiKeyEnv, ...(apiKey ? { apiKey } : {}) } : {}),
+    };
+  };
+
   for (;;) {
+    const models = cloudChatModels(provider);
+    const selectHint =
+      provider === "openrouter"
+        ? "routers + popular models"
+        : `up to ${Math.min(10, Math.max(models.length, 1))} curated models`;
     const mode = await selectWithBack(
       "How do you want to pick models?",
       [
         {
           value: "select",
           label: "Select model",
-          hint: "up to 10 latest curated models",
+          hint: selectHint,
         },
         {
           value: "manual",
@@ -473,28 +482,13 @@ async function askCloudPath(provider: AiSetupProvider): Promise<AiSetupApplyInpu
     if (mode === "manual") {
       const id = await askOtherModelId(recommendCloudChat(provider));
       if (id === null) return null;
-      return {
-        driver,
-        ...(baseUrl !== undefined ? { baseUrl } : {}),
-        chatModel: id,
-        visionModel: null,
-        embedModel: null,
-        ...(apiKeyEnv ? { apiKeyEnv, ...(apiKey ? { apiKey } : {}) } : {}),
-      };
+      return finish(id);
     }
 
-    const models = cloudChatModels(provider);
     if (models.length === 0) {
       const id = await askOtherModelId(recommendCloudChat(provider));
       if (id === null) return null;
-      return {
-        driver,
-        ...(baseUrl !== undefined ? { baseUrl } : {}),
-        chatModel: id,
-        visionModel: null,
-        embedModel: null,
-        ...(apiKeyEnv ? { apiKeyEnv, ...(apiKey ? { apiKey } : {}) } : {}),
-      };
+      return finish(id);
     }
 
     const initial = recommendCloudChat(provider);
@@ -511,14 +505,7 @@ async function askCloudPath(provider: AiSetupProvider): Promise<AiSetupApplyInpu
     if (chat === null) return null;
     if (chat === BACK) continue;
 
-    return {
-      driver,
-      ...(baseUrl !== undefined ? { baseUrl } : {}),
-      chatModel: chat,
-      visionModel: null,
-      embedModel: null,
-      ...(apiKeyEnv ? { apiKeyEnv, ...(apiKey ? { apiKey } : {}) } : {}),
-    };
+    return finish(chat);
   }
 }
 

@@ -4,6 +4,7 @@
 
 import { cancel, intro, outro, spinner } from "@clack/prompts";
 import { applyAiSetup, type AiSetupApplyInput } from "./apply.ts";
+import { cloudApplyDefaults, CLOUD_PROVIDERS } from "./catalog.ts";
 import { askAiSetup } from "./prompts.ts";
 
 /** Parsed flags for AI setup. */
@@ -96,16 +97,17 @@ export function parseAiSetupArgs(
  * Help text for `oke ai setup`.
  */
 export function aiSetupHelp(): string {
+  const cloudIds = CLOUD_PROVIDERS.map((p) => p.value).join(" | ");
   return `oke ai setup — configure AI driver + models
 
 Usage:
   oke ai setup
+  oke ai setup --provider openrouter --yes
   oke ai setup --provider llama-cpp --yes
-  oke ai setup --provider ollama --yes
   oke ai setup --provider anthropic --chat claude-sonnet-4-20250514 --yes
 
 Options:
-  --provider <id>   llama-cpp | ollama | vllm | sglang | openai | anthropic | gemini | lmstudio | openrouter | custom
+  --provider <id>   llama-cpp | ollama | vllm | sglang | ${cloudIds}
   --chat <model>    Chat model id
   --vision <model>  Vision model id (ollama)
   --embed <model>   Embedding model id (ollama)
@@ -151,11 +153,12 @@ export async function runAiSetup(args: AiSetupCliArgs): Promise<number> {
 
   if (input === null) return 1;
 
-  if (args.pull && input.driver === "ollama" && (args.yes || !tty) && args.chat) {
+  const isOllamaImage = Boolean(input.image?.includes("ollama/ollama"));
+  if (args.pull && isOllamaImage && (args.yes || !tty) && args.chat) {
     // Non-interactive pull via the server HTTP API (never a host `ollama` CLI).
     const { ensureOllamaModel } = await import("../../docker/ollama-pull.ts");
     const baseUrl =
-      input.baseUrl?.trim() || process.env.OKE_AI_URL?.trim() || "http://127.0.0.1:11434";
+      input.baseUrl?.trim() || process.env.OKE_AI_URL?.trim() || "http://127.0.0.1:11434/v1";
     const toPull = [input.chatModel, input.visionModel, input.embedModel].filter(
       (m): m is string => typeof m === "string" && m.length > 0,
     );
@@ -201,6 +204,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
   if (provider === "llama-cpp") {
     return {
       driver: "openai-compatible",
+      provider: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
       chatModel: args.chat ?? "granite3.3:2b",
       visionModel: null,
@@ -210,8 +214,9 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
   }
   if (provider === "ollama") {
     return {
-      driver: "ollama",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434",
+      driver: "openai-compatible",
+      provider: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434/v1",
       chatModel: args.chat ?? "gemma4:e4b",
       visionModel: args.vision === undefined ? "qwen3-vl:4b" : args.vision || null,
       embedModel: args.embed ?? "nomic-embed-text",
@@ -221,6 +226,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
   if (provider === "vllm") {
     return {
       driver: "openai-compatible",
+      provider: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8000/v1",
       chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
       visionModel: null,
@@ -231,6 +237,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
   if (provider === "sglang") {
     return {
       driver: "openai-compatible",
+      provider: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:30000/v1",
       chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
       visionModel: null,
@@ -238,28 +245,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
       image: "lmsysorg/sglang:v0.5.17-runtime",
     };
   }
-  if (provider === "anthropic") {
-    return {
-      driver: "anthropic",
-      chatModel: args.chat ?? "claude-sonnet-4-20250514",
-      visionModel: null,
-      embedModel: null,
-      apiKeyEnv: "ANTHROPIC_API_KEY",
-    };
-  }
-  const baseUrls: Record<string, string | undefined> = {
-    openai: "https://api.openai.com/v1",
-    openrouter: "https://openrouter.ai/api/v1",
-    lmstudio: "http://127.0.0.1:1234/v1",
-    gemini: undefined,
-    custom: undefined,
-  };
-  return {
-    driver: "openai-compatible",
-    ...(baseUrls[provider] !== undefined ? { baseUrl: baseUrls[provider] } : {}),
-    chatModel: args.chat ?? "gpt-4o-mini",
-    visionModel: null,
-    embedModel: null,
-    apiKeyEnv: "OPENAI_API_KEY",
-  };
+  return cloudApplyDefaults(provider, {
+    ...(args.chat !== undefined ? { chatModel: args.chat } : {}),
+  });
 }

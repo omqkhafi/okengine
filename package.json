@@ -141,6 +141,7 @@
     "@clack/prompts": "^1.7.0",
     "@tanstack/react-virtual": "^3.14.9",
     "intl-messageformat": "^11.2.13",
+    "oxc-parser": "^0.142.0",
     "sently": "1.2.1"
   },
   "devDependencies": {
@@ -198,7 +199,6 @@
     "mermaid": "^11.16.0",
     "motion": "^13.1.0",
     "nuqs": "^2.8.0",
-    "oxc-parser": "^0.142.0",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
     "oxlint-tsgolint": "^7.0.2001",
@@ -230,7 +230,6 @@
     "drizzle-kit": ">=1.0.0-rc.0",
     "drizzle-orm": ">=1.0.0-rc.0",
     "drizzle-seed": ">=0.3.0",
-    "oxc-parser": ">=0.140.0",
     "zod": ">=3.23.0"
   },
   "peerDependenciesMeta": {
@@ -273,9 +272,6 @@
     "drizzle-seed": {
       "optional": true
     },
-    "oxc-parser": {
-      "optional": true
-    },
     "zod": {
       "optional": true
     }
@@ -285,6 +281,6 @@
     "react": "^19.2.8"
   },
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.1"
   }
 }

@@ -250,7 +250,7 @@ export const db = store.sql("app", { schema: { notes } });
     const source = `
 import { store, field, ai } from "okengine";
 
-export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+export const embedder = ai.model("embedder", { provider: "openai-compatible", model: "nomic-embed-text" });
 
 export const articles = store.schema.table("articles", {
   id: field.text().primaryKey(),
@@ -294,7 +294,7 @@ export const db = store.sql("app", { schema: { articles } });
     const source = `
 import { store, field, ai, oke } from "okengine";
 
-export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+export const embedder = ai.model("embedder", { provider: "openai-compatible", model: "nomic-embed-text" });
 
 oke({
   store: {
@@ -326,8 +326,8 @@ export const db = store.sql("app", { schema: { articles } });
     const source = `
 import { store, field, ai, oke } from "okengine";
 
-export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
-export const other = ai.model("other", { provider: "ollama", model: "nomic-embed-text" });
+export const embedder = ai.model("embedder", { provider: "openai-compatible", model: "nomic-embed-text" });
+export const other = ai.model("other", { provider: "openai-compatible", model: "nomic-embed-text" });
 
 oke({
   store: {
@@ -359,7 +359,7 @@ export const db = store.sql("app", { schema: { articles } });
     const source = `
 import { store, field, ai } from "okengine";
 
-export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+export const embedder = ai.model("embedder", { provider: "openai-compatible", model: "nomic-embed-text" });
 
 export const articles = store.schema.table("articles", {
   id: field.text().primaryKey(),

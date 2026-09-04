@@ -4,12 +4,17 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { OLLAMA_IMAGE } from "../drivers-catalog.ts";
 import { extractImages, findImagesBlock, replaceImagesBlock } from "../transform.ts";
+import { CLOUD_PROVIDERS } from "./catalog.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
-  readonly driver: "ollama" | "anthropic" | "openai-compatible" | "mock";
+  readonly driver: "anthropic" | "openai-compatible" | "mock";
+  /**
+   * Name written to `ai.model({ provider })` — registry id (`openrouter`,
+   * `openai`, …), or `openai-compatible` / `local` for self-hosted.
+   */
+  readonly provider?: string;
   readonly baseUrl?: string;
   readonly chatModel?: string;
   readonly visionModel?: string | null;
@@ -57,8 +62,10 @@ export function applyAiSetup(
     config = upsertAiDrivers(config, input.driver);
     if (input.image) {
       config = upsertImage(config, "ai", input.image);
-    } else if (input.driver === "ollama") {
-      config = upsertImage(config, "ai", OLLAMA_IMAGE);
+    } else {
+      // Cloud / host-side providers must not leave a leftover local AI image —
+      // Compose would still start llama.cpp/Ollama for OpenRouter etc.
+      config = removeImage(config, "ai");
     }
     writeFileSync(configPath, config, "utf8");
   }
@@ -94,7 +101,128 @@ export function applyAiSetup(
 
   const aiTsPath = writeAiModels(cwd, input);
 
+  if (input.embedModel) {
+    ensureHybridSearchEmbedWiring(cwd);
+  }
+
   return { configPath, envPath, aiTsPath };
+}
+
+/** Default dims for nomic-embed-text (starter / local RAG default). */
+export const DEFAULT_SEARCH_EMBED_DIMS = 768;
+
+/**
+ * When AI setup includes an embed model, wire Notes hybrid search:
+ * - `body: …searchable().embed()` in `schema.decl.ts`
+ * - `oke({ store: { search: { embed: { model: embedModel, dims } } } })` in `app.ts`
+ *
+ * Idempotent — safe to re-run.
+ *
+ * @param cwd - Project root
+ * @param dims - Vector dimensionality (default {@link DEFAULT_SEARCH_EMBED_DIMS})
+ */
+export function ensureHybridSearchEmbedWiring(
+  cwd: string,
+  dims: number = DEFAULT_SEARCH_EMBED_DIMS,
+): void {
+  const declPath = join(cwd, "src", "db", "schema.decl.ts");
+  if (existsSync(declPath)) {
+    const prev = readFileSync(declPath, "utf8");
+    const next = ensureNotesBodyEmbed(prev);
+    if (next !== prev) writeFileSync(declPath, next, "utf8");
+  }
+
+  const appPath = join(cwd, "src", "app.ts");
+  if (existsSync(appPath)) {
+    const prev = readFileSync(appPath, "utf8");
+    const next = ensureAppStoreSearchEmbed(prev, dims);
+    if (next !== prev) writeFileSync(appPath, next, "utf8");
+  }
+}
+
+/**
+ * Ensure the Notes `body` column chains bare `.embed()` after `.searchable()`.
+ *
+ * @param source - `schema.decl.ts` source
+ */
+export function ensureNotesBodyEmbed(source: string): string {
+  if (/\bbody:\s*field\.[\s\S]*?\.embed\s*\(/.test(source)) return source;
+  // Prefer exact Notes starter shapes, then a generic searchable body line.
+  const patterns: RegExp[] = [
+    /(body:\s*field\.text\(\)\.searchable\(\))\s*(\.notNull\(\))?/,
+    /(body:\s*field\.text\(\)\.searchable\(\{[^}]*\}\))\s*(\.notNull\(\))?/,
+    /(body:\s*field\.text\(\))\s*(\.notNull\(\))?/,
+  ];
+  for (const re of patterns) {
+    if (!re.test(source)) continue;
+    return source.replace(re, (_m, head: string, notNull?: string) => {
+      const mid =
+        /\.searchable\s*\(/.test(head) ? `${head}.embed()` : `${head}.searchable().embed()`;
+      return `${mid}${notNull ?? ""}`;
+    });
+  }
+  return source;
+}
+
+/**
+ * Stamp project default `store.search.embed` on `oke({…})` and import `embedModel`.
+ *
+ * @param source - `src/app.ts` source
+ * @param dims - Embedding dimensionality
+ */
+export function ensureAppStoreSearchEmbed(source: string, dims: number): string {
+  if (/store\s*:\s*\{[\s\S]*?search\s*:\s*\{[\s\S]*?embed\s*:/.test(source)) {
+    return source;
+  }
+
+  let next = source;
+  if (!/\bembedModel\b/.test(next)) {
+    if (/import\s*\{([^}]*)\}\s*from\s*["']@\/core["']/.test(next)) {
+      next = ensureNamedImportFrom(next, "@/core", "embedModel");
+    } else {
+      next = `import { embedModel } from "@/core";\n${next}`;
+    }
+  }
+
+  const simple = /oke\(\s*\{\s*name:\s*(["'])([^"']+)\1\s*\}\s*\)/;
+  if (simple.test(next)) {
+    return next.replace(
+      simple,
+      (_m, q: string, name: string) =>
+        `oke({\n  name: ${q}${name}${q},\n  store: {\n    search: {\n      embed: { model: embedModel, dims: ${dims} },\n    },\n  },\n})`,
+    );
+  }
+
+  // oke({ name: "…", …other }) — inject store before the closing `}`.
+  const named = /oke\(\s*\{([\s\S]*?)\}\s*\)/;
+  const m = named.exec(next);
+  if (!m) return next;
+  const body = m[1] ?? "";
+  if (/^\s*store\s*:/m.test(body)) return next;
+  const injected = `${body.trimEnd().replace(/,?\s*$/, "")},\n  store: {\n    search: {\n      embed: { model: embedModel, dims: ${dims} },\n    },\n  },\n`;
+  return next.replace(named, `oke({${injected}})`);
+}
+
+/**
+ * Add a named binding to an existing `import { … } from "<mod>"`.
+ *
+ * @param source - Module source
+ * @param mod - Module specifier
+ * @param name - Binding to add
+ */
+function ensureNamedImportFrom(source: string, mod: string, name: string): string {
+  const re = new RegExp(
+    `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${mod.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']\\s*;`,
+  );
+  const m = re.exec(source);
+  if (!m) return `import { ${name} } from "${mod}";\n${source}`;
+  const names = m[1]!
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (names.includes(name)) return source;
+  const sorted = [...names, name].sort((a, b) => a.localeCompare(b));
+  return source.replace(re, `import { ${sorted.join(", ")} } from "${mod}";`);
 }
 
 /**
@@ -140,6 +268,20 @@ export function upsertImage(source: string, key: string, image: string): string 
   return replaceImagesBlock(source, images);
 }
 
+/**
+ * Drop one dotted role's image pin (e.g. clear `images.ai` for cloud AI).
+ *
+ * @param source - Config source
+ * @param key - Image role
+ */
+export function removeImage(source: string, key: string): string {
+  if (!findImagesBlock(source)) return source;
+  const images = { ...extractImages(source) };
+  if (!(key in images)) return source;
+  delete images[key];
+  return replaceImagesBlock(source, images);
+}
+
 /** Options for {@link upsertEnv}. */
 export type UpsertEnvOptions = {
   /**
@@ -178,34 +320,39 @@ export function upsertEnv(
  */
 export function renderAiTs(input: AiSetupApplyInput): string {
   const chat = input.chatModel ?? "default";
-  const provider =
-    input.driver === "ollama"
-      ? "ollama"
-      : input.driver === "anthropic"
-        ? "anthropic"
-        : input.driver === "mock"
-          ? "mock"
-          : "openai-compatible";
+  const provider = resolveDeclProvider(input);
+  const apiKeyEnv = input.apiKeyEnv;
+  const registryCloud = isRegistryCloudProvider(provider);
+  const nativeAnthropic = input.driver === "anthropic";
+  const localPrimary = isSelfHostedLocal(input);
+
+  const smartLines = [
+    `export const smart = ai.model("smart", {`,
+    `  provider: "${provider}",`,
+    ...(nativeAnthropic ? [`  driverId: "anthropic",`] : []),
+    `  model: process.env.OKE_AI_CLOUD_MODEL ?? process.env.OKE_AI_MODEL ?? "${chat}",`,
+    ...smartBaseUrlLines(input, { registryCloud, localPrimary }),
+    ...apiKeySpreadLines(apiKeyEnv),
+    `});`,
+  ];
+
+  const localDefaultModel = localPrimary ? chat : "granite3.3:2b";
+  const localLines = [
+    `export const local = ai.model("local", {`,
+    `  provider: "openai-compatible",`,
+    `  model: process.env.OKE_AI_LOCAL_MODEL ?? "${localDefaultModel}",`,
+    `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
+    `});`,
+  ];
 
   const lines = [
     `import { ai } from "okengine";`,
     ``,
-    `/** Cloud OpenAI-compatible binding (OpenAI / Groq / OpenRouter / …). */`,
-    `export const smart = ai.model("smart", {`,
-    `  provider: "${provider}",`,
-    `  model: process.env.OKE_AI_CLOUD_MODEL ?? process.env.OKE_AI_MODEL ?? "${chat}",`,
-    `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",`,
-    `  ...(process.env.OPENAI_API_KEY?.trim()`,
-    `    ? { apiKey: process.env.OPENAI_API_KEY.trim() }`,
-    `    : {}),`,
-    `});`,
+    `/** Primary model binding (${provider}). */`,
+    ...smartLines,
     ``,
     `/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */`,
-    `export const local = ai.model("local", {`,
-    `  provider: "${provider === "ollama" ? "ollama" : "openai-compatible"}",`,
-    `  model: process.env.OKE_AI_LOCAL_MODEL ?? "${chat}",`,
-    `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
-    `});`,
+    ...localLines,
     ``,
     `/** Advanced Notes summarize — used by \`notes.summarize\` via \`fx.ask\`. */`,
     `export const summarizeNote = smart.prompt("summarize-note", {`,
@@ -219,7 +366,9 @@ export function renderAiTs(input: AiSetupApplyInput): string {
       ``,
       `export const vision = ai.model("vision", {`,
       `  provider: "${provider}",`,
+      ...(nativeAnthropic ? [`  driverId: "anthropic",`] : []),
       `  model: process.env.OKE_AI_VISION_MODEL ?? "${input.visionModel}",`,
+      ...apiKeySpreadLines(apiKeyEnv),
       `});`,
     );
   }
@@ -227,17 +376,78 @@ export function renderAiTs(input: AiSetupApplyInput): string {
   if (input.embedModel) {
     lines.push(
       ``,
+      `/** Embedding model — also the project default via \`oke({ store: { search: { embed } } })\`. */`,
       `export const embedModel = ai.model("embed", {`,
       `  provider: "${provider}",`,
       `  model: process.env.OKE_AI_EMBED_MODEL ?? "${input.embedModel}",`,
+      ...apiKeySpreadLines(apiKeyEnv),
       `});`,
       ``,
+      `/** Index-facet embed pipeline (Meilisearch / pgvector) — separate from SQL \`.embed()\`. */`,
       `export const docsEmbed = ai.embed("docs", { model: embedModel });`,
     );
   }
 
   lines.push(``);
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Provider string for generated `ai.model` declarations.
+ *
+ * @param input - Setup choices
+ */
+export function resolveDeclProvider(input: AiSetupApplyInput): string {
+  if (input.provider !== undefined && input.provider.length > 0) return input.provider;
+  if (input.driver === "anthropic") return "anthropic";
+  if (input.driver === "mock") return "mock";
+  return "openai-compatible";
+}
+
+function isRegistryCloudProvider(provider: string): boolean {
+  return CLOUD_PROVIDERS.some(
+    (p) => (p.provider ?? p.value) === provider && p.driver === "openai-compatible" && p.baseUrl,
+  );
+}
+
+function isSelfHostedLocal(input: AiSetupApplyInput): boolean {
+  return input.image !== undefined;
+}
+
+function smartBaseUrlLines(
+  input: AiSetupApplyInput,
+  flags: { readonly registryCloud: boolean; readonly localPrimary: boolean },
+): string[] {
+  if (input.driver === "anthropic") {
+    return [];
+  }
+  if (flags.registryCloud) {
+    return [
+      `  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),`,
+    ];
+  }
+  if (flags.localPrimary) {
+    return [
+      `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
+    ];
+  }
+  if (input.baseUrl) {
+    return [
+      `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || ${JSON.stringify(input.baseUrl)},`,
+    ];
+  }
+  return [
+    `  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),`,
+  ];
+}
+
+function apiKeySpreadLines(apiKeyEnv: string | undefined): string[] {
+  if (!apiKeyEnv) return [];
+  return [
+    `  ...(process.env.${apiKeyEnv}?.trim()`,
+    `    ? { apiKey: process.env.${apiKeyEnv}.trim() }`,
+    `    : {}),`,
+  ];
 }
 
 /**
@@ -257,14 +467,7 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
 
   if (existsSync(coreAiPath)) {
     const existing = readFileSync(coreAiPath, "utf8");
-    if (hasAiModels(existing)) {
-      const withPrompt = ensureSummarizeNotePrompt(existing);
-      if (withPrompt !== existing) {
-        writeFileSync(coreAiPath, withPrompt, "utf8");
-      }
-    } else {
-      writeFileSync(coreAiPath, mergeAiIntoCore(existing, rendered), "utf8");
-    }
+    writeFileSync(coreAiPath, resolveAiCoreSource(existing, rendered), "utf8");
     ensureCoreBarrelExportsAi(cwd);
     ensureCoreImported(cwd);
     return coreAiPath;
@@ -282,14 +485,7 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
   mkdirSync(dirname(coreTsPath), { recursive: true });
   if (existsSync(coreTsPath)) {
     const existing = readFileSync(coreTsPath, "utf8");
-    if (hasAiModels(existing)) {
-      const withPrompt = ensureSummarizeNotePrompt(existing);
-      if (withPrompt !== existing) {
-        writeFileSync(coreTsPath, withPrompt, "utf8");
-      }
-      return coreTsPath;
-    }
-    writeFileSync(coreTsPath, mergeAiIntoCore(existing, rendered), "utf8");
+    writeFileSync(coreTsPath, resolveAiCoreSource(existing, rendered), "utf8");
   } else {
     writeFileSync(coreTsPath, rendered, "utf8");
   }
@@ -298,14 +494,79 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
 }
 
 /**
+ * Decide whether to merge a full AI module, repair a broken stub, or only
+ * backfill `local` / `summarizeNote` on an already-complete core.
+ *
+ * @param existing - Current core / AI sidecar source
+ * @param rendered - Output of {@link renderAiTs}
+ */
+export function resolveAiCoreSource(existing: string, rendered: string): string {
+  if (isIncompleteAiSetup(existing)) {
+    return mergeAiIntoCore(stripIncompleteAiExports(existing), rendered);
+  }
+  if (hasAiModels(existing)) {
+    return ensureSummarizeNotePrompt(existing);
+  }
+  return mergeAiIntoCore(existing, rendered);
+}
+
+/**
  * @param source - Existing TypeScript
  */
 function hasAiModels(source: string): boolean {
+  // Require real exports — template comments like `//   ai.model("smart", …)`
+  // must not look like an already-configured core.
   return (
-    /\bai\.model\s*\(/.test(source) ||
+    /\bexport\s+const\s+(?:smart|local|vision|embedModel)\s*=\s*ai\.model\s*\(/.test(source) ||
     /from\s+["']\.\/(?:core\/)?ai["']/.test(source) ||
     /import\s+["']\.\/(?:core\/)?ai["']/.test(source)
   );
+}
+
+/**
+ * True when prior AI setup left unusable stubs (e.g. `local` + `summarizeNote`
+ * without `smart` / without an `ai` import — the old comment-as-configured bug).
+ *
+ * @param source - Existing TypeScript
+ */
+export function isIncompleteAiSetup(source: string): boolean {
+  const hasAiImport = /import\s*\{[^}]*\bai\b[^}]*\}\s*from\s*["']okengine["']/.test(source);
+  const hasSmart = /\bexport\s+const\s+smart\s*=\s*ai\.model\s*\(/.test(source);
+  const hasLocal = /\bexport\s+const\s+local\s*=\s*ai\.model\s*\(/.test(source);
+  const hasSummarize = /\bexport\s+const\s+summarizeNote\s*=/.test(source);
+  const hasAnyModel =
+    /\bexport\s+const\s+(?:smart|local|vision|embedModel)\s*=\s*ai\.model\s*\(/.test(source);
+  if (hasAnyModel && !hasAiImport) return true;
+  if ((hasLocal || hasSummarize) && !hasSmart) return true;
+  return false;
+}
+
+/**
+ * Remove partial AI exports so {@link mergeAiIntoCore} can rewrite a full set.
+ *
+ * @param source - Existing TypeScript
+ */
+export function stripIncompleteAiExports(source: string): string {
+  let next = source;
+  next = next.replace(
+    /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+local\s*=\s*ai\.model\s*\(\s*["']local["']\s*,\s*\{[\s\S]*?\}\s*\)\s*;\s*/g,
+    "",
+  );
+  next = next.replace(
+    /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+summarizeNote\s*=\s*smart\.prompt\s*\([\s\S]*?\}\s*\)\s*;\s*/g,
+    "",
+  );
+  if (!/\bexport\s+const\s+smart\s*=\s*ai\.model\s*\(/.test(next)) {
+    next = next.replace(
+      /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+(?:vision|embedModel)\s*=\s*ai\.model\s*\([\s\S]*?\}\s*\)\s*;\s*/g,
+      "",
+    );
+    next = next.replace(
+      /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+docsEmbed\s*=\s*ai\.embed\s*\([\s\S]*?\}\s*\)\s*;\s*/g,
+      "",
+    );
+  }
+  return next.replace(/\n{3,}/g, "\n\n");
 }
 
 /**
@@ -316,10 +577,9 @@ function hasAiModels(source: string): boolean {
  */
 export function ensureSummarizeNotePrompt(source: string): string {
   let next = source;
-  if (
-    !/\bai\.model\s*\(\s*["']local["']/.test(next) &&
-    /\bai\.model\s*\(\s*["']smart["']/.test(next)
-  ) {
+  const hasSmartExport = /\bexport\s+const\s+smart\s*=/.test(next);
+  const hasLocalExport = /\bexport\s+const\s+local\s*=/.test(next);
+  if (!hasLocalExport && hasSmartExport) {
     next = `${next.trimEnd()}
 
 /** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */
@@ -330,10 +590,13 @@ export const local = ai.model("local", {
 });
 `;
   }
-  if (/summarize-note/.test(next) || /summarizeNote/.test(next)) {
-    return next;
+  const hasSummarizeExport =
+    /\bexport\s+const\s+summarizeNote\s*=/.test(next) ||
+    /\.prompt\s*\(\s*["']summarize-note["']/.test(next);
+  if (hasSummarizeExport) {
+    return next === source ? next : ensureNamedOkengineImport(next, "ai");
   }
-  if (!/\bai\.model\s*\(\s*["']smart["']/.test(next)) {
+  if (!hasSmartExport) {
     return next;
   }
   const prompt = `
@@ -343,7 +606,7 @@ export const summarizeNote = smart.prompt("summarize-note", {
   timeout: "30s",
 });
 `;
-  return `${next.trimEnd()}\n${prompt}\n`;
+  return ensureNamedOkengineImport(`${next.trimEnd()}\n${prompt}\n`, "ai");
 }
 
 /**

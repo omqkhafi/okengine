@@ -240,6 +240,19 @@ export function OllamaMark({ className }: { readonly className?: string }) {
   );
 }
 
+/** Monochrome OpenRouter glyph (`currentColor`) — official mark from openrouter.ai/brand. */
+export function OpenrouterMark({ className }: { readonly className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 1024 730" fill="currentColor" className={className}>
+      <path
+        d={
+          "M795.893 0C915.776 0 1012.95 97.9963 1012.95 218.88C1012.95 339.764 915.776 437.76 795.893 437.76L1011.2 654.869C1038.55 682.447 1019.18 729.6 980.504 729.6H361.77C161.97 729.6 0 566.273 0 364.8C0 163.327 161.97 0 361.77 0L795.893 0ZM361.77 145.92C241.89 145.92 144.708 243.916 144.708 364.8C144.708 485.684 241.89 583.68 361.77 583.68C481.649 583.68 578.831 485.684 578.831 364.8C578.831 243.916 481.649 145.92 361.77 145.92Z"
+        }
+      />
+    </svg>
+  );
+}
+
 /** Monochrome RustFS mark — letter R from the official wordmark (simple-icons). */
 export function RustfsMark({ className }: { readonly className?: string }) {
   return (
@@ -425,6 +438,7 @@ export const BRAND_MARKS = {
   pgdog: PgdogMark,
   meilisearch: MeilisearchMark,
   ollama: OllamaMark,
+  openrouter: OpenrouterMark,
   rustfs: RustfsMark,
   timescale: TimescaleMark,
   mailpit: MailpitMark,

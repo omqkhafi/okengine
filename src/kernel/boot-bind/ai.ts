@@ -9,11 +9,6 @@
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { anthropicAiDriver } from "../../drivers/ai-anthropic.ts";
 import { mockAiDriver } from "../../drivers/ai-mock.ts";
-import {
-  normalizeOllamaBaseUrl,
-  ollamaAiDriver,
-  OLLAMA_DEFAULT_BASE_URL,
-} from "../../drivers/ai-ollama.ts";
 import { openaiCompatibleAiDriver } from "../../drivers/ai-openai-compatible.ts";
 import type { AiDriver, AiOpenOptions } from "../../drivers/ai-types.ts";
 import { createAiRuntime, type AiRuntime } from "../../elements/ai.ts";
@@ -50,7 +45,6 @@ export function bindAi(
       mock: lazyDriver("mock", docker),
       anthropic: lazyDriver("anthropic", docker),
       "openai-compatible": lazyDriver("openai-compatible", docker),
-      ollama: lazyDriver("ollama", docker),
     },
     gates: options.ai?.gates ?? gate,
     now,
@@ -77,7 +71,7 @@ export function resolveAiDriverId(options: BootOptions, env: ConfigEnv, docker =
   if (liveUrl && fromEnv && fromEnv !== "mock") return fromEnv;
   const resolved = resolveDriverId(options.config?.drivers?.ai, env);
   if (liveUrl && (resolved === undefined || resolved === "mock")) {
-    return fromEnv === "ollama" ? "ollama" : "openai-compatible";
+    return fromEnv === "openai-compatible" || !fromEnv ? "openai-compatible" : fromEnv;
   }
   if (resolved) return resolved;
   return "mock";
@@ -97,8 +91,6 @@ export function aiDriverFor(id: string): AiDriver {
       return anthropicAiDriver;
     case "openai-compatible":
       return openaiCompatibleAiDriver;
-    case "ollama":
-      return ollamaAiDriver;
     case "bedrock":
     case "vertex":
       throw new Error(`oke boot: AI driver "${id}" is reserved but not implemented yet`);
@@ -113,13 +105,7 @@ export function aiDriverFor(id: string): AiDriver {
  * @param id - Driver id
  * @param docker - Docker mode
  */
-export function openDefaultsFor(id: string, docker = false): AiOpenOptions {
-  if (id === "ollama") {
-    return {
-      baseUrl: aiUrlFor(docker),
-      ...(process.env.OKE_AI_MODEL?.trim() ? { model: process.env.OKE_AI_MODEL.trim() } : {}),
-    };
-  }
+export function openDefaultsFor(id: string, _docker = false): AiOpenOptions {
   if (id === "anthropic") {
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     return {
@@ -129,12 +115,10 @@ export function openDefaultsFor(id: string, docker = false): AiOpenOptions {
   }
   if (id === "openai-compatible") {
     const apiKey = process.env.OPENAI_API_KEY?.trim();
+    // Prefer explicit proxy / local compose URL. Cloud registry models
+    // (`ai.model({ provider: "openrouter" })`) resolve their own baseUrl —
+    // do not require OKE_AI_URL just because `oke dev` uses Docker for Postgres.
     const baseUrl = process.env.OPENAI_BASE_URL?.trim() || process.env.OKE_AI_URL?.trim();
-    if (docker && !baseUrl) {
-      throw new Error(
-        "oke boot: openai-compatible driver needs OKE_AI_URL (did `oke dev` write .env.local?)",
-      );
-    }
     return {
       ...(apiKey ? { apiKey } : {}),
       ...(baseUrl ? { baseUrl } : {}),
@@ -144,28 +128,6 @@ export function openDefaultsFor(id: string, docker = false): AiOpenOptions {
   return {};
 }
 
-/**
- * Ollama base URL — docker fails loud when compose did not write one.
- *
- * @param docker - Docker mode
- */
-export function aiUrlFor(docker = false): string {
-  const raw = process.env.OKE_AI_URL?.trim() || process.env.OLLAMA_HOST?.trim();
-  if (raw) return normalizeOllamaBaseUrl(raw);
-  if (docker) {
-    throw new Error(
-      "oke boot: ollama driver needs OKE_AI_URL (did `oke dev -d` write .env.local?)",
-    );
-  }
-  return OLLAMA_DEFAULT_BASE_URL;
-}
-
-/**
- * Merge fixed open defaults under per-call options.
- *
- * @param driver - Base driver
- * @param defaults - Env-derived open options
- */
 /**
  * Open a protocol driver with env defaults only when a model actually uses it.
  *

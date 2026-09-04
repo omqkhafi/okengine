@@ -27,7 +27,7 @@ Canonical quality bar (read before inventing):
 | Store  | `StoreFacets` + `StoreKvTtl` / `StoreFilesVariants` / `StoreIndexModes` / `StoreSeeding` | Facet physics; TTL contrast; putImage fan-out; vector vs text; seed env→blocks + upsert |
 | Clock  | `ClockSchedules` + `ClockCatchUp` / `ClockSleep`                                         | two triggers → one Flow; catch-up `"one"`; durable sleep survives restart               |
 | Gate   | `GatePipeline`                                                                           | Left-to-right chain; first denial wins; typed Unauthorized / Forbidden / RateLimited    |
-| AI     | `AiBlocks` + `AiGuardrails` / `AiPiiEgress`                                              | Four decls; versioned / PII / maxSteps / no prod default; third-party vs ollama egress  |
+| AI     | `AiBlocks` + `AiGuardrails` / `AiPiiEgress`                                              | Four decls; versioned / PII / maxSteps / no prod default; third-party vs local openai-compatible egress  |
 
 Shared primitives: [`site/components/docs/reveal.tsx`](../../../site/components/docs/reveal.tsx) (`RevealGroup`, `RevealItem`, `useTick`, `BeatPing`). Tone: `CHIP_TONE` + `--oke-el-*` from [`site/lib/element-tones.ts`](../../../site/lib/element-tones.ts).
 

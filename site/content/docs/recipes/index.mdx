@@ -12,7 +12,7 @@ These recipes are real, working infrastructure choices behind the same two templ
 
 <Callout title="The one rule">
   Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol ids
-  (`postgres`, `redis`, `s3`, `smtp`, `meilisearch`, `openai-compatible`, `ollama`, …).
+  (`postgres`, `redis`, `s3`, `smtp`, `meilisearch`, `openai-compatible`, …).
 </Callout>
 
 ## SQL
@@ -98,38 +98,31 @@ Opt-in via `images.proxy` — leave unset until you need an edge or `--scale app
   />
 </Cards>
 
-## AI (local / self-hosted)
+## AI (local / self-hosted / cloud)
 
-Default local pin is **llama.cpp**. Ollama stays fully supported. vLLM / SGLang
-are production-tier self-host options — most apps still use a managed provider.
+Default local pin is **llama.cpp** (via the [Local AI](/docs/recipes/local-ai)
+recipe). Ollama, vLLM, and SGLang share the same `openai-compatible` driver.
+Prefer [OpenRouter](/docs/recipes/openrouter) when you want `fx.ask` with no Docker.
 
-| Workload                         | Recipe                                         |
-| -------------------------------- | ---------------------------------------------- |
-| Single-user / dev (lightest)     | [llama.cpp](/docs/recipes/llama-cpp) (default) |
-| Local library UX                 | [Ollama](/docs/recipes/ollama)                 |
-| Multi-user GPU concurrency       | [vLLM](/docs/recipes/vllm)                     |
-| Structured / agent GPU workloads | [SGLang](/docs/recipes/sglang)                 |
-| Managed cloud                    | Anthropic / OpenAI / … (no `images.ai`)        |
+| Workload | Recipe |
+| -------- | ------ |
+| Zero Docker / free cloud smoke | [OpenRouter](/docs/recipes/openrouter) |
+| Local / self-host (llama.cpp · Ollama · vLLM · SGLang) | [Local AI](/docs/recipes/local-ai) |
+| Managed cloud (registry) | [Models](/docs/elements/ai/models) |
 
-All four recipes **loopback-publish only** and pin explicit tags (never
+The Local AI recipe **loopback-publishes only** and pins explicit tags (never
 `latest`). Load models from curated registries — never arbitrary untrusted GGUF.
 
 <Cards>
   <Card
-    title="llama.cpp"
-    description="Default local AI — OpenAI /v1, lightest footprint."
-    href="/docs/recipes/llama-cpp"
+    title="OpenRouter"
+    description="Zero Docker — openrouter/free + auto baseUrl."
+    href="/docs/recipes/openrouter"
   />
   <Card
-    title="Ollama"
-    description="Fully supported alternative — library pull UX."
-    href="/docs/recipes/ollama"
-  />
-  <Card title="vLLM" description="Self-hosted multi-user GPU serving." href="/docs/recipes/vllm" />
-  <Card
-    title="SGLang"
-    description="Self-hosted structured / agent GPU serving."
-    href="/docs/recipes/sglang"
+    title="Local AI"
+    description="llama.cpp · Ollama · vLLM · SGLang — one driver."
+    href="/docs/recipes/local-ai"
   />
 </Cards>
 

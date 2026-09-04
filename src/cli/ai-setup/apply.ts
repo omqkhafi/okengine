@@ -4,11 +4,16 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { OLLAMA_IMAGE } from "../../docker/recipes/index.ts";
+import { getAiProviderEntry } from "../../elements/ai/providers.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
-  readonly driver: "ollama" | "anthropic" | "openai-compatible" | "mock";
+  readonly driver: "anthropic" | "openai-compatible" | "mock";
+  /**
+   * Name written to `ai.model({ provider })` — registry id (`openrouter`,
+   * `openai`, …), or `openai-compatible` / `local` for self-hosted.
+   */
+  readonly provider?: string;
   readonly baseUrl?: string;
   readonly chatModel?: string;
   readonly visionModel?: string | null;
@@ -56,8 +61,10 @@ export function applyAiSetup(
     config = upsertAiDrivers(config, input.driver);
     if (input.image) {
       config = upsertImage(config, "ai", input.image);
-    } else if (input.driver === "ollama") {
-      config = upsertImage(config, "ai", OLLAMA_IMAGE);
+    } else {
+      // Cloud / host-side providers must not leave a leftover local AI image —
+      // Compose would still start llama.cpp/Ollama for OpenRouter etc.
+      config = removeImage(config, "ai");
     }
     writeFileSync(configPath, config, "utf8");
   }
@@ -143,6 +150,19 @@ export function upsertImage(source: string, key: string, image: string): string 
   return source.replace(imagesRe, `images: {${body}\n${line}\n  }`);
 }
 
+/**
+ * Drop one flat image role pin (e.g. clear `images.ai` for cloud AI).
+ *
+ * @param source - Config source
+ * @param key - Image role (`ai`, `pgdog`, … — not nested `store.*`)
+ */
+export function removeImage(source: string, key: string): string {
+  const keyLit = key.includes(".") ? `"${key}"` : key;
+  const lineRe = new RegExp(`\\n[ \\t]*${keyLit}\\s*:\\s*"[^"]*",?`);
+  if (!lineRe.test(source)) return source;
+  return source.replace(lineRe, "");
+}
+
 /** Options for {@link upsertEnv}. */
 export type UpsertEnvOptions = {
   /**
@@ -181,34 +201,40 @@ export function upsertEnv(
  */
 export function renderAiTs(input: AiSetupApplyInput): string {
   const chat = input.chatModel ?? "default";
-  const provider =
-    input.driver === "ollama"
-      ? "ollama"
-      : input.driver === "anthropic"
-        ? "anthropic"
-        : input.driver === "mock"
-          ? "mock"
-          : "openai-compatible";
+  const provider = resolveDeclProvider(input);
+  const apiKeyEnv = input.apiKeyEnv;
+  const registryCloud = isRegistryCloudProvider(provider);
+  const nativeAnthropic = input.driver === "anthropic";
+  const localPrimary = isSelfHostedLocal(input);
+
+  const smartLines = [
+    `export const smart = ai.model("smart", {`,
+    `  provider: "${provider}",`,
+    ...(nativeAnthropic ? [`  driverId: "anthropic",`] : []),
+    `  model: process.env.OKE_AI_CLOUD_MODEL ?? process.env.OKE_AI_MODEL ?? "${chat}",`,
+    ...smartBaseUrlLines(input, { registryCloud, localPrimary }),
+    ...apiKeySpreadLines(apiKeyEnv),
+    `});`,
+  ];
+
+  const localProvider = "openai-compatible";
+  const localDefaultModel = localPrimary ? chat : "granite3.3:2b";
+  const localLines = [
+    `export const local = ai.model("local", {`,
+    `  provider: "${localProvider}",`,
+    `  model: process.env.OKE_AI_LOCAL_MODEL ?? "${localDefaultModel}",`,
+    `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
+    `});`,
+  ];
 
   const lines = [
     `import { ai } from "okengine";`,
     ``,
-    `/** Cloud OpenAI-compatible binding (OpenAI / Groq / OpenRouter / …). */`,
-    `export const smart = ai.model("smart", {`,
-    `  provider: "${provider}",`,
-    `  model: process.env.OKE_AI_CLOUD_MODEL ?? process.env.OKE_AI_MODEL ?? "${chat}",`,
-    `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",`,
-    `  ...(process.env.OPENAI_API_KEY?.trim()`,
-    `    ? { apiKey: process.env.OPENAI_API_KEY.trim() }`,
-    `    : {}),`,
-    `});`,
+    `/** Primary model binding (${provider}). */`,
+    ...smartLines,
     ``,
     `/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */`,
-    `export const local = ai.model("local", {`,
-    `  provider: "${provider === "ollama" ? "ollama" : "openai-compatible"}",`,
-    `  model: process.env.OKE_AI_LOCAL_MODEL ?? "${chat}",`,
-    `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
-    `});`,
+    ...localLines,
     ``,
     `/** Advanced Notes summarize — used by \`notes.summarize\` via \`fx.ask\`. */`,
     `export const summarizeNote = smart.prompt("summarize-note", {`,
@@ -222,7 +248,9 @@ export function renderAiTs(input: AiSetupApplyInput): string {
       ``,
       `export const vision = ai.model("vision", {`,
       `  provider: "${provider}",`,
+      ...(nativeAnthropic ? [`  driverId: "anthropic",`] : []),
       `  model: process.env.OKE_AI_VISION_MODEL ?? "${input.visionModel}",`,
+      ...apiKeySpreadLines(apiKeyEnv),
       `});`,
     );
   }
@@ -233,6 +261,7 @@ export function renderAiTs(input: AiSetupApplyInput): string {
       `export const embedModel = ai.model("embed", {`,
       `  provider: "${provider}",`,
       `  model: process.env.OKE_AI_EMBED_MODEL ?? "${input.embedModel}",`,
+      ...apiKeySpreadLines(apiKeyEnv),
       `});`,
       ``,
       `export const docsEmbed = ai.embed("docs", { model: embedModel });`,
@@ -241,6 +270,64 @@ export function renderAiTs(input: AiSetupApplyInput): string {
 
   lines.push(``);
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Provider string for generated `ai.model` declarations.
+ *
+ * @param input - Setup choices
+ */
+export function resolveDeclProvider(input: AiSetupApplyInput): string {
+  if (input.provider !== undefined && input.provider.length > 0) return input.provider;
+  if (input.driver === "anthropic") return "anthropic";
+  if (input.driver === "mock") return "mock";
+  return "openai-compatible";
+}
+
+function isRegistryCloudProvider(provider: string): boolean {
+  return getAiProviderEntry(provider) !== undefined;
+}
+
+function isSelfHostedLocal(input: AiSetupApplyInput): boolean {
+  return input.image !== undefined;
+}
+
+function smartBaseUrlLines(
+  input: AiSetupApplyInput,
+  flags: { readonly registryCloud: boolean; readonly localPrimary: boolean },
+): string[] {
+  if (input.driver === "anthropic") {
+    return [];
+  }
+  if (flags.registryCloud) {
+    // Registry auto-resolves; optional env override for proxies/mirrors.
+    return [
+      `  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),`,
+    ];
+  }
+  if (flags.localPrimary) {
+    return [
+      `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
+    ];
+  }
+  // custom / lmstudio — prefer OPENAI_BASE_URL, fall back to setup-time URL when present
+  if (input.baseUrl) {
+    return [
+      `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || ${JSON.stringify(input.baseUrl)},`,
+    ];
+  }
+  return [
+    `  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),`,
+  ];
+}
+
+function apiKeySpreadLines(apiKeyEnv: string | undefined): string[] {
+  if (!apiKeyEnv) return [];
+  return [
+    `  ...(process.env.${apiKeyEnv}?.trim()`,
+    `    ? { apiKey: process.env.${apiKeyEnv}.trim() }`,
+    `    : {}),`,
+  ];
 }
 
 /**
@@ -260,14 +347,7 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
 
   if (existsSync(coreAiPath)) {
     const existing = readFileSync(coreAiPath, "utf8");
-    if (hasAiModels(existing)) {
-      const withPrompt = ensureSummarizeNotePrompt(existing);
-      if (withPrompt !== existing) {
-        writeFileSync(coreAiPath, withPrompt, "utf8");
-      }
-    } else {
-      writeFileSync(coreAiPath, mergeAiIntoCore(existing, rendered), "utf8");
-    }
+    writeFileSync(coreAiPath, resolveAiCoreSource(existing, rendered), "utf8");
     ensureCoreBarrelExportsAi(cwd);
     ensureCoreImported(cwd);
     return coreAiPath;
@@ -285,14 +365,7 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
   mkdirSync(dirname(coreTsPath), { recursive: true });
   if (existsSync(coreTsPath)) {
     const existing = readFileSync(coreTsPath, "utf8");
-    if (hasAiModels(existing)) {
-      const withPrompt = ensureSummarizeNotePrompt(existing);
-      if (withPrompt !== existing) {
-        writeFileSync(coreTsPath, withPrompt, "utf8");
-      }
-      return coreTsPath;
-    }
-    writeFileSync(coreTsPath, mergeAiIntoCore(existing, rendered), "utf8");
+    writeFileSync(coreTsPath, resolveAiCoreSource(existing, rendered), "utf8");
   } else {
     writeFileSync(coreTsPath, rendered, "utf8");
   }
@@ -301,14 +374,79 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
 }
 
 /**
+ * Decide whether to merge a full AI module, repair a broken stub, or only
+ * backfill `local` / `summarizeNote` on an already-complete core.
+ *
+ * @param existing - Current core / AI sidecar source
+ * @param rendered - Output of {@link renderAiTs}
+ */
+export function resolveAiCoreSource(existing: string, rendered: string): string {
+  if (isIncompleteAiSetup(existing)) {
+    return mergeAiIntoCore(stripIncompleteAiExports(existing), rendered);
+  }
+  if (hasAiModels(existing)) {
+    return ensureSummarizeNotePrompt(existing);
+  }
+  return mergeAiIntoCore(existing, rendered);
+}
+
+/**
  * @param source - Existing TypeScript
  */
 function hasAiModels(source: string): boolean {
+  // Require real exports — template comments like `//   ai.model("smart", …)`
+  // must not look like an already-configured core.
   return (
-    /\bai\.model\s*\(/.test(source) ||
+    /\bexport\s+const\s+(?:smart|local|vision|embedModel)\s*=\s*ai\.model\s*\(/.test(source) ||
     /from\s+["']\.\/(?:core\/)?ai["']/.test(source) ||
     /import\s+["']\.\/(?:core\/)?ai["']/.test(source)
   );
+}
+
+/**
+ * True when prior AI setup left unusable stubs (e.g. `local` + `summarizeNote`
+ * without `smart` / without an `ai` import — the old comment-as-configured bug).
+ *
+ * @param source - Existing TypeScript
+ */
+export function isIncompleteAiSetup(source: string): boolean {
+  const hasAiImport = /import\s*\{[^}]*\bai\b[^}]*\}\s*from\s*["']okengine["']/.test(source);
+  const hasSmart = /\bexport\s+const\s+smart\s*=\s*ai\.model\s*\(/.test(source);
+  const hasLocal = /\bexport\s+const\s+local\s*=\s*ai\.model\s*\(/.test(source);
+  const hasSummarize = /\bexport\s+const\s+summarizeNote\s*=/.test(source);
+  const hasAnyModel =
+    /\bexport\s+const\s+(?:smart|local|vision|embedModel)\s*=\s*ai\.model\s*\(/.test(source);
+  if (hasAnyModel && !hasAiImport) return true;
+  if ((hasLocal || hasSummarize) && !hasSmart) return true;
+  return false;
+}
+
+/**
+ * Remove partial AI exports so {@link mergeAiIntoCore} can rewrite a full set.
+ *
+ * @param source - Existing TypeScript
+ */
+export function stripIncompleteAiExports(source: string): string {
+  let next = source;
+  next = next.replace(
+    /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+local\s*=\s*ai\.model\s*\(\s*["']local["']\s*,\s*\{[\s\S]*?\}\s*\)\s*;\s*/g,
+    "",
+  );
+  next = next.replace(
+    /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+summarizeNote\s*=\s*smart\.prompt\s*\([\s\S]*?\}\s*\)\s*;\s*/g,
+    "",
+  );
+  if (!/\bexport\s+const\s+smart\s*=\s*ai\.model\s*\(/.test(next)) {
+    next = next.replace(
+      /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+(?:vision|embedModel)\s*=\s*ai\.model\s*\([\s\S]*?\}\s*\)\s*;\s*/g,
+      "",
+    );
+    next = next.replace(
+      /(?:\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*)?export\s+const\s+docsEmbed\s*=\s*ai\.embed\s*\([\s\S]*?\}\s*\)\s*;\s*/g,
+      "",
+    );
+  }
+  return next.replace(/\n{3,}/g, "\n\n");
 }
 
 /**
@@ -319,10 +457,9 @@ function hasAiModels(source: string): boolean {
  */
 export function ensureSummarizeNotePrompt(source: string): string {
   let next = source;
-  if (
-    !/\bai\.model\s*\(\s*["']local["']/.test(next) &&
-    /\bai\.model\s*\(\s*["']smart["']/.test(next)
-  ) {
+  const hasSmartExport = /\bexport\s+const\s+smart\s*=/.test(next);
+  const hasLocalExport = /\bexport\s+const\s+local\s*=/.test(next);
+  if (!hasLocalExport && hasSmartExport) {
     next = `${next.trimEnd()}
 
 /** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */
@@ -333,10 +470,13 @@ export const local = ai.model("local", {
 });
 `;
   }
-  if (/summarize-note/.test(next) || /summarizeNote/.test(next)) {
-    return next;
+  const hasSummarizeExport =
+    /\bexport\s+const\s+summarizeNote\s*=/.test(next) ||
+    /\.prompt\s*\(\s*["']summarize-note["']/.test(next);
+  if (hasSummarizeExport) {
+    return next === source ? next : ensureNamedOkengineImport(next, "ai");
   }
-  if (!/\bai\.model\s*\(\s*["']smart["']/.test(next)) {
+  if (!hasSmartExport) {
     return next;
   }
   const prompt = `
@@ -346,7 +486,7 @@ export const summarizeNote = smart.prompt("summarize-note", {
   timeout: "30s",
 });
 `;
-  return `${next.trimEnd()}\n${prompt}\n`;
+  return ensureNamedOkengineImport(`${next.trimEnd()}\n${prompt}\n`, "ai");
 }
 
 /**

@@ -2,8 +2,8 @@
  * AI physics demos — claims that tables alone under-teach.
  *
  * AiPiiEgress: same `.pii()` field on fx.ask — anthropic (third-party) fails
- * the build; ollama (on-premise) proceeds. Mirrors assertAllowPiiForAsk in
- * src/elements/ai/pii.ts. Deterministic — never Math.random.
+ * the build; openai-compatible local (on-premise) proceeds. Mirrors
+ * assertAllowPiiForAsk in src/elements/ai/pii.ts. Deterministic — never Math.random.
  */
 
 "use client";
@@ -36,7 +36,7 @@ export function AiPiiEgress() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="PII egress physics: sending a .pii() field to anthropic fails the build without allowPii; the same ask against ollama is on-premise and proceeds."
+      aria-label="PII egress physics: sending a .pii() field to anthropic fails the build without allowPii; the same ask against openai-compatible local is on-premise and proceeds."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">PII — same field, opposite egress</p>
@@ -67,9 +67,9 @@ export function AiPiiEgress() {
         />
         <EgressCard
           icon={Server}
-          driver="ollama"
+          driver="openai-compatible"
           headline="On-premise — ask proceeds"
-          detail="mock and ollama are local — the PII check does not treat them as third-party."
+          detail="mock, local, and openai-compatible are not third-party egress."
           phase={phase}
           blocked={false}
           outcome="ask proceeds · no AiPiiBuildError"

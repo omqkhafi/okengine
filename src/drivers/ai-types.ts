@@ -1,7 +1,7 @@
 /**
  * Protocol-named AI model driver contracts.
  *
- * Driver ids: `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama`.
+ * Driver ids: `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex`.
  * Dev default is `mock`. There is **no** production default — prod must declare.
  */
 
@@ -11,8 +11,7 @@ export type AiDriverId =
   | "anthropic"
   | "openai-compatible"
   | "bedrock"
-  | "vertex"
-  | "ollama";
+  | "vertex";
 
 /** Tool definition offered to a model (Flow-backed at the fx layer). */
 export interface AiToolDef {
