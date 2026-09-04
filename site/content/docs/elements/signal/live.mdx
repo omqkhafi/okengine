@@ -1,14 +1,23 @@
 ---
-title: "Streams"
-description: "Retained event tapes streamed to client browsers over Server-Sent Events with automatic replay on reconnection."
+title: "Live"
+description: "Retained live event tapes streamed to clients over HTTP SSE with Last-Event-ID resume."
 icon: "Activity"
+source: "docs/spec/unified-theory.md"
 ---
 
-Live Streams broadcast events directly to client user interfaces using Server-Sent Events (SSE) over standard HTTP connections.
+`signal.live` keeps a retained event tape and exposes it over Server-Sent Events. Emit with
+`fx.emit`, and mount the feed with `http.live` (or a gated GET).
 
-## What it is
+For developers shipping status feeds and progress UIs — declare the Signal, expose SSE, subscribe
+from the typed client.
 
-Declaring `delivery: "live"` configures a durable event tape. The OKE engine automatically exposes an SSE endpoint. When browsers reconnect after network drops, the `Last-Event-ID` header replays missed events automatically.
+<Callout title="The one rule">
+  `signal.live` is an HTTP SSE tape — not a competing worker. Bind with
+  [`http.live`](/docs/elements/flow/http#live-streams). Do not use `on(liveSignal, flow)` as a
+  queue consumer. Prefer `{ optional: true }` so emit succeeds when no client is connected yet.
+</Callout>
+
+<SignalLiveReplay />
 
 ## Smallest Example
 
@@ -17,12 +26,114 @@ Declaring `delivery: "live"` configures a durable event tape. The OKE engine aut
 <Step>
 ### Declare the live signal
 
+```typescript title="src/signals/orders.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderStatus = signal.live("order-status", {
+  optional: true,
+  schema: z.object({
+    orderId: z.string(),
+    status: z.enum(["placed", "fulfilling", "shipped"]),
+  }),
+});
+```
+
+</Step>
+
+<Step>
+### Expose SSE
+
+```typescript title="src/flows/orders/firehose.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const firehose = on(http.live(orderStatus).gate(member));
+```
+
+</Step>
+
+<Step>
+### Emit and subscribe
+
+```typescript
+// Inside any Flow:
+await fx.emit(orderStatus, { orderId: "ord_1", status: "shipped" });
+```
+
+```bash
+curl -N http://localhost:6530/_oke/live/order-status \
+  -H "accept: text/event-stream" \
+  -H "authorization: Bearer …"
+```
+
+Response `Content-Type` is `text/event-stream`. Frames are JSON `data:` lines
+(optional `id:` for resume), then `data: [DONE]`.
+
+</Step>
+
+</Steps>
+
+<Callout title="Pathless firehose">
+  `on(http.live(signal))` always mounts `GET /_oke/live/{name}` — there is no pathless
+  file-tree stamp for live. Custom paths use `http.get(path).live(signal)`. See
+  [Exposure](#exposure).
+</Callout>
+
+## Progressive Patterns
+
+From a default firehose to filtered paths, retention, and the typed client:
+
+<Tabs items={["Firehose", "Filtered", "Retention", "Client"]}>
+
+<Tab value="Firehose">
+
+`on(http.live(signal))` mounts `GET /_oke/live/{name}`. Chain `.gate(...)` like any GET:
+
+```typescript title="src/flows/orders/firehose.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const firehose = on(http.live(orderStatus).gate(member));
+```
+
+Signal names in the path are `encodeURIComponent`'d (`chat.message` stays readable).
+
+</Tab>
+
+<Tab value="Filtered">
+
+Path params become a filter: an event forwards when each `:param` that **exists on the payload**
+equals the request value. Params missing from the payload are skipped:
+
+```typescript title="src/flows/orders/events.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const events = on(
+  http.get("/orders/:orderId/events").gate(member).live(orderStatus),
+);
+```
+
+`GET /orders/ord_1/events` receives `{ orderId: "ord_1", status: "shipped" }` and drops other
+orders.
+
+</Tab>
+
+<Tab value="Retention">
+
+Cap the tape with `retention` (live-only). Omit for unbounded history:
+
 ```typescript title="src/signals/chat.ts"
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const chatMessage = signal("chat.message", {
-  delivery: "live",
+export const chatMessage = signal.live("chat.message", {
+  optional: true,
+  retention: { maxAge: "7d", maxCount: 10_000 },
   schema: z.object({
     room: z.string(),
     text: z.string(),
@@ -31,34 +142,460 @@ export const chatMessage = signal("chat.message", {
 });
 ```
 
-</Step>
+Invalid `maxAge` / `maxCount` throw at declare — see [Retention](#retention).
 
-<Step>
-### Subscribe from frontend
+</Tab>
+
+<Tab value="Client">
+
+Browsers use the typed client callback — not raw `EventSource` on an invented path:
 
 ```typescript
-const eventSource = new EventSource("/api/signals/chat.message?room=general");
-eventSource.onmessage = (e) => {
-  const msg = JSON.parse(e.data);
-  console.log("New chat message:", msg);
-};
+const stop = api.live(
+  orderStatus,
+  { orderId: "ord_1" },
+  {
+    onEvent: (event) => {
+      /* { orderId, status } */
+    },
+    onError: (err) => {
+      /* 4xx, envelope, or drop */
+    },
+    autoResubscribe: false,
+  },
+);
+stop();
 ```
 
-</Step>
+Reconnects send `Last-Event-ID` from the last `id:` received. See
+[Client subscription](#client-subscription).
 
-</Steps>
+</Tab>
+
+</Tabs>
+
+## Options Reference
+
+Optional second argument to `signal.live(name, options?)`. Delivery is the helper name — not an
+option.
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1043**) |
+| `optional` | `boolean` | `false` | Allow emit with zero SSE clients / subscribers |
+| `retention` | `{ maxAge?, maxCount? }` | unbounded | Prune the tape (live-only) |
+| `description` | `string` | the name | Console / docs blurb |
+| `retries` | `number` | `3` | Declared; live uses the tape, not once DLQ |
+| `deadLetter` | `boolean` | `true` | Declared; live does not use once DLQ |
+
+**Consequence:** `retention` on `signal.once` / `signal.broadcast` is a type error — switch to
+`signal.live` or drop the option.
+
+## Exposure
+
+<Callout title="Detailed section">
+  If you only need the default firehose, jump to the example below. `.live(…)` is GET-only —
+  `on(http.post("/x").live(signal))` throws `on(http.*.live(signal)): live exposure must be GET`.
+</Callout>
+
+`http.live(signal)` is one-arg `on()` — the engine synthesizes the stream Flow
+(`fx.live` + `effects.reads: ["signal:<name>"]`). Chain `.gate(...)` like any GET.
+
+```typescript title="src/flows/orders/firehose.ts"
+import { on, http, signal } from "okengine";
+import { z } from "zod";
+import { member } from "@/core/gate";
+
+export const orderStatus = signal.live("order-status", {
+  optional: true,
+  schema: z.object({
+    orderId: z.string(),
+    status: z.enum(["placed", "fulfilling", "shipped"]),
+  }),
+});
+
+export const firehose = on(http.live(orderStatus).gate(member));
+```
+
+```bash
+curl -N http://localhost:6530/_oke/live/order-status \
+  -H "accept: text/event-stream" \
+  -H "authorization: Bearer …"
+```
+
+Three GET shapes expose a live SSE body. Pick the physics first, then the path.
+
+| Declaration | Path | Physics |
+| ----------- | ---- | ------- |
+| `on(http.live(signal))` | `GET /_oke/live/{name}` | Signal tape — every event |
+| `on(http.get(path).live(signal))` | Your path | Signal tape — auto-match on `:params` |
+| `on(http.get(path).live(table), flow)` | Your path | Live **query** — classified CDC rows |
+| `store.resource({ live: true })` + `http.resource` | `GET <path>/live` | Same live-query physics |
+
+Signal firehoses and resource live queries are different physics — see Live Queries below.
+
+<Accordions>
+
+<Accordion title="Filtered Paths">
+  Path params become a filter: an event is forwarded when each `:param` that
+  **exists on the payload** equals the request value. Params missing from the
+  payload are skipped (the event still flows). No params = firehose.
+
+```typescript title="src/flows/orders/events.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const events = on(
+  http.get("/orders/:orderId/events").gate(member).live(orderStatus),
+);
+```
+
+`GET /orders/ord_1/events` receives `{ orderId: "ord_1", status: "shipped" }`
+and drops events for other orders.
+
+</Accordion>
+
+<Accordion title="Custom Match">
+  Pass your own Flow as the second argument to `on()` when auto-match is not
+  enough. Return `fx.live(signal, { match })` from `do` — do not wrap it with
+  `fx.json.stream`.
+
+```typescript title="src/flows/orders/vip-feed.ts"
+import { on, flow, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const vipFeed = on(
+  http.get("/orders/vip/events").gate(member).live(orderStatus),
+  flow("orders.vipFeed", {
+    do: (_input, fx) =>
+      fx.live(orderStatus, {
+        match: (payload) => payload.status === "shipped",
+      }),
+  }),
+);
+```
+
+**Consequence:** a custom Flow stamps a distinct match key, so it can coexist
+with the auto-match route for the same signal (different path). Two synthesized
+firehoses that share signal **and** gates fail uniqueness — see Uniqueness.
+
+</Accordion>
+
+<Accordion title="Live Queries">
+  Resource / table live is **not** a signal tape. Each subscriber gets classified
+  row events (RLS + list filters). Prefer `http.resource` + `{ live: true }` when
+  you already mount the five CRUD ops.
+
+| `live` on the resource | Result |
+| ---------------------- | ------ |
+| `{ live: true }`       | Mount `GET <path>/live` now |
+| omitted                | Mount only if `oke({ store: { live: true } })` |
+| `{ live: false }`      | Never mount live for this resource |
+
+Wire events (consumed with `useLiveQuery` on the [typed client](/docs/reference/client)):
+
+| `kind`    | Meaning |
+| --------- | ------- |
+| `upsert`  | Row visible under stamp + query — merge by primary key |
+| `revoked` | Row left visibility (`reason: "rls"` or `"query"`) — remove |
+| `delete`  | Row deleted — remove |
+
+For a handwritten list, bind the table on GET and open the window with
+`liveQuery` — full detail under [HTTP · Live Streams](/docs/elements/flow/http#live-streams).
+
+</Accordion>
+
+<Accordion title="Uniqueness">
+  Boot keys each live HTTP route as `(signal, gates, match)`. Match is the
+  sorted path-param names, or `custom:<flow>` when you passed a Flow, or
+  `(firehose)` when there are no params.
+
+| Pair | Boots? |
+| ---- | ------ |
+| Member `:orderId` + admin firehose | Yes — gates and match differ |
+| Same params, different gates | Yes — the client disambiguates with `via` |
+| Two member firehoses on different paths | No — **OKE1013** |
+| Same method + path twice | No — **OKE1011** first |
+
+**OKE1013** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
+Fix: a different gate, a path-param filter, or drop the extra route.
+
+</Accordion>
+
+</Accordions>
+
+## Emit through fx
+
+<Callout title="Detailed section">
+  If you only need `fx.emit(signal, payload)`, jump to the table. Emit appends to the retained
+  tape when the call resolves. The producer run id is stamped as `parentRunId` for Console
+  trace chains.
+</Callout>
+
+| Call | Records | Use |
+| ---- | ------- | --- |
+| `fx.emit(signal, payload?)` | `emits` | Append to the live tape |
+| `fx.live(signal, { match? })` | `reads` `signal:<name>` | Server SSE body for a live tape |
+
+Invalid `schema` payloads fail at emit with **OKE1043** (`"{resource}": {detail}`) before any
+client receives the frame. Cross-signal `fx.live` without a declared read throws **OKE1001**.
+
+```typescript title="src/flows/orders/ship.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { orderStatus } from "@/signals/orders";
+
+export const markShipped = on(
+  http.post("/orders/:id/ship"),
+  flow("orders.markShipped", {
+    in: z.object({ id: z.string() }),
+    do: async ({ id }, fx) => {
+      await fx.emit(orderStatus, { orderId: id, status: "shipped" });
+      return { id, status: "shipped" };
+    },
+  }),
+);
+```
+
+Zero SSE clients + `optional: false` → **OKE1042**. Cause:
+`Flow "{flow}" emits signal "{resource}" with no subscriber.`
+Fix: mount `http.live` (or a path `.live`) before emitting, or set `{ optional: true }`.
+
+## Retention
+
+<Callout title="Detailed section">
+  If you only need an unbounded tape, skip this section. `retention` is live-only — omit both
+  fields (or omit `retention`) for unlimited history.
+</Callout>
+
+| Field | Type | Meaning |
+| ----- | ---- | ------- |
+| `maxAge` | duration string (`"24h"`, `"30s"`, …) | Drop events older than this |
+| `maxCount` | integer ≥ 1 | Keep only the newest N events |
+
+```typescript title="src/signals/chat.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const chatMessage = signal.live("chat.message", {
+  optional: true,
+  retention: { maxAge: "7d", maxCount: 10_000 },
+  schema: z.object({
+    room: z.string(),
+    text: z.string(),
+    author: z.string(),
+  }),
+});
+```
+
+Invalid values throw at declare:
+
+```text
+signal.live("…"): retention.maxAge must be a duration like "24h" or "30s"
+signal.live("…"): retention.maxCount must be an integer ≥ 1
+```
+
+**Consequence:** a pruned `id:` becomes a resume gap — reconnects that still send that
+`Last-Event-ID` hit **OKE1014** / 410 `LiveResumeGap`. Prefer `autoResubscribe: true` on flaky
+networks, or raise `maxCount` / `maxAge` if clients need longer catch-up.
+
+## Resume and gaps
+
+<Callout title="Detailed section">
+  Resume is exclusive: replay events **after** `Last-Event-ID`, then continue live. Unknown or
+  pruned ids throw **OKE1014** before the SSE body — HTTP maps that to **410** `LiveResumeGap`.
+</Callout>
+
+| Symptom | Meaning | Fix |
+| ------- | ------- | --- |
+| **OKE1014** / 410 `LiveResumeGap` | Cursor gone from the tape | Drop `Last-Event-ID`; replay remaining |
+| `autoResubscribe: true` | Client clears gap after backoff | Prefer for flaky networks |
+| Custom `fx.live(signal, { match })` | Server-side filter | Do not wrap with `fx.json.stream` |
+
+```text
+Cursor "{afterId}" missing on "{signal}".
+```
+
+SSE frames carry optional `id:` lines. Clients that reconnect send
+`Last-Event-ID` from the last `id:` they actually received. A **410** means that cursor is
+gone — drop it and replay the remaining tape.
+
+## Client subscription
+
+<Callout title="Detailed section">
+  `signal.live` is HTTP SSE. `for await` stays on the server; the browser uses a callback.
+  Prefer `api.live` or `useLive` — not raw `EventSource` on an invented path.
+</Callout>
+
+The client picks the unique exposure whose `matchKey` fields are a subset of the input,
+preferring the largest match (`{ orderId }` beats firehose). A tie needs `via: "unit.flow"`.
+
+```typescript
+const stop = api.live(
+  orderStatus,
+  { orderId: "ord_1" },
+  {
+    onEvent: (event) => {
+      /* { orderId, status } */
+    },
+    onError: (err) => {
+      /* 4xx, envelope, or drop */
+    },
+    onOpen: () => {
+      /* HTTP 200, including reconnects */
+    },
+    autoResubscribe: false,
+  },
+);
+stop();
+```
+
+`api.orders.events({ orderId }, { onEvent })` is the same shape on the exposing Flow.
+Reconnects send `Last-Event-ID` from the last `id:` received.
+
+| Option | Default | Meaning |
+| ------ | ------- | ------- |
+| `onEvent` | *(required)* | Each JSON frame from the tape |
+| `onError` | omitted | 4xx, envelope errors, or network drop |
+| `onOpen` | omitted | After a successful SSE open (incl. reconnects) |
+| `autoResubscribe` | `false` | Re-open after a drop (500ms…30s backoff) |
+| `via` | omitted | Disambiguate when two exposures share a match shape |
+| `signal` | omitted | `AbortSignal` to cancel the subscribe |
+
+React:
+
+```typescript
+import { useLive } from "okengine/client-react";
+
+const { events, latest, error, isConnected } = useLive(
+  api,
+  orderStatus,
+  { orderId: "ord_1" },
+  { autoResubscribe: true },
+);
+```
+
+Resource live queries use `useLiveQuery` (snapshot + classified events), not `api.live`.
+See [Client](/docs/reference/client).
+
+## What live is not
+
+<Callout title="Detailed section">
+  Pick physics from the guarantee you need. Live is the wrong tool when work must be claimed
+  once, or when every in-process listener should react with no retained history.
+</Callout>
+
+| Need | Use instead |
+| ---- | ----------- |
+| Exactly one worker processes the job | [`once`](/docs/elements/signal/once) |
+| Every active Flow gets a copy, no tape | [`broadcast`](/docs/elements/signal/broadcast) |
+| Classified CDC rows for a list window | [`http.resource` live](/docs/elements/flow/http#resources) / `useLiveQuery` |
+| Durable multi-step work with journal | [Durable Workflows](/docs/elements/flow/workflows) |
+
+Live does **not** use the `once` visibility lease or dead-letter queue. `retries` /
+`deadLetter` may appear on the declare options bag, but the live path is the retained tape +
+SSE resume — not competing-consumer physics.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="404 on /_oke/live/…">
+  Confirm `on(http.live(signal))` (or a path `.live(signal)`) is adopted. Names in the default
+  path are URI-encoded (`encodeURIComponent`). A bare `404` with body `Not Found` means the
+  router found no match.
+</Accordion>
+
+<Accordion title="TypeError: live exposure must be GET">
+  `.live(signal)` only attaches to `http.get` / `http.live`. Other verbs reject live
+  synthesis: `on(http.*.live(signal)): live exposure must be GET`.
+</Accordion>
+
+<Accordion title="OKE1013 — live signal exposed twice">
+  Cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
+  Two firehoses (`http.live` or param-less `.live`) that share the signal and gates cannot boot.
+  Change the gate, add a path-param filter, or remove a route.
+</Accordion>
+
+<Accordion title="OKE1011 — method + path bound twice">
+  Cause: `{method} {path} is bound twice (flow "{flow}").` Two mounts collide on the same
+  method + path (for example two `http.live` firehoses that resolve to the same URL). Drop one
+  binding.
+</Accordion>
+
+<Accordion title="OKE1014 — 410 LiveResumeGap">
+  Cause: `Cursor "{afterId}" missing on "{signal}".` That `Last-Event-ID` was pruned or never
+  existed. Reconnect without it; remaining events replay. `autoResubscribe: true` does this
+  after backoff.
+</Accordion>
+
+<Accordion title="OKE1042 when emitting live">
+  No subscriber / exposure counted. Set `{ optional: true }` (usual for firehoses) or mount
+  `http.live` before emitting in tests.
+</Accordion>
+
+<Accordion title="OKE1043 on emit">
+  Cause: `"{resource}": {detail}` from the Standard Schema issues. Align the payload with
+  `schema` — no client receives a frame.
+</Accordion>
+
+<Accordion title="Bound on(liveSignal, flow) as a worker">
+  Live is not competing-consumer physics. Use `signal.once` for workers, or expose SSE with
+  `http.live`.
+</Accordion>
+
+<Accordion title="Raw EventSource on /api/signals/…">
+  That path is not the engine firehose. Use `GET /_oke/live/{name}`, a gated `.live` route, or
+  `api.live` / `useLive` from the typed client.
+</Accordion>
+
+<Accordion title="Multiple live exposures (client)">
+  Two routes share the same match shape. Pass `via: "unit.flow"` or call the exposing Flow
+  (`api.orders.events({ orderId }, { onEvent })`) instead of root `api.live`.
+</Accordion>
+
+<Accordion title="TypeError: retention is only valid with signal.live">
+  `retention: { maxAge, maxCount }` is live-only. Drop it on queue / pub-sub Signals, or switch
+  to `signal.live`.
+</Accordion>
+
+<Accordion title="live query requires a primary key / RLS driver">
+  Extract: `live: true on table "…" requires a primary key column`. Runtime needs an
+  RLS-capable SQL driver (`postgres` / `pglite`) and a gated identity. That path is
+  resource live — not `signal.live`. Attach `.gate(...)` and declare a PK.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — exposure, uniqueness, match
+- [Signal Overview](/docs/elements/signal) — delivery matrix and drivers
+- [Once](/docs/elements/signal/once) — when you need competing workers instead
+- [Broadcast](/docs/elements/signal/broadcast) — ephemeral fan-out without a tape
+- [Client](/docs/reference/client) — `api.live`, `useLive`, `useLiveQuery`
+- [fx](/docs/reference/fx) — `fx.emit`, `fx.live`
+- [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers
+- [Errors](/docs/reference/errors) — OKE1013 · OKE1014 · OKE1042 · OKE1043
 
 ## Next
 
 <Cards>
   <Card
-    title="Store Element"
-    description="Learn how data is stored at rest across SQL, KV, and files."
-    href="/docs/elements/store"
+    title="HTTP · Live Streams"
+    description="Firehose paths, filters, uniqueness, and client subscribe."
+    href="/docs/elements/flow/http#live-streams"
+  />
+  <Card
+    title="Client"
+    description="api.live and useLive for browsers."
+    href="/docs/reference/client"
   />
   <Card
     title="Signal Overview"
-    description="Return to Signal overview."
+    description="once / broadcast / live in one place."
     href="/docs/elements/signal"
   />
 </Cards>

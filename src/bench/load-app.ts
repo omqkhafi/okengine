@@ -81,16 +81,10 @@ clockRt.onCron(CRON, async () => {});
 
 // --- Signal (once + live physics) -------------------------------------------
 const signalPath = `/tmp/oke-bench-signal-${process.pid}.json`;
-const BENCH_JOB = signal("bench-job", {
-  delivery: "once",
-  retries: 3,
+const BENCH_JOB = signal.once("bench-job", { retries: 3,
   deadLetter: true,
-  optional: true,
-});
-const BENCH_LIVE = signal("bench-live", {
-  delivery: "live",
-  retention: { maxCount: 100 },
-});
+  optional: true });
+const BENCH_LIVE = signal.live("bench-live", { retention: { maxCount: 100 } });
 const signalRt = createSignalRuntime({
   driver: memorySignalDriver,
   durablePath: signalPath,

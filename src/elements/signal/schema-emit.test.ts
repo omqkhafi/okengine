@@ -50,12 +50,9 @@ const drivers: Array<{
 for (const { label, driver, setup } of drivers) {
   describe(`signal schema emit · ${label}`, () => {
     test("invalid payload rejected at emit with OKE1043; valid succeeds", async () => {
-      const orderPlaced = signal("order-placed", {
-        delivery: "once",
-        schema: z.object({
+      const orderPlaced = signal.once("order-placed", { schema: z.object({
           orderId: z.string(),
-          total: z.number(),
-        }),
+          total: z.number() }),
         retries: 1,
         deadLetter: true,
       });
@@ -90,10 +87,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("no schema: any payload still accepted", async () => {
-      const loose = signal("hook", {
-        delivery: "once",
-        optional: true,
-      });
+      const loose = signal.once("hook", { optional: true });
       const bus = await openBus(driver, [loose], setup?.() ?? {});
       const got: unknown[] = [];
       await bus.subscribe("hook", "c1", async (m) => {

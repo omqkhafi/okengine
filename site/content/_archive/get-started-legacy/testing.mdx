@@ -178,10 +178,7 @@ Signals with `delivery: "live"` back client feeds and SSE streams. The harness
 exposes the retained event stream so you can assert both sides deterministically:
 
 ```typescript title="tests/live.test.ts"
-const orderStatus = signal("order-status", {
-  delivery: "live",
-  retention: { maxCount: 10 },
-});
+const orderStatus = signal.live("order-status", { retention: { maxCount: 10 } });
 
 on(
   http.post("/orders/status").public(),

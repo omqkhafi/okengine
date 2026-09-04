@@ -8,24 +8,18 @@ const CommentRef = z.object({
 });
 
 /** Comment added — mention job (exactly one worker). */
-export const commentAdded = signal("comment-added", {
-  delivery: "once",
+export const commentAdded = signal.once("comment-added", {
   retries: 3,
   deadLetter: true,
   schema: CommentRef,
 });
 
 /** Comment changed — fan-out (search + future subscribers). */
-export const commentChanged = signal("comment-changed", {
-  delivery: "broadcast",
+export const commentChanged = signal.broadcast("comment-changed", {
   retries: 3,
   deadLetter: true,
   schema: CommentRef,
 });
 
 /** Comment thread — live feed a late subscriber can replay. */
-export const commentThread = signal("comment-thread", {
-  delivery: "live",
-  optional: true,
-  schema: CommentRef,
-});
+export const commentThread = signal.live("comment-thread", { optional: true, schema: CommentRef });

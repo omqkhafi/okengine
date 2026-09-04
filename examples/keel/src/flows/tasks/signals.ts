@@ -9,32 +9,28 @@ const TaskRef = tasksZod.select.pick({
 });
 
 /** Task created — index job (exactly one worker). */
-export const taskCreated = signal("task-created", {
-  delivery: "once",
+export const taskCreated = signal.once("task-created", {
   retries: 5,
   deadLetter: true,
   schema: TaskRef.extend({ assigneeEmail: z.string().nullable() }),
 });
 
 /** Task changed — fan-out (notify). */
-export const taskChanged = signal("task-changed", {
-  delivery: "broadcast",
+export const taskChanged = signal.broadcast("task-changed", {
   retries: 3,
   deadLetter: true,
   schema: TaskRef.extend({ assigneeEmail: z.string().nullable().optional() }),
 });
 
 /** Task completed — fan-out. */
-export const taskCompleted = signal("task-completed", {
-  delivery: "broadcast",
+export const taskCompleted = signal.broadcast("task-completed", {
   retries: 3,
   deadLetter: true,
   schema: TaskRef,
 });
 
 /** Assignee changed — realtime inbox. */
-export const taskAssigned = signal("task-assigned", {
-  delivery: "live",
+export const taskAssigned = signal.live("task-assigned", {
   optional: true,
   retries: 3,
   deadLetter: true,

@@ -113,7 +113,7 @@ None of that required new code beyond what's above. It required the four lines t
 | ----------------------------------- | ------- | ------------------------------------ |
 | `http.post("/signup")`             | Flow    | A request arrives                  |
 | `clock("name", { every: "10m" })`  | Clock   | A time interval elapses            |
-| `signal("name", {...})`            | Signal  | Another flow announces something   |
+| `signal.once("name", {…})` / `.broadcast` / `.live` | Signal  | Another flow announces something   |
 | `db.table(users).changed("email")` | Store   | A database row changes             |
 | `mcp.tool("name")`                 | AI      | An AI agent calls it               |
 

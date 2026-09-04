@@ -47,6 +47,21 @@ const config = {
   async redirects() {
     return [
       {
+        source: "/docs/elements/signal/queues",
+        destination: "/docs/elements/signal/once",
+        permanent: true,
+      },
+      {
+        source: "/docs/elements/signal/pubsub",
+        destination: "/docs/elements/signal/broadcast",
+        permanent: true,
+      },
+      {
+        source: "/docs/elements/signal/streams",
+        destination: "/docs/elements/signal/live",
+        permanent: true,
+      },
+      {
         source: "/docs/elements/flow/jobs",
         destination: "/docs/elements/flow/consumers",
         permanent: true,

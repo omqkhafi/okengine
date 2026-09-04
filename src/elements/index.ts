@@ -43,7 +43,11 @@ export type {
 export { signal, createSignalRuntime } from "./signal.ts";
 export type {
   SignalDecl,
+  SignalLiveOptions,
+  SignalNamespace,
   SignalOptions,
+  SignalRetention,
+  SignalSharedOptions,
   SignalRuntime,
   CreateSignalRuntimeOptions,
 } from "./signal.ts";

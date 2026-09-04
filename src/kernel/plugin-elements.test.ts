@@ -21,7 +21,7 @@ describe("plugin element contributions", () => {
       dev: "test-otp-signing-key",
     });
     const expire = clock("expire-otp", { every: "1m" });
-    const bus = signal("otp.events", { delivery: "once" });
+    const bus = signal.once("otp.events");
     const member = gate.policy("plugin-member", ({ auth }) => !!auth.verified);
 
     const twoFactor = plugin("twoFactor-scaffold", { version: "0.0.1" })

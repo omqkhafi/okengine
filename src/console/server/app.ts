@@ -4,7 +4,7 @@
 
 import { resolve } from "node:path";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
-import { signal as declareSignal } from "../../elements/signal/declare.ts";
+import { signal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import { oke, type OkeApp } from "../../kernel/index.ts";
 import {
@@ -439,28 +439,22 @@ export async function bindManifestSignalBus(state: ConsoleState): Promise<void> 
     now: state.now,
   });
   for (const [name, s] of declared) {
-    if (s.delivery === "live") {
-      runtime.register(
-        declareSignal(name, {
-          delivery: "live",
-          retries: s.retries,
-          deadLetter: s.deadLetter,
-          schema: s.schema,
-          optional: s.optional,
-          ...(s.retention !== undefined ? { retention: s.retention } : {}),
-        }),
-      );
-    } else {
-      runtime.register(
-        declareSignal(name, {
-          delivery: s.delivery,
-          retries: s.retries,
-          deadLetter: s.deadLetter,
-          schema: s.schema,
-          optional: s.optional,
-        }),
-      );
-    }
+    const opts = {
+      retries: s.retries,
+      deadLetter: s.deadLetter,
+      schema: s.schema,
+      optional: s.optional,
+    };
+    const decl =
+      s.delivery === "live"
+        ? signal.live(name, {
+            ...opts,
+            ...(s.retention !== undefined ? { retention: s.retention } : {}),
+          })
+        : s.delivery === "broadcast"
+          ? signal.broadcast(name, opts)
+          : signal.once(name, opts);
+    runtime.register(decl);
   }
   state.signalBus = await runtime.start();
 }

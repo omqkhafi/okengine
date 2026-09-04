@@ -179,7 +179,7 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
 | Call-only | `flow(name, { … })` or `on(internal, flow)` | `fx.call` | Callee `in` |
 | MCP | `on(mcp.tool("x").gate(…), flow)` | MCP `tools/call` | Tool args |
 
-`delivery: "live"` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
+`signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
 
 ## The Capabilities of Flow
 

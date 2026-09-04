@@ -579,10 +579,7 @@ export const embeddings = store.index("embeddings", {
 
 export const sessions = store.kv("sessions", { description: "Session cache" });
 
-export const orderPlaced = signal("order-placed", {
-  delivery: "once",
-  description: "Order placed event",
-});
+export const orderPlaced = signal.once("order-placed", { description: "Order placed event" });
 
 export const bookingConfirmed = channel.template("booking-confirmed", {
   medium: "email",
@@ -628,11 +625,8 @@ export const stripeKey = vault.secret("STRIPE_KEY", {
     const manifest = await extractFromSources({
       "src/signals.ts": `
 import { signal } from "okengine";
-export const orderStatus = signal("order-status", {
-  delivery: "live",
-  optional: true,
-  retention: { maxAge: "24h", maxCount: 500 },
-});
+export const orderStatus = signal.live("order-status", { optional: true,
+  retention: { maxAge: "24h", maxCount: 500 } });
 `,
     });
     expect(manifest.signals?.["order-status"]?.retention).toEqual({
@@ -1165,7 +1159,7 @@ describe("extractManifest — kv key methods", () => {
 import { on, flow, clock, store, signal } from "okengine";
 
 export const draftsKv = store.kv("drafts");
-export const draftExpired = signal("draft-expired", { delivery: "broadcast", retries: 0, deadLetter: false });
+export const draftExpired = signal.broadcast("draft-expired", { retries: 0, deadLetter: false });
 export const expireClock = clock("drafts.expire", { every: "10m" });
 
 export const expire = on(
@@ -1197,7 +1191,7 @@ describe("extractManifest — fx.deadLetters", () => {
     const source = `
 import { on, flow, http, signal } from "okengine";
 
-export const notify = signal("notify", { delivery: "once" });
+export const notify = signal.once("notify");
 
 export const failed = on(
   http.get("/notifications/failed").public(),
@@ -1218,9 +1212,7 @@ import { on, http, gate, signal } from "okengine";
 import { z } from "zod";
 
 export const member = gate.policy("member", ({ auth }) => !!auth.verified);
-export const orderStatus = signal("order-status", {
-  delivery: "live",
-  optional: true,
+export const orderStatus = signal.live("order-status", { optional: true,
   schema: z.object({ orderId: z.string(), status: z.string() }),
 });
 
@@ -1241,7 +1233,7 @@ export const events = on(http.get("/orders/:orderId/events").gate(member).live(o
 import { on, http, gate, signal } from "okengine";
 
 export const member = gate.policy("member", ({ auth }) => !!auth.verified);
-export const orderStatus = signal("order-status", { delivery: "live", optional: true });
+export const orderStatus = signal.live("order-status", { optional: true });
 
 export const firehose = on(http.live(orderStatus).gate(member));
 `;
@@ -1257,7 +1249,7 @@ export const firehose = on(http.live(orderStatus).gate(member));
     const source = `
 import { on, flow, http, signal } from "okengine";
 
-export const orderStatus = signal("order-status", { delivery: "live", optional: true });
+export const orderStatus = signal.live("order-status", { optional: true });
 
 export const events = on(
   http.get("/feed").public().live(orderStatus),
@@ -1530,7 +1522,7 @@ export const ping = flow({ do: () => ({ ok: true }) });
 import { on, flow, http, store, signal } from "okengine";
 export const db = store.sql("db");
 export const notes = { name: "notes" };
-export const noteCreated = signal("note-created");
+export const noteCreated = signal.once("note-created");
 export const get = on(
   http.get("/notes/:id").public(),
   flow("notes.get", {
@@ -1542,7 +1534,7 @@ export const get = on(
 import { on, flow, http, store, signal } from "okengine";
 export const db = store.sql("db");
 export const notes = { name: "notes" };
-export const noteCreated = signal("note-created");
+export const noteCreated = signal.once("note-created");
 export const get = on(
   http.get().public(),
   flow({

@@ -17,13 +17,10 @@ const admin = gate.policy("admin", ({ auth }) => !!auth.verified);
 const partner = gate.policy("partner", ({ auth }) => !!auth.verified);
 
 const orderStatus = () =>
-  signal("order-status", {
-    delivery: "live",
-    optional: true,
+  signal.live("order-status", { optional: true,
     schema: z.object({
       orderId: z.string(),
-      status: z.enum(["placed", "fulfilling", "shipped"]),
-    }),
+      status: z.enum(["placed", "fulfilling", "shipped"]) }),
   });
 
 beforeEach(() => {

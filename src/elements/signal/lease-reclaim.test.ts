@@ -30,11 +30,8 @@ describe("signal lease reclaim", () => {
     const marker = join(dir, "claimed");
     try {
       let t = 5_000;
-      const once = signal("order-placed", {
-        delivery: "once",
-        retries: 3,
-        deadLetter: true,
-      });
+      const once = signal.once("order-placed", { retries: 3,
+        deadLetter: true });
       const r1 = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,
@@ -83,7 +80,7 @@ describe("signal lease reclaim", () => {
 
   test("postgres: expired inflight reclaimed in the same claim query", async () => {
     let t = 10_000;
-    const once = signal("order-placed", { delivery: "once", retries: 3 });
+    const once = signal.once("order-placed", { retries: 3 });
     const sql = createPostgresSignalFake({ now: () => t });
     const runtime = createSignalRuntime({
       driver: postgresSignalDriver,

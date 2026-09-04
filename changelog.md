@@ -78,12 +78,45 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Renamed Signal delivery docs to match helpers: `/docs/elements/signal/once`
+  (was queues), `/broadcast` (was pubsub), `/live` (was streams). Old URLs
+  redirect permanently. Cards, sidebar, and cross-links updated.
 - Installation / Try it / README badges and agent contracts document Bun ≥ 1.4.1.
+- Rewrote Signal element docs (`/docs/elements/signal` + Once / Broadcast /
+  Live) for `signal.once` / `broadcast` / `live` (HTTP-shaped helpers):
+  progressive patterns, options tables, lease / retention / drivers honesty,
+  real error codes (OKE1042 · OKE1043 · OKE1014), teaching figures, and
+  Troubleshooting. Corrected `deadLetter` (boolean, not a queue name) and live
+  exposure via `http.live` / `api.live` (not invented EventSource paths).
+- Elevated [`signal.once`](/docs/elements/signal/once) to HTTP-trigger docs
+  depth: delivery / binding / emit reference, lease reclaim and ordering
+  accordions, failure-reason + DLQ shapes, idempotency with `durable` +
+  `fx.step`, and expanded Troubleshooting (OKE1001 · OKE1042 · OKE1043).
+  Dropped inaccurate “exponential” retry wording — attempts requeue with no
+  delay backoff.
+- Signal · Live (`elements/signal/live`): rewritten to the HTTP page’s depth —
+  three-step Smallest Example, Progressive Patterns, Options Reference, Exposure
+  (filtered / custom match / live queries / uniqueness), Emit, Retention, Resume,
+  Client subscription (`api.live` / `useLive`), What live is not, expanded
+  Troubleshooting.
+- Signal · Broadcast (`elements/signal/broadcast`): rewritten to the HTTP
+  page’s depth — three-step Smallest Example, Progressive Patterns, delivery
+  reference + options, Fan-out Physics, Emit and Effects, Subscribers tabs,
+  Choosing Physics accordions, and expanded Troubleshooting (OKE1042 ·
+  OKE1043 · retention type error · browser vs Flow consumers).
+- Signal · Broadcast teaching figure (`SignalBroadcastFanout`): ambient demo
+  that one emit fans an independent copy to every active subscriber while an
+  offline listener misses the event (no retained tape) — peers
+  `SignalOnceLease` / `SignalLiveReplay` on once / live.
 
 ### 💥 Breaking Changes
 
 #### Runtime
 
+- Signal declarations use HTTP-shaped helpers: `signal.once(name, opts?)`,
+  `signal.broadcast(name, opts?)`, and `signal.live(name, opts?)`. The callable
+  `signal(name, { delivery })` form is removed. Manifest `delivery` is unchanged
+  (compiler extracts it from the helper name).
 - Removed the native `ollama` AI driver (`driverId: "ollama"` /
   `drivers.ai: "ollama"`). Talk to Ollama via `openai-compatible` +
   `OKE_AI_URL=http://127.0.0.1:11434/v1`. Docker recipe, library pull, and
@@ -162,6 +195,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Migrated all examples (`keel`), starters (`create-oke` standard and advanced templates), and test fixtures to the consolidated clock and table trigger syntax.
 
 ### 🐛 Fixed
+
+#### Console — Observability
+
+- Rebuilt Manifest signal declarations through `signal.once` / `broadcast` /
+  `live` in Console bus bind and `projectSignalsList` so `bun run typecheck`
+  passes after the callable `signal(name, { delivery })` removal.
 
 #### Runtime
 

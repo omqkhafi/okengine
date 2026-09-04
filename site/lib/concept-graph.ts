@@ -24,7 +24,7 @@ export const CANONICAL_ELEMENTS = [
     name: "Signal",
     symbol: "Sg",
     essence: "Data in motion",
-    summary: "Queues, pub/sub, and streams — delivery physics are a property.",
+    summary: "Once, broadcast, and live — delivery physics are a property.",
     replaces: "queue · pub/sub · stream · websocket · SSE · event bus",
     primitiveKind: "transport",
   },

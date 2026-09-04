@@ -24,11 +24,8 @@ describe("signal dry-run replay — external effects stubbed", () => {
 
     const runtime = createSignalRuntime({ driver: memorySignalDriver });
     runtime.register(
-      signal("order-placed", {
-        delivery: "once",
-        retries: 0,
-        deadLetter: true,
-      }),
+      signal.once("order-placed", { retries: 0,
+        deadLetter: true }),
     );
     const bus = await runtime.start();
 

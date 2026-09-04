@@ -13,7 +13,7 @@ import { http } from "./triggers.ts";
 describe("correlation — parentId across Flow → Signal → Flow", () => {
   test("consumer WideEvent.parentId equals producer run id", async () => {
     resetBindings();
-    const orderPlaced = signal("corr-order-placed", { delivery: "once" });
+    const orderPlaced = signal.once("corr-order-placed");
     const runs = createRunsRuntime({ driver: "memory" });
     await runs.open();
 

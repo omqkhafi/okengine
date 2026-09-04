@@ -48,7 +48,7 @@ export const ELEMENTS: ReadonlyArray<{
     name: "Signal",
     symbol: "Sg",
     essence: "data in motion",
-    description: "Queues, pub/sub, and streams — delivery is a property.",
+    description: "Once, broadcast, and live — delivery is a property.",
     replaces: "queue · pub/sub · stream · websocket · SSE · event bus",
     href: "/docs/elements/signal",
     icon: Radio,

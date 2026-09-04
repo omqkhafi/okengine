@@ -1,6 +1,6 @@
 /**
  * Signal element acceptance:
- * - delivery is mandatory with no default
+ * - delivery helpers: signal.once / broadcast / live
  * - rolled-back transaction emits nothing
  * - crash between write and emit loses nothing (transactional outbox)
  * - competing consumers under once receive each message once
@@ -76,25 +76,20 @@ async function openBus(
 }
 
 describe("signal declaration", () => {
-  test("delivery is mandatory with no default", () => {
-    expect(() =>
-      // @ts-expect-error delivery is required
-      signal("x", { retries: 1 }),
-    ).toThrow(/delivery is mandatory/);
-
-    const s = signal("order-placed", { delivery: "once" });
-    expect(s.delivery).toBe("once");
-    expect(s.name).toBe("order-placed");
+  test("helpers stamp delivery physics", () => {
+    expect(signal.once("order-placed").delivery).toBe("once");
+    expect(signal.broadcast("news").delivery).toBe("broadcast");
+    expect(signal.live("seat-feed").delivery).toBe("live");
+    expect(signal.once("order-placed").name).toBe("order-placed");
   });
 
   test("retention is live-only", () => {
     expect(() =>
       // @ts-expect-error retention is live-only
-      signal("order-placed", { delivery: "once", retention: { maxCount: 2 } }),
+      signal.once("order-placed", { retention: { maxCount: 2 } }),
     ).toThrow(/retention is only valid/);
 
-    const live = signal("order-status", {
-      delivery: "live",
+    const live = signal.live("order-status", {
       optional: true,
       retention: { maxAge: "24h", maxCount: 500 },
     });
@@ -105,7 +100,7 @@ describe("signal declaration", () => {
 for (const { label, driver, setup } of drivers) {
   describe(`signal driver · ${label}`, () => {
     test("rolled-back transaction emits nothing", async () => {
-      const once = signal("order-placed", { delivery: "once" });
+      const once = signal.once("order-placed");
       const bus = await openBus(driver, [once], setup?.() ?? {});
       const seen: unknown[] = [];
       await bus.subscribe("order-placed", "c1", async (m) => {
@@ -123,7 +118,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("commit makes write + emit visible together", async () => {
-      const once = signal("order-placed", { delivery: "once" });
+      const once = signal.once("order-placed");
       const bus = await openBus(driver, [once], setup?.() ?? {});
       const seen: unknown[] = [];
       await bus.subscribe("order-placed", "c1", async (m) => {
@@ -141,7 +136,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("competing consumers under once receive each message exactly once", async () => {
-      const once = signal("order-placed", { delivery: "once", retries: 2 });
+      const once = signal.once("order-placed", { retries: 2 });
       const bus = await openBus(driver, [once], setup?.() ?? {});
       const got: string[] = [];
 
@@ -163,7 +158,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("once: a single emit is received by exactly one of two consumers", async () => {
-      const once = signal("order-placed", { delivery: "once", retries: 2 });
+      const once = signal.once("order-placed", { retries: 2 });
       const bus = await openBus(driver, [once], setup?.() ?? {});
       const got: string[] = [];
       await bus.subscribe("order-placed", "worker-a", async () => {
@@ -179,7 +174,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("broadcast reaches every subscriber", async () => {
-      const bcast = signal("news", { delivery: "broadcast" });
+      const bcast = signal.broadcast("news");
       const bus = await openBus(driver, [bcast], setup?.() ?? {});
       const a: unknown[] = [];
       const b: unknown[] = [];
@@ -198,7 +193,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("live is client-subscribable", async () => {
-      const live = signal("seat-feed", { delivery: "live", optional: true });
+      const live = signal.live("seat-feed", { optional: true });
       const bus = await openBus(driver, [live], setup?.() ?? {});
       const it = bus.live("seat-feed")[Symbol.asyncIterator]();
       const pending = it.next();
@@ -211,11 +206,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("DLQ preserves typed failure reasons per attempt", async () => {
-      const once = signal("flaky", {
-        delivery: "once",
-        retries: 2,
-        deadLetter: true,
-      });
+      const once = signal.once("flaky", { retries: 2, deadLetter: true });
       const bus = await openBus(driver, [once], setup?.() ?? {});
       let attempts = 0;
       await bus.subscribe("flaky", "c1", async () => {
@@ -241,7 +232,7 @@ for (const { label, driver, setup } of drivers) {
 
 describe("postgres transactional emit (dual-write fix)", () => {
   test("fx.emit enrols in the caller's transaction via runtime", async () => {
-    const orderPlaced = signal("order-placed", { delivery: "once" });
+    const orderPlaced = signal.once("order-placed");
     const runtime = createSignalRuntime({
       driver: postgresSignalDriver,
       sql: createPostgresSignalFake(),
@@ -268,7 +259,7 @@ describe("postgres transactional emit (dual-write fix)", () => {
 
   test("LISTEN/NOTIFY wakes drain after commit", async () => {
     const sql = createPostgresSignalFake();
-    const once = signal("order-placed", { delivery: "once" });
+    const once = signal.once("order-placed");
     const bus = await openBus(postgresSignalDriver, [once], { sql });
     const seen: unknown[] = [];
     await bus.subscribe("order-placed", "c1", async (m) => {
@@ -291,7 +282,7 @@ describe("postgres transactional emit (dual-write fix)", () => {
 describe("redis / nats outbox relay", () => {
   test("redis relay publishes after commit, not on rollback", async () => {
     const redis = createSignalRedisFake();
-    const once = signal("order-placed", { delivery: "once", optional: true });
+    const once = signal.once("order-placed", { optional: true });
     const bus = await openBus(redisSignalDriver, [once], { redis });
 
     const tx = await bus.begin();
@@ -309,7 +300,7 @@ describe("redis / nats outbox relay", () => {
 
   test("nats relay publishes after commit, not on rollback", async () => {
     const nats = createSignalNatsFake();
-    const once = signal("order-placed", { delivery: "once", optional: true });
+    const once = signal.once("order-placed", { optional: true });
     const bus = await openBus(natsSignalDriver, [once], { nats });
 
     const tx = await bus.begin();
@@ -338,11 +329,7 @@ describe("chaos — kill process mid-transaction", () => {
       expect(code).toBe(99);
 
       // Recover: new process opens the same durable path.
-      const orderPlaced = signal("order-placed", {
-        delivery: "once",
-        retries: 3,
-        deadLetter: true,
-      });
+      const orderPlaced = signal.once("order-placed", { retries: 3, deadLetter: true });
       const runtime = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,
@@ -376,7 +363,7 @@ describe("chaos — kill process mid-transaction", () => {
           import { memorySignalDriver } from ${JSON.stringify(join(import.meta.dir, "../drivers/signal-memory.ts"))};
           import { signal } from ${JSON.stringify(join(import.meta.dir, "signal/declare.ts"))};
           import { createSignalRuntime } from ${JSON.stringify(join(import.meta.dir, "signal/runtime.ts"))};
-          const orderPlaced = signal("order-placed", { delivery: "once", retries: 3, deadLetter: true, optional: true });
+          const orderPlaced = signal.once("order-placed", { retries: 3, deadLetter: true, optional: true });
           const runtime = createSignalRuntime({ driver: memorySignalDriver, durablePath: ${JSON.stringify(durablePath)} });
           runtime.register(orderPlaced);
           const bus = await runtime.start();
@@ -396,11 +383,7 @@ describe("chaos — kill process mid-transaction", () => {
       child.kill(9);
       await child.exited;
 
-      const orderPlaced = signal("order-placed", {
-        delivery: "once",
-        retries: 3,
-        deadLetter: true,
-      });
+      const orderPlaced = signal.once("order-placed", { retries: 3, deadLetter: true });
       const runtime = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,
@@ -434,11 +417,7 @@ describe("chaos — kill process mid-transaction", () => {
       });
       expect(await child.exited).toBe(0);
 
-      const orderPlaced = signal("order-placed", {
-        delivery: "once",
-        retries: 3,
-        deadLetter: true,
-      });
+      const orderPlaced = signal.once("order-placed", { retries: 3, deadLetter: true });
       const runtime = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,
@@ -501,11 +480,7 @@ describe("chaos — kill process mid-transaction", () => {
       await Bun.sleep(leaseMs + 40);
 
       let clock = Date.now() + leaseMs + 1_000;
-      const orderPlaced = signal("order-placed", {
-        delivery: "once",
-        retries: 3,
-        deadLetter: true,
-      });
+      const orderPlaced = signal.once("order-placed", { retries: 3, deadLetter: true });
       const runtime = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,

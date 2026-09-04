@@ -17,10 +17,7 @@ describe("createTestApp live-signal subscriptions", () => {
     resetBindings();
     resetFlowSeq();
 
-    const orderStatus = signal("order-status", {
-      delivery: "live",
-      retention: { maxCount: 10 },
-    });
+    const orderStatus = signal.live("order-status", { retention: { maxCount: 10 } });
 
     on(
       http.post("/orders/status").public(),

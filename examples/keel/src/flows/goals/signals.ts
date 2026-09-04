@@ -8,24 +8,18 @@ const GoalRef = z.object({
 });
 
 /** Goal health dropped to at-risk — exclusive mail. */
-export const goalAtRisk = signal("goal-at-risk", {
-  delivery: "once",
+export const goalAtRisk = signal.once("goal-at-risk", {
   retries: 3,
   deadLetter: true,
   schema: GoalRef,
 });
 
 /** Goal changed — fan-out (ops inbox). */
-export const goalChanged = signal("goal-changed", {
-  delivery: "broadcast",
+export const goalChanged = signal.broadcast("goal-changed", {
   retries: 3,
   deadLetter: true,
   schema: GoalRef,
 });
 
 /** Goal health — live rollup a late subscriber can replay. */
-export const goalHealth = signal("goal-health", {
-  delivery: "live",
-  optional: true,
-  schema: GoalRef,
-});
+export const goalHealth = signal.live("goal-health", { optional: true, schema: GoalRef });

@@ -33,7 +33,7 @@ let bus: SignalBus;
 beforeAll(async () => {
   if (!LIVE_PG) throw new Error("G3 needs live Postgres: set OKE_TEST_POSTGRES=1 + DATABASE_URL");
   sql = createBunSignalSql(LIVE_PG);
-  const decl = signal(SIGNAL_NAME, { delivery: "once", retries: 2, deadLetter: true });
+  const decl = signal.once(SIGNAL_NAME, { retries: 2, deadLetter: true });
   bus = await openPostgresSignal({
     signals: new Map([[decl.name, decl]]),
     sql,

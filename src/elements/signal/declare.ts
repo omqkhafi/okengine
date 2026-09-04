@@ -1,8 +1,8 @@
 /**
  * Signal declaration — data in motion.
  *
- * `delivery` is mandatory with no default: queue / pub-sub / stream were
- * always one object with different physics (unified-theory §3).
+ * Delivery physics are chosen by helper name (`signal.once` / `broadcast` /
+ * `live`), matching `http.get` / `http.post` — no default, no options bag for mode.
  */
 
 import type { SignalDelivery } from "../../manifest/types.ts";
@@ -17,8 +17,8 @@ export interface SignalRetention {
   readonly maxCount?: number;
 }
 
-/** Shared options for every {@link signal} delivery mode. */
-interface SignalOptionsBase {
+/** Shared options for every {@link signal} delivery helper. */
+export interface SignalSharedOptions {
   /** Optional human description for Console / docs (falls back to the signal name). */
   readonly description?: string;
   /** Max delivery attempts before dead-letter (once). */
@@ -34,20 +34,16 @@ interface SignalOptionsBase {
   readonly optional?: boolean;
 }
 
+/** Options for {@link signal.live} — shared fields plus optional tape retention. */
+export type SignalLiveOptions = SignalSharedOptions & {
+  readonly retention?: SignalRetention;
+};
+
 /**
- * Options for {@link signal}.
- *
- * `retention` is live-only — a type error on `once` / `broadcast`.
+ * @deprecated Prefer {@link SignalSharedOptions} / {@link SignalLiveOptions}.
+ * Alias kept for type-only imports that still name `SignalOptions`.
  */
-export type SignalOptions =
-  | (SignalOptionsBase & {
-      readonly delivery: "once" | "broadcast";
-      readonly retention?: never;
-    })
-  | (SignalOptionsBase & {
-      readonly delivery: "live";
-      readonly retention?: SignalRetention;
-    });
+export type SignalOptions = SignalSharedOptions | SignalLiveOptions;
 
 /**
  * Declared signal handle — usable as `on(signal, flow)`, `fx.emit(signal, …)`,
@@ -74,8 +70,33 @@ export interface SignalDecl<T = unknown> {
   readonly _payload?: T;
 }
 
+/** Public Signal declaration namespace — `signal.once` / `broadcast` / `live`. */
+export interface SignalNamespace {
+  /**
+   * Competing queue — exactly one subscriber claims each message.
+   *
+   * @param name - Signal name
+   * @param options - Retry / DLQ / schema policy
+   */
+  once<T = unknown>(name: string, options?: SignalSharedOptions): SignalDecl<T>;
+  /**
+   * Pub/sub fan-out — every subscriber receives each message.
+   *
+   * @param name - Signal name
+   * @param options - Schema / optional policy
+   */
+  broadcast<T = unknown>(name: string, options?: SignalSharedOptions): SignalDecl<T>;
+  /**
+   * Live SSE tape — retained stream for `http.live` / `.live(signal)`.
+   *
+   * @param name - Signal name
+   * @param options - Retention / schema / optional policy
+   */
+  live<T = unknown>(name: string, options?: SignalLiveOptions): SignalDecl<T>;
+}
+
 /**
- * `signal()` pushes into the shared {@link signalRegistry}
+ * `signal.*` pushes into the shared {@link signalRegistry}
  * (`src/kernel/element-registries.ts`) so {@link oke} can auto-populate
  * `signals` with zero explicit array — mirrors the {@link on} trigger-drain
  * registry (`src/kernel/on.ts`).
@@ -95,45 +116,52 @@ export function resetSignals(): void {
   signalRegistry.length = 0;
 }
 
-/**
- * Declare a signal. `delivery` is mandatory — omitting it is a type error.
- *
- * @param name - Signal name
- * @param options - Delivery physics and retry / DLQ policy
- */
-export function signal<T = unknown>(name: string, options: SignalOptions): SignalDecl<T> {
-  if (
-    options.delivery !== "once" &&
-    options.delivery !== "broadcast" &&
-    options.delivery !== "live"
-  ) {
-    throw new TypeError(`signal("${name}"): delivery is mandatory (once | broadcast | live)`);
-  }
+function declareSignal<T = unknown>(
+  name: string,
+  delivery: SignalDelivery,
+  options: SignalSharedOptions | SignalLiveOptions = {},
+): SignalDecl<T> {
   const retention = "retention" in options ? options.retention : undefined;
-  if (retention !== undefined && options.delivery !== "live") {
-    throw new TypeError(`signal("${name}"): retention is only valid with delivery: "live"`);
+  if (retention !== undefined && delivery !== "live") {
+    throw new TypeError(`signal.${delivery}("${name}"): retention is only valid with signal.live`);
   }
   if (retention?.maxAge !== undefined && parseDurationMs(retention.maxAge) <= 0) {
     throw new TypeError(
-      `signal("${name}"): retention.maxAge must be a duration like "24h" or "30s"`,
+      `signal.live("${name}"): retention.maxAge must be a duration like "24h" or "30s"`,
     );
   }
   if (
     retention?.maxCount !== undefined &&
     (!Number.isInteger(retention.maxCount) || retention.maxCount < 1)
   ) {
-    throw new TypeError(`signal("${name}"): retention.maxCount must be an integer ≥ 1`);
+    throw new TypeError(`signal.live("${name}"): retention.maxCount must be an integer ≥ 1`);
   }
   const decl: SignalDecl<T> = {
     name,
-    delivery: options.delivery,
+    delivery,
     ...(options.description !== undefined ? { description: options.description } : {}),
     retries: options.retries ?? 3,
     deadLetter: options.deadLetter ?? true,
     schema: options.schema,
     optional: options.optional ?? false,
-    ...(options.delivery === "live" && retention !== undefined ? { retention } : {}),
+    ...(delivery === "live" && retention !== undefined ? { retention } : {}),
   };
   signalRegistry.push(decl as SignalDecl);
   return decl;
 }
+
+/**
+ * Declare a signal. Delivery physics are chosen by helper name —
+ * `signal.once` · `signal.broadcast` · `signal.live`.
+ */
+export const signal: SignalNamespace = {
+  once<T = unknown>(name: string, options?: SignalSharedOptions): SignalDecl<T> {
+    return declareSignal(name, "once", options);
+  },
+  broadcast<T = unknown>(name: string, options?: SignalSharedOptions): SignalDecl<T> {
+    return declareSignal(name, "broadcast", options);
+  },
+  live<T = unknown>(name: string, options?: SignalLiveOptions): SignalDecl<T> {
+    return declareSignal(name, "live", options);
+  },
+};

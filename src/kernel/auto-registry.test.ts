@@ -33,7 +33,7 @@ describe("oke() auto-registry — stores/secrets/signals/clocks/gates/channel.te
     const dbBefore = store.sql("before-app", { schema: {} });
     const filesBefore = store.files("before-uploads");
     const secretBefore = vault.secret("BEFORE_WEBHOOK_SECRET", { dev: "dev-secret-before" });
-    const signalBefore = signal("before-note-created", { delivery: "once", optional: true });
+    const signalBefore = signal.once("before-note-created", { optional: true });
     const mailBefore = channel.email({ from: "Before <before@localhost>" });
     const templateBefore = mailBefore.template("before-note-created");
 
@@ -71,7 +71,7 @@ describe("oke() auto-registry — stores/secrets/signals/clocks/gates/channel.te
     store.sql("after-app", { schema: {} });
     store.files("after-uploads");
     const secretAfter = vault.secret("AFTER_WEBHOOK_SECRET", { dev: "dev-secret-after" });
-    const signalAfter = signal("after-note-created", { delivery: "once", optional: true });
+    const signalAfter = signal.once("after-note-created", { optional: true });
     const mailAfter = channel.email({ from: "After <after@localhost>" });
     const templateAfter = mailAfter.template("after-note-created");
 
@@ -204,7 +204,7 @@ describe("oke() auto-registry — stores/secrets/signals/clocks/gates/channel.te
   test('registry: "consume" (default) drains stores/secrets/signals/channel.templates — a later app does not inherit them', async () => {
     store.sql("leak-app", { schema: {} });
     vault.secret("LEAK_SECRET", { dev: "dev-leak" });
-    signal("leak-signal", { delivery: "once" });
+    signal.once("leak-signal");
     channel.email().template("leak-template");
 
     const appA = oke({

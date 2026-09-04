@@ -50,8 +50,8 @@
 - Reference gates in Flows via the `gates` array.
 
 # ---------- Signal Patterns ----------
-- Signal delivery physics are MANDATORY: `once`, `broadcast`, `live`.
-- Declare `retries`, `deadLetter`, and `schema` explicitly.
+- Signal delivery helpers are MANDATORY: `signal.once`, `signal.broadcast`, `signal.live` (like `http.get` / `http.post`).
+- Declare `retries`, `deadLetter`, and `schema` explicitly when needed.
 
 # ---------- AI Patterns ----------
 - AI config lives under the `ai` element in the manifest.

@@ -280,9 +280,7 @@ describe("Notes — typeof app carries contracts", () => {
   });
 
   test("typeof app live exposure is subscribe, not JSON RPC", () => {
-    const orderStatus = signal("order-status", {
-      delivery: "live",
-      optional: true,
+    const orderStatus = signal.live("order-status", { optional: true,
       schema: z.object({ orderId: z.string(), status: z.string() }),
     });
     const events = on(http.get("/orders/:orderId/events").live(orderStatus));

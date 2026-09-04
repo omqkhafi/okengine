@@ -90,11 +90,8 @@ for (const { label, driver, setup } of drivers) {
   describe(`signal delivery modes · ${label}`, () => {
     test("once: one message reaches exactly one of two competing consumers", async () => {
       // Shape matches Linkly linkClicked / Provisions order-placed.
-      const once = signal("link-clicked", {
-        delivery: "once",
-        retries: 3,
-        deadLetter: true,
-      });
+      const once = signal.once("link-clicked", { retries: 3,
+        deadLetter: true });
       const bus = await openBus(driver, [once], setup?.() ?? {});
       const got: string[] = [];
 
@@ -113,11 +110,8 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("once: retries+1 attempts then dead-letter when deadLetter: true", async () => {
-      const once = signal("flaky", {
-        delivery: "once",
-        retries: 2,
-        deadLetter: true,
-      });
+      const once = signal.once("flaky", { retries: 2,
+        deadLetter: true });
       const bus = await openBus(driver, [once], setup?.() ?? {});
       let attempts = 0;
       await bus.subscribe("flaky", "c1", async () => {
@@ -136,11 +130,8 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("once: deadLetter: false marks delivered after exhausting retries", async () => {
-      const once = signal("flaky-drop", {
-        delivery: "once",
-        retries: 1,
-        deadLetter: false,
-      });
+      const once = signal.once("flaky-drop", { retries: 1,
+        deadLetter: false });
       const bus = await openBus(driver, [once], setup?.() ?? {});
       let attempts = 0;
       await bus.subscribe("flaky-drop", "c1", async () => {
@@ -159,7 +150,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("broadcast: every subscriber receives its own copy", async () => {
-      const bcast = signal("news", { delivery: "broadcast" });
+      const bcast = signal.broadcast("news");
       const bus = await openBus(driver, [bcast], setup?.() ?? {});
       const a: unknown[] = [];
       const b: unknown[] = [];
@@ -179,7 +170,7 @@ for (const { label, driver, setup } of drivers) {
 
     test("live: late subscriber replays full retained history (unbounded)", async () => {
       // Shape matches Skyport seat-feed.
-      const live = signal("seat-feed", { delivery: "live", optional: true });
+      const live = signal.live("seat-feed", { optional: true });
       const bus = await openBus(driver, [live], setup?.() ?? {});
 
       await bus.emit("seat-feed", { seat: "12A" });
@@ -194,11 +185,8 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("live: maxCount keeps the newest N", async () => {
-      const live = signal("seat-feed", {
-        delivery: "live",
-        optional: true,
-        retention: { maxCount: 2 },
-      });
+      const live = signal.live("seat-feed", { optional: true,
+        retention: { maxCount: 2 } });
       const bus = await openBus(driver, [live], setup?.() ?? {});
 
       for (const seat of ["12A", "12B", "12C", "12D", "12E"]) {
@@ -212,11 +200,8 @@ for (const { label, driver, setup } of drivers) {
 
     test("live: maxAge prunes on emit and on live() open", async () => {
       let t = 1_000;
-      const live = signal("seat-feed", {
-        delivery: "live",
-        optional: true,
-        retention: { maxAge: "1s" },
-      });
+      const live = signal.live("seat-feed", { optional: true,
+        retention: { maxAge: "1s" } });
       const bus = await openBus(driver, [live], { now: () => t, ...(setup?.() ?? {}) });
 
       await bus.emit("seat-feed", { seat: "old" });
@@ -230,7 +215,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("live: afterId skips already-delivered events", async () => {
-      const live = signal("seat-feed", { delivery: "live", optional: true });
+      const live = signal.live("seat-feed", { optional: true });
       const bus = await openBus(driver, [live], setup?.() ?? {});
 
       await bus.emit("seat-feed", { seat: "12A" });
@@ -249,7 +234,7 @@ for (const { label, driver, setup } of drivers) {
     });
 
     test("live: unknown afterId throws OKE1014", async () => {
-      const live = signal("seat-feed", { delivery: "live", optional: true });
+      const live = signal.live("seat-feed", { optional: true });
       const bus = await openBus(driver, [live], setup?.() ?? {});
       await bus.emit("seat-feed", { seat: "12A" });
       await bus.drain();

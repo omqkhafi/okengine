@@ -14,11 +14,7 @@ export const links = store.schema.table("links", {
   createdAt: field.integer(),
 });
 
-export const linkClicked = signal("link-clicked", {
-  delivery: "once",
-  retries: 3,
-  deadLetter: true,
-});
+export const linkClicked = signal.once("link-clicked", { retries: 3, deadLetter: true });
 
 // ① HTTP
 export const create = on(

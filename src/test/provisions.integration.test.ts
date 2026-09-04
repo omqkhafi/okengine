@@ -28,16 +28,10 @@ describe("Provisions integration", () => {
       dev: "sk_test_local",
     });
 
-    const orderPlaced = signal("order-placed", {
-      delivery: "once",
-      retries: 3,
-      deadLetter: true,
-    });
-    const orderNews = signal("order-news", {
-      delivery: "once",
-      retries: 3,
-      deadLetter: true,
-    });
+    const orderPlaced = signal.once("order-placed", { retries: 3,
+      deadLetter: true });
+    const orderNews = signal.once("order-news", { retries: 3,
+      deadLetter: true });
 
     const mail = channel.email({ from: "Provisions <no-reply@provisions.sa>" });
     const orderConfirmed = mail.template("order-confirmed", {

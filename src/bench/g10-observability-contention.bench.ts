@@ -137,7 +137,7 @@ async function runArm(
     const obsLats: number[] = [];
     let obsQueries = 0;
     if (observers && sql) {
-      const decl = signal("g10-watch", { delivery: "once", optional: true });
+      const decl = signal.once("g10-watch", { optional: true });
       const consoleBus: SignalBus = await openPostgresSignal({
         signals: new Map([[decl.name, decl]]),
         sql,

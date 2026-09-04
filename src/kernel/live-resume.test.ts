@@ -24,7 +24,7 @@ describe("live Last-Event-ID resume", () => {
   });
 
   test("skips through Last-Event-ID and 410s a pruned cursor", async () => {
-    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const orderStatus = signal.live("order-status", { optional: true });
     const feed = on(http.get("/feed").public().live(orderStatus));
     stampFlowName(feed, "orders.feed");
     on(

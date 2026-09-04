@@ -8,14 +8,14 @@ import { createFx, createFxContext, isSseFrame, signalReadRef } from "./fx.ts";
 
 describe("fx.live", () => {
   test("undeclared signal read throws OKE1001", async () => {
-    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const orderStatus = signal.live("order-status", { optional: true });
     const runtime = openRuntime(orderStatus);
     const fx = createFx({
       flow: "orders.events",
       effects: { reads: [signalReadRef("order-status")] },
       signalRuntime: runtime,
     });
-    const other = signal("other-status", { delivery: "live", optional: true });
+    const other = signal.live("other-status", { optional: true });
     let err: unknown;
     try {
       const stream = fx.live(other);
@@ -44,7 +44,7 @@ describe("fx.live", () => {
   });
 
   test("ALS abort unsubscribes the live handler", async () => {
-    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const orderStatus = signal.live("order-status", { optional: true });
     const runtime = openRuntime(orderStatus);
     const bus = await runtime.start();
     const { fx } = createFxContext({
@@ -74,7 +74,7 @@ describe("fx.live", () => {
   });
 
   test("yields branded SSE frames with id + payload", async () => {
-    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const orderStatus = signal.live("order-status", { optional: true });
     const runtime = openRuntime(orderStatus);
     const bus = await runtime.start();
     await runtime.emit("order-status", { orderId: "ord_1", status: "placed" });
@@ -102,7 +102,7 @@ describe("fx.live", () => {
   });
 
   test("afterId skips already-delivered events", async () => {
-    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const orderStatus = signal.live("order-status", { optional: true });
     const runtime = openRuntime(orderStatus);
     const bus = await runtime.start();
     await runtime.emit("order-status", { orderId: "ord_1", status: "placed" });
@@ -131,7 +131,7 @@ describe("fx.live", () => {
   });
 
   test("ready throws OKE1014 for a missing afterId", async () => {
-    const orderStatus = signal("order-status", { delivery: "live", optional: true });
+    const orderStatus = signal.live("order-status", { optional: true });
     const runtime = openRuntime(orderStatus);
     const fx = createFx({
       flow: "orders.events",

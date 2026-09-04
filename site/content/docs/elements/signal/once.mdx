@@ -1,42 +1,51 @@
 ---
-title: "Queues"
-description: "Competing worker pools, visibility timeouts, exponential retries, dead-letter queues, and ordered partition keys."
+title: "Once"
+description: "Competing workers, visibility leases, retries, dead letters, and per-key ordering for signal.once."
 icon: "ListOrdered"
+source: "docs/spec/unified-theory.md"
 ---
 
-Queues ensure background tasks are processed reliably by worker pools. Exactly one consumer receives and processes each item.
+`signal.once` processes background work with competing consumers — exactly one worker claims each
+message; failed attempts retry, then dead-letter.
 
-## What it is
+For developers shipping jobs on okengine — declare the Signal, bind `on(signal, flow)`, emit with
+`fx.emit`.
 
-Declaring `delivery: "once"` instructs the OKE engine to treat emissions as persistent work items. In dev mode, items are backed by SQLite/PGLite with lease locks. In production, items use transactional Postgres or Redis streams.
+<Callout title="The one rule">
+  Physics live on the Signal (`retries`, `deadLetter`, `optional`). The Flow is the subscriber.
+  Visibility lease defaults to **30s** — an inflight worker that dies is reclaimed on the next
+  claim.
+</Callout>
+
+<SignalOnceLease />
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Define the queue signal
+### Define the once signal
 
 ```typescript title="src/signals/email.ts"
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const emailTask = signal("tasks.email", {
-  delivery: "once",
+export const emailTask = signal.once("tasks.email", {
   schema: z.object({ to: z.string().email(), body: z.string() }),
   retries: 3,
-  deadLetter: "tasks.email.dlq",
+  deadLetter: true,
 });
 ```
 
 </Step>
 
 <Step>
-### Attach a worker flow
+### Attach a worker and emit
 
 ```typescript title="src/flows/workers/email.ts"
 import { on, flow } from "okengine";
 import { emailTask } from "@/signals/email";
+import { rawEmail } from "@/channels/email";
 
 export const processEmail = on(
   emailTask,
@@ -48,31 +57,541 @@ export const processEmail = on(
 );
 ```
 
+```typescript
+await fx.emit(emailTask, { to: "alice@example.com", body: "Welcome" });
+```
+
+The emit resolves when the outbox commits. The worker runs asynchronously — the producer does not
+wait for `fx.send` to finish.
+
 </Step>
 
 </Steps>
 
-## Key Ordering & Partitioning
+<Callout title="Competing, not fan-out">
+  Two Flows bound to the same `once` Signal compete — exactly one claims each message. For every
+  subscriber to run, use [`broadcast`](/docs/elements/signal/broadcast).
+</Callout>
 
-To process items sequentially per user or tenant without blocking the entire queue, provide a `key` during emission:
+## Progressive Patterns
+
+From a minimal job to ordered partitions and DLQ inspection:
+
+<Tabs items={["Minimal", "Retries", "Ordered", "Dead letters"]}>
+
+<Tab value="Minimal">
+
+Defaults are `retries: 3`, `deadLetter: true`, `optional: false`:
+
+```typescript title="src/signals/orders.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderPlaced = signal.once("orders.placed", {
+  schema: z.object({
+    orderId: z.string(),
+    amount: z.number(),
+    userId: z.string(),
+  }),
+});
+```
+
+```typescript title="src/flows/orders/fulfill.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const fulfill = on(
+  orderPlaced,
+  flow("orders.fulfill", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeAndShip, { orderId });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Retries">
+
+`retries` is extra attempts after the first — total handler invocations are `retries + 1`.
+Failed attempts requeue immediately for another claim (no delay between attempts).
+Make consumers idempotent; at-least-once delivery can re-run after lease reclaim:
+
+```typescript
+export const syncPayment = signal.once("payments.sync", {
+  retries: 5,
+  deadLetter: true,
+  schema: z.object({ chargeId: z.string() }),
+});
+```
+
+</Tab>
+
+<Tab value="Ordered">
+
+Pass `{ key }` on emit. No two `once` messages sharing `(signal, key)` are claimed at once —
+the in-flight visibility lease is the lock:
 
 ```typescript
 await fx.emit(emailTask, payload, { key: user.id });
 ```
 
-The queue guarantees items sharing the same `key` process strictly in FIFO order.
+Same key → FIFO. Different keys run in parallel. Omit `key` for a pure competing pool.
+
+</Tab>
+
+<Tab value="Dead letters">
+
+After `retries + 1` failures with `deadLetter: true`, the message is `dead`. Inspect with
+`fx.deadLetters` (records `reads` on `signal:<name>`):
+
+```typescript title="src/flows/ops/dlq.ts"
+import { on, flow, http } from "okengine";
+import { emailTask } from "@/signals/email";
+
+export const listDlq = on(
+  http.get("/ops/email-dlq"),
+  flow("ops.emailDlq", {
+    effects: { reads: ["signal:tasks.email"] },
+    do: async (_, fx) => {
+      return await fx.deadLetters(emailTask);
+    },
+  }),
+);
+```
+
+`deadLetter: false` marks the message delivered after the last attempt — nothing lands in the DLQ.
+
+</Tab>
+
+</Tabs>
+
+## Delivery Reference
+
+| Surface | Signature | Purpose |
+| ------- | --------- | ------- |
+| Declare | `signal.once(name, options?)` | Competing queue — one claim per message |
+| Bind | `on(signalHandle, flow)` | Worker Flow; payload is `do`'s input |
+| Emit | `fx.emit(signal, payload?, { key? })` | Enrol in the outbox; records `emits` |
+| Inspect DLQ | `fx.deadLetters(signal)` | Exhausted messages; records `reads` `signal:<name>` |
+
+| Need | Use instead |
+| ---- | ----------- |
+| Every active subscriber gets a copy | [`broadcast`](/docs/elements/signal/broadcast) |
+| Browser / SSE resume after disconnect | [`live`](/docs/elements/signal/live) |
+| Durable multi-step work with a journal | [Durable Workflows](/docs/elements/flow/workflows) |
+
+## Options for once
+
+Optional second argument to `signal.once`. Delivery is the helper name — not an option.
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1043**) |
+| `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
+| `deadLetter` | `boolean` | `true` | Keep exhausted messages; not a queue name |
+| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
+| `description` | `string` | the name | Console / docs blurb |
+
+`retention` is a type error on `signal.once` — that option is live-only:
+
+```text
+signal.once("…"): retention is only valid with signal.live
+```
+
+**Consequence:** `deadLetter` is a boolean flag, not a DLQ signal name string.
+
+## Binding Workers
+
+Each worker binds with `on(signalHandle, flow(...))`. The Signal carries delivery physics; the
+Flow is only the handler.
+
+<Tabs items={["Declare", "Bind", "Competing", "Optional"]}>
+
+<Tab value="Declare">
+
+Name the Signal and attach retry / DLQ / schema policy:
+
+```typescript title="src/signals/email.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const emailTask = signal.once("tasks.email", {
+  schema: z.object({ to: z.string().email(), body: z.string() }),
+  retries: 3,
+  deadLetter: true,
+});
+```
+
+</Tab>
+
+<Tab value="Bind">
+
+Subscribe with the same handle. Payload fields destructure in `do`:
+
+```typescript title="src/flows/workers/email.ts"
+import { on, flow } from "okengine";
+import { emailTask } from "@/signals/email";
+import { rawEmail } from "@/channels/email";
+
+export const processEmail = on(
+  emailTask,
+  flow("workers.email", {
+    do: async ({ to, body }, fx) => {
+      await fx.send(rawEmail, { to, body });
+    },
+  }),
+);
+```
+
+The compiler records `emits: ["tasks.email"]` on producers that call `fx.emit(emailTask, …)`.
+
+</Tab>
+
+<Tab value="Competing">
+
+Two Flows on the same `once` Signal share the pool — exactly one claims each message:
+
+```typescript title="src/flows/orders/fulfill-a.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const fulfillA = on(
+  orderPlaced,
+  flow("orders.fulfillA", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeAndShip, { orderId });
+    },
+  }),
+);
+```
+
+```typescript title="src/flows/orders/fulfill-b.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const fulfillB = on(
+  orderPlaced,
+  flow("orders.fulfillB", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeAndShip, { orderId });
+    },
+  }),
+);
+```
+
+**Consequence:** this is not fan-out. For every Flow to run, use `signal.broadcast`.
+
+</Tab>
+
+<Tab value="Optional">
+
+Hooks that may have no worker yet need `optional: true` or emit throws **OKE1042**:
+
+```typescript
+export const webhook = signal.once("hooks.inbound", {
+  optional: true,
+  schema: z.object({ id: z.string() }),
+});
+```
+
+</Tab>
+
+</Tabs>
+
+## Emit
+
+Before any worker runs, `fx.emit` validates `schema` (when set) and enrols the message in the
+outbox. The call resolves on commit — not when the handler finishes.
+
+```typescript title="src/flows/orders/place.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { orderPlaced } from "@/signals/orders";
+
+export const placeOrder = on(
+  http.post("/orders"),
+  flow("orders.place", {
+    in: z.object({ userId: z.string(), amount: z.number() }),
+    do: async ({ userId, amount }, fx) => {
+      const orderId = fx.id();
+      await fx.emit(
+        orderPlaced,
+        { orderId, amount, userId },
+        { key: userId },
+      );
+      return { orderId };
+    },
+  }),
+);
+```
+
+| Call | Records | Meaning |
+| ---- | ------- | ------- |
+| `fx.emit(signal, payload?)` | `emits` | Competing pool — no ordering |
+| `fx.emit(signal, payload, { key })` | `emits` | Per-key FIFO for that `(signal, key)` |
+| `fx.deadLetters(signal)` | `reads` `signal:<name>` | Inspect `dead` messages |
+
+`parentRunId` is stamped automatically from the producer run for Console trace chains — you do
+not set it by hand in app code.
+
+## Lease and reclaim
+
+<Callout title="Detailed section">
+  If you only need the default 30s lease, jump to Ordering. Claims set `lockedBy` +
+  `leaseExpiresAt`. There is no background sweeper — reclaim happens lazily on the next claim
+  after expiry.
+</Callout>
+
+| Concept | Default | Meaning |
+| ------- | ------- | ------- |
+| Visibility lease | `30_000` ms | How long an inflight claim holds the message |
+| Reclaim | next claim after expiry | Another worker may take the same message |
+| Status path | `pending` → `inflight` → `delivered` \| `dead` | Operator inspect / Console |
+
+**Consequence:** treat every `once` handler as at-least-once. Prefer idempotent `do` bodies
+(or durable steps for side effects that must not double-fire).
+
+<Accordions>
+
+<Accordion title="Claim">
+  Eligible messages are `pending` unlocked, or `inflight` whose `leaseExpiresAt` has passed.
+  Claim sets status to `inflight`, stamps `lockedBy` + `leaseExpiresAt`, and increments
+  `attempts` before the handler runs — so a crash mid-handler leaves a reclaimable row.
+</Accordion>
+
+<Accordion title="Reclaim">
+  There is no timeout daemon. After the lease expires, the next drain/claim may hand the same
+  message to another (or the same) worker. Slow handlers that outlive the lease can overlap with
+  a reclaim — keep side effects short or journal them.
+</Accordion>
+
+<Accordion title="Status path">
+  Successful `do` → `delivered`. Exhausted retries with `deadLetter: true` → `dead`. With
+  `deadLetter: false` → `delivered` and nothing in the DLQ.
+</Accordion>
+
+<Accordion title="Lease is not a declare option">
+  The 30s default lives on the signal bus open options. App authors do not pass `leaseMs` on
+  `signal.once(…)`. Tests and custom runtimes may override it when opening the bus.
+</Accordion>
+
+</Accordions>
+
+## Ordering
+
+<Callout title="Detailed section">
+  Partition with `{ key }` only when you need per-tenant / per-user FIFO. Unkeyed messages stay
+  a competing pool and may run concurrently.
+</Callout>
+
+```typescript title="src/flows/orders/ship.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const shipOrder = on(
+  orderPlaced,
+  flow("orders.ship", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(fulfillOrder, { orderId });
+    },
+  }),
+);
+```
+
+```typescript
+await fx.emit(orderPlaced, { orderId: "ord_1", userId: "usr_1" }, { key: "usr_1" });
+```
+
+| Emit | Concurrency | Order |
+| ---- | ----------- | ----- |
+| No `key` | Competing — may overlap | None |
+| Same `key` | Serialized by lease | FIFO for that key |
+| Different keys | May overlap | Independent |
+
+<Accordions>
+
+<Accordion title="Lease is the lock">
+  No two messages sharing `(signal, key)` are claimed while one holds an unexpired lease.
+  When the first completes (or its lease expires and is reclaimed), the next same-key message
+  becomes eligible — emission order is preserved for that key.
+</Accordion>
+
+<Accordion title="Unkeyed pool">
+  Omit `key` for maximum parallelism across workers. There is no global FIFO across unkeyed
+  messages — only competing claim exclusivity per message.
+</Accordion>
+
+</Accordions>
+
+## Retries and dead letters
+
+<Callout title="Detailed section">
+  If you only need defaults (`retries: 3`, `deadLetter: true`), jump to Idempotency. Retries
+  requeue immediately — there is no delay backoff between attempts.
+</Callout>
+
+<Accordions>
+
+<Accordion title="Attempt budget">
+  Handler invocations = `retries + 1`. On each failure the bus records a typed
+  `{ code, message, at, attempt }` reason. When `attempts` exceeds `retries` and
+  `deadLetter: true`, status becomes `dead`.
+</Accordion>
+
+<Accordion title="Failure reasons">
+  Each failed attempt appends a `SignalFailureReason`:
+
+| Field | Meaning |
+| ----- | ------- |
+| `code` | Machine-readable failure code |
+| `message` | Human-readable detail |
+| `at` | Epoch-ms when the attempt failed |
+| `attempt` | 1-based attempt number that failed |
+
+The full history survives on the dead-letter entry for operator inspect.
+</Accordion>
+
+<Accordion title="deadLetter: false">
+  Exhausted messages are marked `delivered` instead of entering the DLQ. Use when dropping
+  is acceptable and you do not want operator replay.
+</Accordion>
+
+<Accordion title="fx.deadLetters">
+  Requires a bound signal runtime and `effects.reads` including `signal:<name>`.
+  Cross-signal reads throw **OKE1001**. Without a runtime:
+  `fx.deadLetters requires a bound signal runtime`.
+
+Returned entries include `payload`, `attempts`, `failures`, `key`, `createdAt`, and
+`status: "dead"`.
+</Accordion>
+
+<Accordion title="Schema at emit">
+  Invalid payloads fail at `fx.emit` with **OKE1043** before any worker runs. Same Standard
+  Schema path as Flow `in`.
+
+Cause: `"{resource}": {detail}`.
+</Accordion>
+
+<Accordion title="Orphan emit">
+  Zero subscribers + `optional: false` → **OKE1042**.
+  Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+  Fix: add `on(signal, …)` or mark `{ optional: true }`.
+</Accordion>
+
+</Accordions>
+
+## Idempotency
+
+Lease reclaim and retries mean a handler can run more than once for the same message.
+
+| Approach | When |
+| -------- | ---- |
+| Idempotent `do` | Side effects are safe to repeat (upsert, set-once flags) |
+| `durable: true` + `fx.step` | Multi-step work that must not double-fire |
+| Short handlers | Finish before the 30s lease so reclaim does not overlap |
+
+```typescript title="src/flows/payments/sync.ts"
+import { on, flow } from "okengine";
+import { syncPayment } from "@/signals/payments";
+
+export const runSync = on(
+  syncPayment,
+  flow("payments.sync", {
+    durable: true,
+    do: async ({ chargeId }, fx) => {
+      await fx.step("charge", async () => {
+        await fx.call(applyCharge, { chargeId });
+      });
+      await fx.step("receipt", async () => {
+        await fx.call(sendReceipt, { chargeId });
+      });
+    },
+  }),
+);
+```
+
+See [Durable Workflows](/docs/elements/flow/workflows).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Worker never runs after emit">
+  Confirm `on(signalHandle, flow)` uses the same declared handle (or the same name) and is
+  adopted into the app. Check **OKE1042** if the emit itself threw. Live Signals are not
+  workers — use Once or Broadcast.
+</Accordion>
+
+<Accordion title="Same message processed twice">
+  Lease reclaim after a crash or slow handler is expected at-least-once physics.
+  Make `do` idempotent, or journal side effects with `durable: true` + `fx.step`.
+</Accordion>
+
+<Accordion title="Both of two Flows ran on one once message">
+  That is broadcast physics, not once. Confirm both files import the same
+  `signal.once` handle — competing workers share one claim. If you need fan-out, switch the
+  declaration to `signal.broadcast`.
+</Accordion>
+
+<Accordion title="Messages stuck inflight">
+  Wait for the 30s lease and the next drain/claim. There is no separate timeout daemon.
+  A handler still running past the lease can overlap with a reclaim — shorten the work or
+  journal it.
+</Accordion>
+
+<Accordion title="OKE1043 on emit">
+  Cause: `"{resource}": {detail}`. Align the payload with `schema` — the worker never started.
+</Accordion>
+
+<Accordion title="OKE1042 on emit">
+  Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+  Add a subscriber or set `{ optional: true }` on the Signal.
+</Accordion>
+
+<Accordion title="OKE1001 on fx.deadLetters">
+  Cause: `Flow "…" reads "signal:…" without declaring it.`
+  Add `effects.reads: ["signal:<name>"]` (or the matching `signalReadRef`) on that Flow.
+</Accordion>
+
+<Accordion title="deadLetter as a string name">
+  `deadLetter` is `boolean` (default `true`). There is no separate named DLQ signal string —
+  inspect with `fx.deadLetters(signal)`.
+</Accordion>
+
+<Accordion title="TypeError: retention is only valid with signal.live">
+  Drop `retention` on `signal.once`, or switch the helper to `signal.live`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Signal Overview](/docs/elements/signal) — delivery matrix and drivers
+- [Broadcast](/docs/elements/signal/broadcast) — fan-out without leases
+- [Live](/docs/elements/signal/live) — retained SSE tapes
+- [Consumers](/docs/elements/flow/consumers) — `on(signal)` next to Clock / CDC
+- [Workflows](/docs/elements/flow/workflows) — `durable` + `fx.step` for idempotent side effects
+- [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`
+- [Errors](/docs/reference/errors) — OKE1042 · OKE1043 · OKE1001
 
 ## Next
 
 <Cards>
   <Card
-    title="Pub/Sub (Broadcast)"
-    description="Ephemeral fan-out and multi-node messaging."
-    href="/docs/elements/signal/pubsub"
+    title="Broadcast"
+    description="Ephemeral fan-out across subscribed Flows."
+    href="/docs/elements/signal/broadcast"
   />
   <Card
-    title="Signal Overview"
-    description="Return to Signal element overview."
-    href="/docs/elements/signal"
+    title="Live"
+    description="Retained SSE tapes for browsers."
+    href="/docs/elements/signal/live"
+  />
+  <Card
+    title="Consumers"
+    description="Signal workers, Clock jobs, and SQL CDC."
+    href="/docs/elements/flow/consumers"
   />
 </Cards>

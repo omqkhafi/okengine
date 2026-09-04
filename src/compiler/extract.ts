@@ -1429,15 +1429,16 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         }
       }
     }
-  }
 
-  // signal("name", { delivery, … })
-  if (identifierName(callee) === "signal") {
-    const signalName = stringArg(call.arguments[0]);
-    const opts = objectArg(call.arguments[1]);
-    if (signalName) {
-      const delivery = stringProp(opts, "delivery") as SignalDelivery | undefined;
-      if (delivery) {
+    // signal.once("name", opts?) / .broadcast / .live
+    if (
+      obj === "signal" &&
+      (prop === "once" || prop === "broadcast" || prop === "live")
+    ) {
+      const signalName = stringArg(call.arguments[0]);
+      const opts = objectArg(call.arguments[1]);
+      if (signalName) {
+        const delivery = prop as SignalDelivery;
         const retentionObj = objectProp(opts, "retention");
         const maxAge = retentionObj ? stringProp(retentionObj, "maxAge") : undefined;
         const maxCount = retentionObj ? numberProp(retentionObj, "maxCount") : undefined;

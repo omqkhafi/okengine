@@ -67,7 +67,7 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     element: "Signal",
     toneKey: "amber",
     icon: Radio,
-    syntax: 'signal("orders.placed", { delivery: "once" })',
+    syntax: 'signal.once("orders.placed")',
     starts: "another flow emits",
     replaces: "queue consumer",
     binding: "on(orderPlaced, fulfillOrder)",

@@ -21,11 +21,8 @@ describe("createTestApp — four-applications surface", () => {
     resetFlowSeq();
 
     const member = gate.policy("member", ({ auth }) => !!auth.verified);
-    const orderPlaced = signal("order-placed", {
-      delivery: "once",
-      retries: 2,
-      deadLetter: true,
-    });
+    const orderPlaced = signal.once("order-placed", { retries: 2,
+      deadLetter: true });
     const mail = channel.email({ from: "test@oke.dev" });
     const orderConfirmed = mail.template("order-confirmed", {
       schema: z.object({

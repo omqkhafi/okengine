@@ -1,5 +1,5 @@
 /**
- * Global safety net for the `store.*` / `vault.secret` / `signal()` /
+ * Global safety net for the `store.*` / `vault.secret` / `signal.*` /
  * `clock()` / `gate.policy`·scope·rate / `channel.<medium>().template()` /
  * `ai.model`·prompt·embed·agent auto-registries
  * (`src/kernel/element-registries.ts`).

@@ -719,13 +719,10 @@ import { on, http, signal } from "okengine";
 import { z } from "zod";
 import { member } from "@/core/gate";
 
-export const orderStatus = signal("order-status", {
-  delivery: "live",
-  optional: true,
+export const orderStatus = signal.live("order-status", { optional: true,
   schema: z.object({
     orderId: z.string(),
-    status: z.enum(["placed", "fulfilling", "shipped"]),
-  }),
+    status: z.enum(["placed", "fulfilling", "shipped"]) }),
 });
 
 export const firehose = on(http.live(orderStatus).gate(member));
@@ -850,7 +847,7 @@ Fix: a different gate, a path-param filter, or drop the extra route.
 </Accordion>
 
 <Accordion title="Client Subscription">
-  `delivery: "live"` is HTTP SSE. `for await` stays on the server; the browser
+  `signal.live` is HTTP SSE. `for await` stays on the server; the browser
   uses a callback.
 
 The client picks the unique exposure whose `matchKey` fields are a subset of
@@ -1040,7 +1037,7 @@ Standard status code mappings:
 ## Learn more
 
 - [Store](/docs/elements/store) — `store.resource`, list query grammar, SQL facet
-- [Signal · Streams](/docs/elements/signal/streams) — `delivery: "live"` tapes
+- [Signal · Live](/docs/elements/signal/live) — `signal.live` tapes
 - [Client](/docs/reference/client) — `api.live`, `useLive`, `useLiveQuery`
 - [fx](/docs/reference/fx) — `fx.live`, `fx.json.stream`, `fx.json.create`
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers

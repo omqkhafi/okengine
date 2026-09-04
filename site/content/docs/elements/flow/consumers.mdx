@@ -75,9 +75,7 @@ Declare delivery physics on the Signal, then bind the worker with `on(handle, fl
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const emailTask = signal("tasks.email", {
-  delivery: "once",
-  schema: z.object({ to: z.string().email(), body: z.string() }),
+export const emailTask = signal.once("tasks.email", { schema: z.object({ to: z.string().email(), body: z.string() }),
   retries: 3,
   deadLetter: true,
 });
@@ -155,7 +153,7 @@ export const onUserWrite = on(
 
 <Tab value="Ordered">
 
-`delivery: "once"` plus `fx.emit(…, { key })` serializes work per key. Same key never runs
+`signal.once` plus `fx.emit(…, { key })` serializes work per key. Same key never runs
 concurrently — the in-flight visibility lease is the lock:
 
 ```typescript title="src/flows/orders/ship.ts"
@@ -191,17 +189,18 @@ Omit `key` for competing consumers with no ordering.
 | CDC any | `on(db.table(t).changed(), flow)` | Every insert / update / delete | `{ before, after }` |
 | CDC column | `on(db.table(t).changed("col"), flow)` | Same writes; column stamped on the Manifest | `{ before, after }` |
 
-`delivery: "live"` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
+`signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
 
 ## Signal Consumers
 
 <Callout title="Detailed section">
-  If you only need a worker, jump to Once below. Physics live on `signal(name, { delivery })` —
-  omitting `delivery` is a type error. Defaults: `retries: 3`, `deadLetter: true`, `optional: false`.
+  If you only need a worker, jump to Once below. Physics live on `signal.once` / `broadcast` /
+  `live` — same idea as `http.get` / `http.post`. Defaults: `retries: 3`, `deadLetter: true`,
+  `optional: false`.
 </Callout>
 
-Each emit is handled according to the Signal's `delivery`. The Flow is the subscriber.
+Each emit is handled according to the Signal helper you declared. The Flow is the subscriber.
 
 <Tabs items={["Once", "Broadcast", "Optional"]}>
 
@@ -214,13 +213,10 @@ dead-letter when `deadLetter` is true (default):
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const orderPlaced = signal("orders.placed", {
-  delivery: "once",
-  schema: z.object({
+export const orderPlaced = signal.once("orders.placed", { schema: z.object({
     orderId: z.string(),
     amount: z.number(),
-    userId: z.string(),
-  }),
+    userId: z.string() }),
   retries: 5,
   deadLetter: true,
 });
@@ -252,9 +248,7 @@ Every subscribed Flow gets a copy. Offline listeners miss the event — there is
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const catalogChanged = signal("catalog.changed", {
-  delivery: "broadcast",
-  schema: z.object({ sku: z.string() }),
+export const catalogChanged = signal.broadcast("catalog.changed", { schema: z.object({ sku: z.string() }),
 });
 ```
 
@@ -282,9 +276,7 @@ Emit with zero subscribers throws **OKE1042** unless `optional: true`. Use that 
 firehoses and hook Signals that may have no worker yet:
 
 ```typescript
-export const webhook = signal("hooks.inbound", {
-  delivery: "once",
-  optional: true,
+export const webhook = signal.once("hooks.inbound", { optional: true,
   schema: z.object({ id: z.string() }),
 });
 ```
@@ -299,16 +291,15 @@ Fix: add `on(signal, …)` or mark `{ optional: true }`.
 <Accordions>
 
 <Accordion title="Signal Options">
-  Second argument to `signal(name, options)`. `delivery` is required.
+  Optional second argument to `signal.once` / `broadcast` / `live`. Delivery is the helper name.
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `delivery` | `"once"` \| `"broadcast"` \| `"live"` | *(required)* | Queue, pub/sub, or SSE tape |
 | `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1043** on mismatch) |
 | `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
 | `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |
-| `retention` | `{ maxAge?, maxCount? }` | unbounded | **Live only** — type error on `once` / `broadcast` |
+| `retention` | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast` |
 | `description` | `string` | the name | Console / docs blurb |
 
 </Accordion>
@@ -677,10 +668,10 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 ## Learn more
 
 - [Signal](/docs/elements/signal) — `once` / `broadcast` / `live` physics
-- [Signal · Queues](/docs/elements/signal/queues) — leases, retries, partition keys
+- [Signal · Once](/docs/elements/signal/once) — leases, retries, partition keys
 - [Clock](/docs/elements/clock) — schedules, intervals, `fx.clock.sleep`
 - [Store · SQL](/docs/elements/store/sql) — tables CDC watches
-- [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `delivery: "live"` SSE
+- [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `signal.live` SSE
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.clock`
 - [Errors](/docs/reference/errors) — OKE1042 · OKE1043
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` on a consumer
@@ -695,7 +686,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
   />
   <Card
     title="Signal Element"
-    description="Delivery physics, queues, pub/sub, and live tapes."
+    description="Delivery physics — once, broadcast, and live tapes."
     href="/docs/elements/signal"
   />
   <Card

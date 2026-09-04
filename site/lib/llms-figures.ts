@@ -16,6 +16,8 @@ export const TEACHING_FIGURE_FALLBACKS: Readonly<Record<string, string>> = {
     "Signal delivery physics: once — two workers compete and exactly one claims; broadcast — every subscriber gets a copy; live — a late bus.live() subscriber replays the full retained history.",
   SignalOnceLease:
     "On once, a claim sets lockedBy and leaseExpiresAt (default 30s); after expiry the next consumer reclaims the same message (at-least-once). No background sweeper.",
+  SignalBroadcastFanout:
+    "On broadcast, one emit fans out an independent copy to every active subscriber; a process that was offline at emit time does not receive past events — there is no retained tape.",
   SignalLiveReplay:
     "live retains every payload; a late bus.live() subscriber replays the full history (placed → fulfilling → shipped).",
   StoreFacets:

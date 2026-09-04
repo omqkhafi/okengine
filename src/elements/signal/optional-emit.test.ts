@@ -45,7 +45,7 @@ for (const { label, driver, setup } of [
 ] as const) {
   describe(`signal optional emit · ${label}`, () => {
     test("optional unset/false: emit with zero subscribers throws OKE1042", async () => {
-      const once = signal("order-placed", { delivery: "once" });
+      const once = signal.once("order-placed");
       expect(once.optional).toBe(false);
       const bus = await openBus(driver, [once], setup());
 
@@ -62,10 +62,7 @@ for (const { label, driver, setup } of [
     });
 
     test("optional: true allows emit with zero subscribers", async () => {
-      const once = signal("hook", {
-        delivery: "once",
-        optional: true,
-      });
+      const once = signal.once("hook", { optional: true });
       const bus = await openBus(driver, [once], setup());
       await bus.emit("hook", { ok: true });
       await bus.drain();

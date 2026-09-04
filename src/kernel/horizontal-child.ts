@@ -104,7 +104,7 @@ const signalRt = createSignalRuntime({
   durablePath: signalPath,
   leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
 });
-const job = signal(SIG, { delivery: "once", retries: 3, deadLetter: true, optional: true });
+const job = signal.once(SIG, { retries: 3, deadLetter: true, optional: true });
 signalRt.register(job);
 const bus = await signalRt.start();
 await bus.subscribe(SIG, `consumer-${instanceId}`, async (msg) => {

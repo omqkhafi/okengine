@@ -3,6 +3,8 @@
  *
  * - SignalOnceLease: claim sets lockedBy + leaseExpiresAt (30s); next consumer
  *   reclaims after expiry (at-least-once, no sweeper).
+ * - SignalBroadcastFanout: one emit → every active subscriber gets a copy;
+ *   an offline listener misses the event (no retained tape).
  * - SignalLiveReplay: live retains every payload; late bus.live() replays
  *   full history (placed → fulfilling → shipped).
  *
@@ -13,7 +15,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Activity, Timer } from "lucide-react";
+import { Activity, Share2, Timer } from "lucide-react";
 import { BeatPing, RevealGroup, RevealItem, useTick } from "@/components/docs/reveal";
 import { CHIP_TONE } from "@/lib/element-tones";
 import { cn } from "@/lib/cn";
@@ -194,6 +196,215 @@ function LeaseSlot({
           transition={{ duration: 0.3 }}
         />
       ))}
+    </svg>
+  );
+}
+
+/* ─── broadcast fan-out + offline miss ─────────────────────────────────── */
+
+const FANOUT_PHASES = ["emit", "copy · a", "copy · b", "miss"] as const;
+
+const FANOUT_SUBS = [
+  {
+    id: "cache.purgeLocal",
+    role: "active" as const,
+    litAt: 1,
+    received: "kv.delete · own copy",
+    waiting: "subscribed · waiting",
+  },
+  {
+    id: "orders.notifyWatchers",
+    role: "active" as const,
+    litAt: 2,
+    received: "fx.call · own copy",
+    waiting: "subscribed · waiting",
+  },
+  {
+    id: "search.reindexSku",
+    role: "offline" as const,
+    litAt: -1,
+    received: "missed · no tape",
+    waiting: "offline at emit",
+  },
+] as const;
+
+/**
+ * broadcast fans one emit to every active subscriber as an independent copy;
+ * a process that was offline does not get a replay — ephemeral, not live.
+ */
+export function SignalBroadcastFanout() {
+  const tick = useTick(1100);
+  // Reduced motion holds the end state: both actives lit, offline still empty.
+  const phase = tick === null ? 3 : tick % FANOUT_PHASES.length;
+  const label = FANOUT_PHASES[phase];
+
+  return (
+    <figure
+      className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+      aria-label="On broadcast, one emit fans out an independent copy to every active subscriber; a process that was offline at emit time does not receive past events — there is no retained tape."
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
+        <p className="text-sm font-medium text-fd-foreground">broadcast — fan-out, then miss</p>
+        <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
+          signal.broadcast · ephemeral
+        </code>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-fd-border px-4 py-2 sm:px-5">
+        <PhaseChip label={label} live={tick !== null} tick={tick} />
+        <span className="text-[11px] text-fd-muted-foreground">
+          every active gets a copy · offline misses
+        </span>
+      </div>
+
+      <RevealGroup as="div" className="flex flex-col gap-3 bg-fd-card px-4 py-4 sm:px-5">
+        <RevealItem as="div" className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-medium text-fd-muted-foreground">
+            fx.emit(orderChanged, …)
+          </p>
+          <FanoutEmit lit={phase >= 0} settled={phase >= 1} />
+        </RevealItem>
+
+        <RevealGroup
+          as="ul"
+          className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-fd-border bg-fd-border @min-[36rem]:grid-cols-3"
+        >
+          {FANOUT_SUBS.map((sub) => {
+            const received = sub.role === "active" ? phase >= sub.litAt : false;
+            const offline = sub.role === "offline";
+            const lit = received || (offline && phase === 3);
+            return (
+              <RevealItem
+                as="li"
+                lift
+                key={sub.id}
+                className={cn(
+                  "flex min-w-0 flex-col gap-2 px-3 py-3 transition-colors duration-300 sm:px-4",
+                  received
+                    ? tone.lit
+                    : offline && phase === 3
+                      ? "bg-fd-secondary/30"
+                      : "bg-fd-card",
+                )}
+              >
+                <code className="inline-flex w-fit max-w-full items-center gap-1.5 truncate rounded border border-fd-border bg-fd-secondary/40 px-2 py-0.5 font-mono text-[10px] font-medium text-fd-foreground">
+                  <Share2
+                    className={cn("size-3 shrink-0", lit ? tone.icon : "text-fd-muted-foreground")}
+                    aria-hidden
+                    strokeWidth={1.75}
+                  />
+                  <span className="truncate">{sub.id}</span>
+                </code>
+                <FanoutSink received={received} offline={offline} spotlight={phase === 3} />
+                <p className="text-xs font-medium text-fd-foreground">
+                  {received
+                    ? "received · independent copy"
+                    : offline
+                      ? phase >= 3
+                        ? "missed · no tape"
+                        : "offline at emit"
+                      : "waiting for copy"}
+                </p>
+                <p className="text-[11px] leading-relaxed text-pretty text-fd-muted-foreground">
+                  {received
+                    ? sub.received
+                    : offline
+                      ? "Restart does not replay broadcast history."
+                      : sub.waiting}
+                </p>
+              </RevealItem>
+            );
+          })}
+        </RevealGroup>
+
+        <RevealItem as="div">
+          <p className="text-[11px] leading-relaxed text-pretty text-fd-muted-foreground">
+            No competing claim — each subscribed Flow runs with its own copy. A failure in one
+            handler does not lease-lock siblings. Use{" "}
+            <code className="font-mono text-[10px]">signal.live</code> when a late joiner must catch
+            up.
+          </p>
+        </RevealItem>
+      </RevealGroup>
+    </figure>
+  );
+}
+
+function FanoutEmit({ lit, settled }: { readonly lit: boolean; readonly settled: boolean }) {
+  return (
+    <svg viewBox="0 0 120 18" className="h-5 w-full max-w-48" role="presentation" aria-hidden>
+      <circle cx="8" cy="9" r="3" fill={lit ? PACKET : IDLE} opacity={lit ? 0.95 : 0.35} />
+      <line x1="14" y1="9" x2="52" y2="9" stroke={BOX_LINE} strokeWidth="1" strokeDasharray="2 3" />
+      {/* Fan lines toward three subscriber slots */}
+      {[3, 9, 15].map((y, i) => (
+        <line
+          key={y}
+          x1="52"
+          y1="9"
+          x2="88"
+          y2={y}
+          stroke={BOX_LINE}
+          strokeWidth="1"
+          strokeDasharray="2 3"
+          opacity={settled || i === 2 ? 0.9 : 0.35}
+        />
+      ))}
+      {[3, 9].map((y, i) => (
+        <motion.circle
+          key={y}
+          r="2.2"
+          fill={PACKET}
+          initial={false}
+          animate={
+            settled ? { cx: 96, cy: y, opacity: 0.95 } : { cx: 8, cy: 9, opacity: lit ? 0.5 : 0.2 }
+          }
+          transition={{ ...SPRING, delay: settled ? i * 0.06 : 0 }}
+        />
+      ))}
+      {/* Offline branch — packet never arrives */}
+      <motion.circle
+        r="2.2"
+        fill={IDLE}
+        initial={false}
+        animate={{ cx: 70, cy: 15, opacity: settled ? 0.25 : 0.1 }}
+        transition={SPRING}
+      />
+    </svg>
+  );
+}
+
+function FanoutSink({
+  received,
+  offline,
+  spotlight,
+}: {
+  readonly received: boolean;
+  readonly offline: boolean;
+  readonly spotlight: boolean;
+}) {
+  return (
+    <svg viewBox="0 0 84 16" className="h-4 w-21" role="presentation" aria-hidden>
+      <rect
+        x="4"
+        y="2"
+        width="76"
+        height="12"
+        rx="2"
+        fill={BOX}
+        stroke={received ? PACKET : BOX_LINE}
+        strokeDasharray={offline ? "3 2" : undefined}
+      />
+      <motion.circle
+        cy="8"
+        r="2.5"
+        fill={received ? PACKET : IDLE}
+        initial={false}
+        animate={{
+          cx: received ? 62 : offline && spotlight ? 40 : 22,
+          opacity: received ? 0.95 : offline && spotlight ? 0.2 : 0.35,
+        }}
+        transition={SPRING}
+      />
     </svg>
   );
 }

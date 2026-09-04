@@ -28,11 +28,8 @@ const MANIFEST: Manifest = {
 describe("projectSignalsList", () => {
   test("reads bus stats and surfaces durable consumers from Manifest", async () => {
     const runtime = createSignalRuntime({ driver: memorySignalDriver });
-    const decl = signal("order-placed", {
-      delivery: "once",
-      retries: 3,
-      deadLetter: true,
-    });
+    const decl = signal.once("order-placed", { retries: 3,
+      deadLetter: true });
     runtime.register(decl);
     const bus = await runtime.start();
     await bus.subscribe("order-placed", "oke:fulfillment", async () => {

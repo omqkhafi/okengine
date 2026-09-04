@@ -15,7 +15,7 @@ import type {
 } from "../../drivers/signal-types.ts";
 import type { SignalConfigRow, SignalConfigStore } from "../../elements/signal/reconcile.ts";
 import { reconcileSignals } from "../../elements/signal/reconcile.ts";
-import { signal as declareSignal } from "../../elements/signal/declare.ts";
+import { signal } from "../../elements/signal/declare.ts";
 
 /** Producer / consumer edge for the mini causality view. */
 export interface SignalEndpoint {
@@ -82,15 +82,17 @@ export interface ProjectSignalsOptions {
 export async function projectSignalsList(
   options: ProjectSignalsOptions,
 ): Promise<readonly ConsoleSignalRow[]> {
-  const declared = Object.entries(options.manifest?.signals ?? {}).map(([name, s]) =>
-    declareSignal(name, {
-      delivery: s.delivery,
+  const declared = Object.entries(options.manifest?.signals ?? {}).map(([name, s]) => {
+    const opts = {
       retries: s.retries,
       deadLetter: s.deadLetter,
       schema: s.schema,
       optional: s.optional,
-    }),
-  );
+    };
+    if (s.delivery === "live") return signal.live(name, opts);
+    if (s.delivery === "broadcast") return signal.broadcast(name, opts);
+    return signal.once(name, opts);
+  });
   const reconciled = await reconcileSignals(declared, options.config);
   const statsByName = new Map<string, SignalStats>();
   if (options.bus) {

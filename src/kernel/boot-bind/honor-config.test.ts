@@ -303,7 +303,7 @@ describe("boot binders honour drivers.* config", () => {
   test("signal: drivers.signal memory binds memory", async () => {
     const result = await bootApplication({
       env: "test",
-      signals: [signal("ping", { delivery: "once" })],
+      signals: [signal.once("ping")],
       config: {
         drivers: {
           signal: { dev: "redis", test: "memory", prod: "redis" },
@@ -321,7 +321,7 @@ describe("boot binders honour drivers.* config", () => {
     const fake = createSignalRedisFake();
     const result = await bootApplication({
       env: "test",
-      signals: [signal("ping", { delivery: "once" })],
+      signals: [signal.once("ping")],
       clients: { signalRedis: fake },
       config: {
         drivers: {
@@ -340,7 +340,7 @@ describe("boot binders honour drivers.* config", () => {
     await expect(
       bootApplication({
         env: "test",
-        signals: [signal("ping", { delivery: "once" })],
+        signals: [signal.once("ping")],
         config: {
           drivers: {
             signal: { test: "postgres" },
@@ -421,7 +421,7 @@ describe("boot binders honour drivers.* config", () => {
     await expect(
       bootApplication({
         env: "test",
-        signals: [signal("ping", { delivery: "once" })],
+        signals: [signal.once("ping")],
         config: {
           drivers: {
             signal: { test: "nats" },

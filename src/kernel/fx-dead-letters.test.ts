@@ -6,7 +6,7 @@ import { createFx, createFxContext, signalReadRef } from "./fx.ts";
 
 describe("fx.deadLetters", () => {
   test("returns dead-lettered messages for a declared signal read", async () => {
-    const notify = signal("notify", { delivery: "once", retries: 0, deadLetter: true });
+    const notify = signal.once("notify", { retries: 0, deadLetter: true });
     const runtime = openRuntime(notify);
     const bus = await runtime.start();
     await bus.subscribe("notify", "c1", async () => {
@@ -33,8 +33,8 @@ describe("fx.deadLetters", () => {
   });
 
   test("undeclared and cross-signal reads throw OKE1001", async () => {
-    const notify = signal("notify", { delivery: "once", retries: 0, deadLetter: true });
-    const other = signal("other", { delivery: "once", retries: 0, deadLetter: true });
+    const notify = signal.once("notify", { retries: 0, deadLetter: true });
+    const other = signal.once("other", { retries: 0, deadLetter: true });
     const runtime = openRuntime(notify);
     const fx = createFx({
       flow: "notifications.failed",

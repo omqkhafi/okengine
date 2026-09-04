@@ -42,20 +42,12 @@ afterEach(async () => {
 describe("signal order lifecycle · once + broadcast + live", () => {
   test("one placed order: exclusive fulfill, fan-out side effects, live status replay", async () => {
     // once — queued job: exactly one competing consumer fulfills
-    const orderPlaced = signal("order-placed", {
-      delivery: "once",
-      retries: 2,
-      deadLetter: true,
-    });
+    const orderPlaced = signal.once("order-placed", { retries: 2,
+      deadLetter: true });
     // broadcast — same domain event fan-out: every subscriber gets a copy
-    const orderChanged = signal("order-changed", {
-      delivery: "broadcast",
-    });
+    const orderChanged = signal.broadcast("order-changed");
     // live — client-visible status feed (bus.live; createClient has no subscribe yet)
-    const orderStatus = signal("order-status", {
-      delivery: "live",
-      optional: true,
-    });
+    const orderStatus = signal.live("order-status", { optional: true });
 
     const bus = await memorySignalDriver.open({
       signals: new Map([
@@ -118,11 +110,8 @@ describe("signal order lifecycle · once + broadcast + live", () => {
 
   test("once retries then DLQ still apply inside the same domain", async () => {
     // Light reuse of once retry/DLQ — full matrix lives in delivery-modes.test.ts.
-    const orderPlaced = signal("order-placed", {
-      delivery: "once",
-      retries: 1,
-      deadLetter: true,
-    });
+    const orderPlaced = signal.once("order-placed", { retries: 1,
+      deadLetter: true });
     const bus = await memorySignalDriver.open({
       signals: new Map([[orderPlaced.name, orderPlaced]]),
     });

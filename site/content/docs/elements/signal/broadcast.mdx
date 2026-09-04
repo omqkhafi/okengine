@@ -1,14 +1,23 @@
 ---
-title: "PubSub"
-description: "Ephemeral fan-out, multi-instance cache invalidation, and non-blocking cluster event distribution."
+title: "Broadcast"
+description: "Ephemeral fan-out — every active subscriber gets a copy; offline listeners miss the event."
 icon: "Share2"
+source: "docs/spec/unified-theory.md"
 ---
 
-Pub/Sub delivers events to every active subscriber across all running backend instances simultaneously.
+`signal.broadcast` delivers each emission to every subscribed Flow at once. Use it when every
+active listener should react and you do not need a retained history.
 
-## What it is
+For developers invalidating caches or syncing in-process state — declare the Signal, bind one or
+more `on(signal, flow)` subscribers, emit with `fx.emit`.
 
-Declaring `delivery: "broadcast"` configures high-throughput, low-latency fan-out messaging. If an instance is offline or restarts during emission, it does not receive past events.
+<Callout title="The one rule">
+  Broadcast is ephemeral. If a subscriber is offline or restarts during the emit, it does not
+  receive past events. Use [`live`](/docs/elements/signal/live) when clients need replay. Use
+  [`once`](/docs/elements/signal/once) when exactly one worker must claim the job.
+</Callout>
+
+<SignalBroadcastFanout />
 
 ## Smallest Example
 
@@ -21,8 +30,7 @@ Declaring `delivery: "broadcast"` configures high-throughput, low-latency fan-ou
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const cacheInvalidated = signal("cache.invalidated", {
-  delivery: "broadcast",
+export const cacheInvalidated = signal.broadcast("cache.invalidated", {
   schema: z.object({ key: z.string() }),
 });
 ```
@@ -30,9 +38,9 @@ export const cacheInvalidated = signal("cache.invalidated", {
 </Step>
 
 <Step>
-### React on all nodes
+### Bind a subscriber
 
-```typescript title="src/flows/cache/sync.ts"
+```typescript title="src/flows/cache/purge.ts"
 import { on, flow } from "okengine";
 import { cacheInvalidated } from "@/signals/cache";
 
@@ -48,19 +56,463 @@ export const purgeLocalCache = on(
 
 </Step>
 
+<Step>
+### Emit from any Flow
+
+```typescript title="src/flows/catalog/update.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { cacheInvalidated } from "@/signals/cache";
+
+export const updateSku = on(
+  http.patch("/skus/:sku"),
+  flow("catalog.updateSku", {
+    in: z.object({ sku: z.string(), title: z.string().min(1) }),
+    do: async ({ sku, title }, fx) => {
+      // … persist the change …
+      await fx.emit(cacheInvalidated, { key: `sku:${sku}` });
+      return { sku, title };
+    },
+  }),
+);
+```
+
+The compiler records `emits: ["cache.invalidated"]` on the producer. Emit resolves when the
+outbox commits — the HTTP request does not wait for every subscriber to finish.
+
+</Step>
+
 </Steps>
+
+<Callout title="Same handle everywhere">
+  Import the declared Signal handle (or the same name) in every subscriber and producer. A typo
+  in the name creates a different Manifest entry — fan-out never crosses names.
+</Callout>
+
+## Progressive Patterns
+
+Explore broadcast from one listener to multi-Flow fan-out, optional hooks, and schema-checked
+payloads:
+
+<Tabs items={["Minimal", "Fan-out", "Optional", "Schema"]}>
+
+<Tab value="Minimal">
+
+One Flow subscribed — still broadcast physics (no competing claim, no once DLQ path):
+
+```typescript title="src/signals/catalog.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const catalogChanged = signal.broadcast("catalog.changed", {
+  schema: z.object({ sku: z.string() }),
+});
+```
+
+```typescript title="src/flows/cache/invalidate.ts"
+import { on, flow } from "okengine";
+import { catalogChanged } from "@/signals/catalog";
+
+export const invalidate = on(
+  catalogChanged,
+  flow("cache.invalidate", {
+    do: async ({ sku }, fx) => {
+      await fx.store.kv.delete(`sku:${sku}`);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Fan-out">
+
+Bind a second Flow to the same Signal — both run. That is the fan-out:
+
+```typescript title="src/flows/search/reindex.ts"
+import { on, flow } from "okengine";
+import { catalogChanged } from "@/signals/catalog";
+
+export const reindexSku = on(
+  catalogChanged,
+  flow("search.reindexSku", {
+    do: async ({ sku }, fx) => {
+      await fx.call(rebuildSearchDoc, { sku });
+    },
+  }),
+);
+```
+
+**Consequence:** each subscribed Flow gets its own copy. A failure in one handler does not
+claim-lock the message away from siblings the way `once` leases do.
+
+</Tab>
+
+<Tab value="Optional">
+
+Hooks that may have no subscriber yet need `optional: true` or emit throws **OKE1042**:
+
+```typescript
+export const clusterHint = signal.broadcast("cluster.hint", {
+  optional: true,
+  schema: z.object({ nodeId: z.string() }),
+});
+```
+
+**OKE1042** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+Fix: bind at least one `on(signal, flow)` or set `{ optional: true }`.
+
+</Tab>
+
+<Tab value="Schema">
+
+Invalid payloads fail at `fx.emit` with **OKE1043** before any subscriber runs:
+
+```typescript
+export const priceTick = signal.broadcast("prices.tick", {
+  schema: z.object({
+    sku: z.string(),
+    cents: z.number().int().nonnegative(),
+  }),
+});
+```
+
+Cause shape: `"{resource}": {detail}`. Align the payload with `schema` — no subscriber started.
+
+</Tab>
+
+</Tabs>
+
+## Delivery Reference
+
+How broadcast sits next to the other helpers when you are choosing physics:
+
+| Helper | Pattern | Who runs | Replay | Typical use |
+| ------ | ------- | -------- | ------ | ----------- |
+| `signal.once` | Work queue | Exactly one competing worker | Retries + DLQ | Emails, fulfillment, sync |
+| `signal.broadcast` | Pub/sub | Every active subscriber | None (miss if offline) | Cache bust, multi-side-effect fan-out |
+| `signal.live` | SSE tape | HTTP clients via `http.live` | `Last-Event-ID` resume | Status feeds, progress |
+
+| Guarantee | Broadcast | Once | Live |
+| --------- | --------- | ---- | ---- |
+| Competing claim / visibility lease | No | Yes (default 30s) | No |
+| Dead-letter queue path | No | Yes (`deadLetter`) | No |
+| Retained history for late joiners | No | No | Yes |
+| Multiple Flows on one emit | Yes — each gets a copy | One claimer | Not a Flow worker |
+
+## Options for broadcast
+
+Second argument to `signal.broadcast(name, options?)`. Delivery is the helper name — not an
+option.
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1043**) |
+| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
+| `description` | `string` | the name | Console / docs blurb |
+| `retries` | `number` | `3` | Declared; not the `once` lease / DLQ path |
+| `deadLetter` | `boolean` | `true` | Declared; broadcast does not use once DLQ |
+
+`retention` is a type error on `signal.broadcast` — that option is live-only:
+
+```text
+signal.broadcast("…"): retention is only valid with signal.live
+```
+
+## Fan-out Physics
+
+<Callout title="Detailed section">
+  If you only need one subscriber, jump to Emit. Fan-out is the distinctive physics: one emit,
+  N independent Flow runs, no competing claim.
+</Callout>
+
+Bind any number of Flows with `on(theSameSignal, flow(...))`. At dispatch, every matching
+binding runs with the same payload.
+
+```typescript title="src/flows/orders/side-effects.ts"
+import { on, flow } from "okengine";
+import { orderChanged } from "@/signals/orders";
+
+export const bustOrderCache = on(
+  orderChanged,
+  flow("orders.bustCache", {
+    do: async ({ orderId }, fx) => {
+      await fx.store.kv.delete(`order:${orderId}`);
+    },
+  }),
+);
+
+export const notifyOrderWatchers = on(
+  orderChanged,
+  flow("orders.notifyWatchers", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(pushOrderWatchers, { orderId });
+    },
+  }),
+);
+```
+
+```typescript
+await fx.emit(orderChanged, { orderId: "ord_42", kind: "placed" });
+```
+
+| Concept | Meaning |
+| ------- | ------- |
+| Subscriber | An adopted Flow bound with `on(broadcastSignal, flow)` |
+| Copy | Each subscriber receives the payload independently |
+| Isolation | One handler's failure does not lease-lock siblings |
+| Offline | A process that was down at emit time does not get a replay |
+
+**Consequence:** treat broadcast handlers as best-effort side effects. If the work must run
+exactly once with retries and a DLQ, declare a separate `signal.once` for that job.
+
+## Emit and Effects
+
+<Callout title="Detailed section">
+  If you only need `fx.emit(signal, payload)`, jump to the example. Emit commits the outbox when
+  the call resolves. Subscribers run asynchronously afterward.
+</Callout>
+
+| Call | Records | Use |
+| ---- | ------- | --- |
+| `fx.emit(signal, payload?)` | `emits` | Publish to every active subscriber |
+| `fx.emit(signal, payload, { key })` | `emits` | `key` is for `once` ordering — ignore for broadcast fan-out |
+
+```typescript title="src/flows/catalog/write.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { catalogChanged } from "@/signals/catalog";
+
+export const writeCatalog = on(
+  http.post("/catalog"),
+  flow("catalog.write", {
+    in: z.object({ sku: z.string(), title: z.string().min(1) }),
+    do: async ({ sku, title }, fx) => {
+      // … write …
+      await fx.emit(catalogChanged, { sku });
+      return { sku, title };
+    },
+  }),
+);
+```
+
+The producer WideEvent / run id is stamped as `parentRunId` for Console trace chains. Schema
+mismatches fail at emit (**OKE1043**) before any subscriber runs.
+
+## Subscribers
+
+Each verb of fan-out is a normal Flow. Bind with `on(signal, flow(...))` — same species as
+[Consumers](/docs/elements/flow/consumers).
+
+<Tabs items={["Cache", "Notify", "Reindex", "Compose"]}>
+
+<Tab value="Cache">
+
+Drop hot keys when the source of truth changes:
+
+```typescript title="src/flows/cache/on-catalog.ts"
+import { on, flow } from "okengine";
+import { catalogChanged } from "@/signals/catalog";
+
+export const onCatalogCache = on(
+  catalogChanged,
+  flow("cache.onCatalog", {
+    do: async ({ sku }, fx) => {
+      await fx.store.kv.delete(`sku:${sku}`);
+      await fx.store.kv.delete(`sku:${sku}:meta`);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Notify">
+
+Fan a domain event into a Channel or another Flow without competing for a lease:
+
+```typescript title="src/flows/notify/on-order.ts"
+import { on, flow } from "okengine";
+import { orderChanged } from "@/signals/orders";
+import { orderWatchers } from "@/channels/orders";
+
+export const onOrderNotify = on(
+  orderChanged,
+  flow("notify.onOrder", {
+    do: async ({ orderId }, fx) => {
+      await fx.send(orderWatchers, {
+        to: "ops@example.com",
+        data: { orderId },
+      });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Reindex">
+
+Kick search / projection work as a side effect of the same emit:
+
+```typescript title="src/flows/search/on-catalog.ts"
+import { on, flow } from "okengine";
+import { catalogChanged } from "@/signals/catalog";
+
+export const onCatalogReindex = on(
+  catalogChanged,
+  flow("search.onCatalog", {
+    do: async ({ sku }, fx) => {
+      await fx.call(rebuildSearchDoc, { sku });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Compose">
+
+Need durable retries for one side effect? Emit a `once` job from the broadcast handler (or from
+the producer) — do not stretch broadcast into a queue:
+
+```typescript title="src/flows/orders/on-changed.ts"
+import { on, flow } from "okengine";
+import { orderChanged, orderSyncJob } from "@/signals/orders";
+
+export const onOrderChanged = on(
+  orderChanged,
+  flow("orders.onChanged", {
+    do: async ({ orderId }, fx) => {
+      await fx.store.kv.delete(`order:${orderId}`);
+      await fx.emit(orderSyncJob, { orderId });
+    },
+  }),
+);
+```
+
+`orderSyncJob` is `signal.once(...)` — competing workers, retries, and DLQ live there.
+
+</Tab>
+
+</Tabs>
+
+## Choosing Physics
+
+<Callout title="Detailed section">
+  Pick physics from the guarantee you need. Broadcast is the wrong tool when work must be
+  claimed once, or when a late client must catch up.
+</Callout>
+
+| Need | Use instead |
+| ---- | ----------- |
+| Exactly one worker processes the job | [`once`](/docs/elements/signal/once) |
+| Browser / SSE resume after disconnect | [`live`](/docs/elements/signal/live) |
+| Durable multi-step work with journal | [Durable Workflows](/docs/elements/flow/workflows) |
+| HTTP SSE firehose on a path | [`http.live`](/docs/elements/flow/http#live-streams) |
+
+Broadcast does **not** use the `once` visibility lease. There is no competing claim and no
+dead-letter queue for exhausted retries in the queue sense — see
+[Once · Retries](/docs/elements/signal/once#retries-and-dead-letters).
+
+<Accordions>
+
+<Accordion title="Orphan emit (OKE1042)">
+  Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+  Fix: bind at least one `on(signal, flow)` or set `{ optional: true }`.
+</Accordion>
+
+<Accordion title="Schema (OKE1043)">
+  Cause: `"{resource}": {detail}`. Fix the payload or the `schema`. No subscriber ran.
+</Accordion>
+
+<Accordion title="Missed while offline">
+  Expected. Restarted processes do not replay broadcast history. Emit again after boot if
+  the listener must refresh state, or switch to `live` for a retained tape.
+</Accordion>
+
+<Accordion title="retries / deadLetter on the declaration">
+  Those fields exist on the shared options type (defaults `3` / `true`) so Console and Manifest
+  stay uniform. Broadcast delivery does not follow the once lease + DLQ path — do not expect
+  `fx.deadLetters(broadcastSignal)` to behave like a queue operator surface.
+</Accordion>
+
+<Accordion title="retention on broadcast">
+  Throws at declare:
+  `signal.broadcast("…"): retention is only valid with signal.live`.
+  Cap a client-visible tape with `signal.live({ retention })` instead.
+</Accordion>
+
+</Accordions>
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Only one of two subscribers runs">
+  Confirm both Flows import the same Signal handle / name and are adopted into the app.
+  Names must match the Manifest entry exactly. A second `signal.broadcast("catalog.changed")`
+  with a different spelling is a different signal.
+</Accordion>
+
+<Accordion title="Subscriber missed an event after restart">
+  Broadcast has no tape. Re-emit on boot, hydrate from Store, or use
+  [`signal.live`](/docs/elements/signal/live).
+</Accordion>
+
+<Accordion title="OKE1042 on emit">
+  Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+  No subscriber is bound. Add `on(signal, …)` or `{ optional: true }`.
+</Accordion>
+
+<Accordion title="OKE1043 on emit">
+  Cause: `"{resource}": {detail}`. Align the payload with `schema` — no subscriber started.
+</Accordion>
+
+<Accordion title="Expecting retries / DLQ like a queue">
+  Use `signal.once`. Broadcast fan-out is not the lease + DLQ path documented under
+  [Once](/docs/elements/signal/once).
+</Accordion>
+
+<Accordion title="TypeError: retention is only valid with signal.live">
+  You passed `retention` to `signal.broadcast`. Drop it, or switch the helper to
+  `signal.live` if you need a retained SSE tape.
+</Accordion>
+
+<Accordion title="HTTP client never sees the event">
+  Broadcast is for Flow subscribers, not browsers. Expose a
+  [`signal.live`](/docs/elements/signal/live) tape with
+  [`http.live`](/docs/elements/flow/http#live-streams) (or a gated GET `.live(signal)`).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Signal Overview](/docs/elements/signal) — delivery matrix and drivers
+- [Once](/docs/elements/signal/once) — competing workers and DLQ
+- [Live](/docs/elements/signal/live) — retained SSE
+- [Consumers](/docs/elements/flow/consumers) — binding `on(signal)`
+- [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — when the consumer is a browser
+- [fx](/docs/reference/fx) — `fx.emit`
+- [Errors](/docs/reference/errors) — OKE1042 · OKE1043
 
 ## Next
 
 <Cards>
   <Card
-    title="Live Streams"
-    description="Stream events over HTTP SSE with reconnection replays."
-    href="/docs/elements/signal/streams"
+    title="Live"
+    description="Retained event tapes over HTTP SSE."
+    href="/docs/elements/signal/live"
   />
   <Card
-    title="Signal Overview"
-    description="Return to Signal overview."
-    href="/docs/elements/signal"
+    title="Once"
+    description="Competing workers with leases and dead letters."
+    href="/docs/elements/signal/once"
+  />
+  <Card
+    title="Consumers"
+    description="Signal workers, Clock jobs, and SQL CDC."
+    href="/docs/elements/flow/consumers"
   />
 </Cards>

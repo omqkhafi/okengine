@@ -5,8 +5,8 @@ import { createMemorySignalConfigStore, reconcileSignals } from "./reconcile.ts"
 describe("reconcileSignals", () => {
   test("marks a removed signal orphaned without deleting it", async () => {
     const store = createMemorySignalConfigStore();
-    const a = signal("order-placed", { delivery: "once" });
-    const b = signal("legacy-shipped", { delivery: "once" });
+    const a = signal.once("order-placed");
+    const b = signal.once("legacy-shipped");
 
     await reconcileSignals([a, b], store);
     const second = await reconcileSignals([a], store);

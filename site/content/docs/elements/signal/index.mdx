@@ -1,58 +1,64 @@
 ---
 title: "Overview"
-description: "Data in motion — queues, pub/sub, and live streams under a single element with mandatory delivery physics."
+description: "Data in motion — once, broadcast, and live SSE tapes under one typed declaration with HTTP-shaped delivery helpers."
 icon: "Radio"
 source: "docs/spec/unified-theory.md"
 ---
 
-Signal is how your backend **moves data when the producer and consumer should not wait for each other**. In other frameworks you configure SQS, RabbitMQ, Redis Pub/Sub, Kafka, or SSE as distinct systems with conflicting semantics. In OKE, they are one typed declaration where the physics of delivery are declared explicitly.
+Signal is how your backend **moves data when the producer should not wait**. An email job, a cache bust across instances, and a browser status feed share one handle shape — only the helper changes: `signal.once`, `signal.broadcast`, or `signal.live`.
+
+For developers wiring async work on okengine — declare the physics, emit with `fx.emit`, bind workers with `on(signal, flow)`.
 
 <Callout title="The one rule">
-  Signal delivery physics are **mandatory**: every signal must explicitly declare `delivery:
-  "once"`, `delivery: "broadcast"`, or `delivery: "live"`. Omitting delivery physics is a
-  compile-time error.
+  Declare every signal with `signal.once`, `signal.broadcast`, or `signal.live` — same idea as
+  `http.get` / `http.post`. Physics live on the Signal; the Flow is only the subscriber.
 </Callout>
 
-## What is Signal?
+<SignalDelivery />
 
-When an event occurs in a backend (e.g. `order.created`, `user.logged_in`, `stock.price_changed`), different consumers require fundamentally different delivery guarantees:
+## Smallest Example
 
-1. **Queues (`once`)**: Competing worker pools where exactly one worker handles each message.
-2. **Pub/Sub (`broadcast`)**: Ephemeral fan-out where every active listener receives a copy.
-3. **Live Streams (`live`)**: Retained event logs streamed over HTTP/SSE with reconnection resumes.
+<Steps>
 
-Signal unifies all three patterns under `signal(name, options)`.
+<Step>
+### Declare the signal
 
 ```typescript title="src/signals/orders.ts"
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const orderPlaced = signal("orders.placed", {
-  delivery: "once",
+export const orderPlaced = signal.once("orders.placed", {
   schema: z.object({
     orderId: z.string(),
     amount: z.number(),
     userId: z.string(),
   }),
   retries: 5,
-  deadLetter: "orders.placed.dlq",
+  deadLetter: true,
 });
 ```
 
-## The Delivery Physics Matrix
+</Step>
 
-| Physics     | Pattern         | Consumer Semantics             | Replay & Resume           | Storage Engine                      |
-| ----------- | --------------- | ------------------------------ | ------------------------- | ----------------------------------- |
-| `once`      | Work Queue      | Competing workers, lease locks | Exponential retry + DLQ   | Postgres `oke_queue` / Redis stream |
-| `broadcast` | Pub/Sub         | Ephemeral fan-out              | None (dropped if offline) | Redis Pub/Sub / In-memory           |
-| `live`      | Live SSE Stream | Client HTTP feed               | `Last-Event-ID` resume    | Retained tape / Store               |
+<Step>
+### Bind a worker and emit
 
-## How Signal Executes Through fx
+```typescript title="src/flows/orders/fulfill.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
 
-Publishing an event occurs through `fx.emit`:
+export const fulfill = on(
+  orderPlaced,
+  flow("orders.fulfill", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeAndShip, { orderId });
+    },
+  }),
+);
+```
 
 ```typescript
-// Inside any flow:
+// Inside any Flow:
 await fx.emit(orderPlaced, {
   orderId: "ord_99",
   amount: 150,
@@ -60,39 +66,286 @@ await fx.emit(orderPlaced, {
 });
 ```
 
-The compiler records an `emits: ["orders.placed"]` effect in the Flow's manifest.
+The compiler records `emits: ["orders.placed"]` on the producer. The HTTP request does not wait
+for the worker.
+
+</Step>
+
+</Steps>
+
+<Callout title="Live is not a worker">
+  `signal.live` is an HTTP SSE tape. Expose it with
+  [`http.live`](/docs/elements/flow/http#live-streams) — do not bind `on(liveSignal, flow)` as a
+  competing consumer.
+</Callout>
+
+## Progressive Patterns
+
+Same helpers + `fx.emit` from a queue job to a fan-out and a browser feed:
+
+<Tabs items={["Once", "Broadcast", "Live", "Optional"]}>
+
+<Tab value="Once">
+
+Competing workers — exactly one claims each message. Failed attempts retry, then dead-letter
+when `deadLetter` is true (default):
+
+```typescript title="src/signals/email.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const emailTask = signal.once("tasks.email", {
+  schema: z.object({ to: z.string().email(), body: z.string() }),
+  retries: 3,
+  deadLetter: true,
+});
+```
+
+```typescript title="src/flows/workers/email.ts"
+import { on, flow } from "okengine";
+import { emailTask } from "@/signals/email";
+import { rawEmail } from "@/channels/email";
+
+export const processEmail = on(
+  emailTask,
+  flow("workers.email", {
+    do: async ({ to, body }, fx) => {
+      await fx.send(rawEmail, { to, body });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Broadcast">
+
+Every subscribed Flow gets a copy. Offline listeners miss the event — there is no replay tape:
+
+```typescript title="src/signals/cache.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const catalogChanged = signal.broadcast("catalog.changed", {
+  schema: z.object({ sku: z.string() }),
+});
+```
+
+```typescript title="src/flows/cache/invalidate.ts"
+import { on, flow } from "okengine";
+import { catalogChanged } from "@/signals/cache";
+
+export const invalidate = on(
+  catalogChanged,
+  flow("cache.invalidate", {
+    do: async ({ sku }, fx) => {
+      await fx.store.kv.delete(`sku:${sku}`);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Live">
+
+Retained tape for browsers. Mount with `http.live` (or a gated GET path):
+
+```typescript title="src/signals/orders.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderStatus = signal.live("order-status", {
+  optional: true,
+  schema: z.object({
+    orderId: z.string(),
+    status: z.enum(["placed", "fulfilling", "shipped"]),
+  }),
+});
+```
+
+```typescript title="src/flows/orders/firehose.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const firehose = on(http.live(orderStatus).gate(member));
+```
+
+```bash
+curl -N http://localhost:6530/_oke/live/order-status \
+  -H "accept: text/event-stream" \
+  -H "authorization: Bearer …"
+```
+
+</Tab>
+
+<Tab value="Optional">
+
+Emit with zero subscribers throws **OKE1042** unless `optional: true`. Use that for live
+firehoses and hooks that may have no worker yet:
+
+```typescript
+export const webhook = signal.once("hooks.inbound", {
+  optional: true,
+  schema: z.object({ id: z.string() }),
+});
+```
+
+**OKE1042** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+Fix: add `on(signal, …)` or mark `{ optional: true }`.
+
+</Tab>
+
+</Tabs>
+
+## Delivery Physics
+
+| Helper | Pattern | Consumer | Replay | Typical use |
+| ------ | ------- | -------- | ------ | ----------- |
+| `signal.once` | Work queue | Competing workers, lease lock | Retries + DLQ | Emails, fulfillment, sync |
+| `signal.broadcast` | Pub/sub | Every active subscriber | None (miss if offline) | Cache invalidation, fan-out |
+| `signal.live` | SSE tape | HTTP clients via `http.live` | `Last-Event-ID` resume | Status feeds, progress |
 
 ## The Capabilities of Signal
 
 <Cards>
   <Card
-    title="Queues (Once)"
-    description="Competing workers, visibility timeouts, retries, dead-letter routing, and ordered partition keys."
-    href="/docs/elements/signal/queues"
+    title="Once"
+    description="Competing workers, visibility leases, retries, dead letters, and per-key ordering."
+    href="/docs/elements/signal/once"
   />
   <Card
-    title="Pub/Sub (Broadcast)"
-    description="Ephemeral fan-out, cache invalidation, and multi-node cluster synchronization."
-    href="/docs/elements/signal/pubsub"
+    title="Broadcast"
+    description="Ephemeral fan-out across subscribed Flows — no retained tape."
+    href="/docs/elements/signal/broadcast"
   />
   <Card
-    title="Live Streams (Live)"
-    description="Retained event tapes streamed to browsers over Server-Sent Events with automatic replay."
-    href="/docs/elements/signal/streams"
+    title="Live"
+    description="Retained event tapes over HTTP SSE with Last-Event-ID resume."
+    href="/docs/elements/signal/live"
   />
 </Cards>
 
-## Next Steps
+## Options Reference
+
+Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. Delivery is the helper name — not an option.
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1043** on mismatch) |
+| `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) — `once` path |
+| `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
+| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
+| `retention` | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast` |
+| `description` | `string` | the name | Console / docs blurb |
+
+**Consequence:** `deadLetter` is a boolean flag, not a queue name string.
+
+## Emit through fx
+
+<Callout title="Detailed section">
+  If you only need `fx.emit(signal, payload)`, jump to the table. Emit commits the outbox when
+  the call resolves. The producer run id is stamped as `parentRunId` for Console trace chains.
+</Callout>
+
+| Call | Records | Use |
+| ---- | ------- | --- |
+| `fx.emit(signal, payload?, { key? })` | `emits` | Publish; `{ key }` serializes `once` per key |
+| `fx.deadLetters(signal)` | `reads` `signal:<name>` | Inspect exhausted `once` messages |
+| `fx.live(signal, { match? })` | `reads` `signal:<name>` | Server SSE body for a live tape |
+
+Invalid `schema` payloads fail at emit with **OKE1043** (`"{resource}": {detail}`) before any
+consumer runs. Cross-signal `fx.deadLetters` / `fx.live` without a declared read throws
+**OKE1001**.
+
+```typescript
+await fx.emit(orderPlaced, { orderId: "ord_1", userId: "usr_1" }, { key: "usr_1" });
+```
+
+Omit `key` for a pure competing pool with no ordering.
+
+## Per-environment drivers
+
+Protocol ids: `memory` · `redis` · `postgres` · `nats`. Defaults (when `oke.config.ts` omits
+`drivers.signal`):
+
+| Env | Default | Boot today |
+| --- | ------- | ---------- |
+| `dev` | `redis` | Emit relays to Redis; consume / live / drain use a process-local outbox |
+| `test` | `memory` | In-process bus |
+| `prod` | `redis` | Same redis honesty as `dev` |
+
+```typescript title="oke.config.ts"
+export default defineConfig({
+  drivers: {
+    signal: { test: "memory", prod: "redis" },
+  },
+});
+```
+
+`postgres` and `nats` fail loud at boot until a native bind ships — never silently fall back to
+`memory`. Prefer `memory` for tests; pin `redis` when Compose provides Redis.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="TypeError: retention is only valid with signal.live">
+  `retention: { maxAge, maxCount }` is live-only. Drop it on queue / pub-sub Signals, or switch
+  to `signal.live`.
+</Accordion>
+
+<Accordion title="OKE1042 — emit with no subscriber">
+  Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+  Fix: bind `on(signal, flow)` or set `{ optional: true }`.
+</Accordion>
+
+<Accordion title="OKE1043 — emit payload failed schema">
+  Cause: `"{resource}": {detail}` from the Standard Schema issues.
+  Fix the payload or the `schema` on the Signal. The consumer never ran.
+</Accordion>
+
+<Accordion title='oke boot: signal driver "postgres" / "nats"'>
+  Those ids are reserved but not bound for production yet. Use `"memory"` or `"redis"`, or inject
+  a custom `elements.signal` runtime.
+</Accordion>
+
+<Accordion title="redis Signal — process-local consume">
+  Boot warns that redis emit relays to Redis while consume / live / drain stay process-local.
+  Multi-instance competing consumers need a shared durable outbox path (or a single consumer
+  instance) until Redis Streams consume ships.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Once](/docs/elements/signal/once) — leases, retries, partition keys, DLQ
+- [Broadcast](/docs/elements/signal/broadcast) — ephemeral fan-out
+- [Live](/docs/elements/signal/live) — SSE tapes and retention
+- [Consumers](/docs/elements/flow/consumers) — `on(signal)` workers next to Clock / CDC
+- [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `http.live` exposure
+- [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.live`
+- [Client](/docs/reference/client) — `api.live` for browsers
+- [Errors](/docs/reference/errors) — OKE1042 · OKE1043 · OKE1014
+
+## Next
 
 <Cards>
   <Card
-    title="Queues Capability"
-    description="Configure background worker queues with retry policies."
-    href="/docs/elements/signal/queues"
+    title="Once"
+    description="Competing workers, leases, retries, and dead letters."
+    href="/docs/elements/signal/once"
   />
   <Card
-    title="Store Element"
-    description="Explore data at rest across SQL, KV, files, and search."
-    href="/docs/elements/store"
+    title="Consumers"
+    description="Signal workers, named Clock jobs, and SQL CDC — one Flow species."
+    href="/docs/elements/flow/consumers"
+  />
+  <Card
+    title="The Model"
+    description="Eight elements overview."
+    href="/docs/understand/the-model"
   />
 </Cards>

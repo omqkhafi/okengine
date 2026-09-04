@@ -21,7 +21,11 @@ import { FlowDurable } from "@/components/docs/elements/flow-durable";
 import { FlowTriggers } from "@/components/docs/elements/flow-triggers";
 import { GatePipeline } from "@/components/docs/elements/gate-pipeline";
 import { SignalDelivery } from "@/components/docs/elements/signal-delivery";
-import { SignalLiveReplay, SignalOnceLease } from "@/components/docs/elements/signal-physics";
+import {
+  SignalBroadcastFanout,
+  SignalLiveReplay,
+  SignalOnceLease,
+} from "@/components/docs/elements/signal-physics";
 import { StoreFacetMark, StoreFacets } from "@/components/docs/elements/store-facets";
 import {
   StoreFilesVariants,
@@ -45,7 +49,7 @@ import { Vocabulary } from "@/components/landing/vocabulary";
  * custom FlowShape / DevModes / ClientLoop / DriftBoard / CollapseBoard) and
  * per-element visuals
  * (FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease,
- * SignalLiveReplay, StoreFacets, StoreFacetMark, StoreKvTtl,
+ * SignalBroadcastFanout, SignalLiveReplay, StoreFacets, StoreFacetMark, StoreKvTtl,
  * StoreFilesVariants, StoreIndexModes, StoreSeeding, ClockSchedules, ClockCatchUp,
  * ClockSleep, GatePipeline, VaultResolution, VaultRedacted, ChannelPhysics,
  * AiBlocks, AiGuardrails, AiPiiEgress).
@@ -82,6 +86,7 @@ export function getMDXComponents(components?: MDXComponents) {
     FlowDurable,
     SignalDelivery,
     SignalOnceLease,
+    SignalBroadcastFanout,
     SignalLiveReplay,
     StoreFacets,
     StoreFacetMark,

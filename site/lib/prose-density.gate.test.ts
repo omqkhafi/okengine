@@ -11,7 +11,7 @@ import { DOCS_CONTENT_DIR, stripYamlFrontmatter } from "./markdown-source";
 const MAX_CONSECUTIVE = 3;
 
 const STRUCTURAL =
-  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|SixSystemsDrift|FlowTriggers|FlowDurable|SignalDelivery|SignalOnceLease|SignalLiveReplay|StoreFacets|StoreFacetMark|StoreKvTtl|StoreFilesVariants|StoreIndexModes|StoreSeeding|ClockSchedules|ClockCatchUp|ClockSleep|GatePipeline|VaultResolution|VaultRedacted|ChannelPhysics|AiBlocks|AiGuardrails|AiPiiEgress|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
+  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|SixSystemsDrift|FlowTriggers|FlowDurable|SignalDelivery|SignalOnceLease|SignalBroadcastFanout|SignalLiveReplay|StoreFacets|StoreFacetMark|StoreKvTtl|StoreFilesVariants|StoreIndexModes|StoreSeeding|ClockSchedules|ClockCatchUp|ClockSleep|GatePipeline|VaultResolution|VaultRedacted|ChannelPhysics|AiBlocks|AiGuardrails|AiPiiEgress|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
 
 /**
  * Whether a non-empty line counts as a plain prose paragraph line.

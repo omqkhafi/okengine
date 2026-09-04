@@ -7,7 +7,8 @@ description: >-
   bring a docs page to life, add or fix Store/Flow/Signal/element visuals, raise
   micro-interaction quality, visualize claims that tables under-teach, or when
   editing StoreFacets, StoreKvTtl, StoreFilesVariants, StoreIndexModes, StoreSeeding,
-  FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease, SignalLiveReplay,
+  FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease, SignalBroadcastFanout,
+  SignalLiveReplay,
   ClockSchedules, ClockCatchUp, ClockSleep, GatePipeline, AiBlocks, AiGuardrails,
   AiPiiEgress, or sibling element figures. Companion to oke-docs (page IA) and
   landing-motion (marketing surfaces).
@@ -23,7 +24,7 @@ Canonical quality bar (read before inventing):
 | ------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Flow   | `FlowTriggers` + `FlowDurable`                                                           | Any trigger → one Flow species; kill→resume skips completed `fx.step`                   |
 | Vault  | `VaultResolution` + `VaultRedacted`                                                      | First-hit chain + fail-loud; Redacted until `.reveal()`                                 |
-| Signal | `SignalDelivery` + `SignalOnceLease` / `SignalLiveReplay`                                | once / broadcast / live packet physics; lease reclaim; late `bus.live()` history        |
+| Signal | `SignalDelivery` + `SignalOnceLease` / `SignalBroadcastFanout` / `SignalLiveReplay`      | once / broadcast / live packet physics; lease reclaim; fan-out + offline miss; late `bus.live()` history |
 | Store  | `StoreFacets` + `StoreKvTtl` / `StoreFilesVariants` / `StoreIndexModes` / `StoreSeeding` | Facet physics; TTL contrast; putImage fan-out; vector vs text; seed env→blocks + upsert |
 | Clock  | `ClockSchedules` + `ClockCatchUp` / `ClockSleep`                                         | two triggers → one Flow; catch-up `"one"`; durable sleep survives restart               |
 | Gate   | `GatePipeline`                                                                           | Left-to-right chain; first denial wins; typed Unauthorized / Forbidden / RateLimited    |
@@ -150,7 +151,7 @@ When an element has independent facets (sql · kv · files · index):
 - Store physics: `site/components/docs/elements/store-physics.tsx`
 - Store seeding: `site/components/docs/elements/store-seeding.tsx` (`StoreSeeding`)
 - Flow bars: `flow-triggers.tsx`, `flow-durable.tsx`
-- Signal bars: `signal-delivery.tsx`, `signal-physics.tsx` (`SignalOnceLease`, `SignalLiveReplay`)
+- Signal bars: `signal-delivery.tsx`, `signal-physics.tsx` (`SignalOnceLease`, `SignalBroadcastFanout`, `SignalLiveReplay`)
 - Clock bars: `clock-schedules.tsx`, `clock-physics.tsx` (`ClockCatchUp`, `ClockSleep`)
 - Gate bars: `gate-pipeline.tsx`
 - AI bars: `ai-blocks.tsx`, `ai-guardrails.tsx`, `ai-physics.tsx` (`AiPiiEgress`)

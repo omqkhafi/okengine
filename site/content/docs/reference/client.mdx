@@ -264,7 +264,7 @@ covered under [Gate](/docs/elements/gate).
 
 ### Live signals
 
-`delivery: "live"` is HTTP SSE. Expose with `.live(signal)` on GET (or `http.live(signal)` for
+`signal.live` is HTTP SSE. Expose with `.live(signal)` on GET (or `http.live(signal)` for
 `GET /_oke/live/{name}`), then subscribe with a callback. `for await` stays on the server.
 
 ```typescript
@@ -444,7 +444,7 @@ the next request omits `Last-Event-ID` and replays what remains.
 - [Gate](/docs/elements/gate) — policies, `gate.public`, denials
 - [Store](/docs/elements/store) — `store.resource` and list query language
 - [Flow](/docs/elements/flow) — `in` / `out` / `errors` and `fx.fail`
-- [Signal](/docs/elements/signal) — `api.live` for `delivery: "live"` SSE
+- [Signal](/docs/elements/signal) — `api.live` for `signal.live` SSE
 - [Errors](/docs/reference/errors) — framework codes vs failure values
 - [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) — browser callers
 - [CLI Reference](/docs/reference/cli) — `oke client add`, `oke dev`
