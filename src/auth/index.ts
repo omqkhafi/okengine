@@ -60,8 +60,34 @@ export {
 export {
   setActiveGateAuthContext,
   getActiveGateAuthContext,
+  patchActiveGateAuthContext,
   type ActiveGateAuthContext,
+  type TwoFactorAuthBridge,
 } from "./method-context.ts";
+
+export {
+  createPendingTwoFactorStore,
+  createStepUpStore,
+  issueChallenge,
+  getChallenge,
+  findActiveForUser,
+  hasActiveChallenge,
+  consumeChallenge,
+  invalidateActiveForUser,
+  grantStepUp,
+  consumeStepUp,
+  hasStepUp,
+  twoFactorEmailOtpIdentifier,
+  DEFAULT_TWO_FACTOR_CHALLENGE_TTL_MS,
+  DEFAULT_STEP_UP_TTL_MS,
+  type TwoFactorMethod,
+  type PendingTwoFactorChallenge,
+  type PendingTwoFactorStore,
+  type StepUpGrant,
+  type StepUpStore,
+  type TwoFactorRequiredOut,
+  type IssueChallengeOptions,
+} from "./two-factor-challenge.ts";
 
 export { createAuthSecondaryStorage, type AuthKv } from "./secondary-storage.ts";
 
@@ -90,6 +116,7 @@ export {
   ensureUserByEmail,
   ensureUserExists,
   linkOrProvision,
+  completeVerifiedEmailSignIn,
   IdentityError,
   type IdentityStore,
   type UserIdentityRow,
@@ -97,6 +124,8 @@ export {
   type CreateUserWithPasswordOptions,
   type LinkOrProvisionOptions,
   type LinkedCredential,
+  type CompleteVerifiedEmailSignInOptions,
+  type VerifiedEmailSignInResult,
 } from "./identity.ts";
 
 export {

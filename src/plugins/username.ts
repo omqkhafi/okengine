@@ -18,6 +18,7 @@ import {
   AuthFailed,
   AuthRateLimited,
   SessionTokensOut,
+  SignInOut,
   bindPublicAuth,
   createMethodRuntime,
   fail,
@@ -405,7 +406,7 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
   const signIn = flow("auth.signInUsername", {
     plane: "user",
     in: UsernameIn,
-    out: SessionTokensOut,
+    out: SignInOut,
     errors: { AuthFailed, AuthRateLimited },
     do: async (input) => {
       const key = normalizeUsername(input.username);
@@ -426,6 +427,11 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
           return fail("AuthFailed", { reason: "invalid_credentials" });
         }
         throw err;
+      }
+      const bridge = getActiveGateAuthContext()?.twoFactor;
+      if (bridge?.isEnabled(userId)) {
+        const challenge = await bridge.beginLoginChallenge(userId);
+        if (challenge) return challenge;
       }
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: userId,

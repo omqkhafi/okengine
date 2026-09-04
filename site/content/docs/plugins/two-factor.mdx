@@ -1,17 +1,20 @@
 ---
 title: "Two-factor"
-description: "Official plugin — TOTP enable, verify, and disable for an authenticated session."
+description: "Official plugin — method-locked TOTP or email OTP after first-factor sign-in, with step-up enrollment and method change."
 icon: "LockKeyhole"
 source: "docs/spec/unified-theory.md"
 ---
 
-`twoFactor()` adds RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30s) after someone already has a session.
-Enable returns a secret, `otpauth://` URL, and recovery codes; verify mints a new session.
-TOTP codes are compared in constant time (±1 step window).
+`twoFactor()` adds a second factor after password (or username) sign-in: RFC 6238
+TOTP or email OTP. When 2FA is enabled, first-factor success withholds session
+tokens and returns a **method-locked** challenge. Enrollment and method change
+are privileged — they need a verified current factor first.
 
 <Callout title="The one rule">
-  Enable `gate.auth`, then `.plug(twoFactor())`. Enable and disable need a Bearer session —
-  verify is public and takes `{ userId, code }` after password (or other) sign-in.
+  Enable `gate.auth`, then `.plug(twoFactor())`. Login challenges lock the
+  configured method (`totp` or `email_otp`). Mid-challenge QR enrollment returns
+  `Forbidden`. Changing method requires step-up verify → provision → confirm
+  (old method is invalidated only after the new one is active).
 </Callout>
 
 ## Quick start
@@ -35,69 +38,126 @@ export const app = oke({
 </Step>
 
 <Step>
-### Enable (session required)
+### First-time enable (session required)
 
 Wire Bearer on `createClient` (`auth.getToken` / `memorySession`) — calls take input only.
 
 ```typescript
 const { data } = await api.auth.twoFactorEnable({});
-// data.secret, data.otpauthUrl, data.recoveryCodes
+// data.secret, data.otpauthUrl, data.recoveryCodes, data.method === "totp"
 ```
 
-`POST /auth/two-factor/enable` — writes `oke_two_factor`. Store recovery codes once; they are
-shown only here.
+`POST /auth/two-factor/enable` — writes `oke_two_factor`. Store recovery codes once.
+Re-enrollment when 2FA is already enabled requires step-up first
+(`twoFactorStepUp`). An active login challenge → `Forbidden` /
+`active_2fa_challenge`.
 
 </Step>
 
 <Step>
-### Verify a code
+### Sign-in then verify
 
 ```typescript
-const { data } = await api.auth.twoFactorVerify({ userId, code: "123456" });
-// hybrid session tokens — recovery codes also accepted once each
+const signIn = await api.auth.signInUsername({ username, password });
+if ("twoFactorRequired" in signIn.data && signIn.data.twoFactorRequired) {
+  const { data } = await api.auth.twoFactorVerify({
+    challengeId: signIn.data.challengeId,
+    code: "123456",
+  });
+  // hybrid session tokens
+}
 ```
 
-`POST /auth/two-factor/verify`. Missing / disabled factor or bad code → `AuthFailed` /
-`invalid_credentials`. Disable: `api.auth.twoFactorDisable` (Bearer via `auth.getToken`).
+`POST /auth/two-factor/verify` takes `{ challengeId, code }` — not a bare
+`userId`. Missing challenge, method mismatch, or bad code → `AuthFailed` /
+`invalid_credentials`.
 
 </Step>
 
 </Steps>
 
+## Method lock
+
+When a login challenge is issued, the active method is recorded on the pending
+challenge. Until that challenge is consumed or expires:
+
+- Only codes for the **locked** method are accepted.
+- `twoFactorEnable`, `twoFactorChangeMethod`, `twoFactorConfirmChange`, and
+  `twoFactorDisable` return `Forbidden` with `active_2fa_challenge` if called
+  for that user (including with an older Bearer session).
+
+This closes the July–August 2026 method-switching bypass pattern (switch to
+TOTP enrollment mid email-OTP challenge without proving the current factor).
+
+## Step-up and method change
+
+1. `POST /auth/two-factor/step-up` — `{ code, purpose }` verifies the **current**
+   method and grants a short-lived step-up (`enroll` | `change` | `disable`).
+2. `POST /auth/two-factor/change-method` — `{ method, email? }` provisions the new
+   method in a pending state (TOTP QR or email OTP). Requires step-up.
+3. `POST /auth/two-factor/confirm-change` — `{ code }` activates the new method and
+   **immediately invalidates** the old secret / recovery codes.
+
+Disable also requires step-up when 2FA is already enabled.
+
 ## Options
 
-| Option     | Type             | Default    | Meaning                          |
-| ---------- | ---------------- | ---------- | -------------------------------- |
-| `secret`   | `string`         | active\*   | HMAC secret (\*from `gate.auth`) |
-| `sessions` | `SessionStore`   | active\*   | Session store                    |
-| `now`      | `() => number`   | `Date.now` | Injectable clock                 |
-| `factors`  | `TwoFactorStore` | new        | Per-user TOTP + recovery hashes  |
-| `issuer`   | `string`         | `"oke"`    | Label in `otpauth://` URLs       |
+| Option           | Type                    | Default    | Meaning                                      |
+| ---------------- | ----------------------- | ---------- | -------------------------------------------- |
+| `secret`         | `string`                | active\*   | HMAC secret (\*from `gate.auth`)             |
+| `sessions`       | `SessionStore`          | active\*   | Session store                                |
+| `now`            | `() => number`          | `Date.now` | Injectable clock                             |
+| `factors`        | `TwoFactorStore`        | new        | Per-user method + TOTP / recovery            |
+| `issuer`         | `string`                | `"oke"`    | Label in `otpauth://` URLs                   |
+| `pending`        | `PendingTwoFactorStore` | active\*   | Login challenges                             |
+| `stepUp`         | `StepUpStore`           | active\*   | Privileged-op grants                         |
+| `verifications`  | `VerificationStore`     | active\*   | Email OTP as second factor (`2fa:{userId}`)  |
+| `exposeDevOtp`   | `boolean`               | `false`    | Return `devOtp` on email_otp challenge paths |
 
 ## Surfaces
 
-| Flow                    | Path                            | Gate                     |
-| ----------------------- | ------------------------------- | ------------------------ |
-| `auth.twoFactorEnable`  | `POST /auth/two-factor/enable`  | session + bearer         |
-| `auth.twoFactorVerify`  | `POST /auth/two-factor/verify`  | `gate.public` + otp rate |
-| `auth.twoFactorDisable` | `POST /auth/two-factor/disable` | session + bearer         |
+| Flow                           | Path                                   | Gate                     |
+| ------------------------------ | -------------------------------------- | ------------------------ |
+| `auth.twoFactorEnable`         | `POST /auth/two-factor/enable`         | session + bearer         |
+| `auth.twoFactorVerify`         | `POST /auth/two-factor/verify`         | `gate.public` + otp rate |
+| `auth.twoFactorStepUp`         | `POST /auth/two-factor/step-up`         | session + bearer         |
+| `auth.twoFactorChangeMethod`   | `POST /auth/two-factor/change-method`  | session + bearer         |
+| `auth.twoFactorConfirmChange`  | `POST /auth/two-factor/confirm-change` | session + bearer         |
+| `auth.twoFactorRequestEmailOtp`| `POST /auth/two-factor/request-email-otp` | public + otp rate     |
+| `auth.twoFactorDisable`        | `POST /auth/two-factor/disable`        | session + bearer         |
 
-**Consequence:** verify issues a full session for `userId` — use it as the step after first-factor
-sign-in when the account has 2FA enabled.
+**Consequence:** email/password and username sign-in return
+`{ twoFactorRequired, challengeId, method, userId }` (no tokens) when the
+account has 2FA enabled. Complete login only via `twoFactorVerify`.
 
 ## Troubleshooting
 
 <Accordions>
+<Accordion title="twoFactorEnable returns Forbidden active_2fa_challenge">
+
+Finish or wait out the login 2FA challenge first. Enrollment is blocked while
+an unresolved challenge exists for that user.
+
+</Accordion>
+<Accordion title="twoFactorEnable returns Forbidden step_up_required">
+
+2FA is already enabled. Call `twoFactorStepUp` with a valid current-method code
+(`purpose: "enroll"`), then enable again.
+
+</Accordion>
 <Accordion title="twoFactorEnable returns AuthFailed unauthenticated">
 
-Wire a session into `createClient` (`auth.getToken` / `memorySession`) from email/password
-(or another method) first — enable is gated on Bearer.
+Wire a session into `createClient` (`auth.getToken` / `memorySession`) from
+email/password (or another method) first — enable is gated on Bearer. First-time
+enroll must happen **before** 2FA is required on sign-in (or after a full
+session from a completed challenge).
 
 </Accordion>
 <Accordion title="verify always fails">
 
-Code must be six digits. Check clock skew (±1 window), and that you enrolled the `secret` from
-enable. A recovery code works once, then is consumed.
+Submit `{ challengeId, code }` from the sign-in challenge response. TOTP must be
+six digits (±1 window). Email OTP uses the code from the locked `email_otp`
+challenge. A recovery code works once for TOTP, then is consumed.
 
 </Accordion>
 </Accordions>
@@ -107,7 +167,8 @@ enable. A recovery code works once, then is consumed.
 - [Passkey](/docs/plugins/passkey) — WebAuthn register / authenticate
 - [Gate](/docs/elements/gate) — session + policies
 - [Username](/docs/plugins/username) — first factor to enroll against
-- OTP over SMS or email instead of TOTP? See [OTP](/docs/plugins/otp) / [Magic link](/docs/plugins/magic-link)
+- Primary OTP sign-in (not a second factor)? See [OTP](/docs/plugins/otp) /
+  [Magic link](/docs/plugins/magic-link)
 
 ## Next
 

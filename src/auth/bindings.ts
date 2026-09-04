@@ -22,6 +22,7 @@ import {
   IdentityError,
   type IdentityStore,
 } from "./identity.ts";
+import { getActiveGateAuthContext } from "./method-context.ts";
 import { PasswordPolicyError } from "./password-policy.ts";
 import {
   createSessionStore,
@@ -90,6 +91,17 @@ const SessionTokensOut = z.object({
   accessExpiresAt: z.number(),
   userId: z.string().optional(),
 });
+
+const SignInOut = z.union([
+  SessionTokensOut,
+  z.object({
+    twoFactorRequired: z.literal(true),
+    challengeId: z.string(),
+    method: z.enum(["totp", "email_otp"]),
+    userId: z.string(),
+    devOtp: z.string().optional(),
+  }),
+]);
 
 const RefreshIn = z.object({
   refreshToken: z.string().min(1),
@@ -289,7 +301,7 @@ export function createAuthHttpBindings(
     const signInEmail = flow("auth.signInEmail", {
       plane: "user",
       in: EmailPasswordIn,
-      out: SessionTokensOut,
+      out: SignInOut,
       errors: { AuthFailed, AuthRateLimited },
       do: async (input) => {
         // Rate limit is Gate KV (`signInRate` on the binding) — shared across
@@ -299,6 +311,11 @@ export function createAuthHttpBindings(
         if (!user) return fail("AuthFailed", { reason: "invalid_credentials" });
         if (config.emailAndPassword.requireEmailVerification && !user.emailVerified) {
           return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        const bridge = getActiveGateAuthContext()?.twoFactor;
+        if (bridge?.isEnabled(user.id)) {
+          const challenge = await bridge.beginLoginChallenge(user.id);
+          if (challenge) return challenge;
         }
         const issued = await issueSessionWithScopes(sessions, ctx.sessionCrypto(), {
           id: user.id,

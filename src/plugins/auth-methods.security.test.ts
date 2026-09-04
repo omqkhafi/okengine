@@ -14,7 +14,7 @@ import { resetBindings } from "../kernel/on.ts";
 import { anonymous } from "./anonymous.ts";
 import { magicLink } from "./magic-link.ts";
 import { otp } from "./otp.ts";
-import { passkey } from "./passkey.ts";
+import { createPasskeyStore, passkey } from "./passkey.ts";
 import { b64urlEncode, buildAuthenticatorData, signWebAuthnAssertion } from "./passkey-webauthn.ts";
 import { twoFactor, verifyTotp, createTwoFactorStore } from "./two-factor.ts";
 import { username } from "./username.ts";
@@ -96,6 +96,8 @@ async function buildCeremony(opts: {
   rpId: string;
   privateKey: CryptoKey;
   signCount: number;
+  /** Authenticator flags (default UP|UV = 0x05). */
+  flags?: number;
 }): Promise<{
   clientDataJSON: string;
   authenticatorData: string;
@@ -108,7 +110,7 @@ async function buildCeremony(opts: {
       origin: opts.origin,
     }),
   );
-  const authData = await buildAuthenticatorData(opts.rpId, opts.signCount);
+  const authData = await buildAuthenticatorData(opts.rpId, opts.signCount, opts.flags ?? 0x05);
   const sig = await signWebAuthnAssertion(opts.privateKey, authData, clientData);
   return {
     clientDataJSON: b64urlEncode(clientData),
@@ -116,6 +118,9 @@ async function buildCeremony(opts: {
     signature: b64urlEncode(sig),
   };
 }
+
+type PasskeyRegOpts = { challenge: string; sessionId: string; userId: string; rpId: string };
+type PasskeyAuthOpts = { challenge: string; sessionId: string; rpId: string };
 
 describe("auth methods — gate posture (zero-trust)", () => {
   test("every plugin HTTP binding declares gate posture; boot succeeds with deny", async () => {
@@ -274,12 +279,32 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
     const enabled = (await enable.json()) as { data: { recoveryCodes: string[] } };
     const code = enabled.data.recoveryCodes[0]!;
 
+    const challengeRes = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "twofa_user",
+        password: "CorrectHorse1!",
+      }),
+    );
+    expect(challengeRes.status).toBe(200);
+    const challenge = (await challengeRes.json()) as {
+      data: { twoFactorRequired: true; challengeId: string };
+    };
+    expect(challenge.data.twoFactorRequired).toBe(true);
+
     const first = await app.fetch(
-      jsonPost("/auth/two-factor/verify", { userId: session.userId, code }),
+      jsonPost("/auth/two-factor/verify", { challengeId: challenge.data.challengeId, code }),
     );
     expect(first.status).toBe(200);
+
+    const challenge2 = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "twofa_user",
+        password: "CorrectHorse1!",
+      }),
+    );
+    const c2 = (await challenge2.json()) as { data: { challengeId: string } };
     const reuse = await app.fetch(
-      jsonPost("/auth/two-factor/verify", { userId: session.userId, code }),
+      jsonPost("/auth/two-factor/verify", { challengeId: c2.data.challengeId, code }),
     );
     expect((await readError(reuse)).reason).toBe("invalid_credentials");
 
@@ -299,9 +324,7 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
         { authorization: `Bearer ${session.accessToken}` },
       ),
     );
-    const reg = (await regOpts.json()) as {
-      data: { challenge: string; userId: string; rpId: string };
-    };
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
     const regCeremony = await buildCeremony({
       type: "webauthn.create",
       challenge: reg.data.challenge,
@@ -319,6 +342,7 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
           publicKey: keys.publicKeyB64,
           userId: reg.data.userId,
           challenge: reg.data.challenge,
+          sessionId: reg.data.sessionId,
           ...regCeremony,
         },
         { authorization: `Bearer ${session.accessToken}` },
@@ -327,7 +351,7 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
     expect(registered.status).toBe(200);
 
     const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
-    const auth = (await authOpts.json()) as { data: { challenge: string; rpId: string } };
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
     const authCeremony = await buildCeremony({
       type: "webauthn.get",
       challenge: auth.data.challenge,
@@ -340,6 +364,7 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
       jsonPost("/auth/passkey/authenticate", {
         credentialId,
         challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
         ...authCeremony,
       }),
     );
@@ -349,6 +374,7 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
       jsonPost("/auth/passkey/authenticate", {
         credentialId,
         challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
         ...authCeremony,
       }),
     );
@@ -375,7 +401,7 @@ describe("auth methods — anonymous non-escalation", () => {
       ),
     );
     expect(opts.status).toBe(200);
-    const optBody = (await opts.json()) as { data: { challenge: string; userId: string } };
+    const optBody = (await opts.json()) as { data: PasskeyRegOpts };
     expect(optBody.data.userId).toBe(anonBody.data.userId);
 
     const keys = await generatePasskeyKeypair();
@@ -395,6 +421,7 @@ describe("auth methods — anonymous non-escalation", () => {
           publicKey: keys.publicKeyB64,
           userId: victim.userId,
           challenge: optBody.data.challenge,
+          sessionId: optBody.data.sessionId,
           ...ceremony,
         },
         { authorization: `Bearer ${anonBody.data.accessToken}` },
@@ -488,17 +515,199 @@ describe("auth methods — TOTP constant-time compare (confirmed issue)", () => 
     const code = await generateTotpForTest(data.secret, t);
     expect(await verifyTotp(data.secret, code, t)).toBe(true);
 
+    const challengeRes = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "totp_user",
+        password: "CorrectHorse1!",
+      }),
+    );
+    const challenge = (await challengeRes.json()) as {
+      data: { challengeId: string; twoFactorRequired: true };
+    };
+    expect(challenge.data.twoFactorRequired).toBe(true);
+
     const ok = await app.fetch(
-      jsonPost("/auth/two-factor/verify", { userId: session.userId, code }),
+      jsonPost("/auth/two-factor/verify", {
+        challengeId: challenge.data.challengeId,
+        code,
+      }),
     );
     expect(ok.status).toBe(200);
 
     // Wrong code of the same length — must fail (uses constant-time path).
+    const challengeBad = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "totp_user",
+        password: "CorrectHorse1!",
+      }),
+    );
+    const badCh = (await challengeBad.json()) as { data: { challengeId: string } };
     const wrong = code === "000000" ? "000001" : "000000";
     const bad = await app.fetch(
-      jsonPost("/auth/two-factor/verify", { userId: session.userId, code: wrong }),
+      jsonPost("/auth/two-factor/verify", {
+        challengeId: badCh.data.challengeId,
+        code: wrong,
+      }),
     );
     expect((await readError(bad)).reason).toBe("invalid_credentials");
+
+    await app.stop();
+  });
+});
+
+describe("auth methods — 2FA method lock (July–August 2026 bypass)", () => {
+  test("TOTP enrollment mid email_otp challenge returns Forbidden", async () => {
+    const factors = createTwoFactorStore();
+    const app = oke({
+      name: `2fa-lock-${crypto.randomUUID()}`,
+      env: "test",
+      registry: "ignore",
+      gate: { auth: { secret: SECRET, emailAndPassword: { enabled: true } } },
+    })
+      .plug(username())
+      .plug(otp({ mode: "app", channels: ["email"], exposeDevOtp: true }))
+      .plug(twoFactor({ factors, exposeDevOtp: true }));
+    await app.boot({ env: "test" });
+
+    // First-factor session before 2FA is enabled (attacker may hold an old Bearer).
+    const session = await mintUsernameSession(app, "lock_victim");
+
+    // Seed email OTP as the configured second factor (method locked at challenge).
+    factors.byUserId.set(session.userId, {
+      userId: session.userId,
+      method: "email_otp",
+      secret: "",
+      enabled: true,
+      recoveryHashes: new Set(),
+      createdAt: Date.now(),
+      email: "lock_victim@example.com",
+    });
+
+    const signIn = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "lock_victim",
+        password: "CorrectHorse1!",
+      }),
+    );
+    expect(signIn.status).toBe(200);
+    const challenge = (await signIn.json()) as {
+      data: {
+        twoFactorRequired: true;
+        challengeId: string;
+        method: string;
+        accessToken?: string;
+      };
+    };
+    expect(challenge.data.twoFactorRequired).toBe(true);
+    expect(challenge.data.method).toBe("email_otp");
+    expect(challenge.data.accessToken).toBeUndefined();
+
+    // Mid-challenge: attempt TOTP QR enrollment without completing email OTP.
+    const enroll = await app.fetch(
+      jsonPost(
+        "/auth/two-factor/enable",
+        {},
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    expect(enroll.status).toBeGreaterThanOrEqual(400);
+    const err = await readError(enroll);
+    expect(err.code).toBe("Forbidden");
+    expect(err.reason).toBe("active_2fa_challenge");
+
+    await app.stop();
+  });
+
+  test("email_otp challenge verify issues session; method change invalidates TOTP", async () => {
+    const factors = createTwoFactorStore();
+    const app = oke({
+      name: `2fa-change-${crypto.randomUUID()}`,
+      env: "test",
+      registry: "ignore",
+      gate: { auth: { secret: SECRET, emailAndPassword: { enabled: true } } },
+    })
+      .plug(username())
+      .plug(twoFactor({ factors, exposeDevOtp: true }));
+    await app.boot({ env: "test" });
+
+    const session = await mintUsernameSession(app, "change_user");
+    const enable = await app.fetch(
+      jsonPost("/auth/two-factor/enable", {}, { authorization: `Bearer ${session.accessToken}` }),
+    );
+    expect(enable.status).toBe(200);
+    const enabled = (await enable.json()) as { data: { secret: string } };
+    const oldSecret = enabled.data.secret;
+
+    // Step-up with TOTP, then change to email_otp.
+    const t = Math.floor(Date.now() / 1000);
+    const totpCode = await generateTotpForTest(oldSecret, t);
+    const stepUp = await app.fetch(
+      jsonPost(
+        "/auth/two-factor/step-up",
+        { code: totpCode, purpose: "change" },
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    expect(stepUp.status).toBe(200);
+
+    const change = await app.fetch(
+      jsonPost(
+        "/auth/two-factor/change-method",
+        { method: "email_otp", email: "change_user@example.com" },
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    expect(change.status).toBe(200);
+    const changed = (await change.json()) as { data: { method: string; devOtp?: string } };
+    expect(changed.data.method).toBe("email_otp");
+    expect(changed.data.devOtp).toBeTruthy();
+
+    const confirm = await app.fetch(
+      jsonPost(
+        "/auth/two-factor/confirm-change",
+        { code: changed.data.devOtp },
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    expect(confirm.status).toBe(200);
+    expect(factors.byUserId.get(session.userId)?.method).toBe("email_otp");
+    expect(factors.byUserId.get(session.userId)?.secret).toBe("");
+
+    // Old TOTP no longer works for login.
+    const signIn = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "change_user",
+        password: "CorrectHorse1!",
+      }),
+    );
+    const ch = (await signIn.json()) as {
+      data: { challengeId: string; method: string; devOtp?: string };
+    };
+    expect(ch.data.method).toBe("email_otp");
+    const badTotp = await app.fetch(
+      jsonPost("/auth/two-factor/verify", {
+        challengeId: ch.data.challengeId,
+        code: await generateTotpForTest(oldSecret, Math.floor(Date.now() / 1000)),
+      }),
+    );
+    expect((await readError(badTotp)).reason).toBe("invalid_credentials");
+
+    const signIn2 = await app.fetch(
+      jsonPost("/auth/sign-in/username", {
+        username: "change_user",
+        password: "CorrectHorse1!",
+      }),
+    );
+    const ch2 = (await signIn2.json()) as {
+      data: { challengeId: string; devOtp?: string };
+    };
+    const ok = await app.fetch(
+      jsonPost("/auth/two-factor/verify", {
+        challengeId: ch2.data.challengeId,
+        code: ch2.data.devOtp,
+      }),
+    );
+    expect(ok.status).toBe(200);
 
     await app.stop();
   });
@@ -562,9 +771,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
         { authorization: `Bearer ${session.accessToken}` },
       ),
     );
-    const reg = (await regOpts.json()) as {
-      data: { challenge: string; userId: string; rpId: string };
-    };
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
     const regCeremony = await buildCeremony({
       type: "webauthn.create",
       challenge: reg.data.challenge,
@@ -584,6 +791,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
               publicKey: keys.publicKeyB64,
               userId: reg.data.userId,
               challenge: reg.data.challenge,
+              sessionId: reg.data.sessionId,
               ...regCeremony,
             },
             { authorization: `Bearer ${session.accessToken}` },
@@ -617,9 +825,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
         { authorization: `Bearer ${session.accessToken}` },
       ),
     );
-    const reg = (await regOpts.json()) as {
-      data: { challenge: string; userId: string; rpId: string };
-    };
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
     const regCeremony = await buildCeremony({
       type: "webauthn.create",
       challenge: reg.data.challenge,
@@ -639,6 +845,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
               publicKey: keys.publicKeyB64,
               userId: reg.data.userId,
               challenge: reg.data.challenge,
+              sessionId: reg.data.sessionId,
               ...regCeremony,
             },
             { authorization: `Bearer ${session.accessToken}` },
@@ -648,7 +855,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
     ).toBe(200);
 
     const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
-    const auth = (await authOpts.json()) as { data: { challenge: string; rpId: string } };
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
 
     const evil = await buildCeremony({
       type: "webauthn.get",
@@ -662,6 +869,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
       jsonPost("/auth/passkey/authenticate", {
         credentialId,
         challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
         ...evil,
       }),
     );
@@ -669,7 +877,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
 
     // Fresh challenge after failed attempt (previous challenge was consumed).
     const authOpts2 = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
-    const auth2 = (await authOpts2.json()) as { data: { challenge: string; rpId: string } };
+    const auth2 = (await authOpts2.json()) as { data: PasskeyAuthOpts };
     const good = await buildCeremony({
       type: "webauthn.get",
       challenge: auth2.data.challenge,
@@ -682,6 +890,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
       jsonPost("/auth/passkey/authenticate", {
         credentialId,
         challenge: auth2.data.challenge,
+        sessionId: auth2.data.sessionId,
         ...good,
       }),
     );
@@ -707,9 +916,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
         { authorization: `Bearer ${session.accessToken}` },
       ),
     );
-    const reg = (await regOpts.json()) as {
-      data: { challenge: string; userId: string; rpId: string };
-    };
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
     const regCeremony = await buildCeremony({
       type: "webauthn.create",
       challenge: reg.data.challenge,
@@ -727,6 +934,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
           publicKey: keys.publicKeyB64,
           userId: reg.data.userId,
           challenge: reg.data.challenge,
+          sessionId: reg.data.sessionId,
           ...regCeremony,
         },
         { authorization: `Bearer ${session.accessToken}` },
@@ -734,7 +942,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
     );
 
     const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
-    const auth = (await authOpts.json()) as { data: { challenge: string; rpId: string } };
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
     const forged = await buildCeremony({
       type: "webauthn.get",
       challenge: auth.data.challenge,
@@ -747,6 +955,7 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
       jsonPost("/auth/passkey/authenticate", {
         credentialId,
         challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
         ...forged,
       }),
     );

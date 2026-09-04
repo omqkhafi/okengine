@@ -67,6 +67,7 @@ export {
   type TwoFactorRow,
   type TwoFactorStore,
 } from "./two-factor.ts";
+export type { TwoFactorMethod } from "../auth/two-factor-challenge.ts";
 export {
   assertUsernamePolicy,
   createUsernameStore,

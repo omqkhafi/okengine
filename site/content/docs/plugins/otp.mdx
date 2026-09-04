@@ -100,6 +100,14 @@ const { data } = await api.auth.verifyOtp({
 
 </Steps>
 
+<Callout type="info" title="Pre-account hijack defense (email)">
+  App-mode email verify proves inbox ownership the same way magic-link does. An
+  **unverified** parked email+password account for that address is reclaimed:
+  sessions revoked, password hashes cleared, `emailVerified` set, then the OTP
+  session is issued. Already-verified owners re-auth without a credential purge.
+  Phone OTP is unchanged (no email identity).
+</Callout>
+
 ## Modes
 
 |                      | Provider mode                 | App mode                                      |
@@ -202,6 +210,7 @@ In `local` / `test` the `console` driver captures messages. Use
 ## Learn more
 
 - [Magic link](/docs/plugins/magic-link) — link instead of a code
+- [Two-factor](/docs/plugins/two-factor) — email OTP / TOTP as a **second** factor after password (distinct from this primary `/auth/otp` sign-in)
 - [Channel](/docs/elements/channel) — `fx.send`, `fx.sendOtp`, drivers, Mailpit
 - [Gate](/docs/elements/gate) — `gate.auth`
 
@@ -209,6 +218,6 @@ In `local` / `test` the `console` driver captures messages. Use
 
 <Cards>
   <Card title="Magic link" description="Email link sign-in." href="/docs/plugins/magic-link" />
-  <Card title="Two-factor" description="TOTP second factor." href="/docs/plugins/two-factor" />
+  <Card title="Two-factor" description="TOTP / email OTP second factor." href="/docs/plugins/two-factor" />
   <Card title="Channel" description="Delivery drivers and Mailpit." href="/docs/elements/channel" />
 </Cards>

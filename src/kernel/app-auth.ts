@@ -10,6 +10,11 @@ import { auth as authPlugin } from "../auth/plugin.ts";
 import { createAuthHttpBindings, type AuthHttpMaterialization } from "../auth/bindings.ts";
 import { tokenFromCookieHeader } from "../auth/cookies.ts";
 import { setActiveGateAuthContext } from "../auth/method-context.ts";
+import {
+  createPendingTwoFactorStore,
+  createStepUpStore,
+} from "../auth/two-factor-challenge.ts";
+import { createVerificationStore } from "../auth/verification.ts";
 import type { ResolvedGateConfig } from "../elements/gate/config.ts";
 import {
   createAppAuthBinding,
@@ -85,6 +90,9 @@ export function wireGateAuth(options: WireGateAuthOptions): WiredGateAuth {
     passwordPolicy: auth.passwordPolicy,
     password: auth.password,
     breachCheck: auth.breachCheck,
+    pendingTwoFactor: createPendingTwoFactorStore(),
+    stepUp: createStepUpStore(),
+    twoFactorVerifications: createVerificationStore(),
   });
 
   return {

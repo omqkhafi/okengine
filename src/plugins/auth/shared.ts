@@ -21,6 +21,9 @@ export const AuthFailed = z.object({
   reasons: z.array(z.string()).optional(),
 });
 export const AuthRateLimited = z.object({ reason: z.string() });
+export const Forbidden = z.object({
+  reason: z.string().optional(),
+});
 
 export const SessionTokensOut = z.object({
   accessToken: z.string(),
@@ -28,6 +31,19 @@ export const SessionTokensOut = z.object({
   accessExpiresAt: z.number(),
   userId: z.string().optional(),
 });
+
+/** Sign-in may return tokens or a locked 2FA challenge. */
+export const SignInOut = z.union([
+  SessionTokensOut,
+  z.object({
+    twoFactorRequired: z.literal(true),
+    challengeId: z.string(),
+    method: z.enum(["totp", "email_otp"]),
+    userId: z.string(),
+    devOtp: z.string().optional(),
+  }),
+]);
+
 
 /** Common options for auth method plugins (session issue). */
 export interface AuthMethodOptions {

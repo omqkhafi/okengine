@@ -11,6 +11,26 @@ import type { BreachCheckFn } from "./breach-check.ts";
 import type { IdentityStore } from "./identity.ts";
 import type { PasswordPolicyOptions } from "./password-policy.ts";
 import type { SessionStore } from "./sessions.ts";
+import type {
+  PendingTwoFactorStore,
+  StepUpStore,
+  TwoFactorRequiredOut,
+} from "./two-factor-challenge.ts";
+import type { VerificationStore } from "./verification.ts";
+
+/**
+ * Bridge registered by `twoFactor()` so first-factor sign-in can withhold
+ * tokens and issue a method-locked pending challenge.
+ */
+export interface TwoFactorAuthBridge {
+  /** Whether the user has an enabled second factor. */
+  isEnabled(userId: string): boolean;
+  /**
+   * Issue a locked login challenge (and email OTP when method is email_otp).
+   * Returns null when 2FA is not enabled for the user.
+   */
+  beginLoginChallenge(userId: string): Promise<TwoFactorRequiredOut | null>;
+}
 
 /** Shared context for auth method plugins. */
 export interface ActiveGateAuthContext {
@@ -25,6 +45,14 @@ export interface ActiveGateAuthContext {
   readonly password?: PasswordHashOptions;
   /** From `gate.auth.breachCheck` — optional breach checker. */
   readonly breachCheck?: BreachCheckFn;
+  /** Shared pending login 2FA challenges (created at Gate auth wire). */
+  readonly pendingTwoFactor?: PendingTwoFactorStore;
+  /** Shared step-up grants for privileged 2FA ops. */
+  readonly stepUp?: StepUpStore;
+  /** Shared verification store for 2FA email OTP (and injectable tests). */
+  readonly twoFactorVerifications?: VerificationStore;
+  /** Registered by `.plug(twoFactor())`. */
+  twoFactor?: TwoFactorAuthBridge;
 }
 
 let active: ActiveGateAuthContext | undefined;
@@ -42,5 +70,18 @@ export function setActiveGateAuthContext(ctx: ActiveGateAuthContext | undefined)
  * Read the active Gate auth context, if any.
  */
 export function getActiveGateAuthContext(): ActiveGateAuthContext | undefined {
+  return active;
+}
+
+/**
+ * Mutate the active context in place (e.g. register `twoFactor` bridge).
+ *
+ * @param patch - Fields to merge onto the active context
+ */
+export function patchActiveGateAuthContext(
+  patch: Partial<ActiveGateAuthContext>,
+): ActiveGateAuthContext | undefined {
+  if (!active) return undefined;
+  active = { ...active, ...patch };
   return active;
 }

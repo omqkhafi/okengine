@@ -19,6 +19,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Require named clock declarations instead of bare `every(interval)` trigger constructors: `on(clock.cron(...), flow)`, `on(clock.every(...), flow)`, etc.
 - Require store table receivers (`db.table(handle).changed(column)` / `table.changed(...)`) for CDC triggers instead of bare `table(name, store?)`.
 
+#### Runtime
+
+- When `twoFactor()` is plugged and the account has 2FA enabled, email/password
+  and username sign-in withhold session tokens and return
+  `{ twoFactorRequired, challengeId, method, userId }` instead.
+- `auth.twoFactorVerify` requires `{ challengeId, code }` (bound to the
+  server-issued login challenge). Unbound `{ userId, code }` is no longer accepted.
+
 ### 🔥 Removed
 
 #### Kernel
@@ -27,6 +35,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Removed bare top-level `table(name, store?)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
 
 ### ✨ Added
+
+#### Runtime
+
+- `twoFactor` step-up / change-method / confirm-change / request-email-otp surfaces;
+  shared pending-challenge + step-up stores on Gate auth context; email OTP as a
+  configurable second-factor method.
 
 #### Kernel
 
@@ -64,6 +78,29 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Fixed trigger item row alignment, badge visibility, height symmetry, ambient auto-cycling (`useTick`), interactive tabbed contract inspector (`in`, `out`, `errors`, `do`), and unified domain pipeline examples (`orders.*`) in `FlowTriggers` (`flow-triggers.tsx`).
 - Fixed broken consumers doc example calling `users.changed()` without a store table receiver.
+
+### ♻️ Changed
+
+#### Docs
+
+- Two-factor docs: method-locked login challenges, step-up enrollment / method
+  change, `Forbidden` mid-challenge; OTP docs clarify primary `/auth/otp` vs
+  second-factor email OTP.
+
+### 🔒 Security
+
+#### Runtime
+
+- 2FA method lock during active login challenges: the configured method
+  (`totp` | `email_otp`) is recorded on the pending challenge; TOTP enrollment /
+  method change / disable while an unresolved challenge exists returns
+  `Forbidden` (`active_2fa_challenge`). Closes the July–August 2026
+  method-switching bypass pattern.
+- TOTP re-enrollment and method change require a successful step-up verification
+  of the current factor; the old method is invalidated only after the new one is
+  confirmed active.
+
+
 
 ## v0.18.5 — 2026-08-28
 
