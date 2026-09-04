@@ -70,6 +70,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Upgraded `FlowShape` figure (`flow-shape.tsx`) with interactive stage physics, active element triggers (including MCP), and nameless flow auto-derivation annotations.
 - Enhanced Flow documentation with interactive trigger visualizer (`flow-triggers.tsx`), step-by-step quickstart, comprehensive execution options (`compensate`, `retry`, `cache`, `plane`), schema validation guides (Standard Schema, Drizzle ORM v1 subpaths, `shapes.ts`), and dedicated Shiki focus/highlight styles.
 - Updated agent CI guidelines across `.cursorrules`, `AGENTS.md`, and skill definitions to prevent automatic CI execution after implementations.
+- Flow Overview (`elements/flow`): rewritten to the HTTP page’s depth — Smallest Example
+  Steps, Progressive Patterns, trigger table + capability cards, verified `flow()` options
+  (`cache` auto for read-only, `NotFound` → 400 not 404), `fx` door, call-only / `internal`,
+  plane / retry / OKE1008 troubleshooting.
 
 #### Dev, Keel & create-oke
 

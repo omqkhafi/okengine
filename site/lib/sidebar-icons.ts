@@ -23,7 +23,6 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/elements/flow": "Workflow",
   "/docs/elements/flow/http": "Globe",
   "/docs/elements/flow/routing": "GitFork",
-  "/docs/elements/flow/jobs": "Clock",
   "/docs/elements/flow/consumers": "Radio",
   "/docs/elements/flow/workflows": "GitFork",
   "/docs/elements/signal": "Radio",

@@ -3,6 +3,7 @@
  * so production is a Next.js server (Vercel) rather than a static `out/` tree.
  */
 
+import { isChromeInspectorProbe } from "@/lib/chrome-inspector";
 import { markdownNegotiation, markdownTwinPath } from "@/lib/markdown-negotiate";
 import { markdownNotFoundResponse } from "@/lib/not-found-markdown";
 import { type NextRequest, NextResponse } from "next/server";
@@ -12,9 +13,16 @@ import { type NextRequest, NextResponse } from "next/server";
  * unknown paths with a markdown body. Always stamp `Vary: Accept` on those
  * responses so caches key the representation they selected.
  *
+ * Chrome / Cursor DevTools probe this origin as CDP (`GET /json/version`);
+ * answer 204 so those probes never paint as handbook 404s.
+ *
  * @param request - Incoming request
  */
 export function proxy(request: NextRequest): NextResponse | Response {
+  if (isChromeInspectorProbe(request.method, request.nextUrl.pathname)) {
+    return new NextResponse(null, { status: 204 });
+  }
+
   const action = markdownNegotiation(request);
   if (action.kind === "pass") {
     const response = NextResponse.next();

@@ -16,6 +16,15 @@ const config = {
   // Do not set `output: "export"`: `proxy.ts` negotiates `Accept: text/markdown`,
   // and that file convention does not run on a static export (Next.js).
   reactStrictMode: true,
+  // Dev binds as `localhost`; browsing via `http://127.0.0.1` is a different
+  // origin, so Next blocks `/_next/*` unless this host is allowlisted.
+  allowedDevOrigins: ["127.0.0.1"],
+  // Chrome / Cursor DevTools probe this origin as CDP (`GET /json/version`).
+  logging: {
+    incomingRequests: {
+      ignore: [/\/json(?:\/|$)/],
+    },
+  },
   env: {
     NEXT_PUBLIC_OKE_VERSION: okeVersion,
   },
@@ -34,6 +43,15 @@ const config = {
   // turbopack.root to that root so workspace-hoisted deps resolve.
   turbopack: {
     root: rootDir,
+  },
+  async redirects() {
+    return [
+      {
+        source: "/docs/elements/flow/jobs",
+        destination: "/docs/elements/flow/consumers",
+        permanent: true,
+      },
+    ];
   },
 };
 

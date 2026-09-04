@@ -1,94 +1,121 @@
 ---
 title: "Overview"
-description: "Permission to act — authentication, tenant boundaries, authorization policies, and rate limits in one chain."
+description: "Permission to act — policy and rate gates on the trigger, left to right, first denial wins."
 icon: "ShieldCheck"
 source: "docs/spec/unified-theory.md"
 ---
 
-Gate is how your backend **decides whether a caller has permission to act**. In traditional stacks, security is an afterthought spread across routing middlewares, authentication strategies, rate-limiter libraries, and ad-hoc tenant decorators. In OKE, Gate provides an explicit security posture.
+Gate is how your backend **decides whether a caller may run a Flow**. Policies and rate limits attach to the
+trigger with `.gate(...)`. Identity comes from `oke({ gate: { auth } })` into `fx.auth`; Gate policies
+read that principal — they do not invent a separate middleware stack.
 
 <Callout title="The one rule">
-  **First denial wins**. When multiple gates protect a Flow, they evaluate left-to-right. The first
-  gate to reject the caller terminates execution immediately without evaluating subsequent gates or
-  entering the flow body.
+  **First denial wins.** Gates on a trigger evaluate left to right. The first reject stops the chain —
+  later gates are skipped, and `do` never runs.
 </Callout>
+
+<GatePipeline />
 
 ## What is Gate?
 
-Gate spans four unified protection surfaces:
+Four surfaces, one vocabulary:
 
-1. **Authentication (`gate.auth`)**: Session validation, JWT verification, and API key resolution.
-2. **Multi-Tenancy (`gate.auth.tenant`)**: Automatic tenant isolation injected into `fx.tenant`.
-3. **Authorization Policies (`gate.policy`, `gate.scope`)**: Role-based (RBAC) and Attribute-based (ABAC) permission checks.
-4. **Rate Limiting (`gate.rate`)**: High-performance sliding-window and token-bucket throttling backed by KV.
+1. **Policy (`gate.policy`, `gate.scope`)** — ABAC / scope checks over `auth` and request meta.
+2. **Public (`gate.public` / `.public()`)** — intentionally unauthenticated HTTP posture.
+3. **Rate (`gate.rate`)** — KV-backed throttle (`max` / `per` / `keyBy`).
+4. **Auth config (`gate.auth`)** — sessions, keys, and optional tenancy under `oke({ gate: { auth } })`.
 
-```typescript title="src/gates/roles.ts"
+```typescript title="src/core/gate.ts"
 import { gate } from "okengine";
 
-export const requireAdmin = gate.policy("adminOnly", async (ctx) => {
-  return ctx.user?.role === "admin";
+export const member = gate.policy("member", {
+  description: "Signed-in workspace member",
+  check: ({ auth }) => !!auth.verified,
 });
 
-export const apiRateLimit = gate.rate("apiThrottling", {
-  strategy: "sliding-window-counter",
-  limit: 100,
-  window: "1m",
+export const notesWrite = gate.scope("notes:write");
+
+export const notesWriteRate = gate.rate({
+  max: 60,
+  per: "1m",
+  keyBy: "ip",
+  description: "Note write throttle",
 });
+
+export const notesMutate = gate.all(member, notesWrite, notesWriteRate);
 ```
 
 ## Attaching Gates to Flows
 
-Gates attach directly to any Flow definition:
+Gates chain on the **trigger**, not on a `gates: [...]` field inside `flow()`:
 
-```typescript
-export const deleteUser = on(
-  http.delete("/users/:id"),
-  flow("users.delete", {
-    gates: [gate.auth, requireAdmin, apiRateLimit],
-    do: async ({ id }, fx) => {
-      // Guaranteed: user is authenticated, has admin role, and caller is within rate limits
-      await fx.store(db).delete(users).where(eq(users.id, id));
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { notesMutate } from "@/core/gate";
+
+export const createNote = on(
+  http.post("/notes").gate(notesMutate),
+  flow("notes.create", {
+    do: async (input, fx) => {
+      // Guaranteed: verified member, notes:write scope, under rate
+      return fx.json.create({ id: fx.id(), ...input });
     },
   }),
 );
 ```
+
+Open a route explicitly with `.public()` (or `.gate(gate.public)`). HTTP triggers that omit both a gate
+and `.public()` fail boot with `GateBootError`.
 
 ## The Capabilities of Gate
 
 <Cards>
   <Card
     title="Authentication"
-    description="Built-in user sessions, password validation, HaveIBeenPwned checks, and OAuth integration."
+    description="Enable gate.auth, populate fx.auth, then protect Flows with policies that check the principal."
     href="/docs/elements/gate/auth"
   />
   <Card
     title="Multi-Tenancy"
-    description="Tenant identification from subdomains, headers, or API keys with automatic fx.tenant injection."
+    description="Opt into gate.auth.tenant and read fx.tenant.id for isolation."
     href="/docs/elements/gate/tenancy"
   />
   <Card
     title="Authorization Policies"
-    description="Fine-grained policy evaluations and scope checks for role-based and attribute-based security."
+    description="gate.policy and gate.scope for RBAC / ABAC; compose with gate.all."
     href="/docs/elements/gate/authorization"
   />
   <Card
     title="Rate Limits"
-    description="5 high-throughput throttling algorithms implemented directly in Redis/KV Lua scripts."
+    description="gate.rate with five KV strategies — sliding-window-counter by default."
     href="/docs/elements/gate/rate-limits"
   />
 </Cards>
+
+## Denial codes
+
+| Situation                                      | Code           | Status |
+| ---------------------------------------------- | -------------- | ------ |
+| Policy denied and no `auth.userId`             | `Unauthorized` | 401    |
+| Policy denied and caller is authenticated      | `Forbidden`    | 403    |
+| Rate gate burned                               | `RateLimited`  | 429    |
 
 ## Next Steps
 
 <Cards>
   <Card
     title="Authentication"
-    description="Configure session auth and credentials."
+    description="Configure gate.auth and session identity."
     href="/docs/elements/gate/auth"
   />
   <Card
+    title="HTTP triggers"
+    description="Attach .gate(...) and .public() on REST routes."
+    href="/docs/elements/flow/http"
+  />
+  <Card
     title="Vault Element"
-    description="Manage secrets and protected configuration."
+    description="Declare secrets and protected configuration."
     href="/docs/elements/vault"
   />
 </Cards>

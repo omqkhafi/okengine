@@ -14,5 +14,7 @@ describe("proxy.ts markdown negotiation", () => {
     expect(src).toContain("markdownTwinPath");
     expect(src).toContain('response.headers.set("Vary", "Accept")');
     expect(src).toContain("markdownNotFoundResponse");
+    expect(src).toContain("isChromeInspectorProbe");
+    expect(src).toContain("status: 204");
   });
 });

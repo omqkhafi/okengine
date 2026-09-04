@@ -1,61 +1,93 @@
 ---
-title: "Limits"
-description: "High-throughput traffic throttling and DDoS protection powered by 5 Lua strategies on KV."
+title: "Rate Limits"
+description: "gate.rate — KV-backed throttles with max, per, and keyBy; five strategies, sliding-window-counter by default."
 icon: "Gauge"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Rate Limit Gate (`gate.rate`) protects APIs from abuse, runaway loops, and denial-of-service traffic.
+`gate.rate` protects Flows from abuse and runaway clients. Limits run as atomic takes on the KV
+driver before `do`. Compose rates with policies via `gate.all` or list them on `.gate(...)`.
 
-## What it is
+<Callout title="The one rule">
+  Pass options as one object: `{ max, per, keyBy? }`. There is no `gate.rate(name, { limit, window })`
+  form — the runtime names the gate from strategy and window.
+</Callout>
 
-Rate limit gates execute high-speed atomic algorithms (such as sliding window counters or token buckets) on the KV store before allowing requests through.
+## Strategies
 
-## Supported Strategies
+| Strategy                 | Best for                         |
+| ------------------------ | -------------------------------- |
+| `sliding-window-counter` | Default — accuracy vs cost       |
+| `token-bucket`           | Bursty traffic with refill       |
+| `leaky-bucket`           | Smooth outbound rate             |
+| `fixed-window`           | Simple reset intervals           |
+| `sliding-log`            | Strict precision                 |
 
-1. `sliding-window-counter` (Default recommended)
-2. `token-bucket` (Ideal for bursting traffic)
-3. `leaky-bucket` (Smooth request rate)
-4. `fixed-window` (Simple reset intervals)
-5. `sliding-log` (Strict precision)
-
-## Smallest Example
+## Quick start
 
 <Steps>
 
 <Step>
-### Define and attach rate limit
+### Declare a rate gate
+
+```typescript title="src/core/gate.ts"
+import { gate } from "okengine";
+
+export const loginThrottle = gate.rate({
+  strategy: "sliding-window-counter", // default when omitted
+  max: 5,
+  per: "1m",
+  keyBy: "ip",
+  description: "Login attempts per IP",
+});
+```
+
+</Step>
+
+<Step>
+### Attach on the trigger
 
 ```typescript title="src/flows/auth/login.ts"
 import { on, flow, http, gate } from "okengine";
-
-const loginThrottle = gate.rate("auth.loginThrottle", {
-  strategy: "sliding-window-counter",
-  limit: 5,
-  window: "1m",
-  by: (ctx) => ctx.ip,
-});
+import { loginThrottle } from "@/core/gate";
 
 export const login = on(
-  http.post("/login"),
+  http.post("/auth/sign-in/email").gate(gate.public, loginThrottle),
   flow("auth.login", {
-    gates: [loginThrottle],
     do: async (input, fx) => {
-      // Maximum 5 attempts per minute per IP
+      // At most 5 takes per IP per minute
+      return input;
     },
   }),
 );
 ```
 
+A burned quota returns typed `RateLimited` with `retryAfterMs` — never a thrown stack mid-`do`.
+
 </Step>
 
 </Steps>
+
+## Options
+
+| Option         | Type           | Default                   | Meaning                                      |
+| -------------- | -------------- | ------------------------- | -------------------------------------------- |
+| `max`          | `number`       | required                  | Takes allowed within `per`                   |
+| `per`          | `string`       | required                  | Window / refill (`"1m"`, `"60s"`, …)         |
+| `strategy`     | `RateStrategy` | `sliding-window-counter`  | Algorithm id                                 |
+| `keyBy`        | `string`       | —                         | Subject dim (`"ip"`, `"user"`, …)            |
+| `overridable`  | `boolean`      | `false`                   | Console may override `max` / `per` in Store  |
+| `description`  | `string`       | —                         | Human label for Console / docs               |
+
+**Consequence:** rate gates need a KV driver in the app. Without KV, evaluation denies with
+`reason: "rate gate requires kv"`.
 
 ## Next
 
 <Cards>
   <Card
     title="Vault Element"
-    description="Manage secret keys, KMS unsealing, and config."
+    description="Secrets and protected configuration."
     href="/docs/elements/vault"
   />
   <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />

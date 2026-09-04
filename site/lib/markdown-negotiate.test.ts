@@ -31,6 +31,9 @@ describe("markdownTwinPath", () => {
     expect(markdownTwinPath("/")).toBe("/llms.mdx/home");
     expect(markdownTwinPath("/docs")).toBe("/llms.mdx/docs/index.md");
     expect(markdownTwinPath("/docs/elements/vault")).toBe("/llms.mdx/docs/elements/vault.md");
+    expect(markdownTwinPath("/docs/elements/flow/jobs")).toBe(
+      "/llms.mdx/docs/elements/flow/consumers.md",
+    );
     expect(markdownTwinPath("/changelog")).toBe("/llms.mdx/releases");
     expect(markdownTwinPath("/changelog/0.12")).toBe("/llms.mdx/releases/0.12");
   });
@@ -69,6 +72,7 @@ describe("markdownNegotiation", () => {
     expect(
       markdownNegotiation(request("/llms.mdx/docs/elements/vault.md", "text/markdown")).kind,
     ).toBe("pass");
+    expect(markdownNegotiation(request("/json/version", "text/markdown")).kind).toBe("pass");
   });
 });
 

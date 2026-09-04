@@ -1,34 +1,68 @@
 ---
-title: "Multi-Tenancy Gate"
-description: "Automatic tenant boundary resolution from headers, subdomains, or API keys with fx.tenant injection."
+title: "Multi-Tenancy"
+description: "Opt into gate.auth.tenant so requests resolve fx.tenant.id from claim, header, or subdomain."
 icon: "Building2"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Tenancy Gate (`gate.auth.tenant`) extracts organization context and enforces tenant isolation boundaries.
+Tenancy is an identity **dimension** under `gate.auth.tenant`, not a separate gate you attach with
+`.gate(...)`. When enabled, the runtime resolves a tenant for the request and exposes it as
+`fx.tenant.id`. Your SQL / KV / files code (and optional RLS) use that id for isolation.
 
-## What it is
+<Callout title="The one rule">
+  Enable `gate.auth.tenant`, keep membership checks on — then filter every store access by
+  `fx.tenant.id`. Do not invent a `gate.auth.tenant` trigger handle.
+</Callout>
 
-Multi-tenant SaaS applications need to ensure one customer cannot view or modify another customer's data. `gate.auth.tenant` resolves tenant identity from the request (e.g. `X-Tenant-Id` header, subdomain, or authenticated session) and attaches it to `fx.tenant`.
-
-## Smallest Example
+## Quick start
 
 <Steps>
 
 <Step>
-### Protect tenant routes
+### Turn tenancy on
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+
+export const app = oke({
+  name: "shop",
+  env: "dev",
+  gate: {
+    auth: {
+      tenant: true, // claim source · header x-oke-tenant · required: false
+    },
+  },
+});
+```
+
+Or pass options:
+
+```typescript
+tenant: {
+  required: true, // every user-plane request needs a tenant
+  source: "header", // "claim" | "header" | "subdomain" | "resolve"
+  header: "x-oke-tenant",
+}
+```
+
+</Step>
+
+<Step>
+### Protect the route and scope data
 
 ```typescript title="src/flows/invoices/list.ts"
-import { on, flow, http, gate } from "okengine";
+import { on, flow, http } from "okengine";
+import { eq } from "drizzle-orm";
+import { member } from "@/core/gate";
+import { db, invoices } from "@/schema";
 
 export const listInvoices = on(
-  http.get("/invoices"),
+  http.get("/invoices").gate(member),
   flow("invoices.list", {
-    gates: [gate.auth, gate.auth.tenant],
     do: async (_, fx) => {
-      // fx.tenant contains active tenant context
-      return await fx.store(db).query.invoices.findMany({
-        where: (inv, { eq }) => eq(inv.tenantId, fx.tenant.id),
-      });
+      const tenantId = fx.tenant.id;
+      if (!tenantId) return fx.fail("Forbidden", { reason: "tenant_required" });
+      return await fx.store(db).select().from(invoices).where(eq(invoices.tenantId, tenantId));
     },
   }),
 );
@@ -38,12 +72,24 @@ export const listInvoices = on(
 
 </Steps>
 
+## Options
+
+| Option          | Type                                         | Default         | Meaning                                      |
+| --------------- | -------------------------------------------- | --------------- | -------------------------------------------- |
+| `required`      | `boolean`                                    | `false`         | Reject user-plane requests without a tenant  |
+| `source`        | `"claim" \| "header" \| "subdomain" \| "resolve"` | `"claim"`  | Where the tenant id comes from               |
+| `header`        | `string`                                     | `x-oke-tenant`  | Header name when `source: "header"`          |
+| `resolve`       | `(ctx) => string \| null \| undefined`       | —               | Custom resolver; membership still checked    |
+| `authoritative` | `boolean`                                    | `false`         | Trust `resolve` without a membership query   |
+
+Manage membership at runtime with `fx.auth` tenant methods (`auth:tenants` capability).
+
 ## Next
 
 <Cards>
   <Card
     title="Authorization Policies"
-    description="Implement role-based and attribute-based permissions."
+    description="gate.policy and gate.scope for capability checks."
     href="/docs/elements/gate/authorization"
   />
   <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />

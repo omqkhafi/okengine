@@ -1,44 +1,90 @@
 ---
-title: "RBAC"
-description: "Fine-grained policy evaluations and scope checks for role-based (RBAC) and attribute-based (ABAC) access control."
+title: "Authorization"
+description: "gate.policy and gate.scope — reusable permission checks composed with gate.all and attached via .gate."
 icon: "ShieldAlert"
+source: "docs/spec/unified-theory.md"
 ---
 
-Authorization Gates (`gate.policy` and `gate.scope`) enforce domain rules and role permissions.
+Authorization answers “may this principal do this?” after identity is known. Declare reusable
+`gate.policy` / `gate.scope` handles, compose them with `gate.all`, and attach the chain on the
+trigger.
 
-## What it is
+<Callout title="The one rule">
+  Policies receive `GatePolicyContext` (`auth`, `operator`, optional `meta`) — never invent
+  `ctx.user` or `ctx.store`. World access stays inside `do` via `fx`.
+</Callout>
 
-While authentication verifies identity, authorization checks capability. Policies are declared as reusable functions that inspect the active user, tenant, and request payload.
-
-## Smallest Example
+## Quick start
 
 <Steps>
 
 <Step>
-### Define custom policies
+### Declare policies and scopes
 
-```typescript title="src/gates/permissions.ts"
+```typescript title="src/core/gate.ts"
 import { gate } from "okengine";
 
-export const canEditProject = gate.policy("projects.edit", async (ctx) => {
-  if (ctx.user.role === "admin") return true;
-  const project = await ctx.store(db).query.projects.findFirst({
-    where: (p, { eq }) => eq(p.id, ctx.input.projectId),
-  });
-  return project?.ownerId === ctx.user.id;
+/** Signed-in member. */
+export const member = gate.policy("member", {
+  check: ({ auth }) => !!auth.verified,
 });
+
+/** Holds the notes:write scope (name is the scope string). */
+export const notesWrite = gate.scope("notes:write");
+
+/** Admin-only ABAC example. */
+export const adminOnly = gate.policy("adminOnly", ({ auth }) => auth.scopes.has("admin"));
+```
+
+`gate.scope(name)` is shorthand for
+`gate.policy(name, ({ auth }) => auth.scopes.has(name))` with `scopes: [name]` recorded.
+
+</Step>
+
+<Step>
+### Compose and attach
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http, gate } from "okengine";
+import { member, notesWrite } from "@/core/gate";
+
+export const notesMutate = gate.all(member, notesWrite);
+
+export const createNote = on(
+  http.post("/notes").gate(notesMutate),
+  // or: .gate(member, notesWrite)
+  flow("notes.create", {
+    do: async ({ title }, fx) => fx.json.create({ id: fx.id(), title }),
+  }),
+);
 ```
 
 </Step>
 
 </Steps>
 
+## Policy context
+
+| Field                | Type                         | Meaning                          |
+| -------------------- | ---------------------------- | -------------------------------- |
+| `auth.userId`        | `string \| null`             | User-plane principal             |
+| `auth.scopes`        | `ReadonlySet<string>`        | Granted scopes                   |
+| `auth.verified`      | `boolean \| undefined`       | Credential verified              |
+| `auth.apiKeyId`      | `string \| null \| undefined`| API-key principal when present   |
+| `operator.id`        | `string \| null`             | Operator-plane principal         |
+| `meta.ip` / `userId` | optional                     | Subject dims for rate `keyBy`    |
+
+## Denial mapping
+
+- No `auth.userId` when a policy denies → `Unauthorized`
+- Authenticated principal when a policy denies → `Forbidden` with `{ gate, reason }`
+
 ## Next
 
 <Cards>
   <Card
     title="Rate Limits"
-    description="Throttling strategies backed by Redis/KV."
+    description="Throttle with gate.rate on the same chain."
     href="/docs/elements/gate/rate-limits"
   />
   <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />

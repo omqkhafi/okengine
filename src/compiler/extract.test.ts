@@ -349,6 +349,67 @@ export const db = store.sql("app", { schema: { assets } });
     expect(cols?.createdAt).toMatchObject({ type: "integer", nullable: false, default: null });
   });
 
+  test("field.id() / field.okid() heads extract as text PK with dynamic default", async () => {
+    const source = `
+import { store, field } from "okengine";
+
+export const tasks = store.schema.table("tasks", {
+  id: field.id().primaryKey(),
+  title: field.text().notNull(),
+  updatedAt: field.timestamp().notNull().now(),
+});
+
+export const assets = store.schema.table("assets", {
+  id: field.okid().primaryKey(),
+  name: field.text().notNull(),
+});
+
+export const db = store.sql("app", { schema: { tasks, assets } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    expect(manifest.stores?.app?.tables?.tasks?.columns?.id).toMatchObject({
+      type: "text",
+      primaryKey: true,
+      default: null,
+      sqlName: "id",
+    });
+    expect(manifest.stores?.app?.tables?.assets?.columns?.id).toMatchObject({
+      type: "text",
+      primaryKey: true,
+      default: null,
+    });
+  });
+
+  test("live(.live(table)) accepts field.id().primaryKey() tables", async () => {
+    const source = `
+import { on, flow, http, gate, store, field } from "okengine";
+
+export const tasks = store.schema.table("tasks", {
+  id: field.id().primaryKey(),
+  status: field.text().notNull(),
+  updatedAt: field.timestamp().notNull().now(),
+});
+
+export const db = store.sql("app", { schema: { tasks } });
+export const member = gate.policy("member", { require: ["member"] });
+
+export const live = on(
+  http.get("/tasks/live").gate(member).live(tasks),
+  flow("tasks.live", {
+    do: async () => ({ ok: true }),
+  }),
+);
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+      "src/flows/live.ts": source,
+    });
+    expect(manifest.flows?.["tasks.live"]).toBeDefined();
+    expect(manifest.stores?.app?.tables?.tasks?.columns?.id?.primaryKey).toBe(true);
+  });
+
   test("decimal head collapses to numeric in the manifest", async () => {
     const source = `
 import { store, field } from "okengine";

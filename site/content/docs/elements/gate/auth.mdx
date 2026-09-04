@@ -1,47 +1,112 @@
 ---
-title: "Authentication Gate"
-description: "Built-in session management, password hashing, credential validation, and HaveIBeenPwned breach checks."
+title: "Authentication"
+description: "Enable gate.auth so sessions and API keys fill fx.auth — then protect Flows with policy gates."
 icon: "Lock"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Authentication Gate (`gate.auth`) validates caller identity before flow execution.
+Authentication is configured as `oke({ gate: { auth } })`. That bag issues `/auth/*` Flows (unless
+`http: false`), fills `fx.auth`, and leaves permission to policy gates — there is no `gate.auth`
+handle for `.gate(...)`.
 
-## What it is
+<Callout title="The one rule">
+  Turn on `gate.auth` for identity. Attach `gate.policy` / `gate.scope` (or `.public()`) for
+  permission. Boot fails if an HTTP trigger has neither.
+</Callout>
 
-`gate.auth` inspects Bearer tokens, session cookies, or API keys on incoming requests. On success, it populates `fx.user` and `fx.session`. If authentication fails, it rejects the request with HTTP 401 Unauthorized.
-
-## Smallest Example
+## Quick start
 
 <Steps>
 
 <Step>
-### Protect a flow with gate.auth
+### Enable auth on the app
 
-```typescript title="src/flows/profile/me.ts"
-import { on, flow, http, gate } from "okengine";
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { username } from "okengine/plugins";
 
-export const getProfile = on(
-  http.get("/profile"),
-  flow("profile.me", {
-    gates: [gate.auth],
-    do: async (_, fx) => {
-      // fx.user is guaranteed non-null
-      return { user: fx.user };
+export const app = oke({
+  name: "notes",
+  env: "dev",
+  gate: {
+    auth: {
+      // secret required in prod; minted in dev when omitted
+      // basePath defaults to "/auth"
     },
-  }),
-);
+  },
+}).plug(username());
 ```
 
 </Step>
 
+<Step>
+### Declare a signed-in policy
+
+```typescript title="src/core/gate.ts"
+import { gate } from "okengine";
+
+export const member = gate.policy("member", {
+  description: "Signed-in user",
+  check: ({ auth }) => !!auth.verified,
+});
+```
+
+</Step>
+
+<Step>
+### Attach it on the trigger
+
+```typescript title="src/flows/profile/me.ts"
+import { on, flow, http } from "okengine";
+import { member } from "@/core/gate";
+
+export const getProfile = on(
+  http.get("/profile").gate(member),
+  flow("profile.me", {
+    do: async (_, fx) => ({ userId: fx.auth.userId }),
+  }),
+);
+```
+
+Anonymous callers fail the policy → typed `Unauthorized`. Authenticated callers reach `do` with
+`fx.auth.userId` and `fx.auth.scopes` set.
+
+</Step>
+
 </Steps>
+
+## What `fx.auth` carries
+
+| Field        | Meaning                                              |
+| ------------ | ---------------------------------------------------- |
+| `userId`     | Principal id, or `null` when anonymous               |
+| `scopes`     | `ReadonlySet<string>` used by `gate.scope`           |
+| `verified`   | Session / credential passed verification             |
+| `apiKeyId`   | Present when the principal is an API key             |
+
+Inside `do`, read identity from `fx.auth` — not `fx.user`.
+
+## Public routes
+
+Health checks and login endpoints must declare open posture explicitly:
+
+```typescript
+http.get("/health").public();
+// equivalent: http.get("/health").gate(gate.public)
+```
+
+## Learn more
+
+- [Username plugin](/docs/plugins/username) — email-free sign-up on `gate.auth`
+- [Authorization](/docs/elements/gate/authorization) — scopes and ABAC policies
+- [HTTP](/docs/elements/flow/http) — `.gate` / `.public` on triggers
 
 ## Next
 
 <Cards>
   <Card
     title="Multi-Tenancy"
-    description="Isolate tenant data across organizations."
+    description="Resolve fx.tenant.id from claims, headers, or subdomains."
     href="/docs/elements/gate/tenancy"
   />
   <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />

@@ -2,13 +2,17 @@
 title: "HTTP"
 description: "Synchronous REST endpoints, RFC 10008 QUERY, CRUD mounts, live SSE streams, and gate chains on Flow."
 icon: "Globe"
+source: "docs/spec/unified-theory.md"
 ---
 
 HTTP triggers bind web requests directly to Flows. Every standard REST verb is available alongside RFC 10008 QUERY for safe body reads, multi-verb CRUD mounts, and live Server-Sent Events (SSE).
 
+For developers building APIs on okengine — declare the route, attach gates, return typed data.
+
 <Callout title="The one rule">
   An HTTP trigger parses the request, checks attached gates, and invokes `flow()`. All business
-  logic runs inside the Flow via `fx`.
+  logic runs inside the Flow via `fx`. Always declare `in`, `out`, and `errors` when the route has
+  a body, path params, or domain failures.
 </Callout>
 
 ## Smallest Example
@@ -16,7 +20,7 @@ HTTP triggers bind web requests directly to Flows. Every standard REST verb is a
 <Steps>
 
 <Step>
-### Define the HTTP route and Flow
+### Define the route
 
 ```typescript title="src/flows/ping.ts"
 import { on, flow, http } from "okengine";
@@ -52,11 +56,17 @@ Response:
 
 </Steps>
 
+<Callout title="Pathless routes">
+  Omit the path (`http.get()`) to stamp the URL from the file tree. Path params, query string, and
+  JSON body merge into one object validated by `in` — see [Path Conventions](#path-conventions)
+  and [Request Parsing](#request-parsing).
+</Callout>
+
 ## Progressive Patterns
 
 Explore HTTP flow patterns from minimal handlers to schema-validated, error-handling, and gate-protected endpoints:
 
-<Tabs items={["Minimal", "Validated Contract", "Typed Failures", "Protected Gates"]}>
+<Tabs items={["Minimal", "Validated", "Failures", "Gates"]}>
 
 <Tab value="Minimal">
 
@@ -75,7 +85,7 @@ export const health = on(
 
 </Tab>
 
-<Tab value="Validated Contract">
+<Tab value="Validated">
 
 Extract URL parameters and JSON body with runtime schema validation (`in`/`out`):
 
@@ -98,7 +108,7 @@ export const createNote = on(
 
 </Tab>
 
-<Tab value="Typed Failures">
+<Tab value="Failures">
 
 Declare typed domain errors and return clean failure responses using `fx.fail`:
 
@@ -123,20 +133,26 @@ export const getOrder = on(
 
 </Tab>
 
-<Tab value="Protected Gates">
+<Tab value="Gates">
 
-Chain authentication, role permissions, and rate limits directly on the trigger:
+Chain policies and rate limits on the trigger with `.gate(...)`.
+`fx.json.empty()` answers `204 No Content` with no body:
 
 ```typescript title="src/flows/account/delete.ts"
-import { on, flow, http } from "okengine";
-import { authGate, role, rateLimit } from "@/gates";
+import { on, flow, http, gate } from "okengine";
+import { eq } from "drizzle-orm";
+import { db, users } from "@/schema";
+
+const member = gate.policy("member", ({ auth }) => !!auth.verified);
+const admin = gate.scope("admin");
+const deleteRate = gate.rate({ max: 5, per: "1m", keyBy: "user" });
 
 export const deleteAccount = on(
-  http.delete("/account").gate(authGate, role("admin"), rateLimit({ max: 5, window: "1m" })),
+  http.delete("/account").gate(member, admin, deleteRate),
   flow("account.delete", {
     do: async (_, fx) => {
-      await fx.store(db).deleteUser(fx.auth.userId);
-      return fx.json(undefined, { status: 204 });
+      await fx.store(db).delete(users).where(eq(users.id, fx.auth.userId!));
+      return fx.json.empty();
     },
   }),
 );
@@ -146,44 +162,256 @@ export const deleteAccount = on(
 
 </Tabs>
 
-## Trigger Methods
+## Method Reference
 
-The `http` trigger namespace exposes constructor methods for all standard HTTP verbs, query extensions, and compound resources.
+| Method          | Signature                  | Purpose                    | Body Allowed    | Idempotent     |
+| --------------- | -------------------------- | -------------------------- | --------------- | -------------- |
+| `http.get`      | `http.get(path?)`          | Fetch a resource or list   | No              | Yes            |
+| `http.post`     | `http.post(path?)`         | Create resource / command  | Yes             | No             |
+| `http.put`      | `http.put(path?)`          | Replace entire resource    | Yes             | Yes            |
+| `http.patch`    | `http.patch(path?)`        | Partial resource update    | Yes             | No             |
+| `http.delete`   | `http.delete(path?)`       | Remove a resource          | Optional        | Yes            |
+| `http.query`    | `http.query(path?)`        | Safe read with JSON body   | Yes (RFC 10008) | Yes            |
+| `http.head`     | `http.head(path?)`         | Retrieve response headers  | No              | Yes            |
+| `http.options`  | `http.options(path?)`      | Discover allowed methods   | No              | Yes            |
+| `http.resource` | `http.resource(path, ops)` | Five CRUD verbs; live when on | Verb-dependent | Verb-dependent |
+| `http.live`     | `http.live(signal)`        | Firehose SSE on `GET /_oke/live/{name}` | No   | Yes            |
 
-### Standard REST Methods
+## Path Conventions
+
+Routes can use an explicit path or inherit one from the file tree.
+
+**Explicit path** — pass the URL template directly to the method:
 
 ```typescript
-import { http } from "okengine";
-
-// GET — Retrieve resources or collections
-http.get("/notes/:id");
-
-// POST — Create resources or run commands
-http.post("/notes");
-
-// PUT — Full replacement of a resource
-http.put("/notes/:id");
-
-// PATCH — Partial modification of a resource
-http.patch("/notes/:id");
-
-// DELETE — Remove a resource
-http.delete("/notes/:id");
-
-// HEAD — Read response headers without body
-http.head("/notes/:id");
-
-// OPTIONS — Inspect allowed verbs and capabilities
-http.options("/notes");
+http.get("/organizations/:orgId/members/:memberId");
 ```
 
-### Safe Body Reads (`http.query`)
+**Pathless** — omit the path so the compiler stamps the route from disk location:
 
-RFC 10008 defines the `QUERY` method for safe, idempotent reads that carry a JSON request body. This avoids URL length limits and URL encoding leaks for complex search filters and analytics payloads.
+```typescript title="src/flows/users/[id]/get.ts"
+import { on, flow, http } from "okengine";
 
-```typescript title="src/flows/search/query.ts"
+// Stamped automatically to GET /users/:id
+export default on(http.get(), flow({ do: async ({ id }, fx) => ({ id }) }));
+```
+
+## Request Parsing
+
+Before `flow()`, the HTTP engine merges request parts into one object checked against `in`:
+
+1. **Path parameters** — `:param` segments (e.g. `{ id: "123" }`).
+2. **Query string** — `?sort=desc` keys at the root.
+3. **JSON body** — object fields merged into the same root.
+4. **Headers & cookies** — bags under `headers` / `cookie` when `do` reads them (declare the same keys in `in`).
+
+```typescript title="src/flows/items/update.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, items } from "@/schema";
+
+export const updateItem = on(
+  http.patch("/items/:id"),
+  flow("items.update", {
+    // :id from the path merges with JSON body { title }
+    in: z.object({
+      id: z.string(),
+      title: z.string().min(1),
+    }),
+    do: async ({ id, title }, fx) => {
+      await fx.store(db).update(items).set({ title }).where(eq(items.id, id));
+      return { id, title };
+    },
+  }),
+);
+```
+
+Read request metadata by naming `headers` / `cookie` in `in` and destructuring them in `do`
+(header names are lower-cased):
+
+```typescript title="src/flows/uploads/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const createUpload = on(
+  http.post("/uploads"),
+  flow("uploads.create", {
+    in: z.object({
+      name: z.string().min(1),
+      headers: z.object({
+        "content-type": z.string().optional(),
+        "x-request-id": z.string().optional(),
+      }),
+      cookie: z.object({
+        sid: z.string().optional(),
+      }),
+    }),
+    do: async ({ name, headers, cookie }, fx) => {
+      return {
+        id: fx.id(),
+        name,
+        contentType: headers["content-type"] ?? "application/octet-stream",
+        session: cookie.sid ?? null,
+      };
+    },
+  }),
+);
+```
+
+## HTTP Methods
+
+Each verb binds with `on(http.<method>(path), flow(...))`:
+
+<Tabs items={["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY", "HEAD", "OPTIONS"]}>
+
+<Tab value="GET">
+
+Fetch a resource or collection:
+
+```typescript title="src/flows/notes/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const getNote = on(
+  http.get("/notes/:id"),
+  flow("notes.get", {
+    in: z.object({ id: z.string() }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id }, fx) => {
+      const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
+      if (!note) return fx.fail("NotFound", { id });
+      return note;
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="POST">
+
+Create a resource or run a command. `fx.json.create(value)` returns `201 Created` with
+`{ data: value, error: null }`:
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const createNote = on(
+  http.post("/notes"),
+  flow("notes.create", {
+    in: z.object({ title: z.string().min(1) }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    do: async ({ title }, fx) => {
+      const id = fx.id();
+      await fx.store(db).insert(notes).values({ id, title });
+      return fx.json.create({ id, title });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="PUT">
+
+Replace an entire resource (idempotent full write):
+
+```typescript title="src/flows/notes/replace.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const replaceNote = on(
+  http.put("/notes/:id"),
+  flow("notes.replace", {
+    in: z.object({
+      id: z.string(),
+      title: z.string().min(1),
+      body: z.string(),
+    }),
+    out: z.object({ id: z.string(), title: z.string(), body: z.string() }),
+    do: async ({ id, title, body }, fx) => {
+      await fx.store(db).update(notes).set({ title, body }).where(eq(notes.id, id));
+      return { id, title, body };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="PATCH">
+
+Apply a partial update (only declared fields change):
+
+```typescript title="src/flows/notes/update.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const updateNote = on(
+  http.patch("/notes/:id"),
+  flow("notes.update", {
+    in: z.object({
+      id: z.string(),
+      title: z.string().min(1).optional(),
+    }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id, title }, fx) => {
+      if (title !== undefined) {
+        await fx.store(db).update(notes).set({ title }).where(eq(notes.id, id));
+      }
+      const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
+      if (!note) return fx.fail("NotFound", { id });
+      return note;
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="DELETE">
+
+Remove a resource. `fx.json.empty()` returns `204 No Content` with no body:
+
+```typescript title="src/flows/notes/remove.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const removeNote = on(
+  http.delete("/notes/:id"),
+  flow("notes.remove", {
+    in: z.object({ id: z.string() }),
+    do: async ({ id }, fx) => {
+      await fx.store(db).delete(notes).where(eq(notes.id, id));
+      return fx.json.empty();
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="QUERY">
+
+Safe, idempotent read with a JSON body (RFC 10008) — filters that would overflow a URL:
+
+```typescript title="src/flows/orders/search.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { db } from "@/schema";
 
 export const searchOrders = on(
   http.query("/orders/search"),
@@ -200,139 +428,501 @@ export const searchOrders = on(
 );
 ```
 
-### Resource Mounts (`http.resource`)
+Clients must send `Content-Type: application/json`.
 
-Mounts the standard five CRUD operations (`list`, `create`, `get`, `update`, `remove`) plus an optional live stream in a single declaration:
+Some browsers, HTTP libraries, and reverse proxies still reject or strip bodies on methods other
+than `POST`/`PUT`/`PATCH`. Prefer modern clients, or fall back to `POST` for the same search
+contract when you must support older stacks.
 
-```typescript title="src/flows/notes/resource.ts"
-import { on, http, store } from "okengine";
-import { notesTable } from "@/schema";
+</Tab>
 
-const notesCrud = store.resource(notesTable, { live: true });
+<Tab value="HEAD">
 
-export const notesResource = on(http.resource("/notes", notesCrud.all()).gate(member));
-```
+Probe existence / headers without returning a body:
 
-Mounted paths:
-
-- `GET /notes` → `list`
-- `POST /notes` → `create`
-- `GET /notes/:id` → `get`
-- `PATCH /notes/:id` → `update`
-- `DELETE /notes/:id` → `remove`
-- `GET /notes/live` → Real-time SSE stream
-
-### Live Stream Firehose (`http.live`)
-
-Exposes a `delivery: "live"` Signal as a dedicated Server-Sent Events endpoint on `/_oke/live/{signal}`:
-
-```typescript title="src/flows/notifications/feed.ts"
-import { on, http } from "okengine";
-import { liveNotifications } from "@/signals";
-
-export const notificationStream = on(http.live(liveNotifications).gate(authGate));
-```
-
-## Method Reference
-
-| Method          | Signature                  | Purpose                    | Body Allowed    | Idempotent     |
-| --------------- | -------------------------- | -------------------------- | --------------- | -------------- |
-| `http.get`      | `http.get(path?)`          | Fetch a resource or list   | No              | Yes            |
-| `http.post`     | `http.post(path?)`         | Create resource / command  | Yes             | No             |
-| `http.put`      | `http.put(path?)`          | Replace entire resource    | Yes             | Yes            |
-| `http.patch`    | `http.patch(path?)`        | Partial resource update    | Yes             | No             |
-| `http.delete`   | `http.delete(path?)`       | Remove resource            | Optional        | Yes            |
-| `http.query`    | `http.query(path?)`        | Safe read with JSON body   | Yes (RFC 10008) | Yes            |
-| `http.head`     | `http.head(path?)`         | Retrieve response headers  | No              | Yes            |
-| `http.options`  | `http.options(path?)`      | Discover allowed methods   | No              | Yes            |
-| `http.resource` | `http.resource(path, ops)` | Mount 5 CRUD verbs + live  | Verb-dependent  | Verb-dependent |
-| `http.live`     | `http.live(signal)`        | Firehose SSE stream on GET | No              | Yes            |
-
-## Trigger Chaining & Modifiers
-
-Every HTTP trigger supports fluent modifier chaining before binding to `on()`.
-
-### Attaching Gates (`.gate`)
-
-Attach authentication, permission checks, or rate limits. Gates evaluate in declaration order:
-
-```typescript
-http.post("/documents").gate(authGate, role("editor"), rateLimit({ max: 100, window: "1m" }));
-```
-
-### Public Access (`.public`)
-
-Explicitly marks the endpoint as open without authentication:
-
-```typescript
-http.get("/health").public();
-```
-
-### Live SSE Feeds (`.live`)
-
-Turn a `GET` route into an active Server-Sent Events stream by binding a live Signal or table:
-
-```typescript
-// Stream matching Signal emissions to connected clients
-http.get("/rooms/:id/live").live(roomEvents).gate(authGate);
-```
-
-## Path Conventions: Explicit vs Pathless
-
-Routes can be defined with an explicit path or inferred automatically from the project file structure.
-
-### Explicit Path
-
-Pass the URL template directly to the method:
-
-```typescript
-http.get("/organizations/:orgId/members/:memberId");
-```
-
-### Pathless File-Tree Stamp
-
-Omit the path argument to allow the file-tree compiler to stamp the route from its disk location:
-
-```typescript title="src/flows/users/[id]/get.ts"
+```typescript title="src/flows/notes/head.ts"
 import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
 
-// Stamped automatically to GET /users/:id
-export default on(http.get(), flow({ do: async ({ id }, fx) => ({ id }) }));
-```
-
-## Request Parsing & Input Assembly
-
-Before invoking `flow()`, the HTTP engine extracts and merges incoming request parts into a single typed object checked against the `in` schema:
-
-1. **Path Parameters**: Extracted from `:param` URL segments (e.g., `{ id: "123" }`).
-2. **Query Parameters**: Parsed from the URL query string (`?sort=desc`).
-3. **Request Body**: JSON payloads are parsed and merged into the root object.
-4. **Headers & Cookies**: Accessible under `headers` and `cookie` when declared in schema.
-
-```typescript title="src/flows/items/update.ts"
-export const updateItem = on(
-  http.patch("/items/:id"),
-  flow("items.update", {
-    // Merges path param :id with JSON body { title: string }
-    in: z.object({
-      id: z.string(),
-      title: z.string().min(1),
-    }),
-    do: async ({ id, title }, fx) => {
-      await fx.store(db).update(items).set({ title }).where(eq(items.id, id));
-      return { id, title };
+export const headNote = on(
+  http.head("/notes/:id"),
+  flow("notes.head", {
+    in: z.object({ id: z.string() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id }, fx) => {
+      const [note] = await fx
+        .store(db)
+        .select({ id: notes.id })
+        .from(notes)
+        .where(eq(notes.id, id));
+      if (!note) return fx.fail("NotFound", { id });
+      return;
     },
   }),
 );
 ```
 
-## Response Envelopes & Custom Statuses
+</Tab>
 
-Every HTTP flow produces a predictable response structure.
+<Tab value="OPTIONS">
 
-### Standard Success
+Advertise allowed verbs and capabilities for a path:
 
-Returning a value from `do` produces a `200 OK` response:
+```typescript title="src/flows/notes/options.ts"
+import { on, flow, http } from "okengine";
+
+export const notesOptions = on(
+  http.options("/notes"),
+  flow("notes.options", {
+    do: () => ({
+      allow: ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY", "HEAD", "OPTIONS"],
+    }),
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+## Resources
+
+<Callout title="Detailed section">
+  If you only need the basic mount, jump to the example below. `on(http.resource(path, ops))`
+  takes **no Flow as a second argument** — `.all()` is the bag; options live on `store.resource`.
+  A second argument throws `on(http.resource(...)) takes no second argument`.
+</Callout>
+
+`http.resource(path, ops)` mounts five CRUD Flows in one `on()` call. Pass
+`store.resource(…).all()` or any bag with `list` · `create` · `get` · `update` · `remove`.
+
+Chain `.gate(...)` / `.public()` once — every verb (and live, when present) gets the same gates.
+
+<Tabs items={["Define", "Mount"]}>
+
+<Tab value="Define">
+
+`store.resource` builds the five Flows. The factory registers no routes.
+
+```typescript title="src/flows/notes/resource.ts"
+import { store } from "okengine";
+import { z } from "zod";
+import { db, notesTable } from "@/schema";
+
+export const notesResource = store.resource(db, notesTable, {
+  in: z.object({ title: z.string().min(1) }),
+  out: z.object({ id: z.string(), title: z.string() }),
+});
+```
+
+</Tab>
+
+<Tab value="Mount">
+
+`.gate(member)` stamps every verb. The client sees `api.notes.list` / `.create` / `.get` /
+`.update` / `.remove` after `oke({ name: "app" }).adopt({ notes })`.
+
+```typescript title="src/flows/notes/index.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { notesResource } from "./resource";
+
+export const notes = on(http.resource("/notes", notesResource.all()).gate(member));
+```
+
+</Tab>
+
+</Tabs>
+
+The URL id segment is always `:id`. Update is **PATCH**, not PUT. There is no
+pathless `http.resource()` — pass an explicit base path.
+
+| Op       | Method   | Path            | Typical status                         |
+| -------- | -------- | --------------- | -------------------------------------- |
+| `list`   | `GET`    | `/notes`        | `200` + `{ data, error, meta }`        |
+| `create` | `POST`   | `/notes`        | `201 Created` (`fx.json.create`)       |
+| `get`    | `GET`    | `/notes/:id`    | `200`, or `NotFound`                   |
+| `update` | `PATCH`  | `/notes/:id`    | `200`, or `NotFound`                   |
+| `remove` | `DELETE` | `/notes/:id`    | `204 No Content` (`fx.json.empty`)     |
+| `live`   | `GET`    | `/notes/live`   | SSE — only when live is on             |
+
+<Accordions>
+
+<Accordion title="Resource Options">
+  Third argument to `store.resource(db, table, options)`:
+
+| Option     | Type      | Default | Meaning |
+| ---------- | --------- | ------- | ------- |
+| `in`       | Schema    | *(required)* | Create body (`POST`) |
+| `out`      | Schema    | *(required)* | Item shape (get / list / update return) |
+| `update`   | Schema    | `in`    | Patch fields. Wire body is `{ id, ...patch }` |
+| `idSchema` | Schema    | `update`/`in` + `{ id: string }` | Replaces the update Flow `in` when set (include the id key) |
+| `errors`   | error map | `{ NotFound }` | Typed failures on get / update / remove |
+| `id`       | column    | table PK | Column bound to `:id` |
+| `list`     | object    | see List Options | List query grammar (`GET /notes`) |
+| `breaking` | `boolean` | `false` | Marks the five Flows `breaking: true` (handwritten → resource migration) |
+| `live`     | `boolean` | omitted | Live query surface; see Resource Live |
+
+</Accordion>
+
+<Accordion title="List Options">
+  Nested on `store.resource(…, { list: { … } })`. Search / filter / order / select
+  use a column scope: `"all"` · column array · `"none"`.
+
+| Option      | Type                         | Default | Meaning |
+| ----------- | ---------------------------- | ------- | ------- |
+| `mode`      | `"cursor"` \| `"offset"`     | `"cursor"` when `cursor` is set, else `"offset"` | Pagination |
+| `cursor`    | columns                      | `[]`    | Keyset columns |
+| `direction` | `"asc"` \| `"desc"`          | `"desc"` | Default sort when no `?order=` |
+| `limit`     | `number`                     | `20`    | Default page size |
+| `maxLimit`  | `number`                     | `100`   | Cap on `?limit=` |
+| `count`     | `"exact"` \| `"none"`        | `"exact"` | Offset-only `COUNT(*)` |
+| `search`    | column scope                 | `"none"` | `?search=` / `?q=` |
+| `filter`    | column scope                 | `"none"` | `?col=eq.x` grammar |
+| `order`     | column scope                 | cursor columns, else `"all"` | `?order=` |
+| `select`    | column scope                 | `"all"` | `?select=` projection |
+
+</Accordion>
+
+<Accordion title="Resource Members">
+
+| Member | Kind | Meaning |
+| ------ | ---- | ------- |
+| `all()` | method, no args | Bag for `http.resource(path, notesResource.all())` — five Flows, plus `live` when enabled |
+| `list` · `create` · `get` · `update` · `remove` | Flow | One verb. Bind with `http.get` / `http.post` / `http.patch` / `http.delete` |
+| `page(input)` | method | Compile list-query input for a handwritten `fx.store(db).page` |
+| `live` | `{ signal, flow }?` | Live surface when `live: true` (or the project default drained on) |
+
+</Accordion>
+
+<Accordion title="Resource Live">
+  A sixth route appears only when the resource is live. It is **not** a signal
+  firehose — each subscriber gets classified row events (RLS + list filters).
+
+| `live` on the resource | Result |
+| ---------------------- | ------ |
+| `{ live: true }`       | Mount `GET <path>/live` now |
+| omitted                | Mount only if `oke({ store: { live: true } })` |
+| `{ live: false }`      | Never mount live for this resource |
+| table `store.schema.live(false)` | Opts that table out of the project default. `{ live: true }` on the resource still wins. |
+
+```typescript title="src/flows/notes/resource.ts"
+const notesResource = store.resource(db, notesTable, {
+  in: z.object({ title: z.string().min(1) }),
+  out: z.object({ id: z.string(), title: z.string() }),
+  live: true,
+});
+
+export const notes = on(http.resource("/notes", notesResource.all()).gate(member));
+```
+
+**Consequence:** `GET /notes/live` rides the same `.gate(...)` chain as list/get.
+
+Query-string filters use the resource list grammar; pagination cursors do **not**
+gate membership — a row enters or leaves the window when filters / RLS change.
+
+Wire events (consumed with `useLiveQuery` on the [typed client](/docs/reference/client)):
+
+| `kind`    | Meaning |
+| --------- | ------- |
+| `upsert`  | Row visible under stamp + query — merge by primary key |
+| `revoked` | Row left visibility (`reason: "rls"` or `"query"`) — remove |
+| `delete`  | Row deleted — remove |
+
+Live queries need an RLS-capable SQL driver (`postgres` / `pglite`) and a gated
+identity on the request. Extract fails without a primary key:
+
+```text
+extract: live: true on table "notes" requires a primary key column (upsert/revoked/delete address rows by PK)
+```
+
+Missing `updatedAt` / `updated_at`, or no RLS policies, warn at extract — they
+do not fail the build.
+
+</Accordion>
+
+<Accordion title="Subset & Override">
+  `http.resource` always mounts all five CRUD keys. To expose only some verbs,
+  bind those Flows on individual triggers. To replace one verb, spread `.all()`
+  and override that key — the other four stay:
+
+```typescript title="src/flows/notes/partial.ts"
+import { on, flow, http, store } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { member } from "@/core/gate";
+import { db, notesTable } from "@/schema";
+
+const notesResource = store.resource(db, notesTable, {
+  in: z.object({ title: z.string().min(1) }),
+  out: z.object({ id: z.string(), title: z.string() }),
+});
+
+export const listNotes = on(http.get("/notes").gate(member), notesResource.list);
+export const getNote = on(http.get("/notes/:id").gate(member), notesResource.get);
+
+export const notes = on(
+  http
+    .resource("/notes", {
+      ...notesResource.all(),
+      remove: flow("notes.archive", {
+        in: z.object({ id: z.string() }),
+        do: async ({ id }, fx) => {
+          await fx
+            .store(db)
+            .update(notesTable)
+            .set({ archived: true })
+            .where(eq(notesTable.id, id));
+          return fx.json.empty();
+        },
+      }),
+    })
+    .gate(member),
+);
+```
+
+A handwritten bag works the same way — each value must be a `flow(…)`:
+
+```typescript
+on(
+  http.resource("/notes", {
+    list: flow("notes.list", { do: () => [] }),
+    create: flow("notes.create", { do: () => ({ id: "n1" }) }),
+    get: flow("notes.get", { do: () => ({ id: "n1" }) }),
+    update: flow("notes.update", { do: () => ({ id: "n1" }) }),
+    remove: flow("notes.remove", { do: (_, fx) => fx.json.empty() }),
+  }),
+);
+```
+
+Missing or non-Flow keys throw `on(http.resource(...)) expects the five CRUD FlowDefs`.
+A `GET /notes` you also declared by hand collides at boot (**OKE1011**).
+
+</Accordion>
+
+</Accordions>
+
+## Live Streams
+
+<Callout title="Detailed section">
+  If you only need the basic firehose, jump to the example below. `.live(…)` is GET-only —
+  `on(http.post("/x").live(signal))` throws `on(http.*.live(signal)): live exposure must be GET`.
+</Callout>
+
+`http.live(signal)` is one-arg `on()` — the engine synthesizes the stream Flow
+(`fx.live` + `effects.reads: ["signal:<name>"]`). Chain `.gate(...)` like any GET.
+
+```typescript title="src/flows/orders/firehose.ts"
+import { on, http, signal } from "okengine";
+import { z } from "zod";
+import { member } from "@/core/gate";
+
+export const orderStatus = signal("order-status", {
+  delivery: "live",
+  optional: true,
+  schema: z.object({
+    orderId: z.string(),
+    status: z.enum(["placed", "fulfilling", "shipped"]),
+  }),
+});
+
+export const firehose = on(http.live(orderStatus).gate(member));
+```
+
+```bash
+curl -N http://localhost:6530/_oke/live/order-status \
+  -H "accept: text/event-stream" \
+  -H "authorization: Bearer …"
+```
+
+Response `Content-Type` is `text/event-stream`. Frames are JSON `data:` lines
+(optional `id:` for resume), then `data: [DONE]`.
+
+<Accordions>
+
+<Accordion title="Exposure Shapes">
+  Three GET shapes expose a live SSE body. Pick the physics first, then the path.
+
+| Declaration | Path | Physics |
+| ----------- | ---- | ------- |
+| `on(http.live(signal))` | `GET /_oke/live/{name}` | Signal tape — every event |
+| `on(http.get(path).live(signal))` | Your path | Signal tape — auto-match on `:params` |
+| `on(http.get(path).live(table), flow)` | Your path | Live **query** — `liveQuery(fx, table, input)` |
+| `store.resource({ live: true })` + `http.resource` | `GET <path>/live` | Same live-query physics as `.live(table)` |
+
+Signal names in the default firehose path are `encodeURIComponent`'d
+(`chat.message` stays readable; slashes in internal names are escaped).
+
+</Accordion>
+
+<Accordion title="Filtered Paths">
+  Path params become a filter: an event is forwarded when each `:param` that
+  **exists on the payload** equals the request value. Params missing from the
+  payload are skipped (the event still flows). No params = firehose.
+
+```typescript title="src/flows/orders/events.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const events = on(
+  http.get("/orders/:orderId/events").gate(member).live(orderStatus),
+);
+```
+
+`GET /orders/ord_1/events` receives `{ orderId: "ord_1", status: "shipped" }`
+and drops events for other orders.
+
+</Accordion>
+
+<Accordion title="Custom Match">
+  Pass your own Flow as the second argument to `on()` when auto-match is not
+  enough. Return `fx.live(signal, { match })` from `do` — do not wrap it with
+  `fx.json.stream`.
+
+```typescript title="src/flows/orders/vip-feed.ts"
+import { on, flow, http } from "okengine";
+import { member } from "@/core/gate";
+import { orderStatus } from "@/signals/orders";
+
+export const vipFeed = on(
+  http.get("/orders/vip/events").gate(member).live(orderStatus),
+  flow("orders.vipFeed", {
+    do: (_input, fx) =>
+      fx.live(orderStatus, {
+        match: (payload) => payload.status === "shipped",
+      }),
+  }),
+);
+```
+
+**Consequence:** a custom Flow stamps a distinct match key, so it can coexist
+with the auto-match route for the same signal (different path). Two synthesized
+firehoses that share signal **and** gates fail uniqueness — see Uniqueness.
+
+</Accordion>
+
+<Accordion title="Live Queries">
+  For a handwritten list that should stream the same classified CDC as
+  `store.resource({ live: true })`, bind the table on GET and open the window
+  with `liveQuery`:
+
+```typescript title="src/flows/tasks/live.ts"
+import { on, flow, http, liveQuery } from "okengine";
+import { member } from "@/core/gate";
+import { tasks } from "@/schema";
+
+export const tasksLive = on(
+  http.get("/tasks/live").gate(member).live(tasks),
+  flow("tasks.live", {
+    do: async (input, fx) =>
+      liveQuery(fx, tasks, input, {
+        filter: [tasks.status],
+        search: [tasks.title],
+        order: "all",
+      }),
+  }),
+);
+```
+
+Same driver, identity, and extract guardrails as Resource Live. Prefer
+`http.resource` + `{ live: true }` when you already mount the five CRUD ops.
+
+</Accordion>
+
+<Accordion title="Uniqueness">
+  Boot keys each live HTTP route as `(signal, gates, match)`. Match is the
+  sorted path-param names, or `custom:<flow>` when you passed a Flow, or
+  `(firehose)` when there are no params.
+
+| Pair | Boots? |
+| ---- | ------ |
+| Member `:orderId` + admin firehose | Yes — gates and match differ |
+| Same params, different gates | Yes — the client disambiguates with `via` |
+| Two member firehoses on different paths | No — **OKE1013** |
+| Same method + path twice | No — **OKE1011** first |
+
+**OKE1013** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
+Fix: a different gate, a path-param filter, or drop the extra route.
+
+</Accordion>
+
+<Accordion title="Client Subscription">
+  `delivery: "live"` is HTTP SSE. `for await` stays on the server; the browser
+  uses a callback.
+
+The client picks the unique exposure whose `matchKey` fields are a subset of
+the input, preferring the largest match (`{ orderId }` beats firehose). A tie
+needs `via: "unit.flow"`.
+
+```typescript
+const stop = api.live(
+  orderStatus,
+  { orderId: "ord_1" },
+  {
+    onEvent: (event) => {
+      /* { orderId, status } */
+    },
+    onError: (err) => {
+      /* 4xx, envelope, or drop */
+    },
+    autoResubscribe: false,
+  },
+);
+stop();
+```
+
+`api.orders.events({ orderId }, { onEvent })` is the same shape on the exposing
+Flow. Reconnects send `Last-Event-ID` from the last `id:` received.
+
+A **410** `LiveResumeGap` (**OKE1014**) means that cursor is gone — drop it
+and replay the remaining tape (`autoResubscribe: true`).
+
+Resource live queries use `useLiveQuery` (snapshot + classified events), not
+`api.live`. See [Client](/docs/reference/client).
+
+</Accordion>
+
+</Accordions>
+
+## Trigger Modifiers
+
+Every HTTP trigger supports fluent modifier chaining before binding to `on()`.
+Resource mounts accept `.gate(...)` and `.public()` only — live on a resource
+comes from `store.resource({ live: true })`, not `.live()`.
+
+**Gates** — attach policy and rate handles. They evaluate in declaration order; first denial wins:
+
+```typescript
+import { gate } from "okengine";
+import { member } from "@/core/gate";
+
+http.post("/documents").gate(
+  member,
+  gate.scope("editor"),
+  gate.rate({ max: 100, per: "1m", keyBy: "user" }),
+);
+```
+
+**Public** — explicitly marks the endpoint as open without authentication:
+
+```typescript
+http.get("/health").public();
+```
+
+## Response Envelopes
+
+Every HTTP flow returns the same envelope shape. You choose status and optional `meta` — not a
+custom wrapper.
+
+<Callout title="Envelope is fixed">
+  Success and failure always use `{ data, error }` (optional top-level `meta`). There is no API to
+  replace that shape. Use `fx.json.*` for status codes and `meta`; use `fx.fail` for typed errors.
+</Callout>
+
+**Success** — returning a value from `do` produces `200 OK`:
 
 ```json
 { "data": { "id": "123" }, "error": null }
@@ -340,23 +930,15 @@ Returning a value from `do` produces a `200 OK` response:
 
 Returning `undefined` produces a `204 No Content` response with an empty body.
 
-### Custom Status Codes & Metadata
-
-Use `fx.json()` to override the HTTP status code (such as `201 Created`) or append top-level metadata:
+**Custom status** — `fx.json.create` for `201 Created`, or `fx.json.ok` with optional `meta`:
 
 ```typescript
-return fx.json(
-  { id: "ord_1" },
-  {
-    status: 201,
-    meta: { traceId: fx.runId },
-  },
-);
+return fx.json.create({ id: "ord_1" });
+// or
+return fx.json.ok({ id: "ord_1" }, { meta: { traceId: fx.runId } });
 ```
 
-### Typed Failures
-
-Calling `fx.fail(code, data)` formats a failure envelope and maps the status code automatically:
+**Typed failures** — `fx.fail(code, data)` formats the error envelope and maps status:
 
 ```typescript
 return fx.fail("NotFound", { id: "123" });
@@ -385,6 +967,12 @@ Standard status code mappings:
 
 <Accordions>
 
+<Accordion title="404 Not Found — route missing">
+  No Flow is bound to that method + path. Check the explicit path, or for pathless routes the
+  file-tree stamp (`src/flows/users/[id]/get.ts` → `GET /users/:id`). A bare `404` with body
+  `Not Found` means the router found no match.
+</Accordion>
+
 <Accordion title="405 Method Not Allowed on valid route">
   The path exists but has not been bound to the requested HTTP verb. The response contains an
   `Allow` header listing valid methods for that path.
@@ -400,34 +988,80 @@ Standard status code mappings:
   `error.data.issues` array for the specific field validation failure.
 </Accordion>
 
+<Accordion title="Browser blocked by CORS / missing Access-Control-*">
+  Cross-origin access is closed until you plug the [`cors`](/docs/plugins/cors) plugin with an
+  explicit `origin`. Same-origin calls need no CORS headers. Preflight `OPTIONS` is answered by the
+  plugin even when the path is bound to other methods.
+</Accordion>
+
+<Accordion title="TypeError: on(http.resource(...)) takes no second argument">
+  The ops bag already holds the five Flows. Call
+  `on(http.resource("/notes", notesResource.all()).gate(member))` — do not pass a
+  `flow(...)` as the second argument.
+</Accordion>
+
+<Accordion title="TypeError: on(http.resource(...)) expects the five CRUD FlowDefs">
+  The bag must include `list`, `create`, `get`, `update`, and `remove`, each a
+  `flow(...)`. To expose fewer verbs, bind those Flows on `http.get` / `http.post`
+  yourself instead of `http.resource`.
+</Accordion>
+
+<Accordion title="OKE1011 — method + path bound twice">
+  Cause: `{method} {path} is bound twice (flow "{flow}").` A resource mount plus a
+  handwritten `http.get("/notes")` (or two mounts on the same base path) collide.
+  Drop one binding.
+</Accordion>
+
 <Accordion title="TypeError: live exposure must be GET">
   Live SSE feeds declared via `.live(signal)` can only be attached to `GET` triggers
   (`http.get(...)` or `http.live(...)`). Other verbs reject live stream synthesis.
 </Accordion>
 
+<Accordion title="OKE1013 — live signal exposed twice">
+  Cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
+  Two firehoses (`http.live` or param-less `.live`) that share the signal and
+  gates cannot boot. Change the gate, add a path-param filter, or remove a route.
+</Accordion>
+
+<Accordion title="OKE1014 — 410 LiveResumeGap">
+  Cause: `Cursor "{afterId}" missing on "{signal}".` That `Last-Event-ID` is
+  gone from the tape. Reconnect without it; remaining events replay.
+  `autoResubscribe: true` does this after backoff.
+</Accordion>
+
+<Accordion title="live query requires a primary key / RLS driver">
+  Extract: `live: true on table "…" requires a primary key column`. Runtime:
+  `live query for "…" requires an RLS-capable SQL driver (postgres / pglite)`
+  or `requires a gated identity`. Attach `.gate(...)` and declare a PK.
+</Accordion>
+
 </Accordions>
+
+## Learn more
+
+- [Store](/docs/elements/store) — `store.resource`, list query grammar, SQL facet
+- [Signal · Streams](/docs/elements/signal/streams) — `delivery: "live"` tapes
+- [Client](/docs/reference/client) — `api.live`, `useLive`, `useLiveQuery`
+- [fx](/docs/reference/fx) — `fx.live`, `fx.json.stream`, `fx.json.create`
+- [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers
+- [Errors](/docs/reference/errors) — OKE1011 · OKE1013 · OKE1014
 
 ## Next
 
 <Cards>
   <Card
-    title="Jobs & Schedules"
-    description="Trigger flows based on recurring intervals and cron."
-    href="/docs/elements/flow/jobs"
+    title="Gate Element"
+    description="Configure authentication, authorization, and rate limiting."
+    href="/docs/elements/gate"
   />
   <Card
-    title="Consumers & CDC"
-    description="React to Signals and database table change events."
+    title="Consumers"
+    description="Signal workers, named Clock jobs, and SQL CDC — one Flow species."
     href="/docs/elements/flow/consumers"
   />
   <Card
     title="Durable Workflows"
     description="Step journaling and multi-step distributed execution."
     href="/docs/elements/flow/workflows"
-  />
-  <Card
-    title="Gate Element"
-    description="Configure authentication, authorization, and rate limiting."
-    href="/docs/elements/gate"
   />
 </Cards>

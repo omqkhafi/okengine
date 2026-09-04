@@ -678,11 +678,19 @@ const FIELD_SQL_TYPES: ReadonlySet<string> = new Set([
   "cidr",
   "macaddr",
   "macaddr8",
+  // Prepared text-id factories (`field.id()` / `field.okid()` ≡ text + defaultFn).
+  "id",
+  "okid",
 ]);
+
+/** Prepared text-id heads that imply a dynamic default (same as `.okid()` / `.defaultFn(id)`). */
+const FIELD_ID_HEADS: ReadonlySet<string> = new Set(["id", "okid"]);
 
 /** Manifest primitive for a field head (`decimal` collapses into `numeric`). */
 function manifestFieldType(head: string): DeclaredColumn["type"] {
-  return head === "decimal" ? "numeric" : (head as DeclaredColumn["type"]);
+  if (head === "decimal") return "numeric";
+  if (FIELD_ID_HEADS.has(head)) return "text";
+  return head as DeclaredColumn["type"];
 }
 
 /**
@@ -719,7 +727,7 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
         if (method === "describe") {
           description = stringArg(call.arguments[0]) ?? description;
         }
-        if (method === "defaultFn" || method === "okid" || method === "now") {
+        if (method === "defaultFn" || method === "okid" || method === "now" || method === "id") {
           hasDefault = true;
           defaultValue = defaultValue ?? null;
         }
@@ -755,11 +763,17 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
     const member = cur as AstNode & { object: AstNode; property: AstNode };
     if (identifierName(member.object) === "field") {
       const t = identifierName(member.property);
-      if (t && FIELD_SQL_TYPES.has(t)) sqlType = manifestFieldType(t);
+      if (t && FIELD_SQL_TYPES.has(t)) {
+        sqlType = manifestFieldType(t);
+        if (FIELD_ID_HEADS.has(t)) {
+          hasDefault = true;
+          defaultValue = defaultValue ?? null;
+        }
+      }
     }
   }
 
-  // Also: field.text() ends as CallExpression with callee MemberExpression field.text
+  // Also: field.text() / field.id() ends as CallExpression with callee MemberExpression
   if (!sqlType && node.type === "CallExpression") {
     let probe: AstNode | undefined = node;
     while (probe && probe.type === "CallExpression") {
@@ -770,6 +784,10 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
         const head = identifierName(member.property);
         if (identifierName(member.object) === "field" && head && FIELD_SQL_TYPES.has(head)) {
           sqlType = manifestFieldType(head);
+          if (FIELD_ID_HEADS.has(head)) {
+            hasDefault = true;
+            defaultValue = defaultValue ?? null;
+          }
           const arg0 = call.arguments[0];
           if (arg0?.type === "ObjectExpression") optionsNode = arg0;
           break;

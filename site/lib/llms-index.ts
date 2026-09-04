@@ -38,7 +38,6 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
       "elements/flow",
       "elements/flow/http",
       "elements/flow/routing",
-      "elements/flow/jobs",
       "elements/flow/consumers",
       "elements/flow/workflows",
       "elements/signal",

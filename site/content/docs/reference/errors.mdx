@@ -38,6 +38,8 @@ string. Custom app codes stay message-less until registered.
 | `1005` | undeclared ask       | Flow asks a prompt not in `effects.asks`          | Add it to the flow's `effects.asks`                  |
 | `1006` | undeclared secret    | Flow reads a secret not in `effects.secrets`      | Add it to the flow's `effects.secrets`               |
 | `1007` | undeclared call      | Flow calls a flow not in `effects.calls`          | Add it to the flow's `effects.calls`                 |
+| `1009` | adopt barrel stale   | A `src/flows/<unit>` folder was not adopted       | Run `oke dev` or `oke build` to regenerate `generated.ts` |
+| `1010` | HTTP path unresolved | Pathless `http.get()` never received a file-tree stamp | Import `@/flows/generated`, or pass `http.get("/…")` |
 | `1011` | HTTP route clash     | Two HTTP flows share the same method + path       | Give each flow a unique method + path                |
 | `1012` | HTTP flow unnamed    | Adopted HTTP flow still has no `unit.export`      | Export from `flows/<unit>/` or pass a named `flow`   |
 | `1013` | live exposure dup    | Same signal, gates, and match on two GET routes   | Change the gate or path-param filter                 |

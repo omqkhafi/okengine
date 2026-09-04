@@ -689,6 +689,13 @@ declare module "okengine/client" {
           method: "GET";
           path: "/tasks";
         };
+        "live": {
+          in: unknown;
+          out: unknown;
+          errors: {};
+          method: "GET";
+          path: "/tasks/live";
+        };
         "move": {
           in: unknown;
           out: unknown;
