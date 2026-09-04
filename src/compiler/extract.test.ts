@@ -280,7 +280,7 @@ import { store, field } from "okengine";
 
 export const articles = store.schema.table("articles", {
   id: field.text().primaryKey(),
-  body: field.text().searchable().embed({ dims: 8 }),
+  body: field.text().searchable().embed({ dims: 8, model: "embedder" }),
 });
 
 export const db = store.sql("app", { schema: { articles } });
@@ -288,6 +288,89 @@ export const db = store.sql("app", { schema: { articles } });
     await expect(
       extractFromSources({ "src/schema.decl.ts": source }),
     ).rejects.toThrow(/SearchConfigError|ai element/);
+  });
+
+  test("project search.embed default stamps bare .embed()", async () => {
+    const source = `
+import { store, field, ai, oke } from "okengine";
+
+export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+
+oke({
+  store: {
+    search: {
+      embed: { model: embedder, dims: 768 },
+    },
+  },
+});
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  body: field.text().searchable().embed(),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    expect(manifest.store?.search?.embed).toEqual({ model: "embedder", dims: 768 });
+    expect(manifest.stores?.app?.tables?.articles?.columns?.body).toMatchObject({
+      searchable: { weight: 1 },
+      embed: { model: "embedder", dims: 768 },
+    });
+    expect(manifest.stores?.app?.tables?.articles?.search?.engines).toEqual(["bm25", "lsh"]);
+  });
+
+  test("field .embed() override wins over project search.embed default", async () => {
+    const source = `
+import { store, field, ai, oke } from "okengine";
+
+export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+export const other = ai.model("other", { provider: "ollama", model: "nomic-embed-text" });
+
+oke({
+  store: {
+    search: {
+      embed: { model: embedder, dims: 768 },
+    },
+  },
+});
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  body: field.text().searchable().embed(),
+  caption: field.text().searchable().embed({ model: other }),
+  alt: field.text().searchable().embed({ model: other, dims: 384 }),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+    const cols = manifest.stores?.app?.tables?.articles?.columns;
+    expect(cols?.body).toMatchObject({ embed: { model: "embedder", dims: 768 } });
+    expect(cols?.caption).toMatchObject({ embed: { model: "other", dims: 768 } });
+    expect(cols?.alt).toMatchObject({ embed: { model: "other", dims: 384 } });
+  });
+
+  test("bare .embed() without project default fails SearchConfigError", async () => {
+    const source = `
+import { store, field, ai } from "okengine";
+
+export const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+
+export const articles = store.schema.table("articles", {
+  id: field.text().primaryKey(),
+  body: field.text().searchable().embed(),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+`;
+    await expect(
+      extractFromSources({ "src/schema.decl.ts": source }),
+    ).rejects.toThrow(/SearchConfigError|model and dims|store: \{ search: \{ embed/);
   });
 
   test("extracts RLS helpers onto store.tables", async () => {

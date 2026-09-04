@@ -26,6 +26,20 @@ describe("field.searchable / .embed", () => {
     expect(articles.columns.body.search?.embed).toEqual({ dims: 8, model: "embedder" });
     expect(() => field.text().embed({ dims: 8 })).toThrow(/prior \.searchable/);
   });
+
+  test("bare .embed() and partial options are allowed at declare time", () => {
+    const bare = field.text().searchable().embed();
+    const modelOnly = field.text().searchable().embed({ model: "embedder" });
+    expect(bare).toBeDefined();
+    expect(modelOnly).toBeDefined();
+    const table = store.schema.table("articles", {
+      id: field.text().primaryKey(),
+      body: field.text().searchable().embed(),
+      caption: field.text().searchable().embed({ model: "other" }),
+    });
+    expect(table.columns.body.search?.embed).toEqual({});
+    expect(table.columns.caption.search?.embed).toEqual({ model: "other" });
+  });
 });
 
 describe("BM25F", () => {

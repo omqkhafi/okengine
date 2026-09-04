@@ -18,18 +18,31 @@ Built-in hybrid search lives on ordinary `store.schema.table()` columns via `.se
 ### Declare searchable columns
 
 ```typescript title="src/db/schema.decl.ts"
-import { field, store, ai } from "okengine";
+import { field, store, ai, oke } from "okengine";
 
-const embedModel = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+const embedder = ai.model("embedder", { provider: "ollama", model: "nomic-embed-text" });
+const captionEmbedder = ai.model("caption-embedder", {
+  provider: "ollama",
+  model: "nomic-embed-text",
+});
+
+oke({
+  store: {
+    search: {
+      embed: { model: embedder, dims: 768 },
+    },
+  },
+});
 
 export const articles = store.schema.table("articles", {
   id: field.text().primaryKey(),
   title: field.text().searchable({ weight: 2 }).notNull(),
-  body: field.text().searchable().embed({ model: embedModel, dims: 768 }),
+  body: field.text().searchable().embed(), // inherits model + dims
+  caption: field.text().searchable().embed({ model: captionEmbedder }), // override model; dims from default
 });
 ```
 
-Bare `.searchable()` works with **no** `ai` element. Adding `.embed()` without AI fails loud (`SearchConfigError`).
+Set the project default once under `oke({ store: { search: { embed } } })`. Bare `.embed()` inherits; per-field `{ model?, dims? }` overrides. Bare `.searchable()` still needs **no** `ai` element. `.embed()` without a resolvable model/dims (and without AI) fails loud (`SearchConfigError`).
 
 </Step>
 

@@ -313,7 +313,7 @@ export interface DeclaredColumn extends ColumnClassification {
    */
   searchable?: { weight: number };
   /** Async embedding + LSH — requires `searchable` and a configured AI element. */
-  embed?: { model?: string; dims: number };
+  embed?: { model?: string; dims?: number };
 }
 
 /** Field classification value forms. */
@@ -518,10 +518,20 @@ export interface Plugin {
   tables?: Record<string, PluginTable>;
 }
 
-/** Store-wide live-query defaulting configuration. */
+/** Store-wide live-query / search defaulting configuration. */
 export interface StoreLive {
   /** `oke({ store: { live: true } })` is on — new tables are live by default. */
   live?: boolean;
+  /**
+   * Project default for field `.embed()` — `oke({ store: { search: { embed } } })`.
+   * Per-field `.embed({ model?, dims? })` overrides these when set.
+   */
+  search?: {
+    embed?: {
+      model: string;
+      dims: number;
+    };
+  };
 }
 
 /** Tenancy configuration (resolver is code; isolation is data). */

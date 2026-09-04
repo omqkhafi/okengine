@@ -274,8 +274,20 @@ export interface OkeOptions {
    * `store.schema.live(false)`. Default `false` — today's explicit-only
    * behavior, zero change to existing apps. Declaration ergonomics only;
    * never the runtime cost model.
+   *
+   * `{ search: { embed: { model, dims } } }` sets the project default for
+   * field `.embed()` so columns can write bare `.embed()` and inherit;
+   * per-field `{ model?, dims? }` still overrides.
    */
-  readonly store?: { readonly live?: boolean };
+  readonly store?: {
+    readonly live?: boolean;
+    readonly search?: {
+      readonly embed?: {
+        readonly model: { readonly name: string } | string;
+        readonly dims: number;
+      };
+    };
+  };
   /** Channel runtime options. */
   readonly channel?: BootOptions["channel"];
   /** AI runtime options. */

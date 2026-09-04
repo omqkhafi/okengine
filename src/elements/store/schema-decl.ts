@@ -230,12 +230,19 @@ export interface SearchableOptions {
 /**
  * Options for {@link FieldBuilder.embed} — separate from {@link SearchableOptions}
  * because embedding is an async, costed AI pipeline.
+ *
+ * `model` / `dims` may be omitted when the project supplies
+ * `oke({ store: { search: { embed: { model, dims } } } })`. Per-field values
+ * override the project default.
  */
 export interface EmbedFieldOptions {
-  /** Embedding model handle or name. */
+  /** Embedding model handle or name (inherits project default when omitted). */
   readonly model?: { readonly name: string } | string;
-  /** Required vector dimensionality — mismatch fails loud at write time. */
-  readonly dims: number;
+  /**
+   * Vector dimensionality (inherits project default when omitted).
+   * Mismatch with a computed embedding fails loud at write time.
+   */
+  readonly dims?: number;
 }
 
 /** Column-level hybrid search declaration stamped on {@link SchemaColumnDecl}. */
@@ -244,7 +251,8 @@ export interface ColumnSearchDecl {
   readonly weight: number;
   readonly embed?: {
     readonly model?: string;
-    readonly dims: number;
+    /** Present after extract resolution; may be deferred to project default at declare time. */
+    readonly dims?: number;
   };
 }
 
@@ -337,15 +345,18 @@ export interface FieldBuilder<TData = unknown, TNotNull extends boolean = false>
    * Zero AI dependency. Optional {@link SearchableOptions.weight} is BM25F
    * field weight (default `1`).
    *
-   * Chain `.embed({ dims })` separately when semantic LSH is also required.
+   * Chain `.embed()` separately when semantic LSH is also required.
    */
   searchable(options?: SearchableOptions): FieldBuilder<TData, TNotNull>;
   /**
    * Opt into async embedding + LSH for this searchable field.
    * Requires a prior `.searchable()` and a configured `ai` element.
    * Never a boolean flag inside searchable options — cost/mechanism differ.
+   *
+   * Omit `model` / `dims` to inherit `oke({ store: { search: { embed } } })`.
+   * Pass either to override the project default for this field only.
    */
-  embed(options: EmbedFieldOptions): FieldBuilder<TData, TNotNull>;
+  embed(options?: EmbedFieldOptions): FieldBuilder<TData, TNotNull>;
   /** Override snake_case SQL name. */
   as(sqlName: string): FieldBuilder<TData, TNotNull>;
   /** Optional human description for Console / docs (falls back to the JS key). */
@@ -505,22 +516,23 @@ function createBuilder<TData, TNotNull extends boolean>(
       if (!TEXT_SEARCHABLE_TYPES.has(state.sqlType)) {
         throw new Error(`field.${state.sqlType}().embed() is only valid on text / varchar / char columns`);
       }
-      const dims = options.dims;
-      if (!(typeof dims === "number" && Number.isInteger(dims) && dims > 0)) {
-        throw new Error(`.embed({ dims }) requires a positive integer (got ${String(dims)})`);
+      const dims = options?.dims;
+      if (dims !== undefined && !(typeof dims === "number" && Number.isInteger(dims) && dims > 0)) {
+        throw new Error(`.embed({ dims }) requires a positive integer when set (got ${String(dims)})`);
       }
+      const modelRaw = options?.model;
       const model =
-        typeof options.model === "string"
-          ? options.model
-          : options.model && typeof options.model === "object" && "name" in options.model
-            ? String(options.model.name)
+        typeof modelRaw === "string"
+          ? modelRaw
+          : modelRaw && typeof modelRaw === "object" && "name" in modelRaw
+            ? String(modelRaw.name)
             : undefined;
       return next<TNotNull>({
         search: {
           searchable: true,
           weight: state.search.weight,
           embed: {
-            dims,
+            ...(dims !== undefined ? { dims } : {}),
             ...(model !== undefined ? { model } : {}),
           },
         },

@@ -232,7 +232,21 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   if (Object.keys(journeys).length > 0) manifest.journeys = journeys;
   if (Object.keys(drivers).length > 0) manifest.drivers = drivers;
   if (scope.tenancy) manifest.tenancy = scope.tenancy;
-  if (scope.store && scope.store.live === true) manifest.store = { live: true };
+  if (scope.store) {
+    const storeManifest: NonNullable<Manifest["store"]> = {};
+    if (scope.store.live === true) storeManifest.live = true;
+    if (scope.store.search?.embed) {
+      storeManifest.search = {
+        embed: {
+          model: scope.store.search.embed.model,
+          dims: scope.store.search.embed.dims,
+        },
+      };
+    }
+    if (storeManifest.live === true || storeManifest.search?.embed) {
+      manifest.store = storeManifest;
+    }
+  }
   if (scope.i18n) manifest.i18n = scope.i18n;
   if (scope.topology) manifest.topology = scope.topology;
   if (scope.images) manifest.images = scope.images;
@@ -240,6 +254,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   applyTenancyDefaults(manifest);
   assertTenantSafeSchema(manifest);
   applyLiveDefaults(manifest, scope);
+  resolveSearchEmbedDefaults(manifest);
   assertSearchConfig(manifest);
 
   return manifest;
@@ -298,6 +313,7 @@ function collectDeclarations(filePath: string, program: AstNode, scope: ProjectS
     if (name) scope.app = name;
     applyOkeTenantConfig(opts, scope);
     applyOkeStoreLiveConfig(opts, scope);
+    applyOkeStoreSearchConfig(opts, scope);
   });
 }
 
@@ -876,7 +892,8 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
         if (identifierName(member.property) === "embed") {
           const arg0 = call.arguments[0];
           if (arg0?.type === "ObjectExpression") {
-            dims = numberProp(arg0, "dims");
+            const d = numberProp(arg0, "dims");
+            if (d !== undefined) dims = d;
             const modelNode = objectProp(arg0, "model");
             if (modelNode) {
               const lit = stringArg(modelNode);
@@ -888,7 +905,6 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
                   const m = modelNode as AstNode & { property: AstNode };
                   const prop = identifierName(m.property);
                   if (prop === "name") {
-                    // model.name — fall back to object identifier if any
                     const obj = (modelNode as AstNode & { object: AstNode }).object;
                     model = identifierName(obj) ?? model;
                   }
@@ -903,13 +919,15 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
       }
       break;
     }
-    if (dims === undefined || !(Number.isInteger(dims) && dims > 0)) {
+    if (dims !== undefined && !(Number.isInteger(dims) && dims > 0)) {
       throw new Error(
-        `extract: .embed() on column "${key}" requires { dims: positive integer }`,
+        `extract: .embed() on column "${key}" has invalid dims (need positive integer)`,
       );
     }
+    // Stamp partial embed; resolveSearchEmbedDefaults fills model/dims from
+    // oke({ store: { search: { embed } } }) before assertSearchConfig.
     col.embed = {
-      dims,
+      ...(dims !== undefined ? { dims } : {}),
       ...(model !== undefined ? { model } : {}),
     };
   }
@@ -2943,6 +2961,54 @@ function applyOkeStoreLiveConfig(opts: AstNode | undefined, scope: ProjectScope)
 }
 
 /**
+ * Stamp project default for field `.embed()` from
+ * `oke({ store: { search: { embed: { model, dims } } } })`.
+ *
+ * @param opts - `oke({…})` options object
+ * @param scope - Project scope
+ */
+function applyOkeStoreSearchConfig(opts: AstNode | undefined, scope: ProjectScope): void {
+  const store = objectProp(opts, "store");
+  const search = objectProp(store, "search");
+  const embed = objectProp(search, "embed");
+  if (!embed) return;
+  const dims = numberProp(embed, "dims");
+  if (dims === undefined || !(Number.isInteger(dims) && dims > 0)) {
+    throw new Error(
+      `extract: oke({ store: { search: { embed } } }) requires dims: positive integer`,
+    );
+  }
+  const modelNode = objectProp(embed, "model");
+  let model: string | undefined = stringArg(modelNode);
+  if (!model && modelNode) {
+    const bindingName = identifierName(modelNode);
+    if (bindingName) {
+      const binding = scope.bindings.get(bindingName);
+      model = binding?.ref ?? bindingName;
+    } else if (modelNode.type === "MemberExpression") {
+      const prop = identifierName((modelNode as AstNode & { property: AstNode }).property);
+      if (prop === "name") {
+        const obj = (modelNode as AstNode & { object: AstNode }).object;
+        const objName = identifierName(obj);
+        if (objName) {
+          const binding = scope.bindings.get(objName);
+          model = binding?.ref ?? objName;
+        }
+      }
+    }
+  }
+  if (!model) {
+    throw new Error(
+      `extract: oke({ store: { search: { embed } } }) requires model (ai.model handle or name string)`,
+    );
+  }
+  scope.store = {
+    ...scope.store,
+    search: { embed: { model, dims } },
+  };
+}
+
+/**
  * Default every SQL table to live when `oke({ store: { live: true } })` is
  * on, unless the table explicitly opted out with `store.schema.live(false)`.
  *
@@ -3037,8 +3103,39 @@ function assertTenantSafeSchema(manifest: Manifest): void {
 }
 
 /**
+ * Inherit `oke({ store: { search: { embed } } })` onto every column that
+ * called `.embed()`, then stamp concrete `{ model, dims }` on the Manifest.
+ * Per-field values win when set.
+ */
+function resolveSearchEmbedDefaults(manifest: Manifest): void {
+  const project = manifest.store?.search?.embed;
+  for (const store of Object.values(manifest.stores ?? {})) {
+    if (store.facet !== "sql" || !store.tables) continue;
+    for (const [tableName, table] of Object.entries(store.tables)) {
+      for (const [colName, col] of Object.entries(table.columns ?? {})) {
+        if (!col || typeof col !== "object") continue;
+        const declared = col as DeclaredColumn;
+        // `embed: {}` is stamped when `.embed()` was called with no options.
+        if (declared.embed === undefined) continue;
+        const model = declared.embed.model ?? project?.model;
+        const dims = declared.embed.dims ?? project?.dims;
+        if (!model || dims === undefined || !(Number.isInteger(dims) && dims > 0)) {
+          throw new SearchConfigError(
+            tableName,
+            colName,
+            `.embed() needs model and dims — set oke({ store: { search: { embed: { model, dims } } } }) or pass them on .embed({ model, dims })`,
+          );
+        }
+        declared.embed = { model, dims };
+      }
+    }
+  }
+}
+
+/**
  * Fail-loud hybrid-search config: `.embed()` requires an `ai` element;
  * `.embed()` without `searchable` is already rejected in parseFieldChain.
+ * Call after {@link resolveSearchEmbedDefaults} so columns carry concrete dims.
  */
 function assertSearchConfig(manifest: Manifest): void {
   const hasAi =
