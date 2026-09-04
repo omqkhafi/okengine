@@ -91,6 +91,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Session access JWT verify now allowlists `alg: HS256` before HMAC and rejects
+  spoofed algorithms (`none`, `RS256`, …) and non-JWS compact shapes (JWE’s 5
+  parts), closing algorithm-confusion gaps even when the crypto path never
+  switched algorithms.
 - 2FA method lock during active login challenges: the configured method
   (`totp` | `email_otp`) is recorded on the pending challenge; TOTP enrollment /
   method change / disable while an unresolved challenge exists returns

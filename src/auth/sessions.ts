@@ -407,6 +407,9 @@ export class SessionError extends Error {
   }
 }
 
+/** Compact JWS algorithm for session access tokens (HMAC-SHA256). */
+const ACCESS_TOKEN_ALG = "HS256" as const;
+
 async function hashToken(raw: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -417,7 +420,7 @@ function cryptoRandomId(): string {
 }
 
 async function signAccess(secret: string, claims: AccessClaims): Promise<string> {
-  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const header = b64url(JSON.stringify({ alg: ACCESS_TOKEN_ALG, typ: "JWT" }));
   const payload = b64url(JSON.stringify(claims));
   const data = `${header}.${payload}`;
   const sig = await hmac(secret, data);
@@ -426,9 +429,19 @@ async function signAccess(secret: string, claims: AccessClaims): Promise<string>
 
 async function verifyAccessSignature(secret: string, token: string): Promise<AccessClaims> {
   const parts = token.split(".");
+  // JWS compact = 3 parts; JWE compact = 5 — reject anything else before crypto.
   if (parts.length !== 3) throw new SessionError("malformed access token");
-  const [header, payload, sig] = parts as [string, string, string];
-  const data = `${header}.${payload}`;
+  const [headerPart, payload, sig] = parts as [string, string, string];
+  let header: { alg?: string };
+  try {
+    header = JSON.parse(b64urlDecode(headerPart)) as { alg?: string };
+  } catch {
+    throw new SessionError("malformed access token header");
+  }
+  if (header.alg !== ACCESS_TOKEN_ALG) {
+    throw new SessionError("unsupported access token alg");
+  }
+  const data = `${headerPart}.${payload}`;
   const expected = await hmac(secret, data);
   if (sig !== expected) throw new SessionError("invalid access token signature");
   return JSON.parse(b64urlDecode(payload)) as AccessClaims;
