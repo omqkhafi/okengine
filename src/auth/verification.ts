@@ -27,6 +27,11 @@ export interface VerificationRow {
   email?: string | null;
   /** E.164 phone captured at request. */
   phone?: string | null;
+  /**
+   * Ceremony session id (passkey WebAuthn) — challenge is bound to this id.
+   * Other auth methods leave it unset.
+   */
+  sessionId?: string | null;
 }
 
 /** In-memory verification store. */

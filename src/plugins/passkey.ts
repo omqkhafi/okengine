@@ -2,8 +2,9 @@
  * Passkey (WebAuthn) Gate auth method plugin.
  *
  * Registration and authentication verify clientDataJSON origin + challenge,
- * authenticatorData rpId hash, and ECDSA P-256 signature against the stored
- * SPKI public key. Presence-only authenticate is rejected.
+ * authenticatorData rpId hash + UV, and ECDSA P-256 signature against the
+ * stored SPKI public key. Challenges are bound to a ceremony sessionId (≤5m).
+ * UV=false and cloned-authenticator counters are rejected.
  */
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
@@ -72,10 +73,39 @@ const CeremonyIn = z.object({
   publicKey: z.string().min(1).optional(),
   userId: z.string().min(1).optional(),
   challenge: z.string().min(1),
+  /** Opaque ceremony session id from options (challenge binding). */
+  sessionId: z.string().min(1),
   clientDataJSON: z.string().min(1),
   authenticatorData: z.string().min(1),
   signature: z.string().min(1),
 });
+
+/**
+ * Map WebAuthn verify failure reasons onto AuthFailed reasons.
+ *
+ * @param reason - Verifier reason
+ */
+function authFailedReason(reason: string): string {
+  if (reason === "invalid_origin") return "invalid_origin";
+  if (reason === "user_not_verified") return "user_not_verified";
+  if (reason === "cloned_authenticator") return "reregister_required";
+  return "invalid_credentials";
+}
+
+/**
+ * Remove a credential from both indexes (clone / revoke).
+ *
+ * @param store - Passkey store
+ * @param cred - Credential to drop
+ */
+function removeCredential(store: PasskeyStore, cred: PasskeyCredential): void {
+  store.byCredentialId.delete(cred.credentialId);
+  const list = store.byUserId.get(cred.userId);
+  if (!list) return;
+  const next = list.filter((c) => c.credentialId !== cred.credentialId);
+  if (next.length === 0) store.byUserId.delete(cred.userId);
+  else store.byUserId.set(cred.userId, next);
+}
 
 /**
  * Passkey register / authenticate with cryptographic WebAuthn verify (`oke_passkeys`).
@@ -94,6 +124,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     plane: "user",
     out: z.object({
       challenge: z.string(),
+      sessionId: z.string(),
       rpId: z.string(),
       userId: z.string(),
     }),
@@ -102,6 +133,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
       const challenge = crypto.randomUUID().replace(/-/g, "");
+      const sessionId = crypto.randomUUID();
       const now = runtime.now();
       putVerification(challenges, {
         id: crypto.randomUUID(),
@@ -111,8 +143,9 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         createdAt: now,
         consumedAt: null,
         attempts: 0,
+        sessionId,
       });
-      return { challenge, rpId, userId };
+      return { challenge, sessionId, rpId, userId };
     },
   });
 
@@ -133,6 +166,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         challenges,
         `passkey-reg:${input.userId}`,
         input.challenge,
+        input.sessionId,
         runtime.now(),
       );
       if (!consumed) return fail("AuthFailed", { reason: "invalid_credentials" });
@@ -148,9 +182,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         signature: input.signature,
       });
       if (!verified.ok) {
-        return fail("AuthFailed", {
-          reason: verified.reason === "invalid_origin" ? "invalid_origin" : "invalid_credentials",
-        });
+        return fail("AuthFailed", { reason: authFailedReason(verified.reason) });
       }
       if (passkeys.byCredentialId.has(input.credentialId)) {
         return fail("AuthFailed", { reason: "invalid_credentials" });
@@ -191,12 +223,14 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     in: z.object({ email: z.string().optional() }),
     out: z.object({
       challenge: z.string(),
+      sessionId: z.string(),
       rpId: z.string(),
       allowCredentials: z.array(z.string()),
     }),
     errors: { AuthFailed, AuthRateLimited },
     do: async (input) => {
       const challenge = crypto.randomUUID().replace(/-/g, "");
+      const sessionId = crypto.randomUUID();
       const now = runtime.now();
       const key = input.email?.trim().toLowerCase() || "anonymous";
       putVerification(challenges, {
@@ -207,8 +241,9 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         createdAt: now,
         consumedAt: null,
         attempts: 0,
+        sessionId,
       });
-      return { challenge, rpId, allowCredentials: [] as string[] };
+      return { challenge, sessionId, rpId, allowCredentials: [] as string[] };
     },
   });
 
@@ -230,6 +265,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         challenges,
         `passkey-auth:${bucket}`,
         input.challenge,
+        input.sessionId,
         runtime.now(),
       );
       if (!consumed) return fail("AuthFailed", { reason: "invalid_credentials" });
@@ -246,9 +282,14 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         previousSignCount: cred.counter,
       });
       if (!verified.ok) {
-        return fail("AuthFailed", {
-          reason: verified.reason === "invalid_origin" ? "invalid_origin" : "invalid_credentials",
-        });
+        if (verified.reason === "cloned_authenticator") {
+          console.warn(
+            `[passkey] possible cloned authenticator: credentialId=${cred.credentialId} userId=${cred.userId}`,
+          );
+          removeCredential(passkeys, cred);
+          return fail("AuthFailed", { reason: "reregister_required" });
+        }
+        return fail("AuthFailed", { reason: authFailedReason(verified.reason) });
       }
       cred.counter = verified.signCount;
 
@@ -275,16 +316,27 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     .binding(bindPublicAuth("/passkey/authenticate", authenticate, "otp"));
 }
 
+/**
+ * Consume a single-use challenge bound to a ceremony sessionId.
+ *
+ * @param store - Challenge store
+ * @param identifier - Bucket key
+ * @param challenge - Raw challenge
+ * @param sessionId - Ceremony session from options
+ * @param now - Clock
+ */
 async function consumeChallenge(
   store: VerificationStore,
   identifier: string,
   challenge: string,
+  sessionId: string,
   now: number,
 ): Promise<boolean> {
   const hash = await hashChallenge(challenge);
   for (const row of store.rows.values()) {
     if (row.identifier !== identifier) continue;
     if (row.consumedAt !== null || row.expiresAt <= now) continue;
+    if (row.sessionId !== sessionId) continue;
     if (!constantTimeEqual(row.value, hash)) continue;
     row.consumedAt = now;
     return true;

@@ -2,7 +2,7 @@
  * Minimal WebAuthn assertion / registration verifier (ES256 / P-256).
  *
  * Validates clientDataJSON (type · challenge · origin), authenticatorData
- * (rpId hash · user-presence), and ECDSA signature over
+ * (rpId hash · user-presence · user-verified), and ECDSA signature over
  * `authenticatorData || SHA-256(clientDataJSON)` against a stored SPKI public key.
  */
 
@@ -92,14 +92,17 @@ export async function verifyWebAuthnCeremony(
   const flags = authData[32]!;
   // User Present (bit 0) required.
   if ((flags & 0x01) === 0) return { ok: false, reason: "invalid_credentials" };
+  // User Verified (bit 2) required — never accept UV=false (even if RP policy is "preferred").
+  if ((flags & 0x04) === 0) return { ok: false, reason: "user_not_verified" };
 
   const signCount =
     ((authData[33]! << 24) | (authData[34]! << 16) | (authData[35]! << 8) | authData[36]!) >>> 0;
 
   if (opts.previousSignCount !== undefined) {
-    // Spec: if both non-zero, authenticator count must strictly increase.
-    if (opts.previousSignCount > 0 && signCount > 0 && signCount <= opts.previousSignCount) {
-      return { ok: false, reason: "invalid_credentials" };
+    // Stored counter non-zero + non-increasing → possible cloned / replayed authenticator.
+    // Skip when stored is 0 (synced / non-counter authenticators).
+    if (opts.previousSignCount !== 0 && signCount <= opts.previousSignCount) {
+      return { ok: false, reason: "cloned_authenticator" };
     }
   }
 
@@ -164,12 +167,12 @@ export function b64urlDecode(input: string): Uint8Array<ArrayBuffer> {
  *
  * @param rpId - Relying party id
  * @param signCount - Counter
- * @param flags - Flag byte (default UP=0x01)
+ * @param flags - Flag byte (default UP|UV = 0x05)
  */
 export async function buildAuthenticatorData(
   rpId: string,
   signCount: number,
-  flags = 0x01,
+  flags = 0x05,
 ): Promise<Uint8Array> {
   const rpHash = new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rpId)),

@@ -964,3 +964,336 @@ describe("auth methods — passkey signature + origin (confirmed issue)", () => 
     await app.stop();
   });
 });
+
+describe("auth methods — passkey hardening (UV · session · counter · type)", () => {
+  async function registerPasskey(
+    app: ReturnType<typeof fullAuthApp>,
+    accessToken: string,
+    keys: { privateKey: CryptoKey; publicKeyB64: string },
+  ): Promise<{ credentialId: string }> {
+    const regOpts = await app.fetch(
+      jsonPost("/auth/passkey/register/options", {}, { authorization: `Bearer ${accessToken}` }),
+    );
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
+    const regCeremony = await buildCeremony({
+      type: "webauthn.create",
+      challenge: reg.data.challenge,
+      origin: "http://localhost",
+      rpId: reg.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 0,
+    });
+    const credentialId = b64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
+    const registered = await app.fetch(
+      jsonPost(
+        "/auth/passkey/register",
+        {
+          credentialId,
+          publicKey: keys.publicKeyB64,
+          userId: reg.data.userId,
+          challenge: reg.data.challenge,
+          sessionId: reg.data.sessionId,
+          ...regCeremony,
+        },
+        { authorization: `Bearer ${accessToken}` },
+      ),
+    );
+    expect(registered.status).toBe(200);
+    return { credentialId };
+  }
+
+  test("UV=false assertion is rejected with user_not_verified", async () => {
+    const app = fullAuthApp();
+    await app.boot({ env: "test" });
+    const session = await mintUsernameSession(app, "pk_uv");
+    const keys = await generatePasskeyKeypair();
+    const { credentialId } = await registerPasskey(app, session.accessToken, keys);
+
+    const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
+    const ceremony = await buildCeremony({
+      type: "webauthn.get",
+      challenge: auth.data.challenge,
+      origin: "http://localhost",
+      rpId: auth.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+      flags: 0x01, // UP only — no UV
+    });
+    const res = await app.fetch(
+      jsonPost("/auth/passkey/authenticate", {
+        credentialId,
+        challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
+        ...ceremony,
+      }),
+    );
+    expect((await readError(res)).reason).toBe("user_not_verified");
+
+    await app.stop();
+  });
+
+  test("wrong clientDataJSON.type is rejected on authenticate and register", async () => {
+    const app = fullAuthApp();
+    await app.boot({ env: "test" });
+    const session = await mintUsernameSession(app, "pk_type");
+    const keys = await generatePasskeyKeypair();
+    const { credentialId } = await registerPasskey(app, session.accessToken, keys);
+
+    const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
+    const wrongType = await buildCeremony({
+      type: "webauthn.create", // must be webauthn.get
+      challenge: auth.data.challenge,
+      origin: "http://localhost",
+      rpId: auth.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+    });
+    const authRes = await app.fetch(
+      jsonPost("/auth/passkey/authenticate", {
+        credentialId,
+        challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
+        ...wrongType,
+      }),
+    );
+    expect((await readError(authRes)).reason).toBe("invalid_credentials");
+
+    const regOpts = await app.fetch(
+      jsonPost(
+        "/auth/passkey/register/options",
+        {},
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
+    const wrongRegType = await buildCeremony({
+      type: "webauthn.get", // must be webauthn.create
+      challenge: reg.data.challenge,
+      origin: "http://localhost",
+      rpId: reg.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 0,
+    });
+    const regRes = await app.fetch(
+      jsonPost(
+        "/auth/passkey/register",
+        {
+          credentialId: b64urlEncode(crypto.getRandomValues(new Uint8Array(8))),
+          publicKey: keys.publicKeyB64,
+          userId: reg.data.userId,
+          challenge: reg.data.challenge,
+          sessionId: reg.data.sessionId,
+          ...wrongRegType,
+        },
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    expect((await readError(regRes)).reason).toBe("invalid_credentials");
+
+    await app.stop();
+  });
+
+  test("sessionId mismatch is rejected; matching session + challenge succeeds", async () => {
+    const app = fullAuthApp();
+    await app.boot({ env: "test" });
+    const session = await mintUsernameSession(app, "pk_sid");
+    const keys = await generatePasskeyKeypair();
+    const { credentialId } = await registerPasskey(app, session.accessToken, keys);
+
+    const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
+    const ceremony = await buildCeremony({
+      type: "webauthn.get",
+      challenge: auth.data.challenge,
+      origin: "http://localhost",
+      rpId: auth.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+    });
+    const mismatch = await app.fetch(
+      jsonPost("/auth/passkey/authenticate", {
+        credentialId,
+        challenge: auth.data.challenge,
+        sessionId: crypto.randomUUID(),
+        ...ceremony,
+      }),
+    );
+    expect((await readError(mismatch)).reason).toBe("invalid_credentials");
+
+    const authOpts2 = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth2 = (await authOpts2.json()) as { data: PasskeyAuthOpts };
+    const good = await buildCeremony({
+      type: "webauthn.get",
+      challenge: auth2.data.challenge,
+      origin: "http://localhost",
+      rpId: auth2.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+    });
+    const ok = await app.fetch(
+      jsonPost("/auth/passkey/authenticate", {
+        credentialId,
+        challenge: auth2.data.challenge,
+        sessionId: auth2.data.sessionId,
+        ...good,
+      }),
+    );
+    expect(ok.status).toBe(200);
+
+    await app.stop();
+  });
+
+  test("expired challenge (>5m) is rejected", async () => {
+    let now = 1_700_000_000_000;
+    const app = oke({
+      name: `auth-sec-ttl-${crypto.randomUUID()}`,
+      env: "test",
+      registry: "ignore",
+      gate: {
+        auth: {
+          secret: SECRET,
+          emailAndPassword: { enabled: true },
+          now: () => now,
+        },
+        unguardedHttp: "deny",
+      },
+    })
+      .plug(username({ now: () => now }))
+      .plug(passkey({ origins: ["http://localhost"], now: () => now }));
+    await app.boot({ env: "test" });
+
+    const session = await mintUsernameSession(app, "pk_ttl");
+    const keys = await generatePasskeyKeypair();
+
+    const regOpts = await app.fetch(
+      jsonPost(
+        "/auth/passkey/register/options",
+        {},
+        { authorization: `Bearer ${session.accessToken}` },
+      ),
+    );
+    const reg = (await regOpts.json()) as { data: PasskeyRegOpts };
+    const regCeremony = await buildCeremony({
+      type: "webauthn.create",
+      challenge: reg.data.challenge,
+      origin: "http://localhost",
+      rpId: reg.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 0,
+    });
+    const credentialId = b64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
+    expect(
+      (
+        await app.fetch(
+          jsonPost(
+            "/auth/passkey/register",
+            {
+              credentialId,
+              publicKey: keys.publicKeyB64,
+              userId: reg.data.userId,
+              challenge: reg.data.challenge,
+              sessionId: reg.data.sessionId,
+              ...regCeremony,
+            },
+            { authorization: `Bearer ${session.accessToken}` },
+          ),
+        )
+      ).status,
+    ).toBe(200);
+
+    const authOpts = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth = (await authOpts.json()) as { data: PasskeyAuthOpts };
+    now += 5 * 60 * 1000 + 1;
+    const ceremony = await buildCeremony({
+      type: "webauthn.get",
+      challenge: auth.data.challenge,
+      origin: "http://localhost",
+      rpId: auth.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+    });
+    const res = await app.fetch(
+      jsonPost("/auth/passkey/authenticate", {
+        credentialId,
+        challenge: auth.data.challenge,
+        sessionId: auth.data.sessionId,
+        ...ceremony,
+      }),
+    );
+    expect((await readError(res)).reason).toBe("invalid_credentials");
+
+    await app.stop();
+  });
+
+  test("non-increasing signCount deletes credential and returns reregister_required", async () => {
+    const passkeys = createPasskeyStore();
+    const app = oke({
+      name: `auth-sec-clone-${crypto.randomUUID()}`,
+      env: "test",
+      registry: "ignore",
+      gate: {
+        auth: {
+          secret: SECRET,
+          emailAndPassword: { enabled: true },
+        },
+        unguardedHttp: "deny",
+      },
+    })
+      .plug(username())
+      .plug(passkey({ origins: ["http://localhost"], passkeys }));
+    await app.boot({ env: "test" });
+
+    const session = await mintUsernameSession(app, "pk_clone");
+    const keys = await generatePasskeyKeypair();
+    const { credentialId } = await registerPasskey(app, session.accessToken, keys);
+
+    const authOpts1 = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth1 = (await authOpts1.json()) as { data: PasskeyAuthOpts };
+    const c1 = await buildCeremony({
+      type: "webauthn.get",
+      challenge: auth1.data.challenge,
+      origin: "http://localhost",
+      rpId: auth1.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+    });
+    expect(
+      (
+        await app.fetch(
+          jsonPost("/auth/passkey/authenticate", {
+            credentialId,
+            challenge: auth1.data.challenge,
+            sessionId: auth1.data.sessionId,
+            ...c1,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(passkeys.byCredentialId.get(credentialId)?.counter).toBe(1);
+
+    const authOpts2 = await app.fetch(jsonPost("/auth/passkey/authenticate/options", {}));
+    const auth2 = (await authOpts2.json()) as { data: PasskeyAuthOpts };
+    const c2 = await buildCeremony({
+      type: "webauthn.get",
+      challenge: auth2.data.challenge,
+      origin: "http://localhost",
+      rpId: auth2.data.rpId,
+      privateKey: keys.privateKey,
+      signCount: 1,
+    });
+    const clone = await app.fetch(
+      jsonPost("/auth/passkey/authenticate", {
+        credentialId,
+        challenge: auth2.data.challenge,
+        sessionId: auth2.data.sessionId,
+        ...c2,
+      }),
+    );
+    expect((await readError(clone)).reason).toBe("reregister_required");
+    expect(passkeys.byCredentialId.has(credentialId)).toBe(false);
+
+    await app.stop();
+  });
+});

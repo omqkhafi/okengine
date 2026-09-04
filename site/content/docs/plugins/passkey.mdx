@@ -1,17 +1,19 @@
 ---
 title: "Passkey"
-description: "Official plugin — WebAuthn register and authenticate under /auth with signature and origin checks."
+description: "Official plugin — WebAuthn register and authenticate under /auth with UV, signCount, and ceremony session binding."
 icon: "FingerprintPattern"
 source: "docs/spec/unified-theory.md"
 ---
 
 `passkey()` adds register and authenticate Flows for WebAuthn credentials (`oke_passkeys`).
-Options return a challenge; register and authenticate verify `clientDataJSON` origin + challenge,
-`authenticatorData` rpId hash, and an ECDSA P-256 signature against the stored SPKI public key.
+Options return a challenge plus a ceremony `sessionId`; register and authenticate verify
+`clientDataJSON` type · origin · challenge, `authenticatorData` rpId hash · UP · UV, and an
+ECDSA P-256 signature against the stored SPKI public key. Challenges expire in ≤5 minutes
+and are single-use.
 
 <Callout title="The one rule">
   Enable `gate.auth`, then `.plug(passkey())`. Registration needs a Bearer session; authenticate is
-  public. Post the full ceremony fields — presence of a stored credential alone never issues a
+  public. Echo the options `sessionId` with every ceremony — UV=false assertions never mint a
   session.
 </Callout>
 
@@ -42,15 +44,16 @@ Wire Bearer on `createClient` (`auth.getToken` / `memorySession`) — calls take
 
 ```typescript
 const opts = await api.auth.passkeyRegisterOptions({});
-// opts.data: { challenge, rpId, userId }
+// opts.data: { challenge, sessionId, rpId, userId }
 
 await api.auth.passkeyRegister({
   credentialId: "...", // base64url
   publicKey: "...", // base64url SPKI (ECDSA P-256)
   userId: opts.data!.userId,
   challenge: opts.data!.challenge,
-  clientDataJSON: "...", // base64url JSON { type, challenge, origin }
-  authenticatorData: "...", // base64url
+  sessionId: opts.data!.sessionId,
+  clientDataJSON: "...", // base64url JSON { type: "webauthn.create", challenge, origin }
+  authenticatorData: "...", // base64url (UP|UV required)
   signature: "...", // base64url ECDSA over authData || SHA-256(clientDataJSON)
 });
 ```
@@ -67,18 +70,29 @@ const opts = await api.auth.passkeyAuthenticateOptions({});
 const { data } = await api.auth.passkeyAuthenticate({
   credentialId: "...",
   challenge: opts.data!.challenge,
-  clientDataJSON: "...",
+  sessionId: opts.data!.sessionId,
+  clientDataJSON: "...", // type must be "webauthn.get"
   authenticatorData: "...",
   signature: "...",
 });
 ```
 
 Paths: `POST /auth/passkey/authenticate/options`, `POST /auth/passkey/authenticate`.
-Challenges are single-use; wrong origin → `invalid_origin`; bad signature → `invalid_credentials`.
+Challenges are single-use and bound to `sessionId`; wrong origin → `invalid_origin`; UV
+missing → `user_not_verified`; cloned counter → `reregister_required`.
 
 </Step>
 
 </Steps>
+
+## Server checks
+
+| Check | Behavior |
+| ----- | -------- |
+| Ceremony type | `clientDataJSON.type` must be `webauthn.create` (register) or `webauthn.get` (authenticate) |
+| User verification | AuthenticatorData UV bit must be set — UV=false is always rejected |
+| Challenge binding | Challenge hash + `sessionId` must match; TTL ≤ 5 minutes; single-use |
+| Signature counter | Stored per credential; if stored ≠ 0 and incoming `signCount` ≤ stored → delete credential, warn, `reregister_required` |
 
 ## Options
 
@@ -101,8 +115,8 @@ Challenges are single-use; wrong origin → `invalid_origin`; bad signature → 
 | `auth.passkeyAuthenticateOptions` | `POST /auth/passkey/authenticate/options` | `gate.public` + otp rate |
 | `auth.passkeyAuthenticate`        | `POST /auth/passkey/authenticate`         | `gate.public` + otp rate |
 
-**Consequence:** a stolen `credentialId` without the private key cannot mint a session. Set
-`origins` to your real app origins before production.
+**Consequence:** a stolen `credentialId` without the private key (and UV) cannot mint a session.
+Set `origins` to your real app origins before production.
 
 ## Troubleshooting
 
@@ -117,10 +131,22 @@ Sign in with another method first. `userId` in the body must match the Bearer se
 `clientDataJSON.origin` must be in `passkey({ origins })`. Default allows only localhost HTTP/S.
 
 </Accordion>
+<Accordion title="authenticate returns user_not_verified">
+
+AuthenticatorData UV bit was not set. Require user verification on the client
+(`userVerification: "required"`) — the server never accepts UV=false.
+
+</Accordion>
+<Accordion title="authenticate returns reregister_required">
+
+Signature counter did not increase (possible cloned authenticator). That credential was
+deleted — register a fresh passkey for the account.
+
+</Accordion>
 <Accordion title="authenticate returns invalid_credentials">
 
-Unknown `credentialId`, consumed/expired challenge, bad signature, or rpId hash mismatch.
-Re-run authenticate options for a fresh challenge, then sign with the enrolled private key.
+Unknown `credentialId`, wrong/expired/`sessionId` mismatch, bad signature, wrong ceremony
+type, or rpId hash mismatch. Re-run authenticate options for a fresh challenge + `sessionId`.
 
 </Accordion>
 </Accordions>

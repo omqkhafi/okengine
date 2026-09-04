@@ -111,6 +111,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   that principal, clear planted password hashes, mark `emailVerified`, then
   issue the passwordless session. Already-verified owners re-auth without a
   credential purge. Shared helper: `completeVerifiedEmailSignIn`.
+- Hardened `passkey` WebAuthn verification against Pass-the-Passkey / Golden
+  Pass-ta-key class failures: require authenticatorData UV (reject UV=false),
+  bind challenges to a ceremony `sessionId` (≤5m TTL), enforce
+  `clientDataJSON.type`, and treat non-increasing `signCount` (when stored ≠ 0)
+  as a cloned authenticator — log a warning, delete that credential, return
+  `reregister_required`.
 
 
 
