@@ -50,19 +50,24 @@ export const trialReminder = on(
 </Step>
 
 <Step>
-### What the client sees
+### Call the endpoint
 
-The HTTP request returns **`204 No Content`** when the Flow parks on sleep — the caller is
-not waiting three days. Wake continues on a worker; wrap side effects in `fx.step` so
-replay does not re-send mail.
+```bash
+curl -X POST http://localhost:6530/trials/start \
+  -H "content-type: application/json" \
+  -d '{"email":"ada@example.com"}'
+```
+
+Response: **`204 No Content`** (empty body). The HTTP client is done — wake continues on a
+worker three days later. Wrap side effects in `fx.step` so replay does not re-send mail.
 
 </Step>
 
 </Steps>
 
 <Callout title="Detailed section">
-  If you only need a pause, the example above is enough. Below: non-durable no-ops,
-  wake-early, and how sleep fits with steps / compensation.
+  If you only need a pause, the example above is enough. Below: park physics, wake-early,
+  nested-call limits, non-durable no-ops, and how sleep fits with steps / compensation.
 </Callout>
 
 ## Progressive Patterns
@@ -114,8 +119,9 @@ export const provision = on(
 );
 ```
 
-Emit or return **before** sleep when the caller needs an id — after sleep the HTTP
-client is already done. See [Workflows · Durable Sleep](/docs/elements/flow/workflows#durable-sleep).
+After sleep the HTTP client is already done (`204`). Need a JSON body? Return from a
+Flow that does **not** sleep, and park on a Signal consumer instead. See
+[Workflows · Durable Sleep](/docs/elements/flow/workflows#durable-sleep).
 
 </Tab>
 
@@ -148,22 +154,213 @@ no `setTimeout`. Use durable Flows for real delays; use frozen clock + advance i
 
 ## Sleep Reference
 
-| Call / option | Type | Meaning |
-| ------------- | ---- | ------- |
-| `durable: true` | Flow option | Journals steps and sleep; required to park |
-| `fx.clock.sleep(label, duration)` | park | Writes `wakeAt`, status `sleeping`, releases lease |
-| `label` | `string` | Journal / Console step name |
-| `duration` | `string` | `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"` |
+| Call / option | Type | Default | Meaning |
+| ------------- | ---- | ------- | ------- |
+| `durable: true` | Flow option | `false` | Journals steps and sleep; required to park |
+| `fx.clock.sleep(label, duration)` | park | — | Writes `wakeAt`, status `sleeping`, releases lease |
+| `label` | `string` | — | Journal / Console step name |
+| `duration` | `string` | — | `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"` |
 
 Outcomes of a durable attempt that hits sleep: status `"sleeping"` with `wakeAt` and
 `label`. After wake, prior `fx.step` bodies replay from the journal and do not re-execute.
 
+### Duration units
+
+Same grammar as `fx.clock.ago` / `fromNow` / `clock.every`:
+
+| Unit | Example | Milliseconds |
+| ---- | ------- | ------------ |
+| `ms` | `"200ms"` | 200 |
+| `s` | `"30s"` | 30_000 |
+| `m` | `"2m"` | 120_000 |
+| `h` | `"1h"` | 3_600_000 |
+| `d` | `"7d"` | 604_800_000 |
+
+Integer + unit only — no weeks. `"d"` is exactly 86_400_000 ms, not a calendar day across
+DST. Unknown strings parse as `0` ms (wake immediately).
+
+## Park Physics
+
+<Callout title="Detailed section">
+  If you only need `await fx.clock.sleep("label", "8h")`, jump past this section. The park
+  writes a journal entry, sets status `sleeping`, and **releases the run lease** so a parked
+  flow does not hold a 30s lock for days.
+</Callout>
+
+```text
+fx.clock.sleep(label, duration)
+  → journal entry { kind: "sleep", label, duration, wakeAt }
+  → status = sleeping, lease released
+  → HTTP / caller sees success (often 204)
+  → later: claim due sleep → resume → replay steps → continue after sleep
+```
+
+Any instance may claim the row when `wakeAt` is due (shared journal + lease). Resume replays
+completed `fx.step` values from the journal, then continues past the sleep entry.
+
+| Phase | Status | Lease | What happens |
+| ----- | ------ | ----- | ------------ |
+| Before sleep | `running` | Held | Steps append; side effects execute once |
+| At sleep | `sleeping` | **Released** | `wakeAt` stored; worker free |
+| After `wakeAt` | claim → `running` | Re-acquired | Replay steps; sleep entry is a no-op past due |
+| Done | `completed` / `failed` | Released | Terminal — resume refused |
+
+**Consequence:** multi-day sleeps are safe across deploys — the journal row is the schedule,
+not an in-memory timer.
+
+## With Steps
+
+Each verb of durable work binds the same way — checkpoint, park, then more checkpoints:
+
+<Tabs items={["Checkpoint sandwich", "HTTP body + sleep", "Signal consumer"]}>
+
+<Tab value="Checkpoint sandwich">
+
+Wrap every side effect in a uniquely named `fx.step`. Sleep sits **between** steps:
+
+```typescript title="src/flows/onboarding/welcome.ts"
+import { on, flow } from "okengine";
+import { userSignedUp } from "@/signals";
+import { welcomeEmail } from "@/channels/welcome";
+
+export const sendWelcome = on(
+  userSignedUp,
+  flow("onboarding.welcome", {
+    durable: true,
+    do: async ({ email }, fx) => {
+      await fx.step("provision", async () => {
+        await fx.call(createWorkspace, { email });
+      });
+      await fx.clock.sleep("morning-window", "8h");
+      await fx.step("notify", async () => {
+        await fx.send(welcomeEmail, { to: email });
+      });
+    },
+  }),
+);
+```
+
+**Consequence:** after wake, `provision` returns the journaled value and never re-runs;
+`notify` runs for the first time.
+
+</Tab>
+
+<Tab value="HTTP body + sleep">
+
+Parking an HTTP Flow always answers **`204`** (suspend returns `undefined`). When the
+caller must see an id, **do not sleep on that route** — return the body, emit, and park
+on a consumer:
+
+```typescript title="src/flows/trials/start.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const startTrial = on(
+  http.post("/trials"),
+  flow("trials.start", {
+    durable: true,
+    in: z.object({ email: z.string().email() }),
+    out: z.object({ trialId: z.string() }),
+    do: async ({ email }, fx) => {
+      const trialId = await fx.step("create", async () => {
+        return await fx.call(createTrial, { email });
+      });
+      await fx.emit(trialStarted, { trialId, email });
+      return { trialId };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Signal consumer">
+
+The consumer owns the multi-day wait (paired with the HTTP Flow above):
+
+```typescript title="src/flows/trials/remind.ts"
+import { on, flow } from "okengine";
+import { trialStarted } from "@/signals";
+import { trialExpiringEmail } from "@/channels/trials";
+
+export const remind = on(
+  trialStarted,
+  flow("trials.remind", {
+    durable: true,
+    do: async ({ trialId, email }, fx) => {
+      await fx.clock.sleep("expiry-window", "3d");
+      await fx.step("notify", async () => {
+        await fx.send(trialExpiringEmail, { to: email, trialId });
+      });
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+## Nested Calls
+
+<Callout title="Detailed section">
+  If you sleep only on the root durable Flow, skip this section.
+  `fx.call` waits for the callee to return — a sleeping callee does not keep the caller parked.
+</Callout>
+
+`fx.call` of a durable sleeper: the caller receives `undefined` and continues; the child
+wakes later as its own run.
+
+| Pattern | Safe? | Why |
+| ------- | ----- | --- |
+| Sleep on the root durable Flow | Yes | One journal row, clear park |
+| `fx.emit` → durable consumer that sleeps | Yes | Separate run owns the wait |
+| `fx.call(sleeperFlow, …)` then use the result | No | Caller gets `undefined`; child parks alone |
+
+**Consequence:** sleep on the **root** durable Flow, or split with `fx.emit` to a consumer —
+do not nest sleep behind `fx.call`.
+
 ## Wake Early
 
-Operators can advance `wakeAt` to now (Console / `wakeEarly`). With a flow resolver, the
-run resumes immediately; without it, only the wake time moves forward.
+Operators can advance `wakeAt` to **now** from Console (waiting-on / wake-early). With a
+flow resolver, the run resumes immediately; without it, only the wake time moves forward.
 
-Missing run id → `ClockResourceNotFoundError` — `run "{id}" not found`.
+| Outcome | Meaning |
+| ------- | ------- |
+| Resumed | `wakeAt` set to now and `runDurable` continued past the sleep |
+| Wake time only | `wakeAt` advanced; scheduler / next claim picks it up |
+| `ClockResourceNotFoundError` | `run "{id}" not found` — missing id, or status is not `sleeping` |
+
+Missing or non-sleeping run id → `ClockResourceNotFoundError` — `run "{id}" not found`.
+
+## Non-durable & Tests
+
+Without a journal session, `fx.clock.sleep` resolves immediately (tests and sync Flows).
+There is no thread sleep and no `setTimeout`.
+
+For deterministic waits in tests, use a frozen clock and advance:
+
+```typescript
+import { createTimeTravel } from "okengine";
+
+const t = createTimeTravel(0);
+// Park a durable run with now: () => t.now()
+t.advance("7d");
+// Resume — sleep entry is past due and continues
+```
+
+Pin journal for the env you need:
+
+| Driver | Default env | Best for |
+| ------ | ----------- | -------- |
+| `postgres` | `dev`, `prod` | Shared durable runs across replicas (`DATABASE_URL`) |
+| `memory` | `test` | Process-local; lost on exit |
+| `file` | pin explicitly | One machine — `.oke/journal.json` |
+
+Unknown ids throw `oke boot: unknown journal driver "…" (expected memory · file · postgres)`.
+Postgres without a URL throws `oke boot: journal driver "postgres" needs DATABASE_URL`.
+
+Full lease / orphan / status tables live on [Workflows · Journal](/docs/elements/flow/workflows#journal).
 
 ## Troubleshooting
 
@@ -176,7 +373,8 @@ Missing run id → `ClockResourceNotFoundError` — `run "{id}" not found`.
 
 <Accordion title="HTTP 204 with empty body after POST">
   The Flow parked on `fx.clock.sleep` — success, not a missing handler. The original
-  client is done; wake continues on a worker. Return a body before sleep if needed.
+  client is done; wake continues on a worker. Return a body before sleep if needed, or
+  emit to a Signal consumer for the long wait.
 </Accordion>
 
 <Accordion title="Mail / charge ran again after resume">
@@ -190,8 +388,29 @@ Missing run id → `ClockResourceNotFoundError` — `run "{id}" not found`.
 </Accordion>
 
 <Accordion title="ClockResourceNotFoundError on wake">
-  Cause: `run "{id}" not found`. The wake-early target is not in the journal Store —
+  Cause: `run "{id}" not found`. The wake-early target is missing or not `sleeping` —
   check the run id from Console / durable result.
+</Accordion>
+
+<Accordion title="fx.call of a durable sleeper returned undefined">
+  The callee parked. Sleep on the root Flow, or emit to a durable consumer instead of
+  calling a sleeper inline.
+</Accordion>
+
+<Accordion title="Unknown duration wakes immediately">
+  Strings that do not match `integer + ms|s|m|h|d` parse as `0` ms. Use `"8h"`, not
+  `"8 hours"` or `"1w"`.
+</Accordion>
+
+<Accordion title='journal: run "…" is leased by another instance'>
+  Resume lost the lease race (`JournalLeaseBusy`). The other holder continues; this
+  instance skips. Shared `postgres` journal + default **30s** lease — same physics as
+  Signal claims.
+</Accordion>
+
+<Accordion title="GET /_/ready is 503 reason orphan_scan">
+  Boot is still reclaiming `running` / `sleeping` / `compensating` rows with no live
+  lease. Wait for the orphan scan; future sleeps stay scheduled until `wakeAt`.
 </Accordion>
 
 </Accordions>
@@ -199,8 +418,10 @@ Missing run id → `ClockResourceNotFoundError` — `run "{id}" not found`.
 ## Learn more
 
 - [Workflows](/docs/elements/flow/workflows) — `durable`, `fx.step`, compensate, full sleep section
+- [HTTP](/docs/elements/flow/http) — request envelope; `204` from park / `undefined`
 - [Clock overview](/docs/elements/clock) — schedules and `fx.clock` helpers
-- [fx](/docs/reference/fx) — `fx.clock.sleep`, `fx.step`
+- [Schedules](/docs/elements/clock/schedules) — cron / every (calendar time, not durable pause)
+- [fx](/docs/reference/fx) — `fx.clock.sleep`, `fx.step`, `fx.using`
 - [Configuration](/docs/reference/configuration) — `drivers.journal`
 - [Errors](/docs/reference/errors) — `ClockResourceNotFoundError`
 

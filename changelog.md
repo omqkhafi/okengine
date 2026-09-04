@@ -41,6 +41,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Elevated [`Clock · Durable Sleep`](/docs/elements/clock/sleep) to HTTP-trigger
+  docs depth: curl in Smallest Example, Sleep Reference + duration units, Park
+  Physics, With Steps tabs (checkpoint / HTTP body + sleep / Signal consumer),
+  Nested Calls, Wake Early, Non-durable & Tests (`createTimeTravel`, journal
+  drivers), and expanded Troubleshooting (`JournalLeaseBusy`, orphan scan,
+  unknown durations, nested sleeper).
 - Elevated [`Clock · Schedules`](/docs/elements/clock/schedules) to HTTP-trigger
   docs depth: Helper Reference, Timezone Resolution, Binding & Input, per-helper
   tabs (`daily` / `hourly` / `weekly` / `monthly` / `cron` / `every`), Per-tenant
