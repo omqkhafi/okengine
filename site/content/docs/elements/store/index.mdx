@@ -1,106 +1,315 @@
 ---
 title: "Overview"
-description: "Data at rest — SQL, Key-Value, Blob Files, and Search indexes accessed through one unified typed handle."
+description: "Data at rest — SQL, KV, files, and search indexes through one typed fx.store handle."
 icon: "Database"
 source: "docs/spec/unified-theory.md"
 ---
 
-Store is how your backend **holds data at rest**. Instead of maintaining distinct clients for Postgres, Redis, AWS S3, and Meilisearch with four connection pools and differing error shapes, Store provides one handle (`store`) with four typed facets.
+Store is how your backend **holds data at rest**. Declare a facet once (`store.sql`, `store.kv`, `store.files`, `store.index`), then read and write through `fx.store(decl)` inside Flows.
+
+For developers persisting domain data on okengine — one handle shape, drivers swapped by environment.
 
 <Callout title="The one rule">
-  Drivers are **protocol-named** in the manifest and swapped by environment in `oke.config.ts`.
-  Application code writes against the unified `store` facets, never importing vendor-specific driver
-  libraries directly.
+  World access goes through `fx.store(decl)`. Drivers are **protocol-named** in
+  `oke.config.ts` (`postgres`, `redis`, `s3` — never vendors). Application code never
+  imports a driver client directly.
 </Callout>
 
-## What is Store?
+<StoreFacets />
 
-Store models the four fundamental access patterns of backend storage:
+## Smallest Example
 
-1. **SQL Relational (`sql`)**: Relational tables, typed joins, foreign keys, migrations, and Row-Level Security via Drizzle ORM.
-2. **Key-Value (`kv`)**: Ephemeral caches and durable key-value pairs with automatic TTL expiration.
-3. **Blob Files (`files`)**: Object storage buckets with pre-signed upload URLs and server-side image resizing.
-4. **Search (`search`)**: Built-in BM25 ± LSH on SQL columns, plus optional `store.index` engines (Meilisearch / pgvector).
+<Steps>
 
-```typescript title="src/schema/index.ts"
+<Step>
+### Declare a SQL store
+
+```typescript title="src/db/schema.decl.ts"
 import { store, field } from "okengine";
 
-export const db = store.sql({
-  users: store.schema.table("users", {
-    id: field.text().primaryKey(),
-    email: field.text().unique().pii(),
-    createdAt: field.timestamp().defaultNow(),
+export const notes = store.schema.table("notes", {
+  id: field.id().primaryKey(),
+  title: field.text().notNull(),
+  createdAt: field.timestamp().notNull().now(),
+});
+
+export const db = store.sql("app", { schema: { notes } });
+```
+
+</Step>
+
+<Step>
+### Read and write in a Flow
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const createNote = on(
+  http.post("/notes"),
+  flow("notes.create", {
+    in: z.object({ title: z.string().min(1) }),
+    do: async ({ title }, fx) => {
+      const id = fx.id();
+      await fx.store(db).insert(notes).values({ id, title });
+      return fx.json.create({ id, title });
+    },
   }),
-});
+);
 ```
 
-## How Store Executes Through fx
+</Step>
 
-Inside any flow, accessing storage occurs via `fx.store`:
+<Step>
+### Call the endpoint
 
-```typescript
-// SQL query
-const user = await fx.store(db).query.users.findFirst({
-  where: (users, { eq }) => eq(users.id, id),
-});
-
-// KV read/write
-await fx.store.kv.set(`session:${token}`, userId, { ttl: "1h" });
-
-// File upload
-await fx.store.files.put("avatars/alice.png", imageBuffer);
-
-// Hybrid SQL search (BM25 ± LSH)
-const { data } = await fx.store(db).search(articles, { query: "refund" });
+```bash
+curl -X POST http://localhost:6530/notes \
+  -H "content-type: application/json" \
+  -d '{"title":"Ship notes"}'
 ```
 
-## Manifest Inference
-
-Every read and write through `fx.store` is statically recorded by the compiler:
+Response:
 
 ```json
-"effects": {
-  "reads": ["sql:users", "kv:session"],
-  "writes": ["files:avatars"]
+{
+  "data": { "id": "…", "title": "Ship notes" },
+  "error": null
 }
 ```
+
+</Step>
+
+</Steps>
+
+<Callout title="Effects are inferred">
+  Every `fx.store` touch is recorded on the Flow as `reads` / `writes`
+  (`sql:app`, `kv:sessions`, `files:uploads`, …). That powers the Manifest,
+  Console, cache invalidation, and least privilege — no hand-written effect lists.
+</Callout>
+
+## Progressive Patterns
+
+Same `fx.store(decl)` from a row insert to cache, blobs, and hybrid search:
+
+<Tabs items={["SQL", "KV", "Files", "Search"]}>
+
+<Tab value="SQL">
+
+Declare tables with `store.schema.table` + `field.*`, then use the session handle:
+
+```typescript title="src/flows/notes/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const getNote = on(
+  http.get("/notes/:id"),
+  flow("notes.get", {
+    in: z.object({ id: z.string() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id }, fx) => {
+      const [note] = await fx
+        .store(db)
+        .select()
+        .from(notes)
+        .where(eq(notes.id, id));
+      if (!note) return fx.fail("NotFound", { id });
+      return note;
+    },
+  }),
+);
+```
+
+Prefer [`store.resource`](/docs/elements/store/sql#resources) when you want five CRUD Flows in one factory.
+
+</Tab>
+
+<Tab value="KV">
+
+Pass the **declaration** into `fx.store` — there is no `fx.store.kv` namespace. TTL is a duration string:
+
+```typescript title="src/flows/sessions/put.ts"
+import { flow } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const putSession = flow("sessions.put", {
+  in: z.object({ token: z.string(), userId: z.string() }),
+  do: async ({ token, userId }, fx) => {
+    await fx.store(sessions).set(`session:${token}`, userId, "1h");
+    return { ok: true };
+  },
+});
+```
+
+```typescript title="src/core.ts"
+import { store } from "okengine";
+
+export const sessions = store.kv("sessions");
+```
+
+</Tab>
+
+<Tab value="Files">
+
+Bucket I/O is `put` / `get` / `delete` / `list`. Images use `putImage` or the chainable `image(…)` pipeline:
+
+```typescript title="src/flows/avatars/put.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const putAvatar = on(
+  http.post("/avatars"),
+  flow("avatars.put", {
+    in: z.object({ bytes: z.string() }),
+    do: async ({ bytes }, fx) => {
+      const key = `avatars/${fx.id()}.png`;
+      const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+      await fx.store(uploads).put(key, data);
+      return { key };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Search">
+
+Mark text with `.searchable()` for BM25; chain `.embed()` only when you want semantic LSH:
+
+```typescript
+const { data, meta } = await fx.store(db).search(articles, {
+  query: "refund policy",
+  limit: 20,
+});
+```
+
+Full surface: [Search](/docs/elements/store/search).
+
+</Tab>
+
+</Tabs>
+
+## Facet Reference
+
+| Facet | Declare | `fx.store` handle | Resource ref | Default drivers (dev / test / prod) |
+| ----- | ------- | ----------------- | ------------ | ----------------------------------- |
+| SQL | `store.sql(name, opts?)` | select / insert / update / page / search / … | `sql:name` | `postgres` / `pglite` / `postgres` |
+| KV | `store.kv(name, opts?)` | `get` · `set` · `delete` · `list` · `ttlMs` | `kv:name` | `redis` / `memory` / `redis` |
+| Files | `store.files(name, opts?)` | `put` · `get` · `delete` · `list` · `image` · `putImage` | `files:name` | `s3` / `memory` / `s3` |
+| Index | `store.index(name, opts?)` | vector or Meilisearch (by `driverId`) | `index:name` | pin explicitly — no three-env default |
+
+Built-in hybrid search (`fx.store(db).search`) lives on the **SQL** handle — see [Search](/docs/elements/store/search). `store.index` is the optional external engine facet.
+
+## Per-environment drivers
+
+Standard starters inherit `DRIVER_DEFAULTS`. Pin only when you diverge; vendor choice lives under `images`, not driver ids:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // omit store.* to use defaults — pin only overrides
+  },
+  images: {
+    store: {
+      sql: "postgres:18-alpine",
+      kv: "redis:8-alpine",
+      files: "rustfs/rustfs:1.0.0-rc.2",
+    },
+  },
+});
+```
+
+| Facet | Protocol ids | Best for |
+| ----- | ------------ | -------- |
+| `sql` | `postgres` · `pglite` · `memory` | Domain tables, RLS, live queries, BM25 |
+| `kv` | `redis` · `memory` (+ durable SQL via `oke_kv`) | Sessions, caches, short-lived locks |
+| `files` | `s3` · `fs` · `memory` | Uploads, exports, image variants |
+| `index` | `memory` · `pgvector` · `meilisearch` | Hosted FTS / ANN outside the primary table |
 
 ## The Capabilities of Store
 
 <Cards>
   <Card
-    title="SQL Relational"
-    description="Drizzle-powered relational tables, column classification (PII, sensitive), and store.resource CRUD."
+    title="SQL"
+    description="Schema tables, field tags, store.resource CRUD, RLS, and list grammar."
     href="/docs/elements/store/sql"
   />
   <Card
-    title="Key-Value"
-    description="Fast in-memory caching, durable key-value storage, and automatic TTL expiration."
+    title="KV"
+    description="Namespaced get/set with duration TTL — redis honors it; memory ignores it."
     href="/docs/elements/store/kv"
   />
   <Card
-    title="Blob Files"
-    description="S3/RustFS object storage with pre-signed URLs, image transformations, and LQIP blur generation."
+    title="Files"
+    description="Object buckets, putImage variants, and chainable Bun.Image transforms."
     href="/docs/elements/store/files"
   />
   <Card
     title="Search"
-    description="Built-in BM25 ± LSH on SQL tables, plus optional Meilisearch / pgvector indexes."
+    description="Built-in BM25 ± LSH on SQL columns, plus optional store.index engines."
     href="/docs/elements/store/search"
   />
 </Cards>
 
-## Next Steps
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="No sql/kv/files/index driver configured">
+  Boot needs a driver for that facet. Check `drivers.store.*` (or rely on
+  `DRIVER_DEFAULTS`) and that Compose / env URLs match the protocol.
+</Accordion>
+
+<Accordion title="Unknown store ref / Unknown kv ref">
+  `fx.store` received a declaration that was never registered — import the
+  module that calls `store.sql` / `store.kv` / … before the Flow runs (starters
+  load `@/core`).
+</Accordion>
+
+<Accordion title="fx.store(&quot;sql:…&quot;): no store runtime">
+  The app has not booted a store runtime. Run through `oke` / `oke dev` so
+  drivers bind; do not call `fx.store` outside a Flow invoke.
+</Accordion>
+
+<Accordion title="OKE1101 — domain table not found">
+  Cause: `domain table not found — migrations have not been applied.`
+  Run `oke db push` (dev) or `oke db migrate` against that environment.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [SQL](/docs/elements/store/sql) — `store.schema.table`, `store.resource`, RLS
+- [HTTP · Resources](/docs/elements/flow/http#resources) — mount CRUD + live
+- [fx](/docs/reference/fx) — `fx.store`, `fx.json.*`
+- [Configuration](/docs/reference/configuration) — `drivers.store.*`
+- [Errors](/docs/reference/errors) — OKE1101 and friends
+
+## Next
 
 <Cards>
   <Card
-    title="SQL Relational"
-    description="Design schema tables and relations."
+    title="SQL"
+    description="Design tables, classify columns, and mount store.resource."
     href="/docs/elements/store/sql"
   />
   <Card
-    title="Clock Element"
-    description="Manage schedules, intervals, and sleep."
+    title="Clock"
+    description="Schedules, intervals, and durable sleep."
     href="/docs/elements/clock"
+  />
+  <Card
+    title="HTTP"
+    description="REST verbs, CRUD mounts, and live SSE on Flow."
+    href="/docs/elements/flow/http"
   />
 </Cards>

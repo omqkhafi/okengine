@@ -1,31 +1,39 @@
 ---
 title: "SQL"
-description: "Drizzle-powered relational schemas, typed migrations, column classification (PII, sensitive), and store.resource CRUD."
+description: "Relational schemas, field classification, store.resource CRUD, RLS policies, and the fx.store session handle."
 icon: "Table"
+source: "docs/spec/unified-theory.md"
 ---
 
-The SQL facet provides complete relational database access using Drizzle ORM Relational Query Builder v2 (RQB v2).
+The SQL facet is how you declare relational tables and read or write them from Flows. Schemas use `store.schema.table` + `field.*`; I/O goes through `fx.store(db)`.
 
-## What it is
+For developers modeling domain data on okengine — mark columns, push schema, query with the session handle (or mount `store.resource`).
 
-Relational schemas are defined using `store.schema.table` and typed `field.*` helpers. Columns can be decorated with security tags (`pii`, `sensitive`, `retain`) which automatically trigger posture audits and masking during AI prompt evaluation.
+<Callout title="The one rule">
+  Declare tables with `store.schema.table`. Touch them only via `fx.store(db)` —
+  `select` / `insert` / `update` / `delete` / `page` / `search`. There is no
+  `fx.store(db).query.…` Relational Query Builder on the handle.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Define schema tables
+### Define a table and bind the store
 
-```typescript title="src/schema/posts.ts"
+```typescript title="src/db/schema.decl.ts"
 import { store, field } from "okengine";
 
 export const posts = store.schema.table("posts", {
-  id: field.text().primaryKey(),
+  id: field.id().primaryKey(),
   title: field.text().notNull(),
   authorId: field.text().notNull(),
   publishedAt: field.timestamp(),
+  createdAt: field.timestamp().notNull().now(),
 });
+
+export const db = store.sql("app", { schema: { posts } });
 ```
 
 </Step>
@@ -35,14 +43,14 @@ export const posts = store.schema.table("posts", {
 
 ```typescript title="src/flows/posts/list.ts"
 import { on, flow, http } from "okengine";
-import { posts } from "@/schema/posts";
+import { db, posts } from "@/schema";
 
 export const listPosts = on(
   http.get("/posts"),
   flow("posts.list", {
     do: async (_, fx) => {
-      return await fx.store(db).query.posts.findMany({
-        columns: { id: true, title: true },
+      return await fx.store(db).page(posts, {
+        orderBy: [posts.createdAt],
         limit: 20,
       });
     },
@@ -52,19 +60,891 @@ export const listPosts = on(
 
 </Step>
 
+<Step>
+### Push schema and call
+
+```bash
+oke db push
+curl -X GET http://localhost:6530/posts -H "accept: application/json"
+```
+
+Response:
+
+```json
+{
+  "data": [{ "id": "…", "title": "…", "authorId": "…", "publishedAt": null, "createdAt": "…" }],
+  "error": null
+}
+```
+
+</Step>
+
 </Steps>
+
+<Callout title="Pathless declare">
+  Starters often pass the whole decl module: `store.sql("app", { schema })` where
+  `schema` is `import * as schema from "@/db/schema.decl"`. Named keys and the
+  exported table handles are equivalent.
+</Callout>
+
+## Progressive Patterns
+
+Explore SQL from a bare table to classified columns, CRUD factory, and RLS:
+
+<Tabs items={["Schema", "Classify", "Resource", "RLS"]}>
+
+<Tab value="Schema">
+
+`field.id()` is `text` + auto id on insert. Use `.okid()` on an existing text
+column when you want the same default without the sugar factory:
+
+```typescript title="src/db/schema.decl.ts"
+import { store, field } from "okengine";
+
+export const notes = store.schema.table("notes", {
+  id: field.id().primaryKey(),
+  title: field.text().notNull(),
+  body: field.text().notNull(),
+  archivedAt: field.timestamp(),
+  createdAt: field.timestamp().notNull().now(),
+});
+```
+
+</Tab>
+
+<Tab value="Classify">
+
+`.pii()` / `.sensitive()` / `.retain(duration)` tag columns for posture audits
+and AI egress masking:
+
+```typescript
+export const users = store.schema.table("users", {
+  id: field.id().primaryKey(),
+  email: field.text().unique().pii().notNull(),
+  passwordHash: field.text().sensitive().notNull(),
+  lastLoginAt: field.timestamp().retain("90d"),
+});
+```
+
+**Consequence:** AI prompts and Console redaction read these tags — they are not
+decorative comments.
+
+</Tab>
+
+<Tab value="Resource">
+
+`store.resource` builds five Flows. Mount with
+[`http.resource`](/docs/elements/flow/http#resources) — the factory registers no routes:
+
+```typescript title="src/flows/notes/resource.ts"
+import { store } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const notesResource = store.resource(db, notes, {
+  in: z.object({ title: z.string().min(1), body: z.string() }),
+  out: z.object({
+    id: z.string(),
+    title: z.string(),
+    body: z.string(),
+  }),
+  list: {
+    search: [notes.title],
+    filter: [notes.archivedAt],
+    cursor: [notes.createdAt, notes.id],
+  },
+});
+```
+
+```typescript title="src/flows/notes/index.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { notesResource } from "./resource";
+
+export const notesApi = on(
+  http.resource("/notes", notesResource.all()).gate(member),
+);
+```
+
+</Tab>
+
+<Tab value="RLS">
+
+Pass extras as the **third argument array**. Helpers take SQL/JS column
+**names** (strings) and stamp `oke.gate()` / `oke.user()` / `oke.has_scope()`
+predicates:
+
+```typescript title="src/db/schema.decl.ts"
+import { store, field } from "okengine";
+
+export const tasks = store.schema.table(
+  "tasks",
+  {
+    id: field.id().primaryKey(),
+    owner: field.text().notNull(),
+    title: field.text().notNull(),
+  },
+  [
+    store.schema.policy.gate("member", { for: "select" }),
+    store.schema.policy.owner("owner", { for: "all" }),
+  ],
+);
+```
+
+When `gate.auth.tenant` is on, every table needs
+`store.schema.policy.tenant(…)` or `store.schema.unscoped()` — extract fails
+otherwise.
+
+</Tab>
+
+</Tabs>
+
+## Field Reference
+
+Factories mirror Drizzle pg-core names. Chain modifiers after the factory:
+
+| Factory | Infers | Notes |
+| ------- | ------ | ----- |
+| `field.id()` | `string` | `text` + auto id on insert (`≡ field.text().okid()`) |
+| `field.okid()` | `string` | Pins OK ID on a text column |
+| `field.text()` / `varchar` / `char` | `string` | Optional `{ length?, enum? }` |
+| `field.boolean()` | `boolean` | |
+| `field.smallint()` / `integer()` | `number` | |
+| `field.bigint({ mode? })` | `number` (default) | `mode`: `"number"` · `"bigint"` · `"string"` |
+| `field.serial()` / `smallserial()` / `bigserial()` | `number` | NOT NULL by SQL physics |
+| `field.numeric()` / `decimal()` | `string` (default) | Exact decimal; `{ precision?, scale?, mode? }` |
+| `field.real()` / `doublePrecision()` | `number` | Float4 / float8 |
+| `field.json()` / `jsonb()` | generic | Narrow with `field.json<MyShape>()` |
+| `field.uuid()` | `string` | |
+| `field.time()` / `timestamp()` / `date()` / `interval()` | see type | `timestamp` / `date` default to `Date`; `{ mode: "string" }` for ISO |
+| `field.point()` / `line()` | tuple | `{ mode: "xy" }` / `"abc"` for objects |
+| `field.bytea()` | `Buffer` | |
+| `field.inet()` / `cidr()` / `macaddr()` / `macaddr8()` | `string` | |
+
+| Chain | Meaning |
+| ----- | ------- |
+| `.primaryKey()` · `.notNull()` · `.unique()` | Constraints |
+| `.default(v)` · `.defaultFn(fn)` · `.now()` · `.okid()` | Defaults |
+| `.pii()` · `.sensitive()` · `.retain(duration)` | Classification tags |
+| `.searchable({ weight? })` · `.embed({ model?, dims? })` | Hybrid search — see [Search](/docs/elements/store/search) |
+| `.as(sqlName)` · `.describe(text)` · `.type<T>()` | SQL name, docs, TS override |
+| `.references(() => col, actions?)` | FK (`onDelete` / `onUpdate`: `cascade` · `restrict` · `no action` · `set null` · `set default`) |
+
+## Declaring Stores
+
+Bind tables once with `store.sql(name, options)`. The name becomes the resource
+suffix (`sql:app`).
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `schema` | table map or module | *(omit)* | Tables for push / migrate / `fx.store` |
+| `classify` | `table → column → tags` | `{}` | Explicit tags; wins over schema-derived on conflict |
+| `description` | `string` | store name | Console / docs label |
+
+**Named keys** — pass the tables you care about:
+
+```typescript
+export const db = store.sql("app", { schema: { posts, notes } });
+```
+
+**Module star** — starters re-export everything from the decl file:
+
+```typescript title="src/core.ts"
+import { store } from "okengine";
+import * as schema from "@/db/schema.decl";
+
+export const db = store.sql("app", { schema });
+```
+
+**Consequence:** every `fx.store(db)` touch stamps `reads` / `writes` as
+`sql:app` on the Flow — Manifest, Console, and least privilege follow from that.
+
+## Session Handle
+
+`fx.store(db)` returns a `SqlStoreHandle`. Every method goes through the same
+masking / RLS / CDC boundary.
+
+| Method | Purpose |
+| ------ | ------- |
+| `select()` / `select(cols).from(t).where?.().orderBy?.().limit?.()` | Fluent select |
+| `insert(t).values(row)` | Insert (`returning()` optional) |
+| `update(t).set(row).where(cond)` | Update — `where` required |
+| `findById(t, id)` | PK lookup |
+| `delete(t, id)` / `delete(t).where(cond)` | Delete by PK or predicate |
+| `exists(t, idOrWhere)` | Presence check |
+| `upsert(t, matchOn, values, { onExisting? })` | Insert-or-skip; `"update"` opts into overwrite |
+| `increment(t, id, column, by?)` | Atomic numeric bump (`by` default `1`) |
+| `count(t, where?)` | `COUNT(*)` |
+| `page(t, options)` | Offset or keyset page |
+| `search(t, options)` | BM25 ± LSH — [Search](/docs/elements/store/search) |
+| `raw(sql, params?)` | Parameterized SQL (`?` placeholders) |
+
+Each verb binds with `await fx.store(db).<method>(…)` inside `do`:
+
+<Tabs items={["Select", "Insert", "Update", "Delete", "Page", "Upsert"]}>
+
+<Tab value="Select">
+
+Fluent select, or `findById` for a PK:
+
+```typescript title="src/flows/notes/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const getNote = on(
+  http.get("/notes/:id"),
+  flow("notes.get", {
+    in: z.object({ id: z.string() }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id }, fx) => {
+      const [note] = await fx
+        .store(db)
+        .select()
+        .from(notes)
+        .where(eq(notes.id, id));
+      if (!note) return fx.fail("NotFound", { id });
+      return note;
+    },
+  }),
+);
+```
+
+`findById(notes, id)` is the same PK path without a fluent chain.
+
+</Tab>
+
+<Tab value="Insert">
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const createNote = on(
+  http.post("/notes"),
+  flow("notes.create", {
+    in: z.object({ title: z.string().min(1) }),
+    out: z.object({ id: z.string(), title: z.string() }),
+    do: async ({ title }, fx) => {
+      const id = fx.id();
+      const [row] = await fx
+        .store(db)
+        .insert(notes)
+        .values({ id, title })
+        .returning();
+      return fx.json.create(row);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Update">
+
+`where` is required — bare updates throw
+`update().set().where(): condition required`:
+
+```typescript title="src/flows/notes/update.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, notes } from "@/schema";
+
+export const updateNote = on(
+  http.patch("/notes/:id"),
+  flow("notes.update", {
+    in: z.object({
+      id: z.string(),
+      title: z.string().min(1).optional(),
+    }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+    do: async ({ id, title }, fx) => {
+      if (title !== undefined) {
+        await fx.store(db).update(notes).set({ title }).where(eq(notes.id, id));
+      }
+      const row = await fx.store(db).findById(notes, id);
+      if (!row) return fx.fail("NotFound", { id });
+      return row;
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Delete">
+
+Two-arg form deletes by PK. Fluent `.where(cond)` also requires a condition
+(`delete().where(): condition required`):
+
+```typescript title="src/flows/notes/remove.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const removeNote = on(
+  http.delete("/notes/:id"),
+  flow("notes.remove", {
+    in: z.object({ id: z.string() }),
+    do: async ({ id }, fx) => {
+      await fx.store(db).delete(notes, id);
+      return fx.json.empty();
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Page">
+
+`page` options: `where` · `orderBy` · `limit` · `offset` · `after` · `before`.
+`after` / `before` cannot combine with each other or with `offset`.
+
+```typescript title="src/flows/notes/list.ts"
+import { on, flow, http } from "okengine";
+import { db, notes } from "@/schema";
+
+export const listNotes = on(
+  http.get("/notes"),
+  flow("notes.list", {
+    do: async (_, fx) => {
+      return await fx.store(db).page(notes, {
+        where: { archivedAt: null },
+        orderBy: [notes.createdAt],
+        limit: 20,
+      });
+    },
+  }),
+);
+```
+
+**Consequence:** keyset pages (`after` / `before`) stay stable under inserts —
+prefer them for live feeds. Offset is fine for admin tables.
+
+</Tab>
+
+<Tab value="Upsert">
+
+Default is insert-once. Pass `{ onExisting: "update" }` to overwrite a match:
+
+```typescript title="src/flows/notes/ensure.ts"
+import { flow } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const ensureWelcome = flow("notes.ensureWelcome", {
+  in: z.object({ title: z.string() }),
+  do: async ({ title }, fx) => {
+    const result = await fx.store(db).upsert(
+      notes,
+      { id: "welcome" },
+      {
+        id: "welcome",
+        title,
+        body: "Your Notes API is ready.",
+        archivedAt: null,
+        createdAt: new Date(1),
+      },
+      // { onExisting: "update" },
+    );
+    return result; // { status: "upserted" | "changed" | "already-existed" }
+  },
+});
+```
+
+Empty `matchOn` throws `upsert() requires at least one matchOn predicate`.
+
+</Tab>
+
+</Tabs>
+
+Also on the handle: `exists` · `increment` · `count` · `raw` · `search`. See
+[Search](/docs/elements/store/search) for hybrid ranking.
+
+## Resources
+
+<Callout title="Detailed section">
+  Mount details, live SSE, and verb tables live on
+  [HTTP · Resources](/docs/elements/flow/http#resources). This section is the
+  factory contract — `store.resource(db, table, options)`.
+</Callout>
+
+`store.resource(db, table, options)` builds five Flows. Pass
+`notesResource.all()` (or any bag with `list` · `create` · `get` · `update` ·
+`remove`) to `on(http.resource(path, ops))`.
+
+<Tabs items={["Define", "Mount"]}>
+
+<Tab value="Define">
+
+The factory registers no routes:
+
+```typescript title="src/flows/notes/resource.ts"
+import { store } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const notesResource = store.resource(db, notes, {
+  in: z.object({ title: z.string().min(1), body: z.string() }),
+  out: z.object({
+    id: z.string(),
+    title: z.string(),
+    body: z.string(),
+  }),
+  list: {
+    search: [notes.title],
+    filter: [notes.archivedAt],
+    cursor: [notes.createdAt, notes.id],
+  },
+});
+```
+
+</Tab>
+
+<Tab value="Mount">
+
+`.gate(member)` stamps every verb. The client sees `api.notes.list` / `.create` /
+`.get` / `.update` / `.remove` after `oke({ name: "app" }).adopt({ notes })`.
+
+```typescript title="src/flows/notes/index.ts"
+import { on, http } from "okengine";
+import { member } from "@/core/gate";
+import { notesResource } from "./resource";
+
+export const notes = on(
+  http.resource("/notes", notesResource.all()).gate(member),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+The URL id segment is always `:id`. Update is **PATCH**, not PUT.
+
+| Op | Method | Path | Typical status |
+| -- | ------ | ---- | -------------- |
+| `list` | `GET` | `/notes` | `200` + `{ data, error, meta }` |
+| `create` | `POST` | `/notes` | `201 Created` (`fx.json.create`) |
+| `get` | `GET` | `/notes/:id` | `200`, or `NotFound` |
+| `update` | `PATCH` | `/notes/:id` | `200`, or `NotFound` |
+| `remove` | `DELETE` | `/notes/:id` | `204 No Content` (`fx.json.empty`) |
+| `live` | `GET` | `/notes/live` | SSE — only when live is on |
+
+<Accordions>
+
+<Accordion title="Resource Options">
+  Third argument to `store.resource(db, table, options)`:
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `in` | Schema | *(required)* | Create body (`POST`) |
+| `out` | Schema | *(required)* | Item shape (get / list / update return) |
+| `update` | Schema | `in` | Patch fields. Wire body is `{ id, …patch }` |
+| `idSchema` | Schema | `update`/`in` + `{ id: string }` | Replaces the update Flow `in` when set (include the id key) |
+| `errors` | error map | `{ NotFound }` | Typed failures on get / update / remove |
+| `id` | column | table PK | Column bound to `:id` |
+| `list` | object | see List Options | List query grammar (`GET /notes`) |
+| `breaking` | `boolean` | `false` | Marks the five Flows `breaking: true` (handwritten → resource migration) |
+| `live` | `boolean` | omitted | Live query surface — see Resource Live |
+
+</Accordion>
+
+<Accordion title="List Options">
+  Nested on `store.resource(…, { list: { … } })`. Search / filter / order / select
+  use a column scope: `"all"` · column array · `"none"`.
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `mode` | `"cursor"` \| `"offset"` | `"cursor"` when `cursor` is set, else `"offset"` | Pagination |
+| `cursor` | columns | `[]` | Keyset columns |
+| `direction` | `"asc"` \| `"desc"` | `"desc"` | Default sort when no `?order=` |
+| `limit` | `number` | `20` | Default page size |
+| `maxLimit` | `number` | `100` | Cap on `?limit=` |
+| `count` | `"exact"` \| `"none"` | `"exact"` | Offset-only `COUNT(*)` |
+| `search` | column scope | `"none"` | `?search=` / `?q=` substring `LIKE` |
+| `filter` | column scope | `"none"` | `?col=eq.x` grammar |
+| `order` | column scope | cursor columns, else `"all"` | `?order=` |
+| `select` | column scope | `"all"` | `?select=` projection |
+
+</Accordion>
+
+<Accordion title="List URL grammar">
+  Shared by resource lists, `liveQuery`, and handwritten pages that call
+  `parseListQuery`:
+
+| Param | Example | Meaning |
+| ----- | ------- | ------- |
+| `limit` / `offset` / `cursor` | `?limit=20` | Pagination |
+| `search` / `q` | `?search=refund` | Substring `LIKE` (not BM25) |
+| `order` | `?order=createdAt.desc` | Sort |
+| `select` | `?select=id,title` | Projection |
+| column filter | `?status=eq.active` | `eq` · `neq` · `gt` · `gte` · `lt` · `lte` · `like` · `ilike` · `in` · `is` (+ `not.` prefix) |
+| `or` / `and` | `?or=(…)` | Nested boolean groups |
+
+**Consequence:** list `?search=` is substring filter. Hybrid BM25 ranking is
+`fx.store(db).search(table, { query })` — see [Two Surfaces](/docs/elements/store/search#two-surfaces).
+
+</Accordion>
+
+<Accordion title="Resource Members">
+
+| Member | Kind | Meaning |
+| ------ | ---- | ------- |
+| `all()` | method, no args | Bag for `http.resource(path, notesResource.all())` — five Flows, plus `live` when enabled |
+| `list` · `create` · `get` · `update` · `remove` | Flow | One verb. Bind with `http.get` / `http.post` / `http.patch` / `http.delete` |
+| `page(input)` | method | Compile list-query input for a handwritten `fx.store(db).page` |
+| `live` | `{ signal, flow }?` | Live surface when `live: true` (or the project default drained on) |
+
+</Accordion>
+
+<Accordion title="Resource Live">
+  A sixth route appears only when the resource is live. It is **not** a signal
+  firehose — each subscriber gets classified row events (RLS + list filters).
+
+| `live` on the resource | Result |
+| ---------------------- | ------ |
+| `{ live: true }` | Mount `GET <path>/live` now |
+| omitted | Mount only if `oke({ store: { live: true } })` |
+| `{ live: false }` | Never mount live for this resource |
+| table `store.schema.live(false)` | Opts that table out of the project default. `{ live: true }` on the resource still wins. |
+
+```typescript title="src/flows/notes/resource.ts"
+const notesResource = store.resource(db, notes, {
+  in: z.object({ title: z.string().min(1) }),
+  out: z.object({ id: z.string(), title: z.string() }),
+  live: true,
+});
+
+export const notes = on(http.resource("/notes", notesResource.all()).gate(member));
+```
+
+**Consequence:** `GET /notes/live` rides the same `.gate(...)` chain as list/get.
+
+Wire events (consumed with `useLiveQuery` on the [typed client](/docs/reference/client)):
+
+| `kind` | Meaning |
+| ------ | ------- |
+| `upsert` | Row visible under stamp + query — merge by primary key |
+| `revoked` | Row left visibility (`reason: "rls"` or `"query"`) — remove |
+| `delete` | Row deleted — remove |
+
+Live queries need an RLS-capable SQL driver (`postgres` / `pglite`) and a gated
+identity on the request. Extract fails without a primary key:
+
+```text
+extract: live: true on table "notes" requires a primary key column (upsert/revoked/delete address rows by PK)
+```
+
+Missing `updatedAt` / `updated_at`, or no RLS policies, warn at extract — they
+do not fail the build. Full mount physics: [HTTP · Resource Live](/docs/elements/flow/http#resources).
+
+</Accordion>
+
+<Accordion title="Subset & Override">
+  `http.resource` always mounts all five CRUD keys. Bind individual Flows for a
+  subset; spread `.all()` and override one key to replace a verb. Collision
+  errors (**OKE1011**): [HTTP · Resources](/docs/elements/flow/http#resources).
+</Accordion>
+
+</Accordions>
+
+## Schema Extras & RLS
+
+<Callout title="Detailed section">
+  If you only need a gate + owner policy, jump to Progressive Patterns → RLS.
+  Extras are the **third argument array** on `store.schema.table(name, cols, extras)`.
+</Callout>
+
+Pass extras after the column map:
+
+| Extra | Meaning |
+| ----- | ------- |
+| `store.schema.rls()` | Enable RLS on the table (no policies yet) |
+| `store.schema.policy(name, opts?)` | Named policy (`for`, `as`, `using`, `withCheck`) |
+| `store.schema.policy.gate(name)` | Default `for: "select"` — `oke.gate() = '…'` |
+| `store.schema.policy.owner(col)` | Default `for: "all"` — `col = oke.user()` |
+| `store.schema.policy.scope(scope)` | Default `for: "insert"` — `oke.has_scope('…')` |
+| `store.schema.policy.tenant(col)` | Tenant predicate when tenancy is on |
+| `store.schema.unscoped()` | Opt out of tenant requirement |
+| `store.schema.live(false)` | Opt this table out of project live default |
+| `store.schema.relations(…)` | Relation metadata for Drizzle emit — not a query API |
+
+<Accordions>
+
+<Accordion title="Policy helpers">
+  Helpers take **string** column / gate / scope names and stamp predicates:
+
+```typescript title="src/db/schema.decl.ts"
+export const bookings = store.schema.table(
+  "bookings",
+  {
+    id: field.id().primaryKey(),
+    owner: field.text().notNull(),
+    tenantId: field.text().notNull(),
+  },
+  [
+    store.schema.policy.gate("member", { for: "select" }),
+    store.schema.policy.owner("owner", { for: "all" }),
+    store.schema.policy.scope("booking:create", { for: "insert" }),
+    store.schema.policy.tenant("tenantId"),
+  ],
+);
+```
+
+`for` accepts SQL commands (`select` · `insert` · `update` · `delete` · `all`).
+Raw `store.schema.policy(name, { using, withCheck })` is available when helpers
+are not enough.
+
+</Accordion>
+
+<Accordion title="Tenant requirement">
+  When `gate.auth.tenant` is on, every table needs a tenant policy or an
+  explicit opt-out. Extract fails otherwise:
+
+```text
+extract: table "{store}.{table}" needs store.schema.policy.tenant(...) or store.schema.unscoped() when gate.auth.tenant is on
+```
+
+```typescript
+export const shared = store.schema.table(
+  "shared_flags",
+  { id: field.id().primaryKey(), key: field.text().notNull() },
+  [store.schema.unscoped()],
+);
+```
+
+</Accordion>
+
+<Accordion title="Foreign keys & relations">
+  Column FKs use `.references(() => other.col, { onDelete?, onUpdate? })`.
+  `store.schema.relations` records one/many links for Drizzle emit — it does
+  **not** add `fx.store(db).query.…`:
+
+```typescript title="src/db/schema.decl.ts"
+export const links = store.schema.table("links", {
+  id: field.id().primaryKey(),
+  code: field.text().notNull().unique(),
+});
+
+export const daily = store.schema.table("daily", {
+  id: field.id().primaryKey(),
+  code: field
+    .text()
+    .notNull()
+    .references(() => links.code, { onDelete: "cascade" }),
+  day: field.text().notNull(),
+});
+
+export const relations = store.schema.relations({ links, daily }, (r) => ({
+  links: {
+    daily: r.many.daily({ from: r.links.code, to: r.daily.code }),
+  },
+  daily: {
+    link: r.one.links({
+      from: r.daily.code,
+      to: r.links.code,
+      optional: false,
+    }),
+  },
+}));
+```
+
+Join in Flows with fluent `select` / `where`, or mount related tables as their
+own resources.
+
+</Accordion>
+
+</Accordions>
+
+## Seeding
+
+<StoreSeeding />
+
+Seed never runs at boot — only via `oke db seed`. Categories:
+
+| Block | Runs when |
+| ----- | --------- |
+| `essential` | Every env |
+| `dev` | `dev` ConfigEnv only |
+| `prod` | `prod` only |
+| *(none extra)* | `test` — essential only |
+
+```typescript title="src/db/seed/index.ts"
+import { defineSeed, type Fx } from "okengine";
+import { db } from "@/core";
+import { notes } from "@/db/schema.decl";
+
+async function welcomeNote(fx: Fx) {
+  await fx.store(db).upsert(
+    notes,
+    { id: "welcome" },
+    {
+      id: "welcome",
+      title: "Welcome",
+      body: "Your Notes API is ready.",
+      archivedAt: null,
+      createdAt: new Date(1),
+    },
+  );
+}
+
+export default defineSeed({
+  name: "notes",
+  description: "Welcome + sample notes",
+  essential: welcomeNote,
+  // dev: sampleNotes,
+  // prod: async (fx) => { /* prod-only rows */ },
+});
+```
+
+`upsert` returns `{ status: "upserted" | "changed" | "already-existed" }`.
+Default is insert-once; pass `{ onExisting: "update" }` to overwrite.
+
+## CDC
+
+<Callout title="Detailed section">
+  Full consumer patterns live on
+  [Consumers · CDC](/docs/elements/flow/consumers#cdc). Here is the SQL-side
+  trigger: `db.table(handle).changed(column?)`.
+</Callout>
+
+`db.table(orders).changed(column?)` builds a CDC trigger for `on(…)`. Input is
+always `{ before, after }`. `changed("status")` stamps a **column** name on the
+Manifest — it is not an op filter.
+
+```typescript title="src/flows/orders/on-status.ts"
+import { on, flow } from "okengine";
+import { db, orders } from "@/schema";
+
+export const onStatus = on(
+  db.table(orders).changed("status"),
+  flow("orders.statusChanged", {
+    do: async ({ before, after }, fx) => {
+      if (before?.status === after?.status) return;
+      /* committed write */
+    },
+  }),
+);
+```
+
+**Consequence:** writes must go through `fx.store`. A raw SQL client bypasses
+the CDC sink, so no consumer runs.
+
+## Drivers
+
+| Driver | Runs as | Best for |
+| ------ | ------- | -------- |
+| `postgres` | Docker / managed Postgres | Dev + prod default; RLS + live |
+| `pglite` | In-process WASM | Test default; RLS-capable |
+| `memory` | Process map | Tiny ephemeral tests |
+
+Standard starters inherit `DRIVER_DEFAULTS` (`postgres` / `pglite` /
+`postgres`). Pin only when you diverge; vendor choice lives under `images`, not
+driver ids:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // omit store.sql to use defaults — pin only overrides
+  },
+  images: {
+    store: {
+      sql: "postgres:18-alpine",
+    },
+  },
+});
+```
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="OKE1101 — domain table not found">
+  Cause: `domain table not found — migrations have not been applied.`
+  Run `oke db push` locally or `oke db migrate` in that environment.
+</Accordion>
+
+<Accordion title="update().set().where(): condition required">
+  Updates and deletes without a `where` are rejected
+  (`delete().where(): condition required`). Pass a Drizzle condition or
+  equality map — or use `delete(table, id)` for PK deletes.
+</Accordion>
+
+<Accordion title="page(): after and before / offset and keyset cannot combine">
+  Keyset (`after` / `before`) and `offset` are mutually exclusive. Pick one
+  pagination mode per call.
+</Accordion>
+
+<Accordion title="upsert() requires at least one matchOn predicate">
+  Pass a non-empty equality map or Drizzle condition that identifies the row.
+</Accordion>
+
+<Accordion title="increment(): no row with …">
+  The PK was missing. Insert first, or guard with `exists` / `findById`.
+</Accordion>
+
+<Accordion title="extract: table needs tenant or unscoped">
+  Cause: `extract: table "{store}.{table}" needs store.schema.policy.tenant(...) or store.schema.unscoped() when gate.auth.tenant is on`.
+  Add a tenant policy or mark the table unscoped.
+</Accordion>
+
+<Accordion title="live: true requires a primary key / RLS driver">
+  Extract: `live: true on table "…" requires a primary key column`.
+  Runtime needs `postgres` / `pglite` and a gated identity on the request.
+</Accordion>
+
+<Accordion title="unknown list param / search is not enabled">
+  Default `filter: "none"` / `search: "none"` rejects extra keys. Whitelist
+  columns on `store.resource(…, { list: { … } })` or your `liveQuery` options.
+</Accordion>
+
+<Accordion title="fx.store(db).query is undefined">
+  There is no Relational Query Builder on the session handle. Use fluent
+  `select` / `insert` / `update` / `page`, or `store.resource` for CRUD.
+  `store.schema.relations` is emit metadata only.
+</Accordion>
+
+<Accordion title="OKE1011 — method + path bound twice">
+  A resource mount plus a handwritten `http.get("/notes")` (or two mounts on
+  the same base path) collide. Drop one binding — see
+  [HTTP · Troubleshooting](/docs/elements/flow/http#troubleshooting).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Store](/docs/elements/store) — four facets; driver defaults
+- [Search](/docs/elements/store/search) — `.searchable()` / `.embed()` / `fx.store(db).search`
+- [HTTP · Resources](/docs/elements/flow/http#resources) — mount, live SSE, verb table
+- [Consumers · CDC](/docs/elements/flow/consumers#cdc) — `db.table(…).changed()`
+- [fx](/docs/reference/fx) — `fx.store` session
+- [Errors](/docs/reference/errors) — OKE1101 · OKE1011
 
 ## Next
 
 <Cards>
   <Card
-    title="Key-Value Store"
-    description="Fast caching and durable key-value storage."
+    title="KV"
+    description="Namespaced get/set with duration TTL."
     href="/docs/elements/store/kv"
   />
   <Card
-    title="Store Overview"
-    description="Return to Store overview."
-    href="/docs/elements/store"
+    title="Search"
+    description="BM25 ± LSH on SQL columns."
+    href="/docs/elements/store/search"
+  />
+  <Card
+    title="HTTP · Resources"
+    description="Mount store.resource as five CRUD verbs + live."
+    href="/docs/elements/flow/http#resources"
   />
 </Cards>

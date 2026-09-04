@@ -1,64 +1,632 @@
 ---
 title: "KV"
-description: "Fast in-memory caching, durable key-value pairs, duration TTL expiration, and atomic operations."
+description: "Namespaced key-value storage with duration TTL — sessions, caches, and short-lived locks via fx.store."
 icon: "Key"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Key-Value facet (`store.kv`) provides fast dictionary storage for sessions, distributed locks, rate limiter buckets, and temporary cache entries.
+The KV facet is a typed namespace for sessions, cache entries, OTPs, and other short-lived keys.
+Declare with `store.kv(name)`, then read and write through `fx.store(decl)` inside Flows.
 
-## What it is
+For developers caching or locking on okengine — one get/set surface; Redis in Docker, memory in tests.
 
-The KV store supports string, JSON, and numeric values with optional time-to-live (`ttl`) durations. In development, it runs in-memory or on SQLite; in production, it maps to Redis, Valkey, Dragonfly, or Upstash.
+<Callout title="The one rule">
+  Pass the **declaration** into `fx.store(sessions)`. There is no `fx.store.kv`
+  namespace. TTL is a duration **string** (`"15m"`), not `{ ttl: "15m" }`.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Set and get values
+### Declare a namespace
 
-```typescript title="src/flows/cache/example.ts"
-import { flow } from "okengine";
+```typescript title="src/core.ts"
+import { store } from "okengine";
 
-export const cacheExample = flow("cache.example", {
-  do: async ({ key, value }, fx) => {
-    // Write with 15 minute TTL
-    await fx.store.kv.set(key, value, { ttl: "15m" });
+export const sessions = store.kv("sessions");
+```
 
-    // Read cached value
-    const cached = await fx.store.kv.get(key);
-    return { cached };
-  },
-});
+</Step>
+
+<Step>
+### Set and get in a Flow
+
+```typescript title="src/flows/sessions/put.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const putSession = on(
+  http.post("/sessions"),
+  flow("sessions.put", {
+    in: z.object({ token: z.string(), userId: z.string() }),
+    do: async ({ token, userId }, fx) => {
+      await fx.store(sessions).set(`session:${token}`, userId, "1h");
+      const cached = await fx.store(sessions).get(`session:${token}`);
+      return { userId: cached };
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Call the endpoint
+
+```bash
+curl -X POST http://localhost:6530/sessions \
+  -H "content-type: application/json" \
+  -d '{"token":"abc","userId":"u1"}'
+```
+
+Response:
+
+```json
+{
+  "data": { "userId": "u1" },
+  "error": null
+}
 ```
 
 </Step>
 
 </Steps>
 
-## Atomic Operations
+<Callout title="Import the declaration">
+  `store.kv(…)` must run when the app loads — export it from a module Flows
+  import (starters: `@/core`). A Flow that only types the name as a string never
+  opens a namespace; the handle needs the decl object.
+</Callout>
 
-The KV facet includes atomic counters for distributed synchronization:
+## Progressive Patterns
+
+From a plain set to TTL, list/delete, and durable SQL-backed namespaces:
+
+<Tabs items={["Set / get", "TTL", "List / delete", "Durable"]}>
+
+<Tab value="Set / get">
+
+Values may be strings, numbers, or JSON-serializable objects:
+
+```typescript title="src/flows/prefs/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const getPrefs = on(
+  http.get("/prefs/:userId"),
+  flow("prefs.get", {
+    in: z.object({ userId: z.string() }),
+    do: async ({ userId }, fx) => {
+      const prefs = await fx.store(sessions).get(`user:${userId}:prefs`);
+      return { prefs: prefs ?? null };
+    },
+  }),
+);
+```
+
+Missing keys return `undefined` / driver nullish — treat as a cache miss.
+
+</Tab>
+
+<Tab value="TTL">
+
+Third argument to `set` is optional. Format: `^(\d+)(ms|s|m|h|d)$`:
+
+```typescript title="src/flows/otp/issue.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const issueOtp = on(
+  http.post("/otp"),
+  flow("otp.issue", {
+    in: z.object({ userId: z.string() }),
+    do: async ({ userId }, fx) => {
+      const code = "482193";
+      await fx.store(sessions).set(`otp:${userId}`, code, "5m");
+      const remaining = await fx.store(sessions).ttlMs(`otp:${userId}`);
+      return { code, ttlMs: remaining };
+    },
+  }),
+);
+```
+
+**Consequence:** redis honors TTL; the `memory` driver records expiry for
+`ttlMs` but **does not delete** expired keys on `get` — see [TTL Physics](#ttl-physics).
+
+</Tab>
+
+<Tab value="List / delete">
+
+```typescript title="src/flows/sessions/clear.ts"
+import { on, flow, http } from "okengine";
+import { sessions } from "@/core";
+
+export const clearSessions = on(
+  http.delete("/sessions"),
+  flow("sessions.clear", {
+    do: async (_, fx) => {
+      const keys = await fx.store(sessions).list("session:");
+      for (const key of keys) {
+        await fx.store(sessions).delete(key);
+      }
+      return { removed: keys.length };
+    },
+  }),
+);
+```
+
+`list` is for Console browsing and admin Flows — not a substitute for a SQL
+index when you need relational queries.
+
+</Tab>
+
+<Tab value="Durable">
+
+`durable: true` persists the namespace in SQL (`oke_kv` on `DATABASE_URL`) —
+not Redis. Distinct from Flow `durable: true`:
+
+```typescript title="src/core.ts"
+import { store } from "okengine";
+
+export const featureFlags = store.kv("feature-flags", {
+  durable: true,
+  description: "Flags that must survive Redis flushes",
+});
+```
+
+Requires a configured SQL driver. Durable namespaces do **not** support
+driver-level `eval` (Gate rate Lua stays on Redis). See
+[Durable Namespaces](#durable-namespaces).
+
+</Tab>
+
+</Tabs>
+
+## Method Reference
+
+`fx.store(kvDecl)`:
+
+| Method   | Signature                 | Purpose                         | Side effect |
+| -------- | ------------------------- | ------------------------------- | ----------- |
+| `get`    | `get(key)`                | Read value (or miss)            | Read        |
+| `set`    | `set(key, value, ttl?)`   | Write; optional duration string | Write       |
+| `delete` | `delete(key)`             | Remove; returns whether deleted | Write       |
+| `list`   | `list(prefix?)`           | List keys (optional prefix)     | Read        |
+| `ttlMs`  | `ttlMs(key)`              | Remaining ms, or `null`         | Read        |
+
+Handle also exposes `ref` (`kv:name`) and `driverId`
+(`memory` · `redis` · `postgres` · `pglite` when durable).
+
+There is **no** public `incr`, `setNx`, `del` alias, or `eval` on the fx handle.
+Gate rate strategies use Redis `eval` internally — not application Flows.
+
+## Namespaces
+
+Every `store.kv(name)` registers a Manifest resource `kv:name`. The string you
+pass is the namespace id — keys inside it are relative to that namespace.
+
+**Cache namespace** (default) — opens on `drivers.store.kv` (`redis` / `memory`):
 
 ```typescript
-// Increment counter
-const visits = await fx.store.kv.incr("page:views:home");
-
-// Set if not exists (distributed lock)
-const acquired = await fx.store.kv.setNx("lock:sync", "worker-1", { ttl: "30s" });
+export const sessions = store.kv("sessions");
+// ref → "kv:sessions"
 ```
+
+**Durable namespace** — opens on the shared SQL connection (`oke_kv` table):
+
+```typescript
+export const drafts = store.kv("drafts", {
+  durable: true,
+  description: "Compose drafts that survive Redis recreate",
+});
+```
+
+**Global under tenancy** — skip the `{tenantId}:` prefix when `gate.auth.tenant`
+is on:
+
+```typescript
+export const sharedFlags = store.kv("shared-flags", {
+  tenantScoped: false,
+});
+```
+
+## Methods
+
+Each verb binds through `fx.store(decl)` inside `flow({ do })`:
+
+<Tabs items={["get", "set", "delete", "list", "ttlMs"]}>
+
+<Tab value="get">
+
+Read a key. Misses return `undefined` (or driver nullish):
+
+```typescript title="src/flows/sessions/get.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const getSession = on(
+  http.get("/sessions/:token"),
+  flow("sessions.get", {
+    in: z.object({ token: z.string() }),
+    errors: { NotFound: z.object({ token: z.string() }) },
+    do: async ({ token }, fx) => {
+      const userId = await fx.store(sessions).get(`session:${token}`);
+      if (userId === undefined || userId === null) {
+        return fx.fail("NotFound", { token });
+      }
+      return { userId };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="set">
+
+Write a value. Pass a duration string as the third argument for TTL:
+
+```typescript title="src/flows/sessions/put.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const putSession = on(
+  http.post("/sessions"),
+  flow("sessions.put", {
+    in: z.object({ token: z.string(), userId: z.string() }),
+    do: async ({ token, userId }, fx) => {
+      await fx.store(sessions).set(`session:${token}`, userId, "1h");
+      return { ok: true as const };
+    },
+  }),
+);
+```
+
+Omit the third argument for a key with no expiry. Redis JSON-stringifies
+objects; memory keeps the value as-is.
+
+</Tab>
+
+<Tab value="delete">
+
+Remove a key. Returns `true` when a key was deleted:
+
+```typescript title="src/flows/sessions/remove.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const removeSession = on(
+  http.delete("/sessions/:token"),
+  flow("sessions.remove", {
+    in: z.object({ token: z.string() }),
+    do: async ({ token }, fx) => {
+      const removed = await fx.store(sessions).delete(`session:${token}`);
+      return { removed };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="list">
+
+List keys, optionally filtered by prefix. Results are sorted; the returned
+strings are the **logical** keys (no driver prefix, no tenant prefix):
+
+```typescript title="src/flows/drafts/list.ts"
+import { on, flow, http } from "okengine";
+import { drafts } from "@/core";
+
+export const listDrafts = on(
+  http.get("/drafts"),
+  flow("drafts.list", {
+    do: async (_, fx) => {
+      const keys = await fx.store(drafts).list();
+      const items = [];
+      for (const key of keys) {
+        const value = await fx.store(drafts).get(key);
+        items.push({ id: key, value });
+      }
+      return items;
+    },
+  }),
+);
+```
+
+On Redis, `list` uses `SCAN` — never `KEYS *`. A client without SCAN throws
+rather than scanning the whole instance.
+
+</Tab>
+
+<Tab value="ttlMs">
+
+Remaining lifetime in milliseconds, or `null` when the key has no expiry
+(or the backend cannot report one). Does not create or delete the key:
+
+```typescript title="src/flows/otp/remaining.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { sessions } from "@/core";
+
+export const otpRemaining = on(
+  http.get("/otp/:userId/ttl"),
+  flow("otp.ttl", {
+    in: z.object({ userId: z.string() }),
+    do: async ({ userId }, fx) => {
+      const ttlMs = await fx.store(sessions).ttlMs(`otp:${userId}`);
+      return { ttlMs };
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+## Declare Options
+
+Second argument to `store.kv(name, options)`:
+
+| Option          | Type      | Default                    | Meaning |
+| --------------- | --------- | -------------------------- | ------- |
+| `description`   | `string`  | omitted                    | Console / Manifest label |
+| `durable`       | `true`    | omitted                    | Persist in SQL `oke_kv` (not Redis) |
+| `tenantScoped`  | `boolean` | `true` when tenancy is on  | Prefix keys with `{tenantId}:`; set `false` for global namespaces |
+
+## Durable Namespaces
+
+<Callout title="Detailed section">
+  If you only need a Redis/memory cache, skip this section. `durable: true` is
+  a different backend — SQL table `oke_kv` on the shared store.sql connection —
+  not a Redis persistence mode.
+</Callout>
+
+Use durable KV when values must survive Redis flushes or Compose recreate
+(feature flags, compose drafts, webhook registrations). Cache namespaces stay
+on `redis` / `memory`.
+
+```typescript title="src/core.ts"
+import { store } from "okengine";
+
+export const drafts = store.kv("drafts", {
+  durable: true,
+  description: "Compose drafts",
+});
+```
+
+```typescript title="src/flows/drafts/save.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { drafts } from "@/core";
+
+export const saveDraft = on(
+  http.put("/drafts/:id"),
+  flow("drafts.save", {
+    in: z.object({
+      id: z.string().min(1),
+      title: z.string().min(1),
+      body: z.string().optional(),
+    }),
+    do: async ({ id, title, body }, fx) => {
+      await fx.store(drafts).set(id, { title, body: body ?? "" }, "7d");
+      return { id };
+    },
+  }),
+);
+```
+
+<Accordions>
+
+<Accordion title="Storage model">
+  Rows live in engine-owned table `oke_kv` (`namespace`, `key`, `value` JSONB,
+  `expires_at`, `updated_at`). Schema is ensured at open — not part of
+  `oke db push` domain migrations.
+
+| Fact | Detail |
+| ---- | ------ |
+| Connection | Shared primary SQL URL (`DATABASE_URL` / project SQL) |
+| `driverId` on the handle | `postgres` or `pglite` (the SQL driver), not `redis` |
+| TTL | `expires_at` filtered on `get` / `list` / `ttlMs`; expired rows purged on write paths |
+| Distinct from | Flow `durable: true` (step journaling) |
+
+</Accordion>
+
+<Accordion title="What durable does not do">
+  Durable namespaces reject Lua/`eval`. Gate rate buckets and any Redis-only
+  atomic scripts stay on a cache (`redis` / `memory`) namespace.
+
+```text
+oke store: durable store.kv does not support eval
+```
+
+Without a SQL driver configured:
+
+```text
+oke store: durable store.kv needs a configured sql driver
+```
+
+</Accordion>
+
+<Accordion title="When to prefer durable vs redis">
+
+| Need | Prefer |
+| ---- | ------ |
+| Sessions, OTP, short locks, Gate rates | `redis` / `memory` cache namespace |
+| Flags / drafts that must outlive Redis recreate | `durable: true` |
+| Relational queries / joins | [SQL](/docs/elements/store/sql), not KV `list` |
+
+</Accordion>
+
+</Accordions>
+
+## TTL Physics
+
+<Callout title="Detailed section">
+  TTL is best-effort and driver-dependent. The same `set(key, value, "30m")`
+  call does not mean identical expiry semantics on every backend.
+</Callout>
+
+<StoreKvTtl />
+
+| Driver | TTL on `set(…, "30m")` |
+| ------ | ---------------------- |
+| `redis` | Honored (`SET … EX`); key expires |
+| `memory` | `ttlMs` may report remaining time; **`get` does not expire** the key |
+| Durable SQL (`oke_kv`) | Honored on read (`expires_at` filter) |
+
+Valid units match `^(\d+)(ms|s|m|h|d)$`. Invalid strings parse to `0` (no
+useful expiry). Prefer explicit units: `"30s"`, `"15m"`, `"1h"`, `"1d"`.
+
+Redis converts the duration to whole seconds (`EX`); sub-second `"ms"` values
+ceil to at least `1` second when TTL is set.
+
+## Tenant Scoping
+
+When [`gate.auth.tenant`](/docs/elements/gate/tenancy) is on, KV namespaces
+default to tenant-prefixed keys. Application code still uses logical keys —
+the runtime rewrites:
+
+| Op | Physical key (when scoped) |
+| -- | -------------------------- |
+| `get` / `set` / `delete` / `ttlMs` | `{tenantId}:{key}` |
+| `list(prefix?)` | scans `{tenantId}:{prefix…}`; strips the prefix on return |
+
+```typescript
+// With tenancy on and fx.tenant.id = "acme":
+await fx.store(sessions).set("session:abc", "u1", "1h");
+// Physical redis key: oke:kv:sessions:acme:session:abc
+```
+
+Opt out for genuinely global namespaces:
+
+```typescript
+export const catalog = store.kv("catalog", { tenantScoped: false });
+```
+
+Missing tenant on a scoped op throws **OKE1015** (`TENANT_REQUIRED`):
+
+```text
+This operation needs a tenant, but none is resolved for this request.
+```
+
+Fix: switch tenant (`fx.auth.switchTenant`), send a signed `tid` claim, or pass
+the tenant header — see [Tenancy](/docs/elements/gate/tenancy).
+
+## Key Prefixes & Effects
+
+Two prefix layers sit under the logical key you pass to `fx.store`:
+
+| Layer | Shape | Who sees it |
+| ----- | ----- | ----------- |
+| Tenant (when scoped) | `{tenantId}:` | Stripped from `list` results |
+| Driver | Redis `oke:kv:{ns}:` · memory `{ns}:` · durable SQL `namespace` column | Console / Redis tools |
+
+Compiler effects stamp `kv:name` on reads (`get` · `list` · `ttlMs`) and
+writes (`set` · `delete`). Declare the same refs when you hand-write
+`effects` on a Flow.
+
+## Drivers
+
+| Driver | Runs as | Best for |
+| ------ | ------- | -------- |
+| `redis` | Docker Redis / Valkey-compatible | Dev + prod default |
+| `memory` | Process map | Test default |
+| Durable (`postgres` / `pglite` via `oke_kv`) | Shared SQL URL | Namespaces that must outlive Redis |
+
+Defaults: `redis` / `memory` / `redis` (dev / test / prod). Pin overrides in
+`oke.config.ts`; image pins stay under `images.store.kv` — the driver id stays
+`redis` for Valkey / Dragonfly / Upstash wire-compatible servers.
+
+Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="No kv driver configured">
+  Boot needs `drivers.store.kv` (or `DRIVER_DEFAULTS`). Check `REDIS_URL` when
+  the id is `redis`.
+</Accordion>
+
+<Accordion title="oke store: durable store.kv needs a configured sql driver">
+  `durable: true` opens `oke_kv` on the SQL connection. Configure
+  `drivers.store.sql` and `DATABASE_URL` (or the project SQL URL).
+</Accordion>
+
+<Accordion title="oke store: durable store.kv does not support eval">
+  Durable namespaces reject Lua/`eval`. Keep rate-limit buckets on a Redis
+  namespace; use durable KV for flags and similar durable maps.
+</Accordion>
+
+<Accordion title="Unknown kv ref">
+  Cause: `Unknown kv ref: …`. The declaration was never imported. Export
+  `store.kv(…)` from a module the app loads before Flows run (starters: `@/core`).
+</Accordion>
+
+<Accordion title="TTL set but key still readable (memory)">
+  Expected on the `memory` driver — see [TTL Physics](#ttl-physics). Use
+  `redis` in Docker when expiry must be enforced on read.
+</Accordion>
+
+<Accordion title="I passed { ttl: &quot;15m&quot; } and it did not typecheck">
+  Third argument is a bare string: `set(key, value, "15m")`. There is no
+  options bag on `set`.
+</Accordion>
+
+<Accordion title="OKE1015 — TENANT_REQUIRED on kv ops">
+  Cause: `This operation needs a tenant, but none is resolved for this request.`
+  Tenancy is on and the namespace is tenant-scoped. Resolve `fx.tenant.id`, or
+  set `tenantScoped: false` for global keys.
+</Accordion>
+
+<Accordion title="redis kv.list: client lacks SCAN">
+  Browse refused rather than `KEYS *`. Use a Redis client that supports
+  `SCAN` (Bun.RedisClient does). Prefer prefix filters in admin Flows.
+</Accordion>
+
+<Accordion title="I expected incr / setNx / fx.store.kv">
+  Those helpers are not on the public handle. Use `get` / `set` / `delete` /
+  `list` / `ttlMs` via `fx.store(decl)`. Gate rates use Redis Lua internally.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Store](/docs/elements/store) — four facets; driver defaults
+- [SQL](/docs/elements/store/sql) — durable KV shares the SQL driver
+- [Gate · Tenancy](/docs/elements/gate/tenancy) — `tenantScoped` and `fx.tenant.id`
+- [Gate](/docs/elements/gate) — rate buckets use Redis internally
+- [fx](/docs/reference/fx) — `fx.store(decl)`
+- [Configuration](/docs/reference/configuration) — `drivers.store.kv`
+- [Errors](/docs/reference/errors) — OKE1015
 
 ## Next
 
 <Cards>
   <Card
-    title="Blob Files Store"
-    description="Object storage and server-side image processing."
+    title="Files"
+    description="Object buckets, putImage variants, and image pipelines."
     href="/docs/elements/store/files"
   />
   <Card
+    title="SQL"
+    description="Relational tables and store.resource."
+    href="/docs/elements/store/sql"
+  />
+  <Card
     title="Store Overview"
-    description="Return to Store overview."
+    description="SQL · KV · files · index — one handle."
     href="/docs/elements/store"
   />
 </Cards>

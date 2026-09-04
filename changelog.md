@@ -32,6 +32,27 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Store element docs (`/docs/elements/store`) rewritten to the HTTP / Search
+  page bar: overview + SQL / KV / Files with Smallest Example, Progressive
+  Patterns, reference tables, teaching figures (`StoreFacets`, `StoreKvTtl`,
+  `StoreFilesVariants`, `StoreSeeding`), real `fx.store(decl)` APIs, and
+  Troubleshooting. Removes invented surfaces (`fx.store.kv`, `presignPut`,
+  `transform`, Drizzle `.query` on the handle).
+- Elevated [`Store · KV`](/docs/elements/store/kv) to HTTP-trigger docs depth:
+  response envelope in Smallest Example, method tabs (`get` / `set` /
+  `delete` / `list` / `ttlMs`), Namespaces, Durable Namespaces accordions,
+  TTL Physics, Tenant Scoping (OKE1015), key-prefix / effects layers, and
+  expanded Troubleshooting (`SCAN`, invented `incr` / `setNx`).
+- Elevated [`Store · Files`](/docs/elements/store/files) to HTTP-trigger docs
+  depth: response envelope in Smallest Example, blob-op tabs (`put` / `get` /
+  `delete` / `list`), Object Keys, putImage / Image Pipeline accordions
+  (variant naming, decode guards, encode fallback), drivers + S3 env notes,
+  and expanded Troubleshooting (`Invalid object key`, missing image source,
+  single-encode variant rule).
+- Elevated [`Store · Search`](/docs/elements/store/search) to HTTP-trigger docs
+  depth: Declaring Columns / Running Search tabs, Fusion + Backfill
+  accordions, dedicated Rerank + Requirements, corrected `meta.engine` vs
+  `fusedBy` honesty, and expanded Troubleshooting (`lsh` without fusion).
 - OKID reference documents `prefix` / `OKID_MAX_PREFIX_LENGTH` and the
   prefix + sortable composition.
 - Consolidated llama.cpp / Ollama / vLLM / SGLang into one
@@ -247,6 +268,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Store · SQL (`elements/store/sql`): rewritten to the HTTP page’s depth —
+  Smallest Example with response envelope, Progressive Patterns, field /
+  store declare reference, session-handle method tabs (select → upsert),
+  `store.resource` Define/Mount + option accordions (list grammar, live,
+  subset), schema extras / RLS / relations, seeding, CDC, drivers, and
+  expanded Troubleshooting (including no RQB on `fx.store`).
 - Store Search (`elements/store/search`): rewritten to the HTTP page’s depth —
   Smallest Example, Progressive Patterns, field/query reference, two-surface
   distinction (`?search=` LIKE vs hybrid `query` vs `store.index`), embedding

@@ -59,9 +59,10 @@ export const searchArticles = on(
 </Step>
 
 <Step>
-### Call the endpoint
+### Push schema and call
 
 ```bash
+oke db push
 curl -X GET "http://localhost:6530/articles/search?q=refund" \
   -H "accept: application/json"
 ```
@@ -88,7 +89,7 @@ Response:
 
 ## Progressive Patterns
 
-Explore search from BM25-only ranking to hybrid LSH, fusion, and opt-in rerank:
+From BM25-only ranking to hybrid LSH, fusion, and opt-in rerank:
 
 <Tabs items={["BM25", "Hybrid", "Fusion", "Rerank"]}>
 
@@ -114,18 +115,7 @@ export const articles = store.schema.table("articles", {
 
 Set the project default once. Bare `.embed()` inherits; per-field `{ model?, dims? }` overrides:
 
-```typescript title="src/db/schema.decl.ts"
-import { field, store, ai, oke } from "okengine";
-
-const embedder = ai.model("embedder", {
-  provider: "openai-compatible",
-  model: "nomic-embed-text",
-});
-const captionEmbedder = ai.model("caption-embedder", {
-  provider: "openai-compatible",
-  model: "nomic-embed-text",
-});
-
+```typescript
 oke({
   store: {
     search: {
@@ -142,7 +132,8 @@ export const articles = store.schema.table("articles", {
 });
 ```
 
-**Consequence:** `meta.engine` becomes `["bm25", "lsh"]` once embeddings exist.
+**Consequence:** schema columns with `.embed()` stamp `lsh` on `meta.engine`. Fusion
+runs only when query + stored vectors produce LSH hits (`meta.fusedBy`).
 
 </Tab>
 
@@ -150,7 +141,7 @@ export const articles = store.schema.table("articles", {
 
 Default fusion is Reciprocal Rank Fusion with **k = 60**. Weighted fusion is opt-in:
 
-```typescript title="src/flows/articles/search.ts"
+```typescript
 const result = await fx.store(db).search(articles, {
   query: q,
   fuse: { strategy: "rrf", k: 60 },
@@ -159,35 +150,13 @@ const result = await fx.store(db).search(articles, {
 });
 ```
 
-RRF is the robust default, not unconditionally superior. Weighted scores are min-max
-normalized per list first.
+RRF is the robust default. Weighted scores are min-max normalized per list first.
 
 </Tab>
 
 <Tab value="Rerank">
 
 Rerank is **off** until you pass a prompt. It never silently calls `fx.ask`:
-
-```typescript title="src/ai/search-rerank.ts"
-import { ai } from "okengine";
-import { z } from "zod";
-
-const reranker = ai.model("reranker", {
-  provider: "openai-compatible",
-  model: "llama3.1",
-});
-
-export const searchRerank = reranker.prompt("search.rerank", {
-  in: z.object({
-    query: z.string(),
-    docs: z.array(
-      z.object({ id: z.string(), text: z.string(), score: z.number() }),
-    ),
-  }),
-  out: z.object({ rankedIds: z.array(z.string()) }),
-  budget: { maxCostPerCall: 0.02 },
-});
-```
 
 ```typescript
 const result = await fx.store(db).search(articles, {
@@ -253,7 +222,7 @@ Result:
 | Field | Meaning |
 | ----- | ------- |
 | `data` | Ranked rows (PK + searchable text + stored embeddings when present) |
-| `meta.engine` | `["bm25"]` or `["bm25", "lsh"]` |
+| `meta.engine` | `["bm25"]` or `["bm25", "lsh"]` — from schema (`.embed()` columns), not from whether fusion ran |
 | `meta.fusedBy` | `"rrf"` or `"weighted"` — omitted when there are no vector hits |
 | `meta.rrfK` | RRF damping constant — omitted unless RRF ran |
 | `meta.limit` | Effective page size |
@@ -302,6 +271,234 @@ await fx.store(db).search(articles, {
 
 `search()` reuses the list grammar for ordinary column filters, limit, and cursor
 pagination. Only `query`, `fuse`, and `rerank` are search-specific.
+
+## Declaring Columns
+
+Each searchable column binds with `field.text().searchable(…)` (optionally `.embed()`):
+
+<Tabs items={["Searchable", "Embed", "Project default", "Weights"]}>
+
+<Tab value="Searchable">
+
+Mark the text fields you want ranked. No AI, no shadow vector columns:
+
+```typescript title="src/db/schema.decl.ts"
+import { field, store } from "okengine";
+
+export const articles = store.schema.table("articles", {
+  id: field.id().primaryKey(),
+  title: field.text().searchable({ weight: 2 }).notNull(),
+  body: field.text().searchable().notNull(),
+  status: field.text().notNull(),
+  createdAt: field.timestamp().notNull().now(),
+});
+
+export const db = store.sql("app", { schema: { articles } });
+```
+
+After `oke db push`, the table gets a generated `tsvector` + GIN index for candidate
+retrieval (`plainto_tsquery('english', …)`).
+
+</Tab>
+
+<Tab value="Embed">
+
+Chain `.embed()` **after** `.searchable()`. Pass `{ model, dims }` on the field, or
+inherit the project default:
+
+```typescript title="src/db/schema.decl.ts"
+import { field, store, ai } from "okengine";
+
+const embedder = ai.model("embedder", {
+  provider: "openai-compatible",
+  model: "nomic-embed-text",
+});
+
+export const articles = store.schema.table("articles", {
+  id: field.id().primaryKey(),
+  title: field.text().searchable({ weight: 2 }).notNull(),
+  body: field.text().searchable().embed({ model: embedder, dims: 768 }),
+});
+```
+
+**Consequence:** writers never call `fx.embed` — a system CDC flow embeds after commit.
+See [Embedding Pipeline](#embedding-pipeline).
+
+</Tab>
+
+<Tab value="Project default">
+
+Stamp `oke({ store: { search: { embed } } })` once so bare `.embed()` inherits:
+
+```typescript title="src/core.ts"
+import { ai, oke } from "okengine";
+
+const embedder = ai.model("embedder", {
+  provider: "openai-compatible",
+  model: "nomic-embed-text",
+});
+
+oke({
+  store: {
+    search: {
+      embed: { model: embedder, dims: 768 },
+    },
+  },
+});
+```
+
+```typescript title="src/db/schema.decl.ts"
+body: field.text().searchable().embed(), // inherits model + dims
+caption: field.text().searchable().embed({ model: captionEmbedder }), // dims still inherit
+alt: field.text().searchable().embed({ model: captionEmbedder, dims: 384 }),
+```
+
+Project block without `dims` or `model` fails extract:
+
+```text
+extract: oke({ store: { search: { embed } } }) requires dims: positive integer
+extract: oke({ store: { search: { embed } } }) requires model (ai.model handle or name string)
+```
+
+</Tab>
+
+<Tab value="Weights">
+
+`weight` multiplies term frequency **before** Robertson–Zaragoza saturation
+(**k1 = 1.2**, **b = 0.75**). A `weight: 2` title is not “twice the final score”:
+
+```typescript
+title: field.text().searchable({ weight: 2 }).notNull(),
+body: field.text().searchable(), // weight: 1
+tags: field.text().searchable({ weight: 0.5 }),
+```
+
+Invalid weights throw at declare time:
+
+```text
+searchable({ weight }) must be a finite number > 0 (got …)
+```
+
+</Tab>
+
+</Tabs>
+
+## Running Search
+
+Bind a Flow, pass `query`, return `data` + `meta`:
+
+<Tabs items={["BM25 route", "Filtered", "Hybrid response", "Cursor"]}>
+
+<Tab value="BM25 route">
+
+Full HTTP loop with envelope `meta` from the search result:
+
+```typescript title="src/flows/articles/search.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { articles, db } from "@/schema";
+
+export const searchArticles = on(
+  http.get("/articles/search"),
+  flow("articles.search", {
+    in: z.object({ q: z.string().min(1) }),
+    do: async ({ q }, fx) => {
+      const result = await fx.store(db).search(articles, {
+        query: q,
+        limit: 20,
+      });
+      return fx.json.ok(result.data, { meta: result.meta });
+    },
+  }),
+);
+```
+
+```bash
+curl -X GET "http://localhost:6530/articles/search?q=refund+policy" \
+  -H "accept: application/json"
+```
+
+</Tab>
+
+<Tab value="Filtered">
+
+Whitelist columns, then pass PostgREST-shaped filters in `filterInput`:
+
+```typescript title="src/flows/articles/search.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { articles, db } from "@/schema";
+
+export const searchArticles = on(
+  http.get("/articles/search"),
+  flow("articles.search", {
+    in: z.object({
+      q: z.string().min(1),
+      status: z.string().optional(),
+    }),
+    do: async ({ q, status }, fx) => {
+      const result = await fx.store(db).search(articles, {
+        query: q,
+        filter: [articles.status],
+        filterInput: {
+          ...(status ? { status: `eq.${status}` } : {}),
+          limit: "20",
+        },
+        limit: 20,
+      });
+      return fx.json.ok(result.data, { meta: result.meta });
+    },
+  }),
+);
+```
+
+Filter ops match resource lists: `eq` · `neq` · `gt` · `gte` · `lt` · `lte` ·
+`like` · `ilike` · `in` · `is` (+ `not.` prefix).
+
+</Tab>
+
+<Tab value="Hybrid response">
+
+When `.embed()` columns exist and vectors score, `meta` gains fusion fields:
+
+```json
+{
+  "data": [{ "id": "a1", "title": "Refund policy", "body": "…" }],
+  "error": null,
+  "meta": {
+    "engine": ["bm25", "lsh"],
+    "fusedBy": "rrf",
+    "rrfK": 60,
+    "limit": 20
+  }
+}
+```
+
+If query embedding is not wired at boot, ranking stays lexical — `fusedBy` is
+omitted even when `meta.engine` lists `"lsh"` from the schema.
+
+</Tab>
+
+<Tab value="Cursor">
+
+Keyset pagination reuses list-grammar `cursor` / `filterInput`:
+
+```typescript
+const result = await fx.store(db).search(articles, {
+  query: q,
+  mode: "cursor",
+  cursor: [articles.createdAt, articles.id],
+  filterInput: { cursor: lastCursor, limit: "20" },
+  limit: 20,
+});
+```
+
+**Consequence:** keyset pages stay stable under inserts the same way resource
+lists do — prefer cursor when the corpus grows under concurrent writes.
+
+</Tab>
+
+</Tabs>
 
 ## Embedding Pipeline
 
@@ -369,7 +566,11 @@ extract: oke({ store: { search: { embed } } }) requires model (ai.model handle o
 
 ## Fusion
 
-When both BM25 and LSH lists exist, ranks are fused then truncated to `limit`.
+<Callout title="Detailed section">
+  If you only need BM25, skip this. Fusion runs only when both BM25 and LSH hit
+  lists exist — then ranks are fused and truncated to `limit`.
+</Callout>
+
 Candidates are oversampled (`max(limit × 5, 50)`, capped at 500) before fusion.
 
 | `fuse.strategy` | Formula | Default knobs |
@@ -377,15 +578,95 @@ Candidates are oversampled (`max(limit × 5, 50)`, capped at 500) before fusion.
 | `"rrf"` (default) | Σ `1 / (k + rank)` | `k: 60` (Cormack, Clarke, Büttcher — SIGIR 2009; MAP flat for k ∈ [20, 100]) |
 | `"weighted"` | min-max per list, then linear mix | `weights.bm25` / `weights.vector` default `0.5` each |
 
-BM25F itself uses Robertson–Zaragoza saturation: **k1 = 1.2**, **b = 0.75**. Field
-`weight` multiplies term frequency *before* that saturation — a `weight: 2` title
-is not “twice the final score”.
+<Accordions>
+
+<Accordion title="RRF (default)">
+  Reciprocal Rank Fusion ignores raw score scales — only ranks matter:
+
+```typescript
+await fx.store(db).search(articles, {
+  query: q,
+  fuse: { strategy: "rrf", k: 60 },
+  limit: 20,
+});
+```
+
+`meta.fusedBy` is `"rrf"` and `meta.rrfK` echoes the damping constant when RRF ran.
+</Accordion>
+
+<Accordion title="Weighted">
+  Opt-in linear mix after per-list min-max normalization:
+
+```typescript
+await fx.store(db).search(articles, {
+  query: q,
+  fuse: {
+    strategy: "weighted",
+    weights: { bm25: 0.4, vector: 0.6 },
+  },
+  limit: 20,
+});
+```
+
+`meta.fusedBy` is `"weighted"`; `rrfK` is omitted.
+</Accordion>
+
+<Accordion title="BM25F constants">
+  BM25F uses Robertson–Zaragoza saturation: **k1 = 1.2**, **b = 0.75**. Field
+  `weight` multiplies term frequency *before* that saturation.
 
 LSH uses **64** hyperplanes (fits a `bigint` bit pack). Query-time lookup includes
 the exact bucket and Hamming-1 neighbors.
+</Accordion>
 
-If no query embedding is wired at boot, search stays BM25-only even on `.embed()`
-columns — `meta.engine` is `["bm25"]` and `fusedBy` is omitted.
+<Accordion title="No vector hits">
+  When LSH produces no scored neighbors (or query embedding is unwired), order is
+  pure BM25. `fusedBy` / `rrfK` are omitted. `meta.engine` may still list `"lsh"`
+  if the table declared `.embed()` columns.
+</Accordion>
+
+</Accordions>
+
+## Rerank
+
+Rerank is a second, optional pass after fusion. Declare a prompt, then pass its
+name — never enabled by default:
+
+```typescript title="src/ai/search-rerank.ts"
+import { ai } from "okengine";
+import { z } from "zod";
+
+const reranker = ai.model("reranker", {
+  provider: "openai-compatible",
+  model: "llama3.1",
+});
+
+export const searchRerank = reranker.prompt("search.rerank", {
+  in: z.object({
+    query: z.string(),
+    docs: z.array(
+      z.object({ id: z.string(), text: z.string(), score: z.number() }),
+    ),
+  }),
+  out: z.object({ rankedIds: z.array(z.string()) }),
+  budget: { maxCostPerCall: 0.02 },
+});
+```
+
+```typescript title="src/flows/articles/search.ts"
+const result = await fx.store(db).search(articles, {
+  query: q,
+  rerank: { model: "search.rerank" },
+  limit: 20,
+});
+```
+
+The runtime calls `fx.ask` with `{ query, docs }` where each doc’s `text` is the
+concatenated searchable fields. Return `{ rankedIds }` in preferred order.
+Missing or empty `rankedIds` keeps the fused order.
+
+**Consequence:** budgets on the prompt (`maxCostPerCall`) are the cost guardrail —
+search itself does not invent a second limit.
 
 ## Backfill
 
@@ -408,17 +689,41 @@ Doctor warns when searchable columns land on existing rows:
 table "articles" has searchable/embed columns on existing data — run `oke db search-backfill articles` (never auto on push)
 ```
 
-Corpus stats below **100** rows print:
+<Accordions>
+
+<Accordion title="Low corpus warning">
+  Corpus stats below **100** rows print:
 
 ```text
 [oke db search-backfill] warn: table "articles" has only 12 rows — IDF/BM25 corpus statistics are not meaningful yet (threshold 100)
 ```
 
-Unknown table:
+Ranking still runs; IDF is unstable until the corpus grows past 100 rows.
+</Accordion>
+
+<Accordion title="Unknown table">
+  Cause:
 
 ```text
 search-backfill: table "articles" not found in Manifest
 ```
+
+Use the Manifest SQL table name (the string passed to `store.schema.table`), not
+a Flow name.
+</Accordion>
+
+<Accordion title="CLI not fully wired yet">
+  The subcommand is registered (`<table>`, `--batch` default 32) and never
+  auto-runs on push. Until a live SQL connection is wired for the project, the
+  CLI prints the programmatic path:
+
+```text
+oke db search-backfill: use the programmatic runSearchBackfill(conn, manifest, { table }) API, or pass --table via CLI once a live SQL connection is wired for this project.
+```
+
+</Accordion>
+
+</Accordions>
 
 ## External Indexes
 
@@ -482,6 +787,18 @@ if (idx.driverId === "pgvector" || idx.driverId === "memory") {
 
 </Tabs>
 
+## Requirements
+
+Built-in hybrid search is a SQL-facet capability — not a fourth store facet.
+
+| Need | Requirement |
+| ---- | ----------- |
+| Driver | `postgres` or `pglite` (PostgreSQL 15+) |
+| Extensions | **None** — GIN + B-tree only |
+| BM25 | At least one `.searchable()` text column |
+| LSH | `.embed()` + configured `ai` + `model` / `dims` |
+| Backfill | Explicit `oke db search-backfill` (never auto on push) |
+
 ## Troubleshooting
 
 <Accordions>
@@ -541,6 +858,12 @@ if (idx.driverId === "pgvector" || idx.driverId === "memory") {
   BM25 (`meta.engine` includes `"bm25"` immediately after the `tsvector` write).
 </Accordion>
 
+<Accordion title="meta.engine lists lsh but fusedBy is missing">
+  Schema has `.embed()` columns, so `meta.engine` includes `"lsh"`. Fusion only
+  runs when query + stored vectors produce scored neighbors. Check that
+  `embedQuery` is wired at boot and that backfill / CDC wrote embeddings.
+</Accordion>
+
 <Accordion title="Doctor says run search-backfill">
   Cause: `table "{name}" has searchable/embed columns on existing data — run oke db search-backfill {name} (never auto on push)`.
   Push created shadow columns; corpus stats / embeddings still need an explicit rebuild.
@@ -567,7 +890,7 @@ if (idx.driverId === "pgvector" || idx.driverId === "memory") {
 ## Learn more
 
 - [Store](/docs/elements/store) — four facets; `fx.store` handles
-- [SQL](/docs/elements/store/sql) — `store.schema.table`, `field.*`
+- [SQL](/docs/elements/store/sql) — `store.schema.table`, `field.*`, list grammar
 - [HTTP · Resources](/docs/elements/flow/http#resources) — list grammar (`?search=` LIKE, filters, cursor)
 - [AI](/docs/elements/ai) — `ai.model`, `ai.prompt`, `fx.ask` / `fx.embed`
 - [fx](/docs/reference/fx) — `fx.store(db).search` is a SQL read; `fx.search(embed, query)` is the index helper

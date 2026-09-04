@@ -1,37 +1,56 @@
 ---
 title: "Files"
-description: "Object storage buckets, pre-signed upload URLs, image transformations, and Low-Quality Image Placeholders."
+description: "Object storage buckets — put/get, putImage variants, LQIP placeholders, and chainable Bun.Image transforms."
 icon: "Files"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Files facet (`store.files`) handles unstructured media files, PDFs, and user uploads with built-in resizing and CDN acceleration.
+The Files facet is a typed object bucket for uploads, exports, and media. Declare with `store.files(name)`, then call `fx.store(decl)`.
 
-## What it is
+For developers storing blobs on okengine — put bytes, optionally derive image variants, serve keys from Flows.
 
-Files abstracts object storage protocols (S3, Cloudflare R2, MinIO, or local RustFS). It includes pre-signed URL generation for direct client uploads and automatic server-side image processing.
+<Callout title="The one rule">
+  Pass the **declaration** into `fx.store(uploads)`. There is no `fx.store.files`
+  namespace, no `presignPut`, and no `transform(…)` helper — use `put` / `get` /
+  `putImage` / `image(…)`.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Generate pre-signed upload URL
+### Declare a bucket
 
-```typescript title="src/flows/uploads/presign.ts"
+```typescript title="src/core.ts"
+import { store } from "okengine";
+
+export const uploads = store.files("uploads");
+```
+
+</Step>
+
+<Step>
+### Put and get in a Flow
+
+```typescript title="src/flows/uploads/put.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
+import { uploads } from "@/core";
 
-export const presignUpload = on(
-  http.post("/uploads/presign"),
-  flow("uploads.presign", {
-    in: z.object({ filename: z.string(), contentType: z.string() }),
-    do: async ({ filename, contentType }, fx) => {
-      const path = `uploads/${fx.id()}-${filename}`;
-      const url = await fx.store.files.presignPut(path, {
-        contentType,
-        expiresIn: "5m",
-      });
-      return { url, path };
+export const putObject = on(
+  http.post("/uploads"),
+  flow("uploads.put", {
+    in: z.object({
+      name: z.string().min(1),
+      bytes: z.string(), // base64 for the demo
+    }),
+    out: z.object({ key: z.string() }),
+    do: async ({ name, bytes }, fx) => {
+      const key = `uploads/${fx.id()}-${name}`;
+      const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+      await fx.store(uploads).put(key, data);
+      return { key };
     },
   }),
 );
@@ -39,31 +58,606 @@ export const presignUpload = on(
 
 </Step>
 
+<Step>
+### Call the endpoint
+
+```bash
+curl -X POST http://localhost:6530/uploads \
+  -H "content-type: application/json" \
+  -d '{"name":"note.txt","bytes":"aGVsbG8="}'
+```
+
+Response:
+
+```json
+{
+  "data": { "key": "uploads/…-note.txt" },
+  "error": null
+}
+```
+
+</Step>
+
 </Steps>
 
-## Server-Side Image Transforms
+<Callout title="Effects are inferred">
+  Every `fx.store(uploads)` touch stamps `reads` / `writes` as `files:uploads` on
+  the Flow. That powers the Manifest, Console, and least privilege — no hand-written
+  effect lists.
+</Callout>
 
-OKE integrates with native image transformers to resize, crop, and generate blurhash placeholders on upload:
+## Progressive Patterns
+
+From a bare put to list/delete, image variants, and the chainable pipeline:
+
+<Tabs items={["Put / get", "List / delete", "putImage", "Pipeline"]}>
+
+<Tab value="Put / get">
+
+`put` accepts `Uint8Array` or UTF-8 `string`. `get` returns bytes or `null`:
+
+```typescript title="src/flows/exports/write.ts"
+import { on, flow, http } from "okengine";
+import { uploads } from "@/core";
+
+export const writeExport = on(
+  http.post("/exports"),
+  flow("exports.write", {
+    do: async (_, fx) => {
+      const key = `exports/${fx.id()}.csv`;
+      await fx.store(uploads).put(key, "id,title\n1,Ship\n");
+      const bytes = await fx.store(uploads).get(key);
+      return { key, bytes: bytes?.byteLength ?? 0 };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="List / delete">
+
+Prefix `list` for browsing; `delete` returns whether an object was removed:
+
+```typescript title="src/flows/avatars/cleanup.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const cleanupAvatars = on(
+  http.delete("/avatars"),
+  flow("avatars.cleanup", {
+    in: z.object({ prefix: z.string().default("avatars/") }),
+    do: async ({ prefix }, fx) => {
+      const keys = await fx.store(uploads).list(prefix);
+      let removed = 0;
+      for (const key of keys) {
+        if (await fx.store(uploads).delete(key)) removed += 1;
+      }
+      return { listed: keys.length, removed };
+    },
+  }),
+);
+```
+
+Prefer stable, printable-ASCII object keys. Avoid `..` and leading `/` — the
+`fs` driver rejects those with `Invalid object key: …`.
+
+</Tab>
+
+<Tab value="putImage">
+
+Write the original plus named derivatives and an optional ThumbHash LQIP data
+URL on the **result** (not a stored object):
+
+```typescript title="src/flows/photos/put.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const putPhoto = on(
+  http.post("/photos"),
+  flow("photos.put", {
+    in: z.object({ bytes: z.string() }),
+    do: async ({ bytes }, fx) => {
+      const key = `photos/${fx.id()}.jpg`;
+      const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+      const result = await fx.store(uploads).putImage(key, data, {
+        placeholder: true,
+        variants: {
+          thumb: {
+            resize: [320],
+            webp: { quality: 80 },
+          },
+        },
+      });
+      return {
+        key: result.key,
+        thumb: result.variants.thumb,
+        placeholder: result.placeholder,
+        width: result.meta.width,
+        height: result.meta.height,
+      };
+    },
+  }),
+);
+```
+
+Variant key shape: `photos/x.jpg` + `thumb` + `webp` → `photos/x.thumb.webp`.
+
+</Tab>
+
+<Tab value="Pipeline">
+
+Chain Bun.Image ops, then `put` / `bytes` / `blob` / `placeholder` / `metadata`:
+
+```typescript title="src/flows/photos/card.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const makeCard = on(
+  http.post("/photos/card"),
+  flow("photos.card", {
+    in: z.object({ sourceKey: z.string() }),
+    do: async ({ sourceKey }, fx) => {
+      const outKey = sourceKey.replace(/\.[^.]+$/, ".card.webp");
+      await fx
+        .store(uploads)
+        .image(sourceKey)
+        .resize(400, 400, { fit: "inside" })
+        .webp({ quality: 80 })
+        .put(outKey);
+      return { outKey };
+    },
+  }),
+);
+```
+
+`image(source)` accepts an object key **or** raw bytes. Resize `fit` is
+`"fill"` \| `"inside"` (Bun.Image — not CSS `cover`).
+
+</Tab>
+
+</Tabs>
+
+## Method Reference
+
+`fx.store(filesDecl)`:
+
+| Method | Signature | Meaning |
+| ------ | --------- | ------- |
+| `put` | `put(key, data)` | Store bytes or UTF-8 string |
+| `get` | `get(key)` | Read bytes, or `null` if missing |
+| `delete` | `delete(key)` | Remove; returns whether deleted |
+| `list` | `list(prefix?)` | List object keys (optional prefix) |
+| `image` | `image(source, options?)` | Chainable Bun.Image pipeline |
+| `putImage` | `putImage(key, data, opts?)` | Original + variants + optional LQIP |
+
+Handle also exposes `ref` (`files:name`) and `driverId` (`memory` · `fs` · `s3`).
+
+There is **no** public `presignPut`, `presignGet`, `copy`, `head`, or `transform`
+alias on the fx handle.
+
+## Object Keys
+
+Keys are opaque strings the driver stores as-is. Pick a stable prefix + unique
+suffix; keep SQL rows pointing at the key, not the bytes.
+
+**Explicit key** — build the path in the Flow:
 
 ```typescript
-const optimized = await fx.store.files.transform("photos/hero.jpg", {
-  width: 800,
-  format: "webp",
-  quality: 80,
+const key = `avatars/${fx.auth.userId}/${fx.id()}.png`;
+await fx.store(uploads).put(key, data);
+```
+
+**Content hash** — when the same bytes should collapse to one object, hash
+yourself (SHA-256 hex) and put under that digest. The facet does not auto-
+dedupe on `put`.
+
+**Driver guards** — the `fs` driver throws on path escape:
+
+```text
+Invalid object key: ../secret
+```
+
+| Rule | Why |
+| ---- | --- |
+| Prefer printable ASCII | S3-compatible signed URLs are fragile with non-ASCII keys |
+| No leading `/` | Absolute paths are rejected on `fs` |
+| No `..` segments | Path escape is rejected on `fs` |
+| Stable extensions | MIME / Console kind inference uses the suffix |
+
+## Blob Operations
+
+Each verb binds through `fx.store(decl)` inside `flow()`:
+
+<Tabs items={["put", "get", "delete", "list"]}>
+
+<Tab value="put">
+
+Write bytes or a UTF-8 string. Overwrites an existing key:
+
+```typescript title="src/flows/notes/attach.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const attachNote = on(
+  http.post("/notes/:id/attachment"),
+  flow("notes.attach", {
+    in: z.object({
+      id: z.string(),
+      name: z.string().min(1),
+      bytes: z.string(),
+    }),
+    do: async ({ id, name, bytes }, fx) => {
+      const key = `notes/${id}/${name}`;
+      const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
+      await fx.store(uploads).put(key, data);
+      return { key };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="get">
+
+Read bytes, or `null` when the key is missing — treat `null` as not found:
+
+```typescript title="src/flows/notes/download.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const downloadAttachment = on(
+  http.get("/notes/:id/attachment"),
+  flow("notes.download", {
+    in: z.object({ id: z.string(), name: z.string() }),
+    errors: { NotFound: z.object({ key: z.string() }) },
+    do: async ({ id, name }, fx) => {
+      const key = `notes/${id}/${name}`;
+      const bytes = await fx.store(uploads).get(key);
+      if (!bytes) return fx.fail("NotFound", { key });
+      return { key, size: bytes.byteLength };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="delete">
+
+Remove one key. Returns `true` when an object was deleted, `false` if missing:
+
+```typescript title="src/flows/notes/detach.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const detachNote = on(
+  http.delete("/notes/:id/attachment"),
+  flow("notes.detach", {
+    in: z.object({ id: z.string(), name: z.string() }),
+    do: async ({ id, name }, fx) => {
+      const key = `notes/${id}/${name}`;
+      const removed = await fx.store(uploads).delete(key);
+      return { key, removed };
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="list">
+
+List keys under an optional prefix. Use for Console browsing and admin Flows —
+not as a relational index:
+
+```typescript title="src/flows/notes/attachments.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { uploads } from "@/core";
+
+export const listAttachments = on(
+  http.get("/notes/:id/attachments"),
+  flow("notes.attachments", {
+    in: z.object({ id: z.string() }),
+    do: async ({ id }, fx) => {
+      const keys = await fx.store(uploads).list(`notes/${id}/`);
+      return { keys };
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+## putImage
+
+<Callout title="Detailed section">
+  If you only need the original + one thumb, jump to Progressive Patterns →
+  putImage. This section covers options, variant key naming, and decode guards.
+</Callout>
+
+`putImage(key, data, opts?)` writes the **original** at `key`, then optional
+named variants beside it, then optionally returns a ThumbHash LQIP **data URL**
+on the result (the placeholder is not stored as an object).
+
+```typescript
+const result = await fx.store(uploads).putImage(key, data, {
+  placeholder: true,
+  variants: {
+    thumb: { resize: [320], webp: { quality: 80 } },
+    card: { resize: [800, 600, { fit: "inside" }], jpeg: { quality: 85 } },
+  },
+  maxPixels: 4096 * 4096,
+  autoOrient: true,
 });
 ```
+
+<Accordions>
+
+<Accordion title="putImage Options">
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `variants` | `Record<string, ImageVariantSpec>` | omitted | Named derivatives beside the original |
+| `placeholder` | `boolean` | omitted | ThumbHash **data URL** on the result |
+| `maxPixels` | `number` \| `false` | `4096 * 4096` | Decode ceiling; `false` disables |
+| `autoOrient` | `boolean` | `true` | Honor EXIF orientation |
+
+</Accordion>
+
+<Accordion title="ImageVariantSpec">
+  Each variant may set geometry and **exactly one** encode target:
+
+| Field | Meaning |
+| ----- | ------- |
+| `resize` | `[width]`, `[width, height]`, or `[width, height, options]` |
+| `rotate` · `flip` · `flop` | Geometry |
+| `modulate` | `{ brightness?, saturation? }` |
+| `jpeg` / `png` / `webp` / `heic` / `avif` | Encode — set **one** only |
+
+Resize options: `filter`, `fit` (`"fill"` \| `"inside"`), `withoutEnlargement`.
+
+If no encode field is set, the variant keeps the source format when it is
+`jpeg` / `png` / `webp` / `heic` / `avif`; decode-only sources (e.g. gif)
+default to `webp`.
+
+Setting two encode fields throws:
+
+```text
+files image variant: set only one of jpeg/png/webp/heic/avif (got jpeg, webp)
+```
+
+</Accordion>
+
+<Accordion title="Variant key naming">
+  Keys are derived from the original stem + variant name + encode extension
+  (`jpeg` → `jpg`):
+
+| Original | Variant | Format | Stored key |
+| -------- | ------- | ------ | ---------- |
+| `photos/x.jpg` | `thumb` | `webp` | `photos/x.thumb.webp` |
+| `photos/x.png` | `card` | `jpeg` | `photos/x.card.jpg` |
+| `a/b/hero` (no ext) | `sm` | `png` | `a/b/hero.sm.png` |
+
+**Consequence:** `get(result.key)` is the original; read derivatives from
+`result.variants.thumb` (and friends), not by guessing.
+
+</Accordion>
+
+<Accordion title="PutImageResult">
+
+| Field | Type | Meaning |
+| ----- | ---- | ------- |
+| `key` | `string` | Original object key |
+| `meta` | `{ width, height, format }` | Header metadata of the original |
+| `variants` | `Record<string, string>` | Variant name → object key |
+| `placeholder` | `string?` | ThumbHash data URL when requested |
+
+</Accordion>
+
+</Accordions>
+
+## Image Pipeline
+
+<Callout title="Detailed section">
+  Prefer `putImage` when you want original + named variants in one call. Use
+  `image(…)` when you need a one-off transform, metadata probe, or custom out key.
+</Callout>
+
+<StoreFilesVariants />
+
+Chain on `fx.store(uploads).image(source, options?)`:
+
+| Step | Meaning |
+| ---- | ------- |
+| `.resize(w, h?, opts?)` | Resize (Bun fit options) |
+| `.rotate(degrees)` · `.flip()` · `.flop()` | Geometry |
+| `.modulate({ brightness?, saturation? })` | Color |
+| `.jpeg` / `.png` / `.webp` / `.heic` / `.avif` | Encode |
+| `.metadata()` | Width / height / format (header) |
+| `.bytes()` · `.blob()` | Materialize |
+| `.placeholder()` | ThumbHash data URL |
+| `.put(outKey)` | Write the transformed bytes |
+
+Decode guards (`maxPixels`, `autoOrient`) pass as the second argument to
+`image(…)`, same defaults as `putImage`.
+
+<Accordions>
+
+<Accordion title="Source resolution">
+  `image(source)` accepts an object key **or** raw `Uint8Array`.
+
+| Source | Behavior |
+| ------ | -------- |
+| `string` key | Loads via `get`; missing → `files image: object not found: {key}` |
+| `Uint8Array` | Transforms in memory (no prior put required) |
+
+```typescript
+const webp = await fx
+  .store(uploads)
+  .image(rawBytes, { maxPixels: 2048 * 2048 })
+  .resize(800)
+  .webp({ quality: 80 })
+  .bytes();
+```
+
+</Accordion>
+
+<Accordion title="Encode & platform codecs">
+  Call one encode step before materializing. HEIC / AVIF may fall back to WebP
+  when the platform throws `ERR_IMAGE_FORMAT_UNSUPPORTED` (quality preserved
+  when set).
+
+```typescript
+await fx
+  .store(uploads)
+  .image("photos/hero.jpg")
+  .resize(1200, undefined, { fit: "inside", withoutEnlargement: true })
+  .avif({ quality: 70 })
+  .put("photos/hero.avif");
+```
+
+</Accordion>
+
+<Accordion title="Decode guards">
+
+| Option | Default | Meaning |
+| ------ | ------- | ------- |
+| `maxPixels` | `4096 * 4096` (16 MP) | Reject oversized width×height before pixel alloc |
+| `autoOrient` | `true` | Apply JPEG EXIF Orientation first |
+
+Exceeding the ceiling surfaces Bun’s `ERR_IMAGE_TOO_MANY_PIXELS`. Pass a higher
+ceiling, or `maxPixels: false` only when you trust the source.
+
+</Accordion>
+
+</Accordions>
+
+## Declare Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `description` | `string` | omitted | Console / Manifest label |
+
+```typescript
+export const uploads = store.files("uploads", {
+  description: "User uploads and derived image variants",
+});
+```
+
+## Drivers
+
+| Driver | Runs as | Best for |
+| ------ | ------- | -------- |
+| `s3` | S3-compatible (RustFS in Compose) | Dev + prod default |
+| `fs` | Local filesystem root | Single-node laptop paths |
+| `memory` | Process map | Test default |
+
+Defaults: `s3` / `memory` / `s3` (dev / test / prod). Image pins (e.g.
+RustFS) live under `images.store.files` — the driver id stays `s3`.
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // omit store.files to use defaults — pin only overrides
+    // store: { files: { dev: "fs", test: "memory", prod: "s3" } },
+  },
+  images: {
+    store: {
+      files: "rustfs/rustfs:1.0.0-rc.2",
+    },
+  },
+});
+```
+
+For `s3`, Compose / env typically supply `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY`, and optional `S3_REGION` / `S3_SESSION_TOKEN`. Without
+`S3_ENDPOINT`, CreateBucket is skipped so real AWS is not auto-provisioned.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="No files driver configured">
+  Boot needs `drivers.store.files` (or `DRIVER_DEFAULTS`). For `s3`, set the
+  bucket / endpoint env your Compose stack expects (`S3_ENDPOINT`,
+  `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`).
+</Accordion>
+
+<Accordion title="Unknown store ref for files">
+  Cause: `Unknown store ref: …`. Import the module that calls
+  `store.files(…)` before Flows run (starters load `@/core`).
+</Accordion>
+
+<Accordion title="Invalid object key">
+  Cause: `Invalid object key: …` on the `fs` driver when the key starts with
+  `/` or contains `..`. Use relative, non-escaping keys.
+</Accordion>
+
+<Accordion title="ERR_IMAGE_TOO_MANY_PIXELS">
+  Decode exceeded `maxPixels` (default `4096 * 4096`). Pass a higher ceiling
+  or `maxPixels: false` only when you trust the source.
+</Accordion>
+
+<Accordion title="files image: object not found">
+  Cause: `files image: object not found: {key}`. `image(key)` loads via `get`
+  first — put the original, or pass raw `Uint8Array` as the source.
+</Accordion>
+
+<Accordion title="files image variant: set only one of jpeg/png/…">
+  Each `ImageVariantSpec` may set at most one encode field. Pick `webp` **or**
+  `jpeg`, not both.
+</Accordion>
+
+<Accordion title="get returns null after putImage variant">
+  Read the **variant key** from `result.variants.thumb`, not the original key.
+  Naming is `{stem}.{variant}.{ext}` beside the original.
+</Accordion>
+
+<Accordion title="I expected presignPut / transform">
+  Those helpers are not on the fx handle. Upload with `put` / `putImage`, and
+  transform with `image(…).resize(…).webp(…).put(…)` (or `putImage` variants).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Store](/docs/elements/store) — four facets; driver defaults
+- [SQL](/docs/elements/store/sql) — relational data beside blob keys
+- [HTTP](/docs/elements/flow/http) — routes that accept uploads
+- [Vault](/docs/elements/vault) — credentials for S3 when you configure bindings
+- [fx](/docs/reference/fx) — `fx.store(decl)`
+- [Configuration](/docs/reference/configuration) — `drivers.store.files`
 
 ## Next
 
 <Cards>
   <Card
     title="Search"
-    description="Built-in BM25 ± LSH on SQL tables, plus optional external indexes."
+    description="BM25 ± LSH on SQL columns, plus store.index."
     href="/docs/elements/store/search"
   />
   <Card
+    title="KV"
+    description="Namespaced get/set with duration TTL."
+    href="/docs/elements/store/kv"
+  />
+  <Card
     title="Store Overview"
-    description="Return to Store overview."
+    description="SQL · KV · files · index — one handle."
     href="/docs/elements/store"
   />
 </Cards>
