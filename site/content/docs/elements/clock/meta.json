@@ -1,5 +1,5 @@
 {
   "title": "Clock",
   "icon": "Clock",
-  "pages": ["index", "schedules", "intervals", "sleep"]
+  "pages": ["index", "schedules", "sleep"]
 }

@@ -14,9 +14,29 @@ export {
   clock,
   perTenantCronName,
   parsePerTenantCronName,
+  applyClockTimezoneDefaults,
   PER_TENANT_CRON_SEP,
 } from "./clock/declare.ts";
-export type { ClockDecl, ClockOptions } from "./clock/declare.ts";
+export type {
+  ClockDecl,
+  ClockOptions,
+  ClockHelperOptions,
+  ClockDailyOptions,
+  ClockHourlyOptions,
+  ClockWeeklyOptions,
+  ClockMonthlyOptions,
+  ClockCronFieldsOptions,
+  ClockWeekday,
+  ClockNamespace,
+} from "./clock/declare.ts";
+
+export {
+  buildCronExpression,
+  parseAtTime,
+  serializeCronField,
+  assertValidCronExpression,
+} from "./clock/cron-fields.ts";
+export type { CronField, CronFields } from "./clock/cron-fields.ts";
 
 export { parseDurationMs } from "./clock/duration.ts";
 

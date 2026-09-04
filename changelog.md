@@ -16,6 +16,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Clock convenience helpers on `clock`: `daily` · `hourly` · `weekly` ·
+  `monthly` · `every` · `cron` (string or structured fields with `at`,
+  lists, ranges, weekday names). All compile to the same `ClockDecl`
+  (`cron` / `every` strings). Invalid cron fails at declare via
+  `Bun.cron.parse`. Compiler extract records the helpers into Manifest
+  clocks.
+- App-wide Clock timezone: `oke({ clock: { timezone } })` and
+  `defineConfig({ clock: { timezone } })` apply to every `clock()` /
+  helper that omits `timezone` (per-clock wins; `oke` wins over config).
 - `okid({ prefix })` — built-in semantic prefix on `okengine/okid` (e.g.
   `usr_`, `evt_`). Characters must be from `OKID_ALPHABET` (max 32);
   `length` is the body only; combines with `sortable` as
@@ -32,6 +41,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Clock schedules + intervals docs merged into one
+  [`/docs/elements/clock/schedules`](/docs/elements/clock/schedules) page
+  (helpers, `every`, per-tenant, catch-up, DST); overview teaching figure
+  shows `clock.every` / `clock.daily` + zone from `oke({ clock })`.
+- Elevated Clock element docs (`/docs/elements/clock`) to HTTP / Store depth:
+  overview + Schedules / Intervals / Durable Sleep with Smallest Example,
+  Progressive Patterns, options tables, teaching figures (`ClockSchedules`,
+  `ClockCatchUp`, `ClockSleep`), real APIs (`timezone`, `clock.perTenant`,
+  `fx.clock.sleep(label, duration)`), catch-up `"one"`, leader locks, and
+  Troubleshooting. Removes invented surfaces (`tz`, one-arg sleep, jitter on
+  `clock()`).
 - Store element docs (`/docs/elements/store`) rewritten to the HTTP / Search
   page bar: overview + SQL / KV / Files with Smallest Example, Progressive
   Patterns, reference tables, teaching figures (`StoreFacets`, `StoreKvTtl`,
@@ -57,11 +77,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
   prefix + sortable composition.
 - Consolidated llama.cpp / Ollama / vLLM / SGLang into one
   [Local AI](/docs/recipes/local-ai) recipe (comparison table); removed the
-  standalone Ollama recipe (`/docs/recipes/ollama` redirects). Added OpenRouter
-  recipe recommending `openrouter/free`; rewrote Models docs (Verified
-  providers / Limited compatibility). Old
-  `/docs/recipes/{llama-cpp,vllm,sglang,ollama,openai-compatible,openai-compatible-local}`
-  URLs redirect permanently to `/docs/recipes/local-ai`.
+  standalone Ollama recipe. Added OpenRouter recipe recommending
+  `openrouter/free`; rewrote Models docs (Verified providers / Limited
+  compatibility).
 - OpenRouter recipe documents router aliases (`openrouter/free`, `auto`,
   `pareto-code`, `fusion`, `bodybuilder`, `~…-latest`) with OKE `ai.model`
   examples and links to OpenRouter’s router guides.
@@ -106,9 +124,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Moved docs sidebar stage **Extend** from `05` to `03` (Plugins / Providers /
+  Recipes after Elements); Build → `04`, Operate → `05`. Handbook index card
+  groups updated to match.
 - Renamed Signal delivery docs to match helpers: `/docs/elements/signal/once`
-  (was queues), `/broadcast` (was pubsub), `/live` (was streams). Old URLs
-  redirect permanently. Cards, sidebar, and cross-links updated.
+  (was queues), `/broadcast` (was pubsub), `/live` (was streams). Cards,
+  sidebar, and cross-links updated.
 - Installation / Try it / README badges and agent contracts document Bun ≥ 1.4.1.
 - Rewrote Signal element docs (`/docs/elements/signal` + Once / Broadcast /
   Live) for `signal.once` / `broadcast` / `live` (HTTP-shaped helpers):
@@ -174,6 +195,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Removed bare top-level `every(interval)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
 - Removed bare top-level `table(name, store?)` export from kernel triggers and public entrypoints (`okengine`, `okengine/full`).
+
+#### Docs
+
+- Dropped all permanent redirects from `site/next.config.mjs` (legacy Signal
+  delivery paths, Flow jobs → consumers, and Local AI recipe aliases).
 
 ### ✨ Added
 

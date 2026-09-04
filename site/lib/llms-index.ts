@@ -51,7 +51,6 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
       "elements/store/search",
       "elements/clock",
       "elements/clock/schedules",
-      "elements/clock/intervals",
       "elements/clock/sleep",
       "elements/gate",
       "elements/gate/auth",

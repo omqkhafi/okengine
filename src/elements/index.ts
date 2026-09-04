@@ -63,6 +63,17 @@ export {
   parseDurationMs,
 } from "./clock.ts";
 export type { ClockDecl, ClockOptions, ClockRuntime, TimeTravel, DurableResult } from "./clock.ts";
+export type {
+  ClockHelperOptions,
+  ClockDailyOptions,
+  ClockHourlyOptions,
+  ClockWeeklyOptions,
+  ClockMonthlyOptions,
+  ClockCronFieldsOptions,
+  ClockNamespace,
+  CronField,
+  CronFields,
+} from "./clock.ts";
 
 export {
   gate,

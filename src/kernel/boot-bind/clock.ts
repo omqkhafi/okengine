@@ -5,6 +5,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
+  applyClockTimezoneDefaults,
   clock as declareClock,
   createClockRuntime,
   createFileCronStore,
@@ -36,6 +37,15 @@ export const DEFAULT_FILE_CRON_PATH = ".oke/crons.json";
 export function resolveClockDriverId(options: BootOptions, env: ConfigEnv): string {
   // Defaults cover every ConfigEnv key, so this is never undefined.
   return resolveDriverId(options.config?.drivers?.clock, env, CLOCK_DEFAULTS)!;
+}
+
+/**
+ * Effective default timezone: `oke({ clock })` wins over `defineConfig({ clock })`.
+ *
+ * @param options - Boot options
+ */
+function resolveDefaultClockTimezone(options: BootOptions): string | undefined {
+  return options.clock?.timezone ?? options.config?.clock?.timezone;
 }
 
 /**
@@ -102,22 +112,27 @@ export async function bindClock(
     );
   }
 
+  const defaultTimezone = resolveDefaultClockTimezone(options);
   const clockDecls = new Map<string, ClockDecl>();
-  for (const c of options.clocks ?? []) {
+  for (const c of applyClockTimezoneDefaults(options.clocks ?? [], defaultTimezone)) {
     clockDecls.set(c.name, c);
   }
   const coveredEvery = new Set([...clockDecls.values()].flatMap((c) => (c.every ? [c.every] : [])));
   for (const b of options.bindings ?? []) {
     if (b.trigger.kind === "clock" && b.trigger.clock && !clockDecls.has(b.trigger.name)) {
-      clockDecls.set(b.trigger.name, b.trigger.clock);
+      const [resolved] = applyClockTimezoneDefaults([b.trigger.clock], defaultTimezone);
+      if (resolved) clockDecls.set(b.trigger.name, resolved);
     }
     if (b.trigger.kind !== "every") continue;
     if (clockDecls.has(b.trigger.interval) || coveredEvery.has(b.trigger.interval)) continue;
-    clockDecls.set(
-      b.trigger.interval,
-      declareClock(b.trigger.interval, { every: b.trigger.interval }),
+    const [synthetic] = applyClockTimezoneDefaults(
+      [declareClock(b.trigger.interval, { every: b.trigger.interval })],
+      defaultTimezone,
     );
-    coveredEvery.add(b.trigger.interval);
+    if (synthetic) {
+      clockDecls.set(b.trigger.interval, synthetic);
+      coveredEvery.add(b.trigger.interval);
+    }
   }
   for (const decl of clockDecls.values()) {
     clock.register(decl);

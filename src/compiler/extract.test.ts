@@ -1153,6 +1153,38 @@ export const sweep = on(
   });
 });
 
+describe("extractManifest — clock convenience helpers", () => {
+  test("daily / cron fields / every compile into clocks", async () => {
+    const source = `
+import { clock } from "okengine";
+
+export const daily = clock.daily("reports.daily", { at: "06:00", description: "Morning" });
+export const sweep = clock.cron("ops.sweep", {
+  minute: "*/15",
+  hour: [9, 12, 17],
+  dayOfWeek: "1-5",
+  overridable: true,
+});
+export const ping = clock.every("health.ping", "30s");
+export const nick = clock.cron("metrics.hourly", "@hourly");
+export const weekly = clock.weekly("digest", { on: ["mon", "fri"], at: "09:00" });
+`;
+    const manifest = await extractFromSources({ "src/clocks.ts": source });
+
+    expect(manifest.clocks?.["reports.daily"]).toMatchObject({
+      cron: "0 6 * * *",
+      description: "Morning",
+    });
+    expect(manifest.clocks?.["ops.sweep"]).toMatchObject({
+      cron: "*/15 9,12,17 * * 1-5",
+      overridable: true,
+    });
+    expect(manifest.clocks?.["health.ping"]).toMatchObject({ every: "30s" });
+    expect(manifest.clocks?.["metrics.hourly"]).toMatchObject({ cron: "@hourly" });
+    expect(manifest.clocks?.digest).toMatchObject({ cron: "0 9 * * 1,5" });
+  });
+});
+
 describe("extractManifest — kv key methods", () => {
   test("fx.store(kv).delete(key) writes kv:<namespace>, not kv:<identifier>", async () => {
     const source = `

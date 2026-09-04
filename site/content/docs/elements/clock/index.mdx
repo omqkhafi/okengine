@@ -1,78 +1,303 @@
 ---
 title: "Overview"
-description: "Time as an explicit element — named cron schedules, recurring intervals, and deterministic testable time."
+description: "Time as an explicit element — named cron schedules, recurring intervals, and durable sleep through fx.clock."
 icon: "Clock"
 source: "docs/spec/unified-theory.md"
 ---
 
-Clock is how your backend **knows what time it is and schedules recurring work**. Time in backend engineering is notoriously brittle: timezones shift, distributed servers skew, and test suites struggle with flakey timers. In OKE, Clock is an explicit primitive.
+Clock is how your backend **knows what time it is and when to run again**. A monthly invoice job, a 30s health ping, and a three-day trial reminder share one vocabulary: declare a named schedule, bind it with `on(clockDecl, flow)`, and read time only through `fx.clock`.
+
+For developers scheduling work on okengine — one handle shape; drivers swap by environment.
 
 <Callout title="The one rule">
-  All time access and pauses must go through `fx.clock`. Direct calls to `Date.now()`, `new Date()`,
-  or `setTimeout` bypass the deterministic execution engine and prevent time-travel during automated
-  tests.
+  All time access and pauses go through `fx.clock`. `Date.now()`, `new Date()`, and
+  `setTimeout` bypass the injectable clock and break durable sleep / time-travel tests.
 </Callout>
 
-## What is Clock?
+<ClockSchedules />
 
-Clock provides three core capabilities:
+## Smallest Example
 
-1. **Named Schedules (`clock(...)`)**: Cron expressions and intervals with explicit IANA timezone support and distributed leader election.
-2. **Intervals (`clock(name, { every })`)**: Relative duration loops (e.g. `{ every: "10s" }`) with jitter and per-tenant isolation.
-3. **Durable Sleep (`fx.clock.sleep(...)`)**: Process-safe pauses that survive server reboots and node migrations.
+<Steps>
 
-```typescript title="src/clocks/billing.ts"
+<Step>
+### Declare a named clock
+
+```typescript title="src/clocks/digest.ts"
 import { clock } from "okengine";
 
-export const billingCycle = clock("billing.monthly", {
-  cron: "0 0 1 * *",
-  tz: "Asia/Riyadh",
+export const digestClock = clock("notes.digest", { every: "1d" });
+```
+
+</Step>
+
+<Step>
+### Bind a Flow
+
+```typescript title="src/flows/notes/digest.ts"
+import { on, flow } from "okengine";
+import { digestClock } from "@/clocks/digest";
+import { db, notes } from "@/schema";
+import { isNull } from "drizzle-orm";
+
+export const digest = on(
+  digestClock,
+  flow("notes.digest", {
+    plane: "operator",
+    do: async (_, fx) => {
+      const rows = await fx
+        .store(db)
+        .select()
+        .from(notes)
+        .where(isNull(notes.archivedAt));
+      return { active: rows.length, at: fx.clock.now() };
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### See it tick
+
+With `oke dev`, the scheduler reconciles `notes.digest` into the Store and leader-elects
+before each fire. `do` receives no payload — read time with `fx.clock.now()`.
+
+Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting a day.
+
+</Step>
+
+</Steps>
+
+<Callout title="Jobs are Flows">
+  `on(clockDecl, flow)` is the same species as Signal consumers and HTTP handlers.
+  There is no separate job runner — see [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs).
+</Callout>
+
+## Progressive Patterns
+
+Same `clock` + `fx.clock` from a calendar cron to an interval, a durable pause, and typed offsets:
+
+<Tabs items={["Cron", "Interval", "Sleep", "Time helpers"]}>
+
+<Tab value="Cron">
+
+Five-field cron plus helpers. Prefer an app-wide zone so schedules stay short:
+
+```typescript title="src/flows/reports/daily.ts"
+import { on, flow, clock } from "okengine";
+
+export const dailyReportClock = clock.daily("reports.daily", {
+  at: "06:00",
+});
+
+export const runDailyReport = on(
+  dailyReportClock,
+  flow("reports.runDaily", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(buildDailyReport, { at: fx.clock.now() });
+    },
+  }),
+);
+```
+
+Set `oke({ clock: { timezone: "Asia/Riyadh" } })` once (or the same in
+`defineConfig`). Omit per-clock `timezone` unless one schedule must differ —
+see [Schedules](/docs/elements/clock/schedules).
+
+</Tab>
+
+<Tab value="Interval">
+
+Human durations — integer + unit, no weeks: `"200ms"` · `"30s"` · `"5m"` · `"1h"` · `"7d"`:
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow, clock } from "okengine";
+
+export const pingClock = clock("health.pingExternal", { every: "30s" });
+
+export const pingExternal = on(
+  pingClock,
+  flow("health.pingExternal", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(pingUpstream);
+    },
+  }),
+);
+```
+
+Per-tenant expansion and duration rules: [Schedules](/docs/elements/clock/schedules).
+
+</Tab>
+
+<Tab value="Sleep">
+
+`fx.clock.sleep(label, duration)` — two arguments. Needs `durable: true` to park across restarts:
+
+```typescript title="src/flows/trials/reminder.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const trialReminder = on(
+  http.post("/trials/start"),
+  flow("trials.reminder", {
+    durable: true,
+    in: z.object({ email: z.string().email() }),
+    do: async ({ email }, fx) => {
+      await fx.step("mark-trial", async () => {
+        await fx.call(startTrial, { email });
+      });
+      await fx.clock.sleep("expiry-window", "3d");
+      await fx.step("notify", async () => {
+        await fx.send(trialExpiringEmail, { to: email });
+      });
+    },
+  }),
+);
+```
+
+Without a journal, sleep resolves immediately. Deep dive: [Durable Sleep](/docs/elements/clock/sleep).
+
+</Tab>
+
+<Tab value="Time helpers">
+
+Never call `Date.now()` in a Flow — use the injectable surface:
+
+```typescript
+const now = fx.clock.now(); // epoch-ms
+const cutoff = fx.clock.ago("7d"); // now − 7 days
+const due = fx.clock.fromNow("14d"); // now + 14 days
+const weekMs = fx.clock.duration("7d"); // span in ms
+const expiresAt = createdAt + weekMs;
+```
+
+Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400_000 ms, not a
+calendar day. Unknown strings parse as `0`.
+
+</Tab>
+
+</Tabs>
+
+## Capability Reference
+
+| Surface | Signature | Purpose | `do` input |
+| ------- | --------- | ------- | ---------- |
+| Cron schedule | `clock(name, { cron, timezone? })` | Calendar fires in an IANA zone | none (`_`) |
+| Helpers | `clock.daily` · `hourly` · `weekly` · `monthly` · `cron` | Same decl; presets + field bags | none (`_`) |
+| Interval | `clock(name, { every })` / `clock.every` | Fixed duration loop | none (`_`) |
+| Per-tenant | `clock.perTenant(name, opts)` | One Store row per tenant | none (`_`) |
+| Now / offsets | `fx.clock.now` · `ago` · `fromNow` · `duration` | Injectable time math | — |
+| Durable sleep | `fx.clock.sleep(label, duration)` | Park a durable Flow until wake | — |
+
+At least one of `cron` or `every` is required on every declaration.
+
+## Per-environment drivers
+
+Standard starters inherit `DRIVER_DEFAULTS`. Pin only when you diverge:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // omit clock to use defaults — pin only overrides
+    // clock: { dev: "postgres", test: "frozen", prod: "postgres" },
+  },
 });
 ```
 
-## How Clock Executes Through fx
+| Driver | Runs as | Best for |
+| ------ | ------- | -------- |
+| `postgres` | Shared `oke_crons` + leases | Dev/prod multi-instance (default) |
+| `file` | `.oke/crons.json` | Single-host multi-process |
+| `memory` | In-process map | Single process; no cross-instance lock |
+| `frozen` | Time-travel harness | Tests — advance instead of waiting |
 
-Inside any flow:
-
-```typescript
-// Deterministic current timestamp
-const now = fx.clock.now();
-
-// Durable sleep for days or minutes
-await fx.clock.sleep("2d");
-```
+**Consequence:** three pods with `postgres` still run each tick once (30s leader lease).
+`memory` does not coordinate across processes.
 
 ## The Capabilities of Clock
 
 <Cards>
   <Card
-    title="Named Schedules"
-    description="Cron expressions, IANA timezones, distributed leader election, and missed-run catch-up policies."
+    title="Schedules"
+    description="Cron helpers, every-intervals, per-tenant rows, leader locks, and catch-up one."
     href="/docs/elements/clock/schedules"
   />
   <Card
-    title="Intervals"
-    description="Recurring interval loops (every 30s) and multi-tenant schedule partitioning."
-    href="/docs/elements/clock/intervals"
-  />
-  <Card
     title="Durable Sleep"
-    description="Journaled pauses that resume reliably across deployments without keeping Node processes awake."
+    description="Journaled pauses that resume across deploys — label + duration, durable Flows only."
     href="/docs/elements/clock/sleep"
   />
 </Cards>
 
-## Next Steps
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='TypeError: clock("name"): require cron or every'>
+  `clock(name)` needs `{ cron }` and/or `{ every }`. Empty options throw at declaration,
+  before `on()`.
+</Accordion>
+
+<Accordion title="tz is not a clock option">
+  The field is `timezone` (IANA). Prefer `oke({ clock: { timezone } })` /
+  `defineConfig({ clock: { timezone } })` so schedules can omit it.
+  `{ tz: "Asia/Riyadh" }` is ignored.
+</Accordion>
+
+<Accordion title="Cron fired 24 times after overnight downtime">
+  Catch-up is `"one"` — one fire per overdue clock, then `nextRunAt` advances. Missed slots
+  show as `missedRuns`. A burst usually means several clocks or `clock.perTenant` rows, not
+  a replay of hourly slots.
+</Accordion>
+
+<Accordion title="Two pods ran the same job">
+  Leader election needs a shared Store (`drivers.clock` postgres, or `file` on one host).
+  `memory` does not coordinate across processes. Check that instances share `DATABASE_URL`.
+</Accordion>
+
+<Accordion title="Sleep returns immediately / wrong wait">
+  Missing `durable: true`, or `fx.clock.sleep("8h")` with one argument — `"8h"` is the
+  **label**, duration is missing. Use `fx.clock.sleep("label", "8h")`.
+</Accordion>
+
+<Accordion title="ScheduleNotOverridableError from Console">
+  Cause: `clock "{name}" is not overridable`. Add `overridable: true` and redeploy, or
+  edit the declaration in source.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Schedules](/docs/elements/clock/schedules) — cron, every, per-tenant, DST, catch-up, overrides
+- [Durable Sleep](/docs/elements/clock/sleep) — `fx.clock.sleep(label, duration)`
+- [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs) — bind with `on(clockDecl, flow)`
+- [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` around sleeps
+- [fx](/docs/reference/fx) — full `fx.clock` table
+- [Errors](/docs/reference/errors) — `ScheduleNotOverridableError` · `ClockResourceNotFoundError`
+
+## Next
 
 <Cards>
   <Card
-    title="Named Schedules"
-    description="Configure cron schedules and timezone rules."
+    title="Schedules"
+    description="Cron helpers, intervals, timezones, leader locks, and catch-up one."
     href="/docs/elements/clock/schedules"
   />
   <Card
-    title="Gate Element"
-    description="Protect flows with authentication, tenancy, and rate limits."
+    title="Gate"
+    description="Policies and rate limits on HTTP triggers."
     href="/docs/elements/gate"
+  />
+  <Card
+    title="Consumers"
+    description="Signal workers, named Clock jobs, and SQL CDC."
+    href="/docs/elements/flow/consumers"
   />
 </Cards>

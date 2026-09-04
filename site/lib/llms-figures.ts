@@ -31,7 +31,7 @@ export const TEACHING_FIGURE_FALLBACKS: Readonly<Record<string, string>> = {
   StoreSeeding:
     "oke db seed: essential always runs; dev lights the dev block; prod lights prod; test runs essential only. Upsert inserts once, then already-existed unless onExisting update.",
   ClockSchedules:
-    "Two schedule kinds — every is a fixed interval, clock is a named cron or interval — both bind with on(trigger, flow) to the same Flow species.",
+    "Two schedule kinds — clock.every is a fixed interval, clock.daily / cron helpers are wall-clock (timezone from oke({ clock })) — both bind with on(trigger, flow) to the same Flow species.",
   ClockCatchUp:
     "Catch-up policy one: an hourly clock down for five hours reports missedRuns five and catchUp one, then a single tick runs the handler once — never a storm of five.",
   ClockSleep:

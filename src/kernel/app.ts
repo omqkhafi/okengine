@@ -37,6 +37,7 @@ import {
 import { requirePackageModule } from "../shared/lazy-src.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import type { DurableResult, RunDurableOptions } from "../elements/clock/durable.ts";
+import { applyClockTimezoneDefaults } from "../elements/clock/declare.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import { parseAcceptLanguage } from "../elements/channel/locale.ts";
 import { runWithLocale } from "../i18n/locale-context.ts";
@@ -264,6 +265,14 @@ export interface OkeOptions {
   readonly signals?: BootOptions["signals"];
   /** Named clock declarations. */
   readonly clocks?: BootOptions["clocks"];
+  /**
+   * Clock element defaults. `{ timezone: "Asia/Riyadh" }` applies to every
+   * `clock()` / helper that omits `timezone` (explicit per-clock wins).
+   * Prefer this over repeating `timezone` on each declaration.
+   */
+  readonly clock?: {
+    readonly timezone?: string;
+  };
   /** Store facet declarations to register. */
   readonly stores?: BootOptions["stores"];
   /**
@@ -849,7 +858,12 @@ export function oke(options: OkeOptions): OkeApp {
   const effectiveStores = mergeUnique(options.stores, registrySnapshot.stores);
   const effectiveSecrets = mergeUnique(options.secrets, registrySnapshot.secrets);
   const effectiveSignals = mergeUnique(options.signals, registrySnapshot.signals);
-  const effectiveClocks = mergeUnique(options.clocks, registrySnapshot.clocks);
+  const mergedClocks = mergeUnique(options.clocks, registrySnapshot.clocks);
+  // Apply oke({ clock: { timezone } }) now; leave defaulted clocks intact when
+  // unset so bindClock can still honor defineConfig({ clock: { timezone } }).
+  const effectiveClocks = options.clock?.timezone
+    ? applyClockTimezoneDefaults(mergedClocks, options.clock.timezone)
+    : mergedClocks;
   const effectivePolicies = mergeUnique(options.gate?.policies, registrySnapshot.gates);
   /**
    * Fold registered `vault.env.required` names into the vault boot options so
@@ -1301,6 +1315,7 @@ export function oke(options: OkeOptions): OkeApp {
       unguardedHttp,
       signals: [...baseSignals, ...pluginSignals],
       clocks: [...baseClocks, ...pluginClocks],
+      clock: overrides?.clock ?? options.clock,
       stores: overrides?.stores ?? effectiveStores,
       channel: {
         ...(baseChannel ?? {}),

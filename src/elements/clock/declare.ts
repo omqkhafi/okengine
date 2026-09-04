@@ -3,9 +3,18 @@
  *
  * Named clocks are reconciled into the Store at boot; the scheduler reads
  * the effective state from the Store (console §5), never the code directly.
+ *
+ * Helpers (`clock.daily` · `cron` · `every` · …) compile to the same
+ * {@link ClockDecl} shape as `clock(name, { cron })`.
  */
 
 import { clockRegistry } from "../../kernel/element-registries.ts";
+import {
+  assertValidCronExpression,
+  buildCronExpression,
+  type CronField,
+  type CronFields,
+} from "./cron-fields.ts";
 
 /** Options for {@link clock}. */
 export interface ClockOptions {
@@ -30,6 +39,51 @@ export interface ClockOptions {
 }
 
 /**
+ * Shared options for convenience helpers (no `cron` / `every` — those are
+ * supplied by the helper).
+ */
+export type ClockHelperOptions = Omit<ClockOptions, "cron" | "every">;
+
+/** Options for {@link clock.daily}. */
+export type ClockDailyOptions = ClockHelperOptions & {
+  /** Wall-clock time (`"06:00"`). Default midnight. */
+  readonly at?: string;
+};
+
+/** Options for {@link clock.hourly}. */
+export type ClockHourlyOptions = ClockHelperOptions & {
+  /** Minute of each hour (default `0`). */
+  readonly minute?: number;
+};
+
+/** Day-of-week token for {@link clock.weekly}. */
+export type ClockWeekday = CronField;
+
+/** Options for {@link clock.weekly}. */
+export type ClockWeeklyOptions = ClockHelperOptions & {
+  /** Day(s) of week (`"mon"` · `1` · `["mon", "fri"]` · `"1-5"`). */
+  readonly on: ClockWeekday;
+  /** Wall-clock time (default `"00:00"`). */
+  readonly at?: string;
+};
+
+/** Options for {@link clock.monthly}. */
+export type ClockMonthlyOptions = ClockHelperOptions & {
+  /** Day(s) of month (`1` · `[1, 15]`). */
+  readonly on: CronField;
+  /** Wall-clock time (default `"00:00"`). */
+  readonly at?: string;
+};
+
+/**
+ * Structured cron bag + shared helper options for {@link clock.cron}.
+ *
+ * Schedule keys (`minute` · `hour` · … · `at`) build the expression;
+ * remaining keys are {@link ClockHelperOptions}.
+ */
+export type ClockCronFieldsOptions = CronFields & ClockHelperOptions;
+
+/**
  * Declared clock handle — reconciled into `oke_crons` at boot.
  */
 export interface ClockDecl {
@@ -41,6 +95,13 @@ export interface ClockDecl {
   readonly every?: string;
   /** IANA timezone. */
   readonly timezone: string;
+  /**
+   * When true, `timezone` was omitted at declare and may be replaced by
+   * `oke({ clock: { timezone } })` / `defineConfig({ clock: { timezone } })`.
+   *
+   * @internal
+   */
+  readonly timezoneDefaulted?: boolean;
   /** Whether Console override is allowed. */
   readonly overridable: boolean;
   /** Optional human description. */
@@ -80,17 +141,51 @@ function declareClock(name: string, options: ClockOptions = {}): ClockDecl {
   if (!options.cron && !options.every) {
     throw new TypeError(`clock("${name}"): require cron or every`);
   }
+  if (options.cron) {
+    assertValidCronExpression(options.cron, `clock("${name}")`);
+  }
+  const timezoneDefaulted = options.timezone === undefined;
   const decl: ClockDecl = {
     name,
     cron: options.cron,
     every: options.every,
     timezone: options.timezone ?? "UTC",
+    ...(timezoneDefaulted ? { timezoneDefaulted: true } : {}),
     overridable: options.overridable ?? false,
     ...(options.description !== undefined ? { description: options.description } : {}),
     ...(options.perTenant === true ? { perTenant: true } : {}),
   };
   clockRegistry.push(decl);
   return decl;
+}
+
+/**
+ * Apply an app-wide default timezone to clocks that omitted `timezone`.
+ *
+ * Explicit `timezone: "…"` on a declaration always wins. When `defaultTimezone`
+ * is omitted / empty, defaulted clocks stay on `"UTC"`.
+ *
+ * @param decls - Declared clocks
+ * @param defaultTimezone - IANA zone from `oke({ clock })` / config
+ */
+export function applyClockTimezoneDefaults(
+  decls: readonly ClockDecl[],
+  defaultTimezone: string | undefined,
+): ClockDecl[] {
+  const zone = defaultTimezone?.trim();
+  if (!zone) return decls.slice();
+  return decls.map((d) => {
+    if (!d.timezoneDefaulted) return d;
+    return {
+      name: d.name,
+      ...(d.cron !== undefined ? { cron: d.cron } : {}),
+      ...(d.every !== undefined ? { every: d.every } : {}),
+      timezone: zone,
+      overridable: d.overridable,
+      ...(d.description !== undefined ? { description: d.description } : {}),
+      ...(d.perTenant === true ? { perTenant: true } : {}),
+    };
+  });
 }
 
 /**
@@ -101,6 +196,134 @@ function declareClock(name: string, options: ClockOptions = {}): ClockDecl {
  */
 function declarePerTenantClock(name: string, options: ClockOptions = {}): ClockDecl {
   return declareClock(name, { ...options, perTenant: true });
+}
+
+/**
+ * Interval helper — `clock.every("health.ping", "30s")`.
+ *
+ * @param name - Schedule name
+ * @param duration - Interval (`"30s"`, `"1h"`, …)
+ * @param options - Timezone / overridable / description / perTenant
+ */
+function declareEveryClock(
+  name: string,
+  duration: string,
+  options: ClockHelperOptions = {},
+): ClockDecl {
+  return declareClock(name, { ...options, every: duration });
+}
+
+/**
+ * Split structured cron fields from shared helper options.
+ *
+ * @param bag - Mixed `CronFields` + `ClockHelperOptions`
+ */
+function splitCronBag(bag: ClockCronFieldsOptions): {
+  readonly fields: CronFields;
+  readonly opts: ClockHelperOptions;
+} {
+  const {
+    minute,
+    hour,
+    dayOfMonth,
+    month,
+    dayOfWeek,
+    at,
+    timezone,
+    overridable,
+    description,
+    perTenant,
+  } = bag;
+  return {
+    fields: {
+      ...(minute !== undefined ? { minute } : {}),
+      ...(hour !== undefined ? { hour } : {}),
+      ...(dayOfMonth !== undefined ? { dayOfMonth } : {}),
+      ...(month !== undefined ? { month } : {}),
+      ...(dayOfWeek !== undefined ? { dayOfWeek } : {}),
+      ...(at !== undefined ? { at } : {}),
+    },
+    opts: {
+      ...(timezone !== undefined ? { timezone } : {}),
+      ...(overridable !== undefined ? { overridable } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(perTenant !== undefined ? { perTenant } : {}),
+    },
+  };
+}
+
+/**
+ * Cron helper — string expression or structured fields.
+ *
+ * @param name - Schedule name
+ * @param expressionOrFields - Five-field / nickname string, or field bag
+ * @param options - Shared options when the second arg is a string
+ */
+function declareCronClock(
+  name: string,
+  expressionOrFields: string | ClockCronFieldsOptions,
+  options: ClockHelperOptions = {},
+): ClockDecl {
+  if (typeof expressionOrFields === "string") {
+    return declareClock(name, { ...options, cron: expressionOrFields });
+  }
+  const { fields, opts } = splitCronBag(expressionOrFields);
+  const cron = buildCronExpression(fields);
+  return declareClock(name, { ...opts, cron });
+}
+
+/**
+ * Daily preset — midnight unless `at` is set.
+ *
+ * @param name - Schedule name
+ * @param options - `at` + shared options
+ */
+function declareDailyClock(name: string, options: ClockDailyOptions = {}): ClockDecl {
+  const { at, ...opts } = options;
+  const cron = buildCronExpression({ at: at ?? "00:00" });
+  return declareClock(name, { ...opts, cron });
+}
+
+/**
+ * Hourly preset — top of the hour unless `minute` is set.
+ *
+ * @param name - Schedule name
+ * @param options - `minute` + shared options
+ */
+function declareHourlyClock(name: string, options: ClockHourlyOptions = {}): ClockDecl {
+  const { minute, ...opts } = options;
+  const cron = buildCronExpression({ minute: minute ?? 0 });
+  return declareClock(name, { ...opts, cron });
+}
+
+/**
+ * Weekly / multi-weekday preset.
+ *
+ * @param name - Schedule name
+ * @param options - `on` (required) + optional `at`
+ */
+function declareWeeklyClock(name: string, options: ClockWeeklyOptions): ClockDecl {
+  const { on, at, ...opts } = options;
+  const cron = buildCronExpression({
+    at: at ?? "00:00",
+    dayOfWeek: on,
+  });
+  return declareClock(name, { ...opts, cron });
+}
+
+/**
+ * Monthly / multi-DOM preset.
+ *
+ * @param name - Schedule name
+ * @param options - `on` (required) + optional `at`
+ */
+function declareMonthlyClock(name: string, options: ClockMonthlyOptions): ClockDecl {
+  const { on, at, ...opts } = options;
+  const cron = buildCronExpression({
+    at: at ?? "00:00",
+    dayOfMonth: on,
+  });
+  return declareClock(name, { ...opts, cron });
 }
 
 /**
@@ -137,12 +360,33 @@ export function parsePerTenantCronName(
   return { template, tenantId };
 }
 
+/** Public Clock declaration namespace — callable + convenience helpers. */
+export interface ClockNamespace {
+  (name: string, options?: ClockOptions): ClockDecl;
+  readonly perTenant: typeof declarePerTenantClock;
+  readonly every: typeof declareEveryClock;
+  readonly cron: typeof declareCronClock;
+  readonly daily: typeof declareDailyClock;
+  readonly hourly: typeof declareHourlyClock;
+  readonly weekly: typeof declareWeeklyClock;
+  readonly monthly: typeof declareMonthlyClock;
+}
+
 /**
  * Declare a named clock / cron schedule.
+ *
+ * Helpers: `clock.every` · `clock.cron` · `clock.daily` · `clock.hourly` ·
+ * `clock.weekly` · `clock.monthly` · `clock.perTenant`.
  *
  * @param name - Schedule name
  * @param options - `cron` and/or `every`, timezone, overridable
  */
-export const clock: ((name: string, options?: ClockOptions) => ClockDecl) & {
-  readonly perTenant: typeof declarePerTenantClock;
-} = Object.assign(declareClock, { perTenant: declarePerTenantClock });
+export const clock: ClockNamespace = Object.assign(declareClock, {
+  perTenant: declarePerTenantClock,
+  every: declareEveryClock,
+  cron: declareCronClock,
+  daily: declareDailyClock,
+  hourly: declareHourlyClock,
+  weekly: declareWeeklyClock,
+  monthly: declareMonthlyClock,
+});

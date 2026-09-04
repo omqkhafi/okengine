@@ -111,6 +111,14 @@ export interface BootOptions {
   readonly signals?: readonly SignalDecl[];
   /** Named clock declarations. */
   readonly clocks?: readonly ClockDecl[];
+  /**
+   * Clock element defaults — `{ timezone }` for declarations that omit
+   * `timezone`. Merged with `defineConfig({ clock: { timezone } })` at bind
+   * (`oke({ clock })` wins over config).
+   */
+  readonly clock?: {
+    readonly timezone?: string;
+  };
   /** Store facet declarations to register. */
   readonly stores?: readonly StoreDecl[];
   /** Channel runtime options. */

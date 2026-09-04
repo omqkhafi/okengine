@@ -136,6 +136,15 @@ export interface I18nConfig {
   readonly dir?: Readonly<Record<string, "ltr" | "rtl">>;
 }
 
+/** Clock element defaults in {@link defineConfig}. */
+export interface ClockConfig {
+  /**
+   * Default IANA timezone for `clock()` declarations that omit `timezone`.
+   * Overridden by `oke({ clock: { timezone } })` and by per-clock `timezone`.
+   */
+  readonly timezone?: string;
+}
+
 /** Context passed to {@link TenancyConfig.resolve} (Skyport / multi-tenant). */
 export interface TenancyResolveContext {
   readonly auth: {
@@ -229,6 +238,8 @@ export interface OkeConfig {
   readonly drivers?: DriversConfig;
   readonly images?: ImagesConfig;
   readonly i18n?: I18nConfig;
+  /** Default Clock timezone (and future clock element defaults). */
+  readonly clock?: ClockConfig;
   readonly tenancy?: TenancyConfig;
   /**
    * Privacy tooling / redact policy. Presence (or {@link RunsConfig.redact})

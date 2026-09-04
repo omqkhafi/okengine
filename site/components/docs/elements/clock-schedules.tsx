@@ -1,9 +1,9 @@
 /**
  * Two schedule shapes, one Flow species — Clock overview figure.
  *
- * `clock(name, { every })` and `clock(name, { cron, timezone })` take turns firing;
+ * `clock.every` and `clock.daily` (calendar helpers / cron) take turns firing;
  * a packet crosses into the same Flow panel. The flow never sees which kind woke it.
- * Deterministic from one tick, never Math.random.
+ * Timezone lives on `oke({ clock })` — helpers omit it. Deterministic from one tick.
  */
 
 "use client";
@@ -28,7 +28,7 @@ const KINDS: ReadonlyArray<{
   {
     id: "every",
     icon: Timer,
-    syntax: 'clock("sweep", { every: "1h" })',
+    syntax: 'clock.every("sweep", "1h")',
     starts: "fixed interval",
     console: "Listed, with health",
     shape: "Interval — purge, sweep, ping",
@@ -36,15 +36,15 @@ const KINDS: ReadonlyArray<{
   {
     id: "cron",
     icon: CalendarClock,
-    syntax: 'clock("daily-report", { cron, timezone })',
-    starts: "cron + timezone",
+    syntax: 'clock.daily("report", { at: "06:00" })',
+    starts: "wall clock",
     console: "Listed, with health",
-    shape: "Named — operators pause / edit when overridable",
+    shape: "Named — zone from oke({ clock }) · pause / edit when overridable",
   },
 ];
 
 /**
- * Interval vs cron schedule — same `on(clockRef, flow)` underneath.
+ * Interval vs calendar schedule — same `on(clockRef, flow)` underneath.
  */
 export function ClockSchedules() {
   const tick = useTick(TICK_MS);
@@ -53,7 +53,7 @@ export function ClockSchedules() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Two schedule shapes — clock with every is a fixed interval, clock with cron is a named cron — both bind with on(clockRef, flow) to the same Flow species."
+      aria-label="Two schedule shapes — clock.every is a fixed interval, clock.daily and cron helpers are wall-clock — both bind with on(clockRef, flow) to the same Flow species. Timezone comes from oke({ clock })."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Two kinds, one species</p>
@@ -146,7 +146,7 @@ export function ClockSchedules() {
             <p className="text-xs leading-relaxed text-pretty text-fd-muted-foreground">
               Same <code className="font-mono text-[10px]">on(trigger, flow)</code>. The{" "}
               <code className="font-mono text-[10px]">do</code> never knows whether an interval or a
-              named cron woke it.
+              wall-clock helper woke it.
             </p>
           </RevealItem>
         </RevealGroup>

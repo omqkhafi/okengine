@@ -13,6 +13,10 @@ import {
   formatAiProviderTier2Warn,
   getAiProviderEntry,
 } from "../elements/ai/providers.ts";
+import {
+  buildCronExpression,
+  type CronField,
+} from "../elements/clock/cron-fields.ts";
 import { SearchConfigError } from "../elements/store/search-errors.ts";
 
 import type {
@@ -1154,7 +1158,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       const name = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
       if (name) {
-        scope.clocks[name] = {
+        recordClockDecl(scope, program, call, name, {
           ...(stringProp(opts, "every") ? { every: stringProp(opts, "every") } : {}),
           ...(stringProp(opts, "cron") ? { cron: stringProp(opts, "cron") } : {}),
           ...(boolProp(opts, "overridable") !== undefined
@@ -1164,12 +1168,59 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
             ? { description: stringProp(opts, "description") }
             : {}),
           perTenant: true,
-        };
-        const bindingName = enclosingConstName(call, program);
-        if (bindingName) {
-          scope.bindings.set(bindingName, {
-            kind: "clock",
-            ref: name,
+        });
+      }
+    }
+
+    // clock.every("name", "30s", opts?)
+    if (obj === "clock" && prop === "every") {
+      const name = stringArg(call.arguments[0]);
+      const duration = stringArg(call.arguments[1]);
+      const opts = objectArg(call.arguments[2]);
+      if (name && duration) {
+        recordClockDecl(scope, program, call, name, {
+          every: duration,
+          ...clockHelperOptsFromAst(opts),
+        });
+      }
+    }
+
+    // clock.cron("name", "0 6 * * *" | fields, opts?)
+    if (obj === "clock" && prop === "cron") {
+      const name = stringArg(call.arguments[0]);
+      if (name) {
+        const expr = stringArg(call.arguments[1]);
+        const fieldsObj = objectArg(call.arguments[1]);
+        if (expr) {
+          recordClockDecl(scope, program, call, name, {
+            cron: expr,
+            ...clockHelperOptsFromAst(objectArg(call.arguments[2])),
+          });
+        } else if (fieldsObj) {
+          const built = cronExpressionFromFieldsAst(fieldsObj);
+          if (built) {
+            recordClockDecl(scope, program, call, name, {
+              cron: built,
+              ...clockHelperOptsFromAst(fieldsObj),
+            });
+          }
+        }
+      }
+    }
+
+    // clock.daily / hourly / weekly / monthly
+    if (
+      obj === "clock" &&
+      (prop === "daily" || prop === "hourly" || prop === "weekly" || prop === "monthly")
+    ) {
+      const name = stringArg(call.arguments[0]);
+      const opts = objectArg(call.arguments[1]);
+      if (name) {
+        const cron = cronFromPresetHelper(prop, opts);
+        if (cron) {
+          recordClockDecl(scope, program, call, name, {
+            cron,
+            ...clockHelperOptsFromAst(opts),
           });
         }
       }
@@ -1479,7 +1530,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
     const name = stringArg(call.arguments[0]);
     const opts = objectArg(call.arguments[1]);
     if (name && opts) {
-      scope.clocks[name] = {
+      recordClockDecl(scope, program, call, name, {
         ...(stringProp(opts, "every") ? { every: stringProp(opts, "every") } : {}),
         ...(stringProp(opts, "cron") ? { cron: stringProp(opts, "cron") } : {}),
         ...(boolProp(opts, "overridable") !== undefined
@@ -1489,14 +1540,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           ? { description: stringProp(opts, "description") }
           : {}),
         ...(boolProp(opts, "perTenant") === true ? { perTenant: true } : {}),
-      };
-      const bindingName = enclosingConstName(call, program);
-      if (bindingName) {
-        scope.bindings.set(bindingName, {
-          kind: "clock",
-          ref: name,
-        });
-      }
+      });
     }
   }
 
@@ -2842,6 +2886,143 @@ function objectArg(node: AstNode | undefined): AstNode | undefined {
   if (!node) return undefined;
   if (node.type === "ObjectExpression") return node;
   return undefined;
+}
+
+/** Shared helper options (`timezone` is runtime-only — Manifest Clock has no zone field). */
+function clockHelperOptsFromAst(opts: AstNode | undefined): {
+  readonly overridable?: boolean;
+  readonly description?: string;
+  readonly perTenant?: boolean;
+} {
+  return {
+    ...(boolProp(opts, "overridable") !== undefined
+      ? { overridable: boolProp(opts, "overridable") }
+      : {}),
+    ...(stringProp(opts, "description") ? { description: stringProp(opts, "description") } : {}),
+    ...(boolProp(opts, "perTenant") === true ? { perTenant: true } : {}),
+  };
+}
+
+/**
+ * Record a clock into the extract scope + binding map.
+ *
+ * @param scope - Project scope
+ * @param program - AST program
+ * @param call - Declaration call
+ * @param name - Clock name
+ * @param entry - Partial Manifest clock
+ */
+function recordClockDecl(
+  scope: ProjectScope,
+  program: AstNode,
+  call: CallExpression,
+  name: string,
+  entry: Clock,
+): void {
+  scope.clocks[name] = entry;
+  const bindingName = enclosingConstName(call, program);
+  if (bindingName) {
+    scope.bindings.set(bindingName, {
+      kind: "clock",
+      ref: name,
+    });
+  }
+}
+
+/**
+ * Read a structured cron field from an AST node (literal or array of literals).
+ *
+ * @param node - Property value
+ */
+function cronFieldFromAst(node: AstNode | undefined): CronField | undefined {
+  if (!node) return undefined;
+  if (node.type === "Literal") {
+    const v = (node as Literal).value;
+    if (typeof v === "number" || typeof v === "string") return v;
+    return undefined;
+  }
+  if (node.type === "ArrayExpression") {
+    const els = (node as AstNode & { elements?: AstNode[] }).elements ?? [];
+    const out: Array<number | string> = [];
+    for (const el of els) {
+      if (!el || el.type !== "Literal") return undefined;
+      const v = (el as Literal).value;
+      if (typeof v !== "number" && typeof v !== "string") return undefined;
+      out.push(v);
+    }
+    return out;
+  }
+  return undefined;
+}
+
+/**
+ * Build a cron expression from a structured fields object literal.
+ *
+ * @param obj - ObjectExpression with CronFields keys
+ */
+function cronExpressionFromFieldsAst(obj: AstNode): string | undefined {
+  const fields: {
+    minute?: CronField;
+    hour?: CronField;
+    dayOfMonth?: CronField;
+    month?: CronField;
+    dayOfWeek?: CronField;
+    at?: string;
+  } = {};
+  const minute = cronFieldFromAst(objectProp(obj, "minute"));
+  const hour = cronFieldFromAst(objectProp(obj, "hour"));
+  const dayOfMonth = cronFieldFromAst(objectProp(obj, "dayOfMonth"));
+  const month = cronFieldFromAst(objectProp(obj, "month"));
+  const dayOfWeek = cronFieldFromAst(objectProp(obj, "dayOfWeek"));
+  const at = stringProp(obj, "at");
+  if (minute !== undefined) fields.minute = minute;
+  if (hour !== undefined) fields.hour = hour;
+  if (dayOfMonth !== undefined) fields.dayOfMonth = dayOfMonth;
+  if (month !== undefined) fields.month = month;
+  if (dayOfWeek !== undefined) fields.dayOfWeek = dayOfWeek;
+  if (at !== undefined) fields.at = at;
+  try {
+    return buildCronExpression(fields);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Compile a preset helper (`daily` / `hourly` / `weekly` / `monthly`) to cron.
+ *
+ * @param prop - Helper name
+ * @param opts - Options object literal
+ */
+function cronFromPresetHelper(
+  prop: "daily" | "hourly" | "weekly" | "monthly",
+  opts: AstNode | undefined,
+): string | undefined {
+  try {
+    if (prop === "daily") {
+      return buildCronExpression({ at: stringProp(opts, "at") ?? "00:00" });
+    }
+    if (prop === "hourly") {
+      const minute = numberProp(opts, "minute") ?? 0;
+      return buildCronExpression({ minute });
+    }
+    if (prop === "weekly") {
+      const on = cronFieldFromAst(objectProp(opts, "on"));
+      if (on === undefined) return undefined;
+      return buildCronExpression({
+        at: stringProp(opts, "at") ?? "00:00",
+        dayOfWeek: on,
+      });
+    }
+    const on = cronFieldFromAst(objectProp(opts, "on"));
+    if (on === undefined) return undefined;
+    return buildCronExpression({
+      at: stringProp(opts, "at") ?? "00:00",
+      dayOfMonth: on,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 /**

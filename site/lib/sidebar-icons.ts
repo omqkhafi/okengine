@@ -36,7 +36,6 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/elements/store/search": "Search",
   "/docs/elements/clock": "Clock",
   "/docs/elements/clock/schedules": "Calendar",
-  "/docs/elements/clock/intervals": "Timer",
   "/docs/elements/clock/sleep": "Moon",
   "/docs/elements/gate": "ShieldCheck",
   "/docs/elements/gate/auth": "Lock",

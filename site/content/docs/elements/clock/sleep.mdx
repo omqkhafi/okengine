@@ -1,52 +1,225 @@
 ---
 title: "Durable Sleep"
-description: "Process-safe workflow pauses that resume reliably across server reboots without holding OS threads."
+description: "Journaled pauses that resume across restarts — fx.clock.sleep(label, duration) on durable Flows."
 icon: "Moon"
+source: "docs/spec/unified-theory.md"
 ---
 
-Durable Sleep (`fx.clock.sleep`) suspends flow execution until a specified point in the future.
+Durable sleep suspends a Flow until a future instant without holding a worker thread.
+Call `await fx.clock.sleep(label, duration)` inside a `durable: true` Flow — the journal
+stores `wakeAt`, releases the run lease, and any instance may resume when due.
 
-## What it is
+For developers building trial reminders, delayed digests, and multi-day provisions on okengine.
 
-Calling `await fx.clock.sleep("7d")` inside a durable workflow writes a wake-up record into the store and releases the worker thread immediately. When the target time arrives, any available cluster node awakens the workflow and continues execution.
+<Callout title="The one rule">
+  Signature is `fx.clock.sleep(label, duration)` — two arguments. A single duration string
+  is treated as the **label**, not the wait. Sleep only parks when the Flow is durable.
+</Callout>
+
+<ClockSleep />
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Sleep inside a durable flow
+### Sleep inside a durable Flow
 
 ```typescript title="src/flows/trials/reminder.ts"
-import { flow } from "okengine";
+import { on, flow, http } from "okengine";
+import { z } from "zod";
 
-export const trialReminder = flow("trials.reminder", {
-  durable: true,
-  do: async ({ userId }, fx) => {
-    // Wait 3 days
-    await fx.clock.sleep("3d");
-
-    // Send trial expiring email
-    await fx.send(trialExpiringEmail, { to: userId });
-  },
-});
+export const trialReminder = on(
+  http.post("/trials/start"),
+  flow("trials.reminder", {
+    durable: true,
+    in: z.object({ email: z.string().email() }),
+    do: async ({ email }, fx) => {
+      await fx.step("mark-trial", async () => {
+        await fx.call(startTrial, { email });
+      });
+      await fx.clock.sleep("expiry-window", "3d");
+      await fx.step("notify", async () => {
+        await fx.send(trialExpiringEmail, { to: email });
+      });
+    },
+  }),
+);
 ```
+
+</Step>
+
+<Step>
+### What the client sees
+
+The HTTP request returns **`204 No Content`** when the Flow parks on sleep — the caller is
+not waiting three days. Wake continues on a worker; wrap side effects in `fx.step` so
+replay does not re-send mail.
 
 </Step>
 
 </Steps>
 
+<Callout title="Detailed section">
+  If you only need a pause, the example above is enough. Below: non-durable no-ops,
+  wake-early, and how sleep fits with steps / compensation.
+</Callout>
+
+## Progressive Patterns
+
+From a labelled pause to HTTP parking, nested-call limits, and non-durable behavior:
+
+<Tabs items={["Label + duration", "HTTP park", "After a step", "Non-durable"]}>
+
+<Tab value="Label + duration">
+
+Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. Labels show up in the journal
+and Console:
+
+```typescript
+await fx.clock.sleep("morning-window", "8h");
+await fx.clock.sleep("verify-window", "2m");
+```
+
+**Wrong:** `fx.clock.sleep("8h")` — `"8h"` is the label; duration is missing → immediate
+resolve / unexpected behavior.
+
+</Tab>
+
+<Tab value="HTTP park">
+
+Sleep on an HTTP-triggered durable Flow returns success with an empty body (`204`). Return
+a body **before** sleep if the caller must see an id:
+
+```typescript title="src/flows/workspaces/provision.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const provision = on(
+  http.post("/workspaces"),
+  flow("workspaces.provision", {
+    durable: true,
+    in: z.object({ email: z.string().email() }),
+    do: async ({ email }, fx) => {
+      await fx.step("create", async () => {
+        await fx.call(createWorkspace, { email });
+      });
+      await fx.emit(workspaceProvisioned, { email });
+      await fx.clock.sleep("welcome-delay", "8h");
+      await fx.step("notify", async () => {
+        await fx.send(welcomeEmail, { to: email });
+      });
+    },
+  }),
+);
+```
+
+Emit or return **before** sleep when the caller needs an id — after sleep the HTTP
+client is already done. See [Workflows · Durable Sleep](/docs/elements/flow/workflows#durable-sleep).
+
+</Tab>
+
+<Tab value="After a step">
+
+Checkpoint work **before** the pause so a crash mid-provision does not re-run after wake:
+
+```typescript
+await fx.step("provision", async () => {
+  await fx.call(createWorkspace, { email });
+});
+await fx.clock.sleep("morning-window", "8h");
+await fx.step("notify", async () => {
+  await fx.send(welcomeEmail, { to: email });
+});
+```
+
+Do not hold `fx.using` resources across sleep — acquire again after wake.
+
+</Tab>
+
+<Tab value="Non-durable">
+
+Without a journal, `fx.clock.sleep` resolves **immediately**. There is no thread sleep and
+no `setTimeout`. Use durable Flows for real delays; use frozen clock + advance in tests.
+
+</Tab>
+
+</Tabs>
+
+## Sleep Reference
+
+| Call / option | Type | Meaning |
+| ------------- | ---- | ------- |
+| `durable: true` | Flow option | Journals steps and sleep; required to park |
+| `fx.clock.sleep(label, duration)` | park | Writes `wakeAt`, status `sleeping`, releases lease |
+| `label` | `string` | Journal / Console step name |
+| `duration` | `string` | `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"` |
+
+Outcomes of a durable attempt that hits sleep: status `"sleeping"` with `wakeAt` and
+`label`. After wake, prior `fx.step` bodies replay from the journal and do not re-execute.
+
+## Wake Early
+
+Operators can advance `wakeAt` to now (Console / `wakeEarly`). With a flow resolver, the
+run resumes immediately; without it, only the wake time moves forward.
+
+Missing run id → `ClockResourceNotFoundError` — `run "{id}" not found`.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Sleep returns immediately / work runs twice after wait">
+  Missing `durable: true`, or `fx.clock.sleep("8h")` with one argument. Use
+  `fx.clock.sleep("label", "8h")`. Non-durable sleep is a no-op.
+</Accordion>
+
+<Accordion title="HTTP 204 with empty body after POST">
+  The Flow parked on `fx.clock.sleep` — success, not a missing handler. The original
+  client is done; wake continues on a worker. Return a body before sleep if needed.
+</Accordion>
+
+<Accordion title="Mail / charge ran again after resume">
+  The side effect was outside `fx.step`. Wrap provider calls in uniquely named steps so
+  replay returns the journaled value.
+</Accordion>
+
+<Accordion title="Connection held across sleep">
+  `fx.using` is same-attempt cleanup — do not hold handles across
+  `fx.clock.sleep`. Acquire again after wake.
+</Accordion>
+
+<Accordion title="ClockResourceNotFoundError on wake">
+  Cause: `run "{id}" not found`. The wake-early target is not in the journal Store —
+  check the run id from Console / durable result.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Workflows](/docs/elements/flow/workflows) — `durable`, `fx.step`, compensate, full sleep section
+- [Clock overview](/docs/elements/clock) — schedules and `fx.clock` helpers
+- [fx](/docs/reference/fx) — `fx.clock.sleep`, `fx.step`
+- [Configuration](/docs/reference/configuration) — `drivers.journal`
+- [Errors](/docs/reference/errors) — `ClockResourceNotFoundError`
+
 ## Next
 
 <Cards>
   <Card
-    title="Gate Element"
-    description="Authenticate users and protect endpoints with Gates."
-    href="/docs/elements/gate"
+    title="Durable Workflows"
+    description="Step journaling, undo, and multi-day runs."
+    href="/docs/elements/flow/workflows"
+  />
+  <Card
+    title="Schedules"
+    description="Cron helpers, intervals, and IANA timezones."
+    href="/docs/elements/clock/schedules"
   />
   <Card
     title="Clock Overview"
-    description="Return to Clock overview."
+    description="Return to the Clock element overview."
     href="/docs/elements/clock"
   />
 </Cards>
