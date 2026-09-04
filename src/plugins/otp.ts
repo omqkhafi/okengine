@@ -5,6 +5,7 @@
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
 import {
+  completeVerifiedEmailSignIn,
   IdentityError,
   linkOrProvision,
   normalizeEmail,
@@ -563,11 +564,10 @@ export function otp(opts: OtpOptions): PluginDef {
       let user: UserIdentityRow;
       try {
         user = (
-          await linkOrProvision(identities, {
+          await completeVerifiedEmailSignIn(identities, runtime.sessions, {
             provider: "otp",
             providerAccountId: email!,
-            email,
-            emailVerified: true,
+            email: email!,
             now: () => now,
           })
         ).user;

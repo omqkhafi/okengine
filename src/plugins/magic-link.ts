@@ -6,7 +6,13 @@
  * local DX without Mailpit / SMTP.
  */
 
-import { linkOrProvision, normalizeEmail, type IdentityStore } from "../auth/identity.ts";
+import {
+  completeVerifiedEmailSignIn,
+  IdentityError,
+  normalizeEmail,
+  type IdentityStore,
+  type UserIdentityRow,
+} from "../auth/identity.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import {
   createVerificationStore,
@@ -168,13 +174,20 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
       if (!row) return fail("AuthFailed", { reason: "invalid_credentials" });
       row.consumedAt = now;
       const email = row.identifier.slice("magic:".length);
-      const { user } = await linkOrProvision(identities, {
-        provider: "magic-link",
-        providerAccountId: email,
-        email,
-        emailVerified: true,
-        now: () => now,
-      });
+      let user: UserIdentityRow;
+      try {
+        ({ user } = await completeVerifiedEmailSignIn(identities, runtime.sessions, {
+          provider: "magic-link",
+          providerAccountId: email,
+          email,
+          now: () => now,
+        }));
+      } catch (err) {
+        if (err instanceof IdentityError) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        throw err;
+      }
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: user.id,
         plane: "user",

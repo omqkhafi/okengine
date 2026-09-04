@@ -6,6 +6,7 @@ import type { PasswordHashOptions } from "../runtime/types.ts";
 import { createBunCrypto } from "../runtime/primitives.ts";
 import { assertNotBreached, type BreachCheckFn } from "./breach-check.ts";
 import { assertPasswordPolicy, type PasswordPolicyOptions } from "./password-policy.ts";
+import { revokePrincipalSessions, type SessionStore } from "./sessions.ts";
 
 /** User-plane identity row (logical). */
 export interface UserIdentityRow {
@@ -307,6 +308,151 @@ export async function linkOrProvision(
   if (userIsNew) await store.persistUser?.(user);
   await store.persistAccount?.(account);
   return { user, account, created: true };
+}
+
+/** Options for {@link completeVerifiedEmailSignIn}. */
+export interface CompleteVerifiedEmailSignInOptions {
+  /** Passwordless provider (`magic-link` or `otp`). */
+  readonly provider: string;
+  /** Provider-scoped subject — normalized email for email OTP / magic-link. */
+  readonly providerAccountId: string;
+  /** Proven email address (ownership verified by consuming the challenge). */
+  readonly email: string;
+  /** Injectable clock. */
+  readonly now?: () => number;
+}
+
+/** Result of {@link completeVerifiedEmailSignIn}. */
+export interface VerifiedEmailSignInResult extends LinkedCredential {
+  /**
+   * `true` when an existing unverified account was reclaimed and planted
+   * credentials were purged (CVE-2026-67327 pre-account hijack defense).
+   */
+  readonly credentialsCompromised: boolean;
+}
+
+/**
+ * Complete a proven-email passwordless sign-in (magic-link / email OTP).
+ *
+ * Unlike {@link linkOrProvision}, this path may reclaim an existing email
+ * owner because the challenge consumption proved inbox ownership:
+ * - Existing `provider:email` → re-auth (ensure `emailVerified`).
+ * - Unverified email owner → revoke sessions, clear password hashes, mark
+ *   verified, attach the passwordless credential (pre-account hijack fix).
+ * - Verified email owner → attach passwordless credential; no credential purge.
+ * - No owner → provision a new verified user.
+ *
+ * @param store - Shared identity store
+ * @param sessions - Session store (for principal revoke on reclaim)
+ * @param options - Proven email + passwordless provider
+ */
+export async function completeVerifiedEmailSignIn(
+  store: IdentityStore,
+  sessions: SessionStore,
+  options: CompleteVerifiedEmailSignInOptions,
+): Promise<VerifiedEmailSignInResult> {
+  const email = normalizeEmail(options.email);
+  if (!email.includes("@")) {
+    throw new IdentityError("invalid_email", "invalid email");
+  }
+  const providerAccountId = normalizeEmail(options.providerAccountId);
+  const now = options.now ?? (() => Date.now());
+  const t = now();
+  const key = `${options.provider}:${providerAccountId}`;
+
+  // 1. Existing passwordless credential → re-auth (no purge).
+  const existingAccountId = store.byProvider.get(key);
+  if (existingAccountId) {
+    const account = store.accounts.get(existingAccountId);
+    const user = account ? store.users.get(account.userId) : undefined;
+    if (account && user) {
+      if (!user.emailVerified) {
+        user.emailVerified = true;
+        user.updatedAt = t;
+        await store.persistUser?.(user);
+      }
+      return { user, account, created: false, credentialsCompromised: false };
+    }
+  }
+
+  const emailOwnerId = store.byEmail.get(email);
+  if (emailOwnerId) {
+    const user = store.users.get(emailOwnerId);
+    if (!user) {
+      throw new IdentityError("email_in_use", "email already registered to another credential");
+    }
+
+    const wasUnverified = !user.emailVerified;
+    if (wasUnverified) {
+      // Pre-account hijack: attacker planted an unverified password account.
+      revokePrincipalSessions(sessions, "user", user.id, t);
+      const persistAccountJobs: Array<void | Promise<void>> = [];
+      for (const account of store.accounts.values()) {
+        if (account.userId !== user.id || account.passwordHash === null) continue;
+        account.passwordHash = null;
+        account.updatedAt = t;
+        persistAccountJobs.push(store.persistAccount?.(account));
+      }
+      await Promise.all(persistAccountJobs);
+      user.emailVerified = true;
+      user.updatedAt = t;
+      await store.persistUser?.(user);
+    }
+
+    // Attach the passwordless provider if missing (reclaim or verified re-auth).
+    let account = existingAccountId ? store.accounts.get(existingAccountId) : undefined;
+    let created = false;
+    if (!account) {
+      account = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        provider: options.provider,
+        providerAccountId,
+        passwordHash: null,
+        createdAt: t,
+        updatedAt: t,
+      };
+      store.accounts.set(account.id, account);
+      store.byProvider.set(key, account.id);
+      await store.persistAccount?.(account);
+      created = true;
+    }
+
+    return {
+      user,
+      account,
+      created,
+      credentialsCompromised: wasUnverified,
+    };
+  }
+
+  // 3. Fresh provision — verified from the start.
+  const userId = crypto.randomUUID();
+  const user: UserIdentityRow = {
+    id: userId,
+    email,
+    name: email.split("@")[0] || "user",
+    emailVerified: true,
+    status: "active",
+    createdAt: t,
+    updatedAt: t,
+    extra: {},
+  };
+  const account: UserAccountRow = {
+    id: crypto.randomUUID(),
+    userId,
+    provider: options.provider,
+    providerAccountId,
+    passwordHash: null,
+    createdAt: t,
+    updatedAt: t,
+  };
+  store.users.set(userId, user);
+  store.byEmail.set(email, userId);
+  store.accounts.set(account.id, account);
+  store.byProvider.set(key, account.id);
+  await Promise.all([store.persistUser?.(user), store.persistAccount?.(account)]);
+  return { user, account, created: true, credentialsCompromised: false };
 }
 
 /**

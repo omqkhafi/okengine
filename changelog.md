@@ -26,6 +26,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `{ twoFactorRequired, challengeId, method, userId }` instead.
 - `auth.twoFactorVerify` requires `{ challengeId, code }` (bound to the
   server-issued login challenge). Unbound `{ userId, code }` is no longer accepted.
+- `passkey` register / authenticate options now return a ceremony `sessionId`;
+  register and authenticate bodies must echo that `sessionId` with the challenge
+  (challenge is bound to the ceremony session and expires in ≤5 minutes).
 
 ### 🔥 Removed
 
@@ -103,6 +106,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - TOTP re-enrollment and method change require a successful step-up verification
   of the current factor; the old method is invalidated only after the new one is
   confirmed active.
+- Magic-link and email OTP verification reclaim an existing **unverified**
+  email account (CVE-2026-67327 pre-account hijack): revoke all sessions for
+  that principal, clear planted password hashes, mark `emailVerified`, then
+  issue the passwordless session. Already-verified owners re-auth without a
+  credential purge. Shared helper: `completeVerifiedEmailSignIn`.
 
 
 
