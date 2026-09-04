@@ -1,6 +1,6 @@
 ---
 title: "OKID"
-description: "OKE's native id generator — compact, URL-safe, cryptographically random ids from okengine/okid, with an opt-in time-sortable and alphabet-controlled variant."
+description: "OKE's native id generator — compact, URL-safe, cryptographically random ids from okengine/okid, with opt-in prefix, time-sortable, and alphabet-controlled variants."
 icon: "Hash"
 source: "docs/spec/unified-theory.md"
 ---
@@ -31,6 +31,7 @@ import { okid } from "okengine/okid";
 ```typescript
 const userId = okid();
 const requestId = okid(16);
+const typedId = okid({ prefix: "usr_" });
 const eventKey = okid({ sortable: true });
 const inviteCode = okid({ lookAlikes: false, uppercase: false });
 ```
@@ -59,8 +60,9 @@ The same 21-character id lands in your SQL primary keys, KV keys, and trace ids.
 | -------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
 | `okid()`                                           | 21-char URL-safe id, 126 bits of entropy  | 64-char alphabet, `a-zA-Z0-9-_`         |
 | `okid(length)`                                     | id of exactly `length` characters         | integer between 8 and 128               |
-| `okid({ length })`                                 | options form, id of `length`              | default 21                              |
-| `okid({ sortable })`                               | time-prefixed id, 8 prefix + `length − 8` | lexicographic order ≈ creation order    |
+| `okid({ length })`                                 | options form, body of `length`            | default 21                              |
+| `okid({ prefix })`                                 | `prefix` + body                           | body length unchanged; see Options      |
+| `okid({ sortable })`                               | time-prefixed body, 8 + `length − 8`      | lexicographic order ≈ creation order    |
 | `okid({ numbers, lowercase, uppercase, symbols })` | charset control                           | each group defaults to on               |
 | `okid({ lookAlikes })`                             | confusable-char control                   | `lookAlikes: false` drops `1lI0Oouv5Ss` |
 
@@ -68,8 +70,9 @@ The same 21-character id lands in your SQL primary keys, KV keys, and trace ids.
 
 | Option       | Type      | Default | Meaning                                                     |
 | ------------ | --------- | ------- | ----------------------------------------------------------- |
-| `length`     | `number`  | `21`    | total id length in characters, between 8 and 128            |
-| `sortable`   | `boolean` | `false` | prefix an 8-char epoch-ms timestamp so sorting follows time |
+| `length`     | `number`  | `21`    | generated body length (8–128); does not include `prefix`    |
+| `prefix`     | `string`  | `""`    | fixed label prepended to the body (e.g. `"usr_"`, `"evt_"`) |
+| `sortable`   | `boolean` | `false` | prefix the body with an 8-char epoch-ms timestamp           |
 | `numbers`    | `boolean` | `true`  | include `0-9`                                               |
 | `lowercase`  | `boolean` | `true`  | include `a-z`                                               |
 | `uppercase`  | `boolean` | `true`  | include `A-Z`                                               |
@@ -83,16 +86,23 @@ The same 21-character id lands in your SQL primary keys, KV keys, and trace ids.
 | `OKID_ALPHABET`            | `a-zA-Z0-9-_`                             | default, Base64URL order         |
 | `OKID_SORTABLE_ALPHABET`   | alphabet sorted by code unit (same chars) | used by the sortable encoder     |
 | `OKID_LOOKALIKE_CHARS`     | `1lI0Oouv5Ss`                             | dropped when `lookAlikes: false` |
-| `OKID_DEFAULT_LENGTH`      | `21`                                      | default length                   |
-| `OKID_MIN_LENGTH`          | `8`                                       | shortest non-sortable length     |
-| `OKID_MAX_LENGTH`          | `128`                                     | longest length                   |
-| `OKID_SORTABLE_MIN_LENGTH` | `16`                                      | shortest sortable length (8+8)   |
+| `OKID_DEFAULT_LENGTH`      | `21`                                      | default body length              |
+| `OKID_MIN_LENGTH`          | `8`                                       | shortest non-sortable body       |
+| `OKID_MAX_LENGTH`          | `128`                                     | longest body                     |
+| `OKID_SORTABLE_MIN_LENGTH` | `16`                                      | shortest sortable body (8+8)     |
+| `OKID_MAX_PREFIX_LENGTH`   | `32`                                      | longest semantic `prefix`        |
 
 ## Collision resistance
 
 Every character is drawn uniformly from the alphabet with `crypto.getRandomValues()`. Because it uses an unbiased character selection (never modulo), each character carries exactly `log2(alphabet)` bits of entropy. At the default 21 characters over 64 symbols, that is 126 bits — the birthday-bound collision probability across one billion ids is on the order of `10⁻²¹`. You do not need a UUID for collision resistance; this is where a UUID is stronger only because it is a different format, not a different amount of randomness.
 
 **Consequence:** two ids minted at the same millisecond are still distinct — the timestamp prefix never replaces entropy, it prefixes it.
+
+## Semantic prefixes
+
+`prefix` is a fixed label (`"usr_"`, `"evt_"`, `"inst-"`) prepended to the generated body. Characters must belong to `OKID_ALPHABET` (max 32). `length` stays the body size; the returned string is `prefix + body`.
+
+**Consequence:** `okid({ prefix: "usr_", sortable: true })` yields `usr_` + 8-char timestamp + random tail — the label sorts first, then time.
 
 ## Sortable ids
 
@@ -108,7 +118,7 @@ Turning groups off shrinks the alphabet. With a non-power-of-two alphabet, OKID 
 
 ## Under the hood
 
-The generator is a pure function: no counters, no process or machine fingerprint, no shared mutable state. It is safe to call concurrently from any number of workers, and every id uses only the bytes it needs — no hidden timestamp, no hidden prefix.
+The generator is a pure function: no counters, no process or machine fingerprint, no shared mutable state. It is safe to call concurrently from any number of workers, and every body uses only the bytes it needs — no hidden timestamp unless `sortable` is on.
 
 ## Troubleshooting
 
@@ -121,6 +131,13 @@ Passing `numbers: false, lowercase: false, uppercase: false, symbols: false` at 
 <Accordion title="I get a RangeError for a length">
 
 `okid(0)`, `okid(-1)`, `okid(7)`, `okid(129)`, and non-integer lengths throw a `RangeError`. Sortable ids have a higher floor: passing a sortable length below 16 throws. Keep lengths between 8 and 128 (16–128 for sortable).
+
+</Accordion>
+<Accordion title="I get a RangeError for a prefix">
+
+Characters outside `OKID_ALPHABET` (for example `usr:` or a space) throw
+`okid: prefix contains invalid character … — use characters from OKID_ALPHABET`.
+A prefix longer than 32 throws `okid: prefix length … exceeds max 32` — stick to `A-Za-z0-9-_`.
 
 </Accordion>
 <Accordion title="My ids are not sortable by the alphabet order I expected">

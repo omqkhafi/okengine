@@ -12,7 +12,7 @@ export const INSTANCE_ID_PREFIX = "inst-";
  * Mint a process instance id (`inst-<okid>`).
  */
 export function mintInstanceId(): string {
-  return `${INSTANCE_ID_PREFIX}${okid()}`;
+  return okid({ prefix: INSTANCE_ID_PREFIX });
 }
 
 /**

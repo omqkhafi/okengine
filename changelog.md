@@ -16,6 +16,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `okid({ prefix })` — built-in semantic prefix on `okengine/okid` (e.g.
+  `usr_`, `evt_`). Characters must be from `OKID_ALPHABET` (max 32);
+  `length` is the body only; combines with `sortable` as
+  `prefix + timestamp + random`. Process `instanceId` mint uses
+  `okid({ prefix: "inst-" })`.
 - OpenAI-compatible provider registry on `ai.model({ provider })`: verified
   names (`openai`, `openrouter`, `groq`, `together`, `deepinfra`, `meta`,
   `xai`, `mistral`, `deepseek`, `vercel`) plus limited-compatibility
@@ -27,6 +32,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- OKID reference documents `prefix` / `OKID_MAX_PREFIX_LENGTH` and the
+  prefix + sortable composition.
 - Consolidated llama.cpp / Ollama / vLLM / SGLang into one
   [Local AI](/docs/recipes/local-ai) recipe (comparison table); removed the
   standalone Ollama recipe (`/docs/recipes/ollama` redirects). Added OpenRouter

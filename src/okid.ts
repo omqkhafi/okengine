@@ -16,8 +16,11 @@
  *   48-bit epoch-millisecond timestamp encoded in exactly 8 chars, leaving
  *   `length − 8` random chars (78 bits at the default length). Lexicographic
  *   order equals time order across milliseconds; ids minted within the same
- *   millisecond tie on the prefix and carry no intra-ms ordering. Clock skew
+ *   millisecond tie on the timestamp and carry no intra-ms ordering. Clock skew
  *   distorts ordering but can never cause duplicates (the tail stays random).
+ * - **Semantic prefix** — `okid({ prefix: "usr_" })` prepends a fixed label
+ *   from the OKID alphabet. `length` is always the generated body (random or
+ *   sortable); the returned string is `prefix + body`.
  * - **Alphabet control** — group toggles (`numbers`, `lowercase`,
  *   `uppercase`, `symbols`) and `lookAlikes` shrink the alphabet for
  *   human-transcribed codes. Non-power-of-two alphabets use rejection
@@ -38,7 +41,8 @@
  *
  * const userId = okid();                       // 21 chars, 126 bits
  * const requestId = okid(16);                  // explicit length
- * const eventKey = okid({ sortable: true });   // time-prefixed
+ * const eventKey = okid({ sortable: true });   // time-prefixed body
+ * const typedId = okid({ prefix: "usr_" });    // usr_ + 21-char body
  * const inviteCode = okid({
  *   lookAlikes: false,
  *   uppercase: false,
@@ -89,14 +93,27 @@ export const OKID_MAX_LENGTH = 128;
 /** Sortable ids need ≥ 16: 8 timestamp chars alone would leave no randomness. */
 export const OKID_SORTABLE_MIN_LENGTH = 16;
 
+/** Longest permitted semantic {@link OkidOptions.prefix}. */
+export const OKID_MAX_PREFIX_LENGTH = 32;
+
 /** Options for {@link okid}. All alphabet toggles default to included. */
 export interface OkidOptions {
-  /** Total id length (default {@link OKID_DEFAULT_LENGTH}). */
+  /**
+   * Generated body length (default {@link OKID_DEFAULT_LENGTH}). Does not
+   * include {@link prefix} — the returned string is `prefix + body`.
+   */
   readonly length?: number;
   /**
-   * Prefix a 48-bit epoch-ms timestamp (exactly 8 chars) so lexicographic
-   * order tracks creation time across milliseconds. Alphabet toggles are
-   * ignored under this mode — see {@link OKID_SORTABLE_ALPHABET}.
+   * Fixed semantic label prepended to the body (e.g. `"usr_"`, `"evt_"`).
+   * Characters must belong to {@link OKID_ALPHABET}; max
+   * {@link OKID_MAX_PREFIX_LENGTH}. Empty / omitted means no label.
+   */
+  readonly prefix?: string;
+  /**
+   * Prefix the body with a 48-bit epoch-ms timestamp (exactly 8 chars) so
+   * lexicographic order tracks creation time across milliseconds. Alphabet
+   * toggles are ignored under this mode — see {@link OKID_SORTABLE_ALPHABET}.
+   * Combines with {@link prefix}: `prefix + timestamp + random`.
    */
   readonly sortable?: boolean;
   /** Include `a-z` (default true). */
@@ -205,15 +222,36 @@ function assertLength(length: number, min: number, label: string): void {
 }
 
 /**
+ * Assert a semantic prefix is within bounds and stays on the URL-safe alphabet.
+ *
+ * @param prefix - Caller-supplied label
+ */
+function assertPrefix(prefix: string): void {
+  if (prefix.length > OKID_MAX_PREFIX_LENGTH) {
+    throw new RangeError(
+      `okid: prefix length ${prefix.length} exceeds max ${OKID_MAX_PREFIX_LENGTH}`,
+    );
+  }
+  for (const char of prefix) {
+    if (!OKID_ALPHABET.includes(char)) {
+      throw new RangeError(
+        `okid: prefix contains invalid character ${JSON.stringify(char)} — use characters from OKID_ALPHABET`,
+      );
+    }
+  }
+}
+
+/**
  * Generate an OKE-native id.
  *
  * Accepts either a bare length or an options object; the bare-number form is
  * the hot path and skips all option resolution beyond validation.
  *
  * @param options - Length in chars, or {@link OkidOptions}
- * @returns A URL-safe id of exactly the requested length
+ * @returns A URL-safe id: the generated body, optionally preceded by
+ * {@link OkidOptions.prefix}
  * @throws RangeError on invalid input (non-integer, out-of-range length,
- * empty alphabet)
+ * invalid prefix, empty alphabet)
  */
 export function okid(options: number | OkidOptions = OKID_DEFAULT_LENGTH): string {
   if (typeof options === "number") {
@@ -223,6 +261,7 @@ export function okid(options: number | OkidOptions = OKID_DEFAULT_LENGTH): strin
 
   const {
     length = OKID_DEFAULT_LENGTH,
+    prefix = "",
     sortable = false,
     lowercase = true,
     uppercase = true,
@@ -231,15 +270,20 @@ export function okid(options: number | OkidOptions = OKID_DEFAULT_LENGTH): strin
     lookAlikes = true,
   } = options;
 
+  if (prefix) assertPrefix(prefix);
+
+  let body: string;
   if (sortable) {
     assertLength(length, OKID_SORTABLE_MIN_LENGTH, "length");
     // Time ordering requires lexicographic encoding, which requires the full
     // codepoint-ordered alphabet — partial subsets cannot preserve both the
     // caller's charset choice AND cross-ms ordering, so toggles are ignored.
     const alphabet = resolveAlphabet(true, true, true, true, true);
-    return encodeTimestamp(Date.now()) + encode(alphabet, length - 8);
+    body = encodeTimestamp(Date.now()) + encode(alphabet, length - 8);
+  } else {
+    assertLength(length, OKID_MIN_LENGTH, "length");
+    body = encode(resolveAlphabet(numbers, lowercase, uppercase, symbols, lookAlikes), length);
   }
 
-  assertLength(length, OKID_MIN_LENGTH, "length");
-  return encode(resolveAlphabet(numbers, lowercase, uppercase, symbols, lookAlikes), length);
+  return prefix ? prefix + body : body;
 }

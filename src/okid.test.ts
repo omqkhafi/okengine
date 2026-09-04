@@ -8,6 +8,7 @@ import {
   OKID_DEFAULT_LENGTH,
   OKID_LOOKALIKE_CHARS,
   OKID_MAX_LENGTH,
+  OKID_MAX_PREFIX_LENGTH,
   OKID_MIN_LENGTH,
   OKID_SORTABLE_ALPHABET,
   OKID_SORTABLE_MIN_LENGTH,
@@ -300,6 +301,61 @@ describe("okid sortable mode", () => {
     expect(nowChars).toBeLessThanOrEqual(8);
     for (const char of id) {
       expect(OKID_SORTABLE_ALPHABET.includes(char)).toBe(true);
+    }
+  });
+});
+
+describe("okid semantic prefix", () => {
+  test("prepends the label and keeps body length", () => {
+    const id = okid({ prefix: "usr_" });
+    expect(id.startsWith("usr_")).toBe(true);
+    expect(id.length).toBe(4 + OKID_DEFAULT_LENGTH);
+    expect(id.slice(4).length).toBe(OKID_DEFAULT_LENGTH);
+  });
+
+  test("honors length as the body size, not the total", () => {
+    const id = okid({ prefix: "evt_", length: 16 });
+    expect(id.startsWith("evt_")).toBe(true);
+    expect(id.length).toBe(4 + 16);
+  });
+
+  test("combines with sortable: prefix + timestamp + random", () => {
+    const realNow = Date.now;
+    Date.now = () => 1_700_000_000_000;
+    try {
+      const a = okid({ prefix: "evt_", sortable: true, length: 16 });
+      const b = okid({ prefix: "evt_", sortable: true, length: 16 });
+      expect(a.startsWith("evt_")).toBe(true);
+      expect(a.length).toBe(4 + 16);
+      expect(a.slice(4, 12)).toBe(b.slice(4, 12));
+      expect(a.slice(12)).not.toBe(b.slice(12));
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test("empty / omitted prefix is a no-op", () => {
+    expect(okid({ prefix: "" }).length).toBe(OKID_DEFAULT_LENGTH);
+    expect(okid({}).length).toBe(OKID_DEFAULT_LENGTH);
+  });
+
+  test("rejects characters outside OKID_ALPHABET", () => {
+    expect(() => okid({ prefix: "usr:" })).toThrow(RangeError);
+    expect(() => okid({ prefix: "usr " })).toThrow(RangeError);
+    expect(() => okid({ prefix: "usr." })).toThrow(RangeError);
+  });
+
+  test("rejects oversized prefixes", () => {
+    expect(() => okid({ prefix: "a".repeat(OKID_MAX_PREFIX_LENGTH + 1) })).toThrow(RangeError);
+    expect(okid({ prefix: "a".repeat(OKID_MAX_PREFIX_LENGTH) }).length).toBe(
+      OKID_MAX_PREFIX_LENGTH + OKID_DEFAULT_LENGTH,
+    );
+  });
+
+  test("full id stays URL-safe", () => {
+    for (let i = 0; i < 200; i++) {
+      const id = okid({ prefix: "inst-" });
+      expect(encodeURIComponent(id)).toBe(id);
     }
   });
 });
