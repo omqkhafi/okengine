@@ -18,6 +18,8 @@ export const app = oke({ name: "shop", env: "dev" }).plug(csrf());
 
 `GET`/`HEAD`/`OPTIONS`/`QUERY` always pass. A `POST` with `Sec-Fetch-Site: cross-site` now gets the gate element's typed `Forbidden` — unless its `Origin` is yours or allow-listed.
 
+When `gate.auth.cookies.enabled`, the server **soft-requires** this plugin: prod boots refuse without it; dev/test warn. Use `allowNoHeader: false` for cookie-only SPAs.
+
 ## How it decides
 
 <Steps>

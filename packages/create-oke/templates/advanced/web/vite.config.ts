@@ -20,6 +20,7 @@ const APP_ORIGIN = "http://127.0.0.1:6530";
 const proxy: Record<string, ProxyOptions> = {
   "/health": { target: APP_ORIGIN, changeOrigin: true },
   "/notes": { target: APP_ORIGIN, changeOrigin: true },
+  "/auth": { target: APP_ORIGIN, changeOrigin: true },
   "/_oke": { target: APP_ORIGIN, changeOrigin: true },
 };
 

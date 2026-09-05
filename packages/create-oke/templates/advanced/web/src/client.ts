@@ -26,13 +26,26 @@ const $routes = {
     get: { method: "GET", path: "/notes/:id" },
     archive: { method: "POST", path: "/notes/:id/archive" },
   },
+  auth: {
+    me: { method: "GET", path: "/auth/me" },
+    signInEmail: { method: "POST", path: "/auth/sign-in/email" },
+    signUpEmail: { method: "POST", path: "/auth/sign-up/email" },
+    revoke: { method: "POST", path: "/auth/revoke" },
+    passkeyAuthenticateOptions: {
+      method: "POST",
+      path: "/auth/passkey/authenticate/options",
+    },
+    passkeyAuthenticate: { method: "POST", path: "/auth/passkey/authenticate" },
+  },
 } as const;
 
 type AppRoutes = { readonly $routes: typeof $routes };
 
 /**
- * Typed caller for starter Flows. `VITE_API_URL` is empty in dev (proxy).
+ * Typed caller for starter Flows. Cookie session + `api.auth` helpers.
+ * `VITE_API_URL` is empty in dev (proxy).
  */
 export const api = createClient<AppRoutes>(import.meta.env.VITE_API_URL ?? "", {
   $routes,
+  auth: { mode: "cookie", csrfConfigured: true },
 });

@@ -142,3 +142,35 @@ describe("transport — auth refresh", () => {
     }
   });
 });
+
+describe("transport — binary response", () => {
+  test("response blob returns Blob data", async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70]); // %PDF
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () =>
+        new Response(bytes, {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        }),
+    });
+    const { data, error } = await api.sys.ping({ response: "blob" });
+    expect(error).toBeNull();
+    expect(data).toBeInstanceOf(Blob);
+    expect((data as unknown as Blob).type).toContain("pdf");
+  });
+
+  test("response arrayBuffer returns bytes", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () =>
+        new Response(bytes, {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    });
+    const { data, error } = await api.sys.ping({ response: "arrayBuffer" });
+    expect(error).toBeNull();
+    expect(data).toBeInstanceOf(ArrayBuffer);
+    expect(new Uint8Array(data as unknown as ArrayBuffer)).toEqual(bytes);
+  });
+});

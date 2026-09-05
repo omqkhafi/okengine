@@ -96,6 +96,11 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
    * Default `true` when `gate.auth.tenant` is on.
    */
   readonly tenantScoped?: boolean;
+  /**
+   * Mark this HTTP flow as returning `text/event-stream` via `fx.json.stream`
+   * (not signal live). Stamps `$routes.stream` for the typed client.
+   */
+  readonly stream?: true;
   /** The behavior. */
   readonly do: FlowHandler<I, O>;
 }
@@ -200,6 +205,10 @@ export interface FlowDef<
    * Default `true` when `gate.auth.tenant` is on.
    */
   readonly tenantScoped: boolean | undefined;
+  /**
+   * True when this HTTP flow returns SSE via `fx.json.stream` (not live signal).
+   */
+  readonly stream: true | undefined;
   /**
    * Optional compensation phase after terminal durable failure.
    * See {@link FlowOptions.compensate}.
@@ -310,6 +319,7 @@ export function flow(
     plane: options.plane,
     breaking: options.breaking ?? false,
     tenantScoped: options.tenantScoped,
+    stream: options.stream,
     compensate: options.compensate as FlowDef["compensate"],
     do: options.do as FlowHandler,
     triggers,

@@ -4,6 +4,7 @@
 
 import type { ClientFetch, ClientOptions, ClientRouteMap, FlowContract } from "./types.ts";
 import type { LiveHandlers, LiveUnsubscribe } from "./types.ts";
+import { readSse, sseError } from "./sse.ts";
 
 /** One HTTP exposure of a live signal. */
 export interface LiveExposure {
@@ -285,13 +286,21 @@ async function openSse(
   } else if (extra) {
     for (const [k, v] of Object.entries(extra)) headers.set(k, v);
   }
-  const token = opts.auth ? await opts.auth.getToken() : undefined;
+  const token =
+    opts.auth && "getToken" in opts.auth && typeof opts.auth.getToken === "function"
+      ? await opts.auth.getToken()
+      : undefined;
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
   if (lastSeenId) headers.set("last-event-id", lastSeenId);
   const fetchFn: ClientFetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
-  return fetchFn(url, { method, headers, signal });
+  return fetchFn(url, {
+    method,
+    headers,
+    signal,
+    ...(opts.credentials !== undefined ? { credentials: opts.credentials } : {}),
+  });
 }
 
 function restGet(base: string, path: string, input: unknown): { url: string; method: string } {
@@ -309,81 +318,4 @@ function restGet(base: string, path: string, input: unknown): { url: string; met
   }
   const qs = query.length ? `?${query.join("&")}` : "";
   return { url: `${base}${pathOut}${qs}`, method: "GET" };
-}
-
-async function readSse(
-  res: Response,
-  onEvent: (event: unknown, id: string | undefined) => void,
-  signal: AbortSignal,
-  onOpen?: () => void,
-): Promise<void> {
-  if (signal.aborted) return;
-  const ct = res.headers.get("content-type") ?? "";
-  if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => "");
-    throw sseError(res.status, text);
-  }
-  if (!ct.includes("text/event-stream")) {
-    const text = await res.text().catch(() => "");
-    throw sseError(res.status, text || `Expected text/event-stream, got ${ct || "none"}`);
-  }
-  onOpen?.();
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  try {
-    for (;;) {
-      if (signal.aborted) return;
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let sep = buf.indexOf("\n\n");
-      while (sep >= 0) {
-        const raw = buf.slice(0, sep);
-        buf = buf.slice(sep + 2);
-        const stop = dispatchFrame(raw, onEvent, signal);
-        if (stop || signal.aborted) return;
-        sep = buf.indexOf("\n\n");
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function dispatchFrame(
-  raw: string,
-  onEvent: (event: unknown, id: string | undefined) => void,
-  signal: AbortSignal,
-): boolean {
-  const dataLines: string[] = [];
-  let id: string | undefined;
-  for (const line of raw.split("\n")) {
-    if (line.startsWith("id:")) id = line.slice(3).replace(/^ /, "");
-    if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
-  }
-  if (dataLines.length === 0) return false;
-  const data = dataLines.join("\n");
-  if (data === "[DONE]") return true;
-  if (signal.aborted) return true;
-  onEvent(JSON.parse(data) as unknown, id);
-  return false;
-}
-
-function sseError(status: number, body: string): Error {
-  let message = `HTTP ${status}`;
-  if (body) {
-    try {
-      const json: unknown = JSON.parse(body);
-      if (json !== null && typeof json === "object" && "error" in json) {
-        const err = (json as { error?: { code?: string; data?: { message?: string } } }).error;
-        message = err?.data?.message ?? err?.code ?? message;
-      }
-    } catch {
-      message = body.slice(0, 200);
-    }
-  }
-  const e = new Error(message);
-  (e as Error & { status?: number }).status = status;
-  return e;
 }

@@ -57,6 +57,13 @@
   color: #b91c1c;
 }
 
+.hint,
+.session {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
 .list {
   list-style: none;
   padding: 0;

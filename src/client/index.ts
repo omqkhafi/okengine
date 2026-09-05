@@ -13,7 +13,7 @@ export {
   nextResubscribeDelay,
   pickLiveExposure,
 } from "./live.ts";
-export { createClient, flattenRoutes, transportOf } from "./create.ts";
+export { createClient, flattenRoutes, transportOf, createServerClient } from "./create-with-session.ts";
 export type { AppWithRoutes, TransportBag } from "./create.ts";
 export { isErrorCode, isFail, isOk, isTransportError } from "./errors.ts";
 export { isPagerMeta, pagerLink } from "./pager.ts";
@@ -32,12 +32,17 @@ export type {
   Client,
   ClientApp,
   ClientCall,
+  ClientCallOpts,
   ClientDescriptor,
   ClientError,
   ClientFetch,
   ClientFromRoutes,
   ClientHeaders,
+  ClientBodyInit,
+  ClientCredentials,
   ClientOptions,
+  ClientSessionAuthOptions,
+  ClientTransportAuth,
   ClientEnvelope,
   ClientListMeta,
   ClientPagerLink,

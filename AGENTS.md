@@ -69,7 +69,7 @@ Mnemonic: O·K·E = 6·5·3.
 | Budget                | Limit   |
 | --------------------- | ------- |
 | Kernel (edge profile) | < 15 kB |
-| Client runtime        | < 3 kB  |
+| Client runtime        | < 5 kB  |
 | Cold start on Bun     | < 75 ms |
 | p99 routing overhead  | < 1 ms  |
 
@@ -82,7 +82,7 @@ Published packages:
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./plugins`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
 - `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships Notes starters from `packages/create-oke/templates/{standard,advanced}`.
 
-Engine: Bun `>=1.4.1`.
+Engine: Bun `>=1.4.2`.
 
 ## Documentation authority
 

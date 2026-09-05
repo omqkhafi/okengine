@@ -205,8 +205,13 @@ describe("gate.auth — email Flows + security", () => {
       }),
     );
     expect(me.status).toBe(200);
-    const meBody = (await me.json()) as { data: { email: string } };
+    const meBody = (await me.json()) as {
+      data: { email: string; scopes: string[]; tenantId: string | null; apiKeyId: string | null };
+    };
     expect(meBody.data.email).toBe("user@example.com");
+    expect(Array.isArray(meBody.data.scopes)).toBe(true);
+    expect(meBody.data.tenantId).toBeNull();
+    expect(meBody.data.apiKeyId).toBeNull();
 
     const refreshed = await app.fetch(
       new Request("http://localhost/auth/refresh", {

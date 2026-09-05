@@ -186,6 +186,59 @@ export type ClientFetch = (input: string | URL | Request, init?: RequestInit) =>
 export type ClientHeaders = Record<string, string> | [string, string][];
 
 /**
+ * Fetch credentials mode (avoids DOM `RequestCredentials` coupling).
+ * Use `"include"` for cookie sessions.
+ */
+export type ClientCredentials = "include" | "omit" | "same-origin";
+
+/**
+ * Raw request body accepted by the transport (avoids DOM `BodyInit` coupling).
+ * Mirrors what {@link createTransport} treats as non-JSON via `instanceof` checks.
+ */
+export type ClientBodyInit =
+  | Blob
+  | FormData
+  | ArrayBuffer
+  | ArrayBufferView
+  | ReadableStream
+  | string
+  | URLSearchParams;
+
+/**
+ * Bare transport Bearer hooks (no {@link AuthClient}).
+ * Prefer session options (`mode` / `persist` / `csrfConfigured`) so
+ * `createClient` attaches `api.auth`.
+ */
+export interface ClientTransportAuth {
+  /** Current access token (Bearer), or null. */
+  readonly getToken: () => string | null | undefined | Promise<string | null | undefined>;
+  /** Obtain a new access token after 401. */
+  readonly refresh: () => Promise<string | null | undefined>;
+}
+
+/**
+ * Session orchestration options for `createClient({ auth })` → `api.auth`.
+ * Mirrors {@link CreateAuthClientOptions} plus optional SSR token overrides.
+ */
+export interface ClientSessionAuthOptions {
+  readonly mode?: "bearer" | "cookie";
+  readonly persist?: "memory" | "sessionStorage" | "localStorage";
+  readonly storageKey?: string;
+  readonly tenantHeader?: string;
+  readonly csrfConfigured?: boolean;
+  readonly session?: import("./auth/session.ts").MemorySession;
+  readonly env?: {
+    readonly localStorage?: Storage;
+    readonly sessionStorage?: Storage;
+    readonly warn?: (message: string) => void;
+  };
+  /** SSR / custom: override Bearer getToken (cookie mode still uses credentials). */
+  readonly getToken?: ClientTransportAuth["getToken"];
+  /** SSR / custom: override refresh after 401. */
+  readonly refresh?: ClientTransportAuth["refresh"];
+}
+
+/**
  * Options for {@link createClient}.
  */
 export interface ClientOptions {
@@ -205,15 +258,20 @@ export interface ClientOptions {
     readonly backoff?: number;
   };
   /**
-   * Auth token + refresh. On HTTP 401, `refresh` runs once and the
-   * request is retried with the new token.
+   * Session orchestration (`mode` / `csrfConfigured` / …) → attaches `api.auth`,
+   * or bare `{ getToken, refresh }` transport hooks only.
    */
-  readonly auth?: {
-    /** Current access token (Bearer), or null. */
-    readonly getToken: () => string | null | undefined | Promise<string | null | undefined>;
-    /** Obtain a new access token after 401. */
-    readonly refresh: () => Promise<string | null | undefined>;
-  };
+  readonly auth?: ClientTransportAuth | ClientSessionAuthOptions;
+  /**
+   * Fetch credentials mode. Use `"include"` for cookie sessions
+   * (`gate.auth.cookies` + `createClient({ auth: { mode: "cookie" } })`).
+   */
+  readonly credentials?: ClientCredentials;
+  /**
+   * Optional AbortSignal for all calls from this client (per-call override
+   * not yet exposed on the proxy).
+   */
+  readonly signal?: AbortSignal;
   /**
    * Runtime REST table (optional). Keys are `unit.flow`.
    * When absent, the client uses `POST /_oke/{unit}/{flow}` unless
@@ -235,6 +293,14 @@ export interface ClientOptions {
 export type ClientThenableIterable<T> = PromiseLike<T> & AsyncIterable<T>;
 
 /**
+ * Per-call options on a Flow invoke (binary decode / abort).
+ */
+export interface ClientCallOpts {
+  readonly response?: "json" | "blob" | "arrayBuffer";
+  readonly signal?: AbortSignal;
+}
+
+/**
  * Call signature for one flow — thenable (one page) and async-iterable (walk).
  *
  * @typeParam I - Input
@@ -242,10 +308,17 @@ export type ClientThenableIterable<T> = PromiseLike<T> & AsyncIterable<T>;
  * @typeParam E - Errors
  */
 type ClientCallFn<I, O, E extends Record<string, unknown>> = [I] extends [void]
-  ? () => ClientThenableIterable<ClientResult<O, E>>
+  ? {
+      (): ClientThenableIterable<ClientResult<O, E>>;
+      (opts: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+    }
   : Partial<I> extends I
-    ? (input?: I) => ClientThenableIterable<ClientResult<O, E>>
-    : (input: I) => ClientThenableIterable<ClientResult<O, E>>;
+    ? {
+        (input?: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+      }
+    : {
+        (input: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+      };
 
 /**
  * Call signature for one flow. No `.pages()` — iterate the call or the page.
@@ -311,6 +384,12 @@ type ClientLiveOverloads = {
 
 type IsLiveContract<C> = C extends { readonly live: string } ? true : false;
 
+type IsStreamOnlyContract<C> = C extends { readonly stream: true }
+  ? IsLiveContract<C> extends true
+    ? false
+    : true
+  : false;
+
 type ClientLiveFlowCall<I, O> = [I] extends [void]
   ? (handlers: LiveHandlers<O>) => LiveUnsubscribe
   : Partial<I> extends I
@@ -320,10 +399,18 @@ type ClientLiveFlowCall<I, O> = [I] extends [void]
       }
     : (input: I, handlers: LiveHandlers<O>) => LiveUnsubscribe;
 
+type ClientStreamCall<I, O> = [I] extends [void]
+  ? (opts?: { readonly signal?: AbortSignal }) => AsyncIterable<O>
+  : Partial<I> extends I
+    ? (input?: I, opts?: { readonly signal?: AbortSignal }) => AsyncIterable<O>
+    : (input: I, opts?: { readonly signal?: AbortSignal }) => AsyncIterable<O>;
+
 type ClientCallFor<C> =
   IsLiveContract<C> extends true
     ? ClientLiveFlowCall<ContractIn<C>, ContractOut<C>>
-    : ClientCall<ContractIn<C>, ContractOut<C>, ContractErrors<C>>;
+    : IsStreamOnlyContract<C> extends true
+      ? ClientStreamCall<ContractIn<C>, ContractOut<C>>
+      : ClientCall<ContractIn<C>, ContractOut<C>, ContractErrors<C>>;
 
 /**
  * Pull input from a contract shape (supports required or phantom-optional `in`).
@@ -366,6 +453,12 @@ export type ClientFromRoutes<R extends ClientRouteMap> = {
  */
 export type Client<App = never> = ClientFromRoutes<RoutesOf<ResolveApp<App>>> & {
   readonly live: ClientLive<ResolveApp<App>>;
+  /**
+   * Present when `createClient` was constructed with session `auth` options
+   * (`mode` / `persist` / `csrfConfigured` / …). Merged over the `auth` unit
+   * Flows at runtime (`api.auth.me` still works).
+   */
+  readonly auth?: import("./auth/create-auth-client.ts").AuthClient;
 };
 
 /**
@@ -388,6 +481,10 @@ export interface ClientDescriptor {
         readonly errors?: Readonly<Record<string, string>>;
         readonly method?: string;
         readonly path?: string;
+        readonly live?: string;
+        readonly stream?: true;
+        readonly matchKey?: readonly string[];
+        readonly gates?: readonly string[];
       };
     };
   };

@@ -123,17 +123,27 @@ export interface UseLiveQueryState<Row> {
  * @param args.api - Typed client from `createClient`
  * @param args.listFlow - The resource's list call (`api.tasks.list`)
  * @param args.query - Same input as the list Flow (filters)
- * @param args.live - SSE route from `$routes`
+ * @param args.live - SSE route from `$routes` (optional when `listPath` given)
+ * @param args.listPath - List REST path; live defaults to `` `${listPath}/live` ``
  * @param args.options - PK/version extractors, refresh key, `enabled`
  */
 export function useLiveQuery<Row extends Record<string, unknown>, I = void>(args: {
   readonly api: object;
   readonly listFlow: ClientCall<I, Row[], Record<string, never>>;
   readonly query?: I;
-  readonly live: LiveRouteContract;
+  readonly live?: LiveRouteContract;
+  /** List HTTP path — when `live` is omitted, SSE uses `GET ${listPath}/live`. */
+  readonly listPath?: string;
   readonly options?: UseLiveQueryOptions<Row>;
 }): UseLiveQueryState<Row> {
-  const { api, listFlow, query, live, options } = args;
+  const { api, listFlow, query, options } = args;
+  const live: LiveRouteContract = args.live ?? {
+    method: "GET",
+    path: `${(args.listPath ?? "").replace(/\/$/, "")}/live`,
+  };
+  if (!args.live && !args.listPath) {
+    throw new Error("useLiveQuery requires `live` or `listPath` to derive the SSE route");
+  }
   const opts = options ?? {};
   const enabled = opts.enabled ?? true;
   const defaultIdOf = useCallback((row: Row) => String((row as Record<string, unknown>).id), []);

@@ -17,6 +17,7 @@ import {
   type RoutesFromNamespace,
   type RuntimeRouteMap,
 } from "./adopt-routes.ts";
+import { buildClientDescriptor } from "./client-descriptor.ts";
 import { liveExposureKey, liveGatesKey, liveMatchKeyFromPath } from "./live-http.ts";
 // `./boot.ts` pulls in every element + driver module (vault, store, signal,
 // clock, gate, channel, ai, runs) — a type-only import here keeps that whole
@@ -1231,6 +1232,17 @@ export function oke(options: OkeOptions): OkeApp {
 
     const caps = pluginRegistry.capabilities();
     const pluginNames = new Set(Object.keys(caps));
+
+    // Soft-require csrf when gate.auth.cookies.enabled (cookie sessions need CSRF).
+    if (gateConfig.auth?.cookies.enabled && !pluginNames.has("csrf")) {
+      const msg =
+        "gate.auth.cookies.enabled requires the csrf plugin — .plug(csrf({ allowNoHeader: false })) and cors with credentials when cross-origin";
+      if (bootEnv === "prod") {
+        throw new Error(msg);
+      }
+      console.warn(`[okengine] ${msg}`);
+    }
+
     const authGates = authMaterialization?.authGates ?? [];
     const baseGates = overrides?.gates ?? gateConfig.policies ?? [];
     const elementNeeds = resolveElementNeeds({
@@ -2201,8 +2213,9 @@ export function oke(options: OkeOptions): OkeApp {
       }
 
       if (method === "GET" && url.pathname === "/_oke/client.json") {
+        const descriptor = buildClientDescriptor(routes, flowsByName);
         return respond(
-          new Response(JSON.stringify({ routes }), {
+          new Response(JSON.stringify(descriptor), {
             headers: { "content-type": "application/json" },
           }),
         );

@@ -15,6 +15,7 @@ export {
   type ConfigSourceOptions,
 } from "./config-source.ts";
 export { cors, type CorsOptions } from "./cors.ts";
+export { csrf, type CsrfOptions } from "./csrf.ts";
 export { ipAllowlist, type IpAllowlistOptions } from "./ip-allowlist.ts";
 export {
   magicLink,

@@ -16,31 +16,40 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- Clock convenience helpers on `clock`: `daily` · `hourly` · `weekly` ·
-  `monthly` · `every` · `cron` (string or structured fields with `at`,
-  lists, ranges, weekday names). All compile to the same `ClockDecl`
-  (`cron` / `every` strings). Invalid cron fails at declare via
-  `Bun.cron.parse`. Compiler extract records the helpers into Manifest
-  clocks.
-- App-wide Clock timezone: `oke({ clock: { timezone } })` and
-  `defineConfig({ clock: { timezone } })` apply to every `clock()` /
-  helper that omits `timezone` (per-clock wins; `oke` wins over config).
-- `okid({ prefix })` — built-in semantic prefix on `okengine/okid` (e.g.
-  `usr_`, `evt_`). Characters must be from `OKID_ALPHABET` (max 32);
-  `length` is the body only; combines with `sortable` as
-  `prefix + timestamp + random`. Process `instanceId` mint uses
-  `okid({ prefix: "inst-" })`.
-- OpenAI-compatible provider registry on `ai.model({ provider })`: verified
-  names (`openai`, `openrouter`, `groq`, `together`, `deepinfra`, `meta`,
-  `xai`, `mistral`, `deepseek`, `vercel`) plus limited-compatibility
-  `anthropic` / `google`/`gemini` auto-resolve `baseUrl`; explicit `baseUrl`
-  always wins; unknown providers without `baseUrl` fail loud. Limited-
-  compatibility caveats warn at declare and `[oke extract]`. Native
-  `driverId: "anthropic"` skips the openai-compat URL. Per-binding `apiKey`
-  isolation unchanged.
+- **`createClient({ auth })` → `api.auth`** — session options on `createClient` attach
+  `AuthClient` (merged over the `auth` unit Flows). `createAuthClient` + `bind` remains the
+  escape hatch. Thin `createServerClient` + `tokenFromRequestCookies` for SSR.
+- **UI authorize DX** — `api.auth.authorize({ all | any })`, React `Can` / `Cannot` /
+  `useAuthorize`, `forbiddenScopes` helper. Gate on Flows remains real authz.
+- **Binary responses** — per-call `{ response: "blob" | "arrayBuffer" }` on Flow invokes.
+- **CSRF soft-require** — when `gate.auth.cookies.enabled`, prod refuses boot without the
+  `csrf` plugin; dev/test warn. `csrf` exported from `okengine/plugins`.
+- **Client auth level-up** (`okengine/client/auth`): `createAuthClient` with secure-by-default
+  `mode: "bearer" | "cookie"`, memory persist (optional `sessionStorage` / loud `localStorage`),
+  `signIn.*` / `signUp.*` / `completeChallenge` / `signOut`→`auth.revoke`, UI-only `hasScope` /
+  `can`, tenancy header helpers, denial narrowers, and `memorySession.subscribe` /
+  `persistSession`. Cookie mode refuses Storage dual-store and warns unless `csrfConfigured`.
+- **`auth.me` enrichment** — returns `scopes`, `tenantId`, `apiKeyId`, optional `sessionFresh`
+  for UI chrome (Gate on Flows remains real authz).
+- **Typed JSON streams** — `flow({ stream: true })` stamps `$routes.stream`; `createClient`
+  yields `AsyncIterable` for non-live SSE (`fx.json.stream`). Shared `sse.ts` pump.
+- **Honest ambient client** — `GET /_oke/client.json` emits type strings + live/stream stamps;
+  `oke client add` writes `oke-client.d.ts` **and** `oke-client.routes.ts`.
+- Transport: `credentials`, AbortSignal / timeout via `AbortSignal`, raw `BodyInit` /
+  `FormData` / `Blob` bodies. `useLiveQuery` accepts `listPath` to derive `/live`.
+- JSR exports `./client/auth` and `./client-react`; optional `react` peerDependency.
+
+#### Dev, Keel & create-oke
+
+- **Advanced starter** — cookie `gate.auth`, `csrf` + `cors` + `passkey`, web
+  `createClient({ auth: { mode: "cookie" } })` + `<Can>` chrome demo.
 
 #### Docs
 
+- Client Auth / Calling / React / CSRF / ClientLoop updated for `createClient({ auth })`,
+  `authorize` / `Can`, binary downloads, CSRF soft-require, and SSR cookie helper.
+- Client Auth handbook rewritten for `createAuthClient` (secure defaults, methods, UI-only
+  scopes). Calling / React / plugins notes updated for routes module, streams, and auth DX.
 - New **04 Client** handbook group after Extend (Reference → **05**, AI Resources →
   **06**): Overview, Calling, Auth, Live, React at
   [`HTTP`](/docs/elements/flow/http) page depth; permanent redirect from
@@ -171,8 +180,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- Minimum Bun is ≥ 1.4.1 (`engines.bun`, CI `bun-version`, feature-gate
-  error messages). `@types/bun` / `bun-types` lockfile resolve to 1.4.1.
+- Client gzip budget raised to **5 kB** (was 4 kB) so shared SSE + stream open
+  fits the measured `okengine/client` graph; AGENTS.md budget table aligned.
+- create-oke Vite proxy includes `/auth` alongside `/notes`, `/health`, `/_oke`.
+- Minimum Bun is ≥ 1.4.2 (`engines.bun`, CI `bun-version`, feature-gate
+  error messages). `@types/bun` / `bun-types` track `"latest"`.
   Generated Dockerfiles stay on the `oven/bun:1.4` line.
 
 #### Dev, Keel & create-oke
@@ -191,7 +203,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - **AI Provider** select (create-oke Customize + `oke ai setup`) leads with
   OpenRouter and lists the full cloud registry set; OpenRouter **Select model**
   includes router aliases (`free` / `auto` / `pareto-code` / `fusion`).
-- create-oke `engines.bun` and Notes starter GitHub Actions use Bun 1.4.1.
+- create-oke `engines.bun` and Notes starter GitHub Actions use Bun 1.4.2.
 
 #### Docs
 
@@ -221,7 +233,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Renamed Signal delivery docs to match helpers: `/docs/elements/signal/once`
   (was queues), `/broadcast` (was pubsub), `/live` (was streams). Cards,
   sidebar, and cross-links updated.
-- Installation / Try it / README badges and agent contracts document Bun ≥ 1.4.1.
+- Installation / Try it / README badges and agent contracts document Bun ≥ 1.4.2.
 - Rewrote Signal element docs (`/docs/elements/signal` + Once / Broadcast /
   Live) for `signal.once` / `broadcast` / `live` (HTTP-shaped helpers):
   progressive patterns, options tables, lease / retention / drivers honesty,
@@ -359,6 +371,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Client typecheck under root `lib: ["ESNext"]` (no DOM): local `ClientCredentials` /
+  `ClientBodyInit`, duck-typed passkey / `location`, narrowed `auth.getToken` on live /
+  stream, explicit `createClient` proxy return types, mutable `buildClientDescriptor`
+  routes bag, void-input binary call opts in transport tests, and legacy `useSession`
+  token gate (cookie path is AuthClient-only).
 - `oxc-parser` is a hard `okengine` dependency again (no longer an optional peer).
   Published scaffolds with Docker Compose were dying on **OKE1008** for
   `main.health` because Manifest extract could not resolve `oxc-parser` and

@@ -1,6 +1,6 @@
 ---
 title: "React"
-description: "useSession, useLive, and useLiveQuery from okengine/client-react — React helpers over createClient."
+description: "useSession, Can, useLive, and useLiveQuery from okengine/client-react — React helpers over createClient."
 icon: "Atom"
 source: "docs/spec/unified-theory.md"
 ---
@@ -25,16 +25,11 @@ For developers building React storefronts and ops consoles on top of `createClie
 
 ```typescript title="web/src/session.ts"
 import { createClient } from "okengine/client";
-import { memorySession } from "okengine/client/auth";
 import { vault } from "okengine/vault";
 import { app } from "../../src/app";
 
-export const session = memorySession();
 export const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "", {
-  auth: {
-    getToken: () => session.getToken(),
-    refresh: () => session.refresh(api),
-  },
+  auth: { mode: "cookie", csrfConfigured: true },
 });
 ```
 
@@ -44,37 +39,43 @@ export const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "", {
 ### Show the signed-in shopper in the header
 
 ```typescript title="web/src/AccountMenu.tsx"
-import { useSession } from "okengine/client-react";
-import { api, session } from "./session";
+import { Can, useSession } from "okengine/client-react";
+import { api } from "./session";
 
 export function AccountMenu() {
-  const { status, user, signOut } = useSession(api, session);
+  const { status, user, signOut } = useSession(api.auth!);
 
   if (status === "loading") return null;
   if (status === "unauthenticated") return <a href="/sign-in">Sign in</a>;
 
   return (
-    <button type="button" onClick={() => signOut()}>
-      {user?.email}
-    </button>
+    <>
+      <Can auth={api.auth!} all={["orders:write"]} fallback={null}>
+        <a href="/fulfillment">Fulfillment</a>
+      </Can>
+      <button type="button" onClick={() => signOut()}>
+        {user?.email}
+      </button>
+    </>
   );
 }
 ```
 
+`Can` / `useAuthorize` are UI-only — Gate on Flows remains real authz.
 </Step>
 
 </Steps>
 
 ## Progressive Patterns
 
-<Tabs items={["useSession", "useLive", "useLiveQuery", "mutate"]}>
+<Tabs items={["useSession", "Can / useAuthorize", "useLive", "useLiveQuery", "mutate"]}>
 
 <Tab value="useSession">
 
 ```typescript
 import { useSession } from "okengine/client-react";
 
-const { status, user, accessToken, refresh, signOut } = useSession(api, session);
+const { status, user, accessToken, refresh, signOut } = useSession(api.auth!);
 ```
 
 | Field         | Meaning                                              |
@@ -84,6 +85,23 @@ const { status, user, accessToken, refresh, signOut } = useSession(api, session)
 | `accessToken` | Current Bearer from `memorySession` (or `null`)      |
 | `refresh()`   | Re-run `auth.me`                                     |
 | `signOut()`   | `session.clear()` + unauthenticated                  |
+
+</Tab>
+
+<Tab value="Can / useAuthorize">
+
+```tsx
+import { Can, useAuthorize } from "okengine/client-react";
+
+<Can auth={api.auth!} all={["orders:write"]} fallback={<Denied />}>
+  <FulfillmentLink />
+</Can>
+
+const { status, missing } = useAuthorize(api.auth!, { all: ["orders:write"] });
+```
+
+UI chrome only — Gate on Flows is the security boundary. Prefer these over bare `useScope` /
+`useCan`.
 
 </Tab>
 
@@ -169,12 +187,13 @@ Server CDC / the successful response clear the override so the next upsert is au
 | Export                                    | Package                 | Role                                            |
 | ----------------------------------------- | ----------------------- | ----------------------------------------------- |
 | `createClient` / `api.live`               | `okengine/client`       | Typed proxy + SSE subscribe                     |
-| `memorySession` / `AUTH_ERROR_CODES`      | `okengine/client/auth`  | Bearer bag                                      |
+| `createAuthClient` / `memorySession`      | `okengine/client/auth`  | Secure session orchestration                    |
 | `vault` / `vault.env`                     | `okengine/vault`        | Env + config contracts (subpath — not root)     |
-| `useSession` / `useLive` / `useLiveQuery` | `okengine/client-react` | React hooks                                     |
+| `useSession` / `useLive` / `useLiveQuery` | `okengine/client-react` | React hooks (`react` optional peer)             |
 | `subscribeLiveResource`                   | `okengine/client-react` | Non-hook live resource stream helper            |
 
-Not in core today: cookie jars or plugin `.client()` decorations.
+Prefer [`createAuthClient`](/docs/client/auth) for cookie/Bearer sessions and method helpers.
+`useLiveQuery` accepts `listPath` to derive `GET ${listPath}/live` when `live` is omitted.
 
 ## `useLiveQuery` options
 

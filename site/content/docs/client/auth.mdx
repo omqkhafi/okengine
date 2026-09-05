@@ -1,18 +1,19 @@
 ---
 title: "Auth"
-description: "Bearer sessions on createClient — memorySession, refresh once on 401, and gate denials as values."
+description: "createClient({ auth }) → api.auth — cookie-first, authorize/Can UI-only, Gate remains real authz."
 icon: "Lock"
 source: "docs/spec/unified-theory.md"
 ---
 
-One client: `createClient`. With `gate.auth`, the app exposes `/auth/*` Flows (sign-in, refresh,
-me). Helpers under `okengine/client/auth` store tokens — they are **not** a second factory.
+`createClient(url, { auth })` attaches `api.auth` — session orchestration over the same `/auth/*`
+Flows. Prefer that one call. `createAuthClient` + `bind` stays as a compose escape hatch.
 
-For developers attaching identity to typed calls from a storefront or Node worker.
+For storefronts and SPAs attaching identity to typed calls.
 
 <Callout title="The one rule">
-  `auth.refresh` must mutate whatever `auth.getToken` reads. Returning a new string alone does
-  nothing if storage was not updated. Gate denials arrive as envelope values — never throws.
+  Gate on Flows is real authorization. `authorize` / `hasScope` / `Can` are **UI-only**. Cookie
+  mode needs the `csrf` plugin (server soft-requires it when `gate.auth.cookies.enabled`); never
+  persist tokens to Storage when cookies own the session.
 </Callout>
 
 ## Smallest Example
@@ -20,40 +21,41 @@ For developers attaching identity to typed calls from a storefront or Node worke
 <Steps>
 
 <Step>
-### Wire session helpers into `createClient`
+### One `createClient` with session auth
 
-```typescript title="web/src/session.ts"
+```typescript title="web/src/api.ts"
 import { createClient } from "okengine/client";
-import { memorySession } from "okengine/client/auth";
 import { vault } from "okengine/vault";
 import { app } from "../../src/app";
 
-export const session = memorySession();
-
 export const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "", {
-  auth: {
-    getToken: () => session.getToken(),
-    refresh: () => session.refresh(api),
-  },
+  auth: { mode: "cookie", csrfConfigured: true },
 });
 ```
+
+`api.auth` is an `AuthClient`. Unit Flows remain reachable (`api.auth.me`, …) under the same
+namespace.
 
 </Step>
 
 <Step>
-### Sign in and store tokens
+### Sign in and authorize chrome
 
 ```typescript
-const { data, error } = await api.auth.signInEmail({
-  email: "alex@acme.co",
-  password,
-});
-if (error || !data) return;
+const result = await api.auth.signIn.email({ email: "alex@acme.co", password });
+if (!result.ok) {
+  if (result.twoFactor) {
+    await api.auth.completeChallenge({
+      challengeId: result.twoFactor.challengeId,
+      code: totp,
+    });
+  }
+  return;
+}
 
-session.set(data);
-
-const me = await api.auth.me({});
-// Authorization: Bearer <accessToken> on every later call
+const gate = api.auth.authorize({ all: ["orders:write"] });
+if (gate.status === "allowed") showFulfillment();
+await api.auth.signOut();
 ```
 
 </Step>
@@ -62,169 +64,145 @@ const me = await api.auth.me({});
 
 ## Progressive Patterns
 
-<Tabs items={["Sign-in", "Refresh", "API key", "Denials"]}>
+<Tabs items={["Authorize", "Cookie mode", "SSR", "Methods", "Escape hatch"]}>
 
-<Tab value="Sign-in">
+<Tab value="Authorize">
 
 ```typescript
-const { data } = await api.auth.signInEmail({
-  email: "alex@acme.co",
-  password,
+const gate = api.auth.authorize({ all: ["orders:write"] });
+// or: api.auth.authorize({ any: ["orders:write", "admin"] })
+
+if (gate.status === "unauthenticated") redirectToSignIn();
+if (gate.status === "loading") return;
+if (gate.status === "denied") showMissing(gate.missing);
+// gate.status === "allowed"
+```
+
+React: `<Can auth={api.auth} all={["orders:write"]} fallback={<Denied />}>`. Prefer
+`authorize` / `Can` over bare `hasScope`. On server `Forbidden`, use `isForbidden` /
+`forbiddenScopes` and refresh `getSession()` if scopes look stale.
+
+</Tab>
+
+<Tab value="Cookie mode">
+
+When `gate.auth.cookies.enabled`, prefer HttpOnly cookies:
+
+```typescript
+export const api = createClient(app, base, {
+  auth: { mode: "cookie", csrfConfigured: true },
 });
-if (data) session.set(data);
 ```
 
-Every later request: `getToken()` → `Authorization: Bearer …` when a token is present.
+Install `csrf({ allowNoHeader: false })`. Cross-origin also needs
+`cors({ origin: [...], credentials: true })`. Prod boots **refuse** without `csrf` when cookies
+are on; dev/test warn.
 
 </Tab>
 
-<Tab value="Refresh">
-
-| Step                   | What happens                                          |
-| ---------------------- | ----------------------------------------------------- |
-| Every request          | `getToken()` → Bearer when present                    |
-| HTTP **401**           | `refresh()` runs **once**, then the same call retries |
-| HTTP **403** / **429** | No refresh — decode the failure envelope as usual     |
-
-```typescript
-auth: {
-  getToken: () => session.getToken(),
-  refresh: () => session.refresh(api),
-}
-```
-
-With `gate.auth`, `POST /auth/refresh` is built in; `memorySession.refresh(api)` calls
-`api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no refresh token remains.
-
-</Tab>
-
-<Tab value="API key">
-
-`getToken` may return a session access token or an API key secret — both are Bearer.
-See [Gate · API keys](/docs/elements/gate#api-keys). `refresh` applies to sessions only.
-
-Store the partner key as a [Vault secret](/docs/elements/vault/secrets); read the injected env at
-the Node boundary (not in the browser):
+<Tab value="SSR">
 
 ```typescript
 import { createClient } from "okengine/client";
-import { vault } from "okengine/vault";
-import { app } from "./app";
+import { tokenFromRequestCookies, createServerClient } from "okengine/client/auth";
 
-// Partner warehouse sync — key from Vault / env, never hardcoded
-const api = createClient(app, vault.env.required("PUBLIC_API_URL"), {
+// Explicit
+const api = createClient(base, {
+  credentials: "include",
   auth: {
-    getToken: () => vault.env.required("WAREHOUSE_API_KEY"),
+    mode: "cookie",
+    getToken: () => tokenFromRequestCookies(req),
   },
 });
+
+// Or the thin wrapper (same createClient)
+const api2 = createServerClient(req, base, { $routes });
 ```
 
 </Tab>
 
-<Tab value="Denials">
-
-After a gated call, switch on denial codes (values, not throws):
+<Tab value="Methods">
 
 ```typescript
-const { error } = await api.orders.create({
-  sku: "SKU-1842",
-  qty: 3,
-  shipTo: "Stockholm",
-});
-
-if (error?.code === "Unauthorized") {
-  // send the shopper to sign-in, or let auth.refresh run
-} else if (error?.code === "Forbidden") {
-  // error.data: { gate, reason } — e.g. missing “fulfillment” scope
-} else if (error?.code === "RateLimited") {
-  // error.data: { retryAfterMs }
-}
+await api.auth.signIn.social({ provider: "google" });
+await api.auth.signIn.passkey({ email });
+await api.auth.signIn.magicLink.request({ email });
+await api.auth.signIn.otp.verify({ email, code });
+await api.auth.signIn.anonymous();
+await api.auth.signUp.email({ email, password, name });
 ```
 
-These gate codes are **not** listed in each Flow’s `errors` map — they can appear on any gated
-route.
+Helpers call existing plugin Flows only — PKCE / WebAuthn UV stay server-side.
 
-A 401 with no `{ data, error }` body becomes `TransportError` with `data.status: 401`.
+</Tab>
+
+<Tab value="Escape hatch">
+
+```typescript
+import { createClient } from "okengine/client";
+import { createAuthClient } from "okengine/client/auth";
+
+const shell = createClient(app, base);
+const auth = createAuthClient(shell, { mode: "bearer", persist: "memory" });
+const api = createClient(app, base, { ...auth.clientOptions });
+auth.bind(api);
+```
 
 </Tab>
 
 </Tabs>
 
-## Auth options
-
-| Option          | Type                                 | Default | Meaning                                     |
-| --------------- | ------------------------------------ | ------- | ------------------------------------------- |
-| `auth.getToken` | `() => string \| null \| …`          | —       | Bearer access token (or null)               |
-| `auth.refresh`  | `() => Promise<string \| null \| …>` | —       | Runs once on HTTP 401, then the call retries |
-
 ## Helpers
 
-| Helper                      | Package                 | Role                                             |
-| --------------------------- | ----------------------- | ------------------------------------------------ |
-| `memorySession`             | `okengine/client/auth`  | In-memory access/refresh bag for `auth.getToken` |
-| `AUTH_ERROR_CODES`          | `okengine/client/auth`  | Common auth Flow / gate codes                    |
-| `useSession(api, session?)` | `okengine/client-react` | React status + `auth.me` — see [React](/docs/client/react) |
-
-Core `okengine/client` stays under the size budget — helpers are separate exports. Not in core
-today: cookie jars or plugin `.client()` decorations.
+| Helper | Package | Role |
+| ------ | ------- | ---- |
+| `createClient({ auth })` | `okengine/client` | Happy path — attaches `api.auth` |
+| `createAuthClient` | `okengine/client/auth` | Compose / bind escape hatch |
+| `tokenFromRequestCookies` / `createServerClient` | same | SSR cookie → token |
+| `authorize` / `hasScope` / `can` | on `AuthClient` | UI-only chrome |
+| `isUnauthorized` / `isCsrf` / `forbiddenScopes` | same | Envelope narrowers |
+| `useSession` / `useAuthorize` / `Can` | `okengine/client-react` | React session + chrome |
 
 ## Denial codes
 
-| Code           | HTTP | `error.data`       | Typical fix                                                  |
-| -------------- | ---- | ------------------ | ------------------------------------------------------------ |
-| `Unauthorized` | 401  | `{}`               | Sign in, or let `auth.refresh` run; re-login if still denied |
-| `Forbidden`    | 403  | `{ gate, reason }` | Wrong scopes / policy — show denied                          |
-| `RateLimited`  | 429  | `{ retryAfterMs }` | Wait `retryAfterMs` before retrying                          |
+| Code | HTTP | Typical fix |
+| ---- | ---- | ----------- |
+| `Unauthorized` | 401 | Sign in or refresh; re-login if still denied |
+| `Forbidden` | 403 | Wrong scopes / CSRF — read `error.data.reason` |
+| `RateLimited` | 429 | Wait `retryAfterMs` |
 
-Browser apps: also see [CORS](/docs/plugins/cors) and [CSRF](/docs/plugins/csrf).
+Also see [CORS](/docs/plugins/cors) and [CSRF](/docs/plugins/csrf). Advanced create-oke starter
+demos cookie + passkey + `<Can>`.
 
 ## Troubleshooting
 
 <Accordions>
 
-<Accordion title="401 loops or refresh never sticks">
-  `auth.refresh` runs once per call on HTTP 401. It must update the store `getToken` reads — the
-  return value is ignored. With `gate.auth`, `memorySession.refresh(api)` calls
-  `api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no refresh token remains.
+<Accordion title="Cookie mode warns about CSRF / prod refuses boot">
+  Plug `csrf({ allowNoHeader: false })` when `gate.auth.cookies.enabled`. Set
+  `csrfConfigured: true` on the client only after the plugin is installed.
 </Accordion>
 
-<Accordion title="Forbidden after a successful sign-in">
-  Identity is present but policy / scope failed. Read `error.data.gate` and `error.data.reason`.
-  Fix the gate on the Flow — not the client factory.
+<Accordion title="authorize allowed but Flow returns Forbidden">
+  Expected — client authorize is UI-only. Add `gate.scope` / `gate.policy` on the Flow.
 </Accordion>
 
-<Accordion title="Browser blocked by CORS / CSRF">
-  Cross-origin browsers need [CORS](/docs/plugins/cors). Cookie or form POSTs may need
-  [CSRF](/docs/plugins/csrf). Bearer-only SPAs often skip CSRF when tokens are not in cookies.
+<Accordion title="localStorage warning">
+  Prefer cookie mode or memory / `sessionStorage`. XSS can read Storage until family revoke.
 </Accordion>
 
 </Accordions>
 
 ## Learn more
 
-- [Calling](/docs/client/calling) — `createClient` options, base URL from Vault / env
-- [React](/docs/client/react) — `useSession`
-- [Gate](/docs/elements/gate) — policies, `gate.public`, API keys
-- [Gate · Auth](/docs/elements/gate/auth) — session Flows
-- [Vault · Config](/docs/elements/vault/config) — `PUBLIC_API_URL`, `vault.env`
-- [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) — browser callers
+- [Calling](/docs/client/calling) — envelopes, binary `{ response: "blob" }`, REST
+- [React](/docs/client/react) — `useSession` / `Can` / `useAuthorize`
+- [Gate · Auth](/docs/elements/gate/auth) — server cookies and scopes
 
 ## Next
 
 <Cards>
-  <Card
-    title="React"
-    description="useSession over memorySession."
-    href="/docs/client/react"
-  />
-  <Card
-    title="Gate"
-    description="Auth policies and rate limits before any effect."
-    href="/docs/elements/gate"
-  />
-  <Card
-    title="Calling"
-    description="REST, RPC, and result helpers."
-    href="/docs/client/calling"
-  />
+  <Card title="Live" href="/docs/client/live" />
+  <Card title="React" href="/docs/client/react" />
+  <Card title="Gate Auth" href="/docs/elements/gate/auth" />
 </Cards>

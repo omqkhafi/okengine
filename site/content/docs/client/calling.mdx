@@ -95,7 +95,7 @@ Set `PUBLIC_API_URL` via environment or `oke vault set`. Prefer `vault.env` over
 
 From a simple read to typed domain failures and transport errors:
 
-<Tabs items={["Minimal", "Narrow", "Failures", "Transport"]}>
+<Tabs items={["Minimal", "Narrow", "Failures", "Transport", "Binary"]}>
 
 <Tab value="Minimal">
 
@@ -161,6 +161,23 @@ if (result.error && isTransportError(result.error)) {
 
 Network failure, abort (`timeout`), non-JSON body, or HTTP status without a `{ data, error }`
 envelope — never a declared Flow code.
+
+</Tab>
+
+<Tab value="Binary">
+
+```typescript
+const { data, error } = await api.files.download(
+  { id: "file_1" },
+  { response: "blob" },
+);
+if (error || !data) return;
+a.href = URL.createObjectURL(data);
+a.download = "report.pdf";
+```
+
+Same `{ data, error }` envelope; `{ response: "arrayBuffer" }` for raw bytes. Default remains
+JSON envelopes.
 
 </Tab>
 
@@ -338,10 +355,20 @@ pass the origin from Vault / env (never a hardcoded host in source):
 ```bash
 oke client add "$PUBLIC_API_URL"
 oke client add "$PUBLIC_API_URL" --out ./types/oke-client.d.ts
+# also writes oke-client.routes.ts (or types/oke-client.routes.ts)
 ```
 
-create-oke starters ship `web/`: Vite owns `index.html` and proxies your Flow paths plus `/_oke`
-to the app. Leave `PUBLIC_API_URL` unset in local web so `createClient("")` stays same-origin.
+```typescript
+import { createClient } from "okengine/client";
+import { routes } from "./oke-client.routes.ts";
+
+const api = createClient(import.meta.env.PUBLIC_API_URL ?? "", { $routes: routes });
+```
+
+Ambient `.d.ts` types `in` / `out` / live / stream stamps. The routes module supplies wire REST.
+
+create-oke starters ship `web/`: Vite proxies Flow paths plus `/auth` and `/_oke` to the app.
+Leave `PUBLIC_API_URL` unset in local web so `createClient("")` stays same-origin.
 
 CLI details: [CLI Reference](/docs/reference/cli).
 

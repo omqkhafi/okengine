@@ -126,7 +126,7 @@ export async function runPromptEvals(options: RunPromptEvalsOptions): Promise<Ev
 export function parseEvalJsonl(text: string): EvalCase[] {
   const jsonl = (Bun as typeof Bun & { JSONL?: { parse: (t: string) => unknown[] } }).JSONL;
   if (!jsonl) {
-    throw new Error("ai.eval: Bun.JSONL is required (Bun >= 1.4.1)");
+    throw new Error("ai.eval: Bun.JSONL is required (Bun >= 1.4.2)");
   }
   return jsonl.parse(text) as EvalCase[];
 }

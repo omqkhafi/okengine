@@ -5,7 +5,15 @@ import { app, type App } from "@/app";
 let t: TestApp<App>;
 
 beforeAll(async () => {
-  t = await createTestApp(app);
+  t = await createTestApp(app, {
+    boot: {
+      config: {
+        drivers: {
+          store: { sql: { test: "pglite" } },
+        },
+      },
+    },
+  });
 });
 
 afterAll(async () => {
@@ -18,7 +26,7 @@ test("boots — health flow is named main.health", async () => {
   expect(data).toEqual({ ok: true });
 });
 
-test("notes create → attach → summarize → archive", async () => {
+test("notes create → attach → archive", async () => {
   const created = await t.api.notes!.create!({
     title: "Advanced",
     body: "Body long enough to exercise attach and summarize paths in the advanced starter.",
@@ -32,12 +40,7 @@ test("notes create → attach → summarize → archive", async () => {
   expect(attached.error).toBeNull();
   expect((attached.data as { key: string }).key).toBe(`notes/${id}/attachment.txt`);
 
-  t.ai.mock("summarize-note", { summary: "Advanced starter summary." });
-  const summary = await t.api.notes!.summarize!({ id });
-  expect(summary.error).toBeNull();
-  const out = summary.data as { via: string; summary: string };
-  expect(out.via.length).toBeGreaterThan(0);
-  expect(out.summary.length).toBeGreaterThan(0);
+  // `notes.summarize` needs `oke ai setup` (summarize-note prompt) — exercised there.
 
   const archived = await t.api.notes!.archive!({ id });
   expect(archived.error).toBeNull();

@@ -153,7 +153,7 @@ async function readSseJsonRpc(
 function responseTextStream(res: Response): AsyncIterable<string> {
   const stream = (res as Response & { textStream?: () => AsyncIterable<string> }).textStream;
   if (typeof stream !== "function") {
-    throw new Error("ai.mcp: Response.textStream is required (Bun >= 1.4.1)");
+    throw new Error("ai.mcp: Response.textStream is required (Bun >= 1.4.2)");
   }
   return stream.call(res);
 }

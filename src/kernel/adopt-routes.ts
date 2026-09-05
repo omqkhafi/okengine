@@ -186,6 +186,7 @@ export function runtimeRouteFromFlow(flowDef: AnyFlowDef): RuntimeFlowRoute {
   if (trigger?.kind !== "http") return {};
   const liveName = trigger.liveSignal?.name ?? flowDef.live;
   const gates = trigger.gates.map((g) => (typeof g === "string" ? g : g.name));
+  const streamOnly = flowDef.stream === true && liveName === undefined;
   return {
     method: trigger.method,
     path: trigger.path,
@@ -196,7 +197,14 @@ export function runtimeRouteFromFlow(flowDef: AnyFlowDef): RuntimeFlowRoute {
           matchKey: httpPathParams(trigger.path),
           ...(gates.length > 0 ? { gates } : {}),
         }
-      : {}),
+      : streamOnly
+        ? {
+            stream: true as const,
+            ...(gates.length > 0 ? { gates } : {}),
+          }
+        : gates.length > 0
+          ? { gates }
+          : {}),
   };
 }
 

@@ -82,7 +82,7 @@ Every method below exists on both the fluent definition and the boot-time builde
 | `.image(role, recipe)`           | An image recipe for a docker role                                                             |
 | `.table(name, columns, options)` | A whole DB table, merged into the generated schema (`options.description` / `plane` optional) |
 | `.errors(map)`                   | Typed errors flows can fail with                                                              |
-| `.client(name, ext)`             | A typed client extension (reserved seam — not yet merged into `createClient`)                 |
+| `.client(name, ext)`             | Reserved plugin seam — prefer `createAuthClient` method helpers for auth |
 | `.consolePanel(panel)`           | A Console panel (ESM entry loaded at runtime)                                                 |
 | `.cli(name, handler)`            | An `oke <name>` CLI command                                                                   |
 | `.config(schema)`                | A config schema; values live on the plugin identity                                           |

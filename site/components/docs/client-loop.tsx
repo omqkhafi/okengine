@@ -1,9 +1,9 @@
 /**
- * Adopt → typed client → test loop visual for Basic Usage.
+ * App / $routes → createClient → envelope loop visual for Client overview.
  *
- * A token descends the three stages on a loop; the "same Manifest" divider
- * pulses as the token crosses it — the handoff is the point. Compact
- * left-aligned stages; deterministic from one tick, never Math.random.
+ * A token descends the stages on a loop; the "same Manifest" divider
+ * pulses as the token crosses it. Compact left-aligned stages; deterministic
+ * from one tick, never Math.random.
  */
 
 "use client";
@@ -21,21 +21,21 @@ const STAGES: ReadonlyArray<{
 }> = [
   {
     index: "01",
-    title: "Export a Flow",
-    meta: "on(http.get…)",
-    body: "Contracts and do live in your module. Save — Manifest refreshes.",
+    title: "App + routes",
+    meta: "app.$routes · oke-client.routes",
+    body: "Typed adopt or generated routes module — contracts for every Flow.",
   },
   {
     index: "02",
-    title: "Adopt the module",
-    meta: "oke().adopt({ main })",
-    body: "Namespace becomes the typed-client path: api.main.health.",
+    title: "createClient",
+    meta: "createClient(url, { $routes, auth? })",
+    body: "Optional auth attaches api.auth. Same App type in browser or SSR.",
   },
   {
     index: "03",
-    title: "Call or test",
-    meta: "createClient · createTestApp",
-    body: "Same App type. data and error inferred from contracts — no codegen project.",
+    title: "Envelope + ambient",
+    meta: "{ data, error } · oke-client.d.ts",
+    body: "Every call returns data and error. Ambient types after oke client add.",
   },
 ];
 
@@ -43,7 +43,7 @@ const TICK_MS = 1100;
 const tone = CHIP_TONE.sky;
 
 /**
- * Three-stage loop from Flow export to typed client / test harness.
+ * Three-stage loop from routes to typed client envelope.
  */
 export function ClientLoop() {
   const tick = useTick(TICK_MS);
@@ -52,10 +52,10 @@ export function ClientLoop() {
   return (
     <figure
       className="not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Closed loop: export a Flow, adopt the module on the app, then call it with createClient or createTestApp using the same App type."
+      aria-label="Closed loop: App routes, createClient with optional auth, then typed data and error envelopes with ambient oke-client types."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
-        <p className="text-sm font-medium text-fd-foreground">From Flow to client</p>
+        <p className="text-sm font-medium text-fd-foreground">From App to client</p>
         <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
           one App type
         </code>
@@ -118,14 +118,15 @@ export function ClientLoop() {
                     />
                   </span>
                 </div>
-                <p className="text-xs leading-relaxed text-pretty text-fd-muted-foreground sm:pl-7">
-                  {stage.body}
-                </p>
+                <p className="text-sm text-fd-muted-foreground">{stage.body}</p>
               </div>
             </RevealItem>
           );
         })}
       </RevealGroup>
+      <p className="border-t border-fd-border px-4 py-2 font-mono text-[10px] text-fd-muted-foreground sm:px-5">
+        Adopt remains available for same-repo typing — generated routes are the handbook path.
+      </p>
     </figure>
   );
 }

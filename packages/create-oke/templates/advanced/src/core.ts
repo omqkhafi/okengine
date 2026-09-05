@@ -31,6 +31,8 @@ export const files = store.files("uploads");
  * );
  * export const notesMutate = gate.all(notesWrite, notesWriteRate);
  * ```
+ *
+ * Cookie auth + passkey are wired in `app.ts`; client `Can` / `authorize` are UI-only.
  */
 export const notesWrite = gate.policy("notes:write", () => true);
 

@@ -22,11 +22,13 @@ import {
   type LiveByFlow,
   type LiveRouteTable,
 } from "./live.ts";
+import { flattenStreamRoutes, openStream, type StreamByFlow } from "./stream.ts";
 import type {
   Client,
   ClientHeaders,
   ClientLive,
   ClientOptions,
+  ClientResult,
   ClientRouteMap,
   LiveHandlers,
   ResolveApp,
@@ -97,6 +99,7 @@ function buildClient(url: string, opts: ClientOptions = {}): Client {
   const base = url.replace(/\/+$/, "");
   const routes = opts.routes ?? flattenRoutes(opts.$routes);
   const live = flattenLiveRoutes(opts.$routes);
+  const streamByFlow = flattenStreamRoutes(opts.$routes);
   const transport = createTransport(base, { ...opts, routes });
   const perCallHeaders = createPerCallHeaders();
   return proxy(transport, [], {
@@ -104,6 +107,7 @@ function buildClient(url: string, opts: ClientOptions = {}): Client {
     opts,
     liveBySignal: live.bySignal,
     liveByFlow: live.byFlow,
+    streamByFlow,
     perCallHeaders,
   }) as Client;
 }
@@ -113,6 +117,7 @@ type ProxyCtx = {
   readonly opts: ClientOptions;
   readonly liveBySignal: LiveRouteTable;
   readonly liveByFlow: LiveByFlow;
+  readonly streamByFlow: StreamByFlow;
   /**
    * Extra headers attached to the next transport call, then cleared — the
    * `X-Oke-Mutation-Id` channel for optimistic dedupe (one-shot by design;
@@ -187,7 +192,10 @@ export function flattenRoutes(
  * @param path - Accumulated property path
  */
 function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): unknown {
-  const invoke = async (input?: unknown) => {
+  const invoke = async (
+    input?: unknown,
+    callOpts?: CallOpts,
+  ): Promise<ClientResult> => {
     if (path.length < 2) {
       return attachPager(
         {
@@ -199,16 +207,20 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
             },
           },
         },
-        invoke,
+        (nextInput) => invoke(nextInput, callOpts),
         input,
       );
     }
     const unit = path[0]!;
     const flow = path.slice(1).join(".");
-    const result = await transport.call(`${unit}/${flow}`, input, ctx.perCallHeaders.read());
-    return attachPager(result, invoke, input);
+    const result = await transport.call(`${unit}/${flow}`, input, {
+      headers: ctx.perCallHeaders.read(),
+      ...(callOpts?.response !== undefined ? { response: callOpts.response } : {}),
+      ...(callOpts?.signal !== undefined ? { signal: callOpts.signal } : {}),
+    });
+    return attachPager(result, (nextInput) => invoke(nextInput, callOpts), input);
   };
-  const call = (a?: unknown, b?: unknown) => {
+  const call = (a?: unknown, b?: unknown): unknown => {
     if (path.length >= 2) {
       const key = `${path[0]}.${path.slice(1).join(".")}`;
       const exposure = ctx.liveByFlow[key];
@@ -216,6 +228,20 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
         const handlers = (isLiveHandlers(a) ? a : b) as LiveHandlers<unknown>;
         const input = isLiveHandlers(a) ? undefined : a;
         return subscribeLive(ctx.base, exposure, input, handlers, ctx.opts);
+      }
+      const streamRoute = ctx.streamByFlow[key];
+      if (streamRoute) {
+        const input = isCallOpts(a) ? undefined : a;
+        const opts = isCallOpts(a) ? a : isCallOpts(b) ? b : undefined;
+        const merged: ClientOptions = opts?.signal
+          ? { ...ctx.opts, signal: opts.signal }
+          : ctx.opts;
+        return openStream(ctx.base, streamRoute, input, merged);
+      }
+      if (isCallOpts(a) || isCallOpts(b)) {
+        const input = isCallOpts(a) ? undefined : a;
+        const opts = (isCallOpts(a) ? a : b) as CallOpts;
+        return asThenableIterable((next) => invoke(next, opts), input);
       }
     }
     return asThenableIterable(invoke, a);
@@ -312,4 +338,27 @@ function makeLive(ctx: ProxyCtx): ClientLive {
     const exposure = pickLiveExposure(exposures, input, handlers.via);
     return subscribeLive(ctx.base, exposure, input, handlers, ctx.opts);
   }) as ClientLive;
+}
+
+function isCallOpts(value: unknown): value is CallOpts {
+  if (value === null || typeof value !== "object" || isLiveHandlers(value)) return false;
+  const v = value as Record<string, unknown>;
+  if ("response" in v) {
+    return (
+      v.response === undefined ||
+      v.response === "json" ||
+      v.response === "blob" ||
+      v.response === "arrayBuffer"
+    );
+  }
+  if ("signal" in v) {
+    return v.signal === undefined || v.signal instanceof AbortSignal;
+  }
+  return false;
+}
+
+/** Per-call options on a Flow invoke (binary decode / abort). */
+export interface CallOpts {
+  readonly response?: "json" | "blob" | "arrayBuffer";
+  readonly signal?: AbortSignal;
 }

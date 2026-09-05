@@ -117,3 +117,68 @@ describe("csrf plugin", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("csrf soft-require when cookies enabled", () => {
+  test("prod boots refuse without csrf plugin", async () => {
+    const app = oke({
+      autoBoot: false,
+      name: `csrf-cookie-${crypto.randomUUID()}`,
+      env: "prod",
+      registry: "ignore",
+      gate: {
+        auth: {
+          secret: "test-secret-at-least-32-characters!!",
+          cookies: { enabled: true },
+          http: false,
+        },
+      },
+    });
+    await expect(app.boot()).rejects.toThrow(/csrf plugin/);
+  });
+
+  test("test/dev boots warn without csrf plugin", async () => {
+    const warnings: string[] = [];
+    const prev = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      const app = oke({
+        autoBoot: false,
+        name: `csrf-cookie-dev-${crypto.randomUUID()}`,
+        env: "test",
+        registry: "ignore",
+        gate: {
+          auth: {
+            secret: "test-secret-at-least-32-characters!!",
+            cookies: { enabled: true },
+            http: false,
+          },
+        },
+      });
+      await app.boot({ env: "test" });
+      expect(warnings.some((w) => w.includes("csrf"))).toBe(true);
+      await app.stop();
+    } finally {
+      console.warn = prev;
+    }
+  });
+
+  test("boots with csrf plugin when cookies enabled", async () => {
+    const app = oke({
+      autoBoot: false,
+      name: `csrf-cookie-ok-${crypto.randomUUID()}`,
+      env: "test",
+      registry: "ignore",
+      gate: {
+        auth: {
+          secret: "test-secret-at-least-32-characters!!",
+          cookies: { enabled: true },
+          http: false,
+        },
+      },
+    }).plug(csrf({ allowNoHeader: false }));
+    await app.boot({ env: "test" });
+    await app.stop();
+  });
+});

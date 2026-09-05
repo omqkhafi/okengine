@@ -35,12 +35,37 @@ describe("oke client add", () => {
     expect(src).toContain("export {}");
   });
 
-  test("writes a compiling .d.ts", async () => {
+  test("emitAmbient includes live/stream stamps", () => {
+    const src = emitAmbient({
+      routes: {
+        orders: {
+          events: {
+            in: "{ orderId: string }",
+            out: "{ status: string }",
+            errors: {},
+            method: "GET",
+            path: "/orders/:orderId/events",
+            live: "order-status",
+            stream: true,
+            matchKey: ["orderId"],
+          },
+        },
+      },
+    });
+    expect(src).toContain('live: "order-status"');
+    expect(src).toContain("stream: true");
+    expect(src).toContain('matchKey: ["orderId"]');
+  });
+
+  test("writes ambient + routes modules and a compiling .d.ts", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-client-add-"));
     const out = join(dir, "oke-client.d.ts");
 
     const result = await clientAdd({ descriptor: fixture, out });
     expect(result.out).toBe(out);
+    expect(result.routesOut).toContain("oke-client.routes.ts");
+    expect(result.routesSource).toContain("export const routes");
+    expect(result.routesSource).toContain('"/bookings"');
     expect(result.source).toContain("FlightFull");
 
     // Ambient-only project — proves the .d.ts itself is valid TypeScript.

@@ -132,6 +132,14 @@ const MeOut = z.object({
   email: z.string(),
   name: z.string(),
   emailVerified: z.boolean(),
+  /** Live principal scopes — for UI chrome only; Gate on Flows is real authz. */
+  scopes: z.array(z.string()),
+  /** Active tenant id when multi-tenancy is on; otherwise null. */
+  tenantId: z.string().nullable(),
+  /** Authenticating API key id when Bearer was a key secret; otherwise null. */
+  apiKeyId: z.string().nullable(),
+  /** Whether the session completed verification (email / MFA). */
+  sessionFresh: z.boolean().optional(),
 });
 
 /**
@@ -274,6 +282,10 @@ export function createAuthHttpBindings(
         email: user.email,
         name: user.name,
         emailVerified: user.emailVerified,
+        scopes: [...fx.auth.scopes],
+        tenantId: fx.tenant.id,
+        apiKeyId: fx.auth.apiKeyId ?? null,
+        ...(fx.auth.verified !== undefined ? { sessionFresh: fx.auth.verified } : {}),
       };
     },
   });
