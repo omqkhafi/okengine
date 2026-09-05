@@ -48,7 +48,7 @@ import { loginThrottle } from "@/core/gate";
 
 export const login = on(
   http.post("/auth/sign-in/email").gate(gate.public, loginThrottle),
-  flow("auth.login", {
+  flow({
     do: async (input, fx) => {
       // At most 5 takes per IP per minute
       return input;
@@ -145,9 +145,9 @@ export const notesMutate = gate.all(
   gate.rate({ max: 60, per: "1m", keyBy: "user" }),
 );
 
-export const createNote = on(
-  http.post("/notes").gate(notesMutate),
-  flow("notes.create", {
+export const create = on(
+  http.post().gate(notesMutate),
+  flow({
     do: async (input, fx) => fx.json.create({ id: fx.id(), ...input }),
   }),
 );

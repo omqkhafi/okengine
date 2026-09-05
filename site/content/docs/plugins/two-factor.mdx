@@ -7,14 +7,12 @@ source: "docs/spec/unified-theory.md"
 
 `twoFactor()` adds a second factor after password (or username) sign-in: RFC 6238
 TOTP or email OTP. When 2FA is enabled, first-factor success withholds session
-tokens and returns a **method-locked** challenge. Enrollment and method change
-are privileged — they need a verified current factor first.
+tokens and returns a **method-locked** challenge.
 
 <Callout title="The one rule">
   Enable `gate.auth`, then `.plug(twoFactor())`. Login challenges lock the
   configured method (`totp` or `email_otp`). Mid-challenge QR enrollment returns
-  `Forbidden`. Changing method requires step-up verify → provision → confirm
-  (old method is invalidated only after the new one is active).
+  `Forbidden`. Method change needs step-up verify → provision → confirm.
 </Callout>
 
 ## Quick start
@@ -49,8 +47,7 @@ const { data } = await api.auth.twoFactorEnable({});
 
 `POST /auth/two-factor/enable` — writes `oke_two_factor`. Store recovery codes once.
 Re-enrollment when 2FA is already enabled requires step-up first
-(`twoFactorStepUp`). An active login challenge → `Forbidden` /
-`active_2fa_challenge`.
+(`twoFactorStepUp`). An active login challenge → `Forbidden` / `active_2fa_challenge`.
 
 </Step>
 
@@ -147,10 +144,9 @@ an unresolved challenge exists for that user.
 </Accordion>
 <Accordion title="twoFactorEnable returns AuthFailed unauthenticated">
 
-Wire a session into `createClient` (`auth.getToken` / `memorySession`) from
-email/password (or another method) first — enable is gated on Bearer. First-time
-enroll must happen **before** 2FA is required on sign-in (or after a full
-session from a completed challenge).
+Wire a session into `createClient` (`auth.getToken` / `memorySession`) first —
+enable is gated on Bearer. First-time enroll must happen **before** 2FA is
+required on sign-in (or after a full session from a completed challenge).
 
 </Accordion>
 <Accordion title="verify always fails">

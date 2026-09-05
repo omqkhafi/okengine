@@ -35,6 +35,7 @@ import {
 import { StoreSeeding } from "@/components/docs/elements/store-seeding";
 import { VaultRedacted } from "@/components/docs/elements/vault-redacted";
 import { VaultResolution } from "@/components/docs/elements/vault-resolution";
+import { VaultRotate } from "@/components/docs/elements/vault-rotate";
 import { Features } from "@/components/docs/features";
 import { FlowShape } from "@/components/docs/flow-shape";
 import { SixSystemsDrift } from "@/components/docs/understand/six-systems-drift";
@@ -51,8 +52,8 @@ import { Vocabulary } from "@/components/landing/vocabulary";
  * (FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease,
  * SignalBroadcastFanout, SignalLiveReplay, StoreFacets, StoreFacetMark, StoreKvTtl,
  * StoreFilesVariants, StoreIndexModes, StoreSeeding, ClockSchedules, ClockCatchUp,
- * ClockSleep, GatePipeline, VaultResolution, VaultRedacted, ChannelPhysics,
- * AiBlocks, AiGuardrails, AiPiiEgress).
+ * ClockSleep, GatePipeline, VaultResolution, VaultRedacted, VaultRotate,
+ * ChannelPhysics, AiBlocks, AiGuardrails, AiPiiEgress).
  *
  * @param components - Extra overrides from the page renderer
  */
@@ -100,6 +101,7 @@ export function getMDXComponents(components?: MDXComponents) {
     GatePipeline,
     VaultResolution,
     VaultRedacted,
+    VaultRotate,
     ChannelPhysics,
     AiBlocks,
     AiGuardrails,

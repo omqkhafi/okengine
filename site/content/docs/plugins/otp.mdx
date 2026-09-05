@@ -101,11 +101,9 @@ const { data } = await api.auth.verifyOtp({
 </Steps>
 
 <Callout type="info" title="Pre-account hijack defense (email)">
-  App-mode email verify proves inbox ownership the same way magic-link does. An
-  **unverified** parked email+password account for that address is reclaimed:
-  sessions revoked, password hashes cleared, `emailVerified` set, then the OTP
-  session is issued. Already-verified owners re-auth without a credential purge.
-  Phone OTP is unchanged (no email identity).
+  App-mode email verify proves inbox ownership. An **unverified** parked
+  email+password account is reclaimed (sessions revoked, hashes cleared,
+  `emailVerified` set) before the OTP session. Verified owners re-auth only.
 </Callout>
 
 ## Modes

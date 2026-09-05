@@ -1,10 +1,11 @@
 /**
  * Four AI building blocks — model / prompt / embed / agent.
  *
- * Each card runs an ambient physics demo: a logical model binds to a provider,
- * a versioned prompt validates `out`, an embed packet lands in `store.index`,
- * an agent steps through tools via `fx.call` until `maxSteps`. Same quality bar
- * as StoreFacets / SignalDelivery. Deterministic — never Math.random.
+ * Each card runs an ambient physics demo: a logical model binds a verified
+ * provider + wire id, a versioned prompt validates `out`, an embed packet lands
+ * in `store.index`, an agent steps through Flow tools via `fx.call` until
+ * maxSteps. Same quality bar as StoreFacets / SignalDelivery. Deterministic —
+ * never Math.random.
  */
 
 "use client";
@@ -17,6 +18,8 @@ import { cn } from "@/lib/cn";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 const tone = CHIP_TONE.rose;
+const ok = CHIP_TONE.emerald;
+const fail = CHIP_TONE.rose;
 
 type BlockId = "model" | "prompt" | "embed" | "agent";
 
@@ -31,15 +34,15 @@ const BLOCKS: ReadonlyArray<{
   {
     id: "model",
     icon: Sparkles,
-    declare: 'ai.model("smart", { provider, tier })',
+    declare: 'ai.model("smart", { provider, model })',
     kind: "Logical binding",
-    physics: "Name → provider / tier — prod must declare the driver",
+    physics: "Name → provider / wire model — prod must declare the driver",
     forUse: "smart / fast / local — swap per environment",
   },
   {
     id: "prompt",
     icon: Braces,
-    declare: 'smart.prompt("ticket-triage", { in, out, version })',
+    declare: 'smart.prompt("ticket-triage", { out, version })',
     kind: "Versioned artifact",
     physics: "fx.ask validates the response against `out`",
     forUse: "Typed triage, summaries, structured answers",
@@ -127,9 +130,9 @@ function BlockDemo({ kind }: { readonly kind: BlockId }) {
   return <AgentDemo />;
 }
 
-const MODEL_PHASES = ["bind", "provider", "tier"] as const;
+const MODEL_PHASES = ["bind", "provider", "model"] as const;
 
-/** Model — logical name lights, then provider / tier bind in. */
+/** Model — logical name lights, then verified provider + wire model id. */
 function ModelDemo() {
   const tick = useTick(TICK_MS);
   const phase = tick === null ? 2 : tick % MODEL_PHASES.length;
@@ -139,12 +142,7 @@ function ModelDemo() {
     <div className="flex flex-col gap-1.5" aria-label="model binding demo">
       <PhaseChip label={label} live={tick !== null} tick={tick} />
       <div className="flex flex-wrap items-center gap-1" aria-hidden>
-        <code
-          className={cn(
-            "rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors duration-300",
-            tone.active,
-          )}
-        >
+        <code className={cn("rounded border px-1.5 py-0.5 font-mono text-[10px]", tone.active)}>
           smart
         </code>
         <span className="font-mono text-[10px] text-fd-muted-foreground/60">→</span>
@@ -157,7 +155,7 @@ function ModelDemo() {
             phase >= 1 ? tone.active : "border-fd-border text-fd-muted-foreground",
           )}
         >
-          anthropic
+          openrouter
         </motion.code>
         <motion.code
           initial={false}
@@ -165,10 +163,10 @@ function ModelDemo() {
           transition={{ duration: 0.3 }}
           className={cn(
             "rounded border px-1.5 py-0.5 font-mono text-[10px]",
-            phase >= 2 ? tone.active : "border-fd-border text-fd-muted-foreground",
+            phase >= 2 ? ok.active : "border-fd-border text-fd-muted-foreground",
           )}
         >
-          opus
+          openrouter/free
         </motion.code>
       </div>
     </div>
@@ -177,11 +175,12 @@ function ModelDemo() {
 
 const PROMPT_PHASES = ["ask", "validate", "out"] as const;
 
-/** Prompt — ask → validate against out schema. */
+/** Prompt — ask packet → validate → structured out. */
 function PromptDemo() {
   const tick = useTick(TICK_MS);
   const phase = tick === null ? 2 : tick % PROMPT_PHASES.length;
   const label = PROMPT_PHASES[phase];
+  const valid = phase >= 2;
 
   return (
     <div className="flex flex-col gap-1.5" aria-label="prompt validate demo">
@@ -195,7 +194,7 @@ function PromptDemo() {
           fill={IDLE}
           style={{ fontSize: 6, fontFamily: "ui-monospace, monospace" }}
         >
-          v3
+          v1
         </text>
         <line
           x1="36"
@@ -214,7 +213,7 @@ function PromptDemo() {
           initial={false}
           animate={
             tick === null
-              ? { cx: 56, opacity: 0.9 }
+              ? { cx: 70, opacity: 0.9 }
               : phase === 0
                 ? { cx: 40, opacity: 0.95 }
                 : phase === 1
@@ -223,14 +222,23 @@ function PromptDemo() {
           }
           transition={SPRING}
         />
-        <rect x="62" y="3" width="18" height="16" rx="2" fill={BOX} stroke={BOX_LINE} />
+        <rect
+          x="62"
+          y="3"
+          width="18"
+          height="16"
+          rx="2"
+          fill={BOX}
+          stroke={valid ? "var(--color-emerald-500)" : BOX_LINE}
+          strokeOpacity={valid ? 0.55 : 1}
+        />
         <motion.text
           x="71"
           y="14"
           textAnchor="middle"
-          fill={phase >= 2 ? PACKET : IDLE}
+          fill={valid ? "var(--color-emerald-500)" : IDLE}
           initial={false}
-          animate={{ opacity: phase >= 2 ? 1 : 0.45 }}
+          animate={{ opacity: valid ? 1 : 0.45 }}
           style={{ fontSize: 6, fontFamily: "ui-monospace, monospace" }}
         >
           out
@@ -240,7 +248,7 @@ function PromptDemo() {
   );
 }
 
-/** Embed — packet from model into store.index. */
+/** Embed — packet from embed into store.index. */
 function EmbedDemo() {
   const tick = useTick(1000);
   const reduced = useClientReducedMotion();
@@ -304,23 +312,28 @@ function EmbedDemo() {
   );
 }
 
-const AGENT_TOOLS = ["getBooking", "refundBooking"] as const;
+const AGENT_TOOLS = ["docs.search", "tickets.create"] as const;
+const AGENT_BEATS = 8;
 
-/** Agent — steps climb to maxSteps; each tool routes through fx.call. */
+/**
+ * Agent — tools alternate via fx.call; beat 7 lights maxSteps halt (default 6).
+ */
 function AgentDemo() {
   const tick = useTick(900);
-  /* Reduced motion freezes at step 3 of 6 with a tool lit. */
-  const step = tick === null ? 3 : (tick % 7) + 1;
-  const capped = Math.min(step, 6);
-  const toolIdx = tick === null ? 0 : tick % AGENT_TOOLS.length;
-  const halted = step > 6;
+  /* Reduced motion freezes mid-loop with a tool lit (step 3/6). */
+  const t = tick ?? 2;
+  const beat = t % AGENT_BEATS;
+  const halted = beat >= 6;
+  const step = halted ? 6 : beat + 1;
+  const toolIdx = beat % AGENT_TOOLS.length;
 
   return (
     <div className="flex flex-col gap-1.5" aria-label="agent maxSteps demo">
       <PhaseChip
-        label={halted ? "maxSteps" : `step ${capped}/6`}
+        label={halted ? "maxSteps" : `step ${step}/6`}
         live={tick !== null}
         tick={tick}
+        fail={halted}
       />
       <div className="flex flex-wrap items-center gap-1" aria-hidden>
         {AGENT_TOOLS.map((tool, i) => (
@@ -343,11 +356,26 @@ function AgentDemo() {
         <code
           className={cn(
             "rounded border px-1.5 py-0.5 font-mono text-[10px]",
-            !halted ? tone.active : "border-fd-border text-fd-muted-foreground",
+            halted ? fail.active : tone.active,
           )}
         >
-          fx.call
+          {halted ? "halt" : "fx.call"}
         </code>
+      </div>
+      <div className="flex items-center gap-1" aria-hidden>
+        {[1, 2, 3, 4, 5, 6].map((n) => (
+          <span
+            key={n}
+            className={cn(
+              "size-1.5 rounded-full transition-colors duration-300",
+              n <= step
+                ? halted
+                  ? fail.hairline
+                  : tone.hairline
+                : "border border-fd-border bg-transparent",
+            )}
+          />
+        ))}
       </div>
     </div>
   );
@@ -357,27 +385,30 @@ function PhaseChip({
   label,
   live,
   tick,
+  fail: isFail = false,
 }: {
   readonly label: string;
   readonly live: boolean;
   readonly tick: number | null;
+  readonly fail?: boolean;
 }) {
+  const chipTone = isFail ? fail : tone;
   return (
     <div className="flex items-center gap-2">
       <code
         className={cn(
           "rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors duration-300",
-          live ? tone.active : "border-fd-border text-fd-muted-foreground",
+          live ? chipTone.active : "border-fd-border text-fd-muted-foreground",
         )}
       >
         {label}
       </code>
       <span className="relative flex size-1.5 shrink-0" aria-hidden>
-        {live && tick !== null ? <BeatPing key={tick} className={tone.wash} /> : null}
+        {live && tick !== null ? <BeatPing key={tick} className={chipTone.wash} /> : null}
         <span
           className={cn(
             "size-1.5 rounded-full transition-colors duration-300",
-            live ? tone.hairline : "bg-fd-border",
+            live ? chipTone.hairline : "bg-fd-border",
           )}
         />
       </span>

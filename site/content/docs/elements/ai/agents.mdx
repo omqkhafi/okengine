@@ -1,50 +1,224 @@
 ---
 title: "Agents"
-description: "Autonomous tool-calling agents with Flow tools, step limits, cost boundaries, and loop prevention."
+description: "Bounded agents — tools are Flows, maxSteps and budget.maxCostPerRun cap the loop, invoke with fx.run."
 icon: "Bot"
+source: "docs/spec/unified-theory.md"
 ---
 
-Bounded Agents (`ai.agent`) allow models to execute multi-step plans using backend Flows as tools.
+An agent (`ai.agent`) is a **bounded tool-calling loop**. Tools are your app’s Flows (and
+allowlisted MCP refs) — each step goes through `fx.call`. The loop stops at `maxSteps` or
+`budget.maxCostPerRun`.
 
-## What it is
+For developers who need a planner or support assistant without writing a custom tool runtime —
+declare the bag, run with `fx.run`.
 
-In OKE, you do not write custom function-calling wrappers for agents. Any existing Flow can be passed directly to `tools: [myFlow]`. The agent loop terminates automatically when reaching `maxSteps` or exceeding `maxCostPerRun`.
+<Callout title="The one rule">
+  Pass Flow names (or handles) in `tools`, set `maxSteps` and `budget.maxCostPerRun`, then
+  `fx.run(agent, { message })`. There is no `instructions` / `in` / `out` on `ai.agent` — shape
+  the user message yourself.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Declare an agent
+### Declare model + agent
 
-```typescript title="src/ai/researcher.ts"
+```typescript title="src/core/ai.ts"
 import { ai } from "okengine";
-import { z } from "zod";
-import { searchDocs } from "@/flows/docs/search";
-import { createTicket } from "@/flows/tickets/create";
+
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
 
 export const supportAgent = ai.agent("support.assistant", {
-  model: "fast-cloud",
-  instructions: "You are a helpful customer support agent. Search docs before answering.",
-  tools: [searchDocs, createTicket],
+  model: "smart",
+  tools: ["docs.search", "tickets.create"],
   maxSteps: 5,
-  maxCostPerRun: 0.1,
-  in: z.object({ query: z.string() }),
-  out: z.object({ answer: z.string(), ticketCreated: z.boolean() }),
+  budget: { maxCostPerRun: 0.1 },
 });
 ```
 
 </Step>
 
+<Step>
+### Run from a Flow
+
+```typescript title="src/flows/support/assist.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { supportAgent } from "@/core/ai";
+import { member } from "@/core/gate";
+
+export const assist = on(
+  http.post().gate(member),
+  flow({
+    in: z.object({ query: z.string().min(1) }),
+    do: async ({ query }, fx) => {
+      return await fx.run(supportAgent, {
+        message: `Help the member: ${query}`,
+      });
+    },
+  }),
+);
+```
+
+Runtime records the agent name under `asks`. Prefer declaring `effects: { asks: ["support.assistant"] }`
+when inference does not see `fx.run`.
+
+</Step>
+
+<Step>
+### Bound termination
+
+Default `maxSteps` is **6** when omitted. Hitting the step cap ends the loop; exceeding
+`budget.maxCostPerRun` throws `AiBudgetExceededError`:
+`ai: agent "…" exceeded maxCostPerRun N`.
+
+</Step>
+
 </Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Flow tools", "MCP tools", "Ask tools", "Budget"]}>
+
+<Tab value="Flow tools">
+
+String names or Flow handles — same capability path as `fx.call`:
+
+```typescript
+import { searchDocs } from "@/flows/docs/search";
+import { createTicket } from "@/flows/tickets/create";
+
+export const supportAgent = ai.agent("support.assistant", {
+  model: smart,
+  tools: [searchDocs, createTicket],
+  maxSteps: 8,
+});
+```
+
+</Tab>
+
+<Tab value="MCP tools">
+
+Outbound MCP refs join the same bag (`mcp:<server>/<tool>`):
+
+```typescript
+const github = ai.mcpServer("github", {
+  url: "https://mcp.example/github",
+  auth: { bearer: vault.secret("GITHUB_MCP_TOKEN") },
+  tools: ["create_issue"],
+});
+
+export const planner = ai.agent("planner", {
+  model: "smart",
+  tools: ["tasks.list", github.tool("create_issue")],
+  maxSteps: 8,
+  budget: { maxCostPerRun: 0.25 },
+});
+```
+
+See [MCP](/docs/elements/ai/mcp).
+
+</Tab>
+
+<Tab value="Ask tools">
+
+One-shot tool loop on `fx.ask` without a named agent:
+
+```typescript
+await fx.ask(triage, input, {
+  tools: ["docs.search"],
+  maxSteps: 3,
+});
+```
+
+</Tab>
+
+<Tab value="Budget">
+
+Run cost is on `budget`, not a top-level `maxCostPerRun` field:
+
+```typescript
+ai.agent("planner", {
+  tools: ["tasks.list", "tasks.create"],
+  budget: { maxCostPerRun: 0.25, maxCostPerCall: 0.05 },
+});
+```
+
+</Tab>
+
+</Tabs>
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `model` | `AiModelDecl` \| `string` | first model | Logical binding for the loop |
+| `tools` | Flow / MCP refs | `[]` | Callable via `fx.call` |
+| `maxSteps` | `number` | `6` | Hard cap on tool rounds |
+| `budget` | `{ maxCostPerCall?, maxCostPerRun? }` | — | Cost contracts for the run |
+
+## `fx.run` input
+
+Pass a string or `{ message: string }` (and any extra fields your tools need in context). The
+agent declaration does **not** take Zod `in` / `out` — validate on the surrounding Flow.
+
+```typescript
+await fx.run(supportAgent, "Summarize open tickets");
+await fx.run(supportAgent, { message: "Summarize open tickets" });
+```
+
+## Agents vs ask-with-tools
+
+| Surface | When |
+| ------- | ---- |
+| `ai.agent` + `fx.run` | Reusable tool bag, shared step/budget policy |
+| `fx.ask(prompt, …, { tools })` | One prompt, occasional tools |
+
+Both default `maxSteps` to `6`. Denied or unknown tools surface as
+`ai: all tool calls denied for prompt "…"` / `ai: model requested unknown tool "…"`.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='ai: unknown agent "…"'>
+  `fx.run` named an agent that was never declared, or the declaring module was not imported
+  before `oke()`.
+</Accordion>
+
+<Accordion title='ai: agent "…" exceeded maxCostPerRun'>
+  `AiBudgetExceededError` — raise `budget.maxCostPerRun`, lower `maxSteps`, or shrink tools.
+</Accordion>
+
+<Accordion title='ai: model requested unknown tool "…"'>
+  The model emitted a tool name outside the declared `tools` bag. Align names with Flow /
+  MCP refs, or tighten instructions in the user `message`.
+</Accordion>
+
+<Accordion title="OKE1005 on agent runs">
+  Runtime gates `fx.run` as an ask of the agent name. List `effects: { asks: ["support.assistant"] }`
+  when the compiler does not infer `fx.run`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Prompts](/docs/elements/ai/prompts) — `fx.ask` and ask-time tools
+- [MCP](/docs/elements/ai/mcp) — inbound tools and outbound servers
+- [Flow](/docs/elements/flow) — tools are ordinary Flows
+- [AI](/docs/elements/ai) — guardrails figure and drivers
 
 ## Next
 
 <Cards>
-  <Card
-    title="Model Context Protocol"
-    description="Expose your backend to MCP clients and Cursor."
-    href="/docs/elements/ai/mcp"
-  />
-  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
+  <Card title="MCP" description="Expose and consume Model Context Protocol tools." href="/docs/elements/ai/mcp" />
+  <Card title="Prompts" description="Versioned fx.ask artifacts." href="/docs/elements/ai/prompts" />
+  <Card title="AI" description="Element overview." href="/docs/elements/ai" />
 </Cards>

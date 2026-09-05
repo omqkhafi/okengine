@@ -1,5 +1,5 @@
 {
   "title": "Channel",
   "icon": "Mail",
-  "pages": ["index", "email", "sms", "push", "receipts"]
+  "pages": ["index", "email", "sms", "whatsapp", "push", "receipts"]
 }

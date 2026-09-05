@@ -45,9 +45,9 @@ export const db = store.sql("app", { schema: { posts } });
 import { on, flow, http } from "okengine";
 import { db, posts } from "@/schema";
 
-export const listPosts = on(
-  http.get("/posts"),
-  flow("posts.list", {
+export const list = on(
+  http.get(),
+  flow({
     do: async (_, fx) => {
       return await fx.store(db).page(posts, {
         orderBy: [posts.createdAt],
@@ -287,15 +287,15 @@ Each verb binds with `await fx.store(db).<method>(…)` inside `do`:
 
 Fluent select, or `findById` for a PK:
 
-```typescript title="src/flows/notes/get.ts"
+```typescript title="src/flows/notes/[id]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const getNote = on(
-  http.get("/notes/:id"),
-  flow("notes.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), title: z.string() }),
     errors: { NotFound: z.object({ id: z.string() }) },
@@ -323,9 +323,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { db, notes } from "@/schema";
 
-export const createNote = on(
-  http.post("/notes"),
-  flow("notes.create", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ title: z.string().min(1) }),
     out: z.object({ id: z.string(), title: z.string() }),
     do: async ({ title }, fx) => {
@@ -348,15 +348,15 @@ export const createNote = on(
 `where` is required — bare updates throw
 `update().set().where(): condition required`:
 
-```typescript title="src/flows/notes/update.ts"
+```typescript title="src/flows/notes/[id]/update.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const updateNote = on(
-  http.patch("/notes/:id"),
-  flow("notes.update", {
+export const update = on(
+  http.patch(),
+  flow({
     in: z.object({
       id: z.string(),
       title: z.string().min(1).optional(),
@@ -381,14 +381,14 @@ export const updateNote = on(
 Two-arg form deletes by PK. Fluent `.where(cond)` also requires a condition
 (`delete().where(): condition required`):
 
-```typescript title="src/flows/notes/remove.ts"
+```typescript title="src/flows/notes/[id]/remove.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { db, notes } from "@/schema";
 
-export const removeNote = on(
-  http.delete("/notes/:id"),
-  flow("notes.remove", {
+export const remove = on(
+  http.delete(),
+  flow({
     in: z.object({ id: z.string() }),
     do: async ({ id }, fx) => {
       await fx.store(db).delete(notes, id);
@@ -409,9 +409,9 @@ export const removeNote = on(
 import { on, flow, http } from "okengine";
 import { db, notes } from "@/schema";
 
-export const listNotes = on(
-  http.get("/notes"),
-  flow("notes.list", {
+export const list = on(
+  http.get(),
+  flow({
     do: async (_, fx) => {
       return await fx.store(db).page(notes, {
         where: { archivedAt: null },
@@ -626,7 +626,7 @@ export const notes = on(http.resource("/notes", notesResource.all()).gate(member
 
 **Consequence:** `GET /notes/live` rides the same `.gate(...)` chain as list/get.
 
-Wire events (consumed with `useLiveQuery` on the [typed client](/docs/reference/client)):
+Wire events (consumed with `useLiveQuery` on the [typed client](/docs/client/react)):
 
 | `kind` | Meaning |
 | ------ | ------- |

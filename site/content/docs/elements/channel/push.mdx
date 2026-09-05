@@ -1,33 +1,84 @@
 ---
 title: "Push"
-description: "WebPush (VAPID), Firebase Cloud Messaging (FCM), and Meta WhatsApp Business Cloud API integration."
+description: "Mobile and web push — channel.push templates, FCM device tokens, and Web Push (VAPID) drivers bound on boot."
 icon: "Bell"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Push medium (`channel.push`) and WhatsApp integration reach users directly on mobile devices and browsers.
+Push (`channel.push`) delivers device notifications. Unlike email / SMS / WhatsApp, push
+drivers are **not** opened by the default boot binder — pass `webpush` / `fcm` drivers on
+`oke({ channel: { drivers } })`.
 
-## What it is
+For developers notifying installed apps — FCM uses the device token as `to`; Web Push needs
+VAPID keys on the driver.
 
-Channel handles VAPID key signing for WebPush, FCM token dispatch for iOS/Android, and WhatsApp interactive template messaging.
+<Callout title="The one rule">
+  Declare with `channel.push().template(…)`. Bind push drivers yourself — `drivers.channel.push`
+  in config is not auto-opened today. WhatsApp is a different medium
+  ([WhatsApp](/docs/elements/channel/whatsapp)).
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Send WebPush notification
+### Declare a push template
 
-```typescript title="src/flows/notifications/push.ts"
-import { flow } from "okengine";
+```typescript title="src/core/channel.ts"
+import { channel } from "okengine";
+import { z } from "zod";
 
-export const sendPush = flow("notifications.push", {
-  do: async ({ subscription, message }, fx) => {
-    await fx.sendWebPush(subscription, {
-      title: "New Order",
-      body: message,
-      icon: "/icons/icon-192.png",
-    });
+const push = channel.push();
+
+export const orderPush = push.template("order.status", {
+  locales: ["en"],
+  schema: z.object({
+    title: z.string(),
+    body: z.string(),
+  }),
+});
+```
+
+</Step>
+
+<Step>
+### Bind an FCM driver
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { openFcmChannel } from "okengine/drivers";
+
+export const app = oke({
+  name: "shop",
+  channel: {
+    drivers: [
+      openFcmChannel({
+        projectId: process.env.FCM_PROJECT_ID,
+        clientEmail: process.env.FCM_CLIENT_EMAIL,
+        privateKey: process.env.FCM_PRIVATE_KEY,
+      }),
+    ],
+    catalog: {
+      "order.status": {
+        en: { subject: "{{title}}", text: "{{body}}" },
+      },
+    },
   },
+});
+```
+
+FCM maps catalog `subject` → notification title, `text` → body; `to` is the device token.
+
+</Step>
+
+<Step>
+### Send
+
+```typescript
+await fx.send(orderPush, {
+  to: deviceToken,
+  data: { title: "Shipped", body: "Your order is on the way." },
 });
 ```
 
@@ -35,17 +86,133 @@ export const sendPush = flow("notifications.push", {
 
 </Steps>
 
+## Progressive Patterns
+
+<Tabs items={["FCM", "Web Push", "Catalog"]}>
+
+<Tab value="FCM">
+
+`openFcmChannel` requires `projectId` (or `from`) plus either service-account
+`clientEmail` + `privateKey` or a pre-fetched access `token` / `apiKey`.
+
+```text
+fcm channel: projectId (or from) is required
+fcm channel: clientEmail+privateKey (service account) or token (access token) required
+```
+
+</Tab>
+
+<Tab value="Web Push">
+
+```typescript
+import { openWebPushChannel } from "okengine/drivers";
+
+openWebPushChannel({
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY,
+  vapidSubject: "mailto:ops@example.com",
+});
+```
+
+```text
+webpush: vapidPublicKey and vapidPrivateKey are required
+webpush: pushSubscription with endpoint + keys is required
+```
+
+Web Push needs `pushSubscription` (`endpoint` + `p256dh` / `auth`) on the runtime send
+options — `fx.send` does not forward it. Prefer FCM for token-based `fx.send`, or bind
+Web Push where the subscription is supplied on the runtime path.
+
+</Tab>
+
+<Tab value="Catalog">
+
+```typescript
+"order.status": {
+  en: { subject: "{{title}}", text: "{{body}}" },
+}
+```
+
+`subject` becomes the notification title on FCM; `text` is the body. Extra `data` fields pass
+through as FCM data payload when present.
+
+</Tab>
+
+</Tabs>
+
+## Drivers
+
+| Driver id | How it binds | Role |
+| --------- | ------------ | ---- |
+| `fcm`     | `openFcmChannel(…)` in `channel.drivers` | Firebase Cloud Messaging HTTP v1 |
+| `webpush` | `openWebPushChannel(…)` | RFC 8030 + VAPID |
+| `console` | `openConsoleChannel()` | Dev inbox (all mediums) |
+
+Config key `drivers.channel.push` exists for Manifest / tooling ids (`console` · `webpush` ·
+`fcm`) but the boot binder does **not** open push from that map yet — pass drivers on
+`CreateChannelRuntimeOptions.drivers`.
+
+## Options Reference
+
+### `channel.push(options?)`
+
+| Option   | Type     | Meaning           |
+| -------- | -------- | ----------------- |
+| `from`   | `string` | Optional default  |
+| `sender` | `string` | Alias for `from`  |
+
+### `.template(name, options?)`
+
+`description` · `locales` · `schema` — same as other mediums.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Push template sends but nothing is delivered">
+  No push driver in `channel.drivers`. Email/SMS/WhatsApp boot chain does not include FCM or
+  Web Push — add `openFcmChannel` / `openWebPushChannel`.
+</Accordion>
+
+<Accordion title="fcm channel: projectId / credentials required">
+  Open options missing project id or service-account pair / access token. See Progressive
+  Patterns → FCM.
+</Accordion>
+
+<Accordion title="webpush: pushSubscription with endpoint + keys is required">
+  Web Push driver received a message without subscription keys. Supply `pushSubscription` on the
+  runtime send path; token-only `to` is not enough for Web Push.
+</Accordion>
+
+<Accordion title="channel: unknown template">
+  Import the push binder module before `oke()`, or list the template under `channel.templates`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [WhatsApp](/docs/elements/channel/whatsapp) — separate medium for chat
+- [Channel overview](/docs/elements/channel) — `fx.send` and catalogs
+- [Receipts](/docs/elements/channel/receipts) — delivery ledger
+- [Configuration](/docs/reference/configuration) — driver id tables
+
 ## Next
 
 <Cards>
   <Card
-    title="Receipts & Webhooks"
-    description="Track delivery receipts and bounce suppression."
+    title="Receipts"
+    description="Ledger, outcomes, and suppression."
     href="/docs/elements/channel/receipts"
   />
   <Card
+    title="WhatsApp"
+    description="wa-cloud and Taqnyat WhatsApp."
+    href="/docs/elements/channel/whatsapp"
+  />
+  <Card
     title="Channel Overview"
-    description="Return to Channel overview."
+    description="Declare, send, and drivers."
     href="/docs/elements/channel"
   />
 </Cards>

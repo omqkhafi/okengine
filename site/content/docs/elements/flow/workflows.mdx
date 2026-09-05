@@ -33,8 +33,8 @@ import { z } from "zod";
 import { db, charges, orders } from "@/schema";
 
 export const checkout = on(
-  http.post("/orders/checkout"),
-  flow("orders.checkout", {
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ userId: z.string(), sku: z.string() }),
     out: z.object({ orderId: z.string() }),
@@ -110,8 +110,8 @@ import { z } from "zod";
 import { db, payments } from "@/schema";
 
 export const charge = on(
-  http.post("/billing/charge"),
-  flow("billing.charge", {
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ userId: z.string(), amount: z.number() }),
     out: z.object({ paymentId: z.string() }),
@@ -144,8 +144,8 @@ import { eq } from "drizzle-orm";
 import { db, charges } from "@/schema";
 
 export const checkout = on(
-  http.post("/orders/checkout"),
-  flow("orders.checkout", {
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ userId: z.string() }),
     do: async ({ userId }, fx) => {
@@ -183,9 +183,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { trialExpiringEmail } from "@/channels/trial";
 
-export const trialReminder = on(
-  http.post("/trials/reminder"),
-  flow("trials.reminder", {
+export const reminder = on(
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {
@@ -215,8 +215,8 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const checkout = on(
-  http.post("/orders/checkout"),
-  flow("orders.checkout", {
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ userId: z.string(), sku: z.string() }),
     do: async ({ userId, sku }, fx) => {
@@ -607,8 +607,8 @@ Resume that loses the race throws `journal: run "{id}" is leased by another inst
 
 <Accordion title="GET /_/ready is 503 reason orphan_scan">
   Boot is resuming durable orphans. Wait — do not point a liveness probe at
-  `/_/ready`. See [Docker](/docs/deployment/docker) and
-  [Kubernetes](/docs/deployment/kubernetes).
+  `/_/ready`. Use a separate liveness check; readiness may stay 503 until the
+  orphan scan finishes.
 </Accordion>
 
 </Accordions>
@@ -621,7 +621,6 @@ Resume that loses the race throws `journal: run "{id}" is leased by another inst
 - [Clock · Durable Sleep](/docs/elements/clock/sleep) — pause physics
 - [fx](/docs/reference/fx) — `fx.step`, `fx.retry`, `fx.clock.sleep`, `fx.using`
 - [Configuration](/docs/reference/configuration) — `drivers.journal`
-- [Docker](/docs/deployment/docker) — orphan scan and `/_/ready`
 
 ## Next
 

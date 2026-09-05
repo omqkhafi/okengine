@@ -21,7 +21,7 @@ when a new trap or source-of-truth path is discovered.
 | create-oke | `packages/create-oke/src/ai-setup/from-pref.ts`, `prompts.ts`, `transform.test.ts`                                                                                                                            |
 | CLI AI     | `src/cli/ai-setup/index.ts`, `prompts.ts`, `ai-setup.test.ts`                                                                                                                                                 |
 | Tests      | `src/docker/images-config.test.ts`, `docker.test.ts`, `stack-id.test.ts`, `src/cli/load-config.images.test.ts`, `src/plugins/auth-delivery.mailpit.integration.test.ts`, `examples/keel/tests/docker.test.ts` |
-| Docs       | `site/content/docs/recipes/*.mdx`, `elements/{store,ai,channel}.mdx`, `reference/configuration.mdx`, `deployment/{docker,reverse-proxy}.mdx`                                                                  |
+| Docs       | `site/content/docs/recipes/*.mdx`, `elements/{store,ai,channel}.mdx`, `reference/configuration.mdx`                                                                                                          |
 
 Prefer importing catalog / recipe constants over a second string literal.
 

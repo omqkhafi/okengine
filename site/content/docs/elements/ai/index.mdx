@@ -1,28 +1,33 @@
 ---
 title: "Overview"
-description: "Machine intelligence — LLM models, versioned prompts, bounded agents, and Model Context Protocol (MCP) tools."
+description: "Machine intelligence — bind models, ask versioned prompts, run bounded agents, embed into store.index, and connect MCP."
 icon: "Sparkles"
 source: "docs/spec/unified-theory.md"
 ---
 
-AI is how your backend **incorporates machine intelligence into business processes**. Calling OpenAI or Anthropic through arbitrary SDKs creates unversioned prompts, unmonitored costs, and PII leakage. In OKE, AI is an explicit architectural primitive.
+AI is how your backend **calls a model as a declared effect**. Ticket triage, a weekly
+summary, a planner that tools your own Flows — each ask is a named prompt or agent with
+budgets, not an SDK call buried in `do`.
+
+For developers wiring OpenRouter in the cloud or llama.cpp locally — bind a model, mint a
+prompt, ask through `fx`.
 
 <Callout title="The one rule">
-  **Bounded execution and declared budgets**. Every prompt and agent must specify input/output
-  schemas and maximum cost budgets. Flows expose themselves directly as MCP tools to autonomous
-  agents.
+  Declare `ai.model` → `model.prompt` (or `ai.agent` / `ai.embed`), then call through `fx.ask` /
+  `fx.run` / `fx.embed`. There is no top-level `ai.prompt`. Budgets and `maxSteps` are contracts;
+  PII to a third-party model needs explicit `allowPii`.
 </Callout>
 
-## What is AI?
+<AiBlocks />
 
-AI spans four tightly integrated capabilities:
+## Smallest Example
 
-1. **Model Providers (`ai.model`)**: Swappable LLMs — local (Ollama, llama.cpp / vLLM / SGLang) and cloud (OpenRouter, OpenAI, …) with a verified provider registry for `baseUrl`.
-2. **Versioned Prompts (`model.prompt`)**: Typed input/output contracts with cost caps and fallback routes.
-3. **Bounded Agents (`ai.agent`)**: Multi-step tool-calling loops where tools are simply other Flows.
-4. **Model Context Protocol (`ai.mcpServer` & `mcp.tool()`)**: Exposing your backend to external agents and Cursor.
+<Steps>
 
-```typescript title="src/ai/summary.ts"
+<Step>
+### Bind a model and mint a prompt
+
+```typescript title="src/core/ai.ts"
 import { ai } from "okengine";
 import { z } from "zod";
 
@@ -32,58 +37,303 @@ export const smart = ai.model("smart", {
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-export const summarizeDoc = smart.prompt("docs.summarize", {
-  in: z.object({ text: z.string() }),
-  out: z.object({ summary: z.string(), tags: z.array(z.string()) }),
+export const triage = smart.prompt("ticket-triage", {
+  version: 1,
   budget: { maxCostPerCall: 0.02 },
+  out: z.object({
+    category: z.enum(["billing", "technical", "other"]),
+    urgency: z.enum(["low", "medium", "high"]),
+  }),
 });
 ```
 
-## How AI Executes Through fx
+Import this module before `oke()` so registries adopt the decls.
 
-```typescript
-// Inside any flow:
-const result = await fx.ask(summarizeDoc, { text: "..." });
+</Step>
+
+<Step>
+### Ask from a Flow
+
+```typescript title="src/flows/support/triage.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { triage } from "@/core/ai";
+
+export const classify = on(
+  http.post(),
+  flow({
+    in: z.object({ message: z.string().min(1) }),
+    do: async ({ message }, fx) => {
+      return await fx.ask(triage, { message });
+    },
+  }),
+);
 ```
 
-The compiler records `asks: ["docs.summarize"]` in the Flow's manifest.
+The compiler stamps `asks: ["ticket-triage"]` on the Flow’s effects.
+
+</Step>
+
+<Step>
+### Call the endpoint
+
+```bash
+curl -X POST http://localhost:6530/support/triage \
+  -H "accept: application/json" \
+  -H "content-type: application/json" \
+  -d '{"message":"Invoice double-charged last week"}'
+```
+
+With `out` set, the model must return JSON matching the schema or the ask throws
+`AiSchemaValidationError`.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+From a bare ask to fallback models, tools on ask, and a bounded agent:
+
+<Tabs items={["Minimal", "via", "Tools", "Agent"]}>
+
+<Tab value="Minimal">
+
+Prompt handle + input — model comes from the parent `ai.model`:
+
+```typescript
+const result = await fx.ask(triage, { message: "Cannot reset password" });
+```
+
+</Tab>
+
+<Tab value="via">
+
+Ordered recovery across logical bindings. Each name opens its **own** client — keys and
+`baseUrl` never mix:
+
+```typescript
+export const triage = smart.prompt("ticket-triage", {
+  version: 1,
+  via: ["smart", "local"],
+  out: z.object({ category: z.string() }),
+});
+```
+
+Override per call with `fx.ask(triage, input, { via: ["local"] })`.
+
+</Tab>
+
+<Tab value="Tools">
+
+Offer Flows as tools on a single ask. Each invocation goes through `fx.call`
+(default `maxSteps: 6`):
+
+```typescript
+await fx.ask(triage, { message }, {
+  tools: [searchDocs, createTicket],
+  maxSteps: 4,
+});
+```
+
+**Consequence:** undeclared tools fail capability checks the same way as `fx.call`.
+
+</Tab>
+
+<Tab value="Agent">
+
+Multi-step loop with a declared tool bag and run budget:
+
+```typescript
+export const supportAgent = ai.agent("support.assistant", {
+  model: "smart",
+  tools: ["docs.search", "tickets.create"],
+  maxSteps: 5,
+  budget: { maxCostPerRun: 0.1 },
+});
+
+// In a Flow:
+return await fx.run(supportAgent, { message: "Help with billing" });
+```
+
+</Tab>
+
+</Tabs>
+
+## Declaration Reference
+
+| Declaration       | Signature                         | Purpose                                      |
+| ----------------- | --------------------------------- | -------------------------------------------- |
+| `ai.model`        | `ai.model(name, options?)`        | Logical binding (provider / wire model / key) |
+| `model.prompt`    | `model.prompt(name, options?)`    | Versioned prompt on that binding             |
+| `ai.agent`        | `ai.agent(name, options?)`        | Bounded tool-calling agent                   |
+| `ai.embed`        | `ai.embed(name, options?)`        | Embedding pipeline into `store.index`        |
+| `ai.mcpServer`    | `ai.mcpServer(name, options)`     | Outbound MCP client (allowlisted tools)      |
+
+There is **no** `ai.prompt(...)` — mint prompts only via `model.prompt`.
+
+## `fx` surface
+
+| Method | Capability | Meaning |
+| ------ | ---------- | ------- |
+| `fx.ask(prompt, input?, opts?)` | `asks` | Complete a versioned prompt (optional tool loop) |
+| `fx.run(agent, input?)` | `asks` (agent name) | Run a declared agent |
+| `fx.stream(model, opts?)` | `asks` | Token stream from a model binding |
+| `fx.embed(model, text)` | `embeds` | Return a vector (does not write an index) |
+| `fx.search(embed, query, opts?)` | `reads` | Similarity search over an embed / index |
+
+### `fx.ask` options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `via` | refs | prompt `via` / `[model]` | Recovery chain for this call |
+| `timeout` | `"30s"` \| ms | prompt `timeout` | Per-call deadline |
+| `tools` | Flow refs | — | Offered as tools via `fx.call` |
+| `maxSteps` | `number` | `6` | Cap on tool rounds |
+
+Undeclared ask → **OKE1005** `UNDECLARED_ASK`. Undeclared embed → **OKE1015**.
+
+## Guardrails
+
+Budgets, version pins, step limits, and PII egress are contracts — not guidelines:
+
+<AiGuardrails />
+
+### PII egress
+
+Sending a `.pii()` field to a **third-party** provider fails the build unless the Flow
+declares `allowPii: true` (or `pii: "allow"`). `mock`, `local`, and `openai-compatible` are
+not third-party egress.
+
+<AiPiiEgress />
+
+```typescript
+flow({
+  allowPii: true,
+  do: async (input, fx) => fx.ask(triage, { email: input.email }),
+});
+```
+
+## Per-environment drivers
+
+`AiDriverId`: `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex`.
+
+Boot implements `mock`, `anthropic`, and `openai-compatible`. `bedrock` / `vertex` are
+reserved and throw until implemented. Dev/test fall back to **`mock`** when unset — **prod
+must declare** `drivers.ai`.
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    ai: {
+      dev: "openai-compatible",
+      test: "mock",
+      prod: "openai-compatible",
+    },
+  },
+});
+```
+
+| Driver | Runs as | Best for |
+| ------ | ------- | -------- |
+| `mock` | In-process stub | Tests, CI, no network |
+| `openai-compatible` | OpenAI HTTP API | OpenRouter, llama.cpp, Ollama, vLLM, SGLang |
+| `anthropic` | Native Messages API | Production Claude + reliable tools |
+
+Env knobs: `OKE_AI_DRIVER`, `OKE_AI_URL` / `OPENAI_BASE_URL`, provider API keys. Recipes:
+[OpenRouter](/docs/recipes/openrouter), [Local AI](/docs/recipes/local-ai).
 
 ## The Capabilities of AI
 
 <Cards>
   <Card
-    title="Model Providers"
+    title="Models"
     description="Verified providers, limited-compatibility caveats, local and cloud bindings."
     href="/docs/elements/ai/models"
   />
   <Card
-    title="Versioned Prompts"
-    description="Strict input/output Zod schemas, per-call budget caps, fallback models, and eval assertions."
+    title="Prompts"
+    description="Versioned artifacts, via chains, budgets, out-schema validation."
     href="/docs/elements/ai/prompts"
   />
   <Card
-    title="Bounded Agents"
-    description="Autonomous step-loops with FlowRef tools, step limits, cost boundaries, and loop prevention."
+    title="Agents"
+    description="Tool bags are Flows — maxSteps and maxCostPerRun bound the loop."
     href="/docs/elements/ai/agents"
   />
   <Card
     title="Model Context Protocol"
-    description="Native MCP client connections and automatic Flow-to-MCP tool server publishing."
+    description="Expose Flows as MCP tools; consume external servers via ai.mcpServer."
     href="/docs/elements/ai/mcp"
   />
 </Cards>
 
-## Next Steps
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='ai: unknown prompt "…"'>
+  `fx.ask` named a prompt that was never minted with `model.prompt`, or the declaring module
+  was not imported before `oke()`.
+</Accordion>
+
+<Accordion title="OKE1005 — UNDECLARED_ASK">
+  Cause: `Flow "{flow}" asks "{resource}" without declaring it.` Touch the prompt handle
+  inside `do` (inference) or list `effects: { asks: ["ticket-triage"] }`.
+</Accordion>
+
+<Accordion title="AiSchemaValidationError / AiSchemaInvalid">
+  Cause: `ai: schema validation failed for prompt "…"@N: …` The model reply did not match
+  `out`. Fix the schema, the input, or the model — there is no automatic “schema correction”
+  retry.
+</Accordion>
+
+<Accordion title="AiBudgetExceededError">
+  Cause: `ai: prompt "…" exceeded maxCostPerCall N` or `ai: agent "…" exceeded maxCostPerRun N`.
+  Raise the budget or shrink the work.
+</Accordion>
+
+<Accordion title="build failed: … without allowPii">
+  Cause: `build failed: flow "…" sends pii field(s) […] to a third-party model without allowPii`.
+  Set `allowPii: true` on the Flow, or keep the ask on `mock` / `local` / `openai-compatible`.
+</Accordion>
+
+<Accordion title='oke boot: unknown AI driver / reserved'>
+  Prod must pin a real `drivers.ai` id. `bedrock` and `vertex` throw
+  `oke boot: AI driver "…" is reserved but not implemented yet`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Models](/docs/elements/ai/models) — provider registry and `baseUrl` rules
+- [Prompts](/docs/elements/ai/prompts) — `via`, budgets, versions, evals
+- [Agents](/docs/elements/ai/agents) — `fx.run`, tools, `maxSteps`
+- [MCP](/docs/elements/ai/mcp) — inbound `mcp.tool` and outbound `ai.mcpServer`
+- [OpenRouter](/docs/recipes/openrouter) — zero-Docker cloud path
+- [Local AI](/docs/recipes/local-ai) — llama.cpp / Ollama / vLLM / SGLang
+- [fx](/docs/reference/fx) — `fx.ask` / `fx.run` / `fx.embed`
+- [Errors](/docs/reference/errors) — OKE1005 · OKE1015
+
+## Next
 
 <Cards>
   <Card
-    title="Model Providers"
-    description="Configure local and cloud model drivers."
+    title="Models"
+    description="Bind providers and wire model ids."
     href="/docs/elements/ai/models"
   />
   <Card
-    title="Versioned Prompts"
-    description="Author typed prompts with budget boundaries."
-    href="/docs/elements/ai/prompts"
+    title="Channel Element"
+    description="Reach humans with email, SMS, WhatsApp, and push."
+    href="/docs/elements/channel"
+  />
+  <Card
+    title="The Model"
+    description="Eight elements overview."
+    href="/docs/understand/the-model"
   />
 </Cards>

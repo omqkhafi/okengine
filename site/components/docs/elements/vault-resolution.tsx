@@ -3,10 +3,11 @@
  *
  * Layer ids match `VaultResolutionSource`: driver → process.env →
  * .env.local → dev-fallback. Each run probes one layer per beat;
- * the hit layer cycles 1 → 2 → 3 → 4 across runs, and every fifth run
- * misses all four so the fail row lights. Layers past the hit read `skipped`
- * — that is the whole semantics of "first hit wins". Deterministic from one
- * tick, never Math.random.
+ * the hit layer cycles 0→1→2→3 across runs, and every fifth run
+ * misses all four so the fail row lights. Layers past the hit read
+ * `skipped` — that is the whole semantics of "first hit wins".
+ * Footer stays on “Resolving…” until the outcome beat (GatePipeline
+ * pattern). Deterministic from one tick, never Math.random.
  */
 
 "use client";
@@ -17,20 +18,32 @@ import { cn } from "@/lib/cn";
 
 /** Spec order from vault runtime — source ids are the Console labels. */
 const LAYERS: ReadonlyArray<{
-  readonly n: string;
   readonly source: string;
   readonly content: string;
 }> = [
-  { n: "1", source: "driver", content: "Built-in vault / managed bag" },
-  { n: "2", source: "process.env", content: "Real env (CI, hosting)" },
-  { n: "3", source: ".env.local", content: "Local overrides (gitignored)" },
-  { n: "4", source: "dev-fallback", content: "dev: on the contract — never in prod" },
+  { source: "driver", content: "Built-in vault / managed bag" },
+  { source: "process.env", content: "Real env (CI, hosting)" },
+  { source: ".env.local", content: "Local overrides (gitignored)" },
+  { source: "dev-fallback", content: "dev: on the contract — never in prod" },
 ];
 
-const TICK_MS = 800;
+/** One contract probe per run — value only appears when a layer wins. */
+const RUNS: ReadonlyArray<{
+  readonly contract: string;
+  readonly hitAt: number;
+  readonly valueHint: string;
+}> = [
+  { contract: "STRIPE_KEY", hitAt: 0, valueHint: "from driver" },
+  { contract: "STRIPE_KEY", hitAt: 1, valueHint: "from process.env" },
+  { contract: "STRIPE_KEY", hitAt: 2, valueHint: "from .env.local" },
+  { contract: "STRIPE_KEY", hitAt: 3, valueHint: "from dev:" },
+  { contract: "STRIPE_KEY", hitAt: -1, valueHint: "—" },
+];
+
+const TICK_MS = 850;
 const BEATS_PER_RUN = 5;
 
-const tone = CHIP_TONE.yellow;
+const probe = CHIP_TONE.yellow;
 const hit = CHIP_TONE.emerald;
 const fail = CHIP_TONE.rose;
 
@@ -39,17 +52,25 @@ const fail = CHIP_TONE.rose;
  */
 export function VaultResolution() {
   const tick = useTick(TICK_MS);
-  /* Reduced motion freezes a hit on `.env.local`. */
-  const t = tick ?? 2 * BEATS_PER_RUN + 3;
+  /* Reduced motion freezes a hit on `.env.local` (run index 2, outcome beat). */
+  const t = tick ?? 2 * BEATS_PER_RUN + 4;
   const run = Math.floor(t / BEATS_PER_RUN);
   const beat = t % BEATS_PER_RUN;
-  /* Hit layer 0–3 across runs 0–3; run 4 misses everything. */
-  const hitAt = run % 5 === 4 ? -1 : run % 4;
+  const scenario = RUNS[run % RUNS.length]!;
+  const { contract, hitAt, valueHint } = scenario;
+  const outcomeLive = beat === BEATS_PER_RUN - 1;
+  const resolved = hitAt !== -1 && outcomeLive;
+  const failed = hitAt === -1 && outcomeLive;
+  const footerLabel = !outcomeLive
+    ? "Resolving chain…"
+    : resolved
+      ? `First hit wins — ${valueHint}`
+      : "All miss — boot fails loud, every gap listed";
 
   return (
     <figure
-      className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Vault resolution chain: driver, process.env, .env.local, then dev-fallback. First hit wins; if every layer misses, boot fails with VaultBootError."
+      className="not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+      aria-label="Vault resolution chain: driver, process.env, .env.local, then dev-fallback. First hit wins; layers past the hit are skipped. If every layer misses, boot fails with VaultBootError listing every gap."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Resolution chain — first hit wins</p>
@@ -58,39 +79,62 @@ export function VaultResolution() {
         </code>
       </div>
 
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-fd-border px-4 py-2 sm:px-5">
+        <span className="font-mono text-[10px] tracking-[0.12em] text-fd-muted-foreground/70 uppercase">
+          contract
+        </span>
+        <code className="font-mono text-[11px] text-fd-foreground">{contract}</code>
+      </div>
+
       <RevealGroup as="ol" className="flex flex-col gap-px bg-fd-border">
         {LAYERS.map((layer, i) => {
           const probing = beat < 4 && i === beat && (hitAt === -1 || beat <= hitAt);
-          const resolved = i === hitAt && beat >= hitAt;
-          const missed = (hitAt === -1 || i < hitAt) && i < beat && !resolved;
+          const won = i === hitAt && beat > hitAt;
+          const missed = (hitAt === -1 || i < hitAt) && beat > i && !won;
           const skipped = hitAt !== -1 && i > hitAt && beat > hitAt;
           return (
             <RevealItem
               as="li"
-              key={layer.n}
+              key={layer.source}
               className={cn(
                 "flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 transition-colors duration-300 sm:px-5",
-                resolved ? hit.lit : probing ? tone.lit : "bg-fd-card",
+                won
+                  ? hit.lit
+                  : probing
+                    ? "bg-fd-secondary/40"
+                    : missed
+                      ? "bg-fd-card"
+                      : "bg-fd-card",
               )}
             >
-              <span className="relative flex w-5 shrink-0 items-center gap-1.5">
-                <span className="font-mono text-[10px] text-fd-muted-foreground/70">{layer.n}</span>
+              <span className="relative flex w-8 shrink-0 items-center gap-1.5">
+                <span className="w-2.5 font-mono text-[10px] text-fd-muted-foreground/70">
+                  {i + 1}
+                </span>
                 {probing && tick !== null ? (
                   <span className="relative flex size-1.5" aria-hidden>
-                    <BeatPing key={t} className={tone.wash} />
-                    <span className={cn("size-1.5 rounded-full", tone.hairline)} />
+                    <BeatPing key={t} className={probe.wash} />
+                    <span className={cn("size-1.5 rounded-full", probe.hairline)} />
                   </span>
-                ) : null}
+                ) : won ? (
+                  <span aria-hidden className={cn("size-1.5 rounded-full", hit.hairline)} />
+                ) : missed ? (
+                  <span aria-hidden className="size-1.5 rounded-full bg-fd-muted-foreground/35" />
+                ) : skipped ? (
+                  <span aria-hidden className="size-1.5 rounded-full bg-fd-muted-foreground/25" />
+                ) : (
+                  <span aria-hidden className="size-1.5 rounded-full border border-fd-border" />
+                )}
               </span>
               <code className="min-w-0 font-mono text-[11px] break-all text-fd-foreground">
                 {layer.source}
               </code>
-              <span className="text-[11px] text-fd-muted-foreground">{layer.content}</span>
+              <span className="min-w-0 text-[11px] text-fd-muted-foreground">{layer.content}</span>
               <span
                 aria-hidden
                 className={cn(
                   "ml-auto font-mono text-[10px] transition-opacity duration-300",
-                  resolved
+                  won
                     ? hit.mark
                     : missed
                       ? "text-fd-muted-foreground/60"
@@ -99,7 +143,7 @@ export function VaultResolution() {
                         : "opacity-0",
                 )}
               >
-                {resolved ? "✓ resolved" : missed ? "miss" : skipped ? "skipped" : "·"}
+                {won ? "✓ resolved" : missed ? "miss" : skipped ? "skipped" : "·"}
               </span>
             </RevealItem>
           );
@@ -108,21 +152,19 @@ export function VaultResolution() {
           as="li"
           className={cn(
             "flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 transition-colors duration-300 sm:px-5",
-            hitAt === -1 && beat === 4 ? fail.lit : "bg-fd-secondary/50",
+            resolved ? hit.lit : failed ? fail.lit : "bg-fd-secondary/50",
           )}
         >
-          <span className="w-5 shrink-0 font-mono text-[10px] text-fd-muted-foreground/70">!</span>
-          <p className="min-w-0 text-xs font-medium text-fd-foreground">
-            All miss → boot fails loud, every gap listed at once
-          </p>
+          <span className="w-5 shrink-0 font-mono text-[10px] text-fd-muted-foreground/70">→</span>
+          <p className="min-w-0 text-xs font-medium text-fd-foreground">{footerLabel}</p>
           <span
             aria-hidden
             className={cn(
               "ml-auto font-mono text-[10px] transition-opacity duration-300",
-              hitAt === -1 && beat === 4 ? fail.mark : "opacity-0",
+              resolved ? hit.mark : failed ? fail.mark : "opacity-0",
             )}
           >
-            VaultBootError
+            {resolved ? valueHint : failed ? "VaultBootError" : "·"}
           </span>
         </RevealItem>
       </RevealGroup>

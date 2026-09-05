@@ -268,7 +268,7 @@ import { orderStatus } from "@/signals/orders";
 
 export const vipFeed = on(
   http.get("/orders/vip/events").gate(member).live(orderStatus),
-  flow("orders.vipFeed", {
+  flow({
     do: (_input, fx) =>
       fx.live(orderStatus, {
         match: (payload) => payload.status === "shipped",
@@ -294,7 +294,7 @@ firehoses that share signal **and** gates fail uniqueness — see Uniqueness.
 | omitted                | Mount only if `oke({ store: { live: true } })` |
 | `{ live: false }`      | Never mount live for this resource |
 
-Wire events (consumed with `useLiveQuery` on the [typed client](/docs/reference/client)):
+Wire events (consumed with `useLiveQuery` on the [typed client](/docs/client/react)):
 
 | `kind`    | Meaning |
 | --------- | ------- |
@@ -342,14 +342,14 @@ Fix: a different gate, a path-param filter, or drop the extra route.
 Invalid `schema` payloads fail at emit with **OKE1043** (`"{resource}": {detail}`) before any
 client receives the frame. Cross-signal `fx.live` without a declared read throws **OKE1001**.
 
-```typescript title="src/flows/orders/ship.ts"
+```typescript title="src/flows/orders/[id]/ship.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { orderStatus } from "@/signals/orders";
 
-export const markShipped = on(
-  http.post("/orders/:id/ship"),
-  flow("orders.markShipped", {
+export const ship = on(
+  http.post(),
+  flow({
     in: z.object({ id: z.string() }),
     do: async ({ id }, fx) => {
       await fx.emit(orderStatus, { orderId: id, status: "shipped" });
@@ -478,7 +478,7 @@ const { events, latest, error, isConnected } = useLive(
 ```
 
 Resource live queries use `useLiveQuery` (snapshot + classified events), not `api.live`.
-See [Client](/docs/reference/client).
+See [Client · Live](/docs/client/live).
 
 ## What live is not
 
@@ -575,7 +575,7 @@ SSE resume — not competing-consumer physics.
 - [Signal Overview](/docs/elements/signal) — delivery matrix and drivers
 - [Once](/docs/elements/signal/once) — when you need competing workers instead
 - [Broadcast](/docs/elements/signal/broadcast) — ephemeral fan-out without a tape
-- [Client](/docs/reference/client) — `api.live`, `useLive`, `useLiveQuery`
+- [Client](/docs/client/live) — `api.live`, `useLive`, `useLiveQuery`
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.live`
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers
 - [Errors](/docs/reference/errors) — OKE1013 · OKE1014 · OKE1042 · OKE1043
@@ -591,7 +591,7 @@ SSE resume — not competing-consumer physics.
   <Card
     title="Client"
     description="api.live and useLive for browsers."
-    href="/docs/reference/client"
+    href="/docs/client/live"
   />
   <Card
     title="Signal Overview"

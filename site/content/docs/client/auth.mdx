@@ -1,0 +1,230 @@
+---
+title: "Auth"
+description: "Bearer sessions on createClient — memorySession, refresh once on 401, and gate denials as values."
+icon: "Lock"
+source: "docs/spec/unified-theory.md"
+---
+
+One client: `createClient`. With `gate.auth`, the app exposes `/auth/*` Flows (sign-in, refresh,
+me). Helpers under `okengine/client/auth` store tokens — they are **not** a second factory.
+
+For developers attaching identity to typed calls from a storefront or Node worker.
+
+<Callout title="The one rule">
+  `auth.refresh` must mutate whatever `auth.getToken` reads. Returning a new string alone does
+  nothing if storage was not updated. Gate denials arrive as envelope values — never throws.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Wire session helpers into `createClient`
+
+```typescript title="web/src/session.ts"
+import { createClient } from "okengine/client";
+import { memorySession } from "okengine/client/auth";
+import { vault } from "okengine/vault";
+import { app } from "../../src/app";
+
+export const session = memorySession();
+
+export const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "", {
+  auth: {
+    getToken: () => session.getToken(),
+    refresh: () => session.refresh(api),
+  },
+});
+```
+
+</Step>
+
+<Step>
+### Sign in and store tokens
+
+```typescript
+const { data, error } = await api.auth.signInEmail({
+  email: "alex@acme.co",
+  password,
+});
+if (error || !data) return;
+
+session.set(data);
+
+const me = await api.auth.me({});
+// Authorization: Bearer <accessToken> on every later call
+```
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Sign-in", "Refresh", "API key", "Denials"]}>
+
+<Tab value="Sign-in">
+
+```typescript
+const { data } = await api.auth.signInEmail({
+  email: "alex@acme.co",
+  password,
+});
+if (data) session.set(data);
+```
+
+Every later request: `getToken()` → `Authorization: Bearer …` when a token is present.
+
+</Tab>
+
+<Tab value="Refresh">
+
+| Step                   | What happens                                          |
+| ---------------------- | ----------------------------------------------------- |
+| Every request          | `getToken()` → Bearer when present                    |
+| HTTP **401**           | `refresh()` runs **once**, then the same call retries |
+| HTTP **403** / **429** | No refresh — decode the failure envelope as usual     |
+
+```typescript
+auth: {
+  getToken: () => session.getToken(),
+  refresh: () => session.refresh(api),
+}
+```
+
+With `gate.auth`, `POST /auth/refresh` is built in; `memorySession.refresh(api)` calls
+`api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no refresh token remains.
+
+</Tab>
+
+<Tab value="API key">
+
+`getToken` may return a session access token or an API key secret — both are Bearer.
+See [Gate · API keys](/docs/elements/gate#api-keys). `refresh` applies to sessions only.
+
+Store the partner key as a [Vault secret](/docs/elements/vault/secrets); read the injected env at
+the Node boundary (not in the browser):
+
+```typescript
+import { createClient } from "okengine/client";
+import { vault } from "okengine/vault";
+import { app } from "./app";
+
+// Partner warehouse sync — key from Vault / env, never hardcoded
+const api = createClient(app, vault.env.required("PUBLIC_API_URL"), {
+  auth: {
+    getToken: () => vault.env.required("WAREHOUSE_API_KEY"),
+  },
+});
+```
+
+</Tab>
+
+<Tab value="Denials">
+
+After a gated call, switch on denial codes (values, not throws):
+
+```typescript
+const { error } = await api.orders.create({
+  sku: "SKU-1842",
+  qty: 3,
+  shipTo: "Stockholm",
+});
+
+if (error?.code === "Unauthorized") {
+  // send the shopper to sign-in, or let auth.refresh run
+} else if (error?.code === "Forbidden") {
+  // error.data: { gate, reason } — e.g. missing “fulfillment” scope
+} else if (error?.code === "RateLimited") {
+  // error.data: { retryAfterMs }
+}
+```
+
+These gate codes are **not** listed in each Flow’s `errors` map — they can appear on any gated
+route.
+
+A 401 with no `{ data, error }` body becomes `TransportError` with `data.status: 401`.
+
+</Tab>
+
+</Tabs>
+
+## Auth options
+
+| Option          | Type                                 | Default | Meaning                                     |
+| --------------- | ------------------------------------ | ------- | ------------------------------------------- |
+| `auth.getToken` | `() => string \| null \| …`          | —       | Bearer access token (or null)               |
+| `auth.refresh`  | `() => Promise<string \| null \| …>` | —       | Runs once on HTTP 401, then the call retries |
+
+## Helpers
+
+| Helper                      | Package                 | Role                                             |
+| --------------------------- | ----------------------- | ------------------------------------------------ |
+| `memorySession`             | `okengine/client/auth`  | In-memory access/refresh bag for `auth.getToken` |
+| `AUTH_ERROR_CODES`          | `okengine/client/auth`  | Common auth Flow / gate codes                    |
+| `useSession(api, session?)` | `okengine/client-react` | React status + `auth.me` — see [React](/docs/client/react) |
+
+Core `okengine/client` stays under the size budget — helpers are separate exports. Not in core
+today: cookie jars or plugin `.client()` decorations.
+
+## Denial codes
+
+| Code           | HTTP | `error.data`       | Typical fix                                                  |
+| -------------- | ---- | ------------------ | ------------------------------------------------------------ |
+| `Unauthorized` | 401  | `{}`               | Sign in, or let `auth.refresh` run; re-login if still denied |
+| `Forbidden`    | 403  | `{ gate, reason }` | Wrong scopes / policy — show denied                          |
+| `RateLimited`  | 429  | `{ retryAfterMs }` | Wait `retryAfterMs` before retrying                          |
+
+Browser apps: also see [CORS](/docs/plugins/cors) and [CSRF](/docs/plugins/csrf).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="401 loops or refresh never sticks">
+  `auth.refresh` runs once per call on HTTP 401. It must update the store `getToken` reads — the
+  return value is ignored. With `gate.auth`, `memorySession.refresh(api)` calls
+  `api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no refresh token remains.
+</Accordion>
+
+<Accordion title="Forbidden after a successful sign-in">
+  Identity is present but policy / scope failed. Read `error.data.gate` and `error.data.reason`.
+  Fix the gate on the Flow — not the client factory.
+</Accordion>
+
+<Accordion title="Browser blocked by CORS / CSRF">
+  Cross-origin browsers need [CORS](/docs/plugins/cors). Cookie or form POSTs may need
+  [CSRF](/docs/plugins/csrf). Bearer-only SPAs often skip CSRF when tokens are not in cookies.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Calling](/docs/client/calling) — `createClient` options, base URL from Vault / env
+- [React](/docs/client/react) — `useSession`
+- [Gate](/docs/elements/gate) — policies, `gate.public`, API keys
+- [Gate · Auth](/docs/elements/gate/auth) — session Flows
+- [Vault · Config](/docs/elements/vault/config) — `PUBLIC_API_URL`, `vault.env`
+- [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) — browser callers
+
+## Next
+
+<Cards>
+  <Card
+    title="React"
+    description="useSession over memorySession."
+    href="/docs/client/react"
+  />
+  <Card
+    title="Gate"
+    description="Auth policies and rate limits before any effect."
+    href="/docs/elements/gate"
+  />
+  <Card
+    title="Calling"
+    description="REST, RPC, and result helpers."
+    href="/docs/client/calling"
+  />
+</Cards>

@@ -146,13 +146,13 @@ Same key → FIFO. Different keys run in parallel. Omit `key` for a pure competi
 After `retries + 1` failures with `deadLetter: true`, the message is `dead`. Inspect with
 `fx.deadLetters` (records `reads` on `signal:<name>`):
 
-```typescript title="src/flows/ops/dlq.ts"
+```typescript title="src/flows/ops/email-dlq.ts"
 import { on, flow, http } from "okengine";
 import { emailTask } from "@/signals/email";
 
-export const listDlq = on(
-  http.get("/ops/email-dlq"),
-  flow("ops.emailDlq", {
+export const list = on(
+  http.get(),
+  flow({
     effects: { reads: ["signal:tasks.email"] },
     do: async (_, fx) => {
       return await fx.deadLetters(emailTask);
@@ -305,14 +305,14 @@ export const webhook = signal.once("hooks.inbound", {
 Before any worker runs, `fx.emit` validates `schema` (when set) and enrols the message in the
 outbox. The call resolves on commit — not when the handler finishes.
 
-```typescript title="src/flows/orders/place.ts"
+```typescript title="src/flows/orders/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { orderPlaced } from "@/signals/orders";
 
-export const placeOrder = on(
-  http.post("/orders"),
-  flow("orders.place", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ userId: z.string(), amount: z.number() }),
     do: async ({ userId, amount }, fx) => {
       const orderId = fx.id();

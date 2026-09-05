@@ -33,14 +33,14 @@ export const uploads = store.files("uploads");
 <Step>
 ### Put and get in a Flow
 
-```typescript title="src/flows/uploads/put.ts"
+```typescript title="src/flows/uploads/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const putObject = on(
-  http.post("/uploads"),
-  flow("uploads.put", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({
       name: z.string().min(1),
       bytes: z.string(), // base64 for the demo
@@ -96,13 +96,13 @@ From a bare put to list/delete, image variants, and the chainable pipeline:
 
 `put` accepts `Uint8Array` or UTF-8 `string`. `get` returns bytes or `null`:
 
-```typescript title="src/flows/exports/write.ts"
+```typescript title="src/flows/exports/create.ts"
 import { on, flow, http } from "okengine";
 import { uploads } from "@/core";
 
-export const writeExport = on(
-  http.post("/exports"),
-  flow("exports.write", {
+export const create = on(
+  http.post(),
+  flow({
     do: async (_, fx) => {
       const key = `exports/${fx.id()}.csv`;
       await fx.store(uploads).put(key, "id,title\n1,Ship\n");
@@ -119,14 +119,14 @@ export const writeExport = on(
 
 Prefix `list` for browsing; `delete` returns whether an object was removed:
 
-```typescript title="src/flows/avatars/cleanup.ts"
+```typescript title="src/flows/avatars/route.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const cleanupAvatars = on(
-  http.delete("/avatars"),
-  flow("avatars.cleanup", {
+export const cleanup = on(
+  http.delete(),
+  flow({
     in: z.object({ prefix: z.string().default("avatars/") }),
     do: async ({ prefix }, fx) => {
       const keys = await fx.store(uploads).list(prefix);
@@ -150,14 +150,14 @@ Prefer stable, printable-ASCII object keys. Avoid `..` and leading `/` — the
 Write the original plus named derivatives and an optional ThumbHash LQIP data
 URL on the **result** (not a stored object):
 
-```typescript title="src/flows/photos/put.ts"
+```typescript title="src/flows/photos/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const putPhoto = on(
-  http.post("/photos"),
-  flow("photos.put", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ bytes: z.string() }),
     do: async ({ bytes }, fx) => {
       const key = `photos/${fx.id()}.jpg`;
@@ -196,9 +196,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const makeCard = on(
-  http.post("/photos/card"),
-  flow("photos.card", {
+export const card = on(
+  http.post(),
+  flow({
     in: z.object({ sourceKey: z.string() }),
     do: async ({ sourceKey }, fx) => {
       const outKey = sourceKey.replace(/\.[^.]+$/, ".card.webp");
@@ -278,14 +278,14 @@ Each verb binds through `fx.store(decl)` inside `flow()`:
 
 Write bytes or a UTF-8 string. Overwrites an existing key:
 
-```typescript title="src/flows/notes/attach.ts"
+```typescript title="src/flows/notes/[id]/attachment/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const attachNote = on(
-  http.post("/notes/:id/attachment"),
-  flow("notes.attach", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({
       id: z.string(),
       name: z.string().min(1),
@@ -307,14 +307,14 @@ export const attachNote = on(
 
 Read bytes, or `null` when the key is missing — treat `null` as not found:
 
-```typescript title="src/flows/notes/download.ts"
+```typescript title="src/flows/notes/[id]/attachment/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const downloadAttachment = on(
-  http.get("/notes/:id/attachment"),
-  flow("notes.download", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string(), name: z.string() }),
     errors: { NotFound: z.object({ key: z.string() }) },
     do: async ({ id, name }, fx) => {
@@ -333,14 +333,14 @@ export const downloadAttachment = on(
 
 Remove one key. Returns `true` when an object was deleted, `false` if missing:
 
-```typescript title="src/flows/notes/detach.ts"
+```typescript title="src/flows/notes/[id]/attachment/remove.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const detachNote = on(
-  http.delete("/notes/:id/attachment"),
-  flow("notes.detach", {
+export const remove = on(
+  http.delete(),
+  flow({
     in: z.object({ id: z.string(), name: z.string() }),
     do: async ({ id, name }, fx) => {
       const key = `notes/${id}/${name}`;
@@ -358,14 +358,14 @@ export const detachNote = on(
 List keys under an optional prefix. Use for Console browsing and admin Flows —
 not as a relational index:
 
-```typescript title="src/flows/notes/attachments.ts"
+```typescript title="src/flows/notes/[id]/attachments.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const listAttachments = on(
-  http.get("/notes/:id/attachments"),
-  flow("notes.attachments", {
+export const attachments = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string() }),
     do: async ({ id }, fx) => {
       const keys = await fx.store(uploads).list(`notes/${id}/`);

@@ -35,13 +35,13 @@ export const member = gate.policy("member", {
 });
 ```
 
-```typescript title="src/flows/profile/me.ts"
+```typescript title="src/flows/profile/get.ts"
 import { on, flow, http } from "okengine";
 import { member } from "@/core/gate";
 
-export const getProfile = on(
-  http.get("/profile").gate(member),
-  flow("profile.me", {
+export const get = on(
+  http.get().gate(member),
+  flow({
     do: async (_, fx) => ({ userId: fx.auth.userId }),
   }),
 );
@@ -153,10 +153,10 @@ export const notesMutate = gate.all(member, notesWrite, notesWriteRate);
 import { on, flow, http } from "okengine";
 import { notesMutate } from "@/core/gate";
 
-export const createNote = on(
-  http.post("/notes").gate(notesMutate),
+export const create = on(
+  http.post().gate(notesMutate),
   // or: .gate(member, notesWrite, notesWriteRate)
-  flow("notes.create", {
+  flow({
     do: async (input, fx) => fx.json.create({ id: fx.id(), ...input }),
   }),
 );
@@ -189,15 +189,15 @@ Gates chain on the **trigger**, not on a `gates: [...]` field inside `flow()`:
 
 ```typescript
 http
-  .post("/documents")
+  .post()
   .gate(member, gate.scope("editor"), gate.rate({ max: 100, per: "1m", keyBy: "user" }));
 ```
 
 **Public** — open the route without authentication:
 
 ```typescript
-http.get("/health").public();
-// equivalent: http.get("/health").gate(gate.public)
+http.get().public();
+// equivalent: http.get().gate(gate.public)
 ```
 
 Resource mounts accept `.gate(...)` / `.public()` once — every CRUD verb (and live, when
@@ -226,9 +226,9 @@ const write = gate.scope("notes:write");
 const throttle = gate.rate({ max: 60, per: "1m", keyBy: "user" });
 
 // Order matters: identity → capability → quota
-export const createNote = on(
-  http.post("/notes").gate(member, write, throttle),
-  flow("notes.create", {
+export const create = on(
+  http.post().gate(member, write, throttle),
+  flow({
     do: async (input, fx) => fx.json.create({ id: fx.id(), ...input }),
   }),
 );

@@ -1,0 +1,220 @@
+---
+title: "WhatsApp"
+description: "WhatsApp medium — channel.whatsapp templates, wa-cloud and taqnyat-whatsapp drivers, app-mode OTP delivery."
+icon: "MessageCircle"
+source: "docs/spec/unified-theory.md"
+---
+
+WhatsApp (`channel.whatsapp`) is its own medium — not a Push subtype. Declare templates, pin a
+WhatsApp driver (opt-in; no default), and send with `fx.send` or include WhatsApp in
+`fx.deliverOtp` failover.
+
+For developers reaching users on Meta Cloud or Taqnyat WhatsApp — same Channel physics as SMS.
+
+<Callout title="The one rule">
+  Use `channel.whatsapp(…).template(…)` and set `drivers.channel.whatsapp` to `wa-cloud` or
+  `taqnyat-whatsapp`. Boot opens WhatsApp when configured; Push drivers are separate and not
+  auto-bound.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Pin a WhatsApp driver
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    channel: {
+      whatsapp: { prod: "wa-cloud" },
+    },
+  },
+});
+```
+
+`wa-cloud` needs `WHATSAPP_TOKEN` (or `WA_CLOUD_TOKEN`) and `WHATSAPP_PHONE_NUMBER_ID`
+(or `WA_CLOUD_PHONE_NUMBER_ID`).
+
+</Step>
+
+<Step>
+### Declare and send
+
+```typescript title="src/core/channel.ts"
+import { channel } from "okengine";
+import { z } from "zod";
+
+const wa = channel.whatsapp();
+
+export const bookingReminder = wa.template("booking.reminder", {
+  locales: ["en", "ar"],
+  schema: z.object({ when: z.string(), place: z.string() }),
+});
+```
+
+```typescript
+await fx.send(bookingReminder, {
+  to: "+9665xxxxxxx",
+  data: { when: "Thu 15:00", place: "Clinic A" },
+  locale: "ar",
+});
+```
+
+</Step>
+
+<Step>
+### Confirm the effect
+
+Manifest / Console list `sends: ["booking.reminder"]`. Receipts follow the same ledger as email
+and SMS.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Template", "Taqnyat", "App OTP"]}>
+
+<Tab value="Template">
+
+Catalog typically supplies `text` (and optional `subject` where the transport uses it):
+
+```typescript
+oke({
+  channel: {
+    catalog: {
+      "booking.reminder": {
+        en: { text: "Reminder: {{when}} at {{place}}" },
+        ar: { text: "تذكير: {{when}} — {{place}}" },
+      },
+    },
+  },
+});
+```
+
+</Tab>
+
+<Tab value="Taqnyat">
+
+```typescript
+drivers: {
+  channel: {
+    whatsapp: { prod: "taqnyat-whatsapp" },
+  },
+},
+```
+
+Needs `TAQNYAT_WHATSAPP_TOKEN` (falls back to `TAQNYAT_BEARER_TOKEN`). Missing token:
+
+```text
+oke boot: taqnyat-whatsapp channel needs TAQNYAT_WHATSAPP_TOKEN (or TAQNYAT_BEARER_TOKEN)
+```
+
+</Tab>
+
+<Tab value="App OTP">
+
+Include WhatsApp in app-owned OTP delivery (plugin or raw):
+
+```typescript
+await fx.deliverOtp({
+  channels: ["whatsapp", "sms", "email"],
+  templates: {
+    whatsapp: "auth-otp-whatsapp",
+    sms: "auth-otp-sms",
+    email: "auth-otp-email",
+  },
+  phone: "+15551234567",
+  data: { otp: "482910" },
+});
+```
+
+See [OTP plugin](/docs/plugins/otp) for `/auth/otp/*` and [SMS](/docs/elements/channel/sms) for
+provider vs app mode.
+
+</Tab>
+
+</Tabs>
+
+## Drivers
+
+| Driver id            | Env |
+| -------------------- | --- |
+| `wa-cloud`           | `WHATSAPP_TOKEN` / `WA_CLOUD_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` / `WA_CLOUD_PHONE_NUMBER_ID` |
+| `taqnyat-whatsapp`   | `TAQNYAT_WHATSAPP_TOKEN` or `TAQNYAT_BEARER_TOKEN` |
+| `console`            | Config id — opens **no** WhatsApp driver |
+
+```text
+oke boot: wa-cloud channel needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID
+oke boot: unknown whatsapp channel driver "…"
+```
+
+## Options Reference
+
+### `channel.whatsapp(options?)`
+
+| Option   | Type     | Meaning                |
+| -------- | -------- | ---------------------- |
+| `from`   | `string` | Default sender id      |
+| `sender` | `string` | Alias for `from`       |
+
+### `.template(name, options?)`
+
+`description` · `locales` · `schema` — same as other mediums.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="oke boot: wa-cloud channel needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID">
+  Both token and phone-number id are required for Meta Cloud. Check alias env names
+  (`WA_CLOUD_*`) if you use those.
+</Accordion>
+
+<Accordion title="oke boot: taqnyat-whatsapp channel needs TAQNYAT_WHATSAPP_TOKEN">
+  Set the WhatsApp-specific token or reuse `TAQNYAT_BEARER_TOKEN`.
+</Accordion>
+
+<Accordion title="fx.send succeeds nowhere — no WhatsApp in chain">
+  `drivers.channel.whatsapp` unset for this env, or id is `console`. Pin `wa-cloud` or
+  `taqnyat-whatsapp`.
+</Accordion>
+
+<Accordion title="channel: unknown template">
+  Template not auto-registered — import the `channel.whatsapp().template(…)` module before
+  `oke()`, or pass `channel.templates`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [SMS](/docs/elements/channel/sms) — OTP modes and `fx.deliverOtp`
+- [Push](/docs/elements/channel/push) — FCM / Web Push (separate medium)
+- [Channel overview](/docs/elements/channel) — locale, via, effects
+- [OTP plugin](/docs/plugins/otp) — multi-channel auth OTP
+
+## Next
+
+<Cards>
+  <Card
+    title="Push"
+    description="FCM and Web Push driver binding."
+    href="/docs/elements/channel/push"
+  />
+  <Card
+    title="SMS"
+    description="SMS templates and provider OTP."
+    href="/docs/elements/channel/sms"
+  />
+  <Card
+    title="Channel Overview"
+    description="Declare, send, and drivers."
+    href="/docs/elements/channel"
+  />
+</Cards>

@@ -1,0 +1,237 @@
+---
+title: "React"
+description: "useSession, useLive, and useLiveQuery from okengine/client-react — React helpers over createClient."
+icon: "Atom"
+source: "docs/spec/unified-theory.md"
+---
+
+`okengine/client-react` is a separate package so core `okengine/client` stays under the size
+budget. Hooks wrap the same typed client: session status, live SSE, and live resource lists with
+optimistic `mutate`.
+
+For developers building React storefronts and ops consoles on top of `createClient`.
+
+<Callout title="The one rule">
+  Pass the same `api` you built with `createClient`. Hooks never open a second client factory —
+  they subscribe, call Flows, and clean up on unmount.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Create the client and session
+
+```typescript title="web/src/session.ts"
+import { createClient } from "okengine/client";
+import { memorySession } from "okengine/client/auth";
+import { vault } from "okengine/vault";
+import { app } from "../../src/app";
+
+export const session = memorySession();
+export const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "", {
+  auth: {
+    getToken: () => session.getToken(),
+    refresh: () => session.refresh(api),
+  },
+});
+```
+
+</Step>
+
+<Step>
+### Show the signed-in shopper in the header
+
+```typescript title="web/src/AccountMenu.tsx"
+import { useSession } from "okengine/client-react";
+import { api, session } from "./session";
+
+export function AccountMenu() {
+  const { status, user, signOut } = useSession(api, session);
+
+  if (status === "loading") return null;
+  if (status === "unauthenticated") return <a href="/sign-in">Sign in</a>;
+
+  return (
+    <button type="button" onClick={() => signOut()}>
+      {user?.email}
+    </button>
+  );
+}
+```
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+<Tabs items={["useSession", "useLive", "useLiveQuery", "mutate"]}>
+
+<Tab value="useSession">
+
+```typescript
+import { useSession } from "okengine/client-react";
+
+const { status, user, accessToken, refresh, signOut } = useSession(api, session);
+```
+
+| Field         | Meaning                                              |
+| ------------- | ---------------------------------------------------- |
+| `status`      | `"loading"` \| `"authenticated"` \| `"unauthenticated"` |
+| `user`        | `auth.me` payload or `null`                          |
+| `accessToken` | Current Bearer from `memorySession` (or `null`)      |
+| `refresh()`   | Re-run `auth.me`                                     |
+| `signOut()`   | `session.clear()` + unauthenticated                  |
+
+</Tab>
+
+<Tab value="useLive">
+
+```typescript
+import { useLive } from "okengine/client-react";
+import { shipmentStatus } from "@/signals/orders";
+
+const { events, latest, error, isConnected } = useLive(
+  api,
+  shipmentStatus,
+  { orderId: "ord_9c2e" },
+  {
+    autoResubscribe: true,
+  },
+);
+
+// latest?.status → "packed" | "shipped" | "delivered"
+```
+
+Cleanup calls `stop()` on unmount. Changing `signal` / `input` / `via` resets `events`.
+
+| Option            | Meaning                                      |
+| ----------------- | -------------------------------------------- |
+| `autoResubscribe` | Reopen after drop (same as `api.live`)       |
+| `via`             | Disambiguate equal exposure matches          |
+
+</Tab>
+
+<Tab value="useLiveQuery">
+
+```typescript
+import { useLiveQuery } from "okengine/client-react";
+
+const { data, error, isLoading, isConnected, isReconnecting, refetch, mutate } = useLiveQuery({
+  api,
+  listFlow: api.inbox.list,
+  query: { status: "open", assignee: "me" },
+  live: { method: "GET", path: "/inbox/live" }, // from app.$routes
+  options: {
+    enabled: session.status === "authenticated", // default true — idle when false
+    refreshKey: workspaceId, // switch workspace → full re-subscribe
+    onAuthRefresh: onAuthRefreshed, // auth.refresh() → new snapshot + replay
+  },
+});
+```
+
+| State            | Meaning                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `isLoading`      | Waiting for the first snapshot — no data yet                        |
+| `isConnected`    | SSE stream is open                                                  |
+| `isReconnecting` | Stream dropped after a successful load; reconnect backoff in flight |
+
+</Tab>
+
+<Tab value="mutate">
+
+```typescript
+await mutate(
+  api.inbox.update,
+  { id: ticketId, status: "resolved" },
+  {
+    optimistic: (rows) =>
+      rows.map((row) => (row.id === ticketId ? { ...row, status: "resolved" } : row)),
+    pkOf: (input) => input.id,
+  },
+);
+```
+
+Every `mutate` call generates a client UUID sent as the `X-Oke-Mutation-Id` header — the server
+echoes it onto that write's CDC events for pending-set dedupe and replay guards.
+
+**Consequence:** optimistic patches roll back automatically when the Flow returns `error !== null`.
+Server CDC / the successful response clear the override so the next upsert is authoritative.
+
+</Tab>
+
+</Tabs>
+
+## Package boundary
+
+| Export                                    | Package                 | Role                                            |
+| ----------------------------------------- | ----------------------- | ----------------------------------------------- |
+| `createClient` / `api.live`               | `okengine/client`       | Typed proxy + SSE subscribe                     |
+| `memorySession` / `AUTH_ERROR_CODES`      | `okengine/client/auth`  | Bearer bag                                      |
+| `vault` / `vault.env`                     | `okengine/vault`        | Env + config contracts (subpath — not root)     |
+| `useSession` / `useLive` / `useLiveQuery` | `okengine/client-react` | React hooks                                     |
+| `subscribeLiveResource`                   | `okengine/client-react` | Non-hook live resource stream helper            |
+
+Not in core today: cookie jars or plugin `.client()` decorations.
+
+## `useLiveQuery` options
+
+| Option          | Meaning                                                      |
+| --------------- | ------------------------------------------------------------ |
+| `enabled`       | Default `true` — idle when `false`                           |
+| `refreshKey`    | Identity change → full re-subscribe                          |
+| `onAuthRefresh` | After `auth.refresh()` → new snapshot + replay               |
+
+`refetch()` re-runs only the HTTP list read; reconnects always do a full subscribe-protocol cycle
+(new snapshot + replay). Event kinds and resume physics: [Live](/docs/client/live).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Cannot find module okengine/client-react">
+  Install / import the React package separately. Core `okengine/client` does not re-export hooks —
+  that keeps the client runtime under budget.
+</Accordion>
+
+<Accordion title="useSession stuck on loading">
+  Confirm `auth.me` is adopted, Bearer `getToken` returns a token, and the me Flow is reachable.
+  Without a token, status becomes `"unauthenticated"`.
+</Accordion>
+
+<Accordion title="useLiveQuery never connects">
+  Pass `live: { method, path }` from `app.$routes` for the resource’s `/live` route. Set
+  `enabled: true` (or omit). See [Live](/docs/client/live) for exposure and resume errors.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Auth](/docs/client/auth) — `memorySession` and gate denials
+- [Live](/docs/client/live) — `api.live`, resume, live query kinds
+- [Calling](/docs/client/calling) — envelopes and list pager
+- [Signal · Live](/docs/elements/signal/live) — server tape
+- [Store](/docs/elements/store) — `live: true` resources
+
+## Next
+
+<Cards>
+  <Card
+    title="Live"
+    description="SSE subscribe and live resource physics."
+    href="/docs/client/live"
+  />
+  <Card
+    title="Auth"
+    description="Bearer sessions behind the hooks."
+    href="/docs/client/auth"
+  />
+  <Card
+    title="Calling"
+    description="createClient forms and options."
+    href="/docs/client/calling"
+  />
+</Cards>

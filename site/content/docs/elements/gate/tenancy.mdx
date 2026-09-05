@@ -59,9 +59,9 @@ import { eq } from "drizzle-orm";
 import { member } from "@/core/gate";
 import { db, invoices } from "@/schema";
 
-export const listInvoices = on(
-  http.get("/invoices").gate(member),
-  flow("invoices.list", {
+export const list = on(
+  http.get().gate(member),
+  flow({
     do: async (_, fx) => {
       const tenantId = fx.tenant.id;
       if (!tenantId) return fx.fail("Forbidden", { reason: "tenant_required" });
@@ -267,8 +267,8 @@ import { z } from "zod";
 import { member } from "@/core/gate";
 
 export const switchTenant = on(
-  http.post("/tenants/switch").gate(member),
-  flow("tenants.switch", {
+  http.post().gate(member),
+  flow({
     in: z.object({ tenantId: z.string() }),
     do: async ({ tenantId }, fx) => fx.auth.switchTenant(tenantId),
   }),

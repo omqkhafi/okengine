@@ -25,13 +25,13 @@ For developers building trial reminders, delayed digests, and multi-day provisio
 <Step>
 ### Sleep inside a durable Flow
 
-```typescript title="src/flows/trials/reminder.ts"
+```typescript title="src/flows/trials/start.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const trialReminder = on(
-  http.post("/trials/start"),
-  flow("trials.reminder", {
+export const start = on(
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {
@@ -96,13 +96,13 @@ resolve / unexpected behavior.
 Sleep on an HTTP-triggered durable Flow returns success with an empty body (`204`). Return
 a body **before** sleep if the caller must see an id:
 
-```typescript title="src/flows/workspaces/provision.ts"
+```typescript title="src/flows/workspaces/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const provision = on(
-  http.post("/workspaces"),
-  flow("workspaces.provision", {
+export const create = on(
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {
@@ -251,13 +251,13 @@ Parking an HTTP Flow always answers **`204`** (suspend returns `undefined`). Whe
 caller must see an id, **do not sleep on that route** — return the body, emit, and park
 on a consumer:
 
-```typescript title="src/flows/trials/start.ts"
+```typescript title="src/flows/trials/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const startTrial = on(
-  http.post("/trials"),
-  flow("trials.start", {
+export const create = on(
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ email: z.string().email() }),
     out: z.object({ trialId: z.string() }),

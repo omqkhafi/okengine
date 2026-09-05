@@ -64,11 +64,9 @@ const { data } = await api.auth.verifyMagicLink({ token });
 </Steps>
 
 <Callout type="info" title="Pre-account hijack defense">
-  Completing verify proves inbox ownership. If an **unverified** email+password
-  account already parks that address, magic-link reclaims it: sessions for that
-  principal are revoked, planted password hashes are cleared, and
-  `emailVerified` becomes true before the new session is issued. An already
-  verified owner is re-auth only — no credential purge.
+  Completing verify proves inbox ownership. An **unverified** email+password
+  account parked on that address is reclaimed (sessions revoked, hashes cleared,
+  `emailVerified` set). Verified owners re-auth only — no credential purge.
 </Callout>
 
 ## Options

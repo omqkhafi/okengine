@@ -144,8 +144,8 @@ Per [oke-ship](../oke-ship/SKILL.md): `## Unreleased` → `### ♻️ Changed` �
 `#### Dev, Keel & create-oke` (or a flat Changed bullet if that group is
 already flat). One short from→to list.
 
-Update documented pins on the matching recipe / element / configuration /
-deployment pages. Do not rewrite those pages.
+Update documented pins on the matching recipe / element / configuration
+pages. Do not rewrite those pages.
 
 Mention in the user summary when a bump has an ops caveat (Meilisearch
 dump/restore across minors; PgDog parser defaults).

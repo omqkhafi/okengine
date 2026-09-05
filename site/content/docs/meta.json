@@ -7,15 +7,15 @@
     "understand",
     "---02 Elements---",
     "elements",
-    "---03 Build---",
-    "ai",
-    "---04 Operate---",
-    "deployment",
-    "---05 Extend---",
+    "---03 Extend---",
     "plugins",
     "providers",
     "recipes",
-    "---06 Reference---",
-    "reference"
+    "---04 Client---",
+    "client",
+    "---05 Reference---",
+    "reference",
+    "---06 AI Resources---",
+    "ai"
   ]
 }

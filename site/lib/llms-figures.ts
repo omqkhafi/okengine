@@ -42,12 +42,14 @@ export const TEACHING_FIGURE_FALLBACKS: Readonly<Record<string, string>> = {
     "Vault resolution chain: driver, process.env, .env.local, then dev-fallback. First hit wins; if every layer misses, boot fails with VaultBootError.",
   VaultRedacted:
     "Vault Redacted physics: fx.vault.get returns a Redacted wrapper so fx.log, String, and JSON show [redacted]; only .reveal() yields cleartext at the provider boundary.",
+  VaultRotate:
+    "Vault rotate contrast: version rotate re-wraps DEKs under a new data-key version; master-key rotate re-wraps the KEK that protects those DEKs — different blast radius, same fx.vault.rotate entry.",
   ChannelPhysics:
     "Channel physics around one fx.send: consent can suppress before any provider; locale resolves then the catalog body falls back to the default or en; via orders same-medium driver ids with first success winning; every attempt lands on a receipt, with status fallback after recovery.",
   AiBlocks:
     "Four AI building blocks — model bindings, versioned prompts, embedding pipelines into store.index, and bounded agents whose tools are flows.",
   AiGuardrails:
-    "AI guardrails: prompts are versioned typed artifacts, PII to third-party models fails the build unless acknowledged, agents are bounded by steps and budget, and there is no production model default.",
+    "AI guardrails chain: versioned prompt, PII build gate, maxSteps and budget, then prod driver. First denial wins — AiPiiBuildError without allowPii, AiBudgetExceededError on runaway cost, or missing prod driver. Later stages are skipped. fx.ask proceeds only when every contract cleared.",
   AiPiiEgress:
     "PII egress physics: sending a .pii() field to anthropic fails the build without allowPii; the same ask against openai-compatible local is on-premise and proceeds.",
   SixSystemsDrift:

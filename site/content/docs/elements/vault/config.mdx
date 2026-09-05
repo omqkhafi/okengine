@@ -1,47 +1,256 @@
 ---
 title: "Config"
-description: "Validated application settings, runtime feature flags, and environment overrides using vault.config."
+description: "vault.config cleartext settings, Console visibility, and vault.env helpers for plain process configuration."
 icon: "SlidersHorizontal"
+source: "docs/spec/unified-theory.md"
 ---
 
-Dynamic Config (`vault.config`) manages cleartext operational settings.
+Config contracts (`vault.config`) hold **non-secret** operational settings — public origins,
+feature flags, workspace labels. They resolve through the same boot chain as secrets, but Console
+may show them in the clear.
 
-## What it is
+For developers who need validated settings without fingerprinting — declare `vault.config`, read
+with `fx.vault.get`, keep credentials on `vault.secret` instead.
 
-Config values represent non-secret application settings (e.g. `app.url`, `email.sender`, `feature.newDashboard`). They are validated at build/boot time and can be updated at runtime without rebuilding container images.
+<Callout title="The one rule">
+  Use `vault.config` only when cleartext in Console and logs is acceptable. API keys, tokens, and
+  connection passwords belong on `vault.secret`.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Define config contract
+### Declare a config contract
 
-```typescript title="src/vault/app.ts"
+```typescript title="src/core/vault.ts"
 import { vault } from "okengine";
 import { z } from "zod";
 
-export const appUrl = vault.config("app.url", {
+export const publicAppUrl = vault.config("PUBLIC_APP_URL", {
+  description: "Public origin for email links and redirects",
   schema: z.string().url(),
-  default: "http://localhost:6530",
+  // Dev-only fallback — never used in prod boot
+  dev: "http://localhost:6530",
 });
 ```
 
 </Step>
 
+<Step>
+### Read it in a Flow
+
+```typescript title="src/flows/invites/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { member } from "@/core/gate";
+import { publicAppUrl, noteCreatedMail } from "@/core";
+
+export const create = on(
+  http.post().gate(member),
+  flow({
+    in: z.object({ email: z.string().email() }),
+    do: async ({ email }, fx) => {
+      const origin = await fx.vault.get(publicAppUrl);
+      await fx.send(noteCreatedMail, {
+        to: email,
+        // Config may be revealed for URL building — still prefer holding Redacted
+        // until the send boundary when mixed with secrets
+        link: `${origin.reveal()}/accept`,
+      });
+      return fx.json.empty();
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### See it in Console
+
+The Config band shows `PUBLIC_APP_URL` in the clear after boot (secrets stay fingerprinted). Update
+via Console write or `oke vault set PUBLIC_APP_URL`.
+
+</Step>
+
 </Steps>
+
+## Progressive Patterns
+
+From a public URL to flags, registration, and the env escape hatch:
+
+<Tabs items={["URL", "Flag", "Register", "Env"]}>
+
+<Tab value="URL">
+
+```typescript
+export const publicApiUrl = vault.config("PUBLIC_API_URL", {
+  description: "Browser-facing API origin",
+  schema: z.string().url(),
+  dev: "http://localhost:6530",
+});
+```
+
+</Tab>
+
+<Tab value="Flag">
+
+Feature toggles as config (cleartext by design):
+
+```typescript
+export const newDashboard = vault.config("FEATURE_NEW_DASHBOARD", {
+  description: "Enable the redesigned dashboard",
+  schema: z.enum(["on", "off"]),
+  dev: "off",
+});
+```
+
+</Tab>
+
+<Tab value="Register">
+
+`vault.config` is **not** auto-drained into `oke({ secrets })` (unlike `vault.secret`). Pass
+handles explicitly when the Manifest must list them:
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { publicAppUrl, publicApiUrl } from "@/core/vault";
+
+export const app = oke({
+  name: "notes",
+  env: "dev",
+  secrets: [publicAppUrl, publicApiUrl],
+});
+```
+
+</Tab>
+
+<Tab value="Env">
+
+Plain process configuration — no contract, no fingerprint, no driver bag:
+
+```typescript
+import { vault } from "okengine";
+
+const port = vault.env.int("PORT", 6530);
+const verbose = vault.env.bool("VERBOSE", false);
+const bag = vault.env.json<{ region: string }>("DEPLOY_META");
+```
+
+`vault.env.required("NAME")` registers the name so a missing value joins `VaultBootError` gaps
+alongside secret contracts.
+
+</Tab>
+
+</Tabs>
+
+## Options Reference
+
+Same option bag as secrets (`VaultSecretOptions`), with different defaults:
+
+| Option        | Type      | Default   | Meaning                                                         |
+| ------------- | --------- | --------- | --------------------------------------------------------------- |
+| `description` | `string`  | —         | Boot-gap and Console label                                      |
+| `rotate`      | `string`  | omit      | Optional cadence hint (rarely used for config)                  |
+| `schema`      | Schema    | —         | Declared shape for docs / tooling                               |
+| `dev`         | `string`  | —         | Dev-only fallback                                               |
+| `sensitive`   | `boolean` | `false`   | Set `true` only if this config must never show in Console       |
+
+Empty name throws `TypeError: vault.config: name is required`.
+
+**Consequence:** `sensitive: true` on a config behaves like a secret for Console cleartext —
+prefer `vault.secret` when that is the intent.
+
+## `vault.env` helpers
+
+Synchronous reads of process environment. Empty strings count as unset.
+
+| Helper                     | Returns            | Throws when                                      |
+| -------------------------- | ------------------ | ------------------------------------------------ |
+| `vault.env(name)`          | `string \| undefined` | —                                             |
+| `vault.env.required(name)` | `string`           | unset — also registers for boot gaps             |
+| `vault.env.int(name, def?)`| `number`           | unset without default, or not an integer         |
+| `vault.env.bool(name, def?)`| `boolean`         | unset without default, or not boolean-shaped     |
+| `vault.env.json(name)`     | `T \| undefined`   | value present but not valid JSON                 |
+
+Boolean true: `1` · `true` · `yes` · `on`. False: `0` · `false` · `no` · `off` (case-insensitive).
+
+```typescript
+// TypeError: vault.env.required: CI_TOKEN is not set
+vault.env.required("CI_TOKEN");
+
+// TypeError: vault.env.int: PORT is not an integer
+process.env.PORT = "abc";
+vault.env.int("PORT");
+```
+
+Reach for `vault.secret` / `vault.config` when the value must participate in the resolution chain,
+fingerprinting, or Console Vault.
+
+## Cleartext vs fingerprint
+
+| Kind     | Console list     | `runtime.cleartext(name)` | `runtime.fingerprint(name)` |
+| -------- | ---------------- | ------------------------- | --------------------------- |
+| `secret` | Fingerprint only | always `undefined`        | defined when loaded         |
+| `config` | Shown in clear   | loaded value              | always `undefined`          |
+
+Both still return `Redacted` from `fx.vault.get` — reveal when you need a plain string.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Config missing from Manifest / Console">
+  `vault.config` is not auto-registered. Pass `oke({ secrets: [publicAppUrl] })` or ensure the
+  declaring module is adopted the same way your app wires secrets.
+</Accordion>
+
+<Accordion title="VaultBootError includes a PUBLIC_* name">
+  Same resolution chain as secrets — set the value or provide `dev:` for local boot. Config gaps
+  fail boot just like secrets when registered.
+</Accordion>
+
+<Accordion title='TypeError: vault.env.required: NAME is not set'>
+  Call site threw immediately. For boot-time collection, keep the `required` call so the name is
+  registered; boot then lists it with other gaps.
+</Accordion>
+
+<Accordion title="TypeError: vault.env.bool / int / json">
+  Value is present but malformed. Use the documented boolean tokens, an integer string, or valid
+  JSON — or supply a default for `int` / `bool` when unset is allowed.
+</Accordion>
+
+<Accordion title="Secret shown in the Config band">
+  You declared `vault.config` (or `sensitive: false`). Move credentials to `vault.secret`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Secrets](/docs/elements/vault/secrets) — fingerprinted contracts and Redacted
+- [Vault overview](/docs/elements/vault) — resolution order and drivers
+- [Environment variables](/docs/reference/environment-variables) — `OKE_*` knobs
+- [fx](/docs/reference/fx) — `fx.vault.get` on any contract
 
 ## Next
 
 <Cards>
   <Card
     title="Key Rotation"
-    description="Zero-downtime secret rotation policies."
+    description="Rotate versions and the builtin master key."
     href="/docs/elements/vault/rotation"
   />
   <Card
+    title="Secrets"
+    description="Fingerprinted vault.secret contracts."
+    href="/docs/elements/vault/secrets"
+  />
+  <Card
     title="Vault Overview"
-    description="Return to Vault overview."
+    description="Resolution chain and fx.vault surface."
     href="/docs/elements/vault"
   />
 </Cards>

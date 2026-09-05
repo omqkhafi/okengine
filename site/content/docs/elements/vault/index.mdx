@@ -1,79 +1,350 @@
 ---
 title: "Overview"
-description: "Protected knowledge — declared secret contracts, runtime KMS unsealing, and typed environment configuration."
+description: "Protected knowledge — declare secret and config contracts, resolve values at boot, read Redacted credentials through fx.vault."
 icon: "KeyRound"
 source: "docs/spec/unified-theory.md"
 ---
 
-Vault is how your backend **holds secrets and configuration safely**. Storing API keys in plain `process.env` leaks credentials into stack traces, logs, and telemetry. In OKE, secrets are declared as contracts, unsealed on demand, and typed as `Redacted<T>`.
+Vault is how your backend **holds secrets and configuration safely**. Declare a contract
+(`vault.secret`, `vault.config`), resolve the value through the boot chain, and read it inside
+Flows as `Redacted` — never as a plain string in logs or responses.
+
+For developers wiring Stripe keys, SMTP URLs, and feature flags on okengine — contracts first,
+values only at the provider edge.
 
 <Callout title="The one rule">
-  **Contracts, never values**. Application code declares what secret capabilities it requires (e.g.
-  `vault.secret("stripe.apiKey")`). Values are unsealed strictly through `fx.vault.get()` and never
-  exist in plain JavaScript strings.
+  **Contracts, never values.** Application code declares `vault.secret("STRIPE_KEY")` (or
+  `vault.config`). Cleartext crosses only at `.reveal()` on the credential boundary — never in
+  `console.log`, JSON, or the HTTP envelope.
 </Callout>
 
-## What is Vault?
+<VaultResolution />
 
-Vault spans three capabilities:
+## Smallest Example
 
-1. **Secret Contracts (`vault.secret`)**: Typed declarations of sensitive credentials.
-2. **Dynamic Config (`vault.config`)**: Typed non-secret parameters and feature flags.
-3. **Key Rotation (`vault.rotate`)**: Graceful multi-key rollover without downtime.
+<Steps>
 
-```typescript title="src/vault/stripe.ts"
+<Step>
+### Declare a secret contract
+
+```typescript title="src/core/vault.ts"
 import { vault } from "okengine";
-import { z } from "zod";
 
-export const stripeKey = vault.secret("stripe.secretKey", {
-  schema: z.string().startsWith("sk_"),
-  description: "Stripe production secret API key",
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
+  description: "HMAC secret for outbound note webhooks",
+  // Dev-only fallback — never used in prod boot
+  dev: "dev-webhook-secret-change-me",
 });
 ```
 
-## How Vault Executes Through fx
+</Step>
 
-```typescript
-// Inside a flow:
-const key = await fx.vault.get(stripeKey);
+<Step>
+### Read it in a Flow
 
-// key is Redacted<string> — cannot be console.log'd or leaked to client
-const client = new Stripe(key.reveal());
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { webhookSecret } from "@/core/vault";
+import { notesMutate } from "@/core/gate";
+
+export const create = on(
+  http.post().gate(notesMutate),
+  flow({
+    do: async (input, fx) => {
+      // Touches the contract → effects.secrets; reveal only at an SDK edge
+      await fx.vault.get(webhookSecret);
+      return fx.json.create({ id: fx.id(), title: input.title });
+    },
+  }),
+);
 ```
 
-The compiler stamps `secrets: ["stripe.secretKey"]` onto the flow's manifest effects.
+The compiler stamps `secrets: ["APP_WEBHOOK_SECRET"]` on the Flow’s effects.
+
+</Step>
+
+<Step>
+### Boot and call
+
+```bash
+# Missing value → VaultBootError lists every gap at once
+oke vault set APP_WEBHOOK_SECRET
+
+curl -X POST http://localhost:6530/notes \
+  -H "accept: application/json" \
+  -H "content-type: application/json" \
+  -d '{"title":"hello"}'
+```
+
+`fx.log` / `String(key)` / `JSON.stringify(key)` all show `[redacted]` — never the HMAC material.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+From a fingerprinted secret to cleartext config, plain env helpers, and Docker-local fallbacks:
+
+<Tabs items={["Secret", "Config", "Env", "fromDocker"]}>
+
+<Tab value="Secret">
+
+Fingerprinted contract — Console shows a fingerprint, never the value:
+
+```typescript title="src/core/vault.ts"
+import { vault } from "okengine";
+import { z } from "zod";
+
+export const stripeKey = vault.secret("STRIPE_KEY", {
+  description: "Stripe secret API key",
+  schema: z.string().startsWith("sk_"),
+  rotate: "90d",
+  // Optional local fallback when drivers.vault.dev allows it
+  dev: "sk_test_local",
+});
+```
+
+`vault("STRIPE_KEY", opts)` is the same as `vault.secret`.
+
+</Tab>
+
+<Tab value="Config">
+
+Non-sensitive settings — Console may show them in the clear:
+
+```typescript title="src/core/vault.ts"
+import { vault } from "okengine";
+import { z } from "zod";
+
+export const publicAppUrl = vault.config("PUBLIC_APP_URL", {
+  description: "Public origin for email links",
+  schema: z.string().url(),
+  dev: "http://localhost:6530",
+});
+```
+
+**Consequence:** `vault.config` is **not** auto-registered into `oke({ secrets })` — pass the
+handle (or import the declaring module before `oke()` when you need it on the Manifest).
+
+</Tab>
+
+<Tab value="Env">
+
+Plain process configuration — no boot chain, no redaction. Prefer contracts when the value must
+fingerprint or fail boot:
+
+```typescript
+import { vault } from "okengine";
+
+const port = vault.env.int("PORT", 6530);
+const debug = vault.env.bool("DEBUG", false);
+const raw = vault.env("FEATURE_FLAG"); // string | undefined
+const must = vault.env.required("CI_TOKEN"); // joins VaultBootError gaps when missing
+```
+
+</Tab>
+
+<Tab value="fromDocker">
+
+Local fallback that reads the URL the image recipe built for a role — kernel never sees the
+underlying env-var names:
+
+```typescript
+export const databaseUrl = vault.secret("DATABASE_URL", {
+  description: "Primary SQL URL",
+  dev: vault.fromDocker("store.sql"),
+});
+```
+
+Resolves from `OKE_STORE_SQL_URL` (and peers) when `allowDevFallbacks` is on.
+
+</Tab>
+
+</Tabs>
+
+## Declaration Reference
+
+| Declaration       | Signature                                     | Purpose                                      |
+| ----------------- | --------------------------------------------- | -------------------------------------------- |
+| `vault.secret`    | `vault.secret(name, options?)`                | Fingerprinted secret contract                |
+| `vault`           | `vault(name, options?)`                       | Alias for `vault.secret`                     |
+| `vault.config`    | `vault.config(name, options?)`                | Cleartext config contract                    |
+| `vault.fromDocker`| `vault.fromDocker(role)`                      | Dev fallback marker for an image role        |
+| `vault.env`       | `vault.env` / `.required` / `.int` / `.bool` / `.json` | Sync process env — no contract       |
+
+| Option        | Type      | Default                         | Meaning                                                                 |
+| ------------- | --------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `description` | `string`  | —                               | Shown in boot-gap listings and Console                                  |
+| `rotate`      | `string`  | omit ≈ `"never"`                | Cadence hint (`"90d"`) or `"never"` — Console posture, not auto-rotate  |
+| `schema`      | Schema    | —                               | Declared shape (Zod / Standard Schema) for docs and tooling             |
+| `dev`         | `string`  | —                               | Dev-only fallback; never used in prod boot                              |
+| `sensitive`   | `boolean` | `true` secret · `false` config  | Whether cleartext must never leave the runtime                          |
+| `perTenant`   | `boolean` | `true` when tenancy on          | Resolve `{tenantId}/{name}` at request time; not boot-gap fatal         |
+
+## Resolution Chain
+
+<Callout title="Detailed section">
+  If you only need “declare and `fx.vault.get`”, the Smallest Example is enough. This section is
+  how boot finds a value — first hit wins.
+</Callout>
+
+Order (Console labels match these source ids):
+
+1. **driver** — built-in encrypted store, managed bag, or `env` / `memory` driver
+2. **process.env** — real environment (CI, hosting)
+3. **`.env.local`** — local overrides (gitignored)
+4. **dev-fallback** — `dev:` on the contract (dev boot only)
+
+Miss every layer → `VaultBootError` listing **all** gaps in one pass (including
+`vault.env.required` names):
+
+```text
+vault boot failed — 2 missing secret(s):
+  - STRIPE_KEY: Payments gateway key
+  - DATABASE_URL: Primary SQL URL
+```
+
+**Consequence:** fix every listed name before traffic — boot does not take a half-configured app.
+
+See [Secrets](/docs/elements/vault/secrets) for contracts and [Config](/docs/elements/vault/config)
+for cleartext + `vault.env`.
+
+## Redacted until reveal
+
+<VaultRedacted />
+
+`fx.vault.get(contract)` returns `Promise<Redacted<string>>`. Printing, logging, and JSON all
+yield `[redacted]`. Call `.reveal()` only at the Stripe / SMTP / SDK edge.
+
+Loaded secret substrings are also scrubbed from `fx.log` even when you pass cleartext by mistake
+(mask token `[redacted:secret]`).
+
+## `fx.vault` surface
+
+| Method                             | Needs backend | Meaning                                              |
+| ---------------------------------- | ------------- | ---------------------------------------------------- |
+| `get(contract)`                    | No            | `Redacted<string>` — every app has this              |
+| `set(path, value, opts?)`          | Yes (`vault`) | New version; optional `ttlMs` / `metadata`           |
+| `rotate(path, value)`              | Yes (`vault`) | New version under a fresh data key                   |
+| `delete(path)`                     | Yes (`vault`) | Crypto-shred; returns whether anything went          |
+| `list(prefix?)`                    | Yes (`vault`) | Paths only — never values                            |
+| `status()`                         | Yes (`vault`) | `{ sealed, initialized, backend }`                   |
+
+Without a bound encrypted backend, mutations throw:
+
+```text
+fx.vault.set needs a bound Vault backend — configure the vault element (drivers.vault = "vault") …
+```
+
+Dry-run refuses writes rather than mutate a live secret (`DryRunWriteIsolationError`).
+
+## Per-environment drivers
+
+Defaults from `DRIVER_DEFAULTS.vault` — pin overrides in `oke.config.ts`:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // Default vault.dev is "env"; Docker-first starters pin built-in:
+    vault: {
+      dev: "vault",
+      // test: "memory" (default)
+      // prod: "vault" (default)
+    },
+  },
+});
+```
+
+| Driver    | Runs as                         | Best for                                      |
+| --------- | ------------------------------- | --------------------------------------------- |
+| `env`     | Process / dotenv bag            | Simple local / CI without SQL vault tables    |
+| `vault`   | Built-in AES-256-GCM in Postgres| Docker-first apps; `oke vault init` / unseal  |
+| `memory`  | In-process map                  | Tests                                         |
+| `managed` | Remote provider bag             | AWS / Azure / GCP / Doppler / 1Password       |
+
+Managed provider ids: `aws-secrets-manager` · `azure-key-vault` · `gcp-secret-manager` ·
+`doppler` · `1password`. Env knobs: [Environment variables](/docs/reference/environment-variables).
 
 ## The Capabilities of Vault
 
 <Cards>
   <Card
-    title="Secret Contracts"
-    description="Schema-validated secret declarations unsealed via AWS KMS, GCP Secrets, or HashiCorp Vault."
+    title="Secrets"
+    description="Fingerprinted vault.secret contracts, Redacted reads, boot gaps."
     href="/docs/elements/vault/secrets"
   />
   <Card
-    title="Dynamic Config"
-    description="Validated runtime configuration values, tenant overrides, and live reloadable settings."
+    title="Config"
+    description="vault.config cleartext settings and vault.env helpers."
     href="/docs/elements/vault/config"
   />
   <Card
     title="Key Rotation"
-    description="Multi-version key resolution allowing seamless zero-downtime secret rollover."
+    description="Version rotate, master-key rewrap, seal / unseal, CLI."
     href="/docs/elements/vault/rotation"
   />
 </Cards>
 
-## Next Steps
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="VaultBootError — N missing secret(s)">
+  Cause: `vault boot failed — N missing secret(s):` with every gap listed. Set each name via the
+  driver (`oke vault set`, managed provider, or process env), or add a `dev:` fallback for local
+  boot only. `vault.env.required` names join the same list.
+</Accordion>
+
+<Accordion title='vault: secret "…" is not loaded'>
+  `fx.vault.get` ran after boot without that name in the merged bag. Declare the contract, ensure
+  a resolution layer supplies it, and import the declaring module before `oke()`.
+</Accordion>
+
+<Accordion title="fx.vault.set / rotate needs a bound Vault backend">
+  Mutations require `drivers.vault = "vault"` (encrypted-at-rest adapter). `get` works on `env` /
+  `memory` / `managed` bags; writes need the builtin backend.
+</Accordion>
+
+<Accordion title="Logs still show a secret substring">
+  Prefer holding `Redacted` until `.reveal()` at the edge. Revealed cleartext is scrubbed from
+  `fx.log` when the value is registered — but third-party loggers bypass Vault redaction.
+</Accordion>
+
+<Accordion title="VaultSealed / cannot rotate while sealed">
+  Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal`. See
+  [Key Rotation](/docs/elements/vault/rotation).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Secrets](/docs/elements/vault/secrets) — options, Redacted, effects, tenancy paths
+- [Config](/docs/elements/vault/config) — cleartext contracts and `vault.env`
+- [Key Rotation](/docs/elements/vault/rotation) — `oke vault rotate` / `rotate-master`
+- [fx](/docs/reference/fx) — `fx.vault.get` · `set` · `rotate` · `delete` · `list` · `status`
+- [Errors](/docs/reference/errors) — `VaultBootError` · `VaultError` · `VaultSealed`
+- [Environment variables](/docs/reference/environment-variables) — `OKE_VAULT_*`
+
+## Next
 
 <Cards>
   <Card
-    title="Secret Contracts"
-    description="Declare typed secret keys."
+    title="Secrets"
+    description="Declare fingerprinted contracts and read Redacted values."
     href="/docs/elements/vault/secrets"
   />
   <Card
     title="Channel Element"
-    description="Send emails, SMS, push notifications, and WhatsApp."
+    description="Send email, SMS, and other human reach through templates."
     href="/docs/elements/channel"
+  />
+  <Card
+    title="Gate Element"
+    description="Attach policies and rates before do runs."
+    href="/docs/elements/gate"
   />
 </Cards>

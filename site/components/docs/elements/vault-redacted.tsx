@@ -1,90 +1,113 @@
 /**
  * Redacted until reveal — fx.vault.get wraps the value so logs and serialization
  * never see cleartext; only `.reveal()` yields the credential at the provider
- * boundary. Shared beat across both cards (StoreKvTtl pattern). Deterministic
- * from one tick, never Math.random.
+ * boundary. Phase strip walks get → log → json → reveal; hold card stays masked,
+ * reveal card lights only on the last beat (StoreKvTtl contrast pattern).
+ * Deterministic from one tick, never Math.random.
  */
 
 "use client";
 
-import { motion } from "framer-motion";
+import { MotionConfig, motion } from "framer-motion";
 import { Eye, Shield, type LucideIcon } from "lucide-react";
 import { BeatPing, RevealGroup, RevealItem, useTick } from "@/components/docs/reveal";
 import { CHIP_TONE } from "@/lib/element-tones";
 import { cn } from "@/lib/cn";
+import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 const tone = CHIP_TONE.yellow;
 const ok = CHIP_TONE.emerald;
 
 const TICK_MS = 1100;
-const PHASES = ["vault", "log", "json", "reveal"] as const;
+const PHASES = ["get", "log", "json", "reveal"] as const;
 
 /**
  * Same `fx.vault.get` read — hold the Redacted (safe) vs `.reveal()` at the edge.
  */
 export function VaultRedacted() {
+  const reduced = useClientReducedMotion();
   const tick = useTick(TICK_MS);
   /* Reduced motion freezes the reveal beat — cleartext only at the boundary. */
   const phase = tick === null ? 3 : tick % PHASES.length;
-  const label = PHASES[phase];
-
   const masked = phase < 3;
   const revealed = phase === 3;
 
   return (
-    <figure
-      className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Vault Redacted physics: fx.vault.get returns a Redacted wrapper so fx.log, String, and JSON show [redacted]; only .reveal() yields cleartext at the provider boundary."
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
-        <p className="text-sm font-medium text-fd-foreground">Redacted until you reveal</p>
-        <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
-          fx.vault.get(secret) → Redacted
-        </code>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-b border-fd-border px-4 py-2 sm:px-5">
-        <PhaseChip label={label} live={tick !== null} tick={tick} />
-        <span className="text-[11px] text-fd-muted-foreground">shared beat — hold vs reveal</span>
-      </div>
-
-      <RevealGroup
-        as="ul"
-        className="grid grid-cols-1 gap-px bg-fd-border @min-[36rem]:grid-cols-2"
+    <MotionConfig reducedMotion="never">
+      <figure
+        className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+        aria-label="Vault Redacted physics: fx.vault.get returns a Redacted wrapper so fx.log, String, and JSON show [redacted]; only .reveal() yields cleartext at the provider boundary."
       >
-        <PathCard
-          icon={Shield}
-          title="hold Redacted"
-          syntax="fx.vault.get(stripeKey)"
-          live={masked}
-          outcome="[redacted]"
-          detail="fx.log, String(), and JSON.stringify never see the value — nested Redacted included."
-          sinks={[
-            { id: "log", label: "fx.log", active: phase === 1, value: "[redacted]" },
-            { id: "json", label: "JSON / String", active: phase === 2, value: "[redacted]" },
-          ]}
-          tick={tick}
-        />
-        <PathCard
-          icon={Eye}
-          title="reveal at boundary"
-          syntax="key.reveal()"
-          live={revealed}
-          outcome="sk_test_…"
-          detail="One explicit call at the Stripe (or SMTP, or SDK) edge — the credential crosses only there."
-          sinks={[
-            {
-              id: "provider",
-              label: "stripe(…).create",
-              active: revealed,
-              value: "sk_test_…",
-              clear: true,
-            },
-          ]}
-          tick={tick}
-        />
-      </RevealGroup>
-    </figure>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
+          <p className="text-sm font-medium text-fd-foreground">Redacted until you reveal</p>
+          <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
+            fx.vault.get(secret) → Redacted
+          </code>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-b border-fd-border px-4 py-2 sm:px-5">
+          {PHASES.map((p, i) => (
+            <PhaseChip key={p} label={p} live={phase === i} tick={tick} dim={phase !== i} />
+          ))}
+          <span className="text-[11px] text-fd-muted-foreground">
+            {reduced ? "static — reveal at edge" : "shared beat — hold vs reveal"}
+          </span>
+        </div>
+
+        <RevealGroup
+          as="ul"
+          className="grid grid-cols-1 gap-px bg-fd-border @min-[36rem]:grid-cols-2"
+        >
+          <PathCard
+            icon={Shield}
+            title="hold Redacted"
+            syntax="await fx.vault.get(stripeKey)"
+            live={masked}
+            outcome="[redacted]"
+            detail="fx.log, String(), and JSON.stringify never see the value — nested Redacted included."
+            sinks={[
+              {
+                id: "log",
+                label: "fx.log.info(key)",
+                active: phase === 1,
+                value: "[redacted]",
+              },
+              {
+                id: "json",
+                label: "JSON.stringify({ key })",
+                active: phase === 2,
+                value: '"[redacted]"',
+              },
+            ]}
+            tick={tick}
+          />
+          <PathCard
+            icon={Eye}
+            title="reveal at boundary"
+            syntax="key.reveal()"
+            live={revealed}
+            outcome="sk_test_…"
+            detail="One explicit call at the Stripe (or SMTP, or SDK) edge — the credential crosses only there."
+            sinks={[
+              {
+                id: "provider",
+                label: "new Stripe(key.reveal())",
+                active: revealed,
+                value: "sk_test_…",
+                clear: true,
+              },
+              {
+                id: "scrub",
+                label: "fx.log after reveal",
+                active: revealed,
+                value: "[redacted:secret]",
+              },
+            ]}
+            tick={tick}
+          />
+        </RevealGroup>
+      </figure>
+    </MotionConfig>
   );
 }
 
@@ -92,17 +115,23 @@ function PhaseChip({
   label,
   live,
   tick,
+  dim,
 }: {
   readonly label: string;
   readonly live: boolean;
   readonly tick: number | null;
+  readonly dim?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <code
         className={cn(
           "rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors duration-300",
-          live ? tone.active : "border-fd-border text-fd-muted-foreground",
+          live
+            ? tone.active
+            : dim
+              ? "border-fd-border text-fd-muted-foreground/50"
+              : "border-fd-border text-fd-muted-foreground",
         )}
       >
         {label}
@@ -188,7 +217,9 @@ function PathCard({
                   )}
                 />
               </span>
-              <code className="min-w-0 font-mono text-[10px] text-fd-foreground">{sink.label}</code>
+              <code className="min-w-0 truncate font-mono text-[10px] text-fd-foreground">
+                {sink.label}
+              </code>
             </span>
             <motion.code
               key={`${sink.id}-${sink.active ? sink.value : "idle"}`}

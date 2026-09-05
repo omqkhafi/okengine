@@ -1,0 +1,209 @@
+---
+title: "Overview"
+description: "Typed caller for your Flows — createClient from okengine/client, zero codegen, errors as values."
+icon: "Cable"
+source: "docs/spec/unified-theory.md"
+---
+
+`okengine/client` is how a browser, CLI, or another service calls your app's Flows. Import the
+generated barrel, take `typeof app`, and `api.bookings.get({ id })` is fully typed — same contracts
+the server already has, no separate schema project.
+
+For developers consuming an okengine app from the outside — create the client, call a Flow, narrow
+the envelope.
+
+<Callout title="The one rule">
+  Treat every call as a result envelope: `{ data, error }`. Flow failures are values you switch on
+  (`error.code`); they are never thrown. Only transport / protocol problems use
+  `code: "TransportError"`.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Export `App` from the server
+
+```typescript title="src/app.ts"
+import "@/core";
+import "@/flows/generated";
+import { oke } from "okengine/http";
+
+export const app = oke({ name: "commerce" });
+export type App = typeof app;
+```
+
+`.adopt({ bookings })` is optional and additive when a unit is not already in the generated barrel.
+
+</Step>
+
+<Step>
+### Load a booking from the client
+
+```typescript title="web/src/api.ts"
+import { createClient } from "okengine/client";
+import { vault } from "okengine/vault";
+import { app } from "../../src/app";
+
+// Base URL via vault.env (empty = same-origin proxy in create-oke web)
+const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "");
+const { data, error } = await api.bookings.get({ id: "bkg_7f3a" });
+
+if (error) {
+  // TransportError or a declared flow code (NotFound, …)
+  return;
+}
+
+console.log(data.confirmationCode, data.seats);
+```
+
+With `$routes` wired that is `GET /bookings/bkg_7f3a` on the backend (port **6530**):
+
+```json
+{
+  "data": {
+    "id": "bkg_7f3a",
+    "confirmationCode": "SK-4812",
+    "seats": 2,
+    "status": "confirmed"
+  },
+  "error": null
+}
+```
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+Same typed proxy from same-repo REST to a separate frontend repo:
+
+<Tabs items={["Same-repo", "Type-only", "Ambient Register"]}>
+
+<Tab value="Same-repo">
+
+Pass the app value so HTTP triggers hit REST (method + path from `$routes`):
+
+```typescript
+import { createClient } from "okengine/client";
+import { vault } from "okengine/vault";
+import { app } from "./app";
+
+const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "");
+await api.bookings.get({ id: "bkg_7f3a" }); // GET /bookings/bkg_7f3a
+```
+
+</Tab>
+
+<Tab value="Type-only">
+
+Types from an explicit `App` — still RPC until you pass routes:
+
+```typescript
+import { createClient } from "okengine/client";
+import { vault } from "okengine/vault";
+import type { App } from "./app";
+import { app } from "./app";
+
+const api = createClient<App>(vault.env("PUBLIC_API_URL") ?? "", {
+  $routes: app.$routes,
+});
+```
+
+</Tab>
+
+<Tab value="Ambient Register">
+
+`oke dev` regenerates `oke-client.d.ts` from `GET /_oke/client.json`. A separate storefront repo
+runs `oke client add` against your public API origin (from Vault / env):
+
+```typescript
+import { createClient } from "okengine/client";
+import { vault } from "okengine/vault";
+
+const api = createClient(vault.env("PUBLIC_API_URL") ?? "");
+// types from ambient Register in oke-client.d.ts
+```
+
+Declare the origin on the server with [Vault · Config](/docs/elements/vault/config)
+(`PUBLIC_API_URL`), then set it via env or `oke vault set`. Leave it unset in local web
+dev so `createClient("")` stays same-origin behind the Vite proxy.
+
+</Tab>
+
+</Tabs>
+
+<ClientLoop />
+
+## Flows only
+
+<Callout title="Flows only">
+  The client calls **Flows**. Every other element runs on the server through `fx`. You reach its
+  outcome by calling a Flow that uses it — or by handling a gate denial on that call.
+</Callout>
+
+| Element                           | On the client | How                                                                                        |
+| --------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
+| [Flow](/docs/elements/flow)       | Direct        | `api.unit.flow(input)` — the only public surface                                           |
+| [Gate](/docs/elements/gate)       | Indirect      | Bearer via `auth`; denials as `Unauthorized` / `Forbidden` / `RateLimited`                 |
+| [Store](/docs/elements/store)     | Via Flows     | `fx.store` inside Flows; `store.resource` + `on(http.resource…)` → five Flows on `$routes` |
+| [Signal](/docs/elements/signal)   | Live SSE      | `api.live(signal, input?, { onEvent })` — HTTP GET, callback + unsubscribe                 |
+| [Clock](/docs/elements/clock)     | Via Flows     | Schedules fire on the server — the client never ticks a clock                              |
+| [Vault](/docs/elements/vault)     | Via Flows     | Secrets stay server-side; never ship them to the browser package                           |
+| [Channel](/docs/elements/channel) | Via Flows     | `fx.send` in a Flow — the client does not send email/SMS/push                              |
+| [AI](/docs/elements/ai)           | Via Flows     | `fx.ask` / `fx.run` inside a Flow; the client gets that Flow’s `out`                       |
+
+## Pages
+
+<Cards>
+  <Card
+    title="Calling"
+    description="createClient forms, REST vs RPC, options, envelopes, resources, remote types."
+    href="/docs/client/calling"
+  />
+  <Card
+    title="Auth"
+    description="memorySession, Bearer refresh, and gate denials as values."
+    href="/docs/client/auth"
+  />
+  <Card
+    title="Live"
+    description="api.live SSE, resume gaps, and live resource queries."
+    href="/docs/client/live"
+  />
+  <Card
+    title="React"
+    description="useSession, useLive, useLiveQuery from okengine/client-react."
+    href="/docs/client/react"
+  />
+</Cards>
+
+## Learn more
+
+- [Routing](/docs/elements/flow/routing) — folders are the URL; `$routes` without `.adopt()`
+- [HTTP](/docs/elements/flow/http) — verbs, `http.resource`, live SSE
+- [The Anatomy](/docs/understand/the-anatomy) — generated barrel → client → test loop
+- [The Model](/docs/understand/the-model) — same contract for Client, Console, MCP
+- [Errors](/docs/reference/errors) — framework codes vs failure values
+
+## Next
+
+<Cards>
+  <Card
+    title="Calling"
+    description="REST vs RPC, options, helpers, and remote types."
+    href="/docs/client/calling"
+  />
+  <Card
+    title="Auth"
+    description="Sessions and gate denials on the client."
+    href="/docs/client/auth"
+  />
+  <Card
+    title="Live"
+    description="SSE subscribe and live resource queries."
+    href="/docs/client/live"
+  />
+</Cards>

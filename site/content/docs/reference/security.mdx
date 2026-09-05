@@ -1,0 +1,199 @@
+---
+title: "Security"
+description: "Host and Origin allow-lists, user vs operator planes, Console and MCP posture."
+icon: "Shield"
+source: "docs/spec/unified-theory.md"
+---
+
+Every served request on the backend, Console, and app MCP passes Host / Origin checks
+before your Flow runs. Private bind addresses are not a substitute for that check.
+
+Reach for this page when you put a public hostname in front of the app, open Console
+in production, or wire MCP tokens.
+
+<Callout title="The one rule">
+  Pass every public hostname in `allowedHosts` on `createBunRuntime().serve` (and the
+  Console / MCP serve options). Loopback is always allowed; `Origin: null` is always
+  rejected. Failures return **403**.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Serve with an explicit host allow-list
+
+```typescript title="src/app.ts"
+import { createBunRuntime } from "okengine/http";
+import { app } from "./app";
+
+createBunRuntime().serve(app, {
+  port: Number(process.env.PORT ?? 6530),
+  hostname: "0.0.0.0",
+  allowedHosts: ["app.example.com", ".example.com"],
+});
+```
+
+`.example.com` allows `a.example.com` (Vite-style suffix). Always merged with
+`localhost` · `127.0.0.1` · `::1` and the listen hostname when it is not a
+wildcard bind.
+
+</Step>
+
+<Step>
+### Confirm a bad Host is refused
+
+```bash
+curl -i http://127.0.0.1:6530/health -H "Host: evil.example"
+```
+
+Expect `403` with body `Forbidden: unexpected Host header`.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Reverse proxy", "Planes", "MCP"]}>
+
+<Tab value="Reverse proxy">
+
+Edge terminates TLS and forwards to the app. The `Host` the app sees must be on
+the allow-list — usually the public name, not the container hostname.
+
+```typescript
+createBunRuntime().serve(app, {
+  hostname: "0.0.0.0",
+  allowedHosts: ["app.example.com"],
+});
+```
+
+**Consequence:** omitting the public name behind Caddy / nginx / Traefik looks
+like a random 403 to browsers that send the site's `Host`.
+
+</Tab>
+
+<Tab value="Planes">
+
+Only two planes exist: **user** (application Flows, `fx.auth`) and **operator**
+(Console / MCP capability, `fx.operator`). Declare `plane: "operator"` on Flows
+that must stay off the public API.
+
+A user-plane token on an operator Flow (or the reverse) throws `CrossPlaneError`.
+API keys and Console `invoke-as` are attenuated — a derived principal never
+exceeds the creator's scopes.
+
+</Tab>
+
+<Tab value="MCP">
+
+| Surface | Port | Auth |
+| ------- | ---- | ---- |
+| App MCP | **6535** | Bearer required **even on localhost**; audience `oke-mcp` |
+| Docs MCP | **6536** | Host / Origin only — public docs, not a live Manifest |
+
+App MCP inherits **operator-plane** capability and never exceeds it. Tokens are
+never forwarded upstream. Tools declare scopes; writes need confirmation.
+
+</Tab>
+
+</Tabs>
+
+## Host / Origin Rules
+
+| Check | Behavior |
+| ----- | -------- |
+| `Host` | Required; must match the effective allow-list |
+| `Origin` | When present, host must match; `Origin: null` → 403 |
+| Defaults | Always includes loopback + listen hostname (unless `0.0.0.0` / `::`) |
+| Extras | `ServeOptions.allowedHosts` — never replaces the mandatory check |
+
+`allowedHosts` lives on **serve options**, not in `oke.config.ts`. Pass it wherever
+you call `serve` for **6530**, Console **6533**, and app MCP **6535**.
+
+## Console Posture
+
+| Control | Meaning |
+| ------- | ------- |
+| Host / Origin | Same allow-list logic as the backend |
+| CSP | `default-src 'self'`; `frame-ancestors 'none'` |
+| Cookies | `SameSite=Strict` |
+| Claim code | Printed on `oke dev` TTY; `oke console claim-code` while setup is open |
+| PII | Store / Call API mask classified fields unless `revealPii: true` (audited) |
+
+Production Console: set `OKE_CONSOLE_SECRET` and configure
+`console.prod` in [Configuration](/docs/reference/configuration#console).
+
+## Sessions and Audiences
+
+| Audience | Surface |
+| -------- | ------- |
+| `oke-app` | Application sessions |
+| `oke-console` | Console operators |
+| `oke-mcp` | App MCP |
+
+Short access JWT (default ~14m) + rotating refresh. Refresh-token reuse revokes
+the family.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="403 Forbidden: unexpected Host header">
+  The request `Host` is not on the allow-list. Add the public hostname to
+  `allowedHosts`, or hit loopback (`localhost` / `127.0.0.1`) during local
+  `oke dev`.
+</Accordion>
+
+<Accordion title="403 Forbidden: unexpected Origin header">
+  Browser sent an `Origin` whose host is not allowed, or `Origin: null`. Align
+  the page origin with `allowedHosts`, or call same-origin / non-browser clients
+  without a spoofed Origin.
+</Accordion>
+
+<Accordion title="MCP tools refuse without Bearer on localhost">
+  App MCP on **6535** requires a Bearer with audience `oke-mcp` even on
+  loopback. Docs MCP on **6536** does not — it serves documentation only.
+</Accordion>
+
+<Accordion title="CrossPlaneError">
+  A user-plane token reached an operator Flow (or the reverse). Use the principal
+  that matches the Flow's `plane`.
+</Accordion>
+
+<Accordion title="AttenuationError">
+  A derived key or invoke-as identity requested a scope the creator cannot grant.
+  Re-issue with a subset of the creator's scopes.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [CLI](/docs/reference/cli) — `oke dev`, `oke console claim-code`
+- [Gate](/docs/elements/gate) — policies, API keys, tenancy
+- [The Model](/docs/understand/the-model) — one shape, one door, fixed vocabulary
+- [Errors](/docs/reference/errors) — `CrossPlaneError`, `SessionError`, `AttenuationError`
+- [Environment Variables](/docs/reference/environment-variables) — `OKE_CONSOLE_SECRET`
+
+## Next
+
+<Cards>
+  <Card
+    title="Gate"
+    description="Auth, authorization, and rate limits."
+    href="/docs/elements/gate"
+  />
+  <Card
+    title="CLI"
+    description="oke and create-oke command catalogue."
+    href="/docs/reference/cli"
+  />
+  <Card
+    title="The Model"
+    description="One shape for every trigger, one door for every effect."
+    href="/docs/understand/the-model"
+  />
+</Cards>

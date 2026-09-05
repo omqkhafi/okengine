@@ -53,13 +53,13 @@ export const member = gate.policy("member", {
 });
 ```
 
-```typescript title="src/flows/profile/me.ts"
+```typescript title="src/flows/profile/get.ts"
 import { on, flow, http } from "okengine";
 import { member } from "@/core/gate";
 
-export const getProfile = on(
-  http.get("/profile").gate(member),
-  flow("profile.me", {
+export const get = on(
+  http.get().gate(member),
+  flow({
     do: async (_, fx) => ({ userId: fx.auth.userId }),
   }),
 );
@@ -142,9 +142,9 @@ session-only methods (`fx.auth.createApiKey`, tenant admin, …) refuse keys.
 import { on, flow, http } from "okengine";
 import { member } from "@/core/gate";
 
-export const createKey = on(
-  http.post("/keys").gate(member),
-  flow("keys.create", {
+export const create = on(
+  http.post().gate(member),
+  flow({
     do: async (_, fx) => {
       const { key, secret } = await fx.auth.createApiKey({
         name: "ci",
@@ -301,8 +301,8 @@ mint more keys.
 Health checks and login endpoints must declare open posture explicitly:
 
 ```typescript
-http.get("/health").public();
-// equivalent: http.get("/health").gate(gate.public)
+http.get().public();
+// equivalent: http.get().gate(gate.public)
 ```
 
 Auth method Flows under `basePath` register their own posture; your app routes still need

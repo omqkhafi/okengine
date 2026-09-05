@@ -1,60 +1,266 @@
 ---
 title: "Email"
-description: "Transactional email delivery, localized templates, SMTP/Mailpit local testing, and Resend/SNDR production drivers."
+description: "Transactional email — channel.email templates, {{field}} catalogs, SMTP/Mailpit, Resend, SNDR, and Taqnyat Mail."
 icon: "Mail"
+source: "docs/spec/unified-theory.md"
 ---
 
-The Email medium (`channel.email`) sends transactional and notification emails.
+Email (`channel.email`) is the default Channel medium. Declare a binder with a From address,
+register templates, put bodies in the catalog, and send with `fx.send`.
 
-## What it is
+For developers who need local catchers and production HTTP MTAs — same `fx.send` path, swap the
+driver.
 
-Email templates are declared with Zod schemas for dynamic data. In local development, emails are routed to a local Mailpit inbox (`localhost:8025`). In production, OKE connects to Resend, SNDR, AWS SES, or custom SMTP servers.
+<Callout title="The one rule">
+  Use `channel.email({ from }).template(name, { schema, locales })` — never
+  `channel.email("name", { subject, body })`. Subject and body live in the catalog.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Define email channel
+### Declare binder + template
 
-```typescript title="src/channels/reset.ts"
+```typescript title="src/core/channel.ts"
 import { channel } from "okengine";
 import { z } from "zod";
 
-export const passwordResetEmail = channel.email("auth.resetPassword", {
-  subject: () => "Reset your password",
+const mail = channel.email({ from: "App <noreply@example.com>" });
+
+export const passwordReset = mail.template("auth.resetPassword", {
+  description: "Password reset link",
+  locales: ["en"],
   schema: z.object({ resetLink: z.string().url() }),
-  body: ({ resetLink }) => `Click here to reset: ${resetLink}`,
 });
 ```
 
 </Step>
 
 <Step>
-### Send in flow
+### Catalog + send
 
-```typescript
-await fx.send(passwordResetEmail, {
-  to: "alice@example.com",
-  data: { resetLink: "https://example.com/reset?token=123" },
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+
+oke({
+  name: "app",
+  channel: {
+    catalog: {
+      "auth.resetPassword": {
+        en: {
+          subject: "Reset your password",
+          text: "Open {{resetLink}} to choose a new password.",
+          html: '<p><a href="{{resetLink}}">Reset your password</a></p>',
+        },
+      },
+    },
+  },
 });
 ```
+
+```typescript title="src/flows/auth/reset.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { passwordReset } from "@/core/channel";
+
+export const reset = on(
+  http.post().public(),
+  flow({
+    in: z.object({ email: z.string().email() }),
+    do: async ({ email }, fx) => {
+      await fx.send(passwordReset, {
+        to: email,
+        data: { resetLink: `https://example.com/reset?t=${fx.id()}` },
+      });
+      return { ok: true };
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Inspect locally
+
+With Mailpit (`images.channel.email` + `SMTP_URL`), open `MAILPIT_UI_URL`. Manifest lists
+`sends: ["auth.resetPassword"]` on the Flow.
 
 </Step>
 
 </Steps>
 
+## Progressive Patterns
+
+<Tabs items={["Minimal", "Catalog", "Failover", "Plugin catalog"]}>
+
+<Tab value="Minimal">
+
+No catalog — runtime uses `subject: templateName` and `text: JSON.stringify(data)`:
+
+```typescript
+await fx.send(passwordReset, {
+  to: "alice@example.com",
+  data: { resetLink: "https://example.com/r/1" },
+});
+```
+
+</Tab>
+
+<Tab value="Catalog">
+
+Per-locale `subject` / `text` / `html` with `{{field}}` interpolation from `data`:
+
+```typescript
+catalog: {
+  "auth.resetPassword": {
+    en: { subject: "Reset", text: "{{resetLink}}", html: "<a href=\"{{resetLink}}\">Reset</a>" },
+    ar: { subject: "إعادة التعيين", text: "{{resetLink}}" },
+  },
+}
+```
+
+</Tab>
+
+<Tab value="Failover">
+
+Pin multiple email drivers in `oke({ channel: { drivers } })` or rely on the boot chain, then
+order them per send:
+
+```typescript
+await fx.send(passwordReset, {
+  to: "alice@example.com",
+  data: { resetLink: "…" },
+  via: ["smtp", "resend"],
+});
+```
+
+Receipt status `fallback` means an earlier attempt failed and a later one succeeded.
+
+</Tab>
+
+<Tab value="Plugin catalog">
+
+Official plugins contribute catalogs with `.channelCatalog(…)` (e.g. OTP, magic link). App
+`channel.catalog` merges with plugin contributions at boot.
+
+</Tab>
+
+</Tabs>
+
+## Options Reference
+
+### `channel.email(options?)`
+
+| Option   | Type     | Meaning                         |
+| -------- | -------- | ------------------------------- |
+| `from`   | `string` | Default From / sender           |
+| `sender` | `string` | Alias for `from`                |
+
+### `.template(name, options?)`
+
+| Option        | Type       | Meaning                          |
+| ------------- | ---------- | -------------------------------- |
+| `description` | `string`   | Console label                    |
+| `locales`     | `string[]` | Declared locales                 |
+| `schema`      | Schema     | Payload contract for `data`      |
+
+Default From when neither binder nor template sets one: `"oke@localhost.test"`.
+
+## Drivers
+
+| Driver id       | Opens at boot | Env / keys |
+| --------------- | ------------- | ---------- |
+| `smtp`          | yes (default) | `SMTP_URL` or `OKE_CHANNEL_EMAIL_URL`; optional `SMTP_USER` / `SMTP_PASSWORD` |
+| `console`       | yes (test)    | In-process inbox — no network |
+| `resend`        | yes           | `RESEND_API_KEY` |
+| `sndr`          | yes           | `SNDR_API_KEY`; optional `SNDR_BASE_URL` |
+| `taqnyat-mail`  | yes           | `TAQNYAT_MAIL_TOKEN` + `TAQNYAT_CAMPAIGN` |
+
+```typescript title="oke.config.ts"
+drivers: {
+  channel: {
+    email: { dev: "smtp", test: "console", prod: "resend" },
+  },
+},
+images: {
+  channel: { email: "axllent/mailpit:v1.30.7" },
+},
+```
+
+**Consequence:** `dev` and `prod` both speak SMTP protocol by default — Mailpit locally, your
+relay in production. Swap `prod` to `resend` / `sndr` / `taqnyat-mail` when you want HTTP APIs.
+
+Unknown id → `oke boot: unknown email channel driver "…"`. Missing SMTP URL →
+`oke boot: smtp driver needs SMTP_URL`.
+
+## Locale & consent
+
+Locale chain and suppression run before the driver (see [Overview](/docs/elements/channel) and
+[Receipts](/docs/elements/channel/receipts)). Opted-out or prior hard-bounce addresses never
+reach SMTP / Resend.
+
+Channel catalogs are **not** ICU — do not use `fx.t` for email bodies ([i18n](/docs/reference/i18n)).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="oke boot: smtp driver needs SMTP_URL">
+  Pin Mailpit / set `SMTP_URL=smtp://…`. URL must use the `smtp://` scheme
+  (`oke boot: SMTP_URL must use smtp://`).
+</Accordion>
+
+<Accordion title="oke boot: resend channel needs RESEND_API_KEY">
+  Email driver is `resend` but the key is missing. Export `RESEND_API_KEY` for that env.
+</Accordion>
+
+<Accordion title="oke boot: sndr channel needs SNDR_API_KEY">
+  Same pattern for `sndr` — set `SNDR_API_KEY` (and `SNDR_BASE_URL` if non-default).
+</Accordion>
+
+<Accordion title="oke boot: taqnyat-mail channel needs TAQNYAT_MAIL_TOKEN / TAQNYAT_CAMPAIGN">
+  Taqnyat Email requires both the mail token and a campaign name.
+</Accordion>
+
+<Accordion title="Message in Mailpit has JSON body / template name as subject">
+  No catalog entry for that template + locale. Add `channel.catalog` (or a plugin catalog) with
+  `subject` / `text` / `html`.
+</Accordion>
+
+<Accordion title="suppressed/opted-out or prior-bounce — no provider call">
+  Consent or hard-bounce suppression blocked the send. Check the receipt ledger; see
+  [Receipts](/docs/elements/channel/receipts).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Channel overview](/docs/elements/channel) — declare → send → drivers
+- [Mailpit](/docs/recipes/mailpit) — local SMTP catcher
+- [Receipts](/docs/elements/channel/receipts) — delivery ledger
+- [Environment variables](/docs/reference/environment-variables) — email boot binder
+- [OTP plugin](/docs/plugins/otp) — `auth-otp-email` catalog
+
 ## Next
 
 <Cards>
   <Card
-    title="SMS Medium"
-    description="Send SMS text messages and OTP codes."
+    title="SMS"
+    description="SMS templates and provider OTP."
     href="/docs/elements/channel/sms"
   />
   <Card
+    title="Receipts"
+    description="Ledger, outcomes, and suppression."
+    href="/docs/elements/channel/receipts"
+  />
+  <Card
     title="Channel Overview"
-    description="Return to Channel overview."
+    description="Physics, fx surface, and driver table."
     href="/docs/elements/channel"
   />
 </Cards>

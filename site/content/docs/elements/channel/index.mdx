@@ -1,85 +1,348 @@
 ---
 title: "Overview"
-description: "Reaching humans — transactional email, SMS, push notifications, and WhatsApp with delivery receipts and consent rules."
+description: "Reaching humans — declare email, SMS, WhatsApp, and push templates, send through fx.send, track receipts and consent."
 icon: "Mail"
 source: "docs/spec/unified-theory.md"
 ---
 
-Channel is how your backend **communicates with human beings across mediums**. Sending an email, an SMS verification code, or a push notification requires localized templates, provider retries, rate limits, unsubscribe headers, and delivery webhooks. Channel abstracts these behind a unified interface.
+Channel is how your backend **reaches a person** — the order-confirmation email, the SMS
+sign-in code, a WhatsApp notice, or a device push. You declare a template on a medium, fill a
+`{{field}}` body catalog, and send from a Flow with `fx.send`.
+
+For developers wiring Mailpit locally and Resend / Taqnyat / FCM in production — templates and
+drivers first, never vendor SDKs inside `do`.
 
 <Callout title="The one rule">
-  **Explicit consent and medium bindings**. Every message specifies its human recipient and medium.
-  Outgoing deliveries emit standardized audit receipts regardless of the underlying vendor (Resend,
-  Taqnyat, Twilio, or FCM).
+  Declare a template (`channel.email(…).template(…)`), then `fx.send(template, { to, data })`.
+  Bodies live in the catalog (`subject` / `text` / `html`), not on the declare call. Consent and
+  prior bounces suppress before any driver runs.
 </Callout>
 
-## What is Channel?
+<ChannelPhysics />
 
-Channel unifies four messaging mediums:
+## Smallest Example
 
-1. **Email (`channel.email`)**: Transactional and broadcast emails (via SMTP, Mailpit, Resend, SNDR, Taqnyat).
-2. **SMS (`channel.sms`)**: Direct SMS messages and OTP verifications (via Taqnyat, Msegat, Twilio).
-3. **Push & WhatsApp (`channel.push`)**: Mobile/Web push notifications and WhatsApp Cloud messages.
-4. **Receipts & Webhooks (`channel.receipts`)**: Standardized delivery status records and bounce suppression.
+<Steps>
 
-```typescript title="src/channels/welcome.ts"
+<Step>
+### Declare an email template
+
+```typescript title="src/core/channel.ts"
 import { channel } from "okengine";
 import { z } from "zod";
 
-export const welcomeEmail = channel.email("welcome", {
-  subject: (data) => `Welcome to ${data.appName}!`,
-  schema: z.object({ appName: z.string(), name: z.string() }),
+const mail = channel.email({ from: "Notes <notes@localhost>" });
+
+export const noteCreatedMail = mail.template("note-created", {
+  locales: ["en"],
+  schema: z.object({
+    id: z.string(),
+    title: z.string(),
+  }),
 });
 ```
 
-## How Channel Executes Through fx
+Import this module before `oke()` so auto-registry adopts the template (or pass it in
+`oke({ channel: { templates: […] } })`).
+
+</Step>
+
+<Step>
+### Send from a Flow
+
+```typescript title="src/flows/notes/on-created.ts"
+import { on, flow } from "okengine";
+import { noteCreatedMail } from "@/core/channel";
+import { noteCreated } from "./signals";
+
+export const onCreated = on(
+  noteCreated,
+  flow({
+    do: async (payload, fx) => {
+      await fx.send(noteCreatedMail, {
+        to: "you@localhost",
+        data: { id: payload.id, title: payload.title },
+      });
+    },
+  }),
+);
+```
+
+The compiler stamps `sends: ["note-created"]` on the Flow’s effects (template name — not
+`email:note-created`).
+
+</Step>
+
+<Step>
+### See it locally
+
+With `drivers.channel.email.dev: "smtp"` and Mailpit pinned, open the Mailpit UI
+(`MAILPIT_UI_URL`). Missing catalog bodies fall back to `subject: note-created` and
+`text: JSON.stringify(data)`.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+From a bare send to catalog bodies, locale, and same-medium failover:
+
+<Tabs items={["Minimal", "Catalog", "Locale", "via"]}>
+
+<Tab value="Minimal">
+
+Template handle + recipient — catalog optional for local smoke tests:
 
 ```typescript
-// Inside any flow:
-await fx.send(welcomeEmail, {
-  to: "user@example.com",
-  data: { appName: "Acme", name: "Alice" },
+await fx.send(noteCreatedMail, {
+  to: "alice@example.com",
+  data: { id: "n1", title: "Hello" },
 });
 ```
 
-The compiler stamps `sends: ["email:welcome"]` onto the flow's manifest effects.
+</Tab>
+
+<Tab value="Catalog">
+
+Bodies are `{{field}}` strings per locale — not ICU, not React. Pass them on boot or via a
+plugin `.channelCatalog(…)`:
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+
+export const app = oke({
+  name: "notes",
+  channel: {
+    catalog: {
+      "note-created": {
+        en: {
+          subject: "Note created",
+          text: "Your note {{title}} ({{id}}) is ready.",
+          html: "<p>Your note <strong>{{title}}</strong> is ready.</p>",
+        },
+      },
+    },
+  },
+});
+```
+
+</Tab>
+
+<Tab value="Locale">
+
+Precedence: explicit `locale` → `profileLocale` → `Accept-Language` →
+`channel.defaultLocale` / `i18n.default` (`"en"`). Omit send locale opts and the send uses
+`fx.locale`.
+
+```typescript
+await fx.send(noteCreatedMail, {
+  to: "alice@example.com",
+  data: { id: "n1", title: "مرحبا" },
+  locale: "ar",
+});
+```
+
+Missing exact locale falls back to default / `en` in the catalog. Chain steps are recorded on
+the receipt (`profile:…` · `accept-language:…` · `default:…`).
+
+</Tab>
+
+<Tab value="via">
+
+Order same-medium drivers for failover. Provider / 5xx errors advance; permanent client errors
+(400, invalid address) do **not**:
+
+```typescript
+await fx.send(noteCreatedMail, {
+  to: "alice@example.com",
+  data: { id: "n1", title: "Hello" },
+  via: ["smtp", "resend"],
+});
+```
+
+**Consequence:** receipt status is `fallback` when an earlier attempt failed and a later one
+succeeded — every attempt is kept on the receipt.
+
+</Tab>
+
+</Tabs>
+
+## Declaration Reference
+
+| Declaration         | Signature                                      | Purpose                          |
+| ------------------- | ---------------------------------------------- | -------------------------------- |
+| `channel.email`     | `channel.email(options?)`                      | Email medium binder              |
+| `channel.sms`       | `channel.sms(options?)`                        | SMS medium binder                |
+| `channel.whatsapp`  | `channel.whatsapp(options?)`                   | WhatsApp medium binder           |
+| `channel.push`      | `channel.push(options?)`                       | Push medium binder               |
+| `binder.template`   | `binder.template(name, options?)`              | Auto-registered template         |
+| `channel.template`  | `channel.template(name, options?)`             | Medium-agnostic — **not** auto-registered |
+
+### Medium options
+
+| Option   | Type     | Default | Meaning                                      |
+| -------- | -------- | ------- | -------------------------------------------- |
+| `from`   | `string` | —       | Default sender (email From / SMS sender id)  |
+| `sender` | `string` | —       | Alias stored as `from`                       |
+
+### Template options
+
+| Option        | Type       | Default   | Meaning                                      |
+| ------------- | ---------- | --------- | -------------------------------------------- |
+| `description` | `string`   | name      | Console / docs label                         |
+| `locales`     | `string[]` | —         | Declared locale tags for the template        |
+| `schema`      | Schema     | —         | Payload shape (Zod / Standard Schema)        |
+| `from`        | `string`   | binder’s  | Override sender on agnostic `channel.template` only |
+| `medium`      | medium     | `"email"` | Only on `channel.template()`                 |
+
+Empty name throws `TypeError: channel.template: name is required`.
+
+There is **no** `subject` / `body` / `html` on declare — those belong in the catalog.
+
+## `fx` surface
+
+| Method                         | Capability / `sends` | Meaning                                              |
+| ------------------------------ | -------------------- | ---------------------------------------------------- |
+| `fx.send(template, opts?)`     | template name        | Deliver through the medium’s driver chain             |
+| `fx.sendOtp(opts)`             | `"sms-otp"`          | Provider-managed SMS OTP (Taqnyat Verify)            |
+| `fx.verifyOtp(opts)`           | `"sms-otp"`          | Check a provider OTP code                            |
+| `fx.deliverOtp(opts)`          | `"auth-otp"`         | App-owned OTP across email / SMS / WhatsApp          |
+
+### `fx.send` options
+
+| Option            | Type     | Meaning                                              |
+| ----------------- | -------- | ---------------------------------------------------- |
+| `to`              | `string` | Recipient (email / E.164 / FCM token / …)            |
+| `data`            | object   | Interpolated into `{{field}}` catalog bodies         |
+| `via`             | refs     | Same-medium driver order for failover                |
+| `locale`          | `string` | Explicit locale (wins)                               |
+| `profileLocale`   | `string` | Profile locale step                                  |
+| `acceptLanguage`  | `string` | Raw `Accept-Language` header                         |
+
+Dry-run records _would have fired_ and never contacts a provider. Undeclared send → **OKE1004**
+`UNDECLARED_SEND`.
+
+## Per-environment drivers
+
+Email defaults from `DRIVER_DEFAULTS.channel.email`. SMS / WhatsApp / push are **opt-in**:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    channel: {
+      email: { dev: "smtp", test: "console", prod: "smtp" },
+      // sms: { prod: "taqnyat" },
+      // whatsapp: { prod: "wa-cloud" },
+    },
+  },
+  images: {
+    channel: { email: "axllent/mailpit:v1.30.7" },
+  },
+});
+```
+
+| Key                | Default (dev / test / prod) | Driver ids |
+| ------------------ | --------------------------- | ---------- |
+| `channel.email`    | `smtp` / `console` / `smtp` | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail` |
+| `channel.sms`      | none                        | `taqnyat` · `msegat` · `unifonic` (`console` opens nothing) |
+| `channel.whatsapp` | none                        | `wa-cloud` · `taqnyat-whatsapp` |
+| `channel.push`     | none — **not auto-bound**   | Pass `oke({ channel: { drivers: […] } })` with `webpush` / `fcm` |
+
+Env knobs: [Environment variables](/docs/reference/environment-variables). Local SMTP catcher:
+[Mailpit](/docs/recipes/mailpit).
 
 ## The Capabilities of Channel
 
 <Cards>
   <Card
-    title="Email Medium"
-    description="SMTP/Mailpit in development, Resend/SNDR/Taqnyat in production with React templates."
+    title="Email"
+    description="SMTP / Mailpit, Resend, SNDR, Taqnyat Mail — templates and catalogs."
     href="/docs/elements/channel/email"
   />
   <Card
-    title="SMS Medium"
-    description="Transactional SMS, high-speed OTP delivery, and localized phone number normalization."
+    title="SMS"
+    description="Transactional SMS and provider-managed OTP (Taqnyat Verify)."
     href="/docs/elements/channel/sms"
   />
   <Card
-    title="Push & WhatsApp"
-    description="WebPush (VAPID), Firebase Cloud Messaging (FCM), and Meta WhatsApp Cloud API."
+    title="WhatsApp"
+    description="wa-cloud and Taqnyat WhatsApp medium binders."
+    href="/docs/elements/channel/whatsapp"
+  />
+  <Card
+    title="Push"
+    description="FCM device tokens and Web Push (VAPID) driver binding."
     href="/docs/elements/channel/push"
   />
   <Card
-    title="Receipts & Webhooks"
-    description="Unified delivery receipt ledger, automated bounce processing, and spam suppression."
+    title="Receipts"
+    description="In-memory ledger, outcomes taxonomy, consent and bounce suppression."
     href="/docs/elements/channel/receipts"
   />
 </Cards>
 
-## Next Steps
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='channel: unknown template "…"'>
+  `fx.send` named a template that was never declared or not adopted at boot. Import the medium
+  binder module before `oke()`, or pass `channel.templates` explicitly.
+</Accordion>
+
+<Accordion title="OKE1004 — UNDECLARED_SEND">
+  Cause: `Flow "{flow}" sends "{resource}" without declaring it.` Touch the template handle
+  inside `do` (inference) or list `effects: { sends: ["note-created"] }`.
+</Accordion>
+
+<Accordion title="channel: no email transport in driver chain">
+  No email-capable driver is bound (or `via` filtered them all out). Check
+  `drivers.channel.email` and `SMTP_URL` / provider API keys for the active env.
+</Accordion>
+
+<Accordion title="oke boot: smtp driver needs SMTP_URL">
+  Email is pinned to `smtp` but neither `SMTP_URL` nor `OKE_CHANNEL_EMAIL_URL` is set. For local
+  Docker, run the Mailpit stack so compose writes the URL.
+</Accordion>
+
+<Accordion title="Process-local suppression / receipts warning">
+  Boot warns: `Channel suppression/consent/receipts default to process-local memory…` Opt-out on
+  one instance is invisible to others until you inject shared stores or run a single Channel
+  consumer. See [Receipts](/docs/elements/channel/receipts).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Email](/docs/elements/channel/email) — drivers, catalog, Mailpit
+- [SMS](/docs/elements/channel/sms) — `fx.sendOtp` / `fx.verifyOtp`
+- [WhatsApp](/docs/elements/channel/whatsapp) — `channel.whatsapp` + boot drivers
+- [Push](/docs/elements/channel/push) — FCM / Web Push binding
+- [Receipts](/docs/elements/channel/receipts) — ledger, outcomes, suppression
+- [OTP plugin](/docs/plugins/otp) — `/auth/otp/*` over Channel
+- [fx](/docs/reference/fx) — `fx.send` options
+- [i18n](/docs/reference/i18n) — Channel catalogs vs `fx.t`
+
+## Next
 
 <Cards>
   <Card
-    title="Email Medium"
-    description="Design and send transactional emails."
+    title="Email"
+    description="Declare email templates and pin SMTP / Resend drivers."
     href="/docs/elements/channel/email"
   />
   <Card
     title="AI Element"
-    description="Integrate AI models, versioned prompts, and agents."
+    description="Models, prompts, and agents."
     href="/docs/elements/ai"
+  />
+  <Card
+    title="The Model"
+    description="Eight elements overview."
+    href="/docs/understand/the-model"
   />
 </Cards>

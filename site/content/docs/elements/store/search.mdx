@@ -41,9 +41,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { articles, db } from "@/schema";
 
-export const searchArticles = on(
-  http.get("/articles/search"),
-  flow("articles.search", {
+export const search = on(
+  http.get(),
+  flow({
     in: z.object({ q: z.string() }),
     do: async ({ q }, fx) => {
       const result = await fx.store(db).search(articles, {
@@ -398,9 +398,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { articles, db } from "@/schema";
 
-export const searchArticles = on(
-  http.get("/articles/search"),
-  flow("articles.search", {
+export const search = on(
+  http.get(),
+  flow({
     in: z.object({ q: z.string().min(1) }),
     do: async ({ q }, fx) => {
       const result = await fx.store(db).search(articles, {
@@ -429,9 +429,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { articles, db } from "@/schema";
 
-export const searchArticles = on(
-  http.get("/articles/search"),
-  flow("articles.search", {
+export const search = on(
+  http.get(),
+  flow({
     in: z.object({
       q: z.string().min(1),
       status: z.string().optional(),

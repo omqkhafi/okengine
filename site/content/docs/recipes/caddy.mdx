@@ -81,7 +81,7 @@ Caddy has **no** service-discovery story for multiple `app` replicas. Once you r
 discovers replicas from Docker labels instead of a static `reverse_proxy` target.
 
 Also set `allowedHosts` to your public hostname before exposing the edge — see
-[Reverse proxy](/docs/deployment/reverse-proxy).
+[Security](/docs/reference/security).
 
 ## What the recipe configures
 
@@ -111,8 +111,8 @@ Expected with the local CA. Install Caddy's local root for that machine, or set 
 
 ## Learn more
 
-- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik / nginx choice
-- [Docker · Reverse proxy](/docs/deployment/docker#reverse-proxy) — compose layer order
+- [Traefik](/docs/recipes/traefik) — multi-replica discovery via Docker labels
+- [nginx](/docs/recipes/nginx) — static HTTP reverse proxy
 - [Security](/docs/reference/security) — `allowedHosts`
 
 ## Next

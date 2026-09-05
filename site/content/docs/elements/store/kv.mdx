@@ -33,14 +33,14 @@ export const sessions = store.kv("sessions");
 <Step>
 ### Set and get in a Flow
 
-```typescript title="src/flows/sessions/put.ts"
+```typescript title="src/flows/sessions/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const putSession = on(
-  http.post("/sessions"),
-  flow("sessions.put", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ token: z.string(), userId: z.string() }),
     do: async ({ token, userId }, fx) => {
       await fx.store(sessions).set(`session:${token}`, userId, "1h");
@@ -91,14 +91,14 @@ From a plain set to TTL, list/delete, and durable SQL-backed namespaces:
 
 Values may be strings, numbers, or JSON-serializable objects:
 
-```typescript title="src/flows/prefs/get.ts"
+```typescript title="src/flows/prefs/[userId]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const getPrefs = on(
-  http.get("/prefs/:userId"),
-  flow("prefs.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ userId: z.string() }),
     do: async ({ userId }, fx) => {
       const prefs = await fx.store(sessions).get(`user:${userId}:prefs`);
@@ -116,14 +116,14 @@ Missing keys return `undefined` / driver nullish — treat as a cache miss.
 
 Third argument to `set` is optional. Format: `^(\d+)(ms|s|m|h|d)$`:
 
-```typescript title="src/flows/otp/issue.ts"
+```typescript title="src/flows/otp/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const issueOtp = on(
-  http.post("/otp"),
-  flow("otp.issue", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ userId: z.string() }),
     do: async ({ userId }, fx) => {
       const code = "482193";
@@ -142,13 +142,13 @@ export const issueOtp = on(
 
 <Tab value="List / delete">
 
-```typescript title="src/flows/sessions/clear.ts"
+```typescript title="src/flows/sessions/route.ts"
 import { on, flow, http } from "okengine";
 import { sessions } from "@/core";
 
-export const clearSessions = on(
-  http.delete("/sessions"),
-  flow("sessions.clear", {
+export const clear = on(
+  http.delete(),
+  flow({
     do: async (_, fx) => {
       const keys = await fx.store(sessions).list("session:");
       for (const key of keys) {
@@ -245,14 +245,14 @@ Each verb binds through `fx.store(decl)` inside `flow({ do })`:
 
 Read a key. Misses return `undefined` (or driver nullish):
 
-```typescript title="src/flows/sessions/get.ts"
+```typescript title="src/flows/sessions/[token]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const getSession = on(
-  http.get("/sessions/:token"),
-  flow("sessions.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ token: z.string() }),
     errors: { NotFound: z.object({ token: z.string() }) },
     do: async ({ token }, fx) => {
@@ -272,14 +272,14 @@ export const getSession = on(
 
 Write a value. Pass a duration string as the third argument for TTL:
 
-```typescript title="src/flows/sessions/put.ts"
+```typescript title="src/flows/sessions/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const putSession = on(
-  http.post("/sessions"),
-  flow("sessions.put", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ token: z.string(), userId: z.string() }),
     do: async ({ token, userId }, fx) => {
       await fx.store(sessions).set(`session:${token}`, userId, "1h");
@@ -298,14 +298,14 @@ objects; memory keeps the value as-is.
 
 Remove a key. Returns `true` when a key was deleted:
 
-```typescript title="src/flows/sessions/remove.ts"
+```typescript title="src/flows/sessions/[token]/remove.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const removeSession = on(
-  http.delete("/sessions/:token"),
-  flow("sessions.remove", {
+export const remove = on(
+  http.delete(),
+  flow({
     in: z.object({ token: z.string() }),
     do: async ({ token }, fx) => {
       const removed = await fx.store(sessions).delete(`session:${token}`);
@@ -326,9 +326,9 @@ strings are the **logical** keys (no driver prefix, no tenant prefix):
 import { on, flow, http } from "okengine";
 import { drafts } from "@/core";
 
-export const listDrafts = on(
-  http.get("/drafts"),
-  flow("drafts.list", {
+export const list = on(
+  http.get(),
+  flow({
     do: async (_, fx) => {
       const keys = await fx.store(drafts).list();
       const items = [];
@@ -352,14 +352,14 @@ rather than scanning the whole instance.
 Remaining lifetime in milliseconds, or `null` when the key has no expiry
 (or the backend cannot report one). Does not create or delete the key:
 
-```typescript title="src/flows/otp/remaining.ts"
+```typescript title="src/flows/otp/[userId]/ttl.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const otpRemaining = on(
-  http.get("/otp/:userId/ttl"),
-  flow("otp.ttl", {
+export const ttl = on(
+  http.get(),
+  flow({
     in: z.object({ userId: z.string() }),
     do: async ({ userId }, fx) => {
       const ttlMs = await fx.store(sessions).ttlMs(`otp:${userId}`);
@@ -404,14 +404,14 @@ export const drafts = store.kv("drafts", {
 });
 ```
 
-```typescript title="src/flows/drafts/save.ts"
+```typescript title="src/flows/drafts/[id]/save.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { drafts } from "@/core";
 
-export const saveDraft = on(
+export const save = on(
   http.put("/drafts/:id"),
-  flow("drafts.save", {
+  flow({
     in: z.object({
       id: z.string().min(1),
       title: z.string().min(1),

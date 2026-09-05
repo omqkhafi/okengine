@@ -1,64 +1,267 @@
 ---
 title: "MCP"
-description: "Native MCP client tools and automatic publishing of backend Flows as an MCP server for Cursor and external agents."
+description: "Two directions — expose Flows as gated mcp.tool endpoints on :6535, and consume external servers with ai.mcpServer allowlists."
 icon: "Plug"
+source: "docs/spec/unified-theory.md"
 ---
 
-Model Context Protocol (MCP) connects your OKE backend directly to developer tools, Cursor, Claude Desktop, and autonomous agents.
+Model Context Protocol (MCP) connects OKE to Cursor, Claude Desktop, and other agents in
+**two directions**: your app exposes selected Flows as tools, and your Flows call tools on
+external MCP servers.
 
-## What it is
+For developers wiring Cursor to a backend or letting an agent open a GitHub issue — opt-in
+gates inbound; allowlists outbound.
 
-OKE includes two-way MCP support:
+<Callout title="The one rule">
+  Inbound: `on(mcp.tool("name").gate(...), flow)` — ungated tools are not exposed. Outbound:
+  `ai.mcpServer` with a required `tools` allowlist — the runtime never trusts raw `tools/list`.
+</Callout>
 
-1. **Server**: Automatically exposes public and operator Flows as an MCP tool endpoint (`/api/mcp`).
-2. **Client**: Connects to external MCP servers (Figma, GitHub, Postgres) so Flows can consume their tools via `fx`.
-
-## Smallest Example
+## Smallest Example — expose a Flow
 
 <Steps>
 
 <Step>
-### Enable MCP in config
+### Bind a gated MCP tool
 
-```typescript title="oke.config.ts"
-import { defineConfig } from "okengine/config";
+```typescript title="src/flows/bookings/create.ts"
+import { on, flow, mcp } from "okengine";
+import { z } from "zod";
+import { member } from "@/core/gate";
 
-export default defineConfig({
-  mcp: {
-    enabled: true,
-    path: "/api/mcp",
-  },
-});
+export const create = on(
+  mcp.tool("bookings.create").gate(member),
+  flow({
+    in: z.object({
+      guest: z.string().min(1),
+      night: z.string(),
+    }),
+    do: async (input, fx) => {
+      return { id: fx.id(), ...input };
+    },
+  }),
+);
 ```
+
+Deny-by-default: `on(mcp.tool("…"), flow)` without `.gate(...)` fails gate posture at boot.
 
 </Step>
 
 <Step>
-### Connect from Cursor or Claude Desktop
+### Connect a client
 
-Add your backend endpoint to Cursor MCP settings:
+App MCP listens on port **6535**, path **`/mcp`** (not the backend `:6530` HTTP port). Bearer
+auth is required.
 
 ```json
 {
   "mcpServers": {
-    "my-backend": {
-      "url": "http://localhost:6530/api/mcp"
+    "notes": {
+      "url": "http://127.0.0.1:6535/mcp",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
     }
   }
 }
 ```
 
+`GET /health` on the same port probes liveness. Override with `ports.mcp` in config when needed.
+
+</Step>
+
+<Step>
+### Call the tool
+
+The client lists `bookings.create` (and other gated tools). Invocations run the Flow under the
+same gate chain as HTTP.
+
 </Step>
 
 </Steps>
 
+## Smallest Example — consume a server
+
+<Steps>
+
+<Step>
+### Declare an outbound server
+
+```typescript title="src/core/mcp.ts"
+import { ai, vault } from "okengine";
+
+const githubToken = vault.secret("GITHUB_MCP_TOKEN");
+
+export const github = ai.mcpServer("github", {
+  url: "https://mcp.example/github",
+  auth: { bearer: githubToken },
+  tools: ["create_issue", "list_repos"],
+});
+
+export const createIssue = github.tool("create_issue"); // mcp:github/create_issue
+```
+
+Exactly one of `url` (Streamable HTTP) or `command` (+ optional `args` for stdio). Bearer must
+be a `vault.secret` handle or contract name — never a token literal in source.
+
+</Step>
+
+<Step>
+### Use in ask / agent tools
+
+```typescript
+await fx.ask(triage, input, {
+  tools: [github.tool("create_issue")],
+  maxSteps: 2,
+});
+```
+
+Capability ref is `mcp:github/create_issue`. Model-facing names use `server__tool`
+(`github__create_issue`).
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Inbound gate", "stdio server", "Agent bag", "Docs MCP"]}>
+
+<Tab value="Inbound gate">
+
+Chain policies like HTTP — first denial wins:
+
+```typescript
+on(
+  mcp.tool("admin.wipe").gate(member, gate.scope("admin")),
+  flow({ do: async (_input, fx) => fx.json.empty() }),
+);
+```
+
+</Tab>
+
+<Tab value="stdio server">
+
+Local executable transport:
+
+```typescript
+export const localTools = ai.mcpServer("local", {
+  command: "npx",
+  args: ["-y", "some-mcp-server"],
+  tools: ["lookup"],
+});
+```
+
+</Tab>
+
+<Tab value="Agent bag">
+
+Mix Flows and MCP refs on one agent:
+
+```typescript
+ai.agent("planner", {
+  model: "smart",
+  tools: ["tasks.create", github.tool("create_issue")],
+  maxSteps: 8,
+  budget: { maxCostPerRun: 0.25 },
+});
+```
+
+</Tab>
+
+<Tab value="Docs MCP">
+
+Read-only docs MCP is a **separate** process on port **6536** — not your app’s `:6535` tool
+server. Use it for documentation search, not business Flows.
+
+</Tab>
+
+</Tabs>
+
+## Inbound reference
+
+| Piece | Detail |
+| ----- | ------ |
+| Trigger | `mcp.tool(name)` from `okengine` |
+| Gates | `.gate(...)` required for exposure |
+| Port | **6535** (`ports.mcp`) |
+| Path | `POST /mcp` · `GET /health` |
+| Auth | Bearer required (`Bearer token required`) |
+
+Empty name throws `TypeError: mcp.tool(name): name is required`.
+
+## Outbound reference — `ai.mcpServer`
+
+| Option | Type | Required | Meaning |
+| ------ | ---- | -------- | ------- |
+| `url` | `string` | XOR `command` | Streamable HTTP endpoint |
+| `command` | `string` | XOR `url` | stdio executable (no shell string) |
+| `args` | `string[]` | no | Arguments for `command` |
+| `auth.bearer` | secret / name | no | Vault contract for Bearer |
+| `tools` | `string[]` | **yes** | Allowlist — never raw `tools/list` |
+
+| Method | Returns | Meaning |
+| ------ | ------- | ------- |
+| `server.tool(name)` | `{ name: "mcp:server/tool" }` | Capability ref for ask / agent / `fx.call` |
+
+### Declare errors
+
+| Message | Fix |
+| ------- | --- |
+| `ai.mcpServer: name is required` | Pass a non-empty server id |
+| `name "…" must not contain "/" or "__"` | Use a simple id (`github`, not `org/repo`) |
+| `tools allowlist is required` | Pass `tools: ["…"]` |
+| `declare exactly one of url or command` | Pick HTTP **or** stdio |
+| `tool "…" is not in the allowlist` | Add the name to `tools` before `.tool(...)` |
+
+## Ports
+
+| Port | Surface |
+| ---- | ------- |
+| **6530** | Backend HTTP |
+| **6535** | App MCP (Flows as tools) |
+| **6536** | Docs MCP (read-only) |
+
+Mnemonic: O·K·E = 6·5·3.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Bearer token required">
+  Clients must send `Authorization: Bearer …`. Missing or invalid Bearer is rejected before
+  tool dispatch.
+</Accordion>
+
+<Accordion title="Tool missing from Cursor / client list">
+  The Flow is not bound with `mcp.tool(…).gate(…)`, gates deny the identity, or the client
+  points at `:6530` instead of `:6535/mcp`.
+</Accordion>
+
+<Accordion title="Ungated mcp.tool fails at boot">
+  Deny-by-default posture: attach at least one gate. Public-style exposure still needs an
+  explicit gate policy you intend (there is no `.public()` on MCP triggers).
+</Accordion>
+
+<Accordion title="ai.mcpServer allowlist / transport errors">
+  See the declare-error table above. Runtime `ai.mcp: …` covers unknown server, non-allowlisted
+  tool, and unsupported HITL prompts from the remote.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Agents](/docs/elements/ai/agents) — MCP refs in tool bags
+- [Gate](/docs/elements/gate) — policies on `mcp.tool`
+- [Vault](/docs/elements/vault) — bearer secret contracts
+- [AI](/docs/elements/ai) — element overview
+- [Security](/docs/reference/security) — ports 6530 · 6533 · 6535 · 6536
+
 ## Next
 
 <Cards>
-  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
-  <Card
-    title="Flow Overview"
-    description="Explore Flows as the primary behavior primitive."
-    href="/docs/elements/flow"
-  />
+  <Card title="Agents" description="Run bounded agents that call MCP tools." href="/docs/elements/ai/agents" />
+  <Card title="AI" description="Models, prompts, and fx.ask." href="/docs/elements/ai" />
+  <Card title="Flow" description="Flows are the tools MCP exposes." href="/docs/elements/flow" />
 </Cards>

@@ -5,11 +5,9 @@ icon: "FingerprintPattern"
 source: "docs/spec/unified-theory.md"
 ---
 
-`passkey()` adds register and authenticate Flows for WebAuthn credentials (`oke_passkeys`).
-Options return a challenge plus a ceremony `sessionId`; register and authenticate verify
-`clientDataJSON` type · origin · challenge, `authenticatorData` rpId hash · UP · UV, and an
-ECDSA P-256 signature against the stored SPKI public key. Challenges expire in ≤5 minutes
-and are single-use.
+`passkey()` adds register and authenticate Flows for WebAuthn credentials
+(`oke_passkeys`). Options return a challenge plus a ceremony `sessionId`;
+register/authenticate verify client data, authenticator data, and ECDSA P-256.
 
 <Callout title="The one rule">
   Enable `gate.auth`, then `.plug(passkey())`. Registration needs a Bearer session; authenticate is
@@ -155,7 +153,7 @@ type, or rpId hash mismatch. Re-run authenticate options for a fresh challenge +
 
 - [Two-factor](/docs/plugins/two-factor) — TOTP step-up
 - [Gate](/docs/elements/gate) — `gate.auth`
-- [Client](/docs/reference/client) — calling `/auth` from the browser
+- [Client · Auth](/docs/client/auth) — calling `/auth` from the browser
 
 ## Next
 

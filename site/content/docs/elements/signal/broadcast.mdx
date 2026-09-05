@@ -59,14 +59,14 @@ export const purgeLocalCache = on(
 <Step>
 ### Emit from any Flow
 
-```typescript title="src/flows/catalog/update.ts"
+```typescript title="src/flows/skus/[sku]/update.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { cacheInvalidated } from "@/signals/cache";
 
-export const updateSku = on(
-  http.patch("/skus/:sku"),
-  flow("catalog.updateSku", {
+export const update = on(
+  http.patch(),
+  flow({
     in: z.object({ sku: z.string(), title: z.string().min(1) }),
     do: async ({ sku, title }, fx) => {
       // … persist the change …
@@ -278,14 +278,14 @@ exactly once with retries and a DLQ, declare a separate `signal.once` for that j
 | `fx.emit(signal, payload?)` | `emits` | Publish to every active subscriber |
 | `fx.emit(signal, payload, { key })` | `emits` | `key` is for `once` ordering — ignore for broadcast fan-out |
 
-```typescript title="src/flows/catalog/write.ts"
+```typescript title="src/flows/catalog/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { catalogChanged } from "@/signals/catalog";
 
-export const writeCatalog = on(
-  http.post("/catalog"),
-  flow("catalog.write", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ sku: z.string(), title: z.string().min(1) }),
     do: async ({ sku, title }, fx) => {
       // … write …

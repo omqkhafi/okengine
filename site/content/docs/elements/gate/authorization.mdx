@@ -52,10 +52,10 @@ import { member, notesWrite } from "@/core/gate";
 
 export const notesMutate = gate.all(member, notesWrite);
 
-export const createNote = on(
-  http.post("/notes").gate(notesMutate),
+export const create = on(
+  http.post().gate(notesMutate),
   // or: .gate(member, notesWrite)
-  flow("notes.create", {
+  flow({
     do: async ({ title }, fx) => fx.json.create({ id: fx.id(), title }),
   }),
 );
@@ -149,8 +149,8 @@ import { on, flow, http } from "okengine";
 import { consoleOp } from "@/core/gate";
 
 export const cleanup = on(
-  http.post("/ops/cleanup").gate(consoleOp),
-  flow("ops.cleanup", {
+  http.post().gate(consoleOp),
+  flow({
     plane: "operator",
     do: async (_, fx) => ({ operatorId: fx.operator.id }),
   }),

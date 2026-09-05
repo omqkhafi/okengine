@@ -85,8 +85,7 @@ The recipe does **not** declare a named compose volume. Persistence rides the im
 ## Production note
 
 For multi-replica apps, keep SQL on a shared Postgres — Clock CronStore and durable
-journal need one backend. See [Clock](/docs/elements/clock#what-the-runtime-guarantees) ·
-[Docker](/docs/deployment/docker#share-backing-services).
+journal need one backend. See [Clock](/docs/elements/clock#what-the-runtime-guarantees).
 
 Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exhaust
 `max_connections`. Do not also stack a managed provider's pooler on the same URL.

@@ -1,52 +1,264 @@
 ---
 title: "SMS"
-description: "Transactional SMS, one-time passwords (OTP), and regional telecom provider drivers (Taqnyat, Msegat, Twilio)."
+description: "SMS templates via channel.sms, transactional fx.send, and provider-managed OTP with fx.sendOtp / fx.verifyOtp."
 icon: "MessageSquare"
+source: "docs/spec/unified-theory.md"
 ---
 
-The SMS medium (`channel.sms`) delivers short text messages and OTP verification codes.
+SMS (`channel.sms`) delivers short text and provider-managed one-time codes. Pin an SMS driver
+(no default in any env), declare templates for app-owned messages, or call `fx.sendOtp` when the
+vendor owns the code.
 
-## What it is
+For developers verifying phones — choose raw Channel OTP vs the [`otp`](/docs/plugins/otp) plugin.
 
-The SMS channel integrates with global and regional providers (Taqnyat, Msegat, Unifonic, Twilio). It supports dedicated OTP generation and verification through `fx.sendOtp` and `fx.verifyOtp`.
+<Callout title="The one rule">
+  SMS is opt-in: set `drivers.channel.sms` (e.g. `"taqnyat"`) or boot has no SMS transport.
+  Provider OTP needs a Verify-capable driver (`taqnyat`); app-owned codes use templates +
+  `fx.deliverOtp` / the OTP plugin.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Send SMS code
+### Pin an SMS driver
 
-```typescript title="src/flows/auth/sms.ts"
-import { flow } from "okengine";
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
 
-export const sendPhoneCode = flow("auth.sendCode", {
-  do: async ({ phone }, fx) => {
-    await fx.sendOtp({
-      to: phone,
-      channel: "sms",
-      digits: 6,
-      ttl: "5m",
-    });
+export default defineConfig({
+  drivers: {
+    channel: {
+      sms: { prod: "taqnyat" },
+    },
   },
 });
 ```
+
+Set `TAQNYAT_BEARER_TOKEN` (or `TAQNYAT_TOKEN`) and `TAQNYAT_SENDER`.
+
+</Step>
+
+<Step>
+### Declare a template and send
+
+```typescript title="src/core/channel.ts"
+import { channel } from "okengine";
+import { z } from "zod";
+
+const sms = channel.sms({ sender: "ACME" });
+
+export const orderShippedSms = sms.template("order.shipped", {
+  locales: ["en"],
+  schema: z.object({ tracking: z.string() }),
+});
+```
+
+```typescript
+await fx.send(orderShippedSms, {
+  to: "+15551234567",
+  data: { tracking: "1Z999" },
+});
+```
+
+Add a catalog body (`text: "Shipped — track {{tracking}}"`) or accept the JSON fallback.
+
+</Step>
+
+<Step>
+### Or send a provider OTP
+
+```typescript
+await fx.sendOtp({
+  to: "+15551234567",
+  requestId: fx.id(),
+  lang: "en",
+});
+
+await fx.verifyOtp({
+  to: "+15551234567",
+  requestId, // same id
+  code: userEnteredCode,
+});
+```
+
+Effects record `sends: ["sms-otp"]`. Prefer [`otp({ mode: "provider" })`](/docs/plugins/otp) for
+`/auth/otp/*` routes.
 
 </Step>
 
 </Steps>
 
+## Progressive Patterns
+
+<Tabs items={["Template", "Provider OTP", "App OTP", "Plugin"]}>
+
+<Tab value="Template">
+
+Transactional SMS through the same `fx.send` path as email:
+
+```typescript
+const sms = channel.sms({ from: "ACME" });
+export const alertSms = sms.template("ops.alert", {
+  schema: z.object({ message: z.string() }),
+});
+
+await fx.send(alertSms, { to: phone, data: { message: "Disk 90%" } });
+```
+
+</Tab>
+
+<Tab value="Provider OTP">
+
+Vendor owns the code (Taqnyat Verify). Options:
+
+| Option      | Type            | Meaning                          |
+| ----------- | --------------- | -------------------------------- |
+| `to`        | `string`        | E.164 recipient                  |
+| `requestId` | `string`        | Correlation id (required again on verify) |
+| `lang`      | `"en"` \| `"ar"` | Message language               |
+| `note`      | `string`        | Optional note appended to SMS    |
+| `from`      | `string`        | Sender override                  |
+
+`verifyOtp` adds required `code`. Missing Channel →
+`fx.sendOtp needs a bound Channel — declare channel and set drivers.channel.sms (e.g. taqnyat)`.
+
+</Tab>
+
+<Tab value="App OTP">
+
+Your app generates the code; Channel fans out templates:
+
+```typescript
+await fx.deliverOtp({
+  channels: ["sms", "whatsapp", "email"],
+  templates: {
+    sms: "auth-otp-sms",
+    whatsapp: "auth-otp-whatsapp",
+    email: "auth-otp-email",
+  },
+  phone: "+15551234567",
+  email: "alice@example.com",
+  data: { otp: "482910" },
+  locale: "en",
+});
+```
+
+Capability: `sends: ["auth-otp"]`. Pass `only: "sms"` for a single-channel resend (no
+cross-medium failover).
+
+</Tab>
+
+<Tab value="Plugin">
+
+```typescript
+.plug(otp({ mode: "provider" }))
+// or
+.plug(otp({ mode: "app", channels: ["sms", "email"], exposeDevOtp: true }))
+```
+
+Full routes and modes: [OTP plugin](/docs/plugins/otp).
+
+</Tab>
+
+</Tabs>
+
+## Drivers
+
+| Driver id   | OTP Verify | Env |
+| ----------- | ---------- | --- |
+| `taqnyat`   | yes        | `TAQNYAT_BEARER_TOKEN` / `TAQNYAT_TOKEN` + `TAQNYAT_SENDER` |
+| `msegat`    | no         | `MSEGAT_USERNAME` / `MSEGAT_API_KEY` / `MSEGAT_SENDER` |
+| `unifonic`  | no         | `UNIFONIC_APPSID` |
+| `console`   | —          | Config id that opens **no** SMS driver |
+
+Boot errors (verbatim):
+
+```text
+oke boot: taqnyat channel needs TAQNYAT_BEARER_TOKEN
+oke boot: taqnyat channel needs TAQNYAT_SENDER
+oke boot: msegat channel needs MSEGAT_USERNAME / MSEGAT_API_KEY / MSEGAT_SENDER
+oke boot: unifonic channel needs UNIFONIC_APPSID
+```
+
+Provider OTP without a Verify driver:
+
+```text
+channel: SMS driver "…" does not support provider-managed OTP; use exposeDevOtp locally or set drivers.channel.sms to "taqnyat"
+```
+
+No SMS bound:
+
+```text
+channel: no SMS driver bound — bind drivers.channel.sms (e.g. taqnyat) to send provider OTP
+```
+
+## Options Reference
+
+### `channel.sms(options?)`
+
+Same medium options as email: `from` / `sender`.
+
+### `.template(name, options?)`
+
+`description` · `locales` · `schema` — bodies in the catalog (`text` is typical for SMS).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="fx.sendOtp / verifyOtp needs a bound Channel">
+  No Channel runtime, or SMS not configured. Declare templates/drivers and set
+  `drivers.channel.sms`.
+</Accordion>
+
+<Accordion title="channel: no SMS driver bound">
+  Config has no SMS id for this env (`CHANNEL_SMS_DEFAULTS` is empty). Pin `taqnyat` /
+  `msegat` / `unifonic`.
+</Accordion>
+
+<Accordion title="SMS driver does not support provider-managed OTP">
+  Only Taqnyat exposes `sendOtp` / `verifyOtp`. Switch driver or use app-mode OTP
+  (`fx.deliverOtp` / `otp({ mode: "app" })`).
+</Accordion>
+
+<Accordion title="channel: otp delivery has no viable channel">
+  `fx.deliverOtp` had no matching address for a declared medium (need `phone` for SMS /
+  WhatsApp, `email` for email).
+</Accordion>
+
+<Accordion title="channel: otp delivery failed on all channels">
+  Every medium in the failover list failed. Check driver credentials, suppression, and template
+  catalog entries.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [OTP plugin](/docs/plugins/otp) — `/auth/otp/*`
+- [WhatsApp](/docs/elements/channel/whatsapp) — medium for app-mode OTP failover
+- [Email](/docs/elements/channel/email) — email leg of `deliverOtp`
+- [Channel overview](/docs/elements/channel) — effects and drivers
+- [Environment variables](/docs/reference/environment-variables) — SMS boot binder
+
 ## Next
 
 <Cards>
   <Card
-    title="Push & WhatsApp"
-    description="Push notifications and WhatsApp messaging."
-    href="/docs/elements/channel/push"
+    title="WhatsApp"
+    description="WhatsApp Cloud and Taqnyat WhatsApp drivers."
+    href="/docs/elements/channel/whatsapp"
+  />
+  <Card
+    title="OTP Plugin"
+    description="Auth routes over provider or app OTP."
+    href="/docs/plugins/otp"
   />
   <Card
     title="Channel Overview"
-    description="Return to Channel overview."
+    description="fx.send, catalogs, and consent."
     href="/docs/elements/channel"
   />
 </Cards>

@@ -22,12 +22,11 @@ For developers building APIs on okengine — declare the route, attach gates, re
 <Step>
 ### Define the route
 
-```typescript title="src/flows/ping.ts"
+```typescript title="src/flows/main/ping.ts"
 import { on, flow, http } from "okengine";
 
 export const ping = on(
-  http.get("/ping"),
-  // Name is optional — auto-derived from the file path when omitted
+  http.get().public(),
   flow({
     do: () => ({ status: "ok" }),
   }),
@@ -56,10 +55,10 @@ Response:
 
 </Steps>
 
-<Callout title="Pathless routes">
-  Omit the path (`http.get()`) to stamp the URL from the file tree. Path params, query string, and
-  JSON body merge into one object validated by `in` — see [Path Conventions](#path-conventions)
-  and [Request Parsing](#request-parsing).
+<Callout title="Omit path and name">
+  Tree default: `http.get()` and `flow({ do })` — no path or name strings. The
+  file stamps both. Pass either only for
+  [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
 </Callout>
 
 ## Progressive Patterns
@@ -72,11 +71,11 @@ Explore HTTP flow patterns from minimal handlers to schema-validated, error-hand
 
 Return data directly with automatic JSON response enveloping and zero boilerplate:
 
-```typescript title="src/flows/health.ts"
+```typescript title="src/flows/main/health.ts"
 import { on, flow, http } from "okengine";
 
 export const health = on(
-  http.get("/health"),
+  http.get().public(),
   flow({
     do: () => ({ ok: true }),
   }),
@@ -93,9 +92,9 @@ Extract URL parameters and JSON body with runtime schema validation (`in`/`out`)
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const createNote = on(
-  http.post("/notes"),
-  flow("notes.create", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ title: z.string().min(1) }),
     out: z.object({ id: z.string(), title: z.string() }),
     do: async ({ title }, fx) => {
@@ -112,13 +111,13 @@ export const createNote = on(
 
 Declare typed domain errors and return clean failure responses using `fx.fail`:
 
-```typescript title="src/flows/orders/get.ts"
+```typescript title="src/flows/orders/[id]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const getOrder = on(
-  http.get("/orders/:id"),
-  flow("orders.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
     errors: { NotFound: z.object({ id: z.string() }) },
@@ -148,8 +147,8 @@ const admin = gate.scope("admin");
 const deleteRate = gate.rate({ max: 5, per: "1m", keyBy: "user" });
 
 export const deleteAccount = on(
-  http.delete("/account").gate(member, admin, deleteRate),
-  flow("account.delete", {
+  http.delete().gate(member, admin, deleteRate),
+  flow({
     do: async (_, fx) => {
       await fx.store(db).delete(users).where(eq(users.id, fx.auth.userId!));
       return fx.json.empty();
@@ -179,23 +178,25 @@ export const deleteAccount = on(
 
 ## Path Conventions
 
-Routes can use an explicit path or inherit one from the file tree.
+**Default — omit the path.** Tree files stamp the URL from disk (`http.get()`).
+Pass a path only for [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
 
-**Explicit path** — pass the URL template directly to the method:
+**Control — explicit path** — pass the URL template when the folder should not own the route:
 
 ```typescript
 http.get("/organizations/:orgId/members/:memberId");
 ```
 
-**Pathless** — omit the path so the compiler stamps the route from disk location:
+**Pathless** — omit so the compiler stamps from disk location:
 
 ```typescript title="src/flows/users/[id]/get.ts"
 import { on, flow, http } from "okengine";
 
-// Stamped automatically to GET /users/:id
-export default on(http.get(), flow({ do: async ({ id }, fx) => ({ id }) }));
+// Stamped automatically to GET /users/:id · flow users.get
+export const get = on(http.get(), flow({ do: async ({ id }) => ({ id }) }));
 ```
 
+Full file-tree rules: [Routing](/docs/elements/flow/routing).
 ## Request Parsing
 
 Before `flow()`, the HTTP engine merges request parts into one object checked against `in`:
@@ -205,15 +206,15 @@ Before `flow()`, the HTTP engine merges request parts into one object checked ag
 3. **JSON body** — object fields merged into the same root.
 4. **Headers & cookies** — bags under `headers` / `cookie` when `do` reads them (declare the same keys in `in`).
 
-```typescript title="src/flows/items/update.ts"
+```typescript title="src/flows/items/[id]/update.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, items } from "@/schema";
 
-export const updateItem = on(
-  http.patch("/items/:id"),
-  flow("items.update", {
+export const update = on(
+  http.patch(),
+  flow({
     // :id from the path merges with JSON body { title }
     in: z.object({
       id: z.string(),
@@ -234,9 +235,9 @@ Read request metadata by naming `headers` / `cookie` in `in` and destructuring t
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const createUpload = on(
-  http.post("/uploads"),
-  flow("uploads.create", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({
       name: z.string().min(1),
       headers: z.object({
@@ -261,7 +262,8 @@ export const createUpload = on(
 
 ## HTTP Methods
 
-Each verb binds with `on(http.<method>(path), flow(...))`:
+Each verb binds with `on(http.<method>(), flow({…}))`. Omit the path on tree
+files; pass one only for [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
 
 <Tabs items={["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY", "HEAD", "OPTIONS"]}>
 
@@ -269,15 +271,15 @@ Each verb binds with `on(http.<method>(path), flow(...))`:
 
 Fetch a resource or collection:
 
-```typescript title="src/flows/notes/get.ts"
+```typescript title="src/flows/notes/[id]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const getNote = on(
-  http.get("/notes/:id"),
-  flow("notes.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), title: z.string() }),
     errors: { NotFound: z.object({ id: z.string() }) },
@@ -302,9 +304,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { db, notes } from "@/schema";
 
-export const createNote = on(
-  http.post("/notes"),
-  flow("notes.create", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ title: z.string().min(1) }),
     out: z.object({ id: z.string(), title: z.string() }),
     do: async ({ title }, fx) => {
@@ -322,15 +324,15 @@ export const createNote = on(
 
 Replace an entire resource (idempotent full write):
 
-```typescript title="src/flows/notes/replace.ts"
+```typescript title="src/flows/notes/[id]/replace.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const replaceNote = on(
-  http.put("/notes/:id"),
-  flow("notes.replace", {
+export const replace = on(
+  http.put(),
+  flow({
     in: z.object({
       id: z.string(),
       title: z.string().min(1),
@@ -351,15 +353,15 @@ export const replaceNote = on(
 
 Apply a partial update (only declared fields change):
 
-```typescript title="src/flows/notes/update.ts"
+```typescript title="src/flows/notes/[id]/update.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const updateNote = on(
-  http.patch("/notes/:id"),
-  flow("notes.update", {
+export const update = on(
+  http.patch(),
+  flow({
     in: z.object({
       id: z.string(),
       title: z.string().min(1).optional(),
@@ -384,15 +386,15 @@ export const updateNote = on(
 
 Remove a resource. `fx.json.empty()` returns `204 No Content` with no body:
 
-```typescript title="src/flows/notes/remove.ts"
+```typescript title="src/flows/notes/[id]/remove.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const removeNote = on(
-  http.delete("/notes/:id"),
-  flow("notes.remove", {
+export const remove = on(
+  http.delete(),
+  flow({
     in: z.object({ id: z.string() }),
     do: async ({ id }, fx) => {
       await fx.store(db).delete(notes).where(eq(notes.id, id));
@@ -413,9 +415,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { db } from "@/schema";
 
-export const searchOrders = on(
-  http.query("/orders/search"),
-  flow("orders.search", {
+export const search = on(
+  http.query(),
+  flow({
     in: z.object({
       filters: z.array(z.string()),
       dateRange: z.object({ from: z.string(), to: z.string() }),
@@ -438,17 +440,18 @@ contract when you must support older stacks.
 
 <Tab value="HEAD">
 
-Probe existence / headers without returning a body:
+Probe existence / headers without returning a body. `head` is not a reserved
+leaf, so pass the path when the URL must match GET (`/notes/:id`):
 
-```typescript title="src/flows/notes/head.ts"
+```typescript title="src/flows/notes/[id]/head.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const headNote = on(
+export const head = on(
   http.head("/notes/:id"),
-  flow("notes.head", {
+  flow({
     in: z.object({ id: z.string() }),
     errors: { NotFound: z.object({ id: z.string() }) },
     do: async ({ id }, fx) => {
@@ -468,14 +471,15 @@ export const headNote = on(
 
 <Tab value="OPTIONS">
 
-Advertise allowed verbs and capabilities for a path:
+Advertise allowed verbs. Same idea — pass the collection path explicitly when
+the leaf name would otherwise add a segment:
 
 ```typescript title="src/flows/notes/options.ts"
 import { on, flow, http } from "okengine";
 
-export const notesOptions = on(
+export const options = on(
   http.options("/notes"),
-  flow("notes.options", {
+  flow({
     do: () => ({
       allow: ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY", "HEAD", "OPTIONS"],
     }),
@@ -623,7 +627,7 @@ export const notes = on(http.resource("/notes", notesResource.all()).gate(member
 Query-string filters use the resource list grammar; pagination cursors do **not**
 gate membership — a row enters or leaves the window when filters / RLS change.
 
-Wire events (consumed with `useLiveQuery` on the [typed client](/docs/reference/client)):
+Wire events (consumed with `useLiveQuery` on the [typed client](/docs/client/react)):
 
 | `kind`    | Meaning |
 | --------- | ------- |
@@ -648,10 +652,9 @@ do not fail the build.
   bind those Flows on individual triggers. To replace one verb, spread `.all()`
   and override that key — the other four stay:
 
-```typescript title="src/flows/notes/partial.ts"
-import { on, flow, http, store } from "okengine";
+```typescript title="src/flows/notes/list.ts"
+import { on, http, store } from "okengine";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { member } from "@/core/gate";
 import { db, notesTable } from "@/schema";
 
@@ -660,14 +663,24 @@ const notesResource = store.resource(db, notesTable, {
   out: z.object({ id: z.string(), title: z.string() }),
 });
 
-export const listNotes = on(http.get("/notes").gate(member), notesResource.list);
-export const getNote = on(http.get("/notes/:id").gate(member), notesResource.get);
+export const list = on(http.get().gate(member), notesResource.list);
+```
+
+```typescript title="src/flows/notes/[id]/get.ts"
+export const get = on(http.get().gate(member), notesResource.get);
+```
+
+Override one verb on a resource mount — path is required on `http.resource`:
+
+```typescript title="src/flows/notes/index.ts"
+import { on, flow, http } from "okengine";
+import { eq } from "drizzle-orm";
 
 export const notes = on(
   http
     .resource("/notes", {
       ...notesResource.all(),
-      remove: flow("notes.archive", {
+      remove: flow({
         in: z.object({ id: z.string() }),
         do: async ({ id }, fx) => {
           await fx
@@ -682,7 +695,6 @@ export const notes = on(
     .gate(member),
 );
 ```
-
 A handwritten bag works the same way — each value must be a `flow(…)`:
 
 ```typescript
@@ -878,7 +890,7 @@ A **410** `LiveResumeGap` (**OKE1014**) means that cursor is gone — drop it
 and replay the remaining tape (`autoResubscribe: true`).
 
 Resource live queries use `useLiveQuery` (snapshot + classified events), not
-`api.live`. See [Client](/docs/reference/client).
+`api.live`. See [Client · Live](/docs/client/live).
 
 </Accordion>
 
@@ -896,7 +908,7 @@ comes from `store.resource({ live: true })`, not `.live()`.
 import { gate } from "okengine";
 import { member } from "@/core/gate";
 
-http.post("/documents").gate(
+http.post().gate(
   member,
   gate.scope("editor"),
   gate.rate({ max: 100, per: "1m", keyBy: "user" }),
@@ -906,9 +918,8 @@ http.post("/documents").gate(
 **Public** — explicitly marks the endpoint as open without authentication:
 
 ```typescript
-http.get("/health").public();
+http.get().public();
 ```
-
 ## Response Envelopes
 
 Every HTTP flow returns the same envelope shape. You choose status and optional `meta` — not a
@@ -1038,7 +1049,7 @@ Standard status code mappings:
 
 - [Store](/docs/elements/store) — `store.resource`, list query grammar, SQL facet
 - [Signal · Live](/docs/elements/signal/live) — `signal.live` tapes
-- [Client](/docs/reference/client) — `api.live`, `useLive`, `useLiveQuery`
+- [Client](/docs/client/live) — `api.live`, `useLive`, `useLiveQuery`
 - [fx](/docs/reference/fx) — `fx.live`, `fx.json.stream`, `fx.json.create`
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers
 - [Errors](/docs/reference/errors) — OKE1011 · OKE1013 · OKE1014

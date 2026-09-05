@@ -137,13 +137,13 @@ Per-tenant expansion and duration rules: [Schedules](/docs/elements/clock/schedu
 
 `fx.clock.sleep(label, duration)` — two arguments. Needs `durable: true` to park across restarts:
 
-```typescript title="src/flows/trials/reminder.ts"
+```typescript title="src/flows/trials/start.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const trialReminder = on(
-  http.post("/trials/start"),
-  flow("trials.reminder", {
+export const start = on(
+  http.post(),
+  flow({
     durable: true,
     in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {

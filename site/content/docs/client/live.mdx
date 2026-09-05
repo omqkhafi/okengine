@@ -1,0 +1,234 @@
+---
+title: "Live"
+description: "api.live SSE subscribe, exposure matching, resume gaps, and live resource queries."
+icon: "Activity"
+source: "docs/spec/unified-theory.md"
+---
+
+`signal.live` is HTTP SSE. Expose with `.live(signal)` on GET (or `http.live(signal)` for
+`GET /_oke/live/{name}`), then subscribe with a callback. `for await` stays on the server.
+
+For developers streaming shipment status, checkout progress, or live inbox rows into a browser or
+ops console.
+
+<Callout title="The one rule">
+  Subscribe with a callback and an unsubscribe function. Reconnects send `Last-Event-ID` from the
+  last `id:` the client actually received. A **410** `LiveResumeGap` (**OKE1014**) means that
+  cursor is gone.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Subscribe to a shipment feed
+
+```typescript
+import { shipmentStatus } from "@/signals/orders";
+
+const stop = api.live(
+  shipmentStatus,
+  { orderId: "ord_9c2e" },
+  {
+    onEvent: (event) => {
+      // { orderId, status: "packed" | "shipped" | "delivered", eta? }
+      updateTrackingCard(event.status, event.eta);
+    },
+    onError: (err) => {
+      showTrackingBanner(err);
+    },
+    autoResubscribe: false, // default — true reopens after a drop (500ms…30s backoff)
+  },
+);
+```
+
+</Step>
+
+<Step>
+### Clean up when the shopper leaves the page
+
+```typescript
+stop(); // useEffect cleanup / process exit
+```
+
+`api.orders.events({ orderId }, { onEvent })` is the same shape on the exposing Flow.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Callback", "Flow-shaped", "autoResubscribe", "Live query"]}>
+
+<Tab value="Callback">
+
+```typescript
+const stop = api.live(shipmentStatus, { orderId: "ord_9c2e" }, {
+  onEvent: (event) => updateTrackingCard(event.status, event.eta),
+});
+stop();
+```
+
+</Tab>
+
+<Tab value="Flow-shaped">
+
+When the route is the exposing Flow itself:
+
+```typescript
+const stop = api.orders.events(
+  { orderId: "ord_9c2e" },
+  {
+    onEvent: (event) => {
+      updateTrackingCard(event.status, event.eta);
+    },
+  },
+);
+stop();
+```
+
+</Tab>
+
+<Tab value="autoResubscribe">
+
+```typescript
+const stop = api.live(
+  shipmentStatus,
+  { orderId: "ord_9c2e" },
+  {
+    onEvent: (event) => updateTrackingCard(event.status, event.eta),
+    onError: (err) => showTrackingBanner(err),
+    autoResubscribe: true, // reopen after a drop — 500ms…30s backoff
+  },
+);
+```
+
+Reconnects send `Last-Event-ID` from the last `id:` the client actually received.
+
+</Tab>
+
+<Tab value="Live query">
+
+When a resource opts into `live: true`, the compiler mounts `GET <path>/live` next to the CRUD
+verbs. That route streams **classified** row events — not a shared tape — so each subscriber only
+sees rows that still pass their RLS stamp + list filters (e.g. open tickets for this tenant).
+
+Prefer [React · useLiveQuery](/docs/client/react) for UI. Core transport helpers live on
+`okengine/client`.
+
+</Tab>
+
+</Tabs>
+
+## Live handlers
+
+| Option            | Type                      | Default | Meaning                                      |
+| ----------------- | ------------------------- | ------- | -------------------------------------------- |
+| `onEvent`         | `(event) => void`         | —       | Required — each SSE payload                  |
+| `onError`         | `(err) => void`           | —       | 4xx, envelope, network drop                  |
+| `onOpen`          | `() => void`              | —       | Stream connected                             |
+| `autoResubscribe` | `boolean`                 | `false` | Reopen after drop (500ms…30s backoff)        |
+| `via`             | `"unit.flow"` string      | —       | Disambiguate when two exposures match equally |
+
+## Exposure matching
+
+The client picks the unique exposure whose `matchKey` fields are a subset of the input, preferring
+the largest match (`{ orderId }` beats firehose). A tie needs `via: "unit.flow"`.
+
+```typescript
+api.live(shipmentStatus, { orderId: "ord_9c2e" }, {
+  onEvent: updateTrackingCard,
+  via: "orders.events",
+});
+```
+
+Or call the exposing Flow directly: `api.orders.events(input, { onEvent })`.
+
+## Resume and LiveResumeGap
+
+Reconnects send `Last-Event-ID` from the last `id:` the client actually received.
+
+A **410** `LiveResumeGap` (**OKE1014**) means that cursor is gone — `onError` fires, the cursor is
+dropped, and `autoResubscribe` replays the remaining tape after backoff.
+
+Server exposure: [Signal · Live](/docs/elements/signal/live) and
+[HTTP · Live Streams](/docs/elements/flow/http#live-streams).
+
+## Live queries (`store.resource({ live: true })`)
+
+| `kind`    | Meaning                                                        |
+| --------- | -------------------------------------------------------------- |
+| `upsert`  | Row visible under stamp + query — merge/replace by primary key |
+| `revoked` | Row left visibility (`reason: "rls"` \| `"query"`) — remove    |
+| `delete`  | Row deleted in CDC — remove                                    |
+
+Every `mutate` from `useLiveQuery` generates a client UUID sent as the `X-Oke-Mutation-Id`
+header — the server echoes it onto that write's CDC events, so:
+
+- Your own late SSE echoes never double-apply (pending-set dedupe).
+- Reconnects replay-guard by event `seq` (`isReplayedEvent`).
+- Manual `refetch()` re-runs only the HTTP list read; reconnects always do a full
+  subscribe-protocol cycle (new snapshot + replay).
+
+| State            | Meaning                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `isLoading`      | Waiting for the first snapshot — no data yet                        |
+| `isConnected`    | SSE stream is open                                                  |
+| `isReconnecting` | Stream dropped after a successful load; reconnect backoff in flight |
+
+**Consequence:** optimistic patches roll back automatically when the Flow returns `error !== null`.
+Server CDC / the successful response clear the override so the next upsert is authoritative.
+
+Full React wiring: [React](/docs/client/react).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="api.live throws Multiple live exposures">
+  Two routes share the same match shape. Pass `via: "unit.flow"` or call the exposing flow
+  (`api.orders.events(input, { onEvent })`).
+</Accordion>
+
+<Accordion title="onError sees LiveResumeGap / HTTP 410">
+  The last `id:` is not on the server tape. The client drops the cursor. With
+  `autoResubscribe: true` the next request omits `Last-Event-ID` and replays what remains.
+</Accordion>
+
+<Accordion title="No events after subscribe">
+  Confirm the server exposed the signal (`.live(signal)` on GET or `http.live(signal)`), the
+  `matchKey` fields are present in `input`, and gates allow the identity. See
+  [Signal · Live](/docs/elements/signal/live).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [React](/docs/client/react) — `useLive`, `useLiveQuery`
+- [Calling](/docs/client/calling) — typed proxy and envelopes
+- [Signal · Live](/docs/elements/signal/live) — tape, resume, OKE1014
+- [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — server exposure
+- [Store](/docs/elements/store) — `live: true` on resources
+
+## Next
+
+<Cards>
+  <Card
+    title="React"
+    description="useLive and useLiveQuery hooks."
+    href="/docs/client/react"
+  />
+  <Card
+    title="Signal · Live"
+    description="Server tape, Last-Event-ID, resume gaps."
+    href="/docs/elements/signal/live"
+  />
+  <Card
+    title="Calling"
+    description="createClient and REST vs RPC."
+    href="/docs/client/calling"
+  />
+</Cards>

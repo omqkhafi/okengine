@@ -61,9 +61,9 @@ import { on, flow, http } from "okengine";
 import { member } from "@/core/gate";
 import { db, tasks } from "@/schema";
 
-export const listTasks = on(
-  http.get("/tasks").gate(member),
-  flow("tasks.list", {
+export const list = on(
+  http.get().gate(member),
+  flow({
     do: async (_, fx) => fx.store(db).select().from(tasks),
   }),
 );

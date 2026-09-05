@@ -1,33 +1,72 @@
 ---
 title: "fx"
-description: "The complete fx surface — every call a flow can make, its signature, and the effect it records."
+description: "The complete fx surface — every call a Flow can make, its signature, and the effect it records."
 icon: "Braces"
+source: "docs/spec/unified-theory.md"
 ---
 
-`fx` is the second argument of every `do` — the single door to the world. This page is the whole surface; each entry notes the **effect it records**, which is what feeds the Manifest, caching, and capability checks.
+`fx` is the second argument of every `do` — the single door to the world. This page is the
+whole surface; each entry notes the **effect it records**, which feeds the Manifest, caching,
+and capability checks.
 
-```typescript
-flow("orders.example", {
-  do: async (input, fx) => {
-    // everything below, on this one object
-  },
-});
-```
-
-<Callout title="Extracted helpers">
-  Type a helper's `fx` parameter as `Fx` (`import type {Fx} from "okengine"`). A narrower structural
-  type will not match `store()` overloads. See [Flow](/docs/elements/flow).
+<Callout title="The one rule">
+  All world access goes through `fx`. No `node:` I/O, no raw `fetch` for side effects, no
+  `Date.now()` — clocks, stores, channels, vault, and AI only through this object.
 </Callout>
 
-## What the Effects Ledger Powers
+## Smallest Example
 
-Because all side-effects are structured data rather than invisible network calls, the engine automatically derives critical runtime behaviors:
+<Steps>
 
-- **Automatic Cache Invalidation:** The engine knows which tables a flow writes to and automatically invalidates corresponding cached reads.
-- **CDC & Live Queries:** Subscriptions observe `writes` on the store and broadcast real-time updates over SSE without manual event pumps.
-- **Least-Privilege Security:** The compiler generates exact capability matrices for tokens and API keys based on the declared effects.
-- **Deterministic Testing:** Clocks, stores, and channels are mocked deterministically without monkey-patching globals.
-- **Native Observability:** Every run records a wide event in `fx.runs`, eliminating the need for fragmented metric counter libraries.
+<Step>
+### Use `fx` inside `do`
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { db, notes } from "@/schema";
+
+export const create = on(
+  http.post(),
+  flow({
+    in: z.object({ title: z.string().min(1) }),
+    do: async ({ title }, fx) => {
+      const id = fx.id();
+      await fx.store(db).insert(notes).values({ id, title });
+      return fx.json.create({ id, title });
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Type extracted helpers as `Fx`
+
+```typescript
+import type { Fx } from "okengine";
+
+async function loadNote(id: string, fx: Fx) {
+  return fx.store(db).findById(notes, id);
+}
+```
+
+A narrower structural type will not match `store()` overloads. See [Flow](/docs/elements/flow).
+
+</Step>
+
+</Steps>
+
+## What the effects ledger powers
+
+| Derived behavior | From |
+| ---------------- | ---- |
+| Cache invalidation | Inferred / ledgered `reads` · `writes` |
+| Live queries / CDC | Store `writes` observed as row events |
+| Least-privilege tokens | Effect matrices on Flows |
+| Deterministic tests | Injectable clock · store · channel |
+| Runs observability | Wide events per invocation (`fx.runs`) |
 
 ## Stores
 
@@ -245,54 +284,9 @@ Returning a plain value instead answers 200 with `{ data: value, error: null }` 
 | `fx.locale`                                | Active locale (`Accept-Language` matched to `i18n.locales`) |
 | `fx.id()`                                  | OKID — 21-char native id from `okengine/okid`               |
 
-See [OKID](/docs/reference/okid) for generation options and the entropy model.
-
-`fx.t` uses [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
-(FormatJS): `{name}`, plurals, `select` / `selectordinal`, rich-text tags.
-Full syntax and escaping: [i18n · ICU](/docs/reference/i18n#icu-messageformat).
-
-Register catalogs with `defineLocale` before boot (nested trees → dot keys). Augment
-`Register` so keys autocomplete and typos fail at compile time:
-
-```typescript
-import { defineLocale, defineMessages, type MessagesFor } from "okengine/i18n";
-
-export const en = defineMessages({
-  greeting: "Hello, {name}",
-  items: "{count, plural, one {# item} other {# items}}",
-  place: "You finished {place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}!",
-  status: "{status, select, online {Online} offline {Offline} other {Unknown}}",
-  cta: "Read <docs>the docs</docs>",
-});
-defineLocale("en", en);
-
-defineLocale("ar", {
-  greeting: "مرحباً، {name}",
-  items: "{count, plural, zero {لا عناصر} one {عنصر واحد} other {# عناصر}}",
-  place: "أنهيت في المرتبة {place, selectordinal, other {#}}!",
-  status: "{status, select, online {متصل} offline {غير متصل} other {غير معروف}}",
-  cta: "اقرأ <docs>التوثيق</docs>",
-} satisfies MessagesFor<typeof en>);
-
-declare module "okengine" {
-  interface Register {
-    messages: typeof en;
-  }
-}
-```
-
-```typescript
-fx.t("greeting", { name: input.name });
-fx.t("items", { count: 3 });
-fx.t("cta", { docs: (chunks) => `<a href="/docs">${chunks.join("")}</a>` });
-```
-
-Supported locales and the fallback come from `oke.config.ts` `i18n`.
-`create-oke` scaffolds English and Arabic locale modules already wired this way.
-
-Built-in `errors.*` / `oke.*` catalogs localize `fx.fail` messages and thrown
-`OkeError` cause/fix the same way — full i18n guide:
-[i18n](/docs/reference/i18n), [Errors](/docs/reference/errors).
+Catalogs, ICU syntax, and `Register` augmentation live on [i18n](/docs/reference/i18n).
+Id options: [OKID](/docs/reference/okid). Localized `fx.fail` / `OkeError` catalogs:
+[Errors](/docs/reference/errors).
 
 ## Principals
 
@@ -315,9 +309,58 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
   export for existing Grafana/Datadog stacks is additive and never required.
 </Callout>
 
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="OKE1001–1007 undeclared effect">
+  An explicit `effects` block drifted from what `do` touches. Add the missing
+  ledger entry, or drop the hand-written block so inference covers the Flow —
+  see [Errors](/docs/reference/errors).
+</Accordion>
+
+<Accordion title="OKE1042 orphan emit">
+  `fx.emit` with zero subscribers and `optional: false`. Add `on(signal, …)` or
+  declare the signal `optional: true`.
+</Accordion>
+
+<Accordion title="OKE1043 signal schema">
+  Emit payload failed the signal's `schema`. Pass a matching payload or remove
+  the schema.
+</Accordion>
+
+<Accordion title="Cross-signal fx.live / fx.deadLetters">
+  Reading another signal's tape throws **OKE1001**. Declare
+  `effects.reads: ["signal:<name>"]` for that name.
+</Accordion>
+
+<Accordion title="Helper fx type errors on store()">
+  Type the parameter as `Fx` from `okengine`, not a hand-rolled structural type.
+</Accordion>
+
+</Accordions>
+
 ## Learn more
 
 - [Flow](/docs/elements/flow) — why `fx` is the only door
 - [Channel](/docs/elements/channel) — `fx.send`, consent, locale chain, `{{field}}` catalogs
+- [i18n](/docs/reference/i18n) — `fx.t`, catalogs, locale matching
 - [Errors](/docs/reference/errors) — what `fx.fail` produces
 - [Configuration](/docs/reference/configuration) — drivers and the `i18n` block
+- [OKID](/docs/reference/okid) — `fx.id()` options
+
+## Next
+
+<Cards>
+  <Card title="Flow" description="Triggers, effects, and durability." href="/docs/elements/flow" />
+  <Card
+    title="Errors"
+    description="OKE codes and failure values."
+    href="/docs/reference/errors"
+  />
+  <Card
+    title="Client"
+    description="Call Flows with the same envelope."
+    href="/docs/client"
+  />
+</Cards>

@@ -1,14 +1,54 @@
 ---
 title: "Environment Variables"
-description: "Every environment variable OKE reads — connection URLs, driver overrides, secrets, and CLI flags, grouped by what they configure."
-icon: "Terminal"
+description: "Every environment variable OKE reads — connection URLs, driver overrides, secrets, and CLI flags."
+icon: "Variable"
+source: "docs/spec/unified-theory.md"
 ---
 
-OKE reads environment variables at boot for connection detail and secrets — never for behavior you could declare in `oke.config.ts`. Under `oke dev`, Compose writes these into `.env.local`; this page is the full map.
+OKE reads environment variables at boot for connection detail and secrets — never for
+behavior you could declare in `oke.config.ts`. Under `oke dev`, Compose writes these
+into `.env.local`; this page is the full map.
 
-<Callout title="Precedence">
-  For anything with both an `OKE_*` variable and a conventional one (like `DATABASE_URL`), the
-  conventional variable wins first, then the `OKE_*` form, then the built-in default.
+<Callout title="The one rule">
+  Put drivers, images, and locale lists in `oke.config.ts`. Use env vars for URLs,
+  credentials, and runtime posture the host injects — not for inventing new behavior.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Let Compose write the map
+
+```bash
+oke dev
+```
+
+Compose fills `.env.local` with `DATABASE_URL`, Redis, S3, and vault keys for the
+pinned images.
+
+</Step>
+
+<Step>
+### Override one URL when needed
+
+```bash
+export DATABASE_URL=postgres://user:pass@db:5432/oke
+```
+
+Conventional names win over `OKE_*` aliases, then built-in defaults.
+
+</Step>
+
+</Steps>
+
+## Precedence
+
+<Callout title="Resolution order">
+  For anything with both an `OKE_*` variable and a conventional one (like
+  `DATABASE_URL`), the conventional variable wins first, then the `OKE_*` form,
+  then the built-in default.
 </Callout>
 
 ## SQL store
@@ -101,10 +141,11 @@ Read when `drivers.channel.sms` resolves to that driver id (`console` opens noth
 WhatsApp (`wa-cloud`) and push (`webpush` / `fcm`) are not opened from env at
 boot — pass them on `BootOptions.channel.drivers` with their open options.
 
-## Live test gates (opt-in)
+## Live test gates (opt-in, contributors)
 
-Provider-quota-burning live suites are double-gated: the medium flag **plus** that
-provider's real credentials — credentials alone never send.
+Provider-quota-burning live suites in the okengine repo are double-gated: the
+medium flag **plus** that provider's real credentials — credentials alone never
+send. App projects can ignore these.
 
 | Variable         | Used for                                                  |
 | ---------------- | --------------------------------------------------------- |
@@ -145,8 +186,43 @@ Console operator rows are **not** stored in `.oke/console.sqlite`. With `DATABAS
 `OKE_STORE_SQL_URL`) they live in Postgres schema `oke_console`. Without a Postgres URL,
 Console uses PGlite under `.oke/console-pg` for local reopen durability.
 
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Compose did not write .env.local">
+  Run `oke dev` (not a bare `bun` entry) so Compose posture sets `OKE_DOCKER=1`
+  and writes connection URLs. Confirm `images` pins exist in
+  [Configuration](/docs/reference/configuration).
+</Accordion>
+
+<Accordion title="Vault sealed / missing master key">
+  Built-in vault needs `OKE_VAULT_MASTER_KEY` (or `oke vault unseal`). See
+  [Vault](/docs/elements/vault).
+</Accordion>
+
+<Accordion title="Console operator store missing">
+  Operator rows need `DATABASE_URL` or `OKE_STORE_SQL_URL` (schema `oke_console`).
+  Without Postgres, Console uses PGlite under `.oke/console-pg`.
+</Accordion>
+
+</Accordions>
+
 ## Learn more
 
 - [Configuration](/docs/reference/configuration) — the declarative side of the same knobs
 - [Vault](/docs/elements/vault) — how `OKE_VAULT_*` gets minted on first boot
-- [CLI Reference](/docs/reference/cli) — which commands write these for you
+- [CLI](/docs/reference/cli) — which commands write these for you
+- [Security](/docs/reference/security) — `OKE_CONSOLE_SECRET`
+
+## Next
+
+<Cards>
+  <Card
+    title="Configuration"
+    description="Drivers and images in oke.config.ts."
+    href="/docs/reference/configuration"
+  />
+  <Card title="CLI" description="oke dev writes the env map." href="/docs/reference/cli" />
+  <Card title="Vault" description="Master key and managed providers." href="/docs/elements/vault" />
+</Cards>

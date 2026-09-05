@@ -1,41 +1,273 @@
 ---
 title: "Key Rotation"
-description: "Zero-downtime multi-version secret rollover, graceful deprecation, and automated cryptographic key rotation."
+description: "Rotate secret versions under a fresh data key, rewrap the master key, and seal or unseal the builtin vault."
 icon: "RefreshCw"
+source: "docs/spec/unified-theory.md"
 ---
 
-Key Rotation (`vault.rotation`) ensures secrets can be swapped without dropping active requests or invalidating sessions.
+Key rotation keeps credentials and encryption keys moving without dropping the app. On the builtin
+`vault` driver you rotate a **secret version** (fresh data key) or the **master key** (KEK rewrap).
+Contract `rotate: "90d"` is a Console cadence hint — it does not rotate by itself.
 
-## What it is
+For operators and Flows that must cut over keys safely — prefer CLI for master material; use
+`fx.vault.rotate` for path versions inside privileged Flows.
 
-When rotating API keys or JWT signing secrets, Vault allows defining active and previous key versions. Signatures verified with the previous key succeed while all new tokens are signed with the active key.
+<Callout title="The one rule">
+  Never pass master keys as CLI argv in shared shells — they land in history. Prefer
+  `oke vault unseal --key -`, the env `OKE_VAULT_MASTER_KEY`, or the hidden prompt.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Rotate secret via CLI
+### Initialize and set a secret (builtin driver)
 
 ```bash
-oke vault rotate stripe.secretKey --value sk_live_new_key
+# drivers.vault = "vault" — SQL-backed AES-256-GCM
+oke vault init          # prints master key once — store out of band
+export OKE_VAULT_MASTER_KEY=…   # or --key - from stdin
+
+oke vault set STRIPE_KEY
+# prompts for value, or: oke vault set STRIPE_KEY sk_live_…
+```
+
+</Step>
+
+<Step>
+### Rotate to a new version
+
+```bash
+oke vault rotate STRIPE_KEY sk_live_new_key
+# → oke vault: rotated STRIPE_KEY → v2 (fresh data key)
+```
+
+Omit the value to re-encrypt the current cleartext under a new data key (version bumps, readers
+still see the same string until you change it).
+
+</Step>
+
+<Step>
+### Confirm status
+
+```bash
+oke vault status
+# initialized, unsealed, kek version, secret count
 ```
 
 </Step>
 
 </Steps>
 
+## Progressive Patterns
+
+From CLI path rotate to Flow mutations, cadence hints, and master rewrap:
+
+<Tabs items={["CLI rotate", "fx.vault.rotate", "Cadence", "Master"]}>
+
+<Tab value="CLI rotate">
+
+```bash
+oke vault rotate prod/api/stripe sk_live_new
+oke vault rotate prod/api/stripe          # same cleartext, fresh DEK
+```
+
+Needs an unsealed builtin backend. Missing path:
+
+```text
+oke vault: no such secret: prod/api/stripe
+```
+
+</Tab>
+
+<Tab value="fx.vault.rotate">
+
+Privileged Flow — requires `drivers.vault = "vault"` (bound adapter):
+
+```typescript title="src/flows/ops/rotate-stripe.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { gate } from "okengine";
+
+const operator = gate.policy("operator", ({ operator: op }) => !!op);
+
+export const rotateStripe = on(
+  http.post().gate(operator),
+  flow({
+    plane: "operator",
+    in: z.object({ value: z.string().min(1) }),
+    effects: { secrets: ["STRIPE_KEY"] },
+    do: async ({ value }, fx) => {
+      const result = await fx.vault.rotate("STRIPE_KEY", value);
+      return { path: result.path, version: result.version };
+    },
+  }),
+);
+```
+
+`fx.vault.set` writes a new version without forcing a fresh DEK policy the same way; prefer
+`rotate` when retiring the previous data key is the point.
+
+Dry-run refuses both (`DryRunWriteIsolationError`).
+
+</Tab>
+
+<Tab value="Cadence">
+
+Declare intent for Console posture — operators still run rotate:
+
+```typescript
+export const stripeKey = vault.secret("STRIPE_KEY", {
+  description: "Stripe secret API key",
+  rotate: "90d",
+});
+```
+
+Omit or `"never"` when the secret must not rotate on a schedule.
+
+</Tab>
+
+<Tab value="Master">
+
+Rewrap every DEK under a new KEK generation:
+
+```bash
+oke vault rotate-master
+# prints the new master key once — store it, then update OKE_VAULT_MASTER_KEY
+
+# Resume an interrupted rewrap:
+oke vault rotate-master --new-key -
+```
+
+Overlapping batches surface `VaultRotateBusy`. Console rotate-master while sealed → `VaultSealed`.
+
+</Tab>
+
+</Tabs>
+
+## Version physics
+
+<VaultRotate />
+
+Builtin storage encrypts each version with its own data key (DEK), wrapped by a KEK derived from
+the master key:
+
+| Operation              | What changes                         | Readers see                          |
+| ---------------------- | ------------------------------------ | ------------------------------------ |
+| `set` / `rotate` + value | New version + (rotate) fresh DEK   | New cleartext on next `get`          |
+| `rotate` without value | New version + fresh DEK            | Same cleartext                       |
+| `rotate-master`        | New KEK; DEKs re-wrapped           | Same cleartexts; new master required |
+| `delete`               | Crypto-shred path                  | Subsequent `get` misses              |
+
+Paths are slash-separated with no leading slash (`prod/api/stripe`). Invalid paths throw
+`VaultError` `INVALID_PATH`.
+
+**Consequence:** secret access is not journaled — durable Flow replay re-reads live vault state
+after a rotate instead of replaying a stale credential from the journal.
+
+## Seal & unseal
+
+| Command / state        | Meaning                                                    |
+| ---------------------- | ---------------------------------------------------------- |
+| `oke vault init`       | Create backend state; print master key **once**            |
+| `oke vault seal`       | Drop in-memory master; reads fail with `SEALED`            |
+| `oke vault unseal`     | Restore master from `--key` / env / prompt                 |
+| `oke vault status`     | `initialized`, sealed flag, `kekVersion`, `secretCount`    |
+
+```bash
+oke vault unseal --key -          # read base64 master from stdin
+oke vault status --json
+```
+
+## CLI reference
+
+Env / dotenv bag loop:
+
+| Command                    | Purpose                          |
+| -------------------------- | -------------------------------- |
+| `oke vault set <NAME> [value]` | Write / overwrite a name     |
+| `oke vault list`           | List names (never values)        |
+| `oke vault import <file>`  | Bulk import                      |
+| `oke vault key rotate`     | Env-loop key helper              |
+
+Builtin encrypted store:
+
+| Command                         | Purpose                                      |
+| ------------------------------- | -------------------------------------------- |
+| `oke vault init`                | First-time initialize                        |
+| `oke vault status [--json]`     | Seal / KEK / counts                          |
+| `oke vault seal` / `unseal`     | Master lifecycle                             |
+| `oke vault rotate <path> [value]` | Version + fresh DEK                        |
+| `oke vault rotate-master`       | KEK rewrap                                   |
+| `oke vault audit` …             | Audit trail / verify / purge                 |
+| `oke vault purge-expired`       | Drop expired rows                            |
+| `oke vault backup` / `restore`  | File snapshot                                |
+
+`--url` overrides the SQL URL (`DATABASE_URL` / `OKE_STORE_SQL_URL`).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="oke vault: no such secret">
+  Rotate/get targeted a path that was never set. `oke vault list` (or Console) for live paths;
+  remember per-tenant storage uses `{tenantId}/{name}`.
+</Accordion>
+
+<Accordion title="VaultSealed">
+  Process holds no master key. Export `OKE_VAULT_MASTER_KEY` or `oke vault unseal` before
+  rotate-master / reads that need the adapter.
+</Accordion>
+
+<Accordion title="VaultRotateBusy">
+  Another master-rotation lease or batch is in flight. Wait, or resume with
+  `oke vault rotate-master --new-key` (stdin `-` preferred).
+</Accordion>
+
+<Accordion title="VaultUnsupported / needs drivers.vault = vault">
+  Console or `fx.vault.rotate` hit a non-builtin bag (`env` / `memory` / `managed`). Pin
+  `drivers.vault` to `"vault"` and ensure SQL is available.
+</Accordion>
+
+<Accordion title="fx.vault.rotate needs a bound Vault backend">
+  Same as above — mutations need the encrypted adapter. `fx.vault.get` alone works on any driver.
+</Accordion>
+
+<Accordion title="DryRunWriteIsolationError on set / rotate">
+  Dry-run refuses vault writes so a live secret is never mutated. Use a real run for rotation.
+</Accordion>
+
+<Accordion title="VaultError EXPIRED">
+  A version’s absolute expiry passed on the builtin adapter. Rotate or set a new value; purge
+  expired rows with `oke vault purge-expired` when cleaning storage.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Secrets](/docs/elements/vault/secrets) — contracts and `fx.vault.get`
+- [Vault overview](/docs/elements/vault) — drivers and resolution
+- [Errors](/docs/reference/errors) — `VaultSealed` · `VaultRotateBusy` · `VaultUnsupported`
+- [Environment variables](/docs/reference/environment-variables) — `OKE_VAULT_MASTER_KEY`
+
 ## Next
 
 <Cards>
   <Card
     title="Channel Element"
-    description="Send emails, SMS, push notifications, and WhatsApp."
+    description="Send email and other human reach through templates."
     href="/docs/elements/channel"
   />
   <Card
+    title="Secrets"
+    description="Declare contracts readers will rotate."
+    href="/docs/elements/vault/secrets"
+  />
+  <Card
     title="Vault Overview"
-    description="Return to Vault overview."
+    description="Resolution chain, Redacted, and drivers."
     href="/docs/elements/vault"
   />
 </Cards>

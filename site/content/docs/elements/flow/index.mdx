@@ -28,8 +28,7 @@ For developers writing backend work on okengine — declare the contract, keep `
 import { on, flow, http } from "okengine";
 
 export const health = on(
-  http.get("/health").public(),
-  // Name is optional — auto-derived from the file path when omitted
+  http.get().public(),
   flow({
     do: () => ({ ok: true }),
   }),
@@ -58,11 +57,17 @@ Response:
 
 </Steps>
 
-<Callout title="Call-only Flows">
-  A Flow with no trigger — just `flow("payments.charge", { … })` — is internal. Nothing outside
-  your code can start it. Other Flows invoke it with `fx.call(flowRef, input)`.
+<Callout title="Omit path and name">
+  Tree default: `http.get()` + `flow({ do })` — no path or name strings. Pass
+  either only for
+  [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
 </Callout>
 
+<Callout title="Call-only Flows">
+  A Flow with no trigger — just `flow({ … })` or `flow("payments.charge", { … })` —
+  is internal. Nothing outside your code can start it. Other Flows invoke it with
+  `fx.call(flowRef, input)`. Pass a name when you want a stable `fx.call` target.
+</Callout>
 ## Progressive Patterns
 
 Same `on` + `flow` + `do` from a ping to a typed failure to a private callee:
@@ -77,7 +82,7 @@ Return a value. HTTP wraps it as `{ data, error: null }`:
 import { on, flow, http } from "okengine";
 
 export const ping = on(
-  http.get("/ping").public(),
+  http.get().public(),
   flow({
     do: () => ({ status: "ok" }),
   }),
@@ -94,9 +99,9 @@ export const ping = on(
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-export const createNote = on(
-  http.post("/notes"),
-  flow("notes.create", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ title: z.string().min(1) }),
     out: z.object({ id: z.string(), title: z.string() }),
     do: async ({ title }, fx) => {
@@ -113,15 +118,15 @@ export const createNote = on(
 
 Declare domain errors and return `fx.fail` — do not throw for expected failures:
 
-```typescript title="src/flows/orders/get.ts"
+```typescript title="src/flows/orders/[id]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, orders } from "@/schema";
 
-export const getOrder = on(
-  http.get("/orders/:id"),
-  flow("orders.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
     errors: { NotFound: z.object({ id: z.string() }) },
@@ -172,11 +177,11 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
 
 | Trigger | Bind | Starts when | `do` input |
 | ------- | ---- | ----------- | ---------- |
-| HTTP | `on(http.get(path), flow)` | A request | Merged path / query / body |
+| HTTP | `on(http.get(), flow)` | A request | Merged path / query / body |
 | Signal | `on(signalHandle, flow)` | `fx.emit` | Payload (`schema`) |
 | Clock | `on(clockDecl, flow)` | Scheduler tick | none (`_`) |
 | CDC | `on(db.table(t).changed(), flow)` | Committed SQL write | `{ before, after }` |
-| Call-only | `flow(name, { … })` or `on(internal, flow)` | `fx.call` | Callee `in` |
+| Call-only | `flow({ … })` or `flow(name, { … })` | `fx.call` | Callee `in` |
 | MCP | `on(mcp.tool("x").gate(…), flow)` | MCP `tools/call` | Tool args |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
@@ -329,9 +334,9 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 </Accordion>
 
 <Accordion title="Name stamping">
-  `flow({ do })` starts nameless. The file tree, `.adopt()`, or an explicit
-  `flow("notes.create", { … })` stamps `unit.export`. HTTP Flows that stay nameless fail
-  **OKE1012**. See [Routing · Names](/docs/elements/flow/routing#names).
+  Prefer nameless `flow({ do })` on tree files — the file stamps `unit.export`.
+  Pass `flow("notes.create", { … })` only for control. Nameless HTTP after adopt
+  fails **OKE1012** — see [Routing](/docs/elements/flow/routing#when-to-omit--when-to-pass).
 </Accordion>
 
 </Accordions>
@@ -392,8 +397,8 @@ import { z } from "zod";
 import { chargeCard } from "@/flows/payments/charge";
 
 export const checkout = on(
-  http.post("/orders/checkout"),
-  flow("orders.checkout", {
+  http.post(),
+  flow({
     in: z.object({ sku: z.string() }),
     do: async ({ sku }, fx) => {
       const { chargeId } = await fx.call(chargeCard, { amount: 50 });
@@ -402,7 +407,6 @@ export const checkout = on(
   }),
 );
 ```
-
 Do **not** `fx.call` a Flow that parks on `fx.clock.sleep` — the caller receives
 `undefined` and continues; the child wakes later as its own run. Sleep on the root
 durable Flow, or split with `fx.emit`. See [Workflows](/docs/elements/flow/workflows).
@@ -556,9 +560,7 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 <Accordion title="OKE1008 — no declared effects">
   Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.`
   Boot with `oke build` / `oke dev` so extract can infer, or set explicit `effects`.
-  Deploy-shaped environments refuse an open capability token. If extract itself
-  failed (boot warns `Manifest extract failed`), install `oxc-parser` (okengine
-  dependency) and retry.
+  If extract failed (`Manifest extract failed`), install `oxc-parser` and retry.
 </Accordion>
 
 </Accordions>

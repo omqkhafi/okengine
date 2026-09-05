@@ -41,6 +41,55 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- New **04 Client** handbook group after Extend (Reference → **05**, AI Resources →
+  **06**): Overview, Calling, Auth, Live, React at
+  [`HTTP`](/docs/elements/flow/http) page depth; permanent redirect from
+  `/docs/reference/client` → `/docs/client`; hub Cards + llms index + sidebar icons;
+  Client folder unwrapped flat under `04 CLIENT` (same as Understand / Reference).
+  Examples use a commerce domain (bookings, orders, shipments, inbox) instead of
+  health / notes scaffolding; `createClient` base URLs use `vault.env` from
+  `okengine/vault` (`PUBLIC_API_URL`) — subpath imports, not the root barrel.
+- Elevated [`Reference`](/docs/reference) to [`HTTP`](/docs/elements/flow/http) page
+  depth: created missing [`CLI`](/docs/reference/cli) and
+  [`Security`](/docs/reference/security) (Host/Origin/`allowedHosts`, planes, MCP
+  posture); upgraded fx / Errors / Environment Variables / Configuration skeleton
+  (one rule, Steps, Troubleshooting, Next); aligned hub Cards + `meta.json` +
+  llms index order.
+- Elevated [`AI`](/docs/elements/ai) (overview, Models, Prompts, Agents, MCP) to
+  [`HTTP`](/docs/elements/flow/http) page depth: Smallest Example + Progressive
+  Patterns, Declaration / `fx` tables, teaching figures (`AiBlocks`,
+  `AiGuardrails`, `AiPiiEgress`), per-environment drivers, and Troubleshooting
+  with verbatim errors (OKE1005, `AiSchemaValidationError`, budgets, PII build
+  gate). Corrects invented surfaces (`ai.prompt`, `template:`, agent
+  `instructions` / top-level `maxCostPerRun` / `in`/`out`, MCP at
+  `:6530/api/mcp`) to real APIs (`model.prompt`, `budget.maxCostPerRun`,
+  `fx.ask` / `fx.run`, `mcp.tool` on `:6535/mcp`, `ai.mcpServer` allowlists).
+- AI teaching figures raised to GatePipeline quality: `AiGuardrails` (scenario
+  strip, status pips, footer holds “Checking guardrails…” until outcome),
+  `AiPiiEgress` (full ask → check → verdict phase strip + packet gate + footer),
+  `AiBlocks` (accurate openrouter bind, `out` validate, Flow tool names,
+  maxSteps halt pips).
+- Elevated [`Channel`](/docs/elements/channel) (overview, Email, SMS, WhatsApp, Push,
+  Receipts) to [`HTTP`](/docs/elements/flow/http) page depth: Smallest Example +
+  Progressive Patterns, Declaration / `fx.send` tables, `ChannelPhysics` teaching
+  figure, per-environment drivers, and Troubleshooting with verbatim boot / OTP
+  errors. Corrects invented surfaces (`channel.email("name", { subject, body })`,
+  `fx.sendWebPush`, `fx.channel.getReceipt`, `oke_receipts`, Twilio / SES driver
+  ids) to real APIs (`channel.email().template`, catalogs, `fx.send` /
+  `sendOtp` / `verifyOtp` / `deliverOtp`). Splits WhatsApp into its own page;
+  documents push drivers as boot-manual (`openFcmChannel` / `openWebPushChannel`).
+- Elevated [`Vault`](/docs/elements/vault) (overview, Secrets, Config, Key Rotation)
+  to [`HTTP`](/docs/elements/flow/http) page depth: Smallest Example + Progressive
+  Patterns, Declaration / Options / `fx.vault` tables, resolution chain + Redacted
+  teaching figures (`VaultResolution`, `VaultRedacted`), per-environment drivers,
+  `vault.env` helpers, version vs master-key rotate, CLI reference, and
+  Troubleshooting with verbatim `VaultBootError` / seal / backend errors. Corrects
+  invented surfaces (`vault.rotation`, config `default:`) to real APIs
+  (`fx.vault.rotate`, `dev:`).
+- Vault teaching figures raised to GatePipeline quality: `VaultResolution` (contract
+  strip, status pips, footer holds “Resolving…” until outcome), `VaultRedacted`
+  (full phase strip + substring scrub), new `VaultRotate` contrast (version DEK vs
+  master KEK) on Key Rotation.
 - Elevated [`Gate`](/docs/elements/gate) (overview, Authentication, Authorization,
   RLS, Rate Limits, Tenancy) to [`HTTP`](/docs/elements/flow/http) page depth:
   Evaluation Order + denial envelopes, Sessions & Cookies / API Keys accordions,
@@ -146,6 +195,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- HTTP docs default to pathless triggers and nameless Flows —
+  `on(http.get(), flow({ do }))` — with an explicit
+  [When to omit · when to pass](/docs/elements/flow/routing#when-to-omit--when-to-pass)
+  table on Routing. Teaching examples across Flow, Gate, Vault, Store, Clock,
+  Signal, and recipes omit path/name unless control requires them (barrels,
+  `http.resource`, custom live SSE, auth plugin URLs).
+- Docs sidebar **Reference** is flat under `05 REFERENCE` (no accordion group);
+  the `/docs/reference` Overview landing is hidden from the nav list.
+- Docs sidebar drops stage **Build**; stages renumber to Extend `03` · Operate
+  `04` · Reference `05` · **AI Resources** `06` (MCP · Skills · llms.txt).
+  **Try It** sits under Understand after The Anatomy; `/docs/ai` Overview is
+  hidden from the nav list.
+- Docs sidebar stage **Extend** is `03` again (Plugins / Providers / Recipes
+  after Elements); Operate → `04`. Handbook index card group updated to match.
 - Tightened [`Clock · Schedules`](/docs/elements/clock/schedules) in place (still
   three Clock pages): collapsed duplicate Helpers deep-dive into Helper Reference,
   compressed per-tenant / leader lock / Store lifecycle & Console. Nav stays
@@ -221,6 +284,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Dropped [`Manifest`](/docs/reference/manifest) and
+  [`Architecture`](/docs/reference/architecture) reference pages — mental model
+  lives under **01 Understand**; permanent redirects →
+  [`The Model`](/docs/understand/the-model). Ports / planes stay on
+  [`Security`](/docs/reference/security); hub Cards, `meta.json`, sidebar icons,
+  and llms index updated.
+- Removed **04 Operate** and the entire Deployment section
+  (`/docs/deployment` — Docker, Docker Swarm, Kubernetes, reverse proxy).
+  Sidebar sections renumbered: Reference is now **04**, AI Resources **05**.
+  Cross-links retargeted to Recipes / Configuration / Security.
 - Dropped all permanent redirects from `site/next.config.ts` (legacy Signal
   delivery paths, Flow jobs → consumers, and old Local AI recipe URLs).
 

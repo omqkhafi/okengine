@@ -10,10 +10,20 @@ HTTP routes are inferred from where a Flow file lives. Put `http.get()` in
 Flow `notes.get`, and the client calls `api.notes.get({ id })`.
 
 <Callout title="The one rule">
-  On a tree file, omit the path (`http.get()`). The file tree stamps the URL and
-  `unit.export`. The HTTP **method** still comes from the trigger. An explicit
-  `http.get("/x")` always wins.
+  On a tree file, omit path and name: `on(http.get(), flow({ do }))`. The file
+  tree stamps both. Pass either only for control — barrels, a URL that must not
+  follow the folder, or a stable name for `fx.call`. Explicit always wins.
 </Callout>
+
+## When to omit · when to pass
+
+| | Omit (default) | Pass explicitly |
+| - | -------------- | --------------- |
+| **HTTP path** | Tree file under `src/flows/<unit>/` — `http.get()`, `http.post()`, … | Barrel `index.ts`; a public URL that must not match the folder; `http.resource(path, ops)`; custom live SSE path |
+| **Flow name** | Same tree file — `flow({ do })` stamps `unit.export` | Barrel (optional — export still stamps); stable name across moves; call-only Flow you `fx.call` by name |
+
+**Consequence:** most app code looks like the create-oke template —
+`http.get().public()` + `flow({ … })` — with no string path and no string name.
 
 ## Smallest Example
 
@@ -233,18 +243,18 @@ units.
 
 ## Path Conventions
 
-Routes use an explicit path or inherit one from the file tree.
-
-**Explicit path** — pass the URL template; the tree never overwrites it:
-
-```typescript
-http.get("/organizations/:orgId/members/:memberId");
-```
-
-**Pathless** — omit the path so `generated.ts` stamps the URL from disk:
+**Default — pathless.** Omit the path so `generated.ts` stamps the URL from disk:
 
 ```typescript
 http.get(); // pending until stampHttpPath runs
+```
+
+**Control — explicit path.** Pass the URL template when the folder should not
+own the route (barrel, public API shape, resource mount). The tree never
+overwrites an explicit path:
+
+```typescript
+http.get("/organizations/:orgId/members/:memberId");
 ```
 
 Path params, query string, and JSON body still merge into one object checked by
@@ -434,12 +444,13 @@ Three names, one file:
 
 | Surface | Source | Example |
 | ------- | ------ | ------- |
-| HTTP path | File tree or explicit `http.get("/x")` | `/notes/:id` |
-| Flow name | `flow("notes.get")`, else `unit.export` | `notes.get` |
+| HTTP path | File tree (default) or explicit `http.get("/x")` | `/notes/:id` |
+| Flow name | `unit.export` from `flow({ do })` (default), or `flow("notes.get")` | `notes.get` |
 | Client | Unit folder + `export const` | `api.notes.get({ id })` |
 
-Nameless `flow({ do })` is the tree default. Explicit `flow("notes.get")` wins
-when the prefix matches the folder.
+Nameless `flow({ do })` is the tree default — same rule as pathless HTTP. Pass
+`flow("notes.get")` only for control (stable name, barrel, or matching unit
+prefix). Wrong-unit prefixes fail generate.
 
 Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
@@ -524,9 +535,9 @@ plus a handwritten `http.get("/notes")`.
 ## Learn more
 
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, `http.resource`, live SSE
-- [Client](/docs/reference/client) — `api.notes.get`, REST vs RPC, `$routes`
+- [Client](/docs/client/calling) — `api.notes.get`, REST vs RPC, `$routes`
 - [Errors](/docs/reference/errors) — OKE1010 · OKE1009 · OKE1011 · OKE1012
-- [Manifest](/docs/reference/manifest) — derived routes, no hand-written table
+- [The Model](/docs/understand/the-model) — derived routes, no hand-written table
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the same trigger
 
 ## Next
@@ -540,7 +551,7 @@ plus a handwritten `http.get("/notes")`.
   <Card
     title="Client"
     description="Typed caller — createClient, envelopes, REST from $routes."
-    href="/docs/reference/client"
+    href="/docs/client/calling"
   />
   <Card
     title="Consumers"

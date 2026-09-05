@@ -74,22 +74,31 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
     ],
   },
   {
+    heading: "Client",
+    slugs: [
+      "client",
+      "client/calling",
+      "client/auth",
+      "client/live",
+      "client/react",
+    ],
+  },
+  {
     heading: "For agents",
     slugs: ["ai/mcp", "ai/skills", "ai/llms-txt"],
   },
   {
     heading: "Reference",
     slugs: [
-      "reference/architecture",
-      "reference/manifest",
+      "reference/cli",
       "reference/configuration",
-      "reference/fx",
-      "reference/client",
-      "reference/errors",
       "reference/environment-variables",
-      "reference/okid",
+      "reference/fx",
+      "reference/errors",
+      "reference/security",
       "reference/i18n",
       "reference/plugins",
+      "reference/okid",
     ],
   },
 ];

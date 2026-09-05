@@ -1,47 +1,210 @@
 ---
 title: "Receipts"
-description: "Unified message delivery ledger, automated bounce tracking, and spam complaint suppression."
+description: "Delivery ledger, seven-state outcomes, consent opt-out, and hard-bounce suppression — process-local by default."
 icon: "ReceiptText"
+source: "docs/spec/unified-theory.md"
 ---
 
-Receipts & Webhooks (`channel.receipts`) provide auditable delivery tracking for every sent message.
+Every Channel send records a **receipt** — success (`sent` / `fallback`), suppression, or a
+classified failure. Provider bounces and complaints update that ledger through normalized
+outcomes. There is no `oke_receipts` SQL table and no `fx.channel.getReceipt` helper.
 
-## What it is
+For operators watching deliverability — Console projects the ledger; Flows only see send
+results via `fx.send`’s `{ ok: true }` gate.
 
-Every message dispatched via `fx.send` generates a traceable receipt stored in `oke_receipts`. When upstream email or SMS providers emit delivery webhooks (delivered, opened, bounced, spam complaint), OKE automatically updates the receipt status and marks invalid addresses on the suppression list.
+<Callout title="The one rule">
+  Consent and prior hard bounces suppress **before** any driver runs. Default
+  suppression / consent / receipts stores are **process-local memory** — inject shared stores
+  for multi-instance, or run a single Channel consumer, until a durable driver ships.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Query delivery receipt
+### Send and accept the receipt
 
-```typescript title="src/flows/messages/status.ts"
-import { flow } from "okengine";
-
-export const getDeliveryStatus = flow("messages.status", {
-  do: async ({ messageId }, fx) => {
-    return await fx.channel.getReceipt(messageId);
-  },
+```typescript
+const result = await fx.send(noteCreatedMail, {
+  to: "alice@example.com",
+  data: { id: "n1", title: "Hi" },
 });
+// result.ok === true on the fx gate when the capability succeeds;
+// the runtime ledger still stores status, attempts, and messageId.
+```
+
+Dry-run never contacts a provider and still records _would have fired_.
+
+</Step>
+
+<Step>
+### Understand statuses
+
+| Status | Meaning |
+| ------ | ------- |
+| `sent` | First (or only) attempt succeeded |
+| `fallback` | An earlier attempt failed; a later same-medium driver succeeded |
+| `suppressed/opted-out` | Consent store blocked the address |
+| `suppressed/prior-bounce` | Prior hard bounce on the suppression list |
+| `failed` / `opted-out` | Legacy aliases kept for older callers |
+
+</Step>
+
+<Step>
+### Watch the boot warning
+
+```text
+oke boot: Channel suppression/consent/receipts default to process-local memory —
+opt-out, bounce, and receipt state on one instance is invisible to others.
+Inject shared stores for multi-instance, or run a single Channel consumer, until a
+durable driver ships.
 ```
 
 </Step>
 
 </Steps>
 
+## Progressive Patterns
+
+<Tabs items={["Suppression", "Outcomes", "Inject stores"]}>
+
+<Tab value="Suppression">
+
+Opt-out or prior bounce never hits SMTP / SMS:
+
+```typescript
+// Runtime path (not on fx): consent.optOut(subject, medium | "all")
+// Next fx.send → receipt status suppressed/opted-out, driverId "suppression", ok: false
+```
+
+Errors on the receipt: `"opted out"` or `"prior hard bounce"`.
+
+</Tab>
+
+<Tab value="Outcomes">
+
+Post-send taxonomy (`DeliveryOutcomeState`):
+
+| State | Verdict |
+| ----- | ------- |
+| `suppressed/opted-out` | `correct` |
+| `suppressed/prior-bounce` | `correct` |
+| `blocked/invalid-address` | `review` |
+| `soft-bounce` | `retry` |
+| `hard-bounce` | `suppress` |
+| `provider-error` | `retry` |
+| `delivered-then-complained` | `review` |
+
+`ingestOutcome({ messageId, state })` updates the receipt. Hard bounce also adds the address
+to suppression (`prior-bounce`). Invalid-address heuristics include patterns such as
+`550 5.1.1` on attempt errors.
+
+</Tab>
+
+<Tab value="Inject stores">
+
+Pass shared implementations on boot:
+
+```typescript
+oke({
+  channel: {
+    suppression: mySuppressionStore,
+    consent: myConsentStore,
+    receipts: myReceiptLedger,
+  },
+});
+```
+
+Shapes: `SuppressionStore`, `ConsentStore`, `ReceiptLedger` from `okengine` — `record` /
+`all` / `forTemplate` / `byMessageId` / `updateStatus` on the ledger.
+
+</Tab>
+
+</Tabs>
+
+## Receipt shape
+
+| Field | Meaning |
+| ----- | ------- |
+| `id` | Runtime receipt id |
+| `template` | Template name |
+| `to` | Recipient |
+| `medium` | `email` · `sms` · `whatsapp` · `push` · … |
+| `locale` / `localeChain` | Resolved locale + chain steps |
+| `status` | Success, legacy, or outcome state |
+| `messageId` | Provider / runtime message id |
+| `driverId` | Winning driver (or `suppression`) |
+| `attempts` | Every try (`driverId`, `ok`, `error`, `at`) |
+| `at` | Epoch ms |
+| `error` | Aggregated attempt errors when failed |
+
+## Consent & suppression
+
+| Store | Role |
+| ----- | ---- |
+| Consent | `isOptedOut` / `optOut` / `optIn` / `list` per subject + medium |
+| Suppression | Reasons `"opted-out"` \| `"prior-bounce"`; checked on every send |
+
+**Consequence:** suppression is not failure — verdict `correct` for opted-out and prior-bounce
+rows. Complaints (`delivered-then-complained`) outrank many hard bounces in consequence weight.
+
+There is no Flow helper to query receipts today — use Console projection or an injected ledger
+from operator tooling.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Process-local memory boot warning">
+  Expected on single-node `oke dev`. For replicas, inject shared `suppression` / `consent` /
+  `receipts` or pin Channel work to one consumer.
+</Accordion>
+
+<Accordion title="Send returns ok but Mailpit / provider empty">
+  Check receipt status — `suppressed/*` never calls a driver. Opt-in the address or clear prior
+  bounce on the suppression store.
+</Accordion>
+
+<Accordion title="Status fallback with multiple attempts">
+  Same-medium `via` (or ordered driver chain) recovered after a provider error. Inspect
+  `attempts[]` for which driver failed and which succeeded.
+</Accordion>
+
+<Accordion title="No fx.channel.getReceipt">
+  That API does not exist. Use the runtime `receipts` store (injected or Console), not a Flow
+  method. `fx.send` only returns `{ ok: true }` after the capability gate.
+</Accordion>
+
+<Accordion title="Hard bounce still getting mail">
+  `ingestOutcome` with `hard-bounce` must run (webhook → normalized outcome). Without ingestion,
+  suppression never learns the bounce.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Channel overview](/docs/elements/channel) — send path and `ChannelPhysics`
+- [Email](/docs/elements/channel/email) — SMTP / provider drivers
+- [fx](/docs/reference/fx) — dry-run send behavior
+
 ## Next
 
 <Cards>
   <Card
-    title="AI Element"
-    description="Integrate AI models, versioned prompts, and MCP tools."
-    href="/docs/elements/ai"
+    title="Channel Overview"
+    description="Templates, fx.send, and drivers."
+    href="/docs/elements/channel"
   />
   <Card
-    title="Channel Overview"
-    description="Return to Channel overview."
-    href="/docs/elements/channel"
+    title="Email"
+    description="Mailpit and production email drivers."
+    href="/docs/elements/channel/email"
+  />
+  <Card
+    title="AI Element"
+    description="Models, prompts, and agents."
+    href="/docs/elements/ai"
   />
 </Cards>

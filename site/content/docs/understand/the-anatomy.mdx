@@ -7,7 +7,7 @@ icon: "PenTool"
 Everything a Flow does reduces to one line:
 
 ```typescript
-on(trigger, flow(name, { do: (input, fx) => { /* ... */ } }))
+on(trigger, flow({ do: (input, fx) => { /* ... */ } }))
 ```
 
 If that line doesn't mean much yet, that's what this page is for. Five pieces make it up. We'll take them one at a time, then put them together using a complete signup example.
@@ -27,7 +27,7 @@ That's the whole job. The interesting parts are what goes in each slot.
 The first argument to `on` is the trigger: whatever wakes the code up. A trigger doesn't run any of your logic — it only answers one question: *when should this happen?*
 
 ```typescript
-http.post("/signup"); // when a POST request arrives at /signup
+http.post(); // path from the file tree — e.g. src/flows/users/signup.ts → POST /users/signup
 ```
 
 There are five kinds of trigger in total — the table at the end of this page lists them. For now: the trigger is the *when*, and it's the only thing that changes between an endpoint, a scheduled job, and everything else.
@@ -37,12 +37,14 @@ There are five kinds of trigger in total — the table at the end of this page l
 The second argument to `on` is a Flow — declared with the `flow()` function. It answers *what*: what work is this, and what does it promise about its inputs and outputs?
 
 ```typescript
-flow("users.signup", {
+flow({
   do: /* the actual code — next */,
 });
 ```
 
-The name (`"users.signup"`) is optional — omit it and it's derived automatically from the file it lives in. Pass one explicitly when you want it stable across file moves, or referenceable by `fx.call`.
+Omit the name on tree files — the compiler stamps `unit.export` (e.g. `users.signup`).
+Pass `flow("users.signup", { … })` only for control: barrels, stable names across
+moves, or call-only Flows you `fx.call` by name.
 
 ## `do` — the code that actually runs
 
@@ -72,11 +74,11 @@ This one rule is what made the Month 8 drift from The Problem avoidable: if `fx`
 
 Here is the complete signup flow, with every piece labeled where it sits:
 
-```typescript
-export const onSignup = on(
-  http.post("/signup"), // ← trigger: when
-  flow("users.signup", {
-    // ↑ flow: what
+```typescript title="src/flows/users/signup.ts"
+export const signup = on(
+  http.post(), // ← trigger: when (stamped POST /users/signup)
+  flow({
+    // ↑ flow: what (stamped users.signup)
     do: async (input, fx) => {
       // ← do: how
       const user = await fx.store(db).insert(users).values(input); // ← fx: the only way out
@@ -91,7 +93,6 @@ export const onSignup = on(
   A `flow(...)` declared without `on(...)` around it is internal — nothing outside your code can
   start it. Other flows invoke it directly with `fx.call(flowRef, input)`.
 </Callout>
-
 ## Checking it against the timeline
 
 Nothing about the code above looks more complicated than the four lines that started the drift on The Problem — because it isn't. The difference only shows up when the same pressure from that timeline hits it.
@@ -111,7 +112,7 @@ None of that required new code beyond what's above. It required the four lines t
 
 | Trigger                            | Element | Starts When                       |
 | ----------------------------------- | ------- | ------------------------------------ |
-| `http.post("/signup")`             | Flow    | A request arrives                  |
+| `http.post()` (path from file tree) | Flow    | A request arrives                  |
 | `clock("name", { every: "10m" })`  | Clock   | A time interval elapses            |
 | `signal.once("name", {…})` / `.broadcast` / `.live` | Signal  | Another flow announces something   |
 | `db.table(users).changed("email")` | Store   | A database row changes             |

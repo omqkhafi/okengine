@@ -1,0 +1,428 @@
+---
+title: "Calling"
+description: "createClient forms, REST vs RPC, options, result envelopes, store resources, and remote types."
+icon: "Braces"
+source: "docs/spec/unified-theory.md"
+---
+
+`createClient` builds a typed proxy over your adopted Flows. HTTP triggers go out as REST from
+`$routes`; untriggered Flows fall back to RPC. Every call returns `{ data, error }` — never a
+thrown domain failure.
+
+For developers wiring a storefront, mobile app, or partner service to an okengine backend (port
+**6530**).
+
+<Callout title="The one rule">
+  Treat every call as a result envelope: `{ data, error }`. Switch on `error.code`. Only transport
+  / protocol problems use `code: "TransportError"`.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Create the client from the app
+
+```typescript title="web/src/api.ts"
+import { createClient } from "okengine/client";
+import { vault } from "okengine/vault";
+import { app } from "../../src/app";
+
+export const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "");
+```
+
+</Step>
+
+<Step>
+### Confirm a booking and narrow the result
+
+```typescript
+const { data, error } = await api.bookings.get({ id: "bkg_7f3a" });
+
+if (error) {
+  // show “booking not found” or a network banner
+  return;
+}
+
+renderConfirmation(data.confirmationCode, data.seats);
+```
+
+Envelope:
+
+```json
+{
+  "data": {
+    "id": "bkg_7f3a",
+    "confirmationCode": "SK-4812",
+    "seats": 2,
+    "status": "confirmed"
+  },
+  "error": null
+}
+```
+
+</Step>
+
+</Steps>
+
+## Base URL (Vault + env)
+
+Do not paste origins into source. Declare the public API origin as Vault config, then read it from
+env in each runtime:
+
+```typescript title="src/core/vault.ts"
+import { vault } from "okengine/vault";
+import { z } from "zod";
+
+export const publicApiUrl = vault.config("PUBLIC_API_URL", {
+  description: "Browser-facing API origin",
+  schema: z.string().url(),
+});
+```
+
+| Runtime                                    | Base URL for `createClient`                                    |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| Browser / Bun (create-oke web)             | `vault.env("PUBLIC_API_URL") ?? ""` — empty = same-origin proxy |
+| Node / worker / CLI                        | `vault.env.required("PUBLIC_API_URL")`                         |
+| Separate storefront after `oke client add` | Same `vault.env("PUBLIC_API_URL") ?? ""`                       |
+
+Set `PUBLIC_API_URL` via environment or `oke vault set`. Prefer `vault.env` over raw
+`process.env` — same helpers as the rest of the measure. See
+[Vault · Config](/docs/elements/vault/config).
+
+## Progressive Patterns
+
+From a simple read to typed domain failures and transport errors:
+
+<Tabs items={["Minimal", "Narrow", "Failures", "Transport"]}>
+
+<Tab value="Minimal">
+
+```typescript
+const { data, error } = await api.bookings.get({ id: "bkg_7f3a" });
+if (error) return;
+showSeatMap(data.seats);
+```
+
+</Tab>
+
+<Tab value="Narrow">
+
+```typescript
+import { isOk } from "okengine/client";
+
+const result = await api.orders.get({ id: "ord_9c2e" });
+
+if (isOk(result)) {
+  result.data.trackingNumber;
+  result.data.eta;
+}
+```
+
+</Tab>
+
+<Tab value="Failures">
+
+```typescript
+import { isOk, isErrorCode } from "okengine/client";
+
+const result = await api.bookings.create({
+  flightId: "SK481",
+  seats: 2,
+  cabin: "economy",
+});
+
+if (isOk(result)) {
+  result.data.confirmationCode;
+} else if (result.error.code === "FlightFull") {
+  offerWaitlist(result.error.data.seatsLeft);
+} else if (isErrorCode(result.error, "NotFound")) {
+  // shared helper narrowing
+}
+```
+
+Prefer `error?.code === "FlightFull"` for inference; use `isErrorCode` in shared helpers.
+
+</Tab>
+
+<Tab value="Transport">
+
+```typescript
+import { isTransportError } from "okengine/client";
+
+const result = await api.orders.list({ limit: 20, status: "shipped" });
+
+if (result.error && isTransportError(result.error)) {
+  showOfflineBanner(result.error.data.message);
+  // optional: result.error.data.status
+}
+```
+
+Network failure, abort (`timeout`), non-JSON body, or HTTP status without a `{ data, error }`
+envelope — never a declared Flow code.
+
+</Tab>
+
+</Tabs>
+
+## `createClient` forms
+
+| Form                            | Types from                             | Wire                                             |
+| ------------------------------- | -------------------------------------- | ------------------------------------------------ |
+| `createClient(app, url, opts?)` | `typeof app`                           | REST from `app.$routes`; untriggered flows → RPC |
+| `createClient<App>(url, opts?)` | Explicit `App` type                    | RPC unless `opts.$routes` or `opts.routes`       |
+| `createClient(url, opts?)`      | Ambient `Register` (`oke-client.d.ts`) | Same — pass routes for REST                      |
+
+`url` is the app origin from `vault.env("PUBLIC_API_URL")` — empty string means same-origin.
+See [Base URL](#base-url-vault--env).
+
+**Consequence:** `createClient<App>(url)` alone types the proxy but still posts
+`POST /_oke/{unit}/{flow}` until you pass the app value, `$routes`, or `routes`.
+
+## REST vs RPC
+
+| Situation                                            | Request                                                                                                                                                        |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP trigger with method + path on `$routes`         | That method and path (`:id` filled from input; leftover fields → query on GET/HEAD, JSON body otherwise). QUERY always sends JSON (`{}` when only path params) |
+| Adopted flow with no HTTP trigger                    | `POST {base}/_oke/{unit}/{flow}` with JSON body                                                                                                                |
+| Incomplete proxy path (`api.bookings()` with no flow) | Result error: `Incomplete path: api.bookings(…)`                                                                                                              |
+
+```typescript
+// REST — method/path from the bound HTTP trigger (file tree or explicit)
+await api.bookings.get({ id: "bkg_7f3a" }); // GET /bookings/bkg_7f3a
+
+// RPC — untriggered flow named bookings.manifest (internal tally)
+await api.bookings.manifest({ flightId: "SK481" }); // POST /_oke/bookings/manifest
+```
+
+Full file-tree rules: [Routing](/docs/elements/flow/routing).
+
+## How input becomes a request
+
+Before the wire call, the client maps `input` onto the REST template or the RPC body:
+
+1. **Path params** — `:id` (and friends) filled from matching input keys.
+2. **Leftover fields** — query string on GET/HEAD; JSON body otherwise.
+3. **QUERY** — always JSON (`{}` when only path params remain).
+4. **RPC** — whole input as JSON on `POST /_oke/{unit}/{flow}`.
+
+```typescript
+await api.orders.get({ id: "ord_9c2e" });
+// GET /orders/ord_9c2e
+
+await api.orders.list({ limit: 20, q: "stockholm" });
+// GET /orders?limit=20&q=stockholm  (when list is GET on $routes)
+
+await api.bookings.create({ flightId: "SK481", seats: 2 });
+// POST /bookings  with JSON body
+```
+
+## Call shapes
+
+<Tabs items={["unit.flow", "List pager", "for await", "Empty 204"]}>
+
+<Tab value="unit.flow">
+
+```typescript
+const { data, error } = await api.orders.get({ id: "ord_9c2e" });
+if (error) return;
+data.trackingNumber;
+```
+
+</Tab>
+
+<Tab value="List pager">
+
+```typescript
+const page = await api.orders.list({ limit: 20, status: "open" });
+const more = await page.next();
+
+// meta.next / meta.prev are { cursor } bags — spread them, or use page.next()
+```
+
+TanStack `useInfiniteQuery` takes the bag, not the methods:
+
+```typescript
+useInfiniteQuery({
+  queryKey: ["orders", status],
+  queryFn: ({ pageParam }) => api.orders.list({ limit: 20, status, ...pageParam }),
+  initialPageParam: {} as { cursor?: string },
+  getNextPageParam: (last) => last.meta.next ?? undefined,
+  getPreviousPageParam: (last) => last.meta.prev ?? undefined,
+});
+```
+
+</Tab>
+
+<Tab value="for await">
+
+```typescript
+for await (const page of api.orders.list({ limit: 20, status: "shipped" })) {
+  for (const order of page.data) renderRow(order);
+}
+```
+
+</Tab>
+
+<Tab value="Empty 204">
+
+```typescript
+await api.orders.remove({ id: "ord_9c2e" }); // DELETE → 204, data undefined
+```
+
+</Tab>
+
+</Tabs>
+
+## Resources
+
+Mount a resource, adopt the returned ops, then call the five Flows like any other:
+
+```typescript
+const ordersR = store.resource(db, orders, {
+  /* in, out, list */
+});
+const mounted = on(http.resource("/orders", ordersR.all()).gate(member));
+// .adopt({ orders: mounted }) →
+const page = await api.orders.list({ limit: 20, status: "open" });
+await api.orders.get({ id: "ord_9c2e" }); // GET /orders/:id — NotFound when missing
+await api.orders.remove({ id: "ord_9c2e" }); // DELETE → 204
+```
+
+See [Store](/docs/elements/store) for the list query language. Handwritten lists use
+`fx.json.withQuery(rows, input)` for the same envelope. Auth posture:
+[Gate](/docs/elements/gate). Live mounts: [Live](/docs/client/live).
+
+## Options
+
+| Option          | Type                                           | Default            | Meaning                                                        |
+| --------------- | ---------------------------------------------- | ------------------ | -------------------------------------------------------------- |
+| `fetch`         | `(input, init?) => Promise<Response>`          | `globalThis.fetch` | Inject a fetch implementation                                  |
+| `headers`       | `Record<string, string>` \| pairs \| `() => …` | —                  | Static headers, or a getter per request                        |
+| `timeout`       | `number` (ms)                                  | —                  | Abort after this many milliseconds                             |
+| `retry.retries` | `number`                                       | `0`                | Extra attempts after the first (network / 5xx)                 |
+| `retry.delay`   | `number` (ms)                                  | `50`               | Initial backoff delay                                          |
+| `retry.backoff` | `number`                                       | `2`                | Multiplier after each retry                                    |
+| `auth.getToken` | `() => string \| null \| …`                    | —                  | Bearer access token (or null) — see [Auth](/docs/client/auth)  |
+| `auth.refresh`  | `() => Promise<string \| null \| …>`           | —                  | Runs once on HTTP 401, then the request retries                |
+| `$routes`       | `ClientRouteMap`                               | —                  | Runtime map from `app.$routes` (REST when method+path present) |
+| `routes`        | `Record<"unit.flow", { method, path }>`        | —                  | Flat REST table; wins over flattening `$routes`                |
+
+## Result envelopes
+
+Success may include optional top-level `meta` (for example pagination). Declared flow errors and
+transport failures share the failure arm:
+
+```typescript
+import { isOk, isFail, isErrorCode, isTransportError } from "okengine/client";
+
+const result = await api.bookings.create({ flightId: "SK481", seats: 2 });
+
+if (isOk(result)) {
+  result.data.confirmationCode;
+} else if (result.error.code === "FlightFull") {
+  result.error.data.seatsLeft;
+} else if (isTransportError(result.error)) {
+  result.error.data.message;
+}
+
+isFail(result); // true when error !== null
+```
+
+## Remote types
+
+`oke dev` regenerates `oke-client.d.ts` from `GET /_oke/client.json`. A separate storefront repo —
+pass the origin from Vault / env (never a hardcoded host in source):
+
+```bash
+oke client add "$PUBLIC_API_URL"
+oke client add "$PUBLIC_API_URL" --out ./types/oke-client.d.ts
+```
+
+create-oke starters ship `web/`: Vite owns `index.html` and proxies your Flow paths plus `/_oke`
+to the app. Leave `PUBLIC_API_URL` unset in local web so `createClient("")` stays same-origin.
+
+CLI details: [CLI Reference](/docs/reference/cli).
+
+## Exports
+
+| Export                                    | Kind      | Role                                                |
+| ----------------------------------------- | --------- | --------------------------------------------------- |
+| `createClient`                            | function  | Typed proxy `api.unit.flow(input?)` plus `api.live` |
+| `flattenRoutes`                           | function  | `$routes` → flat `unit.flow` REST table             |
+| `createTransport`                         | function  | Low-level HTTP transport (timeout / retry / auth)   |
+| `isOk` / `isFail`                         | function  | Envelope predicates                                 |
+| `isErrorCode` / `isTransportError`        | function  | Error narrowing                                     |
+| `Client`, `ClientCall`, `ClientResult`, … | types     | Contracts, `page.next()` / `for await` of `list()`  |
+| `Register`                                | interface | Module-augmentation slot for ambient App types      |
+| `AppOf`                                   | type      | Brand a bare route map as an App                    |
+
+Budget: the `./client` export stays under the measured client-runtime cap (hard gate in CI).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="api.bookings.get is not a function / type error">
+  Confirm the Flow is `export`ed from a generated unit (`import "@/flows/generated"` then
+  `oke({ name })`), or from a module you still `.adopt({ bookings })`.
+
+  Type `createClient` with that `App` (or ambient `Register` after `oke-client.d.ts` regenerates).
+  Restart `oke dev` after renaming exports.
+</Accordion>
+
+<Accordion title="Calls hit /_oke/… instead of my HTTP path">
+  Types alone do not choose REST. Pass `createClient(app, url)`, or
+  `createClient(url, { $routes: app.$routes })`, or an explicit `routes` map.
+</Accordion>
+
+<Accordion title='error.code is "TransportError"'>
+  Network failure, abort (`timeout`), non-JSON body, empty error response, or HTTP status without a
+  `{ data, error }` envelope. Declared flow codes (`NotFound`, `FlightFull`, …) never use this code.
+  Message text lives in `error.data.message`; HTTP status may appear as `error.data.status`.
+</Accordion>
+
+<Accordion title="Failed to fetch …/_oke/client.json">
+  `oke client add` needs a running app that serves the descriptor. Start the app (`oke dev` /
+  `oke start`), check the URL, then retry. Usage when the URL is missing:
+  `Usage: oke client add <url> [--out oke-client.d.ts]`.
+</Accordion>
+
+<Accordion title="Incomplete path: api.bookings(…)">
+  The proxy path stopped at a unit. Call a Flow: `api.bookings.get({ id })`, not `api.bookings()`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Overview](/docs/client) — ClientLoop, Flows only
+- [Auth](/docs/client/auth) — Bearer, refresh, denials
+- [Live](/docs/client/live) — `api.live` and live queries
+- [React](/docs/client/react) — hooks package
+- [Vault · Config](/docs/elements/vault/config) — `PUBLIC_API_URL`, `vault.env`
+- [Routing](/docs/elements/flow/routing) — `$routes` stamps
+- [HTTP](/docs/elements/flow/http) — verbs and envelopes on the server
+- [Errors](/docs/reference/errors) — framework codes vs failure values
+- [CLI](/docs/reference/cli) — `oke client add`, `oke dev`
+
+## Next
+
+<Cards>
+  <Card
+    title="Auth"
+    description="Sessions and gate denials on the client."
+    href="/docs/client/auth"
+  />
+  <Card
+    title="Live"
+    description="SSE subscribe and live resource queries."
+    href="/docs/client/live"
+  />
+  <Card
+    title="Routing"
+    description="Folders stamp HTTP paths and client units."
+    href="/docs/elements/flow/routing"
+  />
+</Cards>

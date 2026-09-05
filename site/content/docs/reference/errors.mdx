@@ -1,10 +1,13 @@
 ---
 title: "Errors"
-description: "Every error OKE produces — permanent OKE codes with fixes, gate denials, and subsystem errors, with what to do about each."
+description: "OKE codes, gate denials, and subsystem errors — permanent codes with causes and fixes."
 icon: "OctagonAlert"
+source: "docs/spec/unified-theory.md"
 ---
 
-OKE has two error families, and confusing them is the most common mistake: **failures are values** a flow returns (`{ data: null, error: { code, data } }` — clients switch on `error.code`), while **framework errors are thrown** for invariant violations and carry a permanent numeric code, a cause, and a fix.
+OKE has two error families: **failures are values** a Flow returns
+(`{ data: null, error: { code, data } }`), while **framework errors are thrown**
+for invariant violations (permanent numeric code + cause + fix).
 
 ```text
 OKE1101  domain table not found — migrations have not been applied.
@@ -12,7 +15,44 @@ OKE1101  domain table not found — migrations have not been applied.
          https://oke.omqkhafi.dev/e/1101
 ```
 
-Codes are permanent once published — you can match on them safely across upgrades.
+Codes are permanent once published — match them safely across upgrades.
+
+<Callout title="The one rule">
+  Switch on `error.code` for Flow failures. Catch / match `OKE####` only for thrown
+  framework invariants. Do not treat a typed `NotFound` as an unhandled exception.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Return a typed failure
+
+```typescript
+errors: { NotFound: z.object({ id: z.string() }) },
+do: async ({ id }, fx) => {
+  const [row] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
+  if (!row) return fx.fail("NotFound", { id });
+  return row;
+},
+```
+
+</Step>
+
+<Step>
+### Handle it on the client
+
+```typescript
+const { data, error } = await api.notes.get({ id });
+if (error?.code === "NotFound") {
+  // value — not a throw
+}
+```
+
+</Step>
+
+</Steps>
 
 ## Localized messages
 
@@ -25,7 +65,8 @@ from `Accept-Language` (matched to `i18n.locales`); fallback is `i18n.default`.
 | Thrown `OkeError`  | `oke.{code}.cause` · `oke.{code}.fix`      | Cause + fix lines in the thrown message  |
 
 Override via `defineLocale`. Pass `fail(code, data, { message })` for a custom
-string. Custom app codes stay message-less until registered.
+string. Custom app codes stay message-less until registered. Full catalogs:
+[i18n](/docs/reference/i18n).
 
 ## OKE numeric codes
 
@@ -100,9 +141,54 @@ Thrown by specific subsystems — each names its own cause:
 | `AccessGrantError`            | Console access grant rejected                                      | Re-request access with a valid grant                                  |
 | `UnsupportedPathError`        | A route path shape the router can't compile                        | Simplify the path pattern                                             |
 
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="I hit OKE1001–1007">
+  Explicit `effects` drifted from `do`. Add the missing ledger entry or remove the
+  hand-written `effects` block so inference covers the Flow.
+</Accordion>
+
+<Accordion title="OKE1010 pathless HTTP never stamped">
+  Import `@/flows/generated`, or pass an explicit path:
+  `http.get("/users/:id")`.
+</Accordion>
+
+<Accordion title="OKE1011 method + path bound twice">
+  A resource mount and a handwritten route share the same method + path. Drop one
+  binding.
+</Accordion>
+
+<Accordion title="OKE1101 in production">
+  Domain tables missing — prod has no auto-DDL. Run `oke db migrate` against that
+  environment ([CLI](/docs/reference/cli)).
+</Accordion>
+
+<Accordion title="Unauthorized / Forbidden / RateLimited">
+  These are gate denials returned as values before `do` runs — not thrown OKE
+  codes. Fix the policy, membership, or rate budget. See [Gate](/docs/elements/gate).
+</Accordion>
+
+<Accordion title="VaultBootError at startup">
+  A vault contract has no value in any resolution layer. The error lists every
+  gap — set the missing names ([Vault](/docs/elements/vault)).
+</Accordion>
+
+</Accordions>
+
 ## Learn more
 
 - [i18n](/docs/reference/i18n) — catalogs, `fx.t`, locale matching
 - [Flow](/docs/elements/flow) — `fx.fail` and the response envelope
 - [Gate](/docs/elements/gate) — where the three denials come from
-- [CLI Reference](/docs/reference/cli) — `oke db migrate` and friends
+- [CLI](/docs/reference/cli) — `oke db migrate` and friends
+- [fx](/docs/reference/fx) — how failures and effects surface
+
+## Next
+
+<Cards>
+  <Card title="fx" description="The door that records effects." href="/docs/reference/fx" />
+  <Card title="Gate" description="Where Unauthorized and Forbidden come from." href="/docs/elements/gate" />
+  <Card title="Client" description="Switch on error.code in the browser." href="/docs/client" />
+</Cards>

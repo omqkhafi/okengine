@@ -78,7 +78,7 @@ durable state.
 
 Security posture is intentional: Traefik talks to `tcp://socket-proxy:2375` with a
 filtered API (`CONTAINERS`, `EVENTS`, `PING`, `VERSION`, `NETWORKS` only). Never mount
-raw `docker.sock` on Traefik — see [Reverse proxy](/docs/deployment/reverse-proxy).
+raw `docker.sock` on Traefik — keep the socket-proxy companion in front.
 
 HTTP entrypoint redirects to `websecure`. For a single instance with no scale plans,
 [Caddy](/docs/recipes/caddy) is simpler (no labels, no companion).
@@ -122,8 +122,8 @@ re-issuing repeatedly.
 
 ## Learn more
 
-- [Reverse proxy](/docs/deployment/reverse-proxy) — Docker-socket-proxy security rationale
-- [Docker · Reverse proxy](/docs/deployment/docker#reverse-proxy) — compose layer order
+- [Caddy](/docs/recipes/caddy) — simpler single-instance HTTPS edge
+- [nginx](/docs/recipes/nginx) — static HTTP reverse proxy
 - [Security](/docs/reference/security) — `allowedHosts`
 
 ## Next

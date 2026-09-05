@@ -5,24 +5,26 @@ icon: "Cpu"
 source: "docs/spec/unified-theory.md"
 ---
 
-An `ai.model` binding names a logical model (`smart`, `local`, …), the wire
-`model` id, and how to reach it (`provider`, optional `baseUrl` / `apiKey` /
-`driverId`).
+An `ai.model` binding names a logical model (`smart`, `local`, …), the wire `model` id, and how
+to reach it (`provider`, optional `baseUrl` / `apiKey` / `driverId`).
+
+For developers swapping OpenRouter for a local llama.cpp server — one logical name, different
+bindings per environment.
 
 <Callout title="The one rule">
-  Known OpenAI-compatible `provider` names resolve `baseUrl` automatically.
-  Explicit `baseUrl` always wins. Unknown providers require `baseUrl` — they fail
-  loud. Per-binding `apiKey` isolates tokens when several providers run together.
+  Known OpenAI-compatible `provider` names resolve `baseUrl` automatically. Explicit `baseUrl`
+  always wins. Unknown providers require `baseUrl` — they fail loud. Per-binding `apiKey`
+  isolates tokens when several providers run together.
 </Callout>
 
-## Quick start
+## Smallest Example
 
 <Steps>
 
 <Step>
 ### Declare cloud + local bindings
 
-```typescript
+```typescript title="src/core/ai.ts"
 import { ai } from "okengine";
 
 export const smart = ai.model("smart", {
@@ -40,10 +42,9 @@ export const local = ai.model("local", {
 });
 ```
 
-OpenRouter fills `https://openrouter.ai/api/v1` without typing it. See
-[OpenRouter](/docs/recipes/openrouter) for the zero-Docker path. Local servers
-(llama.cpp, Ollama, vLLM, SGLang) use the same `openai-compatible` binding with
-`OKE_AI_URL` ending in `/v1`.
+OpenRouter fills `https://openrouter.ai/api/v1` without typing it. Local servers (llama.cpp,
+Ollama, vLLM, SGLang) use the same `openai-compatible` binding with `OKE_AI_URL` ending in
+`/v1`.
 
 </Step>
 
@@ -60,14 +61,112 @@ export const triage = smart.prompt("ticket-triage", {
 </Step>
 
 <Step>
-### Ask from a flow
+### Ask from a Flow
 
-`fx.ask("ticket-triage", input)` uses the prompt’s model chain. Recovery via
-`via` opens a **separate** client per binding — keys and base URLs do not mix.
+```typescript title="src/flows/support/triage.ts"
+import { on, flow, http } from "okengine";
+import { triage } from "@/core/ai";
+
+export const classify = on(
+  http.post(),
+  flow({
+    do: async (input, fx) => await fx.ask(triage, input),
+  }),
+);
+```
+
+`fx.ask` uses the prompt’s model chain. Recovery via `via` opens a **separate** client per
+binding — keys and base URLs do not mix.
 
 </Step>
 
 </Steps>
+
+## Progressive Patterns
+
+<Tabs items={["OpenRouter", "Local", "Native Anthropic", "Multi-key"]}>
+
+<Tab value="OpenRouter">
+
+Zero Docker — registry fills the URL:
+
+```typescript
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+```
+
+See [OpenRouter](/docs/recipes/openrouter) for router aliases (`openrouter/auto`, fusion, …).
+
+</Tab>
+
+<Tab value="Local">
+
+Same openai-compatible driver, explicit `baseUrl` from compose:
+
+```typescript
+export const local = ai.model("local", {
+  provider: "openai-compatible",
+  model: process.env.OKE_AI_MODEL ?? "granite3.3:2b",
+  baseUrl: process.env.OKE_AI_URL, // must end in /v1
+});
+```
+
+Pin `drivers.ai.dev: "openai-compatible"`. Full recipe: [Local AI](/docs/recipes/local-ai).
+
+</Tab>
+
+<Tab value="Native Anthropic">
+
+Production Claude — native Messages API, not the OpenAI-compat shim:
+
+```typescript
+export const claude = ai.model("claude", {
+  provider: "anthropic",
+  model: "claude-sonnet-4-20250514",
+  driverId: "anthropic",
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+```
+
+</Tab>
+
+<Tab value="Multi-key">
+
+One binding per provider so tokens never collide:
+
+```typescript
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/auto",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+export const gpt = ai.model("gpt", {
+  provider: "openai",
+  model: "gpt-4.1-mini",
+  apiKey: process.env.OPENAI_API_KEY,
+});
+```
+
+</Tab>
+
+</Tabs>
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `provider` | `string` | — | Registry name or exempt/local label |
+| `model` | `string` | — | Wire model id sent to the provider |
+| `baseUrl` | `string` | auto / omit | Override (always wins over registry) |
+| `apiKey` | `string` | — | Per-binding key (isolates multi-provider apps) |
+| `driverId` | `string` | app default | Protocol driver (`openai-compatible`, `anthropic`, `mock`, …) |
+| `tier` | `string` | — | Optional app label (not the registry status below) |
+
+Empty name throws `TypeError: ai.model: name is required`.
 
 ## Verified providers
 
@@ -92,8 +191,8 @@ Exempt labels (no registry URL): `mock`, `local`, `openai-compatible`.
 
 ## Limited compatibility
 
-`anthropic`, `google`, and alias `gemini` also auto-resolve a URL, with
-documented limits. Prefer native Anthropic for production Claude.
+`anthropic`, `google`, and alias `gemini` also auto-resolve a URL, with documented limits.
+Prefer native Anthropic for production Claude.
 
 | Provider | Base URL (auto) |
 | -------- | --------------- |
@@ -102,17 +201,13 @@ documented limits. Prefer native Anthropic for production Claude.
 
 <Callout type="warn" title="Anthropic OpenAI-compat is evaluation-only">
   Anthropic’s OpenAI-compatible endpoint is for testing/comparison only.
-
   `tools[].function.strict` is ignored; `n` must be 1; no embeddings here.
-
   **Production:** `driverId: "anthropic"` (native Messages API).
 </Callout>
 
 <Callout type="warn" title="Google OpenAI-compat tool schemas">
-  Tool/parameter schemas are not full OpenAI JSON Schema fidelity.
-
-  Complex Flow-as-tool schemas can fail — do not rely on this path for agent
-  tool calling in production.
+  Tool/parameter schemas are not full OpenAI JSON Schema fidelity. Complex Flow-as-tool
+  schemas can fail — do not rely on this path for agent tool calling in production.
 </Callout>
 
 Declare-time and `oke extract` both warn when these providers auto-resolve.
@@ -126,47 +221,55 @@ Declare-time and `oke extract` both warn when these providers auto-resolve.
 
 They are not interchangeable for agents that depend on reliable tool calling.
 
-## Options
+## Streaming
 
-| Option | Type | Meaning |
-| ------ | ---- | ------- |
-| `provider` | `string` | Registry name or exempt/local label |
-| `model` | `string` | Wire model id sent to the provider |
-| `baseUrl` | `string` | Override (always wins over registry) |
-| `apiKey` | `string` | Per-binding key (isolates multi-provider apps) |
-| `driverId` | `string` | Protocol driver (`openai-compatible`, `anthropic`, `mock`, …) |
-| `tier` | `string` | Optional label for your app (not the registry status above) |
+`fx.stream(model, { prompt, data?, via? })` records `asks` and yields token chunks. Drivers
+that do not support stream throw
+`ai: model "…" (driver …) does not support stream`.
 
-## Local recipes
+```typescript
+for await (const chunk of fx.stream(smart, { prompt: "Say hello" })) {
+  // chunk is a string token
+}
+```
 
-| Path | Recipe |
-| ---- | ------ |
-| llama.cpp / Ollama / vLLM / SGLang | [Local AI](/docs/recipes/local-ai) |
-| Zero local infra | [OpenRouter](/docs/recipes/openrouter) |
+## Per-environment drivers
+
+See [AI Overview](/docs/elements/ai#per-environment-drivers). create-oke does **not** pin
+`drivers.ai` by default — unset dev/test → `mock`; prod must declare.
 
 ## Troubleshooting
 
 <Accordions>
+
 <Accordion title='ai.model: unknown provider "…" requires an explicit baseUrl'>
-
-The name is not in the registry (and not an exempt local label). Pass `baseUrl`,
-or use a known provider id from the tables above.
-
+  The name is not in the registry (and not an exempt local label). Pass `baseUrl`, or use a
+  known provider id from the tables above. Exact message lists known providers and notes that
+  Cloudflare always needs `baseUrl`.
 </Accordion>
+
 <Accordion title="Limited-compatibility warn on extract / declare">
-
-Expected for `anthropic` / `google` / `gemini` when auto-resolving the
-OpenAI-compat URL. Switch to native `driverId: "anthropic"` for production Claude.
-
+  Expected for `anthropic` / `google` / `gemini` when auto-resolving the OpenAI-compat URL.
+  Switch to native `driverId: "anthropic"` for production Claude.
 </Accordion>
+
+<Accordion title='ai: no client for model "…" and no defaultDriver'>
+  The binding has no resolvable client and boot has no default AI driver. Pin `drivers.ai` or
+  set `OKE_AI_DRIVER` / `OKE_AI_URL` for the active environment.
+</Accordion>
+
+<Accordion title="TypeError: ai.model: name is required">
+  Pass a non-empty logical name (`"smart"`, `"local"`, …).
+</Accordion>
+
 </Accordions>
 
 ## Learn more
 
-- [OpenRouter](/docs/recipes/openrouter)
-- [Local AI](/docs/recipes/local-ai)
-- [AI](/docs/elements/ai)
-- [Prompts](/docs/elements/ai/prompts)
+- [OpenRouter](/docs/recipes/openrouter) — free / auto / fusion routers
+- [Local AI](/docs/recipes/local-ai) — self-hosted openai-compatible
+- [Prompts](/docs/elements/ai/prompts) — `model.prompt` and `via`
+- [AI](/docs/elements/ai) — element overview and `fx` surface
 
 ## Next
 

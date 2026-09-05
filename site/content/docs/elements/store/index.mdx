@@ -46,9 +46,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { db, notes } from "@/schema";
 
-export const createNote = on(
-  http.post("/notes"),
-  flow("notes.create", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ title: z.string().min(1) }),
     do: async ({ title }, fx) => {
       const id = fx.id();
@@ -99,15 +99,15 @@ Same `fx.store(decl)` from a row insert to cache, blobs, and hybrid search:
 
 Declare tables with `store.schema.table` + `field.*`, then use the session handle:
 
-```typescript title="src/flows/notes/get.ts"
+```typescript title="src/flows/notes/[id]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
-export const getNote = on(
-  http.get("/notes/:id"),
-  flow("notes.get", {
+export const get = on(
+  http.get(),
+  flow({
     in: z.object({ id: z.string() }),
     errors: { NotFound: z.object({ id: z.string() }) },
     do: async ({ id }, fx) => {
@@ -157,14 +157,14 @@ export const sessions = store.kv("sessions");
 
 Bucket I/O is `put` / `get` / `delete` / `list`. Images use `putImage` or the chainable `image(…)` pipeline:
 
-```typescript title="src/flows/avatars/put.ts"
+```typescript title="src/flows/avatars/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 import { uploads } from "@/core";
 
-export const putAvatar = on(
-  http.post("/avatars"),
-  flow("avatars.put", {
+export const create = on(
+  http.post(),
+  flow({
     in: z.object({ bytes: z.string() }),
     do: async ({ bytes }, fx) => {
       const key = `avatars/${fx.id()}.png`;

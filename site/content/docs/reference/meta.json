@@ -3,14 +3,13 @@
   "icon": "BookMarked",
   "pages": [
     "index",
-    "architecture",
-    "manifest",
+    "cli",
     "configuration",
-    "fx",
-    "i18n",
-    "client",
     "environment-variables",
+    "fx",
     "errors",
+    "security",
+    "i18n",
     "plugins",
     "okid"
   ]

@@ -1,49 +1,245 @@
 ---
 title: "Prompts"
-description: "Typed input and output schemas, token budgets, automatic model fallbacks, and evaluation assertions."
+description: "Versioned prompt artifacts on ai.model — out schemas, via recovery, budgets, timeouts, and fx.ask."
 icon: "FileCode"
+source: "docs/spec/unified-theory.md"
 ---
 
-Versioned Prompts (`ai.prompt`) enforce structured inputs and outputs when calling LLMs.
+A prompt is a **versioned artifact** minted on a model binding (`smart.prompt(...)`). It names
+the ask, optional `in` / `out` shapes, a recovery chain, and a cost cap — then Flows call it
+with `fx.ask`.
 
-## What it is
+For developers who need typed triage JSON and a fallback model — declare once, ask everywhere.
 
-Prompts define strict Zod contracts for both the variables injected into templates and the structured JSON output returned by the model. If a model generates invalid JSON, OKE retries automatically with schema error corrections.
+<Callout title="The one rule">
+  Mint prompts with `model.prompt(name, options)` — there is no top-level `ai.prompt`. Input is
+  JSON-serialized (no `template` / `{{var}}` API). When `out` is set, the reply must match or
+  the ask throws.
+</Callout>
 
 ## Smallest Example
 
 <Steps>
 
 <Step>
-### Define prompt contract
+### Mint a prompt on a model
 
-```typescript title="src/ai/classify.ts"
+```typescript title="src/core/ai.ts"
 import { ai } from "okengine";
 import { z } from "zod";
 
-export const classifyTicket = ai.prompt("support.classify", {
-  model: "fast-cloud",
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+export const classifyTicket = smart.prompt("support.classify", {
+  version: 1,
+  budget: { maxCostPerCall: 0.01 },
   in: z.object({ message: z.string() }),
   out: z.object({
     category: z.enum(["billing", "technical", "feature_request"]),
     urgency: z.enum(["low", "medium", "high"]),
   }),
-  template: "Classify this support inquiry:\n\n{{message}}",
-  budget: { maxCostPerCall: 0.01 },
 });
 ```
 
 </Step>
 
+<Step>
+### Ask from a Flow
+
+```typescript title="src/flows/support/classify.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { classifyTicket } from "@/core/ai";
+
+export const classify = on(
+  http.post(),
+  flow({
+    in: z.object({ message: z.string().min(1) }),
+    do: async ({ message }, fx) => {
+      return await fx.ask(classifyTicket, { message });
+    },
+  }),
+);
+```
+
+Manifest lists `asks: ["support.classify"]`. Pin a version at call time with
+`fx.ask("support.classify@1", input)`.
+
+</Step>
+
+<Step>
+### See structured output
+
+With `out` set, the runtime appends a schema instruction and validates the JSON reply. Invalid
+shape → `AiSchemaValidationError` (`code: "AiSchemaInvalid"`) — **no** automatic correction
+retry.
+
+</Step>
+
 </Steps>
+
+## Progressive Patterns
+
+<Tabs items={["Minimal", "via", "Budget", "Tools"]}>
+
+<Tab value="Minimal">
+
+Name + optional version — model is the parent binding:
+
+```typescript
+export const summarize = smart.prompt("docs.summarize", { version: 1 });
+
+await fx.ask(summarize, { text: "…" });
+```
+
+</Tab>
+
+<Tab value="via">
+
+Ordered logical model names for recovery. Resolution:
+`ask.via ?? prompt.via ?? [prompt.model]`:
+
+```typescript
+export const triage = smart.prompt("ticket-triage", {
+  version: 1,
+  via: ["smart", "local"],
+  out: z.object({ category: z.string() }),
+});
+
+await fx.ask(triage, input, { via: ["local"] }); // call override
+```
+
+**Consequence:** each via step uses that binding’s own `apiKey` / `baseUrl`.
+
+</Tab>
+
+<Tab value="Budget">
+
+Per-call cost cap — exceeded throws `AiBudgetExceededError`:
+
+```typescript
+smart.prompt("ticket-triage", {
+  budget: { maxCostPerCall: 0.02 },
+});
+```
+
+`maxCostPerRun` on a prompt budget is reserved for multi-step asks; agents use
+`budget.maxCostPerRun` on `ai.agent`.
+
+</Tab>
+
+<Tab value="Tools">
+
+Offer Flows for one ask without declaring an agent:
+
+```typescript
+await fx.ask(triage, { message }, {
+  tools: ["docs.search", "tickets.create"],
+  maxSteps: 4,
+});
+```
+
+Default `maxSteps` is `6`. Tool names also stamp `effects.calls`.
+
+</Tab>
+
+</Tabs>
+
+## Options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `version` | `number` | — | Pin with `fx.ask("name@N")` |
+| `evals` | `string` | — | Path for `oke eval` JSONL |
+| `budget` | `{ maxCostPerCall?, maxCostPerRun? }` | — | Cost contracts |
+| `via` | `string[]` | `[parent model]` | Recovery chain of logical names |
+| `timeout` | `"30s"` \| ms | — | Ask deadline (not a cost budget) |
+| `in` | Schema | — | Declared / Manifest / doctor — **not** runtime-validated on ask |
+| `out` | Schema | — | Runtime-validated (Zod / JSON Schema / field shorthand) |
+
+## How input reaches the model
+
+There is **no** template string API. The runtime JSON-stringifies the ask input (redacting
+secrets), and when `out` is set appends:
+
+```text
+Reply with JSON only matching this schema: …
+```
+
+Pass the fields you need as the second argument to `fx.ask` — do not invent `template` /
+`{{message}}` options.
+
+## `fx.ask` options
+
+| Option | Type | Default | Meaning |
+| ------ | ---- | ------- | ------- |
+| `via` | refs | prompt chain | Override recovery for this call |
+| `timeout` | duration | prompt `timeout` | Per-call deadline |
+| `tools` | Flow refs | — | Tool loop via `fx.call` |
+| `maxSteps` | `number` | `6` | Cap on tool rounds |
+
+## Embeds (related)
+
+`ai.embed` is a separate declaration for vector pipelines into `store.index`:
+
+```typescript
+export const kb = ai.embed("kb", {
+  model: "smart",
+  into: "knowledge",
+});
+
+const vector = await fx.embed(smart, "install guide");
+const hits = await fx.search(kb, "how to install", { topK: 5 });
+```
+
+`fx.embed` records `embeds` (not `asks`). Missing `into` or a non-vector index fails at
+runtime with `ai: embed "…" has no into` / vector-index errors.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='ai: unknown prompt "…"'>
+  The name was never registered with `model.prompt`, or the AI module was not imported before
+  boot.
+</Accordion>
+
+<Accordion title="OKE1005 — UNDECLARED_ASK">
+  Cause: `Flow "{flow}" asks "{resource}" without declaring it.` Use the prompt handle in `do`
+  or list `effects: { asks: ["support.classify"] }`.
+</Accordion>
+
+<Accordion title='ai: schema validation failed for prompt "…"@N'>
+  `AiSchemaValidationError` — the model reply failed `out`. Message includes missing / extra /
+  type issues. There is no retry-with-corrections loop.
+</Accordion>
+
+<Accordion title='ai: prompt "…" exceeded maxCostPerCall'>
+  `AiBudgetExceededError` — raise `budget.maxCostPerCall` or reduce tokens / tool rounds.
+</Accordion>
+
+<Accordion title='ai: all models failed for prompt "…"'>
+  Every entry in the `via` chain failed (network, auth, or provider error). Check each
+  binding’s `apiKey` / `baseUrl` and driver health.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Models](/docs/elements/ai/models) — bindings and providers
+- [Agents](/docs/elements/ai/agents) — multi-step `fx.run`
+- [AI](/docs/elements/ai) — guardrails and PII egress
+- [OpenRouter](/docs/recipes/openrouter) — cloud ask recipe
 
 ## Next
 
 <Cards>
-  <Card
-    title="Bounded Agents"
-    description="Build autonomous agents where tools are Flows."
-    href="/docs/elements/ai/agents"
-  />
-  <Card title="AI Overview" description="Return to AI overview." href="/docs/elements/ai" />
+  <Card title="Agents" description="Bounded agents whose tools are Flows." href="/docs/elements/ai/agents" />
+  <Card title="Models" description="Provider registry and drivers." href="/docs/elements/ai/models" />
+  <Card title="AI" description="Element overview." href="/docs/elements/ai" />
 </Cards>

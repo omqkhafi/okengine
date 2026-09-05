@@ -2,6 +2,7 @@
 title: "Configuration"
 description: "Every option in oke.config.ts — three environments (dev · test · prod), drivers, images, i18n, tenancy, privacy, db sync, topology, ports, and console."
 icon: "Settings2"
+source: "docs/spec/unified-theory.md"
 ---
 
 Complete reference for `oke.config.ts`. Options below match `defineConfig`. Driver maps use three keys: **dev** · **test** · **prod**.
@@ -14,9 +15,9 @@ export default defineConfig({
 });
 ```
 
-<Callout title="Philosophy">
-  We test on what we deploy. Local development runs the same stack as production via Docker. Tests
-  use PGLite for speed without sacrificing Postgres correctness.
+<Callout title="The one rule">
+  Pin drivers and images in `oke.config.ts` for `dev` · `test` · `prod`. We test on what we
+  deploy: Docker-first local stack, PGLite for tests, same protocol ids in production.
 </Callout>
 
 ## Environments
@@ -163,7 +164,7 @@ Omitted image keys mean no container for that role. When both `store.sql` and `p
 
 For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays `redis`.
 `{ durable: true }` KV lives in SQL (`oke_kv` on `DATABASE_URL`), not a second Redis image.
-For `ai`, see [Recipes · AI](/docs/recipes#ai-local--self-hosted). For `proxy`, see [Reverse proxy](/docs/deployment/reverse-proxy).
+For `ai`, see [Recipes · AI](/docs/recipes#ai-local--self-hosted). For `proxy`, see [Caddy](/docs/recipes/caddy), [Traefik](/docs/recipes/traefik), or [nginx](/docs/recipes/nginx).
 
 ## i18n
 
@@ -267,6 +268,23 @@ Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated t
 
 ## Learn more
 
-- [CLI Reference](/docs/reference/cli) — `oke dev` · `oke test` · `oke db`
+- [CLI](/docs/reference/cli) — `oke dev` · `oke test` · `oke db`
 - [Environment Variables](/docs/reference/environment-variables) — URL and secret resolution
 - [Store](/docs/elements/store) — what the store drivers back
+- [i18n](/docs/reference/i18n) — locale catalogs beyond the config block
+
+## Next
+
+<Cards>
+  <Card
+    title="Environment Variables"
+    description="URLs and secrets Compose writes."
+    href="/docs/reference/environment-variables"
+  />
+  <Card title="CLI" description="Commands that honor this config." href="/docs/reference/cli" />
+  <Card
+    title="Security"
+    description="Host, Origin, planes, and MCP ports."
+    href="/docs/reference/security"
+  />
+</Cards>

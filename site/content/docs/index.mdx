@@ -12,11 +12,10 @@ Welcome to the OKEngine handbook. Keep the model small; let the backend grow wit
 </Callout>
 
 ```ts
-on(http.post("/bookings"), createBooking);
+on(http.post(), createBooking); // path + name from the file tree
 on(expireStaleClock, expireStale);
 on(orderPlaced, sendReceipt);
 ```
-
 ## 01 Understand
 
 Master the mental model before exploring features:
@@ -43,13 +42,13 @@ Master the mental model before exploring features:
     href="/docs/understand/the-anatomy"
   />
   <Card
-    title="See It Work"
-    description="The single command that starts the runtime, and what happens in the first three seconds."
-    href="/docs/understand/the-anatomy"
+    title="Try It"
+    description="From an empty folder to a Flow running in the Console — one sitting, minimal detour."
+    href="/docs/ai/try-it"
   />
 </Cards>
 
-## 02 Elements & 03 Build
+## 02 Elements
 
 Deep primitives and execution law:
 
@@ -60,32 +59,22 @@ Deep primitives and execution law:
     href="/docs/elements"
   />
   <Card
-    title="Architecture"
-    description="Unified backend architecture and multi-port layout."
-    href="/docs/reference/architecture"
+    title="Reference"
+    description="CLI, configuration, fx, errors, security, and plugins."
+    href="/docs/reference"
   />
   <Card
-    title="AI & MCP Surface"
+    title="AI Resources"
     description="Runtime MCP (:6535), docs MCP (:6536), agent skills, and machine-readable docs."
     href="/docs/ai"
   />
-  <Card
-    title="Reference"
-    description="Fx surface, configuration, client SDK, errors, and manifest."
-    href="/docs/reference"
-  />
 </Cards>
 
-## 04 Operate & 05 Extend
+## 03 Extend
 
-Deploy to production and connect to infrastructure:
+Connect to infrastructure and extend the model:
 
 <Cards>
-  <Card
-    title="Deployment"
-    description="Production runtime operations: Docker, Swarm, Kubernetes, and reverse proxy."
-    href="/docs/deployment"
-  />
   <Card
     title="Plugins"
     description="Official extensions that add capabilities without creating a ninth element."
@@ -100,5 +89,37 @@ Deploy to production and connect to infrastructure:
     title="Recipes"
     description="Self-hosted Docker compose recipes for SQL, KV, search, and local AI."
     href="/docs/recipes"
+  />
+</Cards>
+
+## 04 Client
+
+Call your Flows from a browser, CLI, or another service — typed, zero separate codegen:
+
+<Cards>
+  <Card
+    title="Overview"
+    description="createClient, envelopes as values, and how Client relates to the eight elements."
+    href="/docs/client"
+  />
+  <Card
+    title="Calling"
+    description="REST vs RPC, options, result helpers, resources, and remote types."
+    href="/docs/client/calling"
+  />
+  <Card
+    title="Auth"
+    description="Bearer sessions, refresh once on 401, and gate denials as values."
+    href="/docs/client/auth"
+  />
+  <Card
+    title="Live"
+    description="api.live SSE, resume, and live resource queries."
+    href="/docs/client/live"
+  />
+  <Card
+    title="React"
+    description="useSession, useLive, and useLiveQuery from okengine/client-react."
+    href="/docs/client/react"
   />
 </Cards>

@@ -1,0 +1,5 @@
+{
+  "title": "Client",
+  "icon": "Cable",
+  "pages": ["index", "calling", "auth", "live", "react"]
+}

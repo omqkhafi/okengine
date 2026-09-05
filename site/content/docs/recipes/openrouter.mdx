@@ -42,11 +42,11 @@ export const triage = smart.prompt("triage");
 <Step>
 ### Ask from a flow
 
-```typescript
+```typescript title="src/flows/main/ask.ts"
 import { on, flow, http } from "okengine";
 
 export const ask = on(
-  http.post("/ask"),
+  http.post(),
   flow({ asks: ["triage"] }, async (fx, input) => {
     return await fx.ask("triage", input);
   }),
@@ -59,9 +59,8 @@ export const ask = on(
 ### Optional setup via CLI
 
 create-oke **AI setup → Recommended** picks OpenRouter with `openrouter/free`
-(no Docker) and prompts for `OPENROUTER_API_KEY`. `oke ai setup --provider openrouter`
-writes the same `openai-compatible` driver wiring. Or create a key at
-[openrouter.ai](https://openrouter.ai) and set `OPENROUTER_API_KEY`.
+and prompts for `OPENROUTER_API_KEY`. `oke ai setup --provider openrouter`
+writes the same wiring — or create a key at [openrouter.ai](https://openrouter.ai).
 
 </Step>
 
