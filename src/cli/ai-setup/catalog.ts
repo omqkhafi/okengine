@@ -90,14 +90,6 @@ export const CLOUD_PROVIDERS: readonly CloudProviderMenuEntry[] = [
     apiKeyEnv: "DEEPINFRA_API_KEY",
   },
   {
-    value: "meta",
-    label: "Meta Model API",
-    hint: "Muse Spark",
-    driver: "openai-compatible",
-    baseUrl: getAiProviderEntry("meta")!.baseUrl,
-    apiKeyEnv: "MODEL_API_KEY",
-  },
-  {
     value: "vercel",
     label: "Vercel AI Gateway",
     driver: "openai-compatible",
@@ -341,14 +333,6 @@ export const CLOUD_CHAT_MODELS: Readonly<Record<string, readonly CloudModel[]>> 
       id: "meta-llama/Meta-Llama-3.1-8B-Instruct",
       label: "Llama 3.1 8B",
       hint: "Fast",
-      recommended: true,
-    },
-  ],
-  meta: [
-    {
-      id: "muse-spark-1.2",
-      label: "Muse Spark",
-      hint: "Meta Model API",
       recommended: true,
     },
   ],

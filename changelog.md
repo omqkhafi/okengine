@@ -275,6 +275,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - CLI docs note that `oke dev` streams Compose pull / create / start progress
   into boot status lines.
+- Models docs drop the incorrect `meta` registry row; Cloudflare and Meta are
+  listed as omitted hosts that always need an explicit `baseUrl`.
 - PgDog recipe healthcheck table matches the 2s interval / 20 retries.
 - CLI docs drop the old `oke dev` TTY live-keys bar (`?`/`r`/`s`/`q`/`u`/`x`);
   quit with Ctrl+C; seed via `oke db seed` or the first-boot prompt.
@@ -347,6 +349,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Browser JSON page removes interactive Authentication (header key + rail
   Inherit/Custom). Handled-request auth mark in the strip remains. Re-add later
   with a clean plan.
+- Dropped incorrect `meta` OpenAI-compat registry entry
+  (`https://api.meta.ai/v1`). Meta’s Llama OpenAI-compat API was retired; the
+  hardcoded host was never the historical Llama URL and is not a verified
+  chat-completions endpoint. `provider: "meta"` without `baseUrl` now fails
+  loud (same posture as Cloudflare). Removed from `oke ai setup` / create-oke
+  menus.
 
 ### 🐛 Fixed
 

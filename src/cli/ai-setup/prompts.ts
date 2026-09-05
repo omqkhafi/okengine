@@ -22,7 +22,6 @@ export type AiSetupProvider =
   | "mistral"
   | "xai"
   | "deepinfra"
-  | "meta"
   | "vercel"
   | "gemini"
   | "lmstudio"

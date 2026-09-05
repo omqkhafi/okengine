@@ -180,13 +180,14 @@ These names auto-resolve a verified OpenAI-compatible `baseUrl`:
 | `groq` | `https://api.groq.com/openai/v1` |
 | `together` | `https://api.together.ai/v1` |
 | `deepinfra` | `https://api.deepinfra.com/v1/openai` |
-| `meta` | `https://api.meta.ai/v1` |
 | `xai` | `https://api.x.ai/v1` |
 | `mistral` | `https://api.mistral.ai/v1` |
 | `deepseek` | `https://api.deepseek.com` |
 | `vercel` | `https://ai-gateway.vercel.sh/v1` |
 
-Cloudflare Workers AI is **not** registered — account-scoped URL; pass `baseUrl`.
+**Not** registered (pass `baseUrl` if you still need them): Cloudflare Workers AI
+(account-scoped URL); Meta (retired Llama OpenAI-compat API / unverified Muse Spark
+host — do not guess a URL).
 
 Exempt labels (no registry URL): `mock`, `local`, `openai-compatible`.
 
@@ -246,7 +247,7 @@ See [AI Overview](/docs/elements/ai#per-environment-drivers). create-oke does **
 <Accordion title='ai.model: unknown provider "…" requires an explicit baseUrl'>
   The name is not in the registry (and not an exempt local label). Pass `baseUrl`, or use a
   known provider id from the tables above. Exact message lists known providers and notes that
-  Cloudflare always needs `baseUrl`.
+  Cloudflare and Meta always need `baseUrl`.
 </Accordion>
 
 <Accordion title="Limited-compatibility warn on extract / declare">

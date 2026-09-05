@@ -124,7 +124,6 @@ export const AI_PROVIDERS = [
   { value: "mistral", label: "Mistral", driver: "openai-compatible" },
   { value: "xai", label: "xAI (Grok)", driver: "openai-compatible" },
   { value: "deepinfra", label: "DeepInfra", driver: "openai-compatible" },
-  { value: "meta", label: "Meta Model API", driver: "openai-compatible" },
   { value: "vercel", label: "Vercel AI Gateway", driver: "openai-compatible" },
   { value: "gemini", label: "Google Gemini", driver: "openai-compatible" },
   { value: "lmstudio", label: "LM Studio", driver: "openai-compatible" },

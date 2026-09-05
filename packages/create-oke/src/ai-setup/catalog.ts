@@ -88,14 +88,6 @@ export const CLOUD_PROVIDERS: readonly CloudProviderMenuEntry[] = [
     apiKeyEnv: "DEEPINFRA_API_KEY",
   },
   {
-    value: "meta",
-    label: "Meta Model API",
-    hint: "Muse Spark",
-    driver: "openai-compatible",
-    baseUrl: "https://api.meta.ai/v1",
-    apiKeyEnv: "MODEL_API_KEY",
-  },
-  {
     value: "vercel",
     label: "Vercel AI Gateway",
     driver: "openai-compatible",
@@ -342,14 +334,6 @@ export const CLOUD_CHAT_MODELS: Readonly<Record<string, readonly CloudModel[]>> 
       recommended: true,
     },
   ],
-  meta: [
-    {
-      id: "muse-spark-1.2",
-      label: "Muse Spark",
-      hint: "Meta Model API",
-      recommended: true,
-    },
-  ],
   vercel: [
     {
       id: "openai/gpt-4o-mini",
@@ -434,7 +418,7 @@ export function cloudApplyDefaults(
   }
   const provider = meta.provider ?? meta.value;
   const registryKnown = new Set([
-    "openai", "openrouter", "groq", "together", "deepinfra", "meta", "xai",
+    "openai", "openrouter", "groq", "together", "deepinfra", "xai",
     "mistral", "deepseek", "vercel", "google", "gemini", "anthropic",
   ]);
   // Registry openai-compat: omit baseUrl so ai.model auto-resolves.

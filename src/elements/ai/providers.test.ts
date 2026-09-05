@@ -53,6 +53,9 @@ describe("resolveAiModelBaseUrl", () => {
     expect(() => resolveAiModelBaseUrl({ provider: "cloudflare" })).toThrow(
       /unknown provider "cloudflare" requires an explicit baseUrl/,
     );
+    expect(() => resolveAiModelBaseUrl({ provider: "meta" })).toThrow(
+      /unknown provider "meta" requires an explicit baseUrl/,
+    );
     expect(() => resolveAiModelBaseUrl({ provider: "not-a-real-provider" })).toThrow(
       /unknown provider "not-a-real-provider"/,
     );

@@ -44,7 +44,8 @@ const GOOGLE_ENTRY: AiProviderEntry = {
 
 /**
  * Verified OpenAI-compatible providers — URLs locked from official sources.
- * Cloudflare is omitted (account-scoped URL; require explicit baseUrl).
+ * Omitted (require explicit `baseUrl`): Cloudflare (account-scoped URL);
+ * Meta (retired Llama API / unverified Muse Spark host — never guess).
  */
 export const AI_OPENAI_COMPAT_PROVIDERS: Readonly<Record<string, AiProviderEntry>> = {
   openai: { baseUrl: "https://api.openai.com/v1", tier: 1 },
@@ -52,7 +53,6 @@ export const AI_OPENAI_COMPAT_PROVIDERS: Readonly<Record<string, AiProviderEntry
   groq: { baseUrl: "https://api.groq.com/openai/v1", tier: 1 },
   together: { baseUrl: "https://api.together.ai/v1", tier: 1 },
   deepinfra: { baseUrl: "https://api.deepinfra.com/v1/openai", tier: 1 },
-  meta: { baseUrl: "https://api.meta.ai/v1", tier: 1 },
   xai: { baseUrl: "https://api.x.ai/v1", tier: 1 },
   mistral: { baseUrl: "https://api.mistral.ai/v1", tier: 1 },
   deepseek: { baseUrl: "https://api.deepseek.com", tier: 1 },
@@ -88,7 +88,7 @@ export function unknownAiProviderBaseUrlError(provider: string): Error {
         .filter((k) => k !== "gemini")
         .sort()
         .join(", ")}; ` +
-      `gemini is an alias of google). Cloudflare and other account-scoped endpoints always need baseUrl.`,
+      `gemini is an alias of google). Cloudflare, Meta, and other omitted / account-scoped endpoints always need baseUrl.`,
   );
 }
 
