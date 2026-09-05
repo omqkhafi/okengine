@@ -8,22 +8,15 @@ source: "docs/spec/unified-theory.md"
 `gate.rate` protects Flows from abuse and runaway clients. Limits run as atomic takes on the KV
 driver before `do`. Compose rates with policies via `gate.all` or list them on `.gate(...)`.
 
+For developers throttling login, writes, and expensive reads on okengine — declare the window,
+key the subject, attach on the trigger.
+
 <Callout title="The one rule">
   Pass options as one object: `{ max, per, keyBy? }`. There is no `gate.rate(name, { limit, window })`
   form — the runtime names the gate from strategy and window.
 </Callout>
 
-## Strategies
-
-| Strategy                 | Best for                         |
-| ------------------------ | -------------------------------- |
-| `sliding-window-counter` | Default — accuracy vs cost       |
-| `token-bucket`           | Bursty traffic with refill       |
-| `leaky-bucket`           | Smooth outbound rate             |
-| `fixed-window`           | Simple reset intervals           |
-| `sliding-log`            | Strict precision                 |
-
-## Quick start
+## Smallest Example
 
 <Steps>
 
@@ -41,6 +34,8 @@ export const loginThrottle = gate.rate({
   description: "Login attempts per IP",
 });
 ```
+
+The runtime name is `rate:sliding-window-counter:5/1m` (strategy · max · per).
 
 </Step>
 
@@ -62,33 +57,309 @@ export const login = on(
 );
 ```
 
-A burned quota returns typed `RateLimited` with `retryAfterMs` — never a thrown stack mid-`do`.
+</Step>
+
+<Step>
+### See a burned quota
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "RateLimited",
+    "message": "Too many requests. Try again later.",
+    "data": { "retryAfterMs": 42000 }
+  }
+}
+```
+
+Status is `429 Too Many Requests`. Clients should wait `retryAfterMs` before retrying.
 
 </Step>
 
 </Steps>
 
+## Progressive Patterns
+
+From the default counter to bursty buckets and subject keys:
+
+<Tabs items={["Default", "Token bucket", "keyBy", "Compose"]}>
+
+<Tab value="Default">
+
+Omit `strategy` for `sliding-window-counter` — best accuracy-to-cost ratio (two KV keys, no
+boundary bursts):
+
+```typescript
+export const fair = gate.rate({ max: 60, per: "1m", keyBy: "user" });
+```
+
+</Tab>
+
+<Tab value="Token bucket">
+
+Allow short bursts that refill over `per`:
+
+```typescript
+export const bursty = gate.rate({
+  strategy: "token-bucket",
+  max: 20,
+  per: "1m",
+  keyBy: "user",
+});
+```
+
+Use `leaky-bucket` when you need a smooth outbound rate instead of burst capacity.
+
+</Tab>
+
+<Tab value="keyBy">
+
+Subject dimension for the take key:
+
+| `keyBy`              | Subject                                           |
+| -------------------- | ------------------------------------------------- |
+| `"user"`             | `auth.userId` (else `meta.userId`, else `"anon"`) |
+| `"ip"`               | `meta.ip` (else `"0.0.0.0"`)                      |
+| `"operator"`         | `operator.id` (else `"anon"`)                     |
+| `"global"` / omitted | Shared `"global"` bucket                          |
+| other string         | `meta[keyBy]` when present, else the literal      |
+
+```typescript
+gate.rate({ max: 100, per: "1h", keyBy: "ip" });
+gate.rate({ max: 10, per: "1s" }); // global
+```
+
+</Tab>
+
+<Tab value="Compose">
+
+Rates sit on the same chain as policies — first denial wins:
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http, gate } from "okengine";
+
+export const notesMutate = gate.all(
+  gate.policy("member", ({ auth }) => !!auth.verified),
+  gate.scope("notes:write"),
+  gate.rate({ max: 60, per: "1m", keyBy: "user" }),
+);
+
+export const createNote = on(
+  http.post("/notes").gate(notesMutate),
+  flow("notes.create", {
+    do: async (input, fx) => fx.json.create({ id: fx.id(), ...input }),
+  }),
+);
+```
+
+Put identity policies **before** rates when anonymous traffic should 401 instead of burning
+quota under `"anon"`.
+
+</Tab>
+
+</Tabs>
+
+## Strategies
+
+| Strategy                 | Best for                   | Cost shape                  |
+| ------------------------ | -------------------------- | --------------------------- |
+| `sliding-window-counter` | Default — accuracy vs cost | Two keys, weighted estimate |
+| `token-bucket`           | Bursty traffic with refill | One hash (`tokens`, `ts`)   |
+| `leaky-bucket`           | Smooth outbound rate       | One hash (`level`, `ts`)    |
+| `fixed-window`           | Simple reset intervals     | One counter per bucket      |
+| `sliding-log`            | Strict precision           | ZSET of event timestamps    |
+
+All five run as atomic Lua on the KV driver (memory / redis EVAL).
+
+<Callout title="Detailed section">
+  Pick the strategy from product physics, not fashion. The default covers most HTTP write paths;
+  switch only when you need bursts, smooth leak, or exact event logs.
+</Callout>
+
+<Tabs items={["sliding-window-counter", "token-bucket", "leaky-bucket", "fixed-window", "sliding-log"]}>
+
+<Tab value="sliding-window-counter">
+
+Near-exact rolling window without boundary spikes of a naive fixed window:
+
+```typescript
+gate.rate({
+  strategy: "sliding-window-counter", // or omit — this is the default
+  max: 100,
+  per: "1m",
+  keyBy: "user",
+});
+```
+
+Uses current + previous window counters with a time-weighted estimate.
+
+</Tab>
+
+<Tab value="token-bucket">
+
+Burst up to `max`, then refill smoothly across `per`:
+
+```typescript
+gate.rate({
+  strategy: "token-bucket",
+  max: 20,
+  per: "1m",
+  keyBy: "ip",
+});
+```
+
+**Consequence:** a quiet client can spend its full burst immediately after idle time.
+
+</Tab>
+
+<Tab value="leaky-bucket">
+
+Smooth outbound rate — rejects when the “bucket level” would exceed `max`:
+
+```typescript
+gate.rate({
+  strategy: "leaky-bucket",
+  max: 50,
+  per: "1m",
+  keyBy: "user",
+});
+```
+
+Prefer this for upstream APIs that punish spikes more than averages.
+
+</Tab>
+
+<Tab value="fixed-window">
+
+Simple counter that resets each `per` bucket:
+
+```typescript
+gate.rate({
+  strategy: "fixed-window",
+  max: 1000,
+  per: "1h",
+  keyBy: "global",
+});
+```
+
+Cheapest layout; allows a double-burst at the bucket boundary.
+
+</Tab>
+
+<Tab value="sliding-log">
+
+Exact event log (ZSET of timestamps) — strict precision at higher cost:
+
+```typescript
+gate.rate({
+  strategy: "sliding-log",
+  max: 10,
+  per: "1m",
+  keyBy: "ip",
+});
+```
+
+Use for sensitive endpoints where approximate counters are not enough.
+
+</Tab>
+
+</Tabs>
+
 ## Options
 
-| Option         | Type           | Default                   | Meaning                                      |
-| -------------- | -------------- | ------------------------- | -------------------------------------------- |
-| `max`          | `number`       | required                  | Takes allowed within `per`                   |
-| `per`          | `string`       | required                  | Window / refill (`"1m"`, `"60s"`, …)         |
-| `strategy`     | `RateStrategy` | `sliding-window-counter`  | Algorithm id                                 |
-| `keyBy`        | `string`       | —                         | Subject dim (`"ip"`, `"user"`, …)            |
-| `overridable`  | `boolean`      | `false`                   | Console may override `max` / `per` in Store  |
-| `description`  | `string`       | —                         | Human label for Console / docs               |
+| Option        | Type           | Default                  | Meaning                                      |
+| ------------- | -------------- | ------------------------ | -------------------------------------------- |
+| `max`         | `number`       | required                 | Takes allowed within `per` (`> 0`)           |
+| `per`         | `string`       | required                 | Window / refill (`"1m"`, `"60s"`, `"1h"`, …) |
+| `strategy`    | `RateStrategy` | `sliding-window-counter` | Algorithm id                                 |
+| `keyBy`       | `string`       | global                   | Subject dim (`"ip"`, `"user"`, …)            |
+| `overridable` | `boolean`      | `false`                  | Console may override `max` / `per` in Store  |
+| `description` | `string`       | —                        | Human label for Console / docs               |
 
 **Consequence:** rate gates need a KV driver in the app. Without KV, evaluation denies with
-`reason: "rate gate requires kv"`.
+telemetry reason `"rate gate requires kv"` and the typed code is still `RateLimited`.
+
+Declare-time guards:
+
+- `gate.rate: max must be a positive number`
+- `gate.rate: per is required`
+
+Invalid `per` at evaluation → deny with `reason: "invalid per: …"`.
+
+## Naming & Overrides
+
+The runtime name is always `rate:{strategy}:{max}/{per}`:
+
+```text
+rate:sliding-window-counter:60/1m
+rate:token-bucket:20/1m
+```
+
+When `overridable: true`, Console may tune `max` / `per` in Store without a code deploy. Leave
+it `false` (default) for hard product limits.
+
+`oke({ gate: { rateLimit: { enabled } } })` controls whether **auth path** Flows attach
+stricter presets. Default is `true` when `gate.auth` is on, `false` otherwise — it does not
+replace your own `gate.rate` declarations.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="429 RateLimited immediately">
+  Quota burned for that subject. Inspect `retryAfterMs`, widen `per`, raise `max`, or change `keyBy`
+  so clients do not share one global bucket unintentionally.
+</Accordion>
+
+<Accordion title='Denial reason "rate gate requires kv"'>
+  Configure a KV driver (`memory` for local, `redis` for multi-instance). Policy-only apps can omit
+  KV; any `gate.rate` on a hot path cannot. The HTTP envelope is still `RateLimited`.
+</Accordion>
+
+<Accordion title="Anonymous traffic burns user quotas">
+  With `keyBy: "user"`, missing `userId` maps to `"anon"` — shared. Put a member policy before the
+  rate, or key by `"ip"` for public endpoints.
+</Accordion>
+
+<Accordion title="TypeError: gate.rate: max must be a positive number">
+  `max` must be `> 0`. Zero and negatives fail at declare.
+</Accordion>
+
+<Accordion title="TypeError: gate.rate: per is required">
+  Pass a duration string (`"1m"`, `"30s"`, …). Empty / missing `per` fails at declare.
+</Accordion>
+
+<Accordion title='Denial reason "invalid per: …"'>
+  The duration string did not parse to a positive window. Use `ms|s|m|h|d` style values the Clock
+  duration parser accepts (`"1m"`, `"60s"`, `"1h"`).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Gate Overview](/docs/elements/gate) — chain order and denial mapping
+- [Authorization](/docs/elements/gate/authorization) — policies on the same `.gate(...)`
+- [Store · KV](/docs/elements/store/kv) — KV facet drivers
+- [HTTP](/docs/elements/flow/http) — attach rates on REST routes
 
 ## Next
 
 <Cards>
   <Card
+    title="Tenancy"
+    description="Resolve fx.tenant.id for B2B isolation."
+    href="/docs/elements/gate/tenancy"
+  />
+  <Card
+    title="RLS"
+    description="Stamp Gate identity into SQL row policies."
+    href="/docs/elements/gate/rls"
+  />
+  <Card
     title="Vault Element"
     description="Secrets and protected configuration."
     href="/docs/elements/vault"
   />
-  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
 </Cards>

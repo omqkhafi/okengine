@@ -1,0 +1,303 @@
+---
+title: "RLS"
+description: "Row-level security — Gate identity stamped into SQL so store.schema.policy helpers filter every fx.store query."
+icon: "Rows3"
+source: "docs/spec/unified-theory.md"
+---
+
+Gate decides whether a caller may run a Flow. **RLS** decides which SQL rows that
+caller may see or change.
+
+After `.gate(...)` passes, `fx.store` stamps the principal into Postgres session GUCs
+(`oke.gate` · `oke.user` · `oke.scopes` · `oke.tenant`) so table policies enforce the
+same identity.
+
+For developers shipping multi-user SQL on okengine — declare Gate policies, attach them
+on the trigger, and mirror them on the table with `store.schema.policy.*`.
+
+<Callout title="The one rule">
+  Put row predicates on the **table** (`store.schema.policy.gate` / `owner` / `scope` / `tenant`).
+  Put permission to **act** on the **trigger** (`.gate(...)`). Never invent a separate middleware
+  layer — the stamp rides every `fx.store` call.
+</Callout>
+
+## Smallest Example
+
+<Steps>
+
+<Step>
+### Declare a Gate policy and an RLS table
+
+```typescript title="src/core/gate.ts"
+import { gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+```
+
+```typescript title="src/db/schema.decl.ts"
+import { store, field } from "okengine";
+
+export const tasks = store.schema.table(
+  "tasks",
+  {
+    id: field.id().primaryKey(),
+    owner: field.text().notNull(),
+    title: field.text().notNull(),
+  },
+  [
+    store.schema.policy.gate("member", { for: "select" }),
+    store.schema.policy.owner("owner", { for: "all" }),
+  ],
+);
+```
+
+</Step>
+
+<Step>
+### Gate the route and query through `fx.store`
+
+```typescript title="src/flows/tasks/list.ts"
+import { on, flow, http } from "okengine";
+import { member } from "@/core/gate";
+import { db, tasks } from "@/schema";
+
+export const listTasks = on(
+  http.get("/tasks").gate(member),
+  flow("tasks.list", {
+    do: async (_, fx) => fx.store(db).select().from(tasks),
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### What the caller sees
+
+Alice’s session stamps `oke.gate = 'member'` and `oke.user = '<alice>'`. SELECT
+policies that require `oke.gate() = 'member'` and `owner = oke.user()` return only
+Alice’s rows — even if the Flow’s `where` clause is empty.
+
+Use an RLS-capable SQL driver (`postgres` / `pglite`). The `memory` SQL driver does
+not enforce row policies.
+
+</Step>
+
+</Steps>
+
+## Progressive Patterns
+
+From a gate-name check to owner columns, scopes, and tenants:
+
+<Tabs items={["Gate", "Owner", "Scope", "Tenant"]}>
+
+<Tab value="Gate">
+
+`store.schema.policy.gate(name)` stamps `oke.gate() = '…'` (default `for: "select"`).
+The name must match a Gate policy on the trigger (rate gates are skipped when picking
+the stamp):
+
+```typescript
+store.schema.policy.gate("member", { for: "select" });
+```
+
+**Consequence:** the first non-rate gate on `.gate(...)` becomes `oke.gate` for that
+request. Put the policy you want stamped **first** when the chain mixes policies and
+rates.
+
+</Tab>
+
+<Tab value="Owner">
+
+`store.schema.policy.owner(column)` stamps `column = oke.user()` (default `for: "all"`):
+
+```typescript
+store.schema.policy.owner("owner", { for: "all" });
+```
+
+`oke.user()` is the stamped `fx.auth.userId` (empty string when anonymous / public).
+
+</Tab>
+
+<Tab value="Scope">
+
+`store.schema.policy.scope(scope)` stamps `oke.has_scope('…')` (default `for: "insert"`).
+Pass a string or a `gate.scope(...)` handle so the scope stays single-sourced:
+
+```typescript
+import { gate } from "okengine";
+
+export const bookingCreate = gate.scope("booking:create");
+
+// On the table:
+store.schema.policy.scope(bookingCreate, { for: "insert" });
+// or: store.schema.policy.scope("booking:create", { for: "insert" });
+```
+
+</Tab>
+
+<Tab value="Tenant">
+
+When `gate.auth.tenant` is on, every table needs a tenant policy or an explicit opt-out:
+
+```typescript
+store.schema.policy.tenant("tenantId"); // default for: "all" → tenantId = oke.tenant()
+// or shared catalog tables:
+store.schema.unscoped();
+```
+
+See [Tenancy](/docs/elements/gate/tenancy). Extract fails without one:
+
+```text
+extract: table "{store}.{table}" needs store.schema.policy.tenant(...) or store.schema.unscoped() when gate.auth.tenant is on
+```
+
+</Tab>
+
+</Tabs>
+
+## Identity Stamp
+
+After Gate allows, the SQL session prelude sets:
+
+| GUC / helper       | Source                             | Used by         |
+| ------------------ | ---------------------------------- | --------------- |
+| `oke.gate()`       | First non-rate gate on the trigger | `policy.gate`   |
+| `oke.user()`       | `fx.auth.userId`                   | `policy.owner`  |
+| `oke.has_scope(…)` | `fx.auth.scopes` (JSON)            | `policy.scope`  |
+| `oke.tenant()`     | `fx.tenant.id` when tenancy is on  | `policy.tenant` |
+
+The stamp `SET LOCAL ROLE oke_app` and turns `row_security` on so table owners cannot
+bypass policies on the hot path.
+
+| Plane / mode                | Stamp?                     |
+| --------------------------- | -------------------------- |
+| User-plane Flow, gated      | Yes                        |
+| `plane: "operator"`         | No — operator bypasses RLS |
+| Console / Call API `bypass` | No                         |
+
+## Policy Helpers
+
+Extras are the **third argument** of `store.schema.table(name, cols, extras)`:
+
+| Helper                             | Default `for` | Predicate                               |
+| ---------------------------------- | ------------- | --------------------------------------- |
+| `store.schema.policy.gate(name)`   | `select`      | `oke.gate() = '…'`                      |
+| `store.schema.policy.owner(col)`   | `all`         | `col = oke.user()`                      |
+| `store.schema.policy.scope(scope)` | `insert`      | `oke.has_scope('…')`                    |
+| `store.schema.policy.tenant(col)`  | `all`         | `col = oke.tenant()`                    |
+| `store.schema.rls()`               | —             | Enable RLS with no policies yet         |
+| `store.schema.unscoped()`          | —             | Opt out of tenant requirement           |
+| `store.schema.policy(name, opts)`  | —             | Raw `using` / `withCheck` / `as` / `to` |
+
+`for` accepts `select` · `insert` · `update` · `delete` · `all`. Optional `as`:
+`"permissive"` (default) or `"restrictive"`. Optional `to` limits Postgres roles.
+
+```typescript title="src/db/schema.decl.ts"
+import { store, field } from "okengine";
+import { member, bookingCreate } from "@/core/gate";
+
+export const bookings = store.schema.table(
+  "bookings",
+  {
+    id: field.id().primaryKey(),
+    owner: field.text().notNull(),
+    tenantId: field.text().notNull(),
+  },
+  [
+    store.schema.policy.gate("member", { for: "select" }),
+    store.schema.policy.owner("owner", { for: "all" }),
+    store.schema.policy.scope(bookingCreate, { for: "insert" }),
+    store.schema.policy.tenant("tenantId"),
+  ],
+);
+```
+
+<Callout title="Detailed section">
+  Schema extras, relations, and emit live under [Store · SQL · Schema Extras &
+  RLS](/docs/elements/store/sql#schema-extras--rls). This page is the Gate ↔ row identity contract.
+</Callout>
+
+## Composition
+
+Multiple **PERMISSIVE** policies for the same command OR together — a row is visible if
+any permissive policy passes. **RESTRICTIVE** policies AND with the rest (`as: "restrictive"`).
+
+```typescript
+[
+  store.schema.policy.gate("member", { for: "select" }),
+  store.schema.policy.owner("owner", { for: "select" }),
+];
+```
+
+A `member` principal sees rows that pass the gate predicate **or** the owner predicate
+(for SELECT). Tighten with restrictive policies or a single compound raw `using`.
+
+## Live Queries & Resources
+
+Resource live (`store.resource({ live: true })`) and handwritten `liveQuery` classify
+CDC events through the same RLS stamp. Needs `postgres` / `pglite` and a gated identity.
+
+See [HTTP · Resource Live](/docs/elements/flow/http#resources) and
+[Store · SQL](/docs/elements/store/sql).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="Every query returns zero rows">
+  Stamp or policies are wrong. Confirm `.gate(member)` (or matching name), that `owner` / `tenantId`
+  columns match `oke.user()` / `oke.tenant()`, and that the driver is `postgres` or `pglite` — not
+  `memory`.
+</Accordion>
+
+<Accordion title="Extract: needs store.schema.policy.tenant or unscoped">
+  Cause: `extract: table "{store}.{table}" needs store.schema.policy.tenant(...) or
+  store.schema.unscoped() when gate.auth.tenant is on`. Add a tenant column policy or mark the table
+  shared.
+</Accordion>
+
+<Accordion title="live query requires an RLS-capable SQL driver">
+  Cause: `live query for "…" requires an RLS-capable SQL driver (postgres / pglite)`. Switch the SQL
+  driver and attach a Gate chain so the stamp has a principal.
+</Accordion>
+
+<Accordion title="Operator / Console sees all rows">
+  `plane: "operator"` and Call API `bypass` skip the RLS stamp by design. User-plane Flows always
+  stamp when gated.
+</Accordion>
+
+<Accordion title="Wrong gate stamped on a long chain">
+  The first non-rate gate name wins for `oke.gate()`. Reorder `.gate(member, write, rate)` so the
+  policy you want in SQL predicates comes before rates and secondary scopes when those scopes use
+  `oke.has_scope` instead of `oke.gate`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Authorization](/docs/elements/gate/authorization) — `gate.policy` / `gate.scope` on triggers
+- [Tenancy](/docs/elements/gate/tenancy) — `fx.tenant.id` and `policy.tenant`
+- [Store · SQL](/docs/elements/store/sql) — schema extras, session handle, drivers
+- [HTTP](/docs/elements/flow/http) — resource live + RLS
+
+## Next
+
+<Cards>
+  <Card
+    title="Rate Limits"
+    description="Throttle with gate.rate on the same chain."
+    href="/docs/elements/gate/rate-limits"
+  />
+  <Card
+    title="Tenancy"
+    description="Resolve fx.tenant.id and policy.tenant."
+    href="/docs/elements/gate/tenancy"
+  />
+  <Card
+    title="Store · SQL"
+    description="Schema extras, fx.store, and RLS-capable drivers."
+    href="/docs/elements/store/sql"
+  />
+</Cards>

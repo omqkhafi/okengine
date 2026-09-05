@@ -4,8 +4,8 @@
  * Each run walks `.gate(member, canBook, fair)` left to right. Four scenarios
  * cycle: all pass → `do` runs; deny at `member` (anonymous) → Unauthorized;
  * deny at `canBook` (authed, missing scope) → Forbidden; deny at `fair` →
- * RateLimited. Gates after the denial read `skipped`. Deterministic from one
- * tick, never Math.random.
+ * RateLimited. Gates after the denial read `skipped`. Outcome copy stays
+ * neutral until the final beat. Deterministic from one tick, never Math.random.
  */
 
 "use client";
@@ -54,6 +54,11 @@ export function GatePipeline() {
   const scenario = SCENARIOS[run % SCENARIOS.length]!;
   const { denyAt, code, principal } = scenario;
   const outcomeLive = beat === BEATS_PER_RUN - 1;
+  const footerLabel = !outcomeLive
+    ? "Evaluating chain…"
+    : code === null
+      ? "Every gate passed — do runs"
+      : "Denied — typed failure, never thrown mid-do";
 
   return (
     <figure
@@ -95,14 +100,25 @@ export function GatePipeline() {
                       : "bg-fd-card",
               )}
             >
-              <span className="relative flex w-5 shrink-0 items-center gap-1.5">
-                <span className="font-mono text-[10px] text-fd-muted-foreground/70">{i + 1}</span>
+              <span className="relative flex w-8 shrink-0 items-center gap-1.5">
+                <span className="w-2.5 font-mono text-[10px] text-fd-muted-foreground/70">
+                  {i + 1}
+                </span>
                 {probing && tick !== null ? (
                   <span className="relative flex size-1.5" aria-hidden>
                     <BeatPing key={t} className={probe.wash} />
                     <span className={cn("size-1.5 rounded-full", probe.hairline)} />
                   </span>
-                ) : null}
+                ) : passed || denied ? (
+                  <span
+                    aria-hidden
+                    className={cn("size-1.5 rounded-full", denied ? fail.hairline : pass.hairline)}
+                  />
+                ) : skipped ? (
+                  <span aria-hidden className="size-1.5 rounded-full bg-fd-muted-foreground/25" />
+                ) : (
+                  <span aria-hidden className="size-1.5 rounded-full border border-fd-border" />
+                )}
               </span>
               <code className="min-w-0 font-mono text-[11px] break-all text-fd-foreground">
                 {gate.name}
@@ -135,11 +151,7 @@ export function GatePipeline() {
           )}
         >
           <span className="w-5 shrink-0 font-mono text-[10px] text-fd-muted-foreground/70">→</span>
-          <p className="min-w-0 text-xs font-medium text-fd-foreground">
-            {code === null
-              ? "Every gate passed — do runs"
-              : "Denied — typed failure, never thrown mid-do"}
-          </p>
+          <p className="min-w-0 text-xs font-medium text-fd-foreground">{footerLabel}</p>
           <span
             aria-hidden
             className={cn(

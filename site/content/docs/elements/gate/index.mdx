@@ -5,25 +5,26 @@ icon: "ShieldCheck"
 source: "docs/spec/unified-theory.md"
 ---
 
-Gate is how your backend **decides whether a caller may run a Flow**. Policies and rate limits attach to the
-trigger with `.gate(...)`. Identity comes from `oke({ gate: { auth } })` into `fx.auth`; Gate policies
-read that principal — they do not invent a separate middleware stack.
+Gate is how your backend **decides whether a caller may run a Flow**. Policies and rate limits
+attach to the trigger with `.gate(...)`. Identity comes from `oke({ gate: { auth } })` into
+`fx.auth`; Gate policies read that principal — they do not invent a separate middleware layer.
+
+For developers protecting APIs on okengine — declare the check, chain it on the trigger, keep
+`do` behind the first denial.
 
 <Callout title="The one rule">
-  **First denial wins.** Gates on a trigger evaluate left to right. The first reject stops the chain —
-  later gates are skipped, and `do` never runs.
+  **First denial wins.** Gates on a trigger evaluate left to right. The first reject stops the chain
+  — later gates are skipped, and `do` never runs.
 </Callout>
 
 <GatePipeline />
 
-## What is Gate?
+## Smallest Example
 
-Four surfaces, one vocabulary:
+<Steps>
 
-1. **Policy (`gate.policy`, `gate.scope`)** — ABAC / scope checks over `auth` and request meta.
-2. **Public (`gate.public` / `.public()`)** — intentionally unauthenticated HTTP posture.
-3. **Rate (`gate.rate`)** — KV-backed throttle (`max` / `per` / `keyBy`).
-4. **Auth config (`gate.auth`)** — sessions, keys, and optional tenancy under `oke({ gate: { auth } })`.
+<Step>
+### Declare a policy and attach it
 
 ```typescript title="src/core/gate.ts"
 import { gate } from "okengine";
@@ -32,22 +33,121 @@ export const member = gate.policy("member", {
   description: "Signed-in workspace member",
   check: ({ auth }) => !!auth.verified,
 });
+```
 
+```typescript title="src/flows/profile/me.ts"
+import { on, flow, http } from "okengine";
+import { member } from "@/core/gate";
+
+export const getProfile = on(
+  http.get("/profile").gate(member),
+  flow("profile.me", {
+    do: async (_, fx) => ({ userId: fx.auth.userId }),
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Call with and without a session
+
+```bash
+# Anonymous → 401 Unauthorized (policy denied, no userId)
+curl -X GET http://localhost:6530/profile -H "accept: application/json"
+
+# Signed-in → 200 with principal
+curl -X GET http://localhost:6530/profile \
+  -H "accept: application/json" \
+  -H "authorization: Bearer …"
+```
+
+Anonymous denial envelope:
+
+```json
+{
+  "data": null,
+  "error": { "code": "Unauthorized", "message": "Authentication required.", "data": {} }
+}
+```
+
+</Step>
+
+</Steps>
+
+<Callout title="Auth posture is required">
+  Every HTTP (and MCP tool) trigger must declare a gate chain **or** `.public()`. Omitting both
+  fails boot with `GateBootError`. See [Boot Posture](#boot-posture).
+</Callout>
+
+## Progressive Patterns
+
+From a single policy to scopes, rates, and reusable chains:
+
+<Tabs items={["Policy", "Scope", "Rate", "Compose"]}>
+
+<Tab value="Policy">
+
+Named ABAC check over `auth` / `operator` / optional `meta`:
+
+```typescript title="src/core/gate.ts"
+import { gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+
+export const adminOnly = gate.policy("adminOnly", {
+  description: "Admin scope required",
+  check: ({ auth }) => auth.scopes.has("admin"),
+});
+```
+
+Both forms are valid: a bare predicate, or `{ check, description? }`.
+
+</Tab>
+
+<Tab value="Scope">
+
+`gate.scope(name)` is shorthand for
+`gate.policy(name, ({ auth }) => auth.scopes.has(name))` with `scopes: [name]` recorded:
+
+```typescript
 export const notesWrite = gate.scope("notes:write");
+```
 
+**Consequence:** the scope string is the policy id — one source of truth for Manifest and Console.
+
+</Tab>
+
+<Tab value="Rate">
+
+KV-backed throttle. Pass one options object — there is no `gate.rate(name, { limit })` form:
+
+```typescript
 export const notesWriteRate = gate.rate({
   max: 60,
   per: "1m",
-  keyBy: "ip",
+  keyBy: "user",
   description: "Note write throttle",
 });
+```
+
+Default strategy is `sliding-window-counter`. See [Rate Limits](/docs/elements/gate/rate-limits).
+
+</Tab>
+
+<Tab value="Compose">
+
+`gate.all` builds a reusable chain. Nested `all` handles flatten at `.gate(...)`:
+
+```typescript title="src/core/gate.ts"
+import { gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const notesWrite = gate.scope("notes:write");
+export const notesWriteRate = gate.rate({ max: 60, per: "1m", keyBy: "user" });
 
 export const notesMutate = gate.all(member, notesWrite, notesWriteRate);
 ```
-
-## Attaching Gates to Flows
-
-Gates chain on the **trigger**, not on a `gates: [...]` field inside `flow()`:
 
 ```typescript title="src/flows/notes/create.ts"
 import { on, flow, http } from "okengine";
@@ -55,30 +155,180 @@ import { notesMutate } from "@/core/gate";
 
 export const createNote = on(
   http.post("/notes").gate(notesMutate),
+  // or: .gate(member, notesWrite, notesWriteRate)
   flow("notes.create", {
-    do: async (input, fx) => {
-      // Guaranteed: verified member, notes:write scope, under rate
-      return fx.json.create({ id: fx.id(), ...input });
-    },
+    do: async (input, fx) => fx.json.create({ id: fx.id(), ...input }),
   }),
 );
 ```
 
-Open a route explicitly with `.public()` (or `.gate(gate.public)`). HTTP triggers that omit both a gate
-and `.public()` fail boot with `GateBootError`.
+</Tab>
+
+</Tabs>
+
+## Declaration Reference
+
+| Declaration   | Signature                                             | Purpose                                |
+| ------------- | ----------------------------------------------------- | -------------------------------------- |
+| `gate.policy` | `gate.policy(name, check \| { check, description? })` | Named ABAC / auth predicate            |
+| `gate.scope`  | `gate.scope(name)`                                    | Require `auth.scopes.has(name)`        |
+| `gate.public` | `gate.public` (handle)                                | Intentionally unauthenticated sentinel |
+| `gate.rate`   | `gate.rate({ max, per, keyBy?, … })`                  | KV-backed throttle                     |
+| `gate.all`    | `gate.all(...members)`                                | Reusable left-to-right chain           |
+
+| `oke({ gate })` option | Type                  | Default             | Meaning                                                                           |
+| ---------------------- | --------------------- | ------------------- | --------------------------------------------------------------------------------- |
+| `auth`                 | bag / omitted         | off                 | Sessions, keys, optional tenancy — see [Authentication](/docs/elements/gate/auth) |
+| `policies`             | decls / `all` handles | auto from registry  | Explicit bag; usually unnecessary                                                 |
+| `rateLimit.enabled`    | `boolean`             | `true` when auth on | Stricter presets on auth Flows                                                    |
+| `unguardedHttp`        | `"deny"` \| `"allow"` | `"deny"`            | `"allow"` only when `env === "test"`                                              |
+
+## Attaching Gates
+
+Gates chain on the **trigger**, not on a `gates: [...]` field inside `flow()`:
+
+```typescript
+http
+  .post("/documents")
+  .gate(member, gate.scope("editor"), gate.rate({ max: 100, per: "1m", keyBy: "user" }));
+```
+
+**Public** — open the route without authentication:
+
+```typescript
+http.get("/health").public();
+// equivalent: http.get("/health").gate(gate.public)
+```
+
+Resource mounts accept `.gate(...)` / `.public()` once — every CRUD verb (and live, when
+present) gets the same chain. See [HTTP · Resources](/docs/elements/flow/http#resources).
+
+## Evaluation Order
+
+<Callout title="Detailed section">
+  If you only need “attach and go”, the Smallest Example is enough. This section is the walk the
+  runtime takes before `do`.
+</Callout>
+
+On each request the pipeline:
+
+1. Resolves identity into `fx.auth` (Bearer / cookie / API key when `gate.auth` is on).
+2. Resolves `fx.tenant.id` when `gate.auth.tenant` is enabled.
+3. Evaluates the trigger’s gate names **in declaration order**.
+4. Stops on the first denial — maps to a typed envelope; later gates never run.
+5. Invokes `do` only when every gate allowed.
+
+```typescript title="src/flows/notes/create.ts"
+import { on, flow, http, gate } from "okengine";
+
+const member = gate.policy("member", ({ auth }) => !!auth.verified);
+const write = gate.scope("notes:write");
+const throttle = gate.rate({ max: 60, per: "1m", keyBy: "user" });
+
+// Order matters: identity → capability → quota
+export const createNote = on(
+  http.post("/notes").gate(member, write, throttle),
+  flow("notes.create", {
+    do: async (input, fx) => fx.json.create({ id: fx.id(), ...input }),
+  }),
+);
+```
+
+| Caller                          | First denial               | Later gates                  |
+| ------------------------------- | -------------------------- | ---------------------------- |
+| Anonymous                       | `member` → `Unauthorized`  | `write` / `throttle` skipped |
+| Signed-in, no `notes:write`     | `write` → `Forbidden`      | `throttle` skipped           |
+| Signed-in + scope, quota burned | `throttle` → `RateLimited` | —                            |
+| All pass                        | —                          | `do` runs                    |
+
+**Consequence:** put identity policies **before** rates so anonymous traffic 401s instead of
+burning a shared `"anon"` quota under `keyBy: "user"`.
+
+<Accordions>
+
+<Accordion title="What policies may read">
+  Predicates receive `GatePolicyContext` only — `auth`, `operator`, optional `meta` (`ip`, `userId`,
+  …). They must not touch Store, Vault, or the network. World access stays in `do` via `fx`. See
+  [Authorization](/docs/elements/gate/authorization).
+</Accordion>
+
+<Accordion title="Rate evaluation fields">
+  A rate take records `remaining` and `retryAfterMs` on the evaluation. A burn maps to
+  `RateLimited` with `{ retryAfterMs }` in `error.data`.
+
+Missing KV still uses kind `rate` → typed `RateLimited` (often `retryAfterMs: 0`);
+telemetry reason is `"rate gate requires kv"`.
+
+</Accordion>
+
+<Accordion title="Unknown gate names">
+  A name that is not registered denies with reason `unknown gate: …`. Prefer attaching the declared
+  handle (`member`) rather than a raw string so the registry always knows the predicate.
+</Accordion>
+
+</Accordions>
+
+## Denial Mapping
+
+Denials are typed error values — never thrown stacks mid-pipeline:
+
+| Situation                        | Code           | Status | Typical `error.data`               |
+| -------------------------------- | -------------- | ------ | ---------------------------------- |
+| Policy denied, no `auth.userId`  | `Unauthorized` | 401    | `{}`                               |
+| Policy denied, principal present | `Forbidden`    | 403    | `{ gate, reason }`                 |
+| Rate gate burned / no KV         | `RateLimited`  | 429    | `{ retryAfterMs }`                 |
+| Tenant required / not a member   | `Forbidden`    | 403    | `{ gate: "auth:tenants", reason }` |
+
+Authenticated policy denial:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "Forbidden",
+    "message": "You are not allowed to perform this action.",
+    "data": { "gate": "notes:write", "reason": "policy denied" }
+  }
+}
+```
+
+Rate burn:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "RateLimited",
+    "message": "Too many requests. Try again later.",
+    "data": { "retryAfterMs": 42000 }
+  }
+}
+```
+
+## Boot Posture
+
+Every HTTP and MCP-tool trigger must carry at least one gate (including `gate.public`) or
+`.public()`. Missing posture throws `GateBootError` listing every gap:
+
+```text
+gate boot failed — 2 trigger(s) missing auth posture (attach a gate or .public()):
+  - notes.list GET /notes
+  - notes.create POST /notes
+```
+
+`unguardedHttp: "allow"` skips the audit **only** when `env === "test"`. Outside test it has no
+effect — migrate real apps with per-trigger `.public()`.
+
+MCP tools follow the same rule: a tool trigger with an empty gate list fails the same boot
+audit (listed as `mcp` + tool name).
 
 ## The Capabilities of Gate
 
 <Cards>
   <Card
     title="Authentication"
-    description="Enable gate.auth, populate fx.auth, then protect Flows with policies that check the principal."
+    description="Enable gate.auth, populate fx.auth, then protect Flows with policies."
     href="/docs/elements/gate/auth"
-  />
-  <Card
-    title="Multi-Tenancy"
-    description="Opt into gate.auth.tenant and read fx.tenant.id for isolation."
-    href="/docs/elements/gate/tenancy"
   />
   <Card
     title="Authorization Policies"
@@ -86,21 +336,70 @@ and `.public()` fail boot with `GateBootError`.
     href="/docs/elements/gate/authorization"
   />
   <Card
+    title="RLS"
+    description="Stamp Gate identity into SQL — store.schema.policy helpers filter rows."
+    href="/docs/elements/gate/rls"
+  />
+  <Card
     title="Rate Limits"
     description="gate.rate with five KV strategies — sliding-window-counter by default."
     href="/docs/elements/gate/rate-limits"
   />
+  <Card
+    title="Tenancy"
+    description="Opt into gate.auth.tenant and read fx.tenant.id for isolation."
+    href="/docs/elements/gate/tenancy"
+  />
 </Cards>
 
-## Denial codes
+## Troubleshooting
 
-| Situation                                      | Code           | Status |
-| ---------------------------------------------- | -------------- | ------ |
-| Policy denied and no `auth.userId`             | `Unauthorized` | 401    |
-| Policy denied and caller is authenticated      | `Forbidden`    | 403    |
-| Rate gate burned                               | `RateLimited`  | 429    |
+<Accordions>
 
-## Next Steps
+<Accordion title="GateBootError — missing auth posture">
+  Cause: `gate boot failed — N trigger(s) missing auth posture (attach a gate or .public()):`. Every
+  listed HTTP/MCP trigger needs `.gate(...)` or `.public()`. `unguardedHttp: "allow"` only works
+  when `env === "test"`.
+</Accordion>
+
+<Accordion title="401 Unauthorized on a gated route">
+  A policy denied and `auth.userId` is null — or Bearer forge / expiry mapped to `Unauthorized`
+  before gates. Send a valid Bearer (or cookie when enabled), or mark the route `.public()` if it
+  should be open.
+</Accordion>
+
+<Accordion title="403 Forbidden with gate + reason">
+  The principal is authenticated but failed a later policy (`error.data.gate` names it). Check
+  scopes on the session / API key, or the predicate in that policy.
+</Accordion>
+
+<Accordion title="429 RateLimited with retryAfterMs">
+  A `gate.rate` burned its quota (or ran without KV). Wait `retryAfterMs`, raise `max` / widen
+  `per`, or configure a KV driver when reason telemetry shows `"rate gate requires kv"`.
+</Accordion>
+
+<Accordion title='TypeError: gate.policy name "public" is reserved'>
+  Use `gate.public` or `.public()` for open surfaces. Do not declare `gate.policy("public", …)` or
+  `gate.scope("public")`.
+</Accordion>
+
+<Accordion title="TypeError: gate.all: at least one member is required">
+  `gate.all()` with zero members is invalid. Pass one or more policy / rate / nested `all` handles.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Authentication](/docs/elements/gate/auth) — `gate.auth`, `fx.auth`, sessions and keys
+- [Authorization](/docs/elements/gate/authorization) — policies, scopes, `gate.all`
+- [RLS](/docs/elements/gate/rls) — Gate identity stamped into SQL row policies
+- [Rate Limits](/docs/elements/gate/rate-limits) — strategies, `keyBy`, KV
+- [Tenancy](/docs/elements/gate/tenancy) — `fx.tenant.id` and isolation
+- [HTTP](/docs/elements/flow/http) — `.gate(...)` / `.public()` on triggers
+- [Errors](/docs/reference/errors) — `Unauthorized` · `Forbidden` · `RateLimited`
+
+## Next
 
 <Cards>
   <Card

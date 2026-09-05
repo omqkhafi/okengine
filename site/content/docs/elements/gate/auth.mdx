@@ -5,16 +5,18 @@ icon: "Lock"
 source: "docs/spec/unified-theory.md"
 ---
 
-Authentication is configured as `oke({ gate: { auth } })`. That bag issues `/auth/*` Flows (unless
-`http: false`), fills `fx.auth`, and leaves permission to policy gates — there is no `gate.auth`
-handle for `.gate(...)`.
+Authentication is configured as `oke({ gate: { auth } })`. That bag issues `/auth/*` Flows
+(unless `http: false`), fills `fx.auth`, and leaves permission to policy gates — there is no
+`gate.auth` handle for `.gate(...)`.
+
+For developers shipping signed-in APIs on okengine — turn on auth, plug a method, attach policies.
 
 <Callout title="The one rule">
   Turn on `gate.auth` for identity. Attach `gate.policy` / `gate.scope` (or `.public()`) for
   permission. Boot fails if an HTTP trigger has neither.
 </Callout>
 
-## Quick start
+## Smallest Example
 
 <Steps>
 
@@ -40,7 +42,7 @@ export const app = oke({
 </Step>
 
 <Step>
-### Declare a signed-in policy
+### Declare a signed-in policy and attach it
 
 ```typescript title="src/core/gate.ts"
 import { gate } from "okengine";
@@ -50,11 +52,6 @@ export const member = gate.policy("member", {
   check: ({ auth }) => !!auth.verified,
 });
 ```
-
-</Step>
-
-<Step>
-### Attach it on the trigger
 
 ```typescript title="src/flows/profile/me.ts"
 import { on, flow, http } from "okengine";
@@ -68,23 +65,236 @@ export const getProfile = on(
 );
 ```
 
-Anonymous callers fail the policy → typed `Unauthorized`. Authenticated callers reach `do` with
-`fx.auth.userId` and `fx.auth.scopes` set.
+</Step>
+
+<Step>
+### Sign in and call
+
+```bash
+# Method routes live under basePath (default /auth) — see your plugged method docs
+curl -X GET http://localhost:6530/profile \
+  -H "accept: application/json" \
+  -H "authorization: Bearer …"
+```
+
+Authenticated callers reach `do` with `fx.auth.userId` and `fx.auth.scopes` set. Anonymous
+callers fail the policy → typed `Unauthorized`.
 
 </Step>
 
 </Steps>
 
+## Progressive Patterns
+
+From Bearer-only identity to cookies, API keys, and method plugins:
+
+<Tabs items={["Bearer", "Cookies", "API keys", "Plugins"]}>
+
+<Tab value="Bearer">
+
+Default transport is `Authorization: Bearer <access>`. The pipeline verifies the token into
+`fx.auth` before gate evaluation:
+
+```typescript
+export const app = oke({
+  name: "notes",
+  env: "dev",
+  gate: { auth: {} },
+});
+```
+
+In production, set `gate.auth.secret` (or `OKE_AUTH_SECRET`). Omitting it in `prod` throws:
+`gate.auth: secret is required in production (set gate.auth.secret or OKE_AUTH_SECRET)`.
+
+Forged, expired, or revoked access tokens map to typed `Unauthorized` — they never become a
+principal.
+
+</Tab>
+
+<Tab value="Cookies">
+
+Opt-in HttpOnly cookie mirror (Bearer remains default). Enable under `gate.auth.cookies`:
+
+```typescript
+gate: {
+  auth: {
+    cookies: {
+      enabled: true,
+      prefix: "oke", // default
+      sameSite: "lax", // default
+      // secure defaults true; path defaults "/"
+    },
+  },
+}
+```
+
+**Consequence:** cookie sessions need the same CSRF / CORS posture as any cookie app — plug
+[`csrf`](/docs/plugins/csrf) and [`cors`](/docs/plugins/cors) when browsers call cross-origin.
+
+</Tab>
+
+<Tab value="API keys">
+
+Machine principals authenticate with a key secret. Inside `do`, `fx.auth.apiKeyId` is set;
+session-only methods (`fx.auth.createApiKey`, tenant admin, …) refuse keys.
+
+```typescript title="src/flows/keys/create.ts"
+import { on, flow, http } from "okengine";
+import { member } from "@/core/gate";
+
+export const createKey = on(
+  http.post("/keys").gate(member),
+  flow("keys.create", {
+    do: async (_, fx) => {
+      const { key, secret } = await fx.auth.createApiKey({
+        name: "ci",
+        scopes: ["notes:read"],
+        expiresIn: "90d",
+      });
+      return { id: key.id, secret }; // secret shown once
+    },
+  }),
+);
+```
+
+Key methods: `createApiKey` · `listApiKeys` · `revokeApiKey` · `rotateApiKey` · `updateApiKey`.
+
+</Tab>
+
+<Tab value="Plugins">
+
+`gate.auth` alone does not ship a login UI — plug a method from `okengine/plugins`:
+
+| Plugin              | Docs                                   |
+| ------------------- | -------------------------------------- |
+| `username`          | [Username](/docs/plugins/username)     |
+| `magicLink`         | [Magic link](/docs/plugins/magic-link) |
+| `passkey`           | [Passkey](/docs/plugins/passkey)       |
+| `oauth` / providers | [OAuth](/docs/plugins/oauth)           |
+| `anonymous`         | [Anonymous](/docs/plugins/anonymous)   |
+| `twoFactor`         | [Two-factor](/docs/plugins/two-factor) |
+| `otp`               | [OTP](/docs/plugins/otp)               |
+
+</Tab>
+
+</Tabs>
+
+## Options
+
+| Option                                      | Type          | Default            | Meaning                                                    |
+| ------------------------------------------- | ------------- | ------------------ | ---------------------------------------------------------- |
+| `secret`                                    | `string`      | minted in non-prod | HMAC for access tokens; required in prod                   |
+| `basePath`                                  | `string`      | `"/auth"`          | HTTP prefix for auth Flows                                 |
+| `http`                                      | `boolean`     | `true`             | `false` skips `/auth/*` bindings (secret + tables only)    |
+| `audience`                                  | `string`      | `"oke-app"`        | Access-token audience claim                                |
+| `emailAndPassword.enabled`                  | `boolean`     | `false`            | Credential method knobs                                    |
+| `emailAndPassword.requireEmailVerification` | `boolean`     | `false`            | Block sign-in until verified                               |
+| `session.accessTtlMs`                       | `number`      | `14m`              | Access token lifetime                                      |
+| `session.refreshTtlMs`                      | `number`      | `30d`              | Refresh token lifetime                                     |
+| `session.freshAgeMs`                        | `number`      | `24h`              | Max age for "fresh" step-up policies                       |
+| `session.idleTtlMs`                         | `number`      | off                | Idle timeout from last activity                            |
+| `session.absoluteTtlMs`                     | `number`      | off                | Absolute lifetime from creation                            |
+| `session.singleSessionPerUser`              | `boolean`     | `false`            | One live family per user                                   |
+| `cookies`                                   | bag           | off                | HttpOnly cookie mirror                                     |
+| `secondaryStorage`                          | bag           | off                | Hot-path KV cache (`prefix` default `"auth:"`)             |
+| `tenant`                                    | `true` \| bag | off                | Multi-tenancy — see [Tenancy](/docs/elements/gate/tenancy) |
+
 ## What `fx.auth` carries
 
-| Field        | Meaning                                              |
-| ------------ | ---------------------------------------------------- |
-| `userId`     | Principal id, or `null` when anonymous               |
-| `scopes`     | `ReadonlySet<string>` used by `gate.scope`           |
-| `verified`   | Session / credential passed verification             |
-| `apiKeyId`   | Present when the principal is an API key             |
+| Field           | Meaning                                                                    |
+| --------------- | -------------------------------------------------------------------------- |
+| `userId`        | Principal id, or `null` when anonymous                                     |
+| `scopes`        | `ReadonlySet<string>` used by `gate.scope` (may include tenant-role union) |
+| `sessionScopes` | Session / JWT scopes before tenant-role union                              |
+| `verified`      | Session / credential passed verification                                   |
+| `apiKeyId`      | Present when the principal is an API key                                   |
 
-Inside `do`, read identity from `fx.auth` — not `fx.user`.
+Inside `do`, read identity from `fx.auth` — not `fx.user`. World access stays on `fx`.
+
+## Sessions & Cookies
+
+<Callout title="Detailed section">
+  Defaults match a short-lived access token plus a long-lived refresh family. Override only what
+  your product needs.
+</Callout>
+
+```typescript title="src/app.ts"
+export const app = oke({
+  name: "notes",
+  env: "prod",
+  gate: {
+    auth: {
+      secret: process.env.OKE_AUTH_SECRET!,
+      session: {
+        accessTtlMs: 14 * 60 * 1000,
+        refreshTtlMs: 30 * 24 * 60 * 60 * 1000,
+        freshAgeMs: 24 * 60 * 60 * 1000,
+        // idleTtlMs / absoluteTtlMs / singleSessionPerUser when needed
+      },
+      cookies: {
+        enabled: true,
+        prefix: "oke",
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+      },
+    },
+  },
+});
+```
+
+| Cookie option    | Default | Meaning                           |
+| ---------------- | ------- | --------------------------------- |
+| `enabled`        | `false` | Opt-in HttpOnly mirror            |
+| `prefix`         | `"oke"` | Cookie name prefix                |
+| `secure`         | `true`  | HTTPS-only                        |
+| `sameSite`       | `"lax"` | `"strict"` \| `"lax"` \| `"none"` |
+| `path`           | `"/"`   | Cookie path                       |
+| `crossSubdomain` | `false` | Share across subdomains           |
+| `domain`         | —       | Explicit cookie domain            |
+
+**Freshness:** policies that require a recent sign-in should compare session age against
+`session.freshAgeMs` (default 24h). Step-up plugins (e.g. [two-factor](/docs/plugins/two-factor))
+build on the same window.
+
+## API Keys
+
+<Accordions>
+
+<Accordion title="createApiKey options">
+
+| Field         | Type                   | Meaning                                    |
+| ------------- | ---------------------- | ------------------------------------------ |
+| `name`        | `string`               | Label for Console / list                   |
+| `scopes`      | `string[]`             | Cannot exceed the creator’s session scopes |
+| `expiresIn`   | duration string        | Optional (`"90d"`, `"1h"`, …)              |
+| `ipAllowlist` | `string[]`             | Optional source IP allowlist               |
+| `rateLimit`   | `{ max, per } \| null` | Optional per-key throttle                  |
+
+Return shape: `{ key, secret }` — the secret is shown once at create / rotate.
+
+</Accordion>
+
+<Accordion title="Session-only refusals">
+  Key management and tenant admin refuse API-key principals:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "Forbidden",
+    "message": "You are not allowed to perform this action.",
+    "data": { "gate": "auth:api-keys", "reason": "session_only" }
+  }
+}
+```
+
+Call those methods from a user session. Machine keys authenticate _into_ Flows; they do not
+mint more keys.
+
+</Accordion>
+
+</Accordions>
 
 ## Public routes
 
@@ -95,19 +305,67 @@ http.get("/health").public();
 // equivalent: http.get("/health").gate(gate.public)
 ```
 
+Auth method Flows under `basePath` register their own posture; your app routes still need
+`.gate(...)` or `.public()`.
+
+Set `gate.auth.http: false` when you want tables + Bearer verify without materializing
+`/auth/*` HTTP bindings (embedding / Console-style hosts).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="gate.auth: secret is required in production">
+  Cause: `gate.auth: secret is required in production (set gate.auth.secret or OKE_AUTH_SECRET)`.
+  Set an explicit secret before shipping — never rely on the minted dev secret in prod.
+</Accordion>
+
+<Accordion title="401 on every gated route after sign-in">
+  Token missing, expired, wrong audience, or cookies enabled without sending credentials. Check
+  `Authorization: Bearer`, `audience`, and cookie `SameSite` / CORS.
+</Accordion>
+
+<Accordion title="Forbidden · session_only on createApiKey / listTenants">
+  Those methods refuse API-key principals (`error.data.reason: "session_only"`). Call them from a
+  user session, not a machine key.
+</Accordion>
+
+<Accordion title="Forbidden · not_owner on revokeApiKey">
+  Keys are owned by the creator. A different session cannot revoke or rotate another user’s key
+  (`reason: "not_owner"`).
+</Accordion>
+
+<Accordion title="GateBootError after enabling auth">
+  Enabling `gate.auth` does not auto-gate your routes. Attach `member` (or `.public()`) on every
+  HTTP trigger — see [Boot Posture](/docs/elements/gate#boot-posture).
+</Accordion>
+
+</Accordions>
+
 ## Learn more
 
 - [Username plugin](/docs/plugins/username) — email-free sign-up on `gate.auth`
 - [Authorization](/docs/elements/gate/authorization) — scopes and ABAC policies
+- [RLS](/docs/elements/gate/rls) — row policies from stamped identity
+- [Tenancy](/docs/elements/gate/tenancy) — `fx.tenant.id`
 - [HTTP](/docs/elements/flow/http) — `.gate` / `.public` on triggers
 
 ## Next
 
 <Cards>
   <Card
-    title="Multi-Tenancy"
+    title="Authorization"
+    description="gate.policy and gate.scope for permission checks."
+    href="/docs/elements/gate/authorization"
+  />
+  <Card
+    title="RLS"
+    description="Stamp Gate identity into SQL row policies."
+    href="/docs/elements/gate/rls"
+  />
+  <Card
+    title="Tenancy"
     description="Resolve fx.tenant.id from claims, headers, or subdomains."
     href="/docs/elements/gate/tenancy"
   />
-  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
 </Cards>

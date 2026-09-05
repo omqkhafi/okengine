@@ -1,5 +1,5 @@
 ---
-title: "Multi-Tenancy"
+title: "Tenancy"
 description: "Opt into gate.auth.tenant so requests resolve fx.tenant.id from claim, header, or subdomain."
 icon: "Building2"
 source: "docs/spec/unified-theory.md"
@@ -9,12 +9,15 @@ Tenancy is an identity **dimension** under `gate.auth.tenant`, not a separate ga
 `.gate(...)`. When enabled, the runtime resolves a tenant for the request and exposes it as
 `fx.tenant.id`. Your SQL / KV / files code (and optional RLS) use that id for isolation.
 
+For developers shipping B2B or mixed B2C+B2B apps on okengine — enable the dimension, filter every
+store access by `fx.tenant.id`.
+
 <Callout title="The one rule">
   Enable `gate.auth.tenant`, keep membership checks on — then filter every store access by
   `fx.tenant.id`. Do not invent a `gate.auth.tenant` trigger handle.
 </Callout>
 
-## Quick start
+## Smallest Example
 
 <Steps>
 
@@ -70,27 +73,300 @@ export const listInvoices = on(
 
 </Step>
 
+<Step>
+### Switch tenant (session)
+
+```typescript
+// Session-only
+const session = await fx.auth.switchTenant("ten_acme");
+// New access token carries tid; subsequent requests resolve fx.tenant.id
+```
+
+</Step>
+
 </Steps>
+
+## Progressive Patterns
+
+From claim-based B2C+B2B to pure B2B, custom resolve, and Flow opt-out:
+
+<Tabs items={["Claim", "Required", "Resolve", "Opt-out"]}>
+
+<Tab value="Claim">
+
+Default when `tenant: true`: `source: "claim"`, `required: false`, header name `x-oke-tenant`
+(unused until you switch source).
+
+The signed session / key claim supplies `tid`. Membership is still checked unless
+`authoritative: true` on a custom `resolve`.
+
+</Tab>
+
+<Tab value="Required">
+
+Pure B2B — every user-plane request must resolve a tenant:
+
+```typescript
+tenant: {
+  required: true,
+  source: "header",
+  header: "x-oke-tenant",
+}
+```
+
+**Consequence:** missing tenant fails before `do` with
+`Forbidden` · `reason: "tenant_required"`. Operator-plane Flows are not forced through the
+same required path.
+
+</Tab>
+
+<Tab value="Resolve">
+
+Custom resolver (tier-3 escape hatch). Membership is still checked unless `authoritative`:
+
+```typescript
+tenant: {
+  source: "resolve",
+  resolve: ({ auth, request, claimTenantId }) => {
+    if (claimTenantId) return claimTenantId;
+    return request?.headers.get("x-workspace") ?? null;
+  },
+  // authoritative: true  // trust resolve without membership query (fail-open — rare)
+}
+```
+
+</Tab>
+
+<Tab value="Opt-out">
+
+When tenancy is on, Flows default to tenant-scoped (role scopes may union into `fx.auth.scopes`).
+Opt a Flow out with `tenantScoped: false`:
+
+```typescript
+flow("billing.globalReport", {
+  plane: "operator",
+  tenantScoped: false,
+  do: async (_, fx) => {
+    // No tenant-role scope union; fx.tenant.id may still be set from the request
+  },
+});
+```
+
+</Tab>
+
+</Tabs>
+
+## Resolution Sources
+
+<Callout title="Detailed section">
+  Three tiers: signed claim (no membership query), client-supplied header/subdomain (membership
+  required), and custom `resolve` (membership unless `authoritative`).
+</Callout>
+
+<Tabs items={["claim", "header", "subdomain", "resolve"]}>
+
+<Tab value="claim">
+
+Signed `tid` on the session / API key. Fast path — no membership query:
+
+```typescript
+tenant: true;
+// expands to source: "claim", required: false, header: "x-oke-tenant"
+```
+
+After `fx.auth.switchTenant(id)`, new access tokens carry `tid` for this source.
+
+</Tab>
+
+<Tab value="header">
+
+Client sends the configured header; membership is required:
+
+```typescript
+tenant: {
+  source: "header",
+  header: "x-oke-tenant", // default name
+}
+```
+
+```bash
+curl -X GET http://localhost:6530/invoices \
+  -H "authorization: Bearer …" \
+  -H "x-oke-tenant: ten_acme"
+```
+
+Not a member → `Forbidden` · `reason: "not_member"`. Anonymous with a header →
+`Unauthorized`.
+
+</Tab>
+
+<Tab value="subdomain">
+
+First Host label is the tenant id (`acme.example.com` → `acme`). Needs at least three
+labels; membership is required:
+
+```typescript
+tenant: {
+  source: "subdomain";
+}
+```
+
+Internal / cron calls without an HTTP request keep the stamped claim when present.
+
+</Tab>
+
+<Tab value="resolve">
+
+Callback receives `{ auth, request, claimTenantId }`. Membership still runs unless
+`authoritative: true`:
+
+```typescript
+tenant: {
+  source: "resolve",
+  resolve: ({ claimTenantId, request }) =>
+    claimTenantId ?? request?.headers.get("x-workspace") ?? null,
+}
+```
+
+**Consequence:** `authoritative: true` is fail-open — use only when you own the resolver’s
+trust boundary.
+
+</Tab>
+
+</Tabs>
 
 ## Options
 
-| Option          | Type                                         | Default         | Meaning                                      |
-| --------------- | -------------------------------------------- | --------------- | -------------------------------------------- |
-| `required`      | `boolean`                                    | `false`         | Reject user-plane requests without a tenant  |
-| `source`        | `"claim" \| "header" \| "subdomain" \| "resolve"` | `"claim"`  | Where the tenant id comes from               |
-| `header`        | `string`                                     | `x-oke-tenant`  | Header name when `source: "header"`          |
-| `resolve`       | `(ctx) => string \| null \| undefined`       | —               | Custom resolver; membership still checked    |
-| `authoritative` | `boolean`                                    | `false`         | Trust `resolve` without a membership query   |
+| Option          | Type                                                    | Default        | Meaning                                     |
+| --------------- | ------------------------------------------------------- | -------------- | ------------------------------------------- |
+| `required`      | `boolean`                                               | `false`        | Reject user-plane requests without a tenant |
+| `source`        | `"claim"` \| `"header"` \| `"subdomain"` \| `"resolve"` | `"claim"`      | Where the tenant id comes from              |
+| `header`        | `string`                                                | `x-oke-tenant` | Header name when `source: "header"`         |
+| `resolve`       | `(ctx) => string \| null \| undefined`                  | —              | Custom resolver; membership still checked   |
+| `authoritative` | `boolean`                                               | `false`        | Trust `resolve` without a membership query  |
 
-Manage membership at runtime with `fx.auth` tenant methods (`auth:tenants` capability).
+`tenant: true` expands to `{ required: false, source: "claim", header: "x-oke-tenant", authoritative: false }`.
+
+## `fx.auth` tenant methods
+
+Session-only. API keys get `Forbidden` with `reason: "session_only"`:
+
+| Method                                             | Meaning                              |
+| -------------------------------------------------- | ------------------------------------ |
+| `listTenants()`                                    | Tenants the user belongs to          |
+| `switchTenant(id)`                                 | Mint a new session family with `tid` |
+| `createTenant({ name, slug?, id? })`               | Create + add caller as member        |
+| `deleteTenant(id)`                                 | Remove tenant                        |
+| `addMember` / `removeMember`                       | Membership                           |
+| `listMembers(tenantId)`                            | Members of a tenant                  |
+| `upsertTenantRole({ tenantId, roleName, scopes })` | Role → scopes (unioned when scoped)  |
+
+```typescript title="src/flows/tenants/switch.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { member } from "@/core/gate";
+
+export const switchTenant = on(
+  http.post("/tenants/switch").gate(member),
+  flow("tenants.switch", {
+    in: z.object({ tenantId: z.string() }),
+    do: async ({ tenantId }, fx) => fx.auth.switchTenant(tenantId),
+  }),
+);
+```
+
+## Store isolation
+
+| Facet | Pattern                                                                  |
+| ----- | ------------------------------------------------------------------------ |
+| SQL   | Filter / RLS by `fx.tenant.id` (and table tenant policies when declared) |
+| KV    | Optional `{tenantId}:` key prefix when the namespace is tenant-scoped    |
+| Files | Path / ACL under the active tenant                                       |
+
+RLS helper for a tenant column:
+
+```typescript
+import { store, field } from "okengine";
+
+export const invoices = store.schema.table(
+  "invoices",
+  {
+    id: field.text().primaryKey(),
+    tenantId: field.text(),
+    total: field.integer(),
+  },
+  [store.schema.policy.tenant("tenantId"), store.schema.rls()],
+);
+```
+
+Globally shared tables when tenancy is on need an explicit opt-out:
+
+```typescript
+store.schema.table("plans", { id: field.text().primaryKey() }, [store.schema.unscoped()]);
+```
+
+**Consequence:** Gate resolves identity; your Flow still owns the filter. A missing `where
+tenant_id = …` is a data leak, not a Gate bug.
+
+## Denial Mapping
+
+| Situation                                  | Code           | `error.data.reason` |
+| ------------------------------------------ | -------------- | ------------------- |
+| `required: true`, authenticated, no tenant | `Forbidden`    | `tenant_required`   |
+| Header / subdomain / resolve, not a member | `Forbidden`    | `not_member`        |
+| Header / subdomain without session         | `Unauthorized` | —                   |
+| Tenant admin from API key                  | `Forbidden`    | `session_only`      |
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="fx.tenant.id is null on every request">
+  Tenancy off, `required: false` with no claim/header, or membership failed. Enable
+  `gate.auth.tenant`, send the claim / header, and confirm the user is a member.
+</Accordion>
+
+<Accordion title="Forbidden · session_only on listTenants / switchTenant">
+  Tenant admin methods refuse API-key principals. Use a user session.
+</Accordion>
+
+<Accordion title="Tenant-granted scope does not authorize a route">
+  The Flow set `tenantScoped: false`, or the role was never upserted. Tenant-role union only applies
+  when the Flow is tenant-scoped (default when tenancy is on).
+</Accordion>
+
+<Accordion title="required: true rejects browser calls">
+  Pure B2B needs a tenant on every user-plane request — send `tid` (claim) or the configured header
+  before calling gated APIs.
+</Accordion>
+
+<Accordion title="Forbidden · not_member on header / subdomain">
+  The supplied tenant id is not in the user’s membership set. Add the member, or switch to `source:
+  "claim"` after `switchTenant` so the signed `tid` is trusted.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Authentication](/docs/elements/gate/auth) — `gate.auth` and `fx.auth`
+- [Authorization](/docs/elements/gate/authorization) — scopes after tenant-role union
+- [RLS](/docs/elements/gate/rls) — `policy.tenant` and the SQL stamp
+- [Store](/docs/elements/store) — SQL / KV / files facets
+- [HTTP](/docs/elements/flow/http) — gated routes that read `fx.tenant`
 
 ## Next
 
 <Cards>
   <Card
-    title="Authorization Policies"
-    description="gate.policy and gate.scope for capability checks."
-    href="/docs/elements/gate/authorization"
+    title="RLS"
+    description="policy.tenant and the SQL identity stamp."
+    href="/docs/elements/gate/rls"
+  />
+  <Card
+    title="Vault Element"
+    description="Secrets and protected configuration."
+    href="/docs/elements/vault"
   />
   <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
 </Cards>

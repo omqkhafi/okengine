@@ -9,12 +9,14 @@ Authorization answers “may this principal do this?” after identity is known.
 `gate.policy` / `gate.scope` handles, compose them with `gate.all`, and attach the chain on the
 trigger.
 
+For developers enforcing RBAC / ABAC on okengine — name the check once, reuse it on every route.
+
 <Callout title="The one rule">
   Policies receive `GatePolicyContext` (`auth`, `operator`, optional `meta`) — never invent
   `ctx.user` or `ctx.store`. World access stays inside `do` via `fx`.
 </Callout>
 
-## Quick start
+## Smallest Example
 
 <Steps>
 
@@ -61,31 +63,236 @@ export const createNote = on(
 
 </Step>
 
+<Step>
+### See the denial
+
+Missing `notes:write` on an authenticated caller:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "Forbidden",
+    "message": "You are not allowed to perform this action.",
+    "data": { "gate": "notes:write", "reason": "policy denied" }
+  }
+}
+```
+
+Anonymous callers denied earlier in the chain get `Unauthorized` instead.
+
+</Step>
+
 </Steps>
 
-## Policy context
+## Progressive Patterns
 
-| Field                | Type                         | Meaning                          |
-| -------------------- | ---------------------------- | -------------------------------- |
-| `auth.userId`        | `string \| null`             | User-plane principal             |
-| `auth.scopes`        | `ReadonlySet<string>`        | Granted scopes                   |
-| `auth.verified`      | `boolean \| undefined`       | Credential verified              |
-| `auth.apiKeyId`      | `string \| null \| undefined`| API-key principal when present   |
-| `operator.id`        | `string \| null`             | Operator-plane principal         |
-| `meta.ip` / `userId` | optional                     | Subject dims for rate `keyBy`    |
+From a single scope to Module:Action names, composition, and operator plane:
 
-## Denial mapping
+<Tabs items={["Scope", "ABAC", "Compose", "Operator"]}>
 
-- No `auth.userId` when a policy denies → `Unauthorized`
-- Authenticated principal when a policy denies → `Forbidden` with `{ gate, reason }`
+<Tab value="Scope">
+
+Prefer `gate.scope` when the check is exactly “has this scope string”:
+
+```typescript
+export const bookingCreate = gate.scope("booking:create");
+export const notesRead = gate.scope("notes:read");
+```
+
+Names containing `:` are Module:Action pairs — extracted into Manifest permissions for Console.
+
+</Tab>
+
+<Tab value="ABAC">
+
+Use `gate.policy` when the predicate needs more than a single scope membership:
+
+```typescript
+export const freshAdmin = gate.policy("freshAdmin", ({ auth, meta }) => {
+  if (!auth.scopes.has("admin")) return false;
+  // Example: combine scopes with request meta (ip allowlists live in plugins)
+  return !!auth.verified && meta?.ip !== undefined;
+});
+```
+
+Async predicates are allowed (`Promise<boolean>`).
+
+</Tab>
+
+<Tab value="Compose">
+
+`gate.all` is every-member-must-pass, left to right. Nesting flattens:
+
+```typescript
+const write = gate.all(member, notesWrite, gate.rate({ max: 60, per: "1m", keyBy: "user" }));
+const strictWrite = gate.all(write, gate.scope("notes:admin"));
+```
+
+Attach either the composed handle or list members on `.gate(...)` — order is declaration order;
+first denial wins.
+
+</Tab>
+
+<Tab value="Operator">
+
+Console / operator-plane Flows read `operator`, not `auth.userId`:
+
+```typescript title="src/core/gate.ts"
+import { gate } from "okengine";
+
+export const consoleOp = gate.policy("consoleOp", ({ operator }) => operator.id !== null);
+```
+
+```typescript title="src/flows/ops/cleanup.ts"
+import { on, flow, http } from "okengine";
+import { consoleOp } from "@/core/gate";
+
+export const cleanup = on(
+  http.post("/ops/cleanup").gate(consoleOp),
+  flow("ops.cleanup", {
+    plane: "operator",
+    do: async (_, fx) => ({ operatorId: fx.operator.id }),
+  }),
+);
+```
+
+Rate `keyBy: "operator"` keys on `operator.id`.
+
+</Tab>
+
+</Tabs>
+
+## Policy Context
+
+| Field                | Type                          | Meaning                                        |
+| -------------------- | ----------------------------- | ---------------------------------------------- |
+| `auth.userId`        | `string \| null`              | User-plane principal                           |
+| `auth.scopes`        | `ReadonlySet<string>`         | Granted scopes (may include tenant-role union) |
+| `auth.verified`      | `boolean \| undefined`        | Credential verified                            |
+| `auth.apiKeyId`      | `string \| null \| undefined` | API-key principal when present                 |
+| `operator.id`        | `string \| null`              | Operator-plane principal                       |
+| `meta.ip` / `userId` | optional                      | Subject dims for rate `keyBy`                  |
+
+Policies must not touch the store, vault, or network — those belong in `do` via `fx`.
+
+## Declaration Forms
+
+| Form            | Example                                                | Notes                             |
+| --------------- | ------------------------------------------------------ | --------------------------------- |
+| Predicate       | `gate.policy("member", ({ auth }) => !!auth.verified)` | Shortest                          |
+| Options         | `gate.policy("member", { check, description? })`       | Console / docs label              |
+| Scope shorthand | `gate.scope("notes:write")`                            | Records `scopes: ["notes:write"]` |
+| Public sentinel | `gate.public`                                          | Always allows; reserved name      |
+| Chain           | `gate.all(a, b, c)`                                    | Flattened at attach time          |
+
+Reserved: `gate.policy("public", …)` and `gate.scope("public")` throw — use `gate.public`.
+
+## Module:Action Permissions
+
+<Callout title="Detailed section">
+  Scopes with a colon (`notes:write`) are Module:Action pairs. Manifest + Console derive the
+  permission catalog from Flows, effects, and gate scopes — you do not hand-maintain a second list.
+</Callout>
+
+| Source                         | Example pair                     |
+| ------------------------------ | -------------------------------- |
+| Flow id `notes.create`         | `notes:create`                   |
+| `gate.scope("booking:create")` | `booking:create`                 |
+| Effect `reads: ["sql:notes"]`  | `store.sql:read`                 |
+| Operator-plane Flow            | also `console:…` when applicable |
+
+**Consequence:** prefer `gate.scope("notes:write")` over a one-off policy with the same string —
+the scope is recorded on the declaration for Manifest / Console.
+
+Tenant roles may grant **application** scopes only (`notes:write`), not `console:*`. See
+[Tenancy](/docs/elements/gate/tenancy).
+
+## Attaching on Resources & Live
+
+Chain once on the mount — every verb (and live, when present) inherits the same gates:
+
+```typescript title="src/flows/notes/index.ts"
+import { on, http } from "okengine";
+import { member, notesWrite } from "@/core/gate";
+import { notesResource } from "./resource";
+
+export const notes = on(http.resource("/notes", notesResource.all()).gate(member, notesWrite));
+```
+
+Live firehoses use the same `.gate(...)` fluent:
+
+```typescript
+on(http.live(orderStatus).gate(member));
+```
+
+See [HTTP · Resources](/docs/elements/flow/http#resources) and
+[HTTP · Live Streams](/docs/elements/flow/http#live-streams).
+
+## Denial Mapping
+
+| Situation                        | Code           | Status | `error.data`                |
+| -------------------------------- | -------------- | ------ | --------------------------- |
+| Policy denied, no `auth.userId`  | `Unauthorized` | 401    | `{}`                        |
+| Policy denied, principal present | `Forbidden`    | 403    | `{ gate, reason }`          |
+| Unknown gate name at runtime     | deny           | —      | `reason: "unknown gate: …"` |
+
+`reason` is `"policy denied"` for failed predicates (unless a rate gate burned earlier).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="403 Forbidden but the user looks signed in">
+  A later gate in the chain failed — read `error.data.gate`. Confirm the session / key actually
+  carries that scope (`fx.auth.scopes`), including tenant-role unions when tenancy is on.
+</Accordion>
+
+<Accordion title="Policy always fails with verified users">
+  Check for `!!auth.verified` vs `auth.userId !== null`. Some principals have a `userId` before
+  verification completes — pick the predicate that matches your product rule.
+</Accordion>
+
+<Accordion title='TypeError: name "public" is reserved'>
+  Cause: `gate.policy: name "public" is reserved — use gate.public for intentionally unauthenticated
+  surfaces` (or the `gate.scope` variant). Rename the policy or use `.public()`.
+</Accordion>
+
+<Accordion title="TypeError: gate.all: at least one member is required">
+  Pass one or more policy / rate / nested `all` handles — empty `gate.all()` is invalid.
+</Accordion>
+
+<Accordion title="Scope present in JWT but route still Forbidden">
+  Tenant-role scopes union into `fx.auth.scopes` only when the Flow is tenant-scoped (default when
+  tenancy is on). A Flow with `tenantScoped: false` keeps session scopes only.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Authentication](/docs/elements/gate/auth) — how `fx.auth` is filled
+- [RLS](/docs/elements/gate/rls) — row policies from the same Gate identity
+- [Rate Limits](/docs/elements/gate/rate-limits) — throttle on the same chain
+- [Tenancy](/docs/elements/gate/tenancy) — tenant-role scope union
+- [HTTP](/docs/elements/flow/http) — `.gate(...)` on triggers
 
 ## Next
 
 <Cards>
   <Card
+    title="RLS"
+    description="Stamp Gate identity into SQL row policies."
+    href="/docs/elements/gate/rls"
+  />
+  <Card
     title="Rate Limits"
     description="Throttle with gate.rate on the same chain."
     href="/docs/elements/gate/rate-limits"
   />
-  <Card title="Gate Overview" description="Return to Gate overview." href="/docs/elements/gate" />
+  <Card
+    title="Tenancy"
+    description="fx.tenant.id and membership-scoped data."
+    href="/docs/elements/gate/tenancy"
+  />
 </Cards>

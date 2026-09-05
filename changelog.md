@@ -41,6 +41,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Elevated [`Gate`](/docs/elements/gate) (overview, Authentication, Authorization,
+  RLS, Rate Limits, Tenancy) to [`HTTP`](/docs/elements/flow/http) page depth:
+  Evaluation Order + denial envelopes, Sessions & Cookies / API Keys accordions,
+  Module:Action permissions, Gate→SQL identity stamp (`oke.gate` / `oke.user` /
+  `oke.has_scope` / `oke.tenant`), per-strategy rate tabs, Resolution Sources,
+  Store RLS helpers, and Troubleshooting with verbatim `GateBootError` / i18n
+  messages. Sidebar: Auth → Authorization → RLS → Rate Limits → Tenancy.
+- `GatePipeline` teaching figure: footer stays on “Evaluating chain…” until the
+  final beat (no premature “Every gate passed” / “Denied”); status pips mark
+  pending · pass · deny · skipped across the left-to-right walk.
 - Elevated [`Clock · Durable Sleep`](/docs/elements/clock/sleep) to HTTP-trigger
   docs depth: curl in Smallest Example, Sleep Reference + duration units, Park
   Physics, With Steps tabs (checkpoint / HTTP body + sleep / Signal consumer),
@@ -50,9 +60,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Elevated [`Clock · Schedules`](/docs/elements/clock/schedules) to HTTP-trigger
   docs depth: Helper Reference, Timezone Resolution, Binding & Input, per-helper
   tabs (`daily` / `hourly` / `weekly` / `monthly` / `cron` / `every`), Per-tenant
-  + Leader Lock detailed sections, Store Lifecycle & Console accordions (status,
-  Console actions, DST, effective vs declared), and expanded Troubleshooting
-  (`cron at`, paused rows).
+  - Leader Lock detailed sections, Store Lifecycle & Console accordions (status,
+    Console actions, DST, effective vs declared), and expanded Troubleshooting
+    (`cron at`, paused rows).
 - Clock schedules + intervals docs merged into one
   [`/docs/elements/clock/schedules`](/docs/elements/clock/schedules) page
   (helpers, `every`, per-tenant, catch-up, DST); overview teaching figure
@@ -125,8 +135,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   Gemini (limited compatibility). Anthropic stays native `driverId: "anthropic"`.
   Ollama setup emits `openai-compatible` + `…:11434/v1` (no native driver).
 - create-oke **AI setup → Recommended** (and `--yes --ai`) defaults to OpenRouter
-  + `openrouter/free` (was llama.cpp · `granite3.3:2b`). Local engines remain
-  under Customize / `--provider llama-cpp`.
+  - `openrouter/free` (was llama.cpp · `granite3.3:2b`). Local engines remain
+    under Customize / `--provider llama-cpp`.
 - create-oke **Recommended** prompts for `OPENROUTER_API_KEY` (same as Customize
   cloud path) and writes it into `.env.local`.
 - **AI Provider** select (create-oke Customize + `oke ai setup`) leads with
@@ -136,6 +146,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Tightened [`Clock · Schedules`](/docs/elements/clock/schedules) in place (still
+  three Clock pages): collapsed duplicate Helpers deep-dive into Helper Reference,
+  compressed per-tenant / leader lock / Store lifecycle & Console. Nav stays
+  Overview · Schedules · Durable Sleep.
 - Site Next / PostCSS configs are `next.config.ts` (typed `NextConfig`) and
   `postcss.config.ts` instead of `*.mjs`.
 - Moved docs sidebar stage **Extend** from `05` to `03` (Plugins / Providers /
@@ -349,8 +363,6 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `clientDataJSON.type`, and treat non-increasing `signCount` (when stored ≠ 0)
   as a cloned authenticator — log a warning, delete that credential, return
   `reregister_required`.
-
-
 
 ## v0.18.5 — 2026-08-28
 
