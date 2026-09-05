@@ -15,7 +15,7 @@ import type { Manifest } from "../manifest/types.ts";
 /** Default image pins when `images` is omitted but prod drivers need containers. */
 const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
 const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
-const DEFAULT_PGDOG_IMAGE = "ghcr.io/pgdogdev/pgdog:v0.1.53";
+const DEFAULT_PGDOG_IMAGE = "ghcr.io/pgdogdev/pgdog:v0.1.57";
 const DEFAULT_KV_IMAGE = "redis:8-alpine";
 
 /**

@@ -893,20 +893,16 @@ async function askProxy(initial: CreateProxyId = "none"): Promise<CreateProxyId 
 }
 
 /**
- * Provider passed to `oke ai setup` — keep menu Ollama when chosen; map mock
- * pins to a local server id when openai-compatible is already pinned.
+ * Provider passed to `oke ai setup` — map mock pins to a concrete menu id.
  *
  * @param menuProvider - Menu id chosen in the wizard
  * @param pins - Resolved driver pins
  */
 export function aiSetupProviderFor(menuProvider: string, pins: EnvDriverPins): string {
-  if (menuProvider === "ollama") return "ollama";
-  if (menuProvider === "llama-cpp") return "llama-cpp";
-  if (menuProvider === "vllm" || menuProvider === "sglang") return menuProvider;
   if (menuProvider === "mock") {
     if (pins.dev === "anthropic" || pins.prod === "anthropic") return "anthropic";
     if (pins.dev === "openai-compatible" || pins.prod === "openai-compatible") {
-      return "llama-cpp";
+      return "custom";
     }
   }
   return menuProvider;

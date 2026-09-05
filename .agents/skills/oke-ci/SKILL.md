@@ -28,7 +28,7 @@ That is `bun scripts/ci.ts` — **sequential**; it stops at the first failing ch
 | 2   | Format     | `bun run fmt:check`               | `bun run fmt` (oxfmt write). If `BUDGETS.md` flips every budgets refresh, the markdown tables must be oxfmt-aligned (see `formatBudgetsMarkdown`)                                  |
 | 3   | Lint       | `bun run lint`                    | Fix oxlint findings; do not disable rules casually                                                                                                                                 |
 | 4   | Typecheck  | `bun run typecheck`               | Fix `tsc --noEmit` (+ `packages/create-oke` typecheck)                                                                                                                             |
-| 5   | Tests      | `bun run test`                    | Fix failing tests; live suites must skip-visible, never silent green. Docker live needs `OKE_TEST_DOCKER=1`; Ollama live needs `OKE_TEST_OLLAMA_URL` or `OKE_TEST_OLLAMA_DOCKER=1` |
+| 5   | Tests      | `bun run test`                    | Fix failing tests; live suites must skip-visible, never silent green. Docker live needs `OKE_TEST_DOCKER=1` |
 | 6   | Gate       | `bun run gate` (`PUBLISH_GATE=1`) | Doc-staleness, competitor-mention, vault-driver-removal, errors registry, upgrade codemods, npm pack + jsr publish dry-run                                                         |
 | 7   | Site build | `bun run site:build`              | Fix MDX/docs build under `site/` (prose density, fumadocs, links)                                                                                                                  |
 

@@ -50,7 +50,7 @@ describe("term", () => {
         { element: "flow", detail: "", status: "ready" },
         { element: "store", detail: "sql postgres · kv redis", status: "ready" },
         { element: "signal", detail: "memory", status: "ready" },
-        { element: "ai", detail: "openai-compatible · granite3.3:2b", status: "pending" },
+        { element: "ai", detail: "openai-compatible · openrouter/free", status: "pending" },
       ],
     });
     expect(out).toContain("oke dev  v0.2.4");

@@ -498,7 +498,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   let pendingAiModelWatch: {
     readonly url: string;
     readonly model: string;
-    readonly kind: "openai-compatible" | "ollama";
+    readonly kind: "openai-compatible";
   } | null = null;
   /** Hero AI status dot (yellow while model loads). */
   let heroAiStatus: DevStatus | undefined;
@@ -721,73 +721,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           };
         }
 
-        // AI model: Ollama pulls via HTTP (blocking with progress). OpenAI-compatible
-        // servers (llama.cpp / vLLM / SGLang) load in-container — poll readiness in
-        // the background. Never treat compose "healthy" as model-ready.
-        const aiSpec = derived.specs.find((s) => s.role === "ai");
-        if (aiSpec) {
-          const { recipeFor } = await import("../docker/recipes/index.ts");
-          const recipeId = recipeFor(aiSpec.image).id;
-          const model =
-            stackEnv!.OKE_AI_MODEL?.trim() ||
-            process.env.OKE_AI_MODEL?.trim() ||
-            (recipeId === "ollama" ? "qwen3.5:9b" : "granite3.3:2b");
-          const url = `http://127.0.0.1:${aiSpec.hostPort}`;
-          const paintAi = (status: DevStatus, detail?: string) => {
-            heroAiStatus = status;
-            if (!pendingStackSummary) return;
-            pendingStackSummary = {
-              ...pendingStackSummary,
-              services: pendingStackSummary.services.map((svc) =>
-                svc.serviceName === aiSpec.serviceName
-                  ? {
-                      ...svc,
-                      status,
-                      detail: detail ?? svc.detail,
-                    }
-                  : svc,
-              ),
-            };
-          };
-          if (recipeId === "ollama") {
-            bootProgress.set(
-              "ai-model",
-              formatStatusLine(`AI ${model} — ensuring…`, undefined, "pending"),
-            );
-            const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
-            await ensureOllamaModel({
-              url,
-              model,
-              onStatus: (line) =>
-                bootProgress.set("ai-model", formatStatusLine(line, undefined, "pending")),
-            });
-            pendingAiModelWatch = { url, model, kind: "ollama" };
-            paintAi("ready", model);
-          } else if (recipeId === "llama-cpp" || recipeId === "vllm" || recipeId === "sglang") {
-            pendingAiModelWatch = {
-              url: `${url}/v1`,
-              model,
-              kind: "openai-compatible",
-            };
-            bootProgress.set(
-              "ai-model",
-              formatStatusLine(`AI ${model} — probing…`, undefined, "pending"),
-            );
-            const { probeAiModelStatus, formatAiModelStatusMessage } =
-              await import("../docker/ai-model-status.ts");
-            const snap = await probeAiModelStatus({
-              url: `${url}/v1`,
-              model,
-              kind: "openai-compatible",
-            });
-            const status = devStatusFromAiPhase(snap.phase);
-            paintAi(status, snap.phase === "ready" ? model : `${model} · ${snap.phase}`);
-            bootProgress.set(
-              "ai-model",
-              formatStatusLine(formatAiModelStatusMessage(snap), undefined, status),
-            );
-          }
-        }
+        // Compose no longer ships local AI recipes — BYO `OKE_AI_URL` watch
+        // is armed below after stackEnv / process.env are known.
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(msg);
@@ -811,6 +746,20 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   const heroAiModel =
     stackEnv?.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || undefined;
+  // BYO OpenAI-compatible server (LM Studio, llama.cpp, …) — poll readiness
+  // without blocking boot. Registry cloud (OpenRouter) has no OKE_AI_URL.
+  if (!pendingAiModelWatch) {
+    const byoUrl =
+      stackEnv?.OKE_AI_URL?.trim() || process.env.OKE_AI_URL?.trim() || undefined;
+    const byoModel = heroAiModel;
+    if (byoUrl && byoModel) {
+      pendingAiModelWatch = {
+        url: byoUrl,
+        model: byoModel,
+        kind: "openai-compatible",
+      };
+    }
+  }
   // OpenAI-compatible model load can outlive compose health — default AI ● to pending.
   if (pendingAiModelWatch && heroAiStatus === undefined) {
     heroAiStatus = "pending";
@@ -1027,6 +976,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   // One-shot schema sync for the compose (`dev`) profile: emits
   // schema.drizzle.ts for the active dialect, then pushes via drizzle-kit.
+  let schemaPushOk = options.noDbPush === true;
   if (!options.noDbPush) {
     const { syncDevSchema } = await import("./dev-schema-sync.ts");
     const configEnv = "dev" as const;
@@ -1042,9 +992,38 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           `oke db push (dev · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
         ),
       );
+      schemaPushOk = result.code === 0;
     } catch (err) {
       write(await formatDevSchemaSyncFailure(cwd, err, "boot"));
     }
+  }
+
+  // Vault gaps before seed / app — missing contracts (e.g. OPENROUTER_API_KEY).
+  {
+    const { maybeAskVaultGaps } = await import("./ask-vault-gaps.ts");
+    const vaultCode = await maybeAskVaultGaps({
+      cwd,
+      entry,
+      write,
+      stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
+    });
+    if (vaultCode !== 0) {
+      bootBoard.stop();
+      restoreProcessEnv();
+      restoreWarn();
+      return { code: vaultCode };
+    }
+  }
+
+  // First-time seed ask only after a successful push (needs live schema).
+  if (schemaPushOk && !options.noDbPush) {
+    const { maybeAskSeed } = await import("./ask-seed.ts");
+    await maybeAskSeed({
+      cwd,
+      env: "dev",
+      write,
+      stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
+    });
   }
 
   const autoPushEnabled = resolveDevAutoPush({

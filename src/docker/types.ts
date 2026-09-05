@@ -84,9 +84,9 @@ export interface RecipeApplyResult {
    * omit this for inference servers (raw API must not bind `0.0.0.0`).
    */
   readonly publishBind?: RecipePublishBind;
-  /** Compose `ipc` (e.g. vLLM `host` for shared-memory workers). */
+  /** Compose `ipc` (e.g. `host` for shared-memory workers). */
   readonly ipc?: string;
-  /** Compose `deploy` (e.g. GPU device reservations for vLLM / SGLang). */
+  /** Compose `deploy` (e.g. GPU device reservations). */
   readonly deploy?: Readonly<Record<string, unknown>>;
   /**
    * Compose `depends_on` (e.g. pooler waits for Postgres).

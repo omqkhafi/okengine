@@ -151,11 +151,10 @@ images: {
   store: {
     sql: "postgres:18-alpine",
     kv: "redis:8-alpine",
-    files: "rustfs/rustfs:1.0.0-rc.2",
+    files: "rustfs/rustfs:1.0.0-rc.5",
   },
-  channel: { email: "axllent/mailpit:v1.30.7" },
-  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
-  // ai: "ghcr.io/ggml-org/llama.cpp:server-b10450",
+  channel: { email: "axllent/mailpit:v1.31.1" },
+  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
   // proxy: "caddy:2-alpine",
 },
 ```
@@ -164,7 +163,10 @@ Omitted image keys mean no container for that role. When both `store.sql` and `p
 
 For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays `redis`.
 `{ durable: true }` KV lives in SQL (`oke_kv` on `DATABASE_URL`), not a second Redis image.
-For `ai`, see [Recipes · AI](/docs/recipes#ai-local--self-hosted). For `proxy`, see [Caddy](/docs/recipes/caddy), [Traefik](/docs/recipes/traefik), or [nginx](/docs/recipes/nginx).
+
+Compose does not manage AI inference — [OpenRouter](/docs/recipes/openrouter) or BYO
+`OKE_AI_URL` ([Models](/docs/elements/ai/models)). For `proxy`, see [Caddy](/docs/recipes/caddy),
+[Traefik](/docs/recipes/traefik), or [nginx](/docs/recipes/nginx).
 
 ## i18n
 

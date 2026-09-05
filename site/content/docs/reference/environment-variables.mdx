@@ -161,11 +161,10 @@ send. App projects can ignore these.
 | `OPENAI_API_KEY`      | `openai-compatible` driver credential                                                                   | —                                                                          |
 | `OPENAI_BASE_URL`     | `openai-compatible` base URL                                                                            | OpenAI cloud                                                               |
 | `OKE_AI_DRIVER`       | Force the AI driver id (honoured under Compose / `oke dev`)                                             | config map                                                                 |
-| `OKE_AI_URL`          | Local / openai-compatible base URL                                                                      | `http://127.0.0.1:8080/v1` (llama.cpp) · `http://127.0.0.1:11434/v1` (Ollama) |
-| `OKE_AI_MODEL`        | Default model id — Docker Hub `ai/` for llama.cpp; Ollama library tag; HF id for vLLM/SGLang            | `granite3.3:2b` (llama.cpp) / `qwen3.5:9b` (Ollama)                         |
+| `OKE_AI_URL`          | openai-compatible base URL (must end in `/v1`) — BYO; Compose does not manage inference                 | —                                                                          |
+| `OKE_AI_MODEL`        | Default model id for openai-compatible / setup bindings                                                 | —                                                                          |
 | `OKE_AI_VISION_MODEL` | Vision model id written by `oke ai setup` (logical `ai.model("vision")`)                                | —                                                                          |
 | `OKE_AI_EMBED_MODEL`  | Embedding model id written by `oke ai setup`                                                            | —                                                                          |
-| `OLLAMA_HOST`         | Alternate Ollama origin (`host:port` or URL) used by pull/detect helpers                                | —                                                                          |
 
 ## Framework behavior
 

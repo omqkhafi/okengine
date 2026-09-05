@@ -11,11 +11,11 @@ import { deriveInfrastructure, writeDerivedFiles } from "../../../src/docker/ind
 
 const IMAGES = {
   "store.sql": "postgres:18-alpine",
-  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
   "store.kv": "redis:8-alpine",
-  "store.files": "rustfs/rustfs:1.0.0-rc.2",
+  "store.files": "rustfs/rustfs:1.0.0-rc.5",
   "store.index": "getmeili/meilisearch:v1.53",
-  "channel.email": "axllent/mailpit:v1.30.7",
+  "channel.email": "axllent/mailpit:v1.31.1",
 } as const;
 
 function dockerAvailable(): boolean {
@@ -40,11 +40,11 @@ describe("keel docker derive", () => {
     });
     const yml = result.files.find((f) => f.path.endsWith("docker-compose.yml"))?.content ?? "";
     expect(yml).toContain("postgres:18-alpine");
-    expect(yml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.53");
+    expect(yml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.57");
     expect(yml).toContain("# pgdog — connection pooler");
     expect(yml).toContain("redis:8-alpine");
-    expect(yml).toContain("rustfs/rustfs:1.0.0-rc.2");
-    expect(yml).toContain("axllent/mailpit:v1.30.7");
+    expect(yml).toContain("rustfs/rustfs:1.0.0-rc.5");
+    expect(yml).toContain("axllent/mailpit:v1.31.1");
     expect(yml).toContain("getmeili/meilisearch:v1.53");
     expect(yml).toContain("oke-keel:latest");
     expect(result.stackEnv.DATABASE_URL).toContain(":6432/");

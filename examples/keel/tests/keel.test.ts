@@ -9,7 +9,7 @@ let guest: Awaited<ReturnType<TestApp<App>["auth"]["loginAs"]>>;
 
 beforeAll(async () => {
   t = await createTestApp(app, {
-    vaultSecrets: { OKE_AI_URL: "http://127.0.0.1:8080" },
+    vaultSecrets: { OPENROUTER_API_KEY: "sk-or-v1-test" },
   });
   pm = await t.auth.loginAs({
     id: "aria@keel.dev",

@@ -766,7 +766,9 @@ own resources.
 
 <StoreSeeding />
 
-Seed never runs at boot — only via `oke db seed`. Categories:
+Seed never runs at boot without confirmation — only via `oke db seed`, the live
+`oke dev` **`s`** key, or the first-boot confirm when a seed module exists and
+`.oke/state.json` has not recorded that identity yet. Categories:
 
 | Block | Runs when |
 | ----- | --------- |

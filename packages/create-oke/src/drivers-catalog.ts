@@ -108,18 +108,6 @@ export const EMAIL_CHOICES: readonly DriverChoice[] = [
   { value: "taqnyat-mail", label: "taqnyat" },
 ];
 
-/**
- * Pinned local-inference images — must match `src/docker/recipes/*` pins.
- * Never `latest` (GGUF-parser CVE floors: llama.cpp ≥ b8146, Ollama ≥ 0.17.1).
- */
-export const LLAMA_CPP_IMAGE = "ghcr.io/ggml-org/llama.cpp:server-b10450";
-/** @see LLAMA_CPP_IMAGE */
-export const OLLAMA_IMAGE = "ollama/ollama:0.32.13";
-/** @see LLAMA_CPP_IMAGE */
-export const VLLM_IMAGE = "vllm/vllm-openai:v0.27.1";
-/** @see LLAMA_CPP_IMAGE */
-export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.17-runtime";
-
 /** AI menu providers → protocol driver (kept for call-site compat). */
 export const AI_PROVIDERS = [
   {
@@ -141,10 +129,6 @@ export const AI_PROVIDERS = [
   { value: "gemini", label: "Google Gemini", driver: "openai-compatible" },
   { value: "lmstudio", label: "LM Studio", driver: "openai-compatible" },
   { value: "custom", label: "Custom OpenAI Compatible", driver: "openai-compatible" },
-  { value: "llama-cpp", label: "llama.cpp (Local)", driver: "openai-compatible" },
-  { value: "ollama", label: "Ollama (Local)", driver: "openai-compatible" },
-  { value: "vllm", label: "vLLM (self-hosted GPU)", driver: "openai-compatible" },
-  { value: "sglang", label: "SGLang (self-hosted GPU)", driver: "openai-compatible" },
   { value: "mock", label: "Mock (dev only)", driver: "mock" },
 ] as const;
 
@@ -243,12 +227,11 @@ export function aiDriverForProvider(provider: string): string {
 /** Default image pins keyed by role (standard template). */
 export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.sql": "postgres:18-alpine",
-  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
   "store.kv": "redis:8-alpine",
-  "store.files": "rustfs/rustfs:1.0.0-rc.2",
-  "channel.email": "axllent/mailpit:v1.30.7",
+  "store.files": "rustfs/rustfs:1.0.0-rc.5",
+  "channel.email": "axllent/mailpit:v1.31.1",
   "store.index": "getmeili/meilisearch:v1.53",
-  ai: LLAMA_CPP_IMAGE,
   proxy: "caddy:2-alpine",
 };
 

@@ -463,7 +463,7 @@ export function buildStackEnv(
       env.OKE_STORE_INDEX_URL = url;
       env.OKE_STORE_INDEX_KEY = spec.credentials.password;
     } else if (spec.role === "ai") {
-      // Ollama: standalone HTTP URL; model is a stack control (OKE_AI_MODEL).
+      // Unsupported compose role — prefer BYO `OKE_AI_URL` for cloud / local servers.
       env[`${prefix}_URL`] = url;
       env.OKE_AI_URL = url;
     } else if (spec.role === "proxy") {
@@ -508,7 +508,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "store.index": "store.index — search index",
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
   signal: "signal — message bus",
-  ai: "ai — local inference (llama.cpp / Ollama / vLLM / SGLang)",
+  ai: "ai — (unsupported; use OKE_AI_URL)",
   proxy: "proxy — edge reverse proxy (Caddy / Traefik / nginx)",
 };
 
@@ -561,7 +561,7 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ALLOW_INSECURE",
   ],
   // OKE_AI_URL is already emitted as `${prefix}_URL` — do not alias it again.
-  ai: ["OKE_AI_MODEL", "OKE_AI_CTX_SIZE"],
+  ai: [],
   proxy: ["OKE_PROXY_HOST", "OKE_PROXY_ACME_EMAIL"],
   "store.index": ["OKE_STORE_INDEX_KEY"],
 };
@@ -578,11 +578,6 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ACCEPT_ANY=1",
     "MP_SMTP_AUTH_ALLOW_INSECURE=1",
   ],
-  // Curated Docker Hub `ai/` model id for llama.cpp; Ollama tags differ.
-  // OKE_AI_CTX_SIZE bounds the KV cache llama-server allocates at load —
-  // left at the model's full native context (often 32K-256K+), a small
-  // model's KV cache alone can OOM the container regardless of host RAM.
-  ai: ["OKE_AI_MODEL=granite3.3:2b", "OKE_AI_CTX_SIZE=4096"],
   proxy: ["OKE_PROXY_HOST=localhost", "OKE_PROXY_ACME_EMAIL=admin@example.com"],
 };
 
@@ -600,12 +595,7 @@ function roleFromEnvKey(key: string): string | undefined {
   }
   if (key === "PGDATA" || key === "POSTGRES_INITDB_ARGS") return "store.sql";
   if (key.startsWith("OKE_STORE_KV_MAXMEMORY")) return "store.kv";
-  if (
-    key === "OKE_AI_URL" ||
-    key === "OKE_AI_MODEL" ||
-    key === "OKE_AI_CTX_SIZE" ||
-    key === "OLLAMA_HOST"
-  ) {
+  if (key === "OKE_AI_URL" || key === "OKE_AI_MODEL") {
     return "ai";
   }
   if (key === "OKE_PROXY_URL" || key === "OKE_PROXY_HOST" || key === "OKE_PROXY_ACME_EMAIL") {

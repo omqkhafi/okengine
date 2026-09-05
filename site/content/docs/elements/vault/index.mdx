@@ -293,9 +293,9 @@ Managed provider ids: `aws-secrets-manager` · `azure-key-vault` · `gcp-secret-
 <Accordions>
 
 <Accordion title="VaultBootError — N missing secret(s)">
-  Cause: `vault boot failed — N missing secret(s):` with every gap listed. Set each name via the
-  driver (`oke vault set`, managed provider, or process env), or add a `dev:` fallback for local
-  boot only. `vault.env.required` names join the same list.
+  Cause: `vault boot failed — N missing secret(s):` with every gap listed. On a
+  TTY, `oke dev` prompts each into `.env.local`; otherwise use `oke vault set` /
+  env / managed, or a `dev:` fallback. `vault.env.required` joins the same list.
 </Accordion>
 
 <Accordion title='vault: secret "…" is not loaded'>

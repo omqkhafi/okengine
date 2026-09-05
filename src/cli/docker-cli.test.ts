@@ -72,7 +72,7 @@ describe("oke stack", () => {
     const code = await runStackPreview({
       cwd: dir,
       images: {
-        "channel.email": "axllent/mailpit:v1.30.7",
+        "channel.email": "axllent/mailpit:v1.31.1",
       },
       write: (t) => {
         out += t;

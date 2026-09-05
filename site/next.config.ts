@@ -35,6 +35,11 @@ const config: NextConfig = {
         destination: "/docs/understand/the-model",
         permanent: true,
       },
+      {
+        source: "/docs/recipes/local-ai",
+        destination: "/docs/recipes/openrouter",
+        permanent: true,
+      },
     ];
   },
   // Dev binds as `localhost`; browsing via `http://127.0.0.1` is a different

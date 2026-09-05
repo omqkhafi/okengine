@@ -9,8 +9,8 @@ AI is how your backend **calls a model as a declared effect**. Ticket triage, a 
 summary, a planner that tools your own Flows — each ask is a named prompt or agent with
 budgets, not an SDK call buried in `do`.
 
-For developers wiring OpenRouter in the cloud or llama.cpp locally — bind a model, mint a
-prompt, ask through `fx`.
+For developers wiring OpenRouter or any OpenAI-compatible `/v1` endpoint — bind a model,
+mint a prompt, ask through `fx`.
 
 <Callout title="The one rule">
   Declare `ai.model` → `model.prompt` (or `ai.agent` / `ai.embed`), then call through `fx.ask` /
@@ -239,18 +239,18 @@ export default defineConfig({
 | Driver | Runs as | Best for |
 | ------ | ------- | -------- |
 | `mock` | In-process stub | Tests, CI, no network |
-| `openai-compatible` | OpenAI HTTP API | OpenRouter, llama.cpp, Ollama, vLLM, SGLang |
+| `openai-compatible` | OpenAI HTTP API | OpenRouter, cloud registries, any `/v1` server |
 | `anthropic` | Native Messages API | Production Claude + reliable tools |
 
-Env knobs: `OKE_AI_DRIVER`, `OKE_AI_URL` / `OPENAI_BASE_URL`, provider API keys. Recipes:
-[OpenRouter](/docs/recipes/openrouter), [Local AI](/docs/recipes/local-ai).
+Env knobs: `OKE_AI_DRIVER`, `OKE_AI_URL` / `OPENAI_BASE_URL`, provider API keys.
+Compose does not pin inference — BYO URL + keys, or [OpenRouter](/docs/recipes/openrouter).
 
 ## The Capabilities of AI
 
 <Cards>
   <Card
     title="Models"
-    description="Verified providers, limited-compatibility caveats, local and cloud bindings."
+    description="Verified providers, limited-compatibility caveats, cloud and BYO bindings."
     href="/docs/elements/ai/models"
   />
   <Card
@@ -314,7 +314,6 @@ Env knobs: `OKE_AI_DRIVER`, `OKE_AI_URL` / `OPENAI_BASE_URL`, provider API keys.
 - [Agents](/docs/elements/ai/agents) — `fx.run`, tools, `maxSteps`
 - [MCP](/docs/elements/ai/mcp) — inbound `mcp.tool` and outbound `ai.mcpServer`
 - [OpenRouter](/docs/recipes/openrouter) — zero-Docker cloud path
-- [Local AI](/docs/recipes/local-ai) — llama.cpp / Ollama / vLLM / SGLang
 - [fx](/docs/reference/fx) — `fx.ask` / `fx.run` / `fx.embed`
 - [Errors](/docs/reference/errors) — OKE1005 · OKE1015
 

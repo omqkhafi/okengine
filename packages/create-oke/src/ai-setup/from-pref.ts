@@ -3,7 +3,6 @@
  */
 
 import type { CreateAiPref } from "../create-defaults.ts";
-import { LLAMA_CPP_IMAGE, OLLAMA_IMAGE, SGLANG_IMAGE, VLLM_IMAGE } from "../drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
 import { cloudApplyDefaults } from "./catalog.ts";
 
@@ -64,49 +63,5 @@ export function aiPrefWithModels(
  * @param provider - Menu id
  */
 export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
-  if (provider === "llama-cpp") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-      chatModel: "granite3.3:2b",
-      visionModel: null,
-      embedModel: null,
-      image: LLAMA_CPP_IMAGE,
-    };
-  }
-  if (provider === "ollama") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434/v1",
-      chatModel: "gemma4:e4b",
-      visionModel: "qwen3-vl:4b",
-      embedModel: "nomic-embed-text",
-      image: OLLAMA_IMAGE,
-    };
-  }
-  if (provider === "vllm") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8000/v1",
-      chatModel: "Qwen/Qwen3-0.6B",
-      visionModel: null,
-      embedModel: null,
-      image: VLLM_IMAGE,
-    };
-  }
-  if (provider === "sglang") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:30000/v1",
-      chatModel: "Qwen/Qwen3-0.6B",
-      visionModel: null,
-      embedModel: null,
-      image: SGLANG_IMAGE,
-    };
-  }
   return cloudApplyDefaults(provider);
 }

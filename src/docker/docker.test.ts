@@ -41,19 +41,7 @@ import {
   valkey,
   writeDerivedFiles,
   yugabyte,
-  ensureOllamaModel,
-  llamaCpp,
-  LLAMA_CPP_IMAGE,
-  LLAMA_CPP_MIN_SAFE_BUILD,
-  OllamaPullError,
-  OLLAMA_IMAGE,
-  OLLAMA_MIN_SAFE_VERSION,
-  sglang,
-  SGLANG_IMAGE,
-  vllm,
-  VLLM_IMAGE,
   type ImageRecipe,
-  type OllamaFetch,
   type ServiceSpec,
 } from "./index.ts";
 
@@ -370,12 +358,12 @@ describe("image recipes", () => {
   });
 
   test("pgdog matches the official image and waits on store-sql", () => {
-    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.53").id).toBe("pgdog");
+    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.57").id).toBe("pgdog");
     expect(pgdog.match("ghcr.io/pgdogdev/pgdog:main")).toBe(true);
     const applied = pgdog.apply({
       role: "pgdog",
       serviceName: "pgdog",
-      image: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+      image: "ghcr.io/pgdogdev/pgdog:v0.1.57",
       port: 6432,
       hostPort: 6432,
       credentials: fixedCreds["store.sql"],
@@ -432,184 +420,6 @@ describe("image recipes", () => {
       database: "oke",
     });
     expect(url).toBe("http://127.0.0.1:7700");
-  });
-
-  test("ollama matches the official image, serves on 11434, emits http URL", () => {
-    expect(recipeFor(OLLAMA_IMAGE).id).toBe("ollama");
-    expect(OLLAMA_IMAGE).not.toContain("latest");
-    expect(OLLAMA_MIN_SAFE_VERSION).toBe("0.17.1");
-    const spec: ServiceSpec = {
-      role: "ai",
-      serviceName: "ai",
-      image: OLLAMA_IMAGE,
-      port: 11434,
-      hostPort: 11434,
-      credentials: { user: "oke", password: "unused", database: "oke" },
-    };
-    const applied = recipeFor(spec.image).apply(spec);
-    expect(applied.environment?.OKE_AI_MODEL).toBe("${OKE_AI_MODEL:-qwen3.5:9b}");
-    expect(applied.environment?.OLLAMA_HOST).toBe("0.0.0.0:11434");
-    expect(applied.publishBind).toBe("127.0.0.1");
-    expect(applied.volumes).toContain("ai-data:/root/.ollama");
-    expect(applied.healthcheck?.test.join(" ")).toContain("ollama list");
-    // Pull is host-side via ensureOllamaModel — never a boot `ollama pull` CLI.
-    expect(applied.command).toBeUndefined();
-    expect(applied.entrypoint).toBeUndefined();
-    const url = recipeFor(spec.image).url(spec, {
-      host: "127.0.0.1",
-      port: 11434,
-      user: "oke",
-      password: "unused",
-      database: "oke",
-    });
-    expect(url).toBe("http://127.0.0.1:11434/v1");
-  });
-
-  test("llama-cpp is the default local AI recipe — OpenAI /v1, loopback publish, pinned ≥ b8146", () => {
-    expect(recipeFor(LLAMA_CPP_IMAGE).id).toBe("llama-cpp");
-    expect(LLAMA_CPP_IMAGE).not.toContain("latest");
-    const build = Number(/server-b(\d+)/.exec(LLAMA_CPP_IMAGE)?.[1]);
-    expect(build).toBeGreaterThanOrEqual(LLAMA_CPP_MIN_SAFE_BUILD);
-    const spec: ServiceSpec = {
-      role: "ai",
-      serviceName: "ai",
-      image: LLAMA_CPP_IMAGE,
-      port: 8080,
-      hostPort: 8080,
-      credentials: { user: "oke", password: "unused", database: "oke" },
-    };
-    const applied = llamaCpp.apply(spec);
-    expect(applied.publishBind).toBe("127.0.0.1");
-    // Never put docker-repo / models-preset / interpolated OKE_AI_MODEL in
-    // service environment — router children recurse / OOM; Compose ${} would
-    // also override env_file from an empty host shell.
-    expect(applied.environment?.LLAMA_ARG_MODELS_PRESET).toBeUndefined();
-    expect(applied.environment?.LLAMA_ARG_DOCKER_REPO).toBeUndefined();
-    expect(applied.environment?.OKE_AI_MODEL).toBeUndefined();
-    expect(applied.entrypoint).toEqual(["/usr/bin/python3", "/oke/llama-entrypoint.py"]);
-    expect(applied.command).toBeUndefined();
-    expect(applied.volumes?.some((v) => v.includes("../.oke/llama-entrypoint.py"))).toBe(true);
-    expect(applied.extraPorts).toBeUndefined();
-    expect(llamaCpp.url(spec, { host: "127.0.0.1", port: 8080, ...spec.credentials })).toBe(
-      "http://127.0.0.1:8080/v1",
-    );
-  });
-
-  test("vllm recipe is GPU-aware, OpenAI /v1, loopback publish, never latest", () => {
-    expect(recipeFor(VLLM_IMAGE).id).toBe("vllm");
-    expect(VLLM_IMAGE).not.toContain("latest");
-    const spec: ServiceSpec = {
-      role: "ai",
-      serviceName: "ai",
-      image: VLLM_IMAGE,
-      port: 8000,
-      hostPort: 8000,
-      credentials: { user: "oke", password: "unused", database: "oke" },
-    };
-    const applied = vllm.apply(spec);
-    expect(applied.publishBind).toBe("127.0.0.1");
-    expect(applied.ipc).toBe("host");
-    expect(JSON.stringify(applied.deploy)).toContain("nvidia");
-    expect(vllm.url(spec, { host: "127.0.0.1", port: 8000, ...spec.credentials })).toBe(
-      "http://127.0.0.1:8000/v1",
-    );
-  });
-
-  test("sglang recipe is GPU-aware, OpenAI /v1, loopback publish, never latest", () => {
-    expect(recipeFor(SGLANG_IMAGE).id).toBe("sglang");
-    expect(SGLANG_IMAGE).not.toContain("latest");
-    const spec: ServiceSpec = {
-      role: "ai",
-      serviceName: "ai",
-      image: SGLANG_IMAGE,
-      port: 30000,
-      hostPort: 30000,
-      credentials: { user: "oke", password: "unused", database: "oke" },
-    };
-    const applied = sglang.apply(spec);
-    expect(applied.publishBind).toBe("127.0.0.1");
-    expect(applied.ipc).toBe("host");
-    expect(JSON.stringify(applied.deploy)).toContain("nvidia");
-    expect(sglang.url(spec, { host: "127.0.0.1", port: 30000, ...spec.credentials })).toBe(
-      "http://127.0.0.1:30000/v1",
-    );
-  });
-
-  test("ensureOllamaModel POSTs /api/pull to the container base URL (not a host CLI)", async () => {
-    const calls: { url: string; method: string; body?: string }[] = [];
-    const fetchFn: OllamaFetch = async (input, init) => {
-      const url = String(input);
-      const method = (init?.method ?? "GET").toUpperCase();
-      const body = typeof init?.body === "string" ? init.body : undefined;
-      calls.push({ url, method, ...(body !== undefined ? { body } : {}) });
-      if (url.endsWith("/api/tags") && method === "GET") {
-        return new Response(JSON.stringify({ models: [] }), { status: 200 });
-      }
-      if (url.endsWith("/api/pull") && method === "POST") {
-        expect(body).toContain('"model":"qwen3.5:9b"');
-        expect(body).toContain('"stream":true');
-        return new Response(`${JSON.stringify({ status: "success" })}\n`, { status: 200 });
-      }
-      return new Response("unexpected", { status: 500 });
-    };
-
-    await ensureOllamaModel({
-      url: "http://127.0.0.1:11434",
-      model: "qwen3.5:9b",
-      fetch: fetchFn,
-      readyTimeoutMs: 2_000,
-      pullTimeoutMs: 5_000,
-    });
-
-    expect(
-      calls.some((c) => c.url === "http://127.0.0.1:11434/api/tags" && c.method === "GET"),
-    ).toBe(true);
-    const pull = calls.find((c) => c.url === "http://127.0.0.1:11434/api/pull");
-    expect(pull?.method).toBe("POST");
-    expect(pull?.body).toBe(JSON.stringify({ model: "qwen3.5:9b", stream: true }));
-    // No host-side `ollama` binary assumption — only HTTP to the given URL.
-    expect(calls.every((c) => c.url.startsWith("http://127.0.0.1:11434/"))).toBe(true);
-  });
-
-  test("ensureOllamaModel skips pull when /api/tags already lists the model", async () => {
-    const calls: string[] = [];
-    const statuses: string[] = [];
-    const fetchFn: OllamaFetch = async (input, init) => {
-      const url = String(input);
-      const method = (init?.method ?? "GET").toUpperCase();
-      calls.push(`${method} ${url}`);
-      if (url.endsWith("/api/tags")) {
-        return new Response(JSON.stringify({ models: [{ name: "gemma4:e4b" }] }), {
-          status: 200,
-        });
-      }
-      return new Response("should not pull", { status: 500 });
-    };
-
-    await ensureOllamaModel({
-      url: "http://127.0.0.1:23100",
-      model: "gemma4:e4b",
-      fetch: fetchFn,
-      readyTimeoutMs: 2_000,
-      onStatus: (line) => statuses.push(line),
-    });
-
-    expect(calls.some((c) => c.includes("/api/pull"))).toBe(false);
-    expect(statuses.some((s) => /already has gemma4:e4b/.test(s))).toBe(true);
-  });
-
-  test("ensureOllamaModel fails loud when the container API never becomes ready", async () => {
-    const fetchFn: OllamaFetch = async () => {
-      throw new Error("connection refused");
-    };
-    await expect(
-      ensureOllamaModel({
-        url: "http://127.0.0.1:59999",
-        model: "qwen3.5:9b",
-        fetch: fetchFn,
-        readyTimeoutMs: 800,
-      }),
-    ).rejects.toBeInstanceOf(OllamaPullError);
   });
 
   test("a new image recipe is ≤15 lines", async () => {
@@ -792,9 +602,8 @@ describe("deriveInfrastructure", () => {
   test("compose YAML spaces services and adds role comments", () => {
     const result = deriveInfrastructure({
       images: {
-        ai: "ghcr.io/ggml-org/llama.cpp:server",
-        "channel.email": "axllent/mailpit:v1.30.7",
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+        "channel.email": "axllent/mailpit:v1.31.1",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
         "store.sql": "postgres:16",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
@@ -803,15 +612,14 @@ describe("deriveInfrastructure", () => {
     });
     const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(yml).toContain("# Generated by `oke docker`");
-    expect(yml).toContain("# ai — local inference");
     expect(yml).toContain("# channel.email — Mailpit");
     expect(yml).toContain("# pgdog — connection pooler");
     expect(yml).toContain("# store.sql — Postgres");
     // Blank line between adjacent service blocks (comment → key → … → blank → comment).
-    expect(yml).toMatch(/# ai —[^\n]+\n  ai:\n[\s\S]+\n\n  # channel\.email —/);
+    expect(yml).toMatch(/# channel\.email —[^\n]+\n  channel-email:\n[\s\S]+\n\n  # pgdog —/);
     expect(yml).toMatch(/\nnetworks:\n[\s\S]+\n\nservices:\n/);
     expect(serviceNamesFromComposeYaml(yml)).toEqual(
-      new Set(["ai", "channel-email", "pgdog", "store-sql"]),
+      new Set(["channel-email", "pgdog", "store-sql"]),
     );
   });
 
@@ -916,7 +724,7 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:18-alpine",
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
       prod: true,
@@ -931,7 +739,7 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_STORE_SQL_URL).toContain(":5432/");
 
     const pgdogYml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.53");
+    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.57");
     expect(pgdogYml).toContain("store-sql");
     expect(pgdogYml).toContain("service_healthy");
     expect(pgdogYml).not.toContain(fixedCreds["store.sql"].password);
@@ -1015,68 +823,13 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.DATABASE_URL).toBeUndefined();
   });
 
-  test("ai ollama emits OKE_AI_URL, loopback publish, and never binds 0.0.0.0 on the host", () => {
-    const result = deriveInfrastructure({
-      images: { ai: OLLAMA_IMAGE },
-      app: "skyport",
-    });
-    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(yml).toContain(OLLAMA_IMAGE);
-    expect(yml).toContain("OKE_AI_MODEL");
-    expect(yml).toContain("qwen3.5:9b");
-    expect(yml).toContain("127.0.0.1:11434:11434");
-    expect(yml).not.toMatch(/ports:\s*\n\s*-\s*"?11434:11434"?/);
-    expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434/v1");
-    const envText = formatStackEnv(result.stackEnv);
-    expect(envText).toContain("# ── ai — local inference");
-    expect(envText.match(/^OKE_AI_URL=/gm)?.length).toBe(1);
-  });
-
-  test("ai llama-cpp (default) emits /v1 URL and loopback-only publish", () => {
-    const result = deriveInfrastructure({
-      images: { ai: LLAMA_CPP_IMAGE },
-      app: "skyport",
-      controls: { OKE_AI_MODEL: "gemma4:e4b-q4_K_M" },
-    });
-    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(yml).toContain(LLAMA_CPP_IMAGE);
-    expect(yml).toContain("127.0.0.1:8080:8080");
-    expect(yml).toContain("llama-entrypoint.py");
-    expect(yml).toContain("../.oke/llama-entrypoint.py");
-    expect(yml).toContain("/oke/llama-entrypoint.py");
-    expect(yml).not.toMatch(/ports:\s*\n\s*-\s*"?8080:8080"?/);
-    expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:8080/v1");
-    expect(result.stackEnv.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
-    const entry = result.files.find((f) => f.path === "../.oke/llama-entrypoint.py")!.content;
-    expect(entry).toContain("Generated by oke");
-    expect(entry).toContain("llama download");
-    expect(entry).toContain("org.cncf.model.filepath");
-    expect(entry).toContain("CNCF / Hub registry pull");
-    expect(entry).toContain("llama-server");
-    expect(entry).toContain("--alias");
-    expect(yml).not.toContain("--models-preset");
-  });
-
-  test("ai vllm and sglang emit loopback publish + GPU deploy", () => {
-    for (const [image, port, path] of [
-      [VLLM_IMAGE, 8000, DOCKER_COMPOSE],
-      [SGLANG_IMAGE, 30000, DOCKER_COMPOSE],
-    ] as const) {
-      const result = deriveInfrastructure({ images: { ai: image }, app: "skyport" });
-      const yml = result.files.find((f) => f.path === path)!.content;
-      expect(yml).toContain(`127.0.0.1:${port}:${port}`);
-      expect(yml).toContain("nvidia");
-      expect(result.stackEnv.OKE_AI_URL).toBe(`http://127.0.0.1:${port}/v1`);
-    }
-  });
-
   test("emits protocol-specific env keys plus optional control notes", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:18-alpine",
         "store.kv": "redis:8-alpine",
-        "store.files": "rustfs/rustfs:1.0.0-rc.2",
-        "channel.email": "axllent/mailpit:v1.30.7",
+        "store.files": "rustfs/rustfs:1.0.0-rc.5",
+        "channel.email": "axllent/mailpit:v1.31.1",
       },
       credentials: {
         ...fixedCreds,
@@ -1119,8 +872,8 @@ describe("deriveInfrastructure", () => {
     const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
     const result = deriveInfrastructure({
       images: {
-        "channel.email": "axllent/mailpit:v1.30.7",
-        "store.files": "rustfs/rustfs:1.0.0-rc.2",
+        "channel.email": "axllent/mailpit:v1.31.1",
+        "store.files": "rustfs/rustfs:1.0.0-rc.5",
       },
       instanceId: id,
       credentials: {
@@ -1158,8 +911,8 @@ describe("deriveInfrastructure", () => {
     const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
     const rows = resolveStack({
       images: {
-        "channel.email": "axllent/mailpit:v1.30.7",
-        "store.files": "rustfs/rustfs:1.0.0-rc.2",
+        "channel.email": "axllent/mailpit:v1.31.1",
+        "store.files": "rustfs/rustfs:1.0.0-rc.5",
       },
       instanceId: id,
       credentials: {

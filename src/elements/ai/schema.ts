@@ -120,8 +120,8 @@ export function promptOutJsonSchema(out: unknown): Record<string, unknown> | und
 
 /**
  * Driver `response_format` for a declared `out` — JSON Schema wrapper.
- * OpenAI-compatible wires this as `json_object` (llama.cpp granite empties
- * `content` on `json_schema`).
+ * OpenAI-compatible wires this as `json_object` (some openai-compatible
+ * servers empty `content` on `json_schema`).
  *
  * @param prompt - Prompt name (schema id)
  * @param out - Declared output

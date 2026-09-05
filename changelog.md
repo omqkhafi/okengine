@@ -43,9 +43,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - **Advanced starter** — cookie `gate.auth`, `csrf` + `cors` + `passkey`, web
   `createClient({ auth: { mode: "cookie" } })` + `<Can>` chrome demo.
+- `oke dev` asks once to run `oke db seed` when a seed module exists and
+  `.oke/state.json` has not recorded that seed identity (TTY only). Successful
+  `oke db seed` (including live **`s`**) marks the identity so the prompt does
+  not repeat.
+- `oke dev` prompts one-by-one for Vault boot gaps (same set as
+  `VaultBootError`) and writes values into `.env.local` before the app starts.
 
 #### Docs
 
+- CLI / Vault / Store seeding docs cover first-boot seed confirm and interactive
+  Vault gap fill; OpenRouter recipe notes Keel's `OPENROUTER_API_KEY` prompt.
 - Client Auth / Calling / React / CSRF / ClientLoop updated for `createClient({ auth })`,
   `authorize` / `Can`, binary downloads, CSRF soft-require, and SSR cookie helper.
 - Client Auth handbook rewritten for `createAuthClient` (secure defaults, methods, UI-only
@@ -155,11 +163,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `fusedBy` honesty, and expanded Troubleshooting (`lsh` without fusion).
 - OKID reference documents `prefix` / `OKID_MAX_PREFIX_LENGTH` and the
   prefix + sortable composition.
-- Consolidated llama.cpp / Ollama / vLLM / SGLang into one
-  [Local AI](/docs/recipes/local-ai) recipe (comparison table); removed the
-  standalone Ollama recipe. Added OpenRouter recipe recommending
-  `openrouter/free`; rewrote Models docs (Verified providers / Limited
-  compatibility).
+- Consolidated local-inference docs into OpenRouter + Models (BYO
+  `openai-compatible`); removed the standalone Local AI / Ollama recipe pages.
+  Added OpenRouter recipe recommending `openrouter/free`; rewrote Models docs
+  (Verified providers / Limited compatibility).
 - OpenRouter recipe documents router aliases (`openrouter/free`, `auto`,
   `pareto-code`, `fusion`, `bodybuilder`, `~…-latest`) with OKE `ai.model`
   examples and links to OpenRouter’s router guides.
@@ -180,6 +187,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Dependency refresh (2026-09-05): Console / tooling minors + patches (`zod`
+  `^4.5.4`, TanStack Query/Router/Form, Vite `^8.2.2`, Playwright `^1.63.0`,
+  oxlint / oxfmt / `oxc-parser` `^0.148.0`, PGLite `^0.5.8`, …); majors
+  `@tanstack/react-table` `^9.2.4`, `shadcn` `^4.21.0`, `shiki` `^4.4.3`.
+  Drizzle stays on intentional `1.0.0-rc.5-*` (npm `latest` is still `0.x`).
 - Client gzip budget raised to **5 kB** (was 4 kB) so shared SSE + stream open
   fits the measured `okengine/client` graph; AGENTS.md budget table aligned.
 - create-oke Vite proxy includes `/auth` alongside `/notes`, `/health`, `/_oke`.
@@ -189,15 +201,25 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Compose default image pins: RustFS `1.0.0-rc.5`, Mailpit `v1.31.1`, PgDog
+  `v0.1.57` (Meilisearch `v1.53`, Traefik `v3.7`, nginx `1.31-alpine`,
+  floating postgres/redis/caddy unchanged). No `images.ai` / local inference
+  pins — AI is OpenRouter (recommended) or BYO `openai-compatible` URL.
+  create-oke templates + Keel stack aligned for the non-AI pins.
+- **Keel default AI** is OpenRouter · `openrouter/free` (no Compose AI
+  service). `OPENROUTER_API_KEY` is a Vault contract without a `dev:` stub so
+  first `oke dev` asks for it. Self-host = set `OKE_AI_URL` / `baseUrl` on
+  `openai-compatible` yourself.
+- create-oke / Notes starter dependency refresh (PGLite, Vite, oxc-parser,
+  zod; Drizzle RC pins unchanged).
 - `oke ai setup` (and create-oke AI wizard) emit real registry `provider` names
   on `ai.model` (e.g. `openrouter`, `groq`) with matching API key env vars;
   known cloud base URLs are omitted so the registry resolves them. OpenRouter
   defaults to `openrouter/free`. Menu lists verified registry providers plus
   Gemini (limited compatibility). Anthropic stays native `driverId: "anthropic"`.
-  Ollama setup emits `openai-compatible` + `…:11434/v1` (no native driver).
 - create-oke **AI setup → Recommended** (and `--yes --ai`) defaults to OpenRouter
-  - `openrouter/free` (was llama.cpp · `granite3.3:2b`). Local engines remain
-    under Customize / `--provider llama-cpp`.
+  · `openrouter/free`. Customize / `oke ai setup` offer cloud registry providers
+  plus `lmstudio` / `custom` (BYO OpenAI-compatible URL) — not local Docker engines.
 - create-oke **Recommended** prompts for `OPENROUTER_API_KEY` (same as Customize
   cloud path) and writes it into `.env.local`.
 - **AI Provider** select (create-oke Customize + `oke ai setup`) leads with
@@ -207,6 +229,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Site deps: fumadocs `16.15.7`, `framer-motion` `^13.2.0`, `cnfast` `^0.2.0`,
+  lucide / zod / PostCSS aligned; recipe + configuration docs mirror the new
+  RustFS / Mailpit / PgDog pins.
 - HTTP docs default to pathless triggers and nameless Flows —
   `on(http.get(), flow({ do }))` — with an explicit
   [When to omit · when to pass](/docs/elements/flow/routing#when-to-omit--when-to-pass)
@@ -270,11 +295,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `signal(name, { delivery })` form is removed. Manifest `delivery` is unchanged
   (compiler extracts it from the helper name).
 - Removed the native `ollama` AI driver (`driverId: "ollama"` /
-  `drivers.ai: "ollama"`). Talk to Ollama via `openai-compatible` +
-  `OKE_AI_URL=http://127.0.0.1:11434/v1`. Docker recipe, library pull, and
-  `oke ai setup --provider ollama` remain (they emit `openai-compatible`).
-  Package paths `okengine/drivers/ai-ollama` and `okengine/drivers/ollama` are
-  gone.
+  `drivers.ai: "ollama"`). Package paths `okengine/drivers/ai-ollama` and
+  `okengine/drivers/ollama` are gone. Use `openai-compatible` + your own
+  `baseUrl` / `OKE_AI_URL` for any OpenAI-shaped `/v1` (including former
+  Ollama / llama.cpp / vLLM / SGLang servers).
+- Dropped first-class Compose / wizard support for llama.cpp, Ollama, vLLM,
+  and SGLang: no Docker recipes, no `images.ai` default pin, no
+  `oke ai setup --provider llama-cpp|ollama|vllm|sglang`, no `--pull` /
+  Ollama detect helpers. Migration: remove `images.ai`, set
+  `drivers.ai` / `ai.model` to `openai-compatible` with `OKE_AI_URL` (or a
+  cloud registry provider such as OpenRouter). Leftover `images.ai` pins
+  fail `recipeFor()` until removed.
 
 #### Kernel
 
@@ -294,8 +325,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### 🔥 Removed
 
+#### Dev, Keel & create-oke
+
+- Docker recipes + pins for llama.cpp, Ollama, vLLM, and SGLang
+  (`src/docker/recipes/{llama-cpp,ollama,vllm,sglang}.ts`, ollama-pull/url,
+  create-oke `LLAMA_CPP_IMAGE` / `OLLAMA_IMAGE` / `VLLM_IMAGE` /
+  `SGLANG_IMAGE`). Compose no longer manages inference.
+- Local AI wizard paths, RAM catalogs, and `oke ai setup --pull` /
+  `--no-pull`.
+
 #### Docs
 
+- Deleted [Local AI](/docs/recipes/local-ai); `/docs/recipes/local-ai`
+  redirects to [OpenRouter](/docs/recipes/openrouter). AI docs point at
+  OpenRouter / registry cloud / BYO `OKE_AI_URL`.
 - Dropped [`Manifest`](/docs/reference/manifest) and
   [`Architecture`](/docs/reference/architecture) reference pages — mental model
   lives under **01 Understand**; permanent redirects →
@@ -410,6 +453,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   because Docker is up for Postgres — cloud models resolve `baseUrl` from the
   provider registry. `oke dev` also uses `compose up --remove-orphans` and
   ignores orphaned exited AI containers when painting element status.
+- `oke dev` arms BYO `OKE_AI_URL` + `OKE_AI_MODEL` readiness watch again after
+  Compose AI recipes were removed (unassigned `pendingAiModelWatch` left
+  typecheck as `never`). Vault-gap tests widen `process.env` after `delete`
+  so assertions typecheck under strict narrowing.
 
 #### Docs
 

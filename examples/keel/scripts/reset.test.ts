@@ -106,7 +106,8 @@ DATABASE_URL=postgres://oke:password@127.0.0.1:5432/oke
     );
     expect(extraEnvSectionTitle("OKE_STORE_KV_PASSWORD")).toContain("store.kv");
     expect(extraEnvSectionTitle("OKE_PGDOG_URL")).toContain("pgdog");
-    expect(extraEnvSectionTitle("OKE_AI_MODEL")).toContain("llama.cpp");
+    expect(extraEnvSectionTitle("OKE_AI_CLOUD_MODEL")).toContain("OpenRouter");
+    expect(extraEnvSectionTitle("OPENROUTER_API_KEY")).toContain("OpenRouter");
     expect(extraEnvSectionTitle("OKE_VAULT_MASTER_KEY")).toContain("vault");
     expect(parseEnvExampleSections(example)[0]?.title).toBe("store.kv — Redis");
     const kv = text.slice(text.indexOf("store.kv"));
@@ -114,16 +115,14 @@ DATABASE_URL=postgres://oke:password@127.0.0.1:5432/oke
     expect(kv).toContain("OKE_STORE_KV_PASSWORD=");
   });
 
-  test("materializeEnvExample omits empty OKE_AI_URL so oke dev can mint the stack port", () => {
+  test("materializeEnvExample keeps OpenRouter cloud model comment defaults", () => {
     const text = materializeEnvExample(`
-# ── AI — llama.cpp (openai-compatible) ──────────────────────
-# OKE_AI_DRIVER=openai-compatible
-# OKE_AI_URL=
-# OKE_AI_MODEL=granite3.3:2b
+# ── AI — OpenRouter (default) or self-host ──────────────────
+# OPENROUTER_API_KEY=
+# OKE_AI_CLOUD_MODEL=openrouter/free
 `);
-    expect(text).toContain("OKE_AI_DRIVER=openai-compatible");
-    expect(text).toContain("OKE_AI_MODEL=granite3.3:2b");
-    expect(text).not.toContain("OKE_AI_URL=");
+    expect(text).toContain("OKE_AI_CLOUD_MODEL=openrouter/free");
+    expect(text).not.toContain("OPENROUTER_API_KEY=");
   });
 
   test("resetKeel writes a fresh .env.local from .env.example", async () => {

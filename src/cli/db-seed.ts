@@ -329,6 +329,8 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
       : await bootSeedFx(cwd, env, options.entry, loaded?.config);
     stop = session.stop;
     await executeSeedDef(def, env, session.fx, write);
+    const { markProjectSeeded } = await import("./project-state.ts");
+    await markProjectSeeded(cwd, { seed: identity.name });
     write("oke db seed: ok\n");
     return finish(EXIT_OK, "oke db seed: ok");
   } catch (err) {

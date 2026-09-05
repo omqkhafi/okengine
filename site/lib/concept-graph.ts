@@ -209,6 +209,6 @@ export const TAXONOMY_RULES = {
   provider:
     "Managed/cloud infrastructure behind a driver (e.g. Neon, Supabase, Redis Cloud, Upstash).",
   recipe:
-    "Self-hosted Docker/compose infrastructure behind a driver (e.g. Postgres, Valkey, Meilisearch, Ollama).",
+    "Self-hosted Docker/compose infrastructure behind a driver (e.g. Postgres, Valkey, Meilisearch).",
   template: "A complete starter project (e.g. standard, advanced).",
 } as const;

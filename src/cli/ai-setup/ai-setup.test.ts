@@ -1,5 +1,5 @@
 /**
- * Unit tests for `oke ai setup` catalog, detect, and apply.
+ * Unit tests for `oke ai setup` catalog and apply.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -11,19 +11,11 @@ import {
   aiProviderSelectOptions,
   cloudApplyDefaults,
   cloudChatModels,
-  recommendChatModel,
   recommendCloudChat,
 } from "./catalog.ts";
-import { isInstalled, parseOllamaList } from "./detect-ollama.ts";
 import { parseAiSetupArgs } from "./index.ts";
 
 describe("catalog", () => {
-  test("recommendChatModel respects RAM tiers", () => {
-    expect(recommendChatModel(8).ramGb).toBeLessThanOrEqual(8);
-    expect(recommendChatModel(16).ramGb).toBeLessThanOrEqual(16);
-    expect(recommendChatModel(null).recommended).toBe(true);
-  });
-
   test("cloud providers ship short curated chat lists + recommended", () => {
     expect(cloudChatModels("openai").length).toBeGreaterThan(0);
     expect(cloudChatModels("openai").length).toBeLessThanOrEqual(10);
@@ -32,11 +24,12 @@ describe("catalog", () => {
     expect(recommendCloudChat("anthropic")).toContain("claude");
   });
 
-  test("aiProviderSelectOptions leads with OpenRouter + full cloud set", () => {
+  test("aiProviderSelectOptions leads with OpenRouter + cloud / custom / lmstudio", () => {
     const opts = aiProviderSelectOptions();
     expect(opts[0]?.value).toBe("openrouter");
     expect(opts.some((o) => o.value === "groq")).toBe(true);
-    expect(opts.some((o) => o.value === "llama-cpp")).toBe(true);
+    expect(opts.some((o) => o.value === "lmstudio")).toBe(true);
+    expect(opts.some((o) => o.value === "custom")).toBe(true);
     expect(opts.some((o) => o.value === "mock")).toBe(false);
     expect(aiProviderSelectOptions({ includeMock: true }).some((o) => o.value === "mock")).toBe(
       true,
@@ -51,21 +44,6 @@ describe("catalog", () => {
     expect(ids).toContain("openrouter/fusion");
     expect(ids.length).toBeLessThanOrEqual(10);
     expect(recommendCloudChat("openrouter")).toBe("openrouter/free");
-  });
-});
-
-describe("detect-ollama", () => {
-  test("parseOllamaList skips header", () => {
-    const out = parseOllamaList(`NAME           ID      SIZE
-qwen3.5:9b     abc     5.0 GB
-nomic-embed-text  def  274 MB
-`);
-    expect(out).toEqual(["qwen3.5:9b", "nomic-embed-text"]);
-  });
-
-  test("isInstalled matches mlx suffixes", () => {
-    expect(isInstalled("qwen3.5:9b", ["qwen3.5:9b-mlx"])).toBe(true);
-    expect(isInstalled("gemma4:e4b", ["qwen3.5:9b"])).toBe(false);
   });
 });
 
@@ -210,21 +188,20 @@ export default defineConfig({
       applyAiSetup(dir, {
         driver: "openai-compatible",
         provider: "openai-compatible",
-        baseUrl: "http://127.0.0.1:11434/v1",
-        chatModel: "gemma4:e4b",
-        visionModel: "qwen3-vl:4b",
-        embedModel: "nomic-embed-text",
-        image: "ollama/ollama:0.32.13",
+        baseUrl: "http://127.0.0.1:1234/v1",
+        chatModel: "local-model",
+        visionModel: "vision-model",
+        embedModel: "embed-model",
       });
 
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
       expect(config).toContain('dev: "openai-compatible"');
-      expect(config).toContain('ai: "ollama/ollama:0.32.13"');
+      expect(config).not.toMatch(/\bai:\s*"[^"]+"/);
       const env = readFileSync(join(dir, ".env.local"), "utf8");
       expect(env).toContain("# OKE_AI_DRIVER=openai-compatible");
-      expect(env).toMatch(/^#\s*OKE_AI_MODEL=gemma4:e4b$/m);
+      expect(env).toMatch(/^#\s*OKE_AI_MODEL=local-model$/m);
       expect(env).not.toMatch(/^OKE_AI_MODEL=/m);
-      expect(env).toContain("# OKE_AI_URL=http://127.0.0.1:11434/v1");
+      expect(env).toContain("# OKE_AI_URL=http://127.0.0.1:1234/v1");
       expect(env).not.toMatch(/^OKE_AI_URL=/m);
       const core = readFileSync(join(dir, "src", "core.ts"), "utf8");
       expect(core).toContain('import { ai, store } from "okengine"');
@@ -327,7 +304,7 @@ export default defineConfig({
 
 export const local = ai.model("local", {
   provider: "openai-compatible",
-  model: process.env.OKE_AI_LOCAL_MODEL ?? "granite3.3:2b",
+  model: process.env.OKE_AI_LOCAL_MODEL ?? "local-model",
   ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),
 });
 
@@ -378,7 +355,7 @@ export default defineConfig({
     store: {
       sql: "postgres:18-alpine",
     },
-    ai: "ghcr.io/ggml-org/llama.cpp:server-b10450",
+    ai: "example.invalid/ai-pin:legacy",
   },
 });
 `,
@@ -396,7 +373,7 @@ export default defineConfig({
       });
 
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
-      expect(config).not.toMatch(/\bai:\s*"[^"]*llama/);
+      expect(config).not.toMatch(/\bai:\s*"[^"]+"/);
       expect(config).toContain("openai-compatible");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -468,10 +445,18 @@ export default defineConfig({
 
 describe("parseAiSetupArgs", () => {
   test("parses provider and models", () => {
-    const a = parseAiSetupArgs(["--provider", "ollama", "--chat=qwen3.5:9b", "--no-pull", "--yes"]);
-    expect(a.provider).toBe("ollama");
-    expect(a.chat).toBe("qwen3.5:9b");
-    expect(a.pull).toBe(false);
+    const a = parseAiSetupArgs([
+      "--provider",
+      "openrouter",
+      "--chat=openrouter/free",
+      "--yes",
+    ]);
+    expect(a.provider).toBe("openrouter");
+    expect(a.chat).toBe("openrouter/free");
     expect(a.yes).toBe(true);
+  });
+
+  test("rejects unknown --pull flag", () => {
+    expect(() => parseAiSetupArgs(["--no-pull"])).toThrow(/unknown option/);
   });
 });

@@ -151,28 +151,24 @@ export const meiliMasterKey = vault.secret("MEILI_MASTER_KEY", {
   dev: "dev-keel-meili",
 });
 
-/** AI driver id. */
+/** AI transport driver id. */
 export const okeAiDriver = vault.config("OKE_AI_DRIVER", {
-  description: "AI driver id",
+  description: "AI transport driver id",
   dev: "openai-compatible",
 });
 
-/** llama.cpp origin (Compose mints the published `:23xxx` port). */
-export const okeAiUrl = vault.config("OKE_AI_URL", {
-  description: "llama.cpp origin",
+/** OpenRouter chat model (default `openrouter/free`). */
+export const okeAiCloudModel = vault.config("OKE_AI_CLOUD_MODEL", {
+  description: "OpenRouter chat model",
+  dev: "openrouter/free",
 });
 
-/** Local chat model. */
-export const okeAiModel = vault.config("OKE_AI_MODEL", {
-  description: "Local chat model",
-  dev: "granite3.3:2b",
-});
-
-/** OpenAI-compatible driver key (not OPENAI_KEY). */
-export const openaiApiKey = vault.secret("OPENAI_API_KEY", {
-  description: "OpenAI-compatible driver key",
+/**
+ * OpenRouter API key — no `dev:` stub so first `oke dev` asks via Vault gaps.
+ */
+export const openrouterApiKey = vault.secret("OPENROUTER_API_KEY", {
+  description: "OpenRouter API key",
   rotate: "90d",
-  dev: "sk-dev-keel-openai-compatible",
 });
 
 /** Vault contracts — auto-register; seed reads this list. */
@@ -200,7 +196,6 @@ export const KEEL_VAULT = [
   meiliUrl,
   meiliMasterKey,
   okeAiDriver,
-  okeAiUrl,
-  okeAiModel,
-  openaiApiKey,
+  okeAiCloudModel,
+  openrouterApiKey,
 ] as const;

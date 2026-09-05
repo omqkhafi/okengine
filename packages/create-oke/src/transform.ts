@@ -15,14 +15,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CreateDefaults, CreateProxyId, EnvDriverPins } from "./create-defaults.ts";
-import {
-  DEFAULT_IMAGES,
-  LLAMA_CPP_IMAGE,
-  OLLAMA_IMAGE,
-  PROXY_IMAGES,
-  SGLANG_IMAGE,
-  VLLM_IMAGE,
-} from "./drivers-catalog.ts";
+import { DEFAULT_IMAGES, PROXY_IMAGES } from "./drivers-catalog.ts";
 import { materializeLocalOkengineDependency } from "./local-okengine.ts";
 import { packageRoot } from "./templates.ts";
 
@@ -512,31 +505,11 @@ function syncImages(source: string, defaults: CreateDefaults): string {
   if (d.store.index?.dev === "meilisearch") {
     pin("store.index", DEFAULT_IMAGES["store.index"]!);
   }
-  const aiImage = selfHostedAiImage(defaults);
-  if (aiImage) {
-    pin("ai", aiImage);
-  }
   if (defaults.proxy !== "none") {
     pin("proxy", PROXY_IMAGES[defaults.proxy]);
   }
 
   return replaceImagesBlock(source, images);
-}
-
-/**
- * Container image for self-hosted local AI only. Cloud registry providers
- * (OpenRouter, OpenAI, …) and host-side tools (LM Studio) must not pin
- * `images.ai` — Compose would start an unused llama.cpp/Ollama service.
- *
- * @param defaults - Create answers
- */
-function selfHostedAiImage(defaults: CreateDefaults): string | undefined {
-  const provider = defaults.ai.provider;
-  if (provider === "ollama") return OLLAMA_IMAGE;
-  if (provider === "vllm") return VLLM_IMAGE;
-  if (provider === "sglang") return SGLANG_IMAGE;
-  if (provider === "llama-cpp") return LLAMA_CPP_IMAGE;
-  return undefined;
 }
 
 /**

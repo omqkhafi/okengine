@@ -6,11 +6,6 @@ import { describe, expect, test } from "bun:test";
 import { anthropicAiDriver, openAnthropic } from "./ai-anthropic.ts";
 import { mockAiDriver } from "./ai-mock.ts";
 import { openaiCompatibleAiDriver, openOpenaiCompatible } from "./ai-openai-compatible.ts";
-import {
-  normalizeOllamaBaseUrl,
-  OLLAMA_DEFAULT_MODEL,
-  ollamaOpenaiCompatibleBaseUrl,
-} from "../docker/ollama-url.ts";
 
 describe("anthropic driver", () => {
   test("id is anthropic; mock remains the only default elsewhere", () => {
@@ -260,17 +255,6 @@ describe("openai-compatible driver", () => {
     });
     await expect(client.complete({ messages: [{ role: "user", content: "x" }] })).rejects.toThrow(
       "quota exceeded",
-    );
-  });
-});
-
-describe("ollama server URL helpers", () => {
-  test("normalize origin and openai-compatible /v1 base", () => {
-    expect(OLLAMA_DEFAULT_MODEL).toBe("qwen3.5:9b");
-    expect(normalizeOllamaBaseUrl("localhost:11434")).toBe("http://localhost:11434");
-    expect(normalizeOllamaBaseUrl("http://127.0.0.1:11434/v1")).toBe("http://127.0.0.1:11434");
-    expect(ollamaOpenaiCompatibleBaseUrl("http://127.0.0.1:11434")).toBe(
-      "http://127.0.0.1:11434/v1",
     );
   });
 });

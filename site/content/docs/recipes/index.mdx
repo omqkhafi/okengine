@@ -98,20 +98,17 @@ Opt-in via `images.proxy` — leave unset until you need an edge or `--scale app
   />
 </Cards>
 
-## AI (local / self-hosted / cloud)
+## AI
 
-Default local pin is **llama.cpp** (via the [Local AI](/docs/recipes/local-ai)
-recipe). Ollama, vLLM, and SGLang share the same `openai-compatible` driver.
-Prefer [OpenRouter](/docs/recipes/openrouter) when you want `fx.ask` with no Docker.
+Compose does not manage inference. Prefer [OpenRouter](/docs/recipes/openrouter)
+for zero-Docker `fx.ask`, or BYO any OpenAI-shaped `/v1` via `OKE_AI_URL` /
+`baseUrl` — see [Models](/docs/elements/ai/models).
 
-| Workload | Recipe |
-| -------- | ------ |
+| Workload | Where |
+| -------- | ----- |
 | Zero Docker / free cloud smoke | [OpenRouter](/docs/recipes/openrouter) |
-| Local / self-host (llama.cpp · Ollama · vLLM · SGLang) | [Local AI](/docs/recipes/local-ai) |
+| BYO OpenAI-compatible `/v1` | [Models](/docs/elements/ai/models) |
 | Managed cloud (registry) | [Models](/docs/elements/ai/models) |
-
-The Local AI recipe **loopback-publishes only** and pins explicit tags (never
-`latest`). Load models from curated registries — never arbitrary untrusted GGUF.
 
 <Cards>
   <Card
@@ -120,9 +117,9 @@ The Local AI recipe **loopback-publishes only** and pins explicit tags (never
     href="/docs/recipes/openrouter"
   />
   <Card
-    title="Local AI"
-    description="llama.cpp · Ollama · vLLM · SGLang — one driver."
-    href="/docs/recipes/local-ai"
+    title="Models"
+    description="Registry providers + custom baseUrl / OKE_AI_URL."
+    href="/docs/elements/ai/models"
   />
 </Cards>
 

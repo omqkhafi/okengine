@@ -15,7 +15,6 @@ export type AiSetupCliArgs = {
   readonly chat?: string;
   readonly vision?: string;
   readonly embed?: string;
-  readonly pull: boolean;
   readonly cwd: string;
 };
 
@@ -35,7 +34,6 @@ export function parseAiSetupArgs(
   let chat: string | undefined;
   let vision: string | undefined;
   let embed: string | undefined;
-  let pull = true;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -45,14 +43,6 @@ export function parseAiSetupArgs(
     }
     if (a === "--yes" || a === "-y") {
       yes = true;
-      continue;
-    }
-    if (a === "--no-pull") {
-      pull = false;
-      continue;
-    }
-    if (a === "--pull") {
-      pull = true;
       continue;
     }
     if (a === "--provider") {
@@ -90,7 +80,7 @@ export function parseAiSetupArgs(
     throw new Error(`oke ai setup: unknown option ${a}`);
   }
 
-  return { help, yes, provider, chat, vision, embed, pull, cwd };
+  return { help, yes, provider, chat, vision, embed, cwd };
 }
 
 /**
@@ -103,15 +93,14 @@ export function aiSetupHelp(): string {
 Usage:
   oke ai setup
   oke ai setup --provider openrouter --yes
-  oke ai setup --provider llama-cpp --yes
+  oke ai setup --provider custom --yes
   oke ai setup --provider anthropic --chat claude-sonnet-4-20250514 --yes
 
 Options:
-  --provider <id>   llama-cpp | ollama | vllm | sglang | ${cloudIds}
+  --provider <id>   ${cloudIds}
   --chat <model>    Chat model id
-  --vision <model>  Vision model id (ollama)
-  --embed <model>   Embedding model id (ollama)
-  --pull / --no-pull  Pull missing Ollama models (default: pull)
+  --vision <model>  Vision model id
+  --embed <model>   Embedding model id
   -y, --yes         Non-interactive (requires --provider)
   -h, --help        Show this help
 `;
@@ -153,26 +142,6 @@ export async function runAiSetup(args: AiSetupCliArgs): Promise<number> {
 
   if (input === null) return 1;
 
-  const isOllamaImage = Boolean(input.image?.includes("ollama/ollama"));
-  if (args.pull && isOllamaImage && (args.yes || !tty) && args.chat) {
-    // Non-interactive pull via the server HTTP API (never a host `ollama` CLI).
-    const { ensureOllamaModel } = await import("../../docker/ollama-pull.ts");
-    const baseUrl =
-      input.baseUrl?.trim() || process.env.OKE_AI_URL?.trim() || "http://127.0.0.1:11434/v1";
-    const toPull = [input.chatModel, input.visionModel, input.embedModel].filter(
-      (m): m is string => typeof m === "string" && m.length > 0,
-    );
-    for (const id of toPull) {
-      console.log(`oke ai setup: pulling ${id} via ${baseUrl}/api/pull…`);
-      try {
-        await ensureOllamaModel({ url: baseUrl, model: id });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`oke ai setup: pull ${id} failed (continuing) — ${msg}`);
-      }
-    }
-  }
-
   const spun = tty ? spinner() : undefined;
   spun?.start("Writing AI config…");
   try {
@@ -200,52 +169,12 @@ export async function runAiSetup(args: AiSetupCliArgs): Promise<number> {
  * @param args - Parsed args
  */
 function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
-  const provider = args.provider!;
-  if (provider === "llama-cpp") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-      chatModel: args.chat ?? "granite3.3:2b",
-      visionModel: null,
-      embedModel: null,
-      image: "ghcr.io/ggml-org/llama.cpp:server-b10450",
-    };
-  }
-  if (provider === "ollama") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434/v1",
-      chatModel: args.chat ?? "gemma4:e4b",
-      visionModel: args.vision === undefined ? "qwen3-vl:4b" : args.vision || null,
-      embedModel: args.embed ?? "nomic-embed-text",
-      image: "ollama/ollama:0.32.13",
-    };
-  }
-  if (provider === "vllm") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8000/v1",
-      chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
-      visionModel: null,
-      embedModel: null,
-      image: "vllm/vllm-openai:v0.27.1",
-    };
-  }
-  if (provider === "sglang") {
-    return {
-      driver: "openai-compatible",
-      provider: "openai-compatible",
-      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:30000/v1",
-      chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
-      visionModel: null,
-      embedModel: null,
-      image: "lmsysorg/sglang:v0.5.17-runtime",
-    };
-  }
-  return cloudApplyDefaults(provider, {
+  const base = cloudApplyDefaults(args.provider!, {
     ...(args.chat !== undefined ? { chatModel: args.chat } : {}),
   });
+  return {
+    ...base,
+    ...(args.vision !== undefined ? { visionModel: args.vision || null } : {}),
+    ...(args.embed !== undefined ? { embedModel: args.embed } : {}),
+  };
 }

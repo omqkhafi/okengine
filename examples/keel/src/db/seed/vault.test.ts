@@ -20,7 +20,7 @@ describe("keel vault seed", () => {
     const named = KEEL_VAULT.filter(
       (c) => c.dev !== undefined && c.dev.length > 0 && !c.dev.startsWith("__oke_from_docker__:"),
     );
-    expect(named).toHaveLength(17);
+    expect(named).toHaveLength(16);
     for (const contract of named) {
       expect(KEEL_VAULT_SEED[contract.name]).toBe(contract.dev);
     }
@@ -28,14 +28,14 @@ describe("keel vault seed", () => {
     expect(KEEL_VAULT_SEED.PUBLIC_APP_URL).toBe("http://127.0.0.1:6530");
     expect(KEEL_VAULT_SEED.OKE_CONSOLE_SECRET).toBe("oke-dev-keel-console");
     expect(KEEL_VAULT_SEED.MEILI_MASTER_KEY).toBe("dev-keel-meili");
-    expect(KEEL_VAULT_SEED.OPENAI_API_KEY).toBe("sk-dev-keel-openai-compatible");
+    expect(KEEL_VAULT_SEED.OKE_AI_CLOUD_MODEL).toBe("openrouter/free");
     expect(KEEL_VAULT_SEED.DATABASE_URL).toBeUndefined();
-    expect(KEEL_VAULT_SEED.OKE_AI_URL).toBeUndefined();
+    expect(KEEL_VAULT_SEED.OPENROUTER_API_KEY).toBeUndefined();
   });
 
-  test("every contract except minted OKE_AI_URL has a `dev` fallback so seed can boot", () => {
+  test("every contract except OPENROUTER_API_KEY has a `dev` fallback so seed can boot", () => {
     const missing = KEEL_VAULT.filter(
-      (c) => c.name !== "OKE_AI_URL" && (c.dev === undefined || c.dev.length === 0),
+      (c) => c.name !== "OPENROUTER_API_KEY" && (c.dev === undefined || c.dev.length === 0),
     ).map((c) => c.name);
     expect(missing).toEqual([]);
   });
@@ -43,10 +43,12 @@ describe("keel vault seed", () => {
   test("resolveKeelVaultSeedValues copies minted stack URLs from env", () => {
     const values = resolveKeelVaultSeedValues({
       DATABASE_URL: "postgres://oke:x@127.0.0.1:6432/oke",
-      OKE_AI_MODEL: "granite3.3:2b",
+      OKE_AI_CLOUD_MODEL: "openrouter/free",
+      OPENROUTER_API_KEY: "sk-or-v1-test",
     });
     expect(values.DATABASE_URL).toBe("postgres://oke:x@127.0.0.1:6432/oke");
-    expect(values.OKE_AI_MODEL).toBe("granite3.3:2b");
+    expect(values.OKE_AI_CLOUD_MODEL).toBe("openrouter/free");
+    expect(values.OPENROUTER_API_KEY).toBe("sk-or-v1-test");
     expect(values.GITHUB_TOKEN).toBe("ghp_dev_keel_github_sync");
     expect(
       resolveKeelVaultSeedValues({ OKE_STORE_INDEX_KEY: "meili-from-compose" }).MEILI_MASTER_KEY,

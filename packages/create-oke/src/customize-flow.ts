@@ -15,10 +15,6 @@ import {
   TEMPLATE_DEV,
   TEMPLATE_TEST,
   VAULT_CHOICES,
-  LLAMA_CPP_IMAGE,
-  OLLAMA_IMAGE,
-  SGLANG_IMAGE,
-  VLLM_IMAGE,
   customizeFacetsFor,
   pinsDockerReady,
   pinsEnv,
@@ -125,40 +121,6 @@ export async function askRecommendedAiApply(): Promise<AiSetupApplyInput | null>
 }
 
 /**
- * Attach the compose image pin for a local/self-hosted AI provider menu id.
- *
- * @param input - Apply input from prompts
- * @param provider - Menu provider id
- */
-export function withLocalAiImage(input: AiSetupApplyInput, provider: string): AiSetupApplyInput {
-  if (provider === "llama-cpp") {
-    return {
-      ...input,
-      image: LLAMA_CPP_IMAGE,
-      baseUrl: input.baseUrl ?? "http://127.0.0.1:8080/v1",
-    };
-  }
-  if (provider === "ollama") {
-    return { ...input, image: OLLAMA_IMAGE };
-  }
-  if (provider === "vllm") {
-    return {
-      ...input,
-      image: VLLM_IMAGE,
-      baseUrl: input.baseUrl ?? "http://127.0.0.1:8000/v1",
-    };
-  }
-  if (provider === "sglang") {
-    return {
-      ...input,
-      image: SGLANG_IMAGE,
-      baseUrl: input.baseUrl ?? "http://127.0.0.1:30000/v1",
-    };
-  }
-  return input;
-}
-
-/**
  * Customize drivers for one template.
  *
  * @param template - Starter id (filters facets)
@@ -236,7 +198,7 @@ export async function askCustomizeFlow(
     if (provider !== "mock") {
       const picked = await askAiSetup({ provider });
       if (picked === null) return null;
-      aiApply = withLocalAiImage(picked, provider);
+      aiApply = picked;
     } else {
       aiApply = { driver: "mock" };
     }

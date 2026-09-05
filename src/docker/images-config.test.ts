@@ -66,9 +66,9 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       },
       // store.files / store.index
       {
-        images: { store: { files: "rustfs/rustfs:1.0.0-rc.2" } },
+        images: { store: { files: "rustfs/rustfs:1.0.0-rc.5" } },
         role: "store.files",
-        image: "rustfs/rustfs:1.0.0-rc.2",
+        image: "rustfs/rustfs:1.0.0-rc.5",
       },
       {
         images: { store: { index: "getmeili/meilisearch:v1.53" } },
@@ -77,27 +77,15 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       },
       // channel.email
       {
-        images: { channel: { email: "axllent/mailpit:v1.30.7" } },
+        images: { channel: { email: "axllent/mailpit:v1.31.1" } },
         role: "channel.email",
-        image: "axllent/mailpit:v1.30.7",
+        image: "axllent/mailpit:v1.31.1",
       },
-      // flat roles — no driver counterpart in DriversConfig
+      // ai role: no compose recipes (BYO OKE_AI_URL) — not covered here
       {
-        images: { ai: "ghcr.io/ggml-org/llama.cpp:server-b10450" },
-        role: "ai",
-        image: "ghcr.io/ggml-org/llama.cpp:server-b10450",
-      },
-      { images: { ai: "vllm/vllm-openai:v0.27.1" }, role: "ai", image: "vllm/vllm-openai:v0.27.1" },
-      {
-        images: { ai: "lmsysorg/sglang:v0.5.17-runtime" },
-        role: "ai",
-        image: "lmsysorg/sglang:v0.5.17-runtime",
-      },
-      { images: { ai: "ollama/ollama:0.32.13" }, role: "ai", image: "ollama/ollama:0.32.13" },
-      {
-        images: { pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53" },
+        images: { pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57" },
         role: "pgdog",
-        image: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+        image: "ghcr.io/pgdogdev/pgdog:v0.1.57",
       },
       { images: { proxy: "caddy:2-alpine" }, role: "proxy", image: "caddy:2-alpine" },
       { images: { proxy: "traefik:v3.1" }, role: "proxy", image: "traefik:v3.1" },
@@ -120,22 +108,22 @@ describe("ImagesConfig nesting — compose output parity", () => {
   test("nested config derives byte-identical output to its flat-shape equivalent", () => {
     const flatImages: Readonly<Record<string, string>> = {
       "store.sql": "postgres:18-alpine",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
       "store.kv": "redis:8-alpine",
-      "store.files": "rustfs/rustfs:1.0.0-rc.2",
+      "store.files": "rustfs/rustfs:1.0.0-rc.5",
       "store.index": "getmeili/meilisearch:v1.53",
-      "channel.email": "axllent/mailpit:v1.30.7",
+      "channel.email": "axllent/mailpit:v1.31.1",
     };
 
     const nestedImages: ImagesConfig = {
       store: {
         sql: "postgres:18-alpine",
         kv: "redis:8-alpine",
-        files: "rustfs/rustfs:1.0.0-rc.2",
+        files: "rustfs/rustfs:1.0.0-rc.5",
         index: "getmeili/meilisearch:v1.53",
       },
-      channel: { email: "axllent/mailpit:v1.30.7" },
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+      channel: { email: "axllent/mailpit:v1.31.1" },
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
     };
 
     // Same nested→flat set, written in a different field order — proves the

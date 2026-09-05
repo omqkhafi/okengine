@@ -8,8 +8,8 @@ source: "docs/spec/unified-theory.md"
 An `ai.model` binding names a logical model (`smart`, `local`, …), the wire `model` id, and how
 to reach it (`provider`, optional `baseUrl` / `apiKey` / `driverId`).
 
-For developers swapping OpenRouter for a local llama.cpp server — one logical name, different
-bindings per environment.
+For developers swapping OpenRouter for a self-hosted OpenAI-compatible `/v1` — one logical
+name, different bindings per environment.
 
 <Callout title="The one rule">
   Known OpenAI-compatible `provider` names resolve `baseUrl` automatically. Explicit `baseUrl`
@@ -22,7 +22,7 @@ bindings per environment.
 <Steps>
 
 <Step>
-### Declare cloud + local bindings
+### Declare cloud + BYO bindings
 
 ```typescript title="src/core/ai.ts"
 import { ai } from "okengine";
@@ -35,16 +35,16 @@ export const smart = ai.model("smart", {
 
 export const local = ai.model("local", {
   provider: "openai-compatible",
-  model: process.env.OKE_AI_MODEL ?? "granite3.3:2b",
+  model: process.env.OKE_AI_MODEL ?? "your-model-id",
   ...(process.env.OKE_AI_URL?.trim()
     ? { baseUrl: process.env.OKE_AI_URL.trim() }
     : {}),
 });
 ```
 
-OpenRouter fills `https://openrouter.ai/api/v1` without typing it. Local servers (llama.cpp,
-Ollama, vLLM, SGLang) use the same `openai-compatible` binding with `OKE_AI_URL` ending in
-`/v1`.
+OpenRouter fills `https://openrouter.ai/api/v1` without typing it. Any
+OpenAI-compatible `/v1` uses the same driver — set `OKE_AI_URL` yourself;
+Compose does not manage inference.
 
 </Step>
 
@@ -84,7 +84,7 @@ binding — keys and base URLs do not mix.
 
 ## Progressive Patterns
 
-<Tabs items={["OpenRouter", "Local", "Native Anthropic", "Multi-key"]}>
+<Tabs items={["OpenRouter", "BYO /v1", "Native Anthropic", "Multi-key"]}>
 
 <Tab value="OpenRouter">
 
@@ -102,19 +102,20 @@ See [OpenRouter](/docs/recipes/openrouter) for router aliases (`openrouter/auto`
 
 </Tab>
 
-<Tab value="Local">
+<Tab value="BYO /v1">
 
-Same openai-compatible driver, explicit `baseUrl` from compose:
+Same `openai-compatible` driver — you supply the base URL (no Compose AI recipe):
 
 ```typescript
 export const local = ai.model("local", {
   provider: "openai-compatible",
-  model: process.env.OKE_AI_MODEL ?? "granite3.3:2b",
+  model: process.env.OKE_AI_MODEL ?? "your-model-id",
   baseUrl: process.env.OKE_AI_URL, // must end in /v1
 });
 ```
 
-Pin `drivers.ai.dev: "openai-compatible"`. Full recipe: [Local AI](/docs/recipes/local-ai).
+Pin `drivers.ai.dev: "openai-compatible"`. Set `OKE_AI_URL` / `OKE_AI_MODEL`
+in env, or pass `baseUrl` on the binding.
 
 </Tab>
 
@@ -267,7 +268,6 @@ See [AI Overview](/docs/elements/ai#per-environment-drivers). create-oke does **
 ## Learn more
 
 - [OpenRouter](/docs/recipes/openrouter) — free / auto / fusion routers
-- [Local AI](/docs/recipes/local-ai) — self-hosted openai-compatible
 - [Prompts](/docs/elements/ai/prompts) — `model.prompt` and `via`
 - [AI](/docs/elements/ai) — element overview and `fx` surface
 

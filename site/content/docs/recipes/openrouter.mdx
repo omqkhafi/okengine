@@ -58,9 +58,9 @@ export const ask = on(
 <Step>
 ### Optional setup via CLI
 
-create-oke **AI setup → Recommended** picks OpenRouter with `openrouter/free`
-and prompts for `OPENROUTER_API_KEY`. `oke ai setup --provider openrouter`
-writes the same wiring — or create a key at [openrouter.ai](https://openrouter.ai).
+create-oke **Recommended** / `oke ai setup --provider openrouter` pick
+`openrouter/free` and prompt for `OPENROUTER_API_KEY`. Keel's first `oke
+dev` asks via Vault gaps — get a key at [openrouter.ai](https://openrouter.ai).
 
 </Step>
 
@@ -264,19 +264,16 @@ for stable prod paths.
 
 ## Learn more
 
-- [Models](/docs/elements/ai/models) — verified providers and limited compatibility
-- [Local AI](/docs/recipes/local-ai) — local `/v1`
+- [Models](/docs/elements/ai/models) — verified providers, limited compatibility, BYO `/v1`
 - [AI](/docs/elements/ai) — prompts and `fx.ask`
 - [OpenRouter routers](https://openrouter.ai/docs/guides/routing/routers/auto-router) — Auto, Free, Pareto, Fusion, Body Builder, Latest
+
+Any OpenAI-compatible `/v1` endpoint works via custom `baseUrl` / `OKE_AI_URL`
+on an `openai-compatible` binding — see Models.
 
 ## Next
 
 <Cards>
-  <Card title="Models" description="Provider registry." href="/docs/elements/ai/models" />
-  <Card
-    title="Local AI"
-    description="llama.cpp / vLLM / SGLang."
-    href="/docs/recipes/local-ai"
-  />
+  <Card title="Models" description="Provider registry + custom URL." href="/docs/elements/ai/models" />
   <Card title="AI" description="Prompts and guardrails." href="/docs/elements/ai" />
 </Cards>

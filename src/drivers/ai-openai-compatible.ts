@@ -1,10 +1,9 @@
 /**
  * `openai-compatible` AI driver — thin HTTP client for OpenAI-shaped APIs.
  *
- * One protocol driver for OpenAI, Groq, Together, OpenRouter, vLLM, LM Studio,
- * Ollama `/v1`, and other chat/completions endpoints. Configure via
- * `baseUrl` + `apiKey` + `model` (+ optional `headers`). Native Ollama stays
- * on the separate `ollama` driver. Injectable `fetch` for tests. Never a
+ * One protocol driver for OpenAI, Groq, Together, OpenRouter, LM Studio, and
+ * other chat/completions `/v1` endpoints. Configure via `baseUrl` + `apiKey` +
+ * `model` (+ optional `headers`). Injectable `fetch` for tests. Never a
  * production default — prod must declare.
  */
 
@@ -198,8 +197,8 @@ export const openaiCompatibleAiDriver: AiDriver = {
 };
 
 /**
- * llama.cpp granite empties `content` on `json_schema`; `json_object` plus
- * the ask-time schema instruction is the portable contract.
+ * Some openai-compatible servers empty `content` on `json_schema`;
+ * `json_object` plus the ask-time schema instruction is the portable contract.
  *
  * @param responseFormat - Runtime format (may be json_schema)
  */

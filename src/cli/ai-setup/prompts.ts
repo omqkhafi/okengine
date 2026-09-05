@@ -2,45 +2,17 @@
  * Interactive Clack prompts for `oke ai setup` / create-oke AI wizard.
  */
 
-import { isCancel, note, password, select, text } from "@clack/prompts";
+import { isCancel, password, select, text } from "@clack/prompts";
 import {
   CLOUD_PROVIDERS,
-  MODEL_TIERS,
   aiProviderSelectOptions,
   cloudChatModels,
-  llamaCppModelsForTier,
-  modelsForTier,
   recommendCloudChat,
-  recommendForRole,
-  recommendForTier,
-  recommendLlamaCppForTier,
-  type CatalogModel,
-  type ModelTier,
 } from "./catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
-import { LLAMA_CPP_IMAGE } from "../../docker/recipes/llama-cpp.ts";
-import { OLLAMA_IMAGE } from "../../docker/recipes/ollama.ts";
-import {
-  detectMachineInfo,
-  detectOllama,
-  detectTotalRamGb,
-  isInstalled,
-  type OllamaDetectResult,
-} from "./detect-ollama.ts";
-import {
-  formatLlamaCppBanner,
-  formatModelRow,
-  formatModelTableHeader,
-  formatOllamaBanner,
-  suggestTierForRam,
-} from "./recommend.ts";
 
-/** Provider menu value. */
+/** Provider menu value (cloud + host-side OpenAI-compatible). */
 export type AiSetupProvider =
-  | "llama-cpp"
-  | "ollama"
-  | "vllm"
-  | "sglang"
   | "openrouter"
   | "openai"
   | "anthropic"
@@ -63,14 +35,12 @@ type Back = typeof BACK;
 /**
  * Run the interactive AI setup prompts.
  *
- * @param options - Preselected provider / seams
+ * @param options - Preselected provider
  * @returns Apply input or null on cancel
  */
 export async function askAiSetup(
   options: {
     readonly provider?: string;
-    readonly detect?: () => Promise<OllamaDetectResult>;
-    readonly ramGb?: number | null;
   } = {},
 ): Promise<AiSetupApplyInput | null> {
   const rawProvider = options.provider?.trim() ?? "";
@@ -87,315 +57,7 @@ export async function askAiSetup(
     provider = String(value) as AiSetupProvider;
   }
 
-  if (provider === "llama-cpp") {
-    return askLlamaCppPath({
-      ramGb: options.ramGb === undefined ? detectTotalRamGb() : options.ramGb,
-    });
-  }
-  if (provider === "ollama") {
-    return askOllamaPath({
-      detect: options.detect ?? detectOllama,
-      ramGb: options.ramGb === undefined ? detectTotalRamGb() : options.ramGb,
-    });
-  }
-  if (provider === "vllm" || provider === "sglang") {
-    return askSelfHostedGpuPath(provider);
-  }
-
   return askCloudPath(provider);
-}
-
-/**
- * llama.cpp path — banner → Select model (tier) / Manual (Docker Hub `ai/`).
- *
- * @param options - RAM override
- */
-async function askLlamaCppPath(options: {
-  readonly ramGb: number | null;
-}): Promise<AiSetupApplyInput | null> {
-  const machine = detectMachineInfo();
-  const ramGb = options.ramGb ?? machine.ramGb;
-  note(formatLlamaCppBanner({ ...machine, ramGb }), "llama.cpp");
-
-  mode: for (;;) {
-    const mode = await selectWithBack(
-      "How do you want to pick models?",
-      [
-        {
-          value: "select",
-          label: "Select model",
-          hint: "Ultra Fast  ·  Fast  ·  Balanced  ·  Smart",
-        },
-        {
-          value: "manual",
-          label: "Manual model",
-          hint: "type any Docker Hub ai/ model id",
-        },
-      ],
-      "select",
-      false,
-    );
-    if (mode === null) return null;
-
-    if (mode === "manual") {
-      const id = await askOtherModelId("granite3.3:2b");
-      if (id === null) return null;
-      return finishLlamaCpp(id);
-    }
-
-    tier: for (;;) {
-      const tierPick = await selectWithBack(
-        "Select model",
-        MODEL_TIERS.map((t) => ({
-          value: t.value,
-          label: t.label,
-          hint: t.hint,
-        })),
-        suggestTierForRam(ramGb),
-        true,
-      );
-      if (tierPick === null) return null;
-      if (tierPick === BACK) continue mode;
-
-      const tier = tierPick as ModelTier;
-      const recommended = recommendLlamaCppForTier(tier, ramGb);
-
-      how: for (;;) {
-        const how = await selectWithBack(
-          MODEL_TIERS.find((t) => t.value === tier)?.label ?? tier,
-          [
-            {
-              value: "recommended",
-              label: "Use recommended",
-              hint: formatModelRow(recommended),
-            },
-            {
-              value: "manual",
-              label: "Select manually",
-              hint: "up to 20 models in this tier",
-            },
-          ],
-          "recommended",
-          true,
-        );
-        if (how === null) return null;
-        if (how === BACK) continue tier;
-
-        if (how === "recommended") {
-          return finishLlamaCpp(recommended.id, recommended);
-        }
-
-        const list = llamaCppModelsForTier(tier);
-        note(formatModelTableHeader(), "Select model");
-        const picked = await selectWithBack(
-          "Pick a model",
-          list.map((m) => ({
-            value: m.id,
-            label: formatModelRow(m),
-            hint: m.hint,
-          })),
-          recommended.id,
-          true,
-        );
-        if (picked === null) return null;
-        if (picked === BACK) continue how;
-        const model = list.find((m) => m.id === picked);
-        return finishLlamaCpp(picked, model);
-      }
-    }
-  }
-}
-
-/**
- * Build apply input for llama.cpp — OpenAI-compatible + curated image pin.
- *
- * @param chatId - Docker Hub `ai/` model id (org prefix optional)
- * @param catalog - Optional catalog row (modalities)
- */
-function finishLlamaCpp(chatId: string, catalog?: CatalogModel): AiSetupApplyInput {
-  const id = chatId.replace(/^ai\//, "");
-  return {
-    driver: "openai-compatible",
-    provider: "openai-compatible",
-    baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-    chatModel: id,
-    visionModel: catalog?.modalities.includes("vision") ? id : null,
-    embedModel: null,
-    image: LLAMA_CPP_IMAGE,
-  };
-}
-
-/**
- * vLLM / SGLang — Hugging Face model path for self-hosted GPU inference.
- *
- * @param provider - vllm | sglang
- */
-async function askSelfHostedGpuPath(
-  provider: "vllm" | "sglang",
-): Promise<AiSetupApplyInput | null> {
-  const port = provider === "vllm" ? 8000 : 30000;
-  const image =
-    provider === "vllm" ? "vllm/vllm-openai:v0.27.1" : "lmsysorg/sglang:v0.5.17-runtime";
-  const model = await text({
-    message: "Hugging Face model id",
-    placeholder: "Qwen/Qwen3-0.6B",
-    initialValue: "Qwen/Qwen3-0.6B",
-    validate: (v) => {
-      if (!v?.trim()) return "Model id required";
-      return undefined;
-    },
-  });
-  if (isCancel(model)) return null;
-  return {
-    driver: "openai-compatible",
-    provider: "openai-compatible",
-    baseUrl: process.env.OKE_AI_URL ?? `http://127.0.0.1:${port}/v1`,
-    chatModel: String(model).trim(),
-    visionModel: null,
-    embedModel: null,
-    image,
-  };
-}
-
-/**
- * Ollama path — banner → Select model (tier) / Manual model.
- *
- * @param options - Detect / RAM
- */
-async function askOllamaPath(options: {
-  readonly detect: () => Promise<OllamaDetectResult>;
-  readonly ramGb: number | null;
-}): Promise<AiSetupApplyInput | null> {
-  const detected = await options.detect();
-  const machine = detectMachineInfo();
-  const ramGb = options.ramGb ?? machine.ramGb;
-  const detectedIds =
-    detected.installed.length > 0
-      ? detected.installed.slice(0, 12)
-      : detected.curatedInstalled.map((m) => m.id);
-
-  note(formatOllamaBanner({ ...machine, ramGb }, detectedIds), "Ollama");
-
-  mode: for (;;) {
-    const mode = await selectWithBack(
-      "How do you want to pick models?",
-      [
-        {
-          value: "select",
-          label: "Select model",
-          hint: "Ultra Fast  ·  Fast  ·  Balanced  ·  Smart",
-        },
-        {
-          value: "manual",
-          label: "Manual model",
-          hint: "type any Ollama model id",
-        },
-      ],
-      "select",
-      false,
-    );
-    if (mode === null) return null;
-
-    if (mode === "manual") {
-      const id = await askOtherModelId("gemma4:e4b");
-      if (id === null) return null;
-      return finishOllama(id, detected);
-    }
-
-    tier: for (;;) {
-      const tierPick = await selectWithBack(
-        "Select model",
-        MODEL_TIERS.map((t) => ({
-          value: t.value,
-          label: t.label,
-          hint: t.hint,
-        })),
-        suggestTierForRam(ramGb),
-        true,
-      );
-      if (tierPick === null) return null;
-      if (tierPick === BACK) continue mode;
-
-      const tier = tierPick as ModelTier;
-      const recommended = recommendForTier(tier, ramGb);
-
-      how: for (;;) {
-        const how = await selectWithBack(
-          MODEL_TIERS.find((t) => t.value === tier)?.label ?? tier,
-          [
-            {
-              value: "recommended",
-              label: "Use recommended",
-              hint: formatModelRow(recommended),
-            },
-            {
-              value: "manual",
-              label: "Select manually",
-              hint: "up to 10 models in this tier",
-            },
-          ],
-          "recommended",
-          true,
-        );
-        if (how === null) return null;
-        if (how === BACK) continue tier;
-
-        if (how === "recommended") {
-          return finishOllama(recommended.id, detected, recommended);
-        }
-
-        const list = modelsForTier(tier);
-        note(formatModelTableHeader(), "Select model");
-        const picked = await selectWithBack(
-          "Pick a model",
-          list.map((m) => ({
-            value: m.id,
-            label: formatModelRow(m),
-            hint: isInstalled(m.id, detected.installed) ? "installed" : m.hint,
-          })),
-          recommended.id,
-          true,
-        );
-        if (picked === null) return null;
-        if (picked === BACK) continue how;
-        const model = list.find((m) => m.id === picked);
-        return finishOllama(picked, detected, model);
-      }
-    }
-  }
-}
-
-/**
- * Build apply input for Ollama — embed default, optional silent pull.
- *
- * @param chatId - Chat model id
- * @param detected - Detect result
- * @param catalog - Optional catalog row (modalities)
- */
-async function finishOllama(
-  chatId: string,
-  detected: OllamaDetectResult,
-  catalog?: CatalogModel,
-): Promise<AiSetupApplyInput> {
-  const embed = recommendForRole("embed");
-  const visionModel = catalog?.modalities.includes("vision") ? chatId : null;
-
-  const needed = [chatId, embed.id].filter(
-    (id) => detected.available && !isInstalled(id, detected.installed),
-  );
-  if (needed.length > 0 && detected.available) {
-    await pullModels(needed, detected.baseUrl);
-  }
-
-  return {
-    driver: "openai-compatible",
-    provider: "openai-compatible",
-    baseUrl: `${detected.baseUrl.replace(/\/v1\/?$/i, "").replace(/\/$/, "")}/v1`,
-    chatModel: chatId,
-    visionModel,
-    embedModel: embed.id,
-    image: OLLAMA_IMAGE,
-  };
 }
 
 /**
@@ -544,38 +206,4 @@ async function askOtherModelId(placeholder: string): Promise<string | null> {
   });
   if (isCancel(value)) return null;
   return String(value).trim();
-}
-
-/**
- * Pull each model via the Ollama HTTP API (`POST /api/pull`).
- *
- * @param models - Model ids
- * @param baseUrl - Ollama server base URL
- */
-async function pullModels(models: readonly string[], baseUrl: string): Promise<void> {
-  const base = baseUrl.replace(/\/+$/, "");
-  for (const id of models) {
-    console.log(`ollama: pulling ${id} via ${base}/api/pull…`);
-    try {
-      const tags = await fetch(`${base}/api/tags`);
-      if (!tags.ok) {
-        throw new Error(`GET ${base}/api/tags → ${tags.status}`);
-      }
-      const res = await fetch(`${base}/api/pull`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model: id, stream: false }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(
-          `POST ${base}/api/pull → ${res.status}${body ? ` ${body.slice(0, 120)}` : ""}`,
-        );
-      }
-      await res.arrayBuffer();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`oke ai setup: pull ${id} failed (continuing) — ${msg}`);
-    }
-  }
 }

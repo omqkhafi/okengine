@@ -40,6 +40,14 @@ oke dev
 Compose comes up, the backend listens on **6530**, Console on **6533**, app MCP on
 **6535**, docs MCP on **6536**. Open `http://localhost:6533`.
 
+On a TTY, after schema push, `oke dev` also:
+
+1. Prompts one-by-one for any Vault boot gaps (writes `.env.local`) — e.g. Keel's
+   `OPENROUTER_API_KEY` when OpenRouter is the default AI.
+2. Asks to run `oke db seed` when a seed module exists and `.oke/state.json` has
+   not recorded that seed identity yet. Live key **`s`** still runs seed later.
+
+
 </Step>
 
 </Steps>
@@ -124,7 +132,7 @@ Override app / console / mcp listen ports in `oke.config.ts` `ports` — see
 | `images` | List / pin digests | `list` · `pin` |
 | `build` | Tree-shaken bundle | `--target\|-t bun\|node\|edge`, `--entry`, `--outdir` |
 | `eval` | Prompt eval sets (CI gate) | `--manifest` |
-| `ai` | Configure AI driver + models | `setup` (`--provider`, `--chat`, `--vision`, `--embed`, `--pull`, `--yes`) |
+| `ai` | Configure AI driver + models | `setup` (`--provider`, `--chat`, `--vision`, `--embed`, `--yes`) |
 | `branch` | Fork journaled state | `<name>`, `--at\|-a` |
 | `replay` | Re-invoke a past Flow from Runs | `--request-id\|-r`, `--entry`, `--dry-run`, `--live` |
 | `privacy` | Crypto-shred subject data | `erase` (`--subject\|-s`) |

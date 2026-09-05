@@ -17,12 +17,6 @@ import {
 import { emitDockerfile } from "./dockerfile.ts";
 import { buildCaddyfile } from "./recipes/caddy.ts";
 import { buildNginxConf } from "./recipes/nginx.ts";
-import {
-  buildLlamaCppEntrypoint,
-  LLAMA_CPP_ENTRYPOINT_FILE,
-  LLAMA_CPP_ENTRYPOINT_HOST_PATH,
-  llamaCpp,
-} from "./recipes/llama-cpp.ts";
 import { buildPgDogToml, buildPgDogUsersToml, PGDOG_CONFIG_DIR } from "./recipes/pgdog.ts";
 import {
   emitPostgresAdvisorDockerfile,
@@ -32,6 +26,9 @@ import {
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { APP_PORT } from "../runtime/types.ts";
+
+/** Legacy llama.cpp entrypoint path (relative to compose dir) — pruned once. */
+const LEGACY_LLAMA_ENTRYPOINT_HOST_PATH = "../.oke/llama-entrypoint.py";
 
 /**
  * Derive infrastructure files from normalised image pins.
@@ -76,7 +73,6 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     ...composeFilesContent,
     ...pgdogConfigFiles(specs),
     ...proxyConfigFiles(specs, normalised.appPort),
-    ...llamaCppEntrypointFiles(specs),
     ...postgresAdvisorDockerfileFiles(specs),
   ];
 
@@ -108,25 +104,6 @@ function postgresAdvisorDockerfileFiles(specs: DeriveResult["specs"]): Generated
     {
       path: POSTGRES_ADVISOR_DOCKERFILE,
       content: emitPostgresAdvisorDockerfile(),
-    },
-  ];
-}
-
-/**
- * Emit `.oke/llama-entrypoint.py` (path relative to compose dir) when the AI
- * role is llama.cpp so first boot can Hub-pull then serve single-model
- * (router `--docker-repo` hangs on b10290+). Kept out of `docker/` so app
- * trees stay TypeScript-only.
- *
- * @param specs - Normalised services
- */
-function llamaCppEntrypointFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
-  const ai = specs.find((s) => s.role === "ai");
-  if (!ai || !llamaCpp.match(ai.image)) return [];
-  return [
-    {
-      path: LLAMA_CPP_ENTRYPOINT_HOST_PATH,
-      content: buildLlamaCppEntrypoint(),
     },
   ];
 }
@@ -208,7 +185,7 @@ export async function writeDerivedFiles(
   mkdirSync(root, { recursive: true });
   const keep = new Set(result.files.map((f) => f.path));
   pruneStaleGenerated(root, keep);
-  pruneLlamaEntrypoint(root, keep);
+  pruneLegacyLlamaEntrypoint(root);
   for (const file of result.files) {
     const path = join(root, file.path);
     mkdirSync(dirname(path), { recursive: true });
@@ -255,21 +232,19 @@ const PRUNE_ROOT_FILES = new Set([
   "compose.prod.yml",
   "Caddyfile",
   "nginx.conf",
-  // Legacy: entrypoint used to land in `docker/`; now `.oke/` only.
-  LLAMA_CPP_ENTRYPOINT_FILE,
+  // Legacy: llama.cpp entrypoint used to land in `docker/`.
+  "llama-entrypoint.py",
   "pgdog.toml",
   "users.toml",
 ]);
 
 /**
- * Drop `.oke/llama-entrypoint.py` when the stack no longer uses llama.cpp.
+ * Drop stale `.oke/llama-entrypoint.py` from older stacks (AI recipes removed).
  *
  * @param root - Compose directory (`docker/`)
- * @param keep - Relative paths that will be rewritten
  */
-function pruneLlamaEntrypoint(root: string, keep: ReadonlySet<string>): void {
-  if (keep.has(LLAMA_CPP_ENTRYPOINT_HOST_PATH)) return;
-  const abs = join(root, LLAMA_CPP_ENTRYPOINT_HOST_PATH);
+function pruneLegacyLlamaEntrypoint(root: string): void {
+  const abs = join(root, LEGACY_LLAMA_ENTRYPOINT_HOST_PATH);
   try {
     unlinkSync(abs);
   } catch {

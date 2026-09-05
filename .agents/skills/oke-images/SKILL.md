@@ -2,12 +2,12 @@
 name: oke-images
 description: >-
   Updates OKE Docker Compose image pins (RustFS, Mailpit, PgDog,
-  Meilisearch, llama.cpp, Ollama, vLLM, SGLang, Traefik, nginx, and
-  other catalog pins). Use when the user asks to update images, bump
-  Docker tags, refresh Compose pins, upgrade RustFS / Mailpit /
-  Meilisearch / llama.cpp, or sync image versions across catalog,
-  recipes, templates, Keel, tests, and docs. Never invents tags —
-  probes registries, keeps pin style, refuses :latest.
+  Meilisearch, Traefik, nginx, and other catalog pins). Use when the
+  user asks to update images, bump Docker tags, refresh Compose pins,
+  upgrade RustFS / Mailpit / Meilisearch, or sync image versions across
+  catalog, recipes, templates, Keel, tests, and docs. Never invents
+  tags — probes registries, keeps pin style, refuses :latest. AI
+  inference is not a Compose role (OpenRouter / BYO OKE_AI_URL).
 ---
 
 # OKE Images — smart Compose pin updates
@@ -29,14 +29,13 @@ Companion to [oke-deps](../oke-deps/SKILL.md) (npm) and [oke-ship](../oke-ship/S
 | `store.index`   | `getmeili/meilisearch:v…`                                            | minor            |
 | `channel.email` | `axllent/mailpit:v…`                                                 | exact patch      |
 | `pgdog`         | `ghcr.io/pgdogdev/pgdog:v…`                                          | exact patch      |
-| `ai` (default)  | `ghcr.io/ggml-org/llama.cpp:server-b…`                               | exact GHCR build |
-| `ai` ollama     | `ollama/ollama:…`                                                    | exact, no `v`    |
-| `ai` vllm       | `vllm/vllm-openai:v…`                                                | exact            |
-| `ai` sglang     | `lmsysorg/sglang:v…-runtime`                                         | exact + suffix   |
 | `proxy` caddy   | `caddy:2-alpine`                                                     | floating family  |
 | `proxy` traefik | `traefik:v…`                                                         | minor            |
 | `proxy` nginx   | `nginx:…-alpine`                                                     | minor alpine     |
 | socket-proxy    | `tecnativa/docker-socket-proxy:v…` (`src/docker/recipes/traefik.ts`) | exact            |
+
+There is **no** `images.ai` / AI engine catalog role. Inference is OpenRouter,
+cloud registry providers, or BYO OpenAI-compatible `OKE_AI_URL` / `baseUrl`.
 
 Default when the user says “update images” / “all”: **every versioned default
 pin** (not floating family tags, not test-only vendor fixtures).
@@ -58,8 +57,8 @@ Task:
 | User says                                      | Do                                                                 |
 | ---------------------------------------------- | ------------------------------------------------------------------ |
 | “update images” / “all”                        | all versioned default pins in the catalog                          |
-| named image (`rustfs`, `mailpit`, `llama.cpp`) | that pin only, everywhere it appears                               |
-| “AI images”                                    | llama.cpp + Ollama + vLLM + SGLang                                 |
+| named image (`rustfs`, `mailpit`, `meilisearch`) | that pin only, everywhere it appears                             |
+| “AI images” / llama / Ollama / vLLM / SGLang   | **Refuse** — no Compose AI recipes; point to OpenRouter / BYO URL  |
 | “vendor” / Cockroach / Yugabyte / Dragonfly    | optional recipe docs + matcher fixtures — **not** in the default   |
 | “majors” / “family bump”                       | floating tags may move (`postgres:18` → `19`) — only if they asked |
 
@@ -91,12 +90,6 @@ curl -sL "https://hub.docker.com/v2/repositories/<ns>/<name>/tags?page_size=20&n
 | GitHub release ahead of the registry                                       | Pin the **published image**, not the git tag                               |
 | Test-only matcher (`traefik:v3.1`, `library/nginx:1.27`, Cockroach `v24…`) | Leave — not a default pin                                                  |
 
-llama.cpp: GitHub `bNNNN` often leads GHCR. Walk down from the latest release
-until `docker manifest inspect ghcr.io/ggml-org/llama.cpp:server-bNNNN` succeeds.
-Never go below `LLAMA_CPP_MIN_SAFE_BUILD` (8146).
-
-Ollama floor: `0.17.1` (CVE-2026-7482). Docker tag has **no** `v` prefix.
-
 ### 3. Confirm the tag exists
 
 ```bash
@@ -109,8 +102,7 @@ manifest inspect (`401` on an unauthenticated registry API is not proof).
 ### 4. Edit
 
 1. Update sources of truth first (constants / `DEFAULT_IMAGES` / `PROXY_IMAGES`).
-2. Prefer importing those constants (`LLAMA_CPP_IMAGE`, `OLLAMA_IMAGE`, …)
-   over duplicating strings (`packages/create-oke/src/ai-setup/from-pref.ts`).
+2. Prefer importing those constants over duplicating strings.
 3. Replace the **old exact pin** everywhere else: templates, Keel
    `oke.config.ts` + generated `docker-compose.yml`, tests, site docs.
 
@@ -157,9 +149,10 @@ GHCR / floating / matcher), tests OK or not.
 
 ## Anti-patterns
 
-- Pinning `:latest` or an unpublished GHCR `server-b*` that only exists as a git tag
+- Pinning `:latest` or inventing unpublished tags
 - Taking `*-preview.*` because it sorts higher than the RC
 - “Upgrading” a floating tag to a patch (`postgres:18.3-alpine`)
 - Updating only `oke.config.ts` and leaving catalog / recipes / docs stale
 - Changing recipe physics (env, ports, health) during a pin bump
 - Bumping test-only vendor fixtures and calling the default catalog done
+- Reintroducing `images.ai` / local AI engine pins into Compose

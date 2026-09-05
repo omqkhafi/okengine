@@ -564,7 +564,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             long: "--provider",
             takesValue: true,
             valueName: "id",
-            summary: "ollama · openai · anthropic · gemini · lmstudio · openrouter · custom",
+            summary: "openrouter · openai · anthropic · groq · … · lmstudio · custom",
           },
           {
             long: "--chat",
@@ -583,14 +583,6 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             takesValue: true,
             valueName: "model",
             summary: "Embedding model id",
-          },
-          {
-            long: "--pull",
-            summary: "Pull missing Ollama models (default)",
-          },
-          {
-            long: "--no-pull",
-            summary: "Skip ollama pull",
           },
           {
             long: "--yes",

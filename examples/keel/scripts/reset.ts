@@ -148,8 +148,13 @@ export function extraEnvSectionTitle(key: string): string | null {
   if (key.startsWith("MEILI_") || key.startsWith("OKE_STORE_INDEX")) {
     return "store.index — Meilisearch";
   }
-  if (key.startsWith("OKE_AI_") || key === "OPENAI_API_KEY" || key === "OLLAMA_HOST") {
-    return "AI — llama.cpp (openai-compatible)";
+  if (
+    key.startsWith("OKE_AI_") ||
+    key === "OPENAI_API_KEY" ||
+    key === "OPENROUTER_API_KEY" ||
+    key === "OPENAI_BASE_URL"
+  ) {
+    return "AI — OpenRouter (or BYO OKE_AI_URL / openai-compatible)";
   }
   if (key === "OKE_VAULT_MASTER_KEY" || key.startsWith("OKE_VAULT_")) {
     return "vault — built-in encrypted-at-rest store";

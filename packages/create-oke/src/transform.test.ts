@@ -150,12 +150,12 @@ describe("upsertAiDrivers", () => {
     expect(config.drivers?.ai).toEqual(localAiPins);
     expect(config.drivers?.channel?.ai).toBeUndefined();
     // Sparse templates omit drivers.channel — images.channel stays a string pin.
-    expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.30.7");
+    expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.31.1");
     expect(config.images?.ai).toBeUndefined();
   });
 
   test("applyCreateAnswers with ai pins keeps top-level drivers.ai", () => {
-    const llamaPins = pinsDockerReady("openai-compatible", "mock");
+    const aiPins = pinsDockerReady("openai-compatible", "mock");
     for (const id of ["standard", "advanced"] as const) {
       const next = applyCreateAnswers(
         templateConfig(id),
@@ -173,9 +173,9 @@ describe("upsertAiDrivers", () => {
             clock: pinsDockerReady("postgres", "frozen"),
             vault: pinsDockerReady("vault", "memory"),
             channel: { email: pinsDockerReady("smtp", "console") },
-            ai: llamaPins,
+            ai: aiPins,
           },
-          ai: { enabled: true, provider: "llama-cpp", driver: "openai-compatible" },
+          ai: { enabled: true, provider: "openrouter", driver: "openai-compatible" },
           locales: [],
           pgdog: false,
           proxy: "none",
@@ -188,7 +188,7 @@ describe("upsertAiDrivers", () => {
         prod: "openai-compatible",
       });
       expect(config.drivers?.channel?.ai, id).toBeUndefined();
-      expect(config.images?.ai, id).toBe("ghcr.io/ggml-org/llama.cpp:server-b10450");
+      expect(config.images?.ai, id).toBeUndefined();
     }
   });
 

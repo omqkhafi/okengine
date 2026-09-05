@@ -21,7 +21,7 @@ export type AiSetupApplyInput = {
   readonly apiKeyEnv?: string;
   /** When set with {@link apiKeyEnv}, writes the token into `.env.local`. */
   readonly apiKey?: string;
-  /** Optional `images.ai` pin (llama.cpp / Ollama / vLLM / SGLang). */
+  /** Optional `images.ai` pin (legacy; cloud / custom / lmstudio leave unset). */
   readonly image?: string;
 };
 
@@ -62,8 +62,7 @@ export function applyAiSetup(
     if (input.image) {
       config = upsertImage(config, "ai", input.image);
     } else {
-      // Cloud / host-side providers must not leave a leftover local AI image —
-      // Compose would still start llama.cpp/Ollama for OpenRouter etc.
+      // Cloud / host-side providers must not leave a leftover `images.ai` pin.
       config = removeImage(config, "ai");
     }
     writeFileSync(configPath, config, "utf8");
@@ -218,7 +217,7 @@ export function renderAiTs(input: AiSetupApplyInput): string {
   ];
 
   const localProvider = "openai-compatible";
-  const localDefaultModel = localPrimary ? chat : "granite3.3:2b";
+  const localDefaultModel = localPrimary ? chat : "local-model";
   const localLines = [
     `export const local = ai.model("local", {`,
     `  provider: "${localProvider}",`,
@@ -233,7 +232,7 @@ export function renderAiTs(input: AiSetupApplyInput): string {
     `/** Primary model binding (${provider}). */`,
     ...smartLines,
     ``,
-    `/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */`,
+    `/** Local OpenAI-compatible binding (via \`OKE_AI_URL\`). */`,
     ...localLines,
     ``,
     `/** Advanced Notes summarize — used by \`notes.summarize\` via \`fx.ask\`. */`,
@@ -462,10 +461,10 @@ export function ensureSummarizeNotePrompt(source: string): string {
   if (!hasLocalExport && hasSmartExport) {
     next = `${next.trimEnd()}
 
-/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */
+/** Local OpenAI-compatible binding (via \`OKE_AI_URL\`). */
 export const local = ai.model("local", {
   provider: "openai-compatible",
-  model: process.env.OKE_AI_LOCAL_MODEL ?? "granite3.3:2b",
+  model: process.env.OKE_AI_LOCAL_MODEL ?? "local-model",
   ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),
 });
 `;

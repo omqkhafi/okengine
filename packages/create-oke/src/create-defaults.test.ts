@@ -75,7 +75,7 @@ describe("read/write round-trip", () => {
           channel: { email: pinsDockerReady("smtp", "console") },
           ai: pinsDockerReady("openai-compatible", "mock"),
         },
-        ai: { enabled: true, provider: "ollama", driver: "openai-compatible" },
+        ai: { enabled: true, provider: "openrouter", driver: "openai-compatible" },
         locales: ["ar"],
         pgdog: true,
         proxy: "caddy",
@@ -86,7 +86,7 @@ describe("read/write round-trip", () => {
       expect(loaded!.template).toBe("advanced");
       expect(loaded!.drivers.store.sql.dev).toBe("postgres");
       expect(loaded!.drivers.ai?.dev).toBe("openai-compatible");
-      expect(loaded!.ai.provider).toBe("ollama");
+      expect(loaded!.ai.provider).toBe("openrouter");
       expect(loaded!.profile).toBe("docker-ready");
       expect(loaded!.locales).toEqual(["ar"]);
       expect(loaded!.pgdog).toBe(true);

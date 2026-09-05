@@ -21,6 +21,8 @@ export default defineConfig({
       dev: "vault",
     },
     ai: {
+      // Transport for OpenRouter (registry provider on ai.model). BYO any
+      // OpenAI-compatible `/v1` via `OKE_AI_URL` / `baseUrl` — no images.ai.
       dev: "openai-compatible",
       test: "mock",
       prod: "openai-compatible",
@@ -30,14 +32,14 @@ export default defineConfig({
     store: {
       sql: "postgres:18-alpine",
       kv: "redis:8-alpine",
-      files: "rustfs/rustfs:1.0.0-rc.2",
+      files: "rustfs/rustfs:1.0.0-rc.5",
       index: "getmeili/meilisearch:v1.53",
     },
-    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
+    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
     channel: {
-      email: "axllent/mailpit:v1.30.7",
+      email: "axllent/mailpit:v1.31.1",
     },
-    ai: "ghcr.io/ggml-org/llama.cpp:server-b10450",
+    // No images.ai — Compose does not manage inference (OpenRouter / BYO URL).
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

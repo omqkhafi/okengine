@@ -282,24 +282,24 @@ describe("wizard ← Back", () => {
 });
 
 describe("aiSetupProviderFor", () => {
-  test("maps mock menu to llama-cpp when openai-compatible is pinned", () => {
+  test("maps mock menu to custom when openai-compatible is pinned", () => {
     expect(
       aiSetupProviderFor("mock", {
         dev: "openai-compatible",
         test: "mock",
         prod: "openai-compatible",
       }),
-    ).toBe("llama-cpp");
+    ).toBe("custom");
   });
 
-  test("keeps menu ollama", () => {
+  test("keeps menu lmstudio", () => {
     expect(
-      aiSetupProviderFor("ollama", {
+      aiSetupProviderFor("lmstudio", {
         dev: "openai-compatible",
         test: "mock",
         prod: "openai-compatible",
       }),
-    ).toBe("ollama");
+    ).toBe("lmstudio");
   });
 });
 
@@ -632,8 +632,8 @@ describe("scaffold structure", () => {
         };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
-        expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.2");
-        expect(pkg.dependencies["oxc-parser"]).toBe("^0.142.0");
+        expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.4");
+        expect(pkg.dependencies["oxc-parser"]).toBe("^0.148.0");
         expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
         expect(pkg.scripts.typecheck).toContain("tsc --noEmit");
         expect(pkg.scripts.typecheck).toContain("tsc -b -p web/tsconfig.json");
@@ -643,9 +643,9 @@ describe("scaffold structure", () => {
         expect(result.files).toContain("web/vite.config.ts");
         expect(result.files).toContain("web/src/client.ts");
         expect(pkg.devDependencies.typescript).toBeTruthy();
-        expect(pkg.devDependencies.vite).toBe("^8.2.0");
-        expect(pkg.devDependencies["@electric-sql/pglite"]).toBe("^0.5.4");
-        expect(pkg.devDependencies["@electric-sql/pglite-pgvector"]).toBe("^0.0.5");
+        expect(pkg.devDependencies.vite).toBe("^8.2.2");
+        expect(pkg.devDependencies["@electric-sql/pglite"]).toBe("^0.5.8");
+        expect(pkg.devDependencies["@electric-sql/pglite-pgvector"]).toBe("^0.0.9");
         const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
         expect(drizzle).toContain('dialect: "postgresql"');
         expect(drizzle).toContain("DATABASE_URL");

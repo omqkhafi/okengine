@@ -10,27 +10,27 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
-    "@base-ui/react": "^1.7.0",
-    "@fumadocs/base-ui": "^16.14.5",
-    "cnfast": "^0.1.0",
-    "framer-motion": "^12.43.0",
-    "fumadocs-core": "16.14.5",
-    "fumadocs-mdx": "15.3.0",
-    "lucide-react": "^1.33.0",
+    "@base-ui/react": "^1.8.0",
+    "@fumadocs/base-ui": "^16.15.7",
+    "cnfast": "^0.2.0",
+    "framer-motion": "^13.2.0",
+    "fumadocs-core": "16.15.7",
+    "fumadocs-mdx": "15.4.0",
+    "lucide-react": "^1.41.0",
     "next": "16.3.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "^0.185.1",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/mdx": "^2.0.14",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.7",
     "@types/three": "^0.185.4",
-    "postcss": "^8.5.26",
+    "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   }

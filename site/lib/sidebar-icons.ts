@@ -58,7 +58,6 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/elements/ai/agents": "Bot",
   "/docs/elements/ai/mcp": "Plug",
   "/docs/recipes": "Container",
-  "/docs/recipes/local-ai": "Cpu",
   "/docs/providers": "Cloud",
   "/docs/reference": "BookMarked",
   "/docs/reference/plugins": "Puzzle",

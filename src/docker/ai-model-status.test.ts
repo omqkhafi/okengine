@@ -5,7 +5,6 @@ import {
   normalizeAiProbeUrl,
   probeAiModelStatus,
   startAiModelWatch,
-  statusFromOllamaTags,
   statusFromOpenAiModels,
 } from "./ai-model-status.ts";
 
@@ -17,12 +16,9 @@ describe("ai-model-status", () => {
     expect(normalizeAiProbeUrl("http://127.0.0.1:8080/v1/", "openai-compatible")).toBe(
       "http://127.0.0.1:8080/v1",
     );
-    expect(normalizeAiProbeUrl("http://127.0.0.1:11434/v1", "ollama")).toBe(
-      "http://127.0.0.1:11434",
-    );
   });
 
-  test("aiModelIdsMatch tolerates llama.cpp quant aliasing", () => {
+  test("aiModelIdsMatch tolerates quant aliasing", () => {
     expect(aiModelIdsMatch("gemma4:e4b-q4_K_M", "gemma4:Q4_K_M")).toBe(true);
     expect(aiModelIdsMatch("smollm2", "smollm2")).toBe(true);
     expect(aiModelIdsMatch("gemma4:e4b-q4_K_M", "qwen3:8b")).toBe(false);
@@ -43,13 +39,6 @@ describe("ai-model-status", () => {
 
   test("statusFromOpenAiModels treats empty list as starting", () => {
     expect(statusFromOpenAiModels("smollm2", { data: [] }).phase).toBe("starting");
-  });
-
-  test("statusFromOllamaTags ready when present", () => {
-    expect(statusFromOllamaTags("qwen3.5:9b", { models: [{ name: "qwen3.5:9b" }] }).phase).toBe(
-      "ready",
-    );
-    expect(statusFromOllamaTags("qwen3.5:9b", { models: [] }).phase).toBe("loading");
   });
 
   test("probeAiModelStatus uses injectable fetch", async () => {

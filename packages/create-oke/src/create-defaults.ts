@@ -26,15 +26,15 @@ export type EnvDriverPins = {
 /** Optional AI preference saved with create defaults. */
 export type CreateAiPref = {
   readonly enabled: boolean;
-  /** Menu id: ollama · openai · anthropic · gemini · lmstudio · openrouter · custom · mock */
+  /** Menu id: openrouter · openai · anthropic · gemini · lmstudio · custom · mock · … */
   readonly provider: string | null;
   /** Protocol driver id written to `drivers.ai`. */
   readonly driver: string | null;
   /** Chat model id (from wizard / `oke ai setup`). */
   readonly chatModel?: string | null;
-  /** Vision model id (ollama). */
+  /** Vision model id. */
   readonly visionModel?: string | null;
-  /** Embedding model id (ollama). */
+  /** Embedding model id. */
   readonly embedModel?: string | null;
   /** Optional OpenAI-compatible base URL. */
   readonly baseUrl?: string | null;

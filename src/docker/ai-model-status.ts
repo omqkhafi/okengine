@@ -1,6 +1,6 @@
 /**
- * Probe local AI servers for configured-model readiness (llama.cpp / Ollama /
- * OpenAI-compatible). Used by `oke dev` to show model id + phase without
+ * Probe OpenAI-compatible AI servers for configured-model readiness
+ * (BYO `OKE_AI_URL`). Used by `oke dev` to show model id + phase without
  * blocking boot.
  */
 
@@ -19,14 +19,14 @@ export type AiModelStatus = {
 };
 
 /** Which HTTP surface to probe. */
-export type AiModelProbeKind = "openai-compatible" | "ollama";
+export type AiModelProbeKind = "openai-compatible";
 
 /** Fetch contract (injectable for tests). */
 export type AiModelFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 /** Options for {@link probeAiModelStatus}. */
 export type ProbeAiModelStatusOptions = {
-  /** Base URL — with or without trailing `/v1` for OpenAI-compatible. */
+  /** Base URL — with or without trailing `/v1`. */
   readonly url: string;
   readonly model: string;
   readonly kind: AiModelProbeKind;
@@ -34,17 +34,15 @@ export type ProbeAiModelStatusOptions = {
 };
 
 /**
- * Strip trailing slashes; for OpenAI-compatible keep a single `/v1` suffix.
+ * Strip trailing slashes; keep a single `/v1` suffix for OpenAI-compatible.
  *
  * @param url - Raw base URL
  * @param kind - Probe kind
  */
 export function normalizeAiProbeUrl(url: string, kind: AiModelProbeKind): string {
   let base = url.trim().replace(/\/+$/, "");
-  if (kind === "openai-compatible") {
-    if (!base.endsWith("/v1")) base = `${base}/v1`;
-  } else if (base.endsWith("/v1")) {
-    base = base.slice(0, -3);
+  if (kind === "openai-compatible" && !base.endsWith("/v1")) {
+    base = `${base}/v1`;
   }
   return base;
 }
@@ -52,7 +50,7 @@ export function normalizeAiProbeUrl(url: string, kind: AiModelProbeKind): string
 /**
  * Whether a reported model id covers the requested `OKE_AI_MODEL`.
  *
- * Tolerates llama.cpp alias normalization (`gemma4:e4b-q4_K_M` ↔ `gemma4:Q4_K_M`).
+ * Tolerates quant / alias normalization (`gemma4:e4b-q4_K_M` ↔ `gemma4:Q4_K_M`).
  *
  * @param want - Requested id
  * @param reported - Server id
@@ -124,30 +122,6 @@ export function statusFromOpenAiModels(model: string, json: unknown): AiModelSta
 }
 
 /**
- * Parse Ollama `GET /api/tags` into a status for `model`.
- *
- * @param model - Requested id
- * @param json - Parsed JSON
- */
-export function statusFromOllamaTags(model: string, json: unknown): AiModelStatus {
-  if (!json || typeof json !== "object") {
-    return { model, phase: "starting", detail: "invalid /api/tags body" };
-  }
-  const models = (json as { models?: unknown }).models;
-  if (!Array.isArray(models)) {
-    return { model, phase: "starting" };
-  }
-  for (const row of models) {
-    if (!row || typeof row !== "object") continue;
-    const name = (row as { name?: unknown }).name;
-    if (typeof name === "string" && aiModelIdsMatch(model, name)) {
-      return { model, phase: "ready", reportedId: name };
-    }
-  }
-  return { model, phase: "loading", detail: "not in /api/tags yet" };
-}
-
-/**
  * Map a server-native status string to {@link AiModelPhase}.
  *
  * @param value - Raw status
@@ -173,7 +147,7 @@ export async function probeAiModelStatus(opts: ProbeAiModelStatusOptions): Promi
   if (!model) return { model: "", phase: "error", detail: "OKE_AI_MODEL is empty" };
   const fetchFn = opts.fetch ?? globalThis.fetch;
   const base = normalizeAiProbeUrl(opts.url, opts.kind);
-  const path = opts.kind === "ollama" ? `${base}/api/tags` : `${base}/models`;
+  const path = `${base}/models`;
   try {
     const res = await fetchFn(path, { method: "GET" });
     if (!res.ok) {
@@ -184,9 +158,7 @@ export async function probeAiModelStatus(opts: ProbeAiModelStatusOptions): Promi
       };
     }
     const json: unknown = await res.json().catch(() => null);
-    return opts.kind === "ollama"
-      ? statusFromOllamaTags(model, json)
-      : statusFromOpenAiModels(model, json);
+    return statusFromOpenAiModels(model, json);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { model, phase: "unreachable", detail: msg };

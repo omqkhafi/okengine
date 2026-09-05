@@ -70,7 +70,7 @@ describe("renderAiTs embed", () => {
   test("documents SQL .embed() vs index ai.embed pipeline", () => {
     const out = renderAiTs({
       driver: "openai-compatible",
-      provider: "ollama",
+      provider: "openai-compatible",
       embedModel: "nomic-embed-text",
     });
     expect(out).toContain("export const embedModel");
@@ -111,10 +111,10 @@ describe("mergeAiIntoCore vs template comments", () => {
 // --- AI ----------------------------------------------------------------------
 //   ai.model("smart", { provider: "openrouter", model: "openrouter/free" })
 
-/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */
+/** Local OpenAI-compatible binding (via \`OKE_AI_URL\`). */
 export const local = ai.model("local", {
   provider: "openai-compatible",
-  model: process.env.OKE_AI_LOCAL_MODEL ?? "granite3.3:2b",
+  model: process.env.OKE_AI_LOCAL_MODEL ?? "local-model",
   ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),
 });
 

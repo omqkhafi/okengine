@@ -1,43 +1,39 @@
 /**
  * Keel AI models, prompts, and the planner agent.
  *
- * Default path is self-hosted OpenAI-compatible (docker llama.cpp) via
- * `OKE_AI_URL`. For zero-local cloud, swap `smart` to a registry provider:
- *
- * ```ts
- * const smart = ai.model("smart", {
- *   provider: "openrouter",
- *   model: "openrouter/free",
- *   ...(process.env.OPENROUTER_API_KEY?.trim()
- *     ? { apiKey: process.env.OPENROUTER_API_KEY.trim() }
- *     : {}),
- * });
- * ```
+ * Default path is OpenRouter (`openrouter/free`). For BYO, swap `smart` to
+ * `openai-compatible` + `OKE_AI_URL` (any OpenAI-compatible `/v1`).
  */
 
 import { ai } from "okengine";
 import { z } from "zod";
 
-const chatModel = process.env.OKE_AI_MODEL?.trim() || "granite3.3:2b";
-
-const openOpts = {
-  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),
-  ...(process.env.OPENAI_API_KEY?.trim()
-    ? { apiKey: process.env.OPENAI_API_KEY.trim() }
-    : {}),
-} as const;
+const chatModel =
+  process.env.OKE_AI_CLOUD_MODEL?.trim() ||
+  process.env.OKE_AI_MODEL?.trim() ||
+  "openrouter/free";
 
 const smart = ai.model("smart", {
-  provider: "openai-compatible",
+  provider: "openrouter",
   tier: "smart",
   model: chatModel,
-  ...openOpts,
+  ...(process.env.OPENAI_BASE_URL?.trim()
+    ? { baseUrl: process.env.OPENAI_BASE_URL.trim() }
+    : {}),
+  ...(process.env.OPENROUTER_API_KEY?.trim()
+    ? { apiKey: process.env.OPENROUTER_API_KEY.trim() }
+    : {}),
 });
 const fast = ai.model("fast", {
-  provider: "openai-compatible",
+  provider: "openrouter",
   tier: "fast",
   model: chatModel,
-  ...openOpts,
+  ...(process.env.OPENAI_BASE_URL?.trim()
+    ? { baseUrl: process.env.OPENAI_BASE_URL.trim() }
+    : {}),
+  ...(process.env.OPENROUTER_API_KEY?.trim()
+    ? { apiKey: process.env.OPENROUTER_API_KEY.trim() }
+    : {}),
 });
 
 /** Task suggest — priority, section, role needed. */
