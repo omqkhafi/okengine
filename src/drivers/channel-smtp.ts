@@ -25,7 +25,11 @@ export function openSmtpChannel(options: ChannelOpenOptions = {}): ChannelDriver
     adapter: new BunAdapter({ secure }),
     ...(options.user && options.pass ? { auth: { user: options.user, pass: options.pass } } : {}),
   });
-  return { id: "smtp", transport };
+  return {
+    id: "smtp",
+    transport,
+    external: { host: options.host, provider: "smtp", kind: "infrastructure" },
+  };
 }
 
 /** SMTP driver factory. */

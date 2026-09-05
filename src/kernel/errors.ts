@@ -155,6 +155,12 @@ export const OKE_ERRORS = {
     cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.embeds.',
   },
+  /** Flow fetches a host not listed in `effects.fetches`. */
+  UNDECLARED_FETCH: {
+    code: 1019,
+    cause: 'Flow "{flow}" fetches "{resource}" without declaring it.',
+    fix: 'Add "{resource}" to this flow\'s effects.fetches.',
+  },
   /** Flow reads a secret not listed in `effects.secrets`. */
   UNDECLARED_SECRET: {
     code: 1006,

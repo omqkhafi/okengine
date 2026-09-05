@@ -11,6 +11,7 @@ import type {
   AuthTenantsResourceRef,
   Effects,
   EmbedRef,
+  FetchHostRef,
   PromptRef,
   ResourceRef,
   SecretRef,
@@ -166,6 +167,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   const embeds = new Set<EmbedRef>();
   const secrets = new Set<SecretRef>();
   const calls = new Set<FlowRef>();
+  const fetches = new Set<FetchHostRef>();
   const steps: string[] = [];
   let usesRaw = false;
 
@@ -235,6 +237,16 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
           const name = identifierName(call.arguments[0]);
           if (name) embeds.add(name);
         }
+      }
+      continue;
+    }
+
+    if (chain.rootMethod === "fetch" && call === chain.rootCall) {
+      // fx.fetch(url) — host becomes effects.fetches entry.
+      const lit = stringArg(call.arguments[0]);
+      if (lit) {
+        const host = hostFromUrlLiteral(lit);
+        if (host) fetches.add(host);
       }
       continue;
     }
@@ -320,6 +332,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   if (embeds.size > 0) effects.embeds = sortUnique([...embeds]);
   if (secrets.size > 0) effects.secrets = sortUnique([...secrets]);
   if (calls.size > 0) effects.calls = sortUnique([...calls]);
+  if (fetches.size > 0) effects.fetches = sortUnique([...fetches]);
 
   return {
     effects,
@@ -685,6 +698,20 @@ export function stringArg(node: AstNode | undefined): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Hostname from a URL string literal for `fx.fetch` inference.
+ *
+ * @param url - Absolute or protocol-relative URL string
+ */
+export function hostFromUrlLiteral(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

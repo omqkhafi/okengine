@@ -89,7 +89,8 @@ export type JsonSchema = string | Record<string, unknown>;
  *
  * `secrets` is a capability (not an irreversible effect).
  * `calls` portals to the callee's transitive effects.
- * `sends` / `asks` / `embeds` are irreversible (asks/embeds also nondeterministic + cost).
+ * `sends` / `asks` / `embeds` / `fetches` are irreversible
+ * (asks/embeds also nondeterministic + cost).
  */
 export interface Effects {
   /** Store reads, plus `"runs"` for `fx.runs` and `signal:name` for `fx.deadLetters` / `fx.live`. */
@@ -117,10 +118,18 @@ export interface Effects {
   secrets?: SecretRef[];
   /** Nested flow calls (transitive effects). */
   calls?: FlowRef[];
+  /**
+   * Outbound HTTP hosts from `fx.fetch` (irreversible).
+   * Hostname only (e.g. `"api.stripe.com"`), never a full URL.
+   */
+  fetches?: FetchHostRef[];
 }
 
 /** Embedding model ref for `effects.embeds` / `fx.embed` (model name). */
 export type EmbedRef = string;
+
+/** Host ref for `effects.fetches` / `fx.fetch` (hostname). */
+export type FetchHostRef = string;
 
 /** HTTP trigger surface. */
 export interface HttpTrigger {

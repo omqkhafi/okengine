@@ -288,6 +288,11 @@ export interface AiRuntime {
   /** Journal of ask results (replay without re-calling the model). */
   readonly journal: readonly AiJournalEntry[];
   /**
+   * Egress identity from the most recent ask / embed / stream complete.
+   * Used by `fx.ask` / `fx.embed` to stamp {@link EffectEntry.external}.
+   */
+  lastExternal?: import("../../drivers/external.ts").DriverExternal;
+  /**
    * Ask a prompt with optional model fallback chain and optional tools.
    *
    * @param prompt - Prompt name
@@ -396,6 +401,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   const now = options.now ?? (() => Date.now());
   const journalingForced = options.forceJournal !== false;
   let runSeq = 0;
+  /** Mutable egress stamp shared by ask / embed / toolLoop. */
+  const egress: {
+    lastExternal?: import("../../drivers/external.ts").DriverExternal;
+  } = {};
 
   async function clientFor(name: string): Promise<AiModelClient> {
     const existing = clients.get(name);
@@ -411,13 +420,38 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           : `ai: no client for model "${name}" and no defaultDriver`,
       );
     }
+    const externalOpen = aiOpenExternal(model);
     const opened = await driver.open({
       model: model?.model ?? name,
       ...(model?.baseUrl !== undefined ? { baseUrl: model.baseUrl } : {}),
       ...(model?.apiKey !== undefined ? { apiKey: model.apiKey } : {}),
+      ...(externalOpen !== undefined ? { external: externalOpen } : {}),
     });
     clients.set(name, opened);
     return opened;
+  }
+
+  /**
+   * Declare-time egress classification for a model binding (never hostname regex).
+   *
+   * @param model - Model declaration
+   */
+  function aiOpenExternal(
+    model: AiModelDecl | undefined,
+  ): { kind: "third-party" | "infrastructure"; provider?: string } | undefined {
+    if (!model) return undefined;
+    const provider = model.provider?.toLowerCase();
+    if (model.driverId === "mock" || provider === "mock") return undefined;
+    if (provider === "local") {
+      return { kind: "infrastructure", provider: "local" };
+    }
+    if (model.driverId === "anthropic") {
+      return { kind: "third-party", provider: provider ?? "anthropic" };
+    }
+    return {
+      kind: "third-party",
+      ...(provider !== undefined ? { provider } : {}),
+    };
   }
 
   /** Wire model id for a logical binding (never send the binding name to providers). */
@@ -589,6 +623,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         responseFormat: opts.responseFormat,
         ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
+      if (result.external !== undefined) {
+        egress.lastExternal = result.external;
+      }
       cost += result.usage?.cost ?? 0;
       addUsageTokens(tokens, result.usage);
       lastText = result.text;
@@ -654,7 +691,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     };
   }
 
-  return {
+  const runtime: AiRuntime = {
     prompts,
     agents,
     embeds,
@@ -663,6 +700,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     denials,
     agentRuns,
     journal,
+    get lastExternal() {
+      return egress.lastExternal;
+    },
+    set lastExternal(value) {
+      egress.lastExternal = value;
+    },
     async ask(prompt, input, opts) {
       const pin = parsePromptRef(prompt);
       const decl = prompts.get(pin.name) ?? prompts.get(prompt);
@@ -773,6 +816,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 ...(responseFormat !== undefined ? { responseFormat } : {}),
                 ...(signal !== undefined ? { signal } : {}),
               });
+              if (result.external !== undefined) {
+                egress.lastExternal = result.external;
+              }
               attemptCost = result.usage?.cost ?? 0;
               totalCost += attemptCost;
               addUsageTokens(totalTokens, result.usage);
@@ -1021,12 +1067,16 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (!client.embed) {
         throw new Error(`ai: model "${modelName}" does not support embed`);
       }
-      const { vectors } = await client.embed({ input: text, model: modelName });
-      const vector = vectors[0];
+      const result = await client.embed({ input: text, model: modelName });
+      if (result.external !== undefined) {
+        egress.lastExternal = result.external;
+      }
+      const vector = result.vectors[0];
       if (!vector) throw new Error("ai: empty embedding");
       return vector;
     },
   };
+  return runtime;
 }
 
 export { AiSchemaValidationError } from "./schema.ts";

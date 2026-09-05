@@ -4,6 +4,7 @@
 
 import { SndrTransport } from "sently/transports/sndr";
 import type { ChannelDriver, ChannelOpenOptions } from "./channel-types.ts";
+import { hostFromUrl } from "./external.ts";
 
 /**
  * Open an SNDR channel driver.
@@ -18,7 +19,15 @@ export function openSndrChannel(options: ChannelOpenOptions = {}): ChannelDriver
     apiKey: options.apiKey,
     ...(options.url ? { baseUrl: options.url } : {}),
   });
-  return { id: "sndr", transport };
+  return {
+    id: "sndr",
+    transport,
+    external: {
+      host: (options.url ? hostFromUrl(options.url) : undefined) ?? "api.sndr.email",
+      provider: "sndr",
+      kind: "third-party",
+    },
+  };
 }
 
 /** SNDR driver factory. */

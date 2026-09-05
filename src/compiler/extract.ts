@@ -2648,6 +2648,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   const embeds = stringArrayProp(node, "embeds");
   const secrets = stringArrayProp(node, "secrets");
   const calls = stringArrayProp(node, "calls");
+  const fetches = stringArrayProp(node, "fetches");
   if (reads) effects.reads = reads as Effects["reads"];
   if (writes) effects.writes = writes as Effects["writes"];
   if (emits) effects.emits = emits;
@@ -2656,6 +2657,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   if (embeds) effects.embeds = embeds;
   if (secrets) effects.secrets = secrets;
   if (calls) effects.calls = calls;
+  if (fetches) effects.fetches = fetches;
   return effects;
 }
 

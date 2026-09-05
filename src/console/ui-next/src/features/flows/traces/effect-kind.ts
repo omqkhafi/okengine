@@ -26,6 +26,7 @@ export const EFFECT_KIND_LABEL: Readonly<Record<RunEffectKind, string>> = {
   embed: "Embed",
   secret: "Secret",
   call: "Call",
+  fetch: "Fetch",
 };
 
 /**
@@ -44,6 +45,7 @@ export function effectKindSummaryLabel(kind: RunEffectKind, count: number): stri
     embed: "embed",
     secret: "secret",
     call: "call",
+    fetch: "fetch",
   };
   const plural: Record<RunEffectKind, string> = {
     read: "reads",
@@ -54,6 +56,7 @@ export function effectKindSummaryLabel(kind: RunEffectKind, count: number): stri
     embed: "embeds",
     secret: "secrets",
     call: "calls",
+    fetch: "fetches",
   };
   return `${count} ${count === 1 ? singular[kind] : plural[kind]}`;
 }
@@ -79,6 +82,7 @@ export function effectBarColor(kind: RunEffectKind): string {
     case "embed":
       return EDGE_STROKE.asks;
     case "send":
+    case "fetch":
       return EDGE_STROKE.sends;
     case "secret":
       return EDGE_STROKE.secrets;
@@ -106,6 +110,7 @@ export function effectKindIcon(kind: RunEffectKind, resource?: string): ElementH
     case "embed":
       return ELEMENT_ICONS.ai.icon;
     case "send":
+    case "fetch":
       return ELEMENT_ICONS.channel.icon;
     case "secret":
       return ELEMENT_ICONS.vault.icon;

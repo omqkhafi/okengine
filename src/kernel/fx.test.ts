@@ -491,6 +491,9 @@ describe("fx — wholesale swap", () => {
       async search() {
         return [];
       },
+      async fetch() {
+        return new Response(null, { status: 204 });
+      },
       async run() {
         return {};
       },

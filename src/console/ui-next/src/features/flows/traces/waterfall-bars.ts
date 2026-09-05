@@ -30,6 +30,8 @@ export type WaterfallBar = {
    * `offsetRatio + widthRatio === 1`.
    */
   readonly widthRatio: number;
+  /** Egress identity when the effect left the process. */
+  readonly external?: RunEffect["external"];
 };
 
 /**
@@ -58,6 +60,7 @@ export function waterfallBars(
       durationMs: 0,
       offsetRatio: 0,
       widthRatio: 0,
+      ...(effect.external !== undefined ? { external: effect.external } : {}),
     }));
   }
 
@@ -75,6 +78,7 @@ export function waterfallBars(
       durationMs: clampedDuration,
       offsetRatio: startOffsetMs / durationMs,
       widthRatio: clampedDuration / durationMs,
+      ...(effect.external !== undefined ? { external: effect.external } : {}),
     };
   });
 }

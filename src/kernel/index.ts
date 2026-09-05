@@ -91,6 +91,7 @@ export {
   recordEffect,
   reversibilityOf,
   type EffectEntry,
+  type EffectExternal,
   type EffectKind,
   type EffectLedger,
   type ReversibilityTier,

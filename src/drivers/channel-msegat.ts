@@ -51,7 +51,12 @@ export function openMsegatChannel(options: ChannelOpenOptions = {}): ChannelDriv
     verify: () => transport.verify(),
   };
 
-  return { id: "msegat", channel, smsTransport: transport };
+  return {
+    id: "msegat",
+    channel,
+    smsTransport: transport,
+    external: { host: "www.msegat.com", provider: "msegat", kind: "third-party" },
+  };
 }
 
 /** Msegat driver factory. */

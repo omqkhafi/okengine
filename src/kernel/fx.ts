@@ -44,7 +44,7 @@ import type { TenantStore } from "../auth/tenants.ts";
 import type { SessionCrypto, SessionStore } from "../auth/sessions.ts";
 import type { Manifest } from "../manifest/types.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
-import { createEffectLedger, recordEffect, reversibilityOf, type EffectLedger } from "./effects.ts";
+import { createEffectLedger, recordEffect, reversibilityOf, type EffectExternal, type EffectLedger } from "./effects.ts";
 import { resolveDurationMs } from "./elapsed.ts";
 import {
   DryRunWriteIsolationError,
@@ -790,6 +790,17 @@ export interface Fx {
    */
   search(embed: NamedRef, query: unknown, opts?: FxSearchOptions): Promise<unknown[]>;
   /**
+   * Outbound HTTP to an arbitrary URL (records `fetch` on the hostname).
+   *
+   * Unconditionally external (`kind: "third-party"`). Declare the hostname in
+   * `effects.fetches`. Prefer wrapping inside {@link Fx.step}; use
+   * {@link Fx.retry} only when the remote API is safe to repeat.
+   *
+   * @param url - Absolute URL (string or URL)
+   * @param init - Standard `RequestInit`
+   */
+  fetch(url: string | URL, init?: RequestInit): Promise<Response>;
+  /**
    * Run a bounded AI agent (records `ask`).
    *
    * @param agent - Agent name or handle
@@ -1086,6 +1097,21 @@ function stampAskTelemetry(
 }
 
 /**
+ * Hostname for `fx.fetch` capability / ledger resource.
+ *
+ * @param href - Absolute URL string
+ */
+export function hostFromFetchUrl(href: string): string {
+  try {
+    const host = new URL(href).hostname;
+    if (host) return host;
+  } catch {
+    /* fall through */
+  }
+  throw new Error(`fx.fetch: invalid URL "${href}" — expected an absolute URL with a hostname`);
+}
+
+/**
  * Create an in-memory `fx` context (v1 stubs, full surface).
  *
  * @param options - Flow identity, declared effects, ledger, principals
@@ -1170,9 +1196,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     kind: Parameters<CapabilityToken["assert"]>[0],
     resource: string,
     body: () => T | Promise<T>,
+    externalOf?:
+      | EffectExternal
+      | ((result: T | undefined, error: unknown) => EffectExternal | undefined),
   ): Promise<T> {
     capability.assert(kind, resource);
-    const execute = () => recordEffect(ledger, kind, resource, now, body);
+    const execute = () => recordEffect(ledger, kind, resource, now, body, externalOf);
     if (journal) {
       return journal.effect(kind, resource, execute);
     }
@@ -1273,14 +1302,15 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       table: unknown,
       body: () => T | Promise<T>,
     ): Promise<T> => {
+      const externalOf = (): EffectExternal | undefined => cached?.external;
       const name = schemaTableName(table);
       if (name !== undefined) {
         const perTable = sqlTableRef(name);
         if (perTable !== ref && capability.allows(kind, perTable)) {
-          return gated(kind, perTable, body);
+          return gated(kind, perTable, body, externalOf);
         }
       }
-      return gated(kind, ref, body);
+      return gated(kind, ref, body, externalOf);
     };
 
     return {
@@ -1599,17 +1629,28 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           }
           const isRead = prop === "get" || prop === "search" || prop === "list" || prop === "ttlMs";
           return (...args: unknown[]) =>
-            gated(isRead ? "read" : "write", baseRef, async () => {
-              if (!isRead && isDryRun()) {
-                throw new DryRunWriteIsolationError(
-                  `Driver-backed store "${baseRef}" cannot isolate writes during dry-run; dry-run refused rather than risk a double-write.`,
-                );
-              }
-              const h = await open();
-              const fn = (h as unknown as Record<string | symbol, unknown>)[prop];
-              if (typeof fn !== "function") return undefined;
-              return (fn as (...a: unknown[]) => unknown).apply(h, args);
-            });
+            gated(
+              isRead ? "read" : "write",
+              baseRef,
+              async () => {
+                if (!isRead && isDryRun()) {
+                  throw new DryRunWriteIsolationError(
+                    `Driver-backed store "${baseRef}" cannot isolate writes during dry-run; dry-run refused rather than risk a double-write.`,
+                  );
+                }
+                const h = await open();
+                const fn = (h as unknown as Record<string | symbol, unknown>)[prop];
+                if (typeof fn !== "function") return undefined;
+                return (fn as (...a: unknown[]) => unknown).apply(h, args);
+              },
+              () => {
+                const opened = cache.handle;
+                if (opened && typeof opened === "object" && "external" in opened) {
+                  return (opened as { external?: EffectExternal }).external;
+                }
+                return undefined;
+              },
+            );
         },
       });
     }
@@ -1937,26 +1978,33 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     cache,
     send(template, opts) {
       const name = resolveName(template);
-      return gated("send", name, async () => {
-        // Dry-run: record "would have fired" — never contact a real channel
-        // (console §9.1 · §9.3 · §9.4).
-        if (isDryRun()) {
-          recordWouldHaveFired("send", name);
+      let sendExternal: EffectExternal | undefined;
+      return gated(
+        "send",
+        name,
+        async () => {
+          // Dry-run: record "would have fired" — never contact a real channel
+          // (console §9.1 · §9.3 · §9.4).
+          if (isDryRun()) {
+            recordWouldHaveFired("send", name);
+            return { ok: true as const };
+          }
+          if (options.channelRuntime) {
+            const result = await options.channelRuntime.send(name, {
+              to: opts?.to ?? "",
+              data: opts?.data,
+              via: opts?.via?.map(resolveName),
+              locale: opts?.locale ?? locale,
+              profileLocale: opts?.profileLocale,
+              acceptLanguage: opts?.acceptLanguage,
+            });
+            sendExternal = result.external;
+            return { ok: result.ok as true };
+          }
           return { ok: true as const };
-        }
-        if (options.channelRuntime) {
-          const result = await options.channelRuntime.send(name, {
-            to: opts?.to ?? "",
-            data: opts?.data,
-            via: opts?.via?.map(resolveName),
-            locale: opts?.locale ?? locale,
-            profileLocale: opts?.profileLocale,
-            acceptLanguage: opts?.acceptLanguage,
-          });
-          return { ok: result.ok as true };
-        }
-        return { ok: true as const };
-      });
+        },
+        () => sendExternal,
+      );
     },
     sendOtp(opts) {
       return gated("send", "sms-otp", async () => {
@@ -2026,41 +2074,51 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     ask(prompt, input, opts) {
       const name = resolveName(prompt);
-      return gated("ask", name, async () => {
-        // Dry-run: stub the model call the same way as send.
-        if (isDryRun()) {
-          recordWouldHaveFired("ask", name);
-          return {};
-        }
-        if (options.aiRuntime) {
-          try {
-            return await options.aiRuntime.ask(name, input, {
-              via: opts?.via?.map(resolveName),
-              ...(opts?.timeout !== undefined ? { timeout: opts.timeout } : {}),
-              tools: opts?.tools?.map(resolveName),
-              maxSteps: opts?.maxSteps,
-              // Host fx.call — same capability / ledger / Runs path as any call.
-              callTool: (tool, toolInput) => fx.call(tool, toolInput),
-            });
-          } finally {
-            stampAskTelemetry(telemetry, options.aiRuntime, name);
+      return gated(
+        "ask",
+        name,
+        async () => {
+          // Dry-run: stub the model call the same way as send.
+          if (isDryRun()) {
+            recordWouldHaveFired("ask", name);
+            return {};
           }
-        }
-        throw new Error(`fx.ask: AI runtime is not configured for prompt "${name}"`);
-      });
+          if (options.aiRuntime) {
+            try {
+              return await options.aiRuntime.ask(name, input, {
+                via: opts?.via?.map(resolveName),
+                ...(opts?.timeout !== undefined ? { timeout: opts.timeout } : {}),
+                tools: opts?.tools?.map(resolveName),
+                maxSteps: opts?.maxSteps,
+                // Host fx.call — same capability / ledger / Runs path as any call.
+                callTool: (tool, toolInput) => fx.call(tool, toolInput),
+              });
+            } finally {
+              stampAskTelemetry(telemetry, options.aiRuntime, name);
+            }
+          }
+          throw new Error(`fx.ask: AI runtime is not configured for prompt "${name}"`);
+        },
+        () => options.aiRuntime?.lastExternal,
+      );
     },
     embed(model, text) {
       const name = resolveName(model);
-      return gated("embed", name, async () => {
-        if (isDryRun()) {
-          recordWouldHaveFired("embed", name);
-          return [];
-        }
-        if (options.aiRuntime && typeof options.aiRuntime.embedVector === "function") {
-          return options.aiRuntime.embedVector(name, text);
-        }
-        throw new Error(`fx.embed: AI runtime is not configured for model "${name}"`);
-      });
+      return gated(
+        "embed",
+        name,
+        async () => {
+          if (isDryRun()) {
+            recordWouldHaveFired("embed", name);
+            return [];
+          }
+          if (options.aiRuntime && typeof options.aiRuntime.embedVector === "function") {
+            return options.aiRuntime.embedVector(name, text);
+          }
+          throw new Error(`fx.embed: AI runtime is not configured for model "${name}"`);
+        },
+        () => options.aiRuntime?.lastExternal,
+      );
     },
     search(embed, query, opts) {
       const name = resolveName(embed);
@@ -2085,6 +2143,22 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         }
         return [];
       });
+    },
+    fetch(url, init) {
+      const href = typeof url === "string" ? url : url.href;
+      const host = hostFromFetchUrl(href);
+      return gated(
+        "fetch",
+        host,
+        async () => {
+          if (isDryRun()) {
+            recordWouldHaveFired("fetch", host);
+            return new Response(null, { status: 204 });
+          }
+          return globalThis.fetch(url, init);
+        },
+        { host, kind: "third-party" },
+      );
     },
     run(agent, input) {
       const name = resolveName(agent);

@@ -7,6 +7,7 @@
  */
 
 import type { MailOptions, SendResult, Transport, VerifyResult } from "sently";
+import type { DriverExternal } from "./external.ts";
 
 export type {
   Address,
@@ -185,6 +186,8 @@ export interface ChannelAttempt {
   readonly error?: string;
   readonly at: number;
   readonly messageId?: string;
+  /** Egress identity for this attempt when the call left the process. */
+  readonly external?: DriverExternal;
 }
 
 /** Result of a channel send including chain history. */
@@ -195,6 +198,8 @@ export interface ChannelSendResult {
   readonly attempts: readonly ChannelAttempt[];
   /** Present when an email transport returned a sently {@link SendResult}. */
   readonly mail?: SendResult;
+  /** Egress identity for the winning (or last) attempt. */
+  readonly external?: DriverExternal;
 }
 
 /** Medium-agnostic transport (sms / whatsapp / push / console). */
@@ -223,6 +228,11 @@ export interface ChannelDriver {
   readonly pushTransport?: PushTransport;
   /** Medium-agnostic transport. */
   readonly channel?: ChannelTransport;
+  /**
+   * Driver-reported egress identity for sends through this binding.
+   * Omitted for in-process console / local sinks.
+   */
+  readonly external?: DriverExternal;
 }
 
 /** Open options shared by channel drivers. */

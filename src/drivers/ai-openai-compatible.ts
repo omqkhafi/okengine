@@ -18,6 +18,8 @@ import type {
   AiStreamChunk,
   AiToolCall,
 } from "./ai-types.ts";
+import type { DriverExternal } from "./external.ts";
+import { hostFromUrl } from "./external.ts";
 
 /** Default OpenAI cloud base — apiKey is required for this origin. */
 export const OPENAI_COMPAT_DEFAULT_BASE = "https://api.openai.com/v1";
@@ -89,6 +91,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
   const fetchFn = options.fetch ?? globalThis.fetch;
   const extraHeaders = options.headers;
   preconnectFetch(fetchFn, baseUrl);
+  const externalBase = resolveOpenaiCompatibleExternal(baseUrl, options);
 
   return {
     driverId: "openai-compatible",
@@ -139,6 +142,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
           inputTokens: raw.usage?.prompt_tokens,
           outputTokens: raw.usage?.completion_tokens,
         },
+        ...(externalBase !== undefined ? { external: externalBase } : {}),
       };
     },
     async *stream(opts: AiCompleteOptions): AsyncIterable<AiStreamChunk> {
@@ -185,8 +189,34 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
         vectors,
         model: raw.model ?? resolvedModel,
         driverId: "openai-compatible",
+        ...(externalBase !== undefined ? { external: externalBase } : {}),
       };
     },
+  };
+}
+
+/**
+ * Build egress metadata from open options + the real request base URL.
+ *
+ * Kind comes from declare-time {@link AiOpenOptions.external} (or defaults to
+ * third-party for the OpenAI cloud base). Host is always the real request host.
+ *
+ * @param baseUrl - Normalized chat/embeddings base
+ * @param options - Open options
+ */
+function resolveOpenaiCompatibleExternal(
+  baseUrl: string,
+  options: AiOpenOptions,
+): DriverExternal | undefined {
+  const host = hostFromUrl(baseUrl);
+  if (!host) return undefined;
+  const kind = options.external?.kind ?? "third-party";
+  return {
+    host,
+    kind,
+    ...(options.external?.provider !== undefined
+      ? { provider: options.external.provider }
+      : {}),
   };
 }
 

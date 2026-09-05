@@ -55,6 +55,11 @@ export interface VaultBag {
   /** Protocol driver id. */
   readonly driverId: VaultDriverId;
   /**
+   * Egress identity when the bag was opened / mutated over the network.
+   * Omitted for `env` / `memory` / injected managed bags.
+   */
+  readonly external?: import("./external.ts").DriverExternal;
+  /**
    * Read a secret by name.
    *
    * @param name - Secret contract name

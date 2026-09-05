@@ -366,6 +366,11 @@ export interface SqlStoreHandle {
   /** Underlying driver id. */
   readonly driverId: SqlConnection["driverId"];
   /**
+   * Egress identity when the SQL connection leaves the process.
+   * Omitted for in-process drivers (`pglite`, `memory`).
+   */
+  readonly external?: SqlConnection["external"];
+  /**
    * Start a select. No-arg form infers the row from `.from(table)`.
    * A column map (`select({ clicks: links.clicks })`) stays {@link SqlRow}.
    *
@@ -758,6 +763,7 @@ export function createSqlStoreHandle(
     ref,
     routedRole: options.routedRole,
     driverId: connection.driverId,
+    ...(connection.external !== undefined ? { external: connection.external } : {}),
 
     select(columns?: unknown) {
       return {

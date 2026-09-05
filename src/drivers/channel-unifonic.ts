@@ -48,7 +48,12 @@ export function openUnifonicChannel(options: ChannelOpenOptions = {}): ChannelDr
     verify: () => transport.verify(),
   };
 
-  return { id: "unifonic", channel, smsTransport: transport };
+  return {
+    id: "unifonic",
+    channel,
+    smsTransport: transport,
+    external: { host: "el.cloud.unifonic.com", provider: "unifonic", kind: "third-party" },
+  };
 }
 
 /** Unifonic driver factory. */

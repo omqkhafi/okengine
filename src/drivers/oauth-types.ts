@@ -11,6 +11,8 @@
  * grants are never implemented.
  */
 
+import type { DriverExternal } from "./external.ts";
+
 /** Supported social providers. */
 export type OAuthDriverId =
   | "apple"
@@ -80,6 +82,8 @@ export interface OAuthExchangeInput {
 /** Result of {@link OAuthDriver.exchangeCode}. */
 export interface OAuthExchangeResult {
   readonly tokens: OAuthTokenSet;
+  /** Egress identity for the token endpoint call. */
+  readonly external?: DriverExternal;
 }
 
 /** Input to {@link OAuthDriver.resolveAssertion}. */

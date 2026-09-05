@@ -1,8 +1,8 @@
 /**
  * Dry-run effect stubbing + write isolation (console §9.1 · §9.3 · §9.4).
  *
- * - Irreversible effects (`send` / `ask` / `embed`) are intercepted and recorded as
- *   "would have fired" — never contact a real channel or model.
+ * - Irreversible effects (`send` / `ask` / `embed` / `fetch`) are intercepted and
+ *   recorded as "would have fired" — never contact a real channel, model, or URL.
  * - Store writes run against real data for an honest pass/fail verdict, then
  *   are always rolled back (snapshot / restore) when the dry-run scope exits.
  * - Drivers that cannot isolate writes throw {@link DryRunWriteIsolationError};
@@ -14,8 +14,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 /** One intercepted irreversible effect during a dry run. */
 export interface DryRunWouldHaveFired {
   /** Irreversible kind. */
-  readonly kind: "send" | "ask" | "embed";
-  /** Template / prompt / model name. */
+  readonly kind: "send" | "ask" | "embed" | "fetch";
+  /** Template / prompt / model / host name. */
   readonly resource: string;
   /** Optional correlating message id (signal dry-run). */
   readonly messageId?: string;
@@ -89,12 +89,15 @@ export function setDryRunMessageId(messageId: string): void {
 }
 
 /**
- * Record that a send/ask/embed would have fired. No-op outside dry-run.
+ * Record that a send/ask/embed/fetch would have fired. No-op outside dry-run.
  *
  * @param kind - Irreversible kind
- * @param resource - Template / prompt / embed-model name
+ * @param resource - Template / prompt / embed-model / host name
  */
-export function recordWouldHaveFired(kind: "send" | "ask" | "embed", resource: string): void {
+export function recordWouldHaveFired(
+  kind: "send" | "ask" | "embed" | "fetch",
+  resource: string,
+): void {
   const ctx = storage.getStore();
   if (!ctx) return;
   ctx.wouldHaveFired.push({

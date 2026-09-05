@@ -49,6 +49,11 @@ export interface SqlConnection {
   /** Primary vs replica. */
   readonly role: SqlRole;
   /**
+   * Egress identity when queries leave the process (remote Postgres).
+   * Omitted for in-process drivers (`pglite`, `memory`).
+   */
+  readonly external?: import("./external.ts").DriverExternal;
+  /**
    * Run a parameterised query and return rows.
    *
    * @param sql - SQL text with `?` placeholders
@@ -338,6 +343,8 @@ export interface TextIndexSearchResult {
 /** Full-text index handle. */
 export interface TextIndexStore {
   readonly driverId: "meilisearch";
+  /** Egress identity for Meilisearch HTTP calls. */
+  readonly external?: import("./external.ts").DriverExternal;
   /**
    * Upsert a document.
    *

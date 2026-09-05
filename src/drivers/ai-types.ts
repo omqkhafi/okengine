@@ -5,6 +5,8 @@
  * Dev default is `mock`. There is **no** production default — prod must declare.
  */
 
+import type { DriverExternal } from "./external.ts";
+
 /** Protocol ids for AI model drivers. */
 export type AiDriverId =
   | "mock"
@@ -65,6 +67,8 @@ export interface AiCompleteResult {
     readonly outputTokens?: number;
     readonly cost?: number;
   };
+  /** Egress identity when the completion left the process. */
+  readonly external?: DriverExternal;
 }
 
 /** One streamed token / delta from a model. */
@@ -84,6 +88,8 @@ export interface AiEmbedResult {
   readonly vectors: readonly (readonly number[])[];
   readonly model: string;
   readonly driverId: AiDriverId;
+  /** Egress identity when the embed left the process. */
+  readonly external?: DriverExternal;
 }
 
 /** Opened model client. */
@@ -114,6 +120,15 @@ export interface AiOpenOptions {
   /** Mock canned responses keyed by prompt name or substring. */
   readonly mockResponses?: Readonly<Record<string, unknown>>;
   readonly fetch?: typeof globalThis.fetch;
+  /**
+   * Driver-reported egress classification for ledger entries.
+   * Set by the AI element from declare-time provider identity — never guessed
+   * by hostname regex inside the driver.
+   */
+  readonly external?: {
+    readonly kind: "third-party" | "infrastructure";
+    readonly provider?: string;
+  };
 }
 
 /** AI model driver factory. */

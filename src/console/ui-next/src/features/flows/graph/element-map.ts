@@ -225,9 +225,11 @@ export function elementsOfRun(run: RunRow): readonly OkeElement[] {
         out.add("signal");
         break;
       case "send":
+      case "fetch":
         out.add("channel");
         break;
       case "ask":
+      case "embed":
         out.add("ai");
         break;
       case "secret":

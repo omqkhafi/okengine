@@ -12,6 +12,7 @@ import type {
   AiModelClient,
   AiOpenOptions,
 } from "./ai-types.ts";
+import { hostFromUrl } from "./external.ts";
 
 const DEFAULT_BASE = "https://api.anthropic.com";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -33,6 +34,14 @@ export async function openAnthropic(options: AiOpenOptions = {}): Promise<AiMode
   if (typeof preconnect === "function") {
     preconnect(baseUrl);
   }
+  const host = hostFromUrl(baseUrl);
+  const external = host
+    ? {
+        host,
+        kind: options.external?.kind ?? ("third-party" as const),
+        provider: options.external?.provider ?? "anthropic",
+      }
+    : undefined;
 
   return {
     driverId: "anthropic",
@@ -71,6 +80,7 @@ export async function openAnthropic(options: AiOpenOptions = {}): Promise<AiMode
           inputTokens: raw.usage?.input_tokens,
           outputTokens: raw.usage?.output_tokens,
         },
+        ...(external !== undefined ? { external } : {}),
       };
     },
   };

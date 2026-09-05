@@ -82,7 +82,9 @@ function flattenEffects(effects: Effects | undefined): EffectChip[] {
   push("emit", effects.emits);
   push("send", effects.sends);
   push("ask", effects.asks);
+  push("embed", effects.embeds);
   push("secret", effects.secrets);
   push("call", effects.calls);
+  push("fetch", effects.fetches);
   return out;
 }

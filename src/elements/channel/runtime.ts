@@ -18,6 +18,7 @@ import type {
   ChannelSendResult,
   SmsOtpTransport,
 } from "../../drivers/channel-types.ts";
+import type { DriverExternal } from "../../drivers/external.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
 import { emitBootWarn } from "../../runtime/boot-warn.ts";
 import type { ConsentStore } from "./consent.ts";
@@ -49,6 +50,33 @@ export type TemplateCatalog = Readonly<
     >
   >
 >;
+
+/**
+ * Resolve driver-reported egress for a provider label in a fallback chain.
+ *
+ * @param drivers - Ordered driver chain
+ * @param provider - Provider / driver id that handled (or failed) the attempt
+ * @param index - Optional transport index when known
+ */
+function externalForChannelProvider(
+  drivers: readonly ChannelDriver[],
+  provider: string,
+  index?: number,
+): DriverExternal | undefined {
+  if (typeof index === "number") {
+    const at = drivers[index]?.external;
+    if (at) return at;
+  }
+  const match = drivers.find(
+    (d) =>
+      d.id === provider ||
+      d.external?.provider === provider ||
+      d.transport?.provider === provider ||
+      d.smsTransport?.provider === provider ||
+      d.channel?.provider === provider,
+  );
+  return match?.external;
+}
 
 /** Options for {@link createChannelRuntime}. */
 export interface CreateChannelRuntimeOptions {
@@ -266,27 +294,32 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
         const provider =
           transports[failedIndex]?.provider ?? chain[failedIndex]?.id ?? `driver-${failedIndex}`;
         recorded.push({ provider, error });
+        const external = externalForChannelProvider(chain, provider, failedIndex);
         attempts.push({
           driverId: provider,
           ok: false,
           error: error instanceof Error ? error.message : String(error),
           at: now(),
+          ...(external !== undefined ? { external } : {}),
         });
       },
     });
 
     try {
       const mailResult = await fallback.send(mail);
+      const providerIndex = mailResult.providerIndex ?? 0;
       const driverId =
         mailResult.provider ??
-        transports[mailResult.providerIndex ?? 0]?.provider ??
+        transports[providerIndex]?.provider ??
         chain[0]?.id ??
         "email";
+      const external = externalForChannelProvider(chain, driverId, providerIndex);
       attempts.push({
         driverId,
         ok: true,
         at: now(),
         messageId: mailResult.messageId,
+        ...(external !== undefined ? { external } : {}),
       });
       return {
         result: {
@@ -295,6 +328,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           driverId,
           attempts,
           mail: mailResult,
+          ...(external !== undefined ? { external } : {}),
         },
         attempts,
       };
@@ -308,30 +342,37 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           : recorded;
       for (const a of fbAttempts) {
         if (!attempts.some((x) => x.driverId === a.provider && !x.ok)) {
+          const external = externalForChannelProvider(chain, a.provider);
           attempts.push({
             driverId: a.provider,
             ok: false,
             error: a.error instanceof Error ? a.error.message : String(a.error),
             at: now(),
+            ...(external !== undefined ? { external } : {}),
           });
         }
       }
       // Permanent client errors abort failover by rethrowing the original error
       // (no FallbackError.attempts / onFallback) — still record the failed try.
       if (attempts.length === 0) {
+        const driverId = transports[0]?.provider ?? chain[0]?.id ?? "email";
+        const external = externalForChannelProvider(chain, driverId, 0);
         attempts.push({
-          driverId: transports[0]?.provider ?? chain[0]?.id ?? "email",
+          driverId,
           ok: false,
           error: err instanceof Error ? err.message : String(err),
           at: now(),
+          ...(external !== undefined ? { external } : {}),
         });
       }
+      const lastExternal = attempts[attempts.length - 1]?.external;
       return {
         result: {
           ok: false,
           messageId: crypto.randomUUID(),
           driverId: "fallback",
           attempts,
+          ...(lastExternal !== undefined ? { external: lastExternal } : {}),
         },
         attempts,
       };
@@ -361,11 +402,17 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       onFallback(failedIndex, error) {
         const provider =
           transports[failedIndex]?.provider ?? sms[failedIndex]?.driver.id ?? `sms-${failedIndex}`;
+        const external = externalForChannelProvider(
+          sms.map((s) => s.driver),
+          provider,
+          failedIndex,
+        );
         attempts.push({
           driverId: provider,
           ok: false,
           error: error instanceof Error ? error.message : String(error),
           at: now(),
+          ...(external !== undefined ? { external } : {}),
         });
       },
     });
@@ -378,16 +425,20 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
 
     try {
       const sendResult = await fallback.send(body);
+      const providerIndex = sendResult.providerIndex ?? 0;
       const driverId =
         sendResult.provider ??
-        transports[sendResult.providerIndex ?? 0]?.provider ??
+        transports[providerIndex]?.provider ??
         sms[0]?.driver.id ??
         "sms";
+      const smsDrivers = sms.map((s) => s.driver);
+      const external = externalForChannelProvider(smsDrivers, driverId, providerIndex);
       attempts.push({
         driverId,
         ok: true,
         at: now(),
         messageId: sendResult.messageId,
+        ...(external !== undefined ? { external } : {}),
       });
       return {
         result: {
@@ -395,10 +446,12 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           messageId: sendResult.messageId,
           driverId,
           attempts,
+          ...(external !== undefined ? { external } : {}),
         },
         attempts,
       };
     } catch (err) {
+      const smsDrivers = sms.map((s) => s.driver);
       const fbAttempts =
         err &&
         typeof err === "object" &&
@@ -408,28 +461,35 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           : [];
       for (const a of fbAttempts) {
         if (!attempts.some((x) => x.driverId === a.provider && !x.ok)) {
+          const external = externalForChannelProvider(smsDrivers, a.provider);
           attempts.push({
             driverId: a.provider,
             ok: false,
             error: a.error instanceof Error ? a.error.message : String(a.error),
             at: now(),
+            ...(external !== undefined ? { external } : {}),
           });
         }
       }
       if (attempts.length === 0) {
+        const driverId = transports[0]?.provider ?? sms[0]?.driver.id ?? "sms";
+        const external = externalForChannelProvider(smsDrivers, driverId, 0);
         attempts.push({
-          driverId: transports[0]?.provider ?? sms[0]?.driver.id ?? "sms",
+          driverId,
           ok: false,
           error: err instanceof Error ? err.message : String(err),
           at: now(),
+          ...(external !== undefined ? { external } : {}),
         });
       }
+      const lastExternal = attempts[attempts.length - 1]?.external;
       return {
         result: {
           ok: false,
           messageId: crypto.randomUUID(),
           driverId: "fallback",
           attempts,
+          ...(lastExternal !== undefined ? { external: lastExternal } : {}),
         },
         attempts,
       };
@@ -450,10 +510,21 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       if (!d.channel) continue;
       try {
         const r = await d.channel.send(message);
-        attempts.push(...r.attempts);
+        const stampedAttempts = r.attempts.map((a) => ({
+          ...a,
+          ...(a.external === undefined && d.external !== undefined
+            ? { external: d.external }
+            : {}),
+        }));
+        attempts.push(...stampedAttempts);
         if (r.ok) {
+          const external = r.external ?? d.external;
           return {
-            result: { ...r, attempts: [...attempts] },
+            result: {
+              ...r,
+              attempts: [...attempts],
+              ...(external !== undefined ? { external } : {}),
+            },
             attempts,
           };
         }
@@ -463,6 +534,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           ok: false,
           error: err instanceof Error ? err.message : String(err),
           at: now(),
+          ...(d.external !== undefined ? { external: d.external } : {}),
         });
       }
     }

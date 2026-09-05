@@ -484,6 +484,7 @@ export function TraceDetailSheet({
                             data-slot="trace-event-row"
                             data-index={index}
                             data-focused={focused ? "true" : "false"}
+                            data-external={effect.external ? "true" : undefined}
                             className={cn(
                               EXPLORER_ROW_CLASS,
                               "cursor-pointer flex-col items-stretch gap-1 text-[11px]",
@@ -510,6 +511,9 @@ export function TraceDetailSheet({
                               </span>
                               <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
                                 {effect.resource}
+                                {effect.external
+                                  ? ` · ↗ ${effect.external.host}${effect.external.kind ? ` (${effect.external.kind})` : ""}`
+                                  : ""}
                               </span>
                               <span className="shrink-0 tabular-nums text-muted-foreground">
                                 {formatDuration(effect.duration)}
@@ -815,6 +819,7 @@ function OverviewTrack({
                     "absolute inset-y-0.5 cursor-pointer rounded-full transition-opacity",
                     hoverIndex !== null && hoverIndex !== bar.index && !focused && "opacity-35",
                     focused && "ring-1 ring-foreground/40",
+                    bar.external && "outline outline-1 outline-dashed outline-foreground/50",
                   )}
                   style={{
                     left: `${mapped.left * 100}%`,
@@ -822,6 +827,7 @@ function OverviewTrack({
                     backgroundColor: effectBarColor(bar.kind),
                   }}
                   data-slot="trace-waterfall-overview-bar"
+                  data-external={bar.external ? "true" : undefined}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSelect?.(bar.index);
@@ -995,6 +1001,7 @@ function PlaybackBarFill({
         "absolute inset-y-0 rounded-full transition-opacity",
         !animated && dimmed && !focused && "opacity-35",
         focused && "ring-1 ring-foreground/40",
+        bar.external && "outline outline-1 outline-dashed outline-foreground/50",
       )}
       style={{
         left: `${left * 100}%`,
@@ -1004,6 +1011,7 @@ function PlaybackBarFill({
         ...(animated ? { scaleX, opacity } : {}),
       }}
       data-slot={slot}
+      data-external={bar.external ? "true" : undefined}
     />
   );
 }

@@ -45,6 +45,7 @@ const KIND_ORDER: readonly RunEffectKind[] = [
   "ask",
   "embed",
   "send",
+  "fetch",
   "secret",
 ];
 
@@ -205,6 +206,7 @@ export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): 
     embed: "Embed",
     secret: "Secret",
     call: "Call",
+    fetch: "Fetch",
   };
   return labels[effect.kind];
 }

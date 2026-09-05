@@ -525,7 +525,7 @@ export interface ConsoleLiveRun {
 
 /** Effect entry on a live run row. */
 export interface ConsoleLiveRunEffect {
-  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "embed" | "secret" | "call";
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "embed" | "secret" | "call" | "fetch";
   readonly resource: string;
   readonly timestamp: number;
   readonly duration: number;
@@ -536,6 +536,11 @@ export interface ConsoleLiveRunEffect {
     | "irreversible"
     | "capability"
     | "portal";
+  readonly external?: {
+    readonly host: string;
+    readonly provider?: string;
+    readonly kind?: "third-party" | "infrastructure";
+  };
 }
 
 /** Log line on a live run row. */

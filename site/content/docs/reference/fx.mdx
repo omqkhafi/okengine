@@ -10,8 +10,9 @@ whole surface; each entry notes the **effect it records**, which feeds the Manif
 and capability checks.
 
 <Callout title="The one rule">
-  All world access goes through `fx`. No `node:` I/O, no raw `fetch` for side effects, no
-  `Date.now()` — clocks, stores, channels, vault, and AI only through this object.
+  All world access goes through `fx`. No `node:` I/O, no raw `fetch` for side effects
+  (use `fx.fetch` instead), no `Date.now()` — clocks, stores, channels, vault, AI, and
+  outbound HTTP only through this object.
 </Callout>
 
 ## Smallest Example
@@ -211,6 +212,17 @@ const rows = await fx.using(
 Omit locale opts and the send uses `fx.locale`. Dry runs record _would have fired_ and never
 contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Channel](/docs/elements/channel)).
 
+## Outbound HTTP
+
+| Signature | Records | Notes |
+| --- | --- | --- |
+| `fx.fetch(url, init?)` | `fetch` on the URL hostname | Always stamps `EffectEntry.external` with `{ host, kind: "third-party" }` |
+
+Declare hosts in `effects.fetches` (e.g. `["api.stripe.com"]`). Prefer wrapping inside
+`fx.step`; use `fx.retry` only when the remote API is safe to repeat. Dry runs stub the
+call and never hit the network. Use this for third-party REST that is not covered by
+Channel / AI / Store drivers — not as a substitute for those elements.
+
 ## AI
 
 | Signature                                             | Records                   | Returns                                                                                                  |
@@ -221,6 +233,10 @@ contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Ch
 | `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                                             |
 
 AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them. `tools` are Flow refs — each model tool call goes through `fx.call` (same capability and Runs path).
+
+Driver-reported `EffectEntry.external` marks cloud providers as `third-party` and
+self-hosted / `provider: "local"` bindings as `infrastructure` — visible on Console
+trace waterfalls (dashed egress outline + host in the tooltip).
 
 ## Vault
 
@@ -313,10 +329,11 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
 
 <Accordions>
 
-<Accordion title="OKE1001–1007 undeclared effect">
+<Accordion title="OKE1001–1007 / 1015 / 1019 undeclared effect">
   An explicit `effects` block drifted from what `do` touches. Add the missing
-  ledger entry, or drop the hand-written block so inference covers the Flow —
-  see [Errors](/docs/reference/errors).
+  ledger entry (`reads` · `writes` · `emits` · `sends` · `asks` · `embeds` ·
+  `secrets` · `calls` · `fetches`), or drop the hand-written block so inference
+  covers the Flow — see [Errors](/docs/reference/errors).
 </Accordion>
 
 <Accordion title="OKE1042 orphan emit">

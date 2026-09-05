@@ -15,7 +15,11 @@ export function openResendChannel(options: ChannelOpenOptions = {}): ChannelDriv
     throw new Error("resend channel: apiKey is required");
   }
   const transport = new ResendTransport({ apiKey: options.apiKey });
-  return { id: "resend", transport };
+  return {
+    id: "resend",
+    transport,
+    external: { host: "api.resend.com", provider: "resend", kind: "third-party" },
+  };
 }
 
 /** Resend driver factory. */

@@ -150,7 +150,7 @@ export interface SignalReplayMessageResult {
 
 /** Irreversible effect intercepted during a dry-run replay. */
 export interface SignalDryRunStub {
-  readonly kind: "send" | "ask" | "embed";
+  readonly kind: "send" | "ask" | "embed" | "fetch";
   readonly resource: string;
   readonly messageId?: string;
 }

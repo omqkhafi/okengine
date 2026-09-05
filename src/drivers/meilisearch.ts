@@ -21,6 +21,7 @@ import type {
   TextIndexSearchResult,
   TextIndexStore,
 } from "./types.ts";
+import { hostFromUrl } from "./external.ts";
 
 /** Error thrown when the remote Meilisearch is unreachable / unhealthy / errors. */
 export class MeilisearchUnavailableError extends Error {
@@ -195,6 +196,11 @@ export async function openMeilisearchIndex(
 
   return {
     driverId: "meilisearch",
+    external: {
+      host: hostFromUrl(url) ?? "meilisearch",
+      provider: "meilisearch",
+      kind: "infrastructure",
+    },
     async upsert(id, document) {
       const body = [{ ...document, id }];
       const task = await enqueue(`/indexes/${uid}/documents`, {

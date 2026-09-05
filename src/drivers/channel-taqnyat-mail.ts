@@ -24,7 +24,7 @@ export function openTaqnyatMailChannel(options: ChannelOpenOptions = {}): Channe
     throw new Error("taqnyat-mail channel: campaignName is required");
   }
   const transport = new TaqnyatMailTransport({ bearerToken, campaignName });
-  return { id: "taqnyat-mail", transport };
+  return { id: "taqnyat-mail", transport, external: { host: "api.taqnyat.sa", provider: "taqnyat-mail", kind: "third-party" } };
 }
 
 /** Taqnyat Email driver factory. */

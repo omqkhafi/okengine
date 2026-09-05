@@ -56,7 +56,12 @@ export function openWaCloudChannel(options: ChannelOpenOptions = {}): ChannelDri
     verify: () => transport.verify(),
   };
 
-  return { id: "wa-cloud", channel, whatsappTransport: transport };
+  return {
+    id: "wa-cloud",
+    channel,
+    whatsappTransport: transport,
+    external: { host: "graph.facebook.com", provider: "wa-cloud", kind: "third-party" },
+  };
 }
 
 /** WhatsApp Cloud driver factory. */

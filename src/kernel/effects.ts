@@ -7,7 +7,7 @@
 
 import { resolveDurationMs } from "./elapsed.ts";
 
-/** The eight load-bearing effect kinds (manifest `effects` keys, singular). */
+/** Load-bearing effect kinds (manifest `effects` keys, singular). */
 export type EffectKind =
   | "read"
   | "write"
@@ -16,7 +16,8 @@ export type EffectKind =
   | "ask"
   | "embed"
   | "secret"
-  | "call";
+  | "call"
+  | "fetch";
 
 /**
  * Reversibility tier — console §9.1 ranking, applied to all effect kinds.
@@ -24,7 +25,7 @@ export type EffectKind =
  * - `none` — reads; no world change
  * - `reversible` — writes; undoable in-transaction
  * - `deferred` — emits; commit with the txn, then fan-out
- * - `irreversible` — sends / asks / embeds; cannot be undone by the runtime
+ * - `irreversible` — sends / asks / embeds / fetches; cannot be undone by the runtime
  * - `capability` — secrets; authority held, not an effect caused
  * - `portal` — calls; expands to the callee's transitive effects
  */
@@ -36,11 +37,22 @@ export type ReversibilityTier =
   | "capability"
   | "portal";
 
+/**
+ * Optional egress identity for an effect that left the process.
+ *
+ * Driver-reported — never inferred from hostname patterns. Only `host` is
+ * required when present; `provider` and `kind` are additive precision.
+ *
+ * Re-exported from drivers so kernel and driver contracts share one shape.
+ */
+export type { DriverExternal as EffectExternal } from "../drivers/external.ts";
+import type { DriverExternal as EffectExternal } from "../drivers/external.ts";
+
 /** One recorded effect call. */
 export interface EffectEntry {
-  /** Which of the eight kinds. */
+  /** Which effect kind. */
   readonly kind: EffectKind;
-  /** Resource / signal / template / prompt / embed-model / secret / flow ref. */
+  /** Resource / signal / template / prompt / embed-model / secret / flow / host ref. */
   readonly resource: string;
   /** Epoch-ms when the call started. */
   readonly timestamp: number;
@@ -48,6 +60,11 @@ export interface EffectEntry {
   readonly duration: number;
   /** Reversibility tier for {@link kind}. */
   readonly reversibility: ReversibilityTier;
+  /**
+   * When set, this effect left the process and reached an external peer.
+   * Omitted for in-process work (PGlite, mock AI, local channel console).
+   */
+  readonly external?: EffectExternal;
 }
 
 /** Append-only ledger of effect entries for one flow invocation. */
@@ -74,12 +91,13 @@ const TIER_BY_KIND: Readonly<Record<EffectKind, ReversibilityTier>> = {
   embed: "irreversible",
   secret: "capability",
   call: "portal",
+  fetch: "irreversible",
 };
 
 /**
  * Reversibility tier for an effect kind.
  *
- * @param kind - One of the eight effect kinds
+ * @param kind - One of the effect kinds
  */
 export function reversibilityOf(kind: EffectKind): ReversibilityTier {
   return TIER_BY_KIND[kind];
@@ -114,6 +132,7 @@ export function createEffectLedger(): EffectLedger {
  * @param resource - Resource ref
  * @param now - Clock (injectable for tests)
  * @param body - Work to time
+ * @param externalOf - Optional egress metadata (static or derived from result / error)
  */
 export async function recordEffect<T>(
   ledger: EffectLedger,
@@ -121,18 +140,30 @@ export async function recordEffect<T>(
   resource: string,
   now: () => number,
   body: () => T | Promise<T>,
+  externalOf?:
+    | EffectExternal
+    | ((result: T | undefined, error: unknown) => EffectExternal | undefined),
 ): Promise<T> {
   const timestamp = now();
   const t0 = performance.now();
+  let result: T | undefined;
+  let error: unknown;
   try {
-    return await body();
+    result = await body();
+    return result;
+  } catch (e) {
+    error = e;
+    throw e;
   } finally {
+    const external =
+      typeof externalOf === "function" ? externalOf(result, error) : externalOf;
     recordObservedEffect(
       ledger,
       kind,
       resource,
       timestamp,
       resolveDurationMs(now() - timestamp, performance.now() - t0),
+      external,
     );
   }
 }
@@ -148,6 +179,7 @@ export async function recordEffect<T>(
  * @param resource - Resource ref (or kernel cache key)
  * @param timestamp - Epoch-ms when the call started
  * @param duration - Measured duration in milliseconds
+ * @param external - Optional egress identity
  */
 export function recordObservedEffect(
   ledger: EffectLedger,
@@ -155,6 +187,7 @@ export function recordObservedEffect(
   resource: string,
   timestamp: number,
   duration: number,
+  external?: EffectExternal,
 ): void {
   ledger.record({
     kind,
@@ -162,11 +195,12 @@ export function recordObservedEffect(
     timestamp,
     duration,
     reversibility: reversibilityOf(kind),
+    ...(external !== undefined ? { external } : {}),
   });
 }
 
 /**
- * All seven kinds with their tiers — useful for exhaustive tests.
+ * All effect kinds with their tiers — useful for exhaustive tests.
  */
 export const EFFECT_KIND_TIERS: ReadonlyArray<{
   kind: EffectKind;

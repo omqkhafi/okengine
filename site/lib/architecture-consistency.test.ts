@@ -92,7 +92,7 @@ describe("Architecture & Positioning Consistency Gate", () => {
   });
 
   it("enforces observable effects definition", () => {
-    expect(CANONICAL_EFFECTS.length).toBe(7);
+    expect(CANONICAL_EFFECTS.length).toBe(9);
     const kinds = CANONICAL_EFFECTS.map((e) => e.kind);
     expect(kinds).toEqual(["read", "write", "emit", "send", "ask", "secret", "call"]);
   });

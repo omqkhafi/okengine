@@ -72,7 +72,12 @@ export function openFcmChannel(options: ChannelOpenOptions = {}): ChannelDriver 
     verify: () => transport.verify(),
   };
 
-  return { id: "fcm", channel, pushTransport: transport };
+  return {
+    id: "fcm",
+    channel,
+    pushTransport: transport,
+    external: { host: "fcm.googleapis.com", provider: "fcm", kind: "third-party" },
+  };
 }
 
 /** FCM driver factory. */

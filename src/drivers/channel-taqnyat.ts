@@ -47,7 +47,7 @@ export function openTaqnyatChannel(options: ChannelOpenOptions = {}): ChannelDri
     verify: () => transport.verify(),
   };
 
-  return { id: "taqnyat", channel, smsTransport: transport };
+  return { id: "taqnyat", channel, smsTransport: transport, external: { host: "api.taqnyat.sa", provider: "taqnyat", kind: "third-party" } };
 }
 
 /** Taqnyat driver factory. */

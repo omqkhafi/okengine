@@ -5,6 +5,7 @@
  */
 
 import type { SqlConnectOptions, SqlConnection, SqlDriver, SqlRole, SqlRow } from "./types.ts";
+import { hostFromUrl } from "./external.ts";
 
 /** Bun.SQL client checked out via {@link PostgresClientLike.reserve}. */
 export interface PostgresReservedClient extends PostgresClientLike {
@@ -290,6 +291,7 @@ export async function connectPostgres(options: SqlConnectOptions = {}): Promise<
       : sharedPostgresClient(options.url));
   return wrapPostgresClient(client, role, {
     shared: injected === undefined && !dedicated,
+    ...(options.url !== undefined ? { url: options.url } : {}),
   });
 }
 
@@ -308,11 +310,19 @@ function dedicatedPostgresClient(url: string): PostgresClientLike {
 function wrapPostgresClient(
   client: PostgresClientLike,
   role: SqlRole,
-  opts: { readonly shared?: boolean; readonly pinned?: boolean } = {},
+  opts: {
+    readonly shared?: boolean;
+    readonly pinned?: boolean;
+    readonly url?: string;
+  } = {},
 ): SqlConnection {
+  const host = opts.url ? hostFromUrl(opts.url) : undefined;
   const connection: SqlConnection = {
     driverId: "postgres",
     role,
+    ...(host !== undefined
+      ? { external: { host, provider: "postgres", kind: "infrastructure" as const } }
+      : {}),
     async query(sql, params = []) {
       // Shared wrappers outlive pause — fail soft before Bun.SQL reconnects.
       if (opts.shared) assertSharedPostgresReady();

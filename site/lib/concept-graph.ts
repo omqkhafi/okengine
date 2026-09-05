@@ -94,8 +94,10 @@ export const CANONICAL_EFFECTS = [
   { kind: "emit", target: "Signal outbox with parentRunId trace stamps" },
   { kind: "send", target: "Channel templates and provider/app OTP delivery" },
   { kind: "ask", target: "AI prompt evaluations, agent executions, model token streaming" },
+  { kind: "embed", target: "AI embedding model calls" },
   { kind: "secret", target: "Vault contract resolutions and redacted key reads" },
   { kind: "call", target: "Flow-to-flow composition and external MCP tool invocations" },
+  { kind: "fetch", target: "Arbitrary outbound HTTP via fx.fetch" },
 ] as const;
 
 export type CanonicalEffectKind = (typeof CANONICAL_EFFECTS)[number]["kind"];

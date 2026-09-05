@@ -84,7 +84,12 @@ export function openTaqnyatWhatsAppChannel(options: ChannelOpenOptions = {}): Ch
     verify: () => transport.verify(),
   };
 
-  return { id: "taqnyat-whatsapp", channel, whatsappTransport: transport };
+  return {
+    id: "taqnyat-whatsapp",
+    channel,
+    whatsappTransport: transport,
+    external: { host: "api.taqnyat.sa", provider: "taqnyat-whatsapp", kind: "third-party" },
+  };
 }
 
 /** Taqnyat WhatsApp driver factory. */

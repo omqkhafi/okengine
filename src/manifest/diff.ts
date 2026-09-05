@@ -51,6 +51,7 @@ const EFFECT_KEYS = [
   "embeds",
   "secrets",
   "calls",
+  "fetches",
 ] as const;
 
 /** Isolation strength: higher = stronger tenant separation. */

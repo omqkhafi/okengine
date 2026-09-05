@@ -10,7 +10,7 @@ import {
 } from "./effects.ts";
 
 describe("effects — reversibility tiers", () => {
-  test("all eight effect kinds have the correct reversibility tier", () => {
+  test("all effect kinds have the correct reversibility tier", () => {
     const expected: Record<EffectKind, ReversibilityTier> = {
       read: "none",
       write: "reversible",
@@ -20,9 +20,10 @@ describe("effects — reversibility tiers", () => {
       embed: "irreversible",
       secret: "capability",
       call: "portal",
+      fetch: "irreversible",
     };
 
-    expect(EFFECT_KIND_TIERS).toHaveLength(8);
+    expect(EFFECT_KIND_TIERS).toHaveLength(9);
     for (const { kind, reversibility } of EFFECT_KIND_TIERS) {
       expect(reversibility).toBe(expected[kind]);
       expect(reversibilityOf(kind)).toBe(expected[kind]);

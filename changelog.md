@@ -14,8 +14,22 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+#### Console — Flows & traces
+
+- Trace waterfall marks egress effects with a dashed outline when
+  `EffectEntry.external` is present; tooltips and event rows show host /
+  provider / `third-party` vs `infrastructure`.
+
 #### Runtime
 
+- **`EffectEntry.external`** — optional `{ host, provider?, kind?: "third-party" | "infrastructure" }`
+  on ledger entries when an effect left the process. Driver-reported (Channel failover,
+  AI complete/embed, Store network facets); never hostname-guessed at the ledger layer.
+  In-process drivers (PGlite, mock AI, console Channel) omit the field.
+- **`fx.fetch(url, init?)`** — first-class outbound HTTP through `fx` (EffectKind `"fetch"`,
+  Manifest `effects.fetches` host refs, dry-run stub, `UNDECLARED_FETCH` / OKE1019). Always
+  stamps `external: { host, kind: "third-party" }`. Compose with `fx.step` / `fx.retry` like
+  other irreversible effects.
 - Browser JSON page: **Request** rail leveled to Console Call API dock IA —
   Routes fill the top as primary nav; Params · Body · Cookies · Headers · Path
   sit in a docked **Request** strip (Reset · **Send**). Body supports **Form**
@@ -70,6 +84,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- `fx` reference documents `fx.fetch`, `effects.fetches`, and driver-reported
+  `EffectEntry.external` (third-party vs infrastructure) on traces.
 - Vault overview notes create-oke Notes `src/vault.ts` contracts +
   `oke({ secrets: NOTES_VAULT })` so Console lists secrets and configs while
   values stay in `.env.local` / built-in vault / `oke vault set`.

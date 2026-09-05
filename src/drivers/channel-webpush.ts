@@ -68,7 +68,12 @@ export function openWebPushChannel(options: ChannelOpenOptions = {}): ChannelDri
     close: () => sender.close(),
   };
 
-  return { id: "webpush", channel, pushTransport: transport };
+  return {
+    id: "webpush",
+    channel,
+    pushTransport: transport,
+    external: { host: "webpush", provider: "webpush", kind: "third-party" },
+  };
 }
 
 /** Web Push driver factory. */

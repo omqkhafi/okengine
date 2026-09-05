@@ -92,11 +92,18 @@ const ManifestOut = z.object({
 });
 
 const EffectEntryOut = z.object({
-  kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call"]),
+  kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call", "fetch"]),
   resource: z.string(),
   timestamp: z.number(),
   duration: z.number(),
   reversibility: z.enum(["none", "reversible", "deferred", "irreversible", "capability", "portal"]),
+  external: z
+    .object({
+      host: z.string(),
+      provider: z.string().optional(),
+      kind: z.enum(["third-party", "infrastructure"]).optional(),
+    })
+    .optional(),
 });
 
 const LogLineOut = z.object({
@@ -259,7 +266,7 @@ const SignalsReplayOut = z.object({
   ),
   wouldHaveFired: z.array(
     z.object({
-      kind: z.enum(["send", "ask", "embed"]),
+      kind: z.enum(["send", "ask", "embed", "fetch"]),
       resource: z.string(),
       messageId: z.string().optional(),
     }),
@@ -893,7 +900,7 @@ const AiListOut = z.object({
           status: z.enum(["ok", "denied"]),
           effects: z.array(
             z.object({
-              kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call"]),
+              kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call", "fetch"]),
               resource: z.string(),
             }),
           ),
@@ -1541,7 +1548,7 @@ const StoreEditOut = z.object({
   willNotFire: WillNotFireOut,
   wouldHaveFired: z.array(
     z.object({
-      kind: z.enum(["send", "ask", "embed"]),
+      kind: z.enum(["send", "ask", "embed", "fetch"]),
       resource: z.string(),
     }),
   ),
@@ -1754,7 +1761,7 @@ const StorePreviewOut = z.object({
   willNotFire: WillNotFireOut,
   wouldHaveFired: z.array(
     z.object({
-      kind: z.enum(["send", "ask", "embed"]),
+      kind: z.enum(["send", "ask", "embed", "fetch"]),
       resource: z.string(),
     }),
   ),
@@ -2304,6 +2311,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
       timestamp: e.timestamp,
       duration: e.duration,
       reversibility: e.reversibility,
+      ...(e.external !== undefined ? { external: e.external } : {}),
     })),
     logs: masked.logs.map((line) => ({
       level: line.level,

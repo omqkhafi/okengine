@@ -16,7 +16,9 @@ export function isReadSafeCall(row: UnitFlowRow): boolean {
     (effects.writes?.length ?? 0) === 0 &&
     (effects.emits?.length ?? 0) === 0 &&
     (effects.sends?.length ?? 0) === 0 &&
-    (effects.asks?.length ?? 0) === 0
+    (effects.asks?.length ?? 0) === 0 &&
+    (effects.embeds?.length ?? 0) === 0 &&
+    (effects.fetches?.length ?? 0) === 0
   );
 }
 

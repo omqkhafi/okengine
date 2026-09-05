@@ -20,6 +20,7 @@ const UNDECLARED_KEY: Readonly<Record<EffectKind, keyof typeof OKE_ERRORS>> = {
   embed: "UNDECLARED_EMBED",
   secret: "UNDECLARED_SECRET",
   call: "UNDECLARED_CALL",
+  fetch: "UNDECLARED_FETCH",
 };
 
 /** Maps effect kind → the corresponding `Effects` field. */
@@ -32,6 +33,7 @@ const EFFECTS_FIELD: Readonly<Record<EffectKind, keyof Effects>> = {
   embed: "embeds",
   secret: "secrets",
   call: "calls",
+  fetch: "fetches",
 };
 
 /**
@@ -88,6 +90,7 @@ export function createCapabilityToken(flow: string, declared?: Effects): Capabil
     embed: new Set(effects.embeds ?? []),
     secret: new Set(effects.secrets ?? []),
     call: new Set(effects.calls ?? []),
+    fetch: new Set(effects.fetches ?? []),
   };
 
   return {
