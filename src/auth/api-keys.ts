@@ -13,6 +13,7 @@ import { parseDurationMs } from "../elements/clock/duration.ts";
 import { assertAttenuated } from "./attenuation.ts";
 import type { AuthPlane } from "./planes.ts";
 import type { ApiKeyRow } from "./tables.ts";
+import { okid } from "../okid.ts";
 
 /** Capability / Manifest resource for `fx.auth` key methods. */
 export const AUTH_API_KEYS_RESOURCE = "auth:api-keys";
@@ -145,7 +146,7 @@ export async function createApiKey(
   assertAttenuated(options.creatorScopes, options.scopes, "api key");
 
   const now = options.now ?? (() => Date.now());
-  const id = options.id ?? crypto.randomUUID();
+  const id = options.id ?? okid();
   const secret = options.secret ?? `oke_${id.replace(/-/g, "")}_${randomSecret()}`;
   const pepper = options.pepper ?? store.pepper ?? DEFAULT_PEPPER;
   const hash = options.hash ?? (await hashApiKeySecret(secret, pepper));

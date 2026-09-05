@@ -416,7 +416,10 @@ async function hashToken(raw: string): Promise<string> {
 }
 
 function cryptoRandomId(): string {
-  return crypto.randomUUID().replace(/-/g, "");
+  // Refresh / opaque session secrets — not application ids (those use OKID).
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function signAccess(secret: string, claims: AccessClaims): Promise<string> {

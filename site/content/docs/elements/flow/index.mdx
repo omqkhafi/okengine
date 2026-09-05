@@ -559,8 +559,12 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 
 <Accordion title="OKE1008 — no declared effects">
   Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.`
-  Boot with `oke build` / `oke dev` so extract can infer, or set explicit `effects`.
-  If extract failed (`Manifest extract failed`), install `oxc-parser` and retry.
+  Boot with `oke build` / `oke dev` so extract can infer. Framework / plugin Flows
+  outside the app tree get an empty least-privilege stamp automatically when a
+  Manifest is present — do not hand-write `effects: {}`. Real `fx` usage still
+  needs inference (app source) or an explicit non-empty `effects` block when
+  extract cannot see the body. If extract failed (`Manifest extract failed`),
+  install `oxc-parser` and retry.
 </Accordion>
 
 </Accordions>

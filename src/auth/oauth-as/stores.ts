@@ -11,6 +11,7 @@ import type {
   ClientCacheRow,
   ConsentRow,
 } from "./tables.ts";
+import { okid } from "../../okid.ts";
 
 /**
  * Create an empty AS store bundle.
@@ -57,5 +58,5 @@ export async function hashSecret(raw: string): Promise<string> {
 
 /** Cryptographically random id (no dashes), same hygiene as session ids. */
 export function cryptoId(): string {
-  return crypto.randomUUID().replace(/-/g, "");
+  return okid();
 }

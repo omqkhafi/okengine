@@ -7,6 +7,7 @@
 
 import { isApplicationScope } from "../elements/gate/permissions.ts";
 import type { TenantMemberRow, TenantRoleRow, TenantRow } from "./tables.ts";
+import { okid } from "../okid.ts";
 
 export type { TenantMemberRow, TenantRoleRow, TenantRow };
 
@@ -99,7 +100,7 @@ export async function createTenant(
 ): Promise<TenantRow> {
   const now = options.now ?? (() => Date.now());
   const t = now();
-  const id = options.id ?? crypto.randomUUID();
+  const id = options.id ?? okid();
   if (store.tenants.has(id)) {
     throw new TenantError("tenant_exists", `tenant already exists: ${id}`);
   }
@@ -180,7 +181,7 @@ export function addMember(store: TenantStore, options: AddMemberOptions): Tenant
   }
   const now = options.now ?? (() => Date.now());
   const row: TenantMemberRow = {
-    id: options.id ?? crypto.randomUUID(),
+    id: options.id ?? okid(),
     tenantId: options.tenantId,
     userId: options.userId,
     role: options.role ?? DEFAULT_TENANT_ROLE,

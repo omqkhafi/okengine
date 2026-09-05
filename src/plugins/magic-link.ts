@@ -34,6 +34,7 @@ import {
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
+import { okid } from "../okid.ts";
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_FROM = "OKE <no-reply@oke.local>";
@@ -121,10 +122,10 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     do: async (input, fx) => {
       const email = normalizeEmail(input.email);
       if (!email.includes("@")) return fail("AuthFailed", { reason: "invalid_email" });
-      const token = `ml_${crypto.randomUUID().replace(/-/g, "")}`;
+      const token = `ml_${okid()}`;
       const now = runtime.now();
       putVerification(verifications, {
-        id: crypto.randomUUID(),
+        id: okid(),
         identifier: `magic:${email}`,
         value: await hashChallenge(token),
         expiresAt: now + ttlMs,

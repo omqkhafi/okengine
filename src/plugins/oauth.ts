@@ -122,7 +122,6 @@ export function oauth(options: OAuthOptions = {}) {
     in: StartIn,
     out: StartOut,
     errors: { AuthFailed, AuthRateLimited },
-    effects: {},
     do: async (input) => {
       const p = providers.find((c) => c.id === input.provider);
       if (!p) return fail("AuthFailed", { reason: "provider_disabled" });
@@ -262,7 +261,6 @@ export function oauth(options: OAuthOptions = {}) {
     in: StartIn,
     out: StartOut,
     errors: { AuthFailed, AuthRateLimited },
-    effects: {},
     do: async (input, fx) => {
       const currentUserId = fx.auth.userId;
       if (!currentUserId) return fail("AuthFailed", { reason: "unauthenticated" });

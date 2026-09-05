@@ -3,6 +3,7 @@
  */
 
 import type { OperatorInviteRow } from "./tables.ts";
+import { okid } from "../okid.ts";
 
 /** Default invitation TTL (7 days). */
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -41,7 +42,7 @@ export function createOperatorInvite(
   const now = options.now ?? (() => Date.now());
   const t = now();
   const row: OperatorInviteRow = {
-    id: options.id ?? crypto.randomUUID(),
+    id: options.id ?? okid(),
     email: options.email,
     invitedBy: options.invitedBy,
     createdAt: t,

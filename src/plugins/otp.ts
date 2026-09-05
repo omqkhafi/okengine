@@ -41,6 +41,7 @@ import {
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
+import { okid } from "../okid.ts";
 
 const E164 = /^\+[1-9]\d{7,14}$/;
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
@@ -255,7 +256,7 @@ export function otp(opts: OtpOptions): PluginDef {
         const identifier = `otp:${phone}`;
         invalidateVerifications(verifications, identifier, now);
 
-        const requestId = crypto.randomUUID();
+        const requestId = okid();
         await fx.sendOtp({
           to: phone,
           requestId,
@@ -263,7 +264,7 @@ export function otp(opts: OtpOptions): PluginDef {
         });
 
         putVerification(verifications, {
-          id: crypto.randomUUID(),
+          id: okid(),
           identifier,
           value: `provider:${requestId}`,
           expiresAt: now + ttlMs,
@@ -393,7 +394,7 @@ export function otp(opts: OtpOptions): PluginDef {
 
       const sealed = await sealOtp(secret, otpCode);
       putVerification(verifications, {
-        id: crypto.randomUUID(),
+        id: okid(),
         identifier,
         value: await hashChallenge(otpCode),
         expiresAt: now + ttlMs,

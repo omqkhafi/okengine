@@ -55,6 +55,7 @@ import {
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
+import { okid } from "../okid.ts";
 
 /** Per-user TOTP / email-OTP + recovery state. */
 export interface TwoFactorRow {
@@ -148,7 +149,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     invalidateVerifications(verifications, identifier, now);
     const sealed = await sealOtp(secret, otpCode);
     putVerification(verifications, {
-      id: crypto.randomUUID(),
+      id: okid(),
       identifier,
       value: await hashChallenge(otpCode),
       expiresAt: now + 10 * 60 * 1000,

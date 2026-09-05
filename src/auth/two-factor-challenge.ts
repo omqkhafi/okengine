@@ -1,3 +1,4 @@
+import { okid } from "../okid.ts";
 /**
  * Pending login 2FA challenges + short-lived step-up grants.
  *
@@ -60,7 +61,7 @@ export function issueChallenge(
   const ttlMs = options.ttlMs ?? DEFAULT_TWO_FACTOR_CHALLENGE_TTL_MS;
   invalidateActiveForUser(store, options.userId, now);
   const row: PendingTwoFactorChallenge = {
-    id: crypto.randomUUID(),
+    id: okid(),
     userId: options.userId,
     method: options.method,
     createdAt: now,

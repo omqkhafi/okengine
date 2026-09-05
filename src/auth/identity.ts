@@ -7,6 +7,7 @@ import { createBunCrypto } from "../runtime/primitives.ts";
 import { assertNotBreached, type BreachCheckFn } from "./breach-check.ts";
 import { assertPasswordPolicy, type PasswordPolicyOptions } from "./password-policy.ts";
 import { revokePrincipalSessions, type SessionStore } from "./sessions.ts";
+import { okid } from "../okid.ts";
 
 /** User-plane identity row (logical). */
 export interface UserIdentityRow {
@@ -99,7 +100,7 @@ export async function ensureUserByEmail(
     const existing = store.users.get(existingId);
     if (existing) return existing;
   }
-  const id = crypto.randomUUID();
+  const id = okid();
   const user: UserIdentityRow = {
     id,
     email,
@@ -141,7 +142,7 @@ export async function createUserWithPassword(
   const crypto = createBunCrypto();
   const now = options.now ?? (() => Date.now());
   const t = now();
-  const id = options.id ?? crypto.randomUUID();
+  const id = options.id ?? okid();
   const user: UserIdentityRow = {
     id,
     email,
@@ -152,7 +153,7 @@ export async function createUserWithPassword(
     updatedAt: t,
     extra: { ...(options.extra ?? {}) },
   };
-  const accountId = crypto.randomUUID();
+  const accountId = okid();
   const account: UserAccountRow = {
     id: accountId,
     userId: id,
@@ -278,7 +279,7 @@ export async function linkOrProvision(
   }
 
   const t = now();
-  const userId = options.currentUserId ?? crypto.randomUUID();
+  const userId = options.currentUserId ?? okid();
   const existingUser = store.users.get(userId);
   const user: UserIdentityRow = existingUser ?? {
     id: userId,
@@ -291,7 +292,7 @@ export async function linkOrProvision(
     extra: {},
   };
   const account: UserAccountRow = {
-    id: crypto.randomUUID(),
+    id: okid(),
     userId,
     provider,
     providerAccountId,
@@ -404,7 +405,7 @@ export async function completeVerifiedEmailSignIn(
     let created = false;
     if (!account) {
       account = {
-        id: crypto.randomUUID(),
+        id: okid(),
         userId: user.id,
         provider: options.provider,
         providerAccountId,
@@ -427,7 +428,7 @@ export async function completeVerifiedEmailSignIn(
   }
 
   // 3. Fresh provision — verified from the start.
-  const userId = crypto.randomUUID();
+  const userId = okid();
   const user: UserIdentityRow = {
     id: userId,
     email,
@@ -439,7 +440,7 @@ export async function completeVerifiedEmailSignIn(
     extra: {},
   };
   const account: UserAccountRow = {
-    id: crypto.randomUUID(),
+    id: okid(),
     userId,
     provider: options.provider,
     providerAccountId,

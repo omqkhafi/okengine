@@ -371,6 +371,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Built-in Gate auth / plugin Flows no longer need hand-declared `effects: {}`.
+  When a Manifest is present (`oke dev` / `oke build` extract) but a Flow is
+  absent from it (framework code outside the app tree), `mintCapabilities`
+  stamps an empty least-privilege token automatically — fixing **OKE1008** on
+  `auth.refresh` for advanced Docker scaffolds without reverting to open tokens.
+- Auth / plugin opaque ids (users, accounts, API keys, passkey ceremonies,
+  verifications, tenants, invites, …) use OKID instead of `crypto.randomUUID`.
+  Session refresh secrets stay `crypto.getRandomValues` hex (not OKID — ids
+  are not credentials).
 - Client typecheck under root `lib: ["ESNext"]` (no DOM): local `ClientCredentials` /
   `ClientBodyInit`, duck-typed passkey / `location`, narrowed `auth.getToken` on live /
   stream, explicit `createClient` proxy return types, mutable `buildClientDescriptor`

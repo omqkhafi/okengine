@@ -16,6 +16,7 @@ import {
   resolveSharedIdentities,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
+import { okid } from "../okid.ts";
 
 /** Options for {@link anonymous}. */
 export interface AnonymousPluginOptions extends AuthMethodOptions {
@@ -44,7 +45,7 @@ export function anonymous(opts: AnonymousPluginOptions = {}): PluginDef {
         userId = (
           await linkOrProvision(identities, {
             provider: "anonymous",
-            providerAccountId: crypto.randomUUID(),
+            providerAccountId: okid(),
             now: runtime.now,
           })
         ).user.id;

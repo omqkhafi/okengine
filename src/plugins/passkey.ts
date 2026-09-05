@@ -31,6 +31,7 @@ import {
   type AuthMethodOptions,
 } from "./auth/shared.ts";
 import { verifyWebAuthnCeremony } from "./passkey-webauthn.ts";
+import { okid } from "../okid.ts";
 
 /** Stored passkey credential. */
 export interface PasskeyCredential {
@@ -132,11 +133,11 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     do: async (_input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
-      const challenge = crypto.randomUUID().replace(/-/g, "");
-      const sessionId = crypto.randomUUID();
+      const challenge = okid();
+      const sessionId = okid();
       const now = runtime.now();
       putVerification(challenges, {
-        id: crypto.randomUUID(),
+        id: okid(),
         identifier: `passkey-reg:${userId}`,
         value: await hashChallenge(challenge),
         expiresAt: now + 5 * 60 * 1000,
@@ -229,12 +230,12 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     }),
     errors: { AuthFailed, AuthRateLimited },
     do: async (input) => {
-      const challenge = crypto.randomUUID().replace(/-/g, "");
-      const sessionId = crypto.randomUUID();
+      const challenge = okid();
+      const sessionId = okid();
       const now = runtime.now();
       const key = input.email?.trim().toLowerCase() || "anonymous";
       putVerification(challenges, {
-        id: crypto.randomUUID(),
+        id: okid(),
         identifier: `passkey-auth:${key}`,
         value: await hashChallenge(challenge),
         expiresAt: now + 5 * 60 * 1000,

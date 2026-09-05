@@ -23,6 +23,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { gate } from "../elements/gate.ts";
 import { field, id, now, store } from "../elements/store.ts";
+import { passkey } from "../plugins/passkey.ts";
 import { oke } from "./app.ts";
 import { resetNoEffectsWarnForTests } from "./boot.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
@@ -225,5 +226,41 @@ export const create = on(
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("boot-level: built-in auth flows under docker", () => {
+  test("emailAndPassword + passkey boot with docker:true — empty stamp from Manifest, no hand-declared effects", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const memoryDrivers = {
+      store: {
+        sql: { dev: "memory", prod: "memory" },
+        kv: { dev: "memory", prod: "memory" },
+      },
+      channel: { email: { dev: "console", prod: "console" } },
+    } as const;
+    const app = oke({
+      name: "auth-stamp-docker",
+      registry: "ignore",
+      gate: {
+        auth: {
+          secret: "test-secret-at-least-16",
+          emailAndPassword: { enabled: true },
+        },
+      },
+    }).plug(passkey({ origins: ["http://localhost"] }));
+
+    // Explicit Manifest (as `oke dev` extract would supply for app Flows).
+    // Framework auth Flows are absent → mintCapabilities stamps `{}`.
+    await app.boot({
+      env: "dev",
+      docker: true,
+      unguardedHttp: "allow",
+      startScheduler: false,
+      manifest: { oke: "1.0", app: "auth-stamp-docker", flows: {} },
+      config: { drivers: memoryDrivers },
+    });
+    await app.stop();
   });
 });

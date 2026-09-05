@@ -9,6 +9,7 @@
 
 import { OAuthError } from "./errors.ts";
 import type { SigningKeyRow } from "./tables.ts";
+import { okid } from "../../okid.ts";
 
 /** Default access-token TTL (10 minutes — short-lived per OAuth 2.1 posture). */
 export const OAUTH_ACCESS_TTL_MS = 10 * 60_000;
@@ -210,7 +211,7 @@ export async function createDpopSigner(): Promise<{
     publicJwk,
     async prove({ htm, htu, now = Date.now(), accessToken, nonce }) {
       const claims: Record<string, unknown> = {
-        jti: crypto.randomUUID(),
+        jti: okid(),
         htm,
         htu: normalizeHtu(htu),
         iat: Math.floor(now / 1000),

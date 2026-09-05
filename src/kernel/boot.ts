@@ -679,9 +679,14 @@ async function tryAutoExtractManifest(rootDir: string): Promise<AutoExtractResul
  * an explicit {@link BootOptions.manifest}, or a lazy AoT extract from
  * {@link BootOptions.rootDir} / `OKE_ROOT_DIR`.
  *
- * When neither is available: `test` stays open with a once-per-process
- * `oke boot:` warning; `dev` with compose infra and `prod` fail loud
- * (`OKE1008`) — never a silent open door in a deploy-shaped environment.
+ * When a Manifest is available but a Flow is absent from it (framework /
+ * plugin Flows outside the app tree), stamp an empty least-privilege token
+ * automatically — do not hand-declare `effects: {}` on those Flows.
+ *
+ * When neither Manifest nor declared effects are available: `test` stays
+ * open with a once-per-process `oke boot:` warning; `dev` with compose
+ * infra and `prod` fail loud (`OKE1008`) — never a silent open door in a
+ * deploy-shaped environment.
  *
  * @param flows - Adopted flows
  * @param env - Resolved {@link ConfigEnv}
@@ -719,6 +724,16 @@ export async function mintCapabilities(
     const stamped = manifest?.flows?.[f.name]?.effects;
     if (stamped !== undefined) {
       map.set(f.name, createCapabilityToken(f.name, stamped));
+      continue;
+    }
+
+    // Manifest extract succeeded (or an explicit Manifest was passed) but this
+    // flow is absent from it — typically a framework / plugin Flow that lives
+    // outside the app tree. Stamp an empty least-privilege token; do not hand
+    // declare `effects: {}` on those Flows. Real fx usage still needs inference
+    // (app source) or an explicit non-empty `effects` block.
+    if (manifest !== undefined) {
+      map.set(f.name, createCapabilityToken(f.name, {}));
       continue;
     }
 

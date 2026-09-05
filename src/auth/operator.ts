@@ -12,6 +12,7 @@ import { createBunCrypto } from "../runtime/primitives.ts";
 import { assertNotBreached, type BreachCheckFn } from "./breach-check.ts";
 import { assertPasswordPolicy, type PasswordPolicyOptions } from "./password-policy.ts";
 import type { OperatorCredentialRow, OperatorRow, OperatorSsoLinkRow } from "./tables.ts";
+import { okid } from "../okid.ts";
 
 /** Operator-plane store. */
 export interface OperatorStore {
@@ -74,7 +75,7 @@ export async function createOperator(
   }
   await assertNotBreached(options.password, options.breachCheck);
   const crypto = createBunCrypto();
-  const id = options.id ?? crypto.randomUUID();
+  const id = options.id ?? okid();
   const row: OperatorRow = {
     id,
     email: options.email,
