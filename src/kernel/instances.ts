@@ -189,6 +189,38 @@ export interface InstanceRuntime {
 }
 
 /**
+ * SQL failures that are expected while `oke dev` pauses shared Postgres for
+ * compose stop (or the server is already gone). Scheduler ticks must not dump
+ * these as unhandled rejections.
+ *
+ * @param err - Rejection / throw
+ */
+export function isBenignSqlDisconnect(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string") {
+    if (
+      code === "ERR_OKE_POSTGRES_PAUSED" ||
+      code === "ERR_POSTGRES_CONNECTION_CLOSED" ||
+      code === "ERR_POSTGRES_CONNECTION_REFUSED" ||
+      code === "ERR_POSTGRES_CONNECTION_TIMEOUT"
+    ) {
+      return true;
+    }
+  }
+  const name = (err as { name?: unknown }).name;
+  if (name === "SharedPostgresPausedError") return true;
+  const message = (err as { message?: unknown }).message;
+  if (typeof message !== "string") return false;
+  return (
+    message === "Connection closed" ||
+    /shared Postgres pools are paused/i.test(message) ||
+    /Failed to connect/i.test(message) ||
+    /ECONNREFUSED/i.test(message)
+  );
+}
+
+/**
  * Create a heartbeat runtime for one process.
  *
  * @param options - Identity, store, env
@@ -214,15 +246,21 @@ export function createInstanceRuntime(options: CreateInstanceRuntimeOptions): In
     },
     async heartbeat(at) {
       const t = at ?? now();
-      await options.store.upsert({
-        id: options.instanceId,
-        startedAt,
-        heartbeatAt: t,
-        leaseExpiresAt: t + leaseMs,
-        env: options.env,
-        pid,
-      });
-      lastHeartbeatAt = t;
+      try {
+        await options.store.upsert({
+          id: options.instanceId,
+          startedAt,
+          heartbeatAt: t,
+          leaseExpiresAt: t + leaseMs,
+          env: options.env,
+          pid,
+        });
+        lastHeartbeatAt = t;
+      } catch (err) {
+        // Compose-stop pause / torn-down Postgres — skip until pools resume.
+        if (isBenignSqlDisconnect(err)) return;
+        throw err;
+      }
     },
     async release() {
       await options.store.remove(options.instanceId);

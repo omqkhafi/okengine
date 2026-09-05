@@ -121,13 +121,23 @@ export async function askRecommendedAiApply(): Promise<AiSetupApplyInput | null>
 }
 
 /**
+ * Result of a completed Customize pass — defaults for persistence plus the
+ * live {@link AiSetupApplyInput} (includes the API token; never write the
+ * token into `create-defaults.json`).
+ */
+export type CustomizeFlowResult = {
+  readonly defaults: CreateDefaults;
+  readonly aiApply: AiSetupApplyInput | null;
+};
+
+/**
  * Customize drivers for one template.
  *
  * @param template - Starter id (filters facets)
  */
 export async function askCustomizeFlow(
   template: TemplateId,
-): Promise<CreateDefaults | WizardBack | null> {
+): Promise<CustomizeFlowResult | WizardBack | null> {
   const facets = customizeFacetsFor(template);
   const primaryPins = await walkFacets(facets);
   if (primaryPins === null) return null;
@@ -140,7 +150,7 @@ export async function askCustomizeFlow(
   let aiPref: CreateDefaults["ai"] = { enabled: false, provider: null, driver: null };
   let aiApply: AiSetupApplyInput | null = null;
 
-  aiSetup: for (;;) {
+  for (;;) {
     const aiSetup = await selectWithBack(
       "AI setup",
       [
@@ -214,16 +224,20 @@ export async function askCustomizeFlow(
     break;
   }
 
-  return toCreateDefaults({
-    template,
-    profile: "docker-ready",
-    drivers: { ...drivers, ai: aiPins },
-    ai: aiPref,
-    // Locales / PgDog / proxy are asked once in the main wizard (not per customize pass).
-    locales: [],
-    pgdog: false,
-    proxy: "none",
-  });
+  return {
+    defaults: toCreateDefaults({
+      template,
+      profile: "docker-ready",
+      drivers: { ...drivers, ai: aiPins },
+      ai: aiPref,
+      // Locales / PgDog / proxy are asked once in the main wizard (not per customize pass).
+      locales: [],
+      pgdog: false,
+      proxy: "none",
+    }),
+    // Keep the live token here — prefs persist only `apiKeyEnv`, never the value.
+    aiApply,
+  };
 }
 
 /**

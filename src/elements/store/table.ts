@@ -294,6 +294,27 @@ function drizzleSqlType(
 }
 
 /**
+ * Bind value for a temporal SQL column. Epoch-ms numbers (e.g. `fx.clock.now()`)
+ * become `Date` so Postgres `timestamp` / `date` accept them; other values pass through.
+ *
+ * @param sqlType - Resolved DDL type
+ * @param value - Incoming JS value
+ */
+export function coerceTemporalBindValue(
+  sqlType: ResolvedColumn["sqlType"],
+  value: unknown,
+): unknown {
+  if (
+    (sqlType === "TIMESTAMP" || sqlType === "DATE") &&
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    return new Date(value);
+  }
+  return value;
+}
+
+/**
  * Map a JS-keyed row to SQL column names; apply Drizzle `$defaultFn`s.
  *
  * @param table - Table-like value
@@ -315,7 +336,7 @@ export function prepareInsertRow(
     else if (col.sqlName in row) value = row[col.sqlName];
     else if (col.defaultFn) value = col.defaultFn();
     else continue;
-    out[col.sqlName] = value;
+    out[col.sqlName] = coerceTemporalBindValue(col.sqlType, value);
   }
   // Pass through unknown keys as-is (already SQL names).
   for (const [k, v] of Object.entries(row)) {
@@ -344,7 +365,7 @@ export function prepareUpdateRow(
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) {
     const col = byKey.get(k) ?? bySql.get(k);
-    out[col?.sqlName ?? k] = v;
+    out[col?.sqlName ?? k] = col ? coerceTemporalBindValue(col.sqlType, v) : v;
   }
   return out;
 }

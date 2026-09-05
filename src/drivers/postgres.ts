@@ -36,7 +36,35 @@ export interface PostgresClientLike {
 /** Cap shared Bun.SQL pools so one process cannot outrun PgDog (default 10). */
 export const POSTGRES_POOL_MAX = 8;
 
-const sharedClients = new Map<string, PostgresClientLike>();
+/** One shared pool entry — raw Bun.SQL plus a pause-aware facade. */
+type SharedPostgresEntry = {
+  readonly raw: PostgresClientLike;
+  readonly guarded: PostgresClientLike;
+};
+
+const sharedClients = new Map<string, SharedPostgresEntry>();
+
+/**
+ * When true, shared pools stay closed and every query fails fast — no Bun.SQL
+ * reconnect into a torn-down Postgres (see {@link pauseSharedPostgresClients}).
+ */
+let sharedPostgresPaused = false;
+
+/**
+ * Thrown when Console / host code touches SQL after `oke dev` paused Postgres
+ * for compose stop. Fail soft — never open a new TCP connection.
+ */
+export class SharedPostgresPausedError extends Error {
+  readonly code = "ERR_OKE_POSTGRES_PAUSED";
+
+  /**
+   * @param message - Operator-facing reason
+   */
+  constructor(message = "shared Postgres pools are paused (compose stopped)") {
+    super(message);
+    this.name = "SharedPostgresPausedError";
+  }
+}
 
 /**
  * Resolve the Postgres URL (injected, `DATABASE_URL`, then localhost).
@@ -48,17 +76,144 @@ export function resolvePostgresUrl(url?: string): string {
 }
 
 /**
+ * True while {@link pauseSharedPostgresClients} has not been resumed.
+ */
+export function isSharedPostgresPaused(): boolean {
+  return sharedPostgresPaused;
+}
+
+/**
+ * Bun / driver connection failures that flood the TTY when Postgres dies
+ * under an open pool (compose stop).
+ *
+ * @param reason - Rejection reason
+ */
+export function isPostgresConnectionNoise(reason: unknown): boolean {
+  if (reason instanceof SharedPostgresPausedError) return true;
+  if (!reason || typeof reason !== "object") return false;
+  const code = (reason as { code?: unknown }).code;
+  if (typeof code === "string") {
+    if (
+      code === "ERR_POSTGRES_CONNECTION_CLOSED" ||
+      code === "ERR_POSTGRES_CONNECTION_REFUSED" ||
+      code === "ERR_POSTGRES_CONNECTION_TIMEOUT" ||
+      code === "ERR_OKE_POSTGRES_PAUSED"
+    ) {
+      return true;
+    }
+  }
+  const message = (reason as { message?: unknown }).message;
+  if (typeof message !== "string") return false;
+  return (
+    message === "Connection closed" ||
+    /Failed to connect/i.test(message) ||
+    /ECONNREFUSED/i.test(message)
+  );
+}
+
+function assertSharedPostgresReady(): void {
+  if (sharedPostgresPaused) throw new SharedPostgresPausedError();
+}
+
+/**
+ * Pause-aware facade over a Bun.SQL client so journal / clock / instances /
+ * Console wrappers that call `.unsafe` directly cannot reconnect after pause.
+ *
+ * @param raw - Underlying Bun.SQL (or test fake)
+ */
+function guardSharedPostgresClient(raw: PostgresClientLike): PostgresClientLike {
+  const guarded: PostgresClientLike = {
+    unsafe(sql, values) {
+      assertSharedPostgresReady();
+      return raw.unsafe(sql, values);
+    },
+    async reserve() {
+      assertSharedPostgresReady();
+      if (typeof raw.reserve !== "function") {
+        throw new Error("postgres client needs reserve()");
+      }
+      const reserved = await raw.reserve();
+      const guardedReserved = guardSharedPostgresClient(reserved) as PostgresReservedClient;
+      return Object.assign(guardedReserved, {
+        release(): void {
+          reserved.release();
+        },
+      });
+    },
+    begin(fn) {
+      assertSharedPostgresReady();
+      if (typeof raw.begin !== "function") {
+        throw new Error("postgres client needs begin()");
+      }
+      return raw.begin((tx) => fn(guardSharedPostgresClient(tx)));
+    },
+    async close(): Promise<void> {
+      // Shared pools are process-owned ({@link closeSharedPostgresClients}).
+      // Journal / clock / instances / store holders must not tear down Bun.SQL
+      // or the map keeps a dead client — next checkout returns
+      // ERR_POSTGRES_CONNECTION_CLOSED (e.g. after in-process `oke db seed`
+      // stops the temporary app boot inside `oke dev`).
+    },
+  };
+  return guarded;
+}
+
+/**
  * One Bun.SQL pool per URL for store / journal / clock / vault / console.
+ *
+ * Returns a pause-aware client — holders (including fleet store wrappers)
+ * fail soft after {@link pauseSharedPostgresClients} instead of reconnecting.
  *
  * @param url - Connection URL
  */
 export function sharedPostgresClient(url?: string): PostgresClientLike {
+  assertSharedPostgresReady();
   const key = resolvePostgresUrl(url);
   const existing = sharedClients.get(key);
-  if (existing) return existing;
-  const created = new Bun.SQL(key, { max: POSTGRES_POOL_MAX }) as unknown as PostgresClientLike;
-  sharedClients.set(key, created);
-  return created;
+  if (existing) return existing.guarded;
+  const raw = new Bun.SQL(key, { max: POSTGRES_POOL_MAX }) as unknown as PostgresClientLike;
+  const guarded = guardSharedPostgresClient(raw);
+  sharedClients.set(key, { raw, guarded });
+  return guarded;
+}
+
+/**
+ * Close and drop every shared Bun.SQL pool.
+ *
+ * Prefer {@link pauseSharedPostgresClients} from `oke dev` — close alone does
+ * not stop Console from opening a fresh pool on the next poll.
+ */
+export async function closeSharedPostgresClients(): Promise<void> {
+  const clients = [...sharedClients.values()];
+  sharedClients.clear();
+  await Promise.all(
+    clients.map(async (entry) => {
+      try {
+        await entry.raw.close?.({ timeout: 1 });
+      } catch {
+        // Pool already closed / server already gone.
+      }
+    }),
+  );
+}
+
+/**
+ * Pause shared Postgres: block new pools, fail soft on existing wrappers, and
+ * close open clients.
+ *
+ * Used by `oke dev` **`x`** before `docker compose stop` so parent Console
+ * polls do not keep reconnecting into a torn-down Postgres/PgDog.
+ */
+export async function pauseSharedPostgresClients(): Promise<void> {
+  sharedPostgresPaused = true;
+  await closeSharedPostgresClients();
+}
+
+/**
+ * Allow shared pools again after compose is back ( `oke dev` **`u`** ).
+ */
+export function resumeSharedPostgresClients(): void {
+  sharedPostgresPaused = false;
 }
 
 /**
@@ -159,12 +314,15 @@ function wrapPostgresClient(
     driverId: "postgres",
     role,
     async query(sql, params = []) {
+      // Shared wrappers outlive pause — fail soft before Bun.SQL reconnects.
+      if (opts.shared) assertSharedPostgresReady();
       const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (Array.isArray(result)) return result as SqlRow[];
       return Array.from(result as ArrayLike<SqlRow>);
     },
     async exec(sql, params = []) {
+      if (opts.shared) assertSharedPostgresReady();
       const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
       if (
@@ -181,6 +339,7 @@ function wrapPostgresClient(
       return { changes: 0 };
     },
     async transaction(fn) {
+      if (opts.shared) assertSharedPostgresReady();
       if (opts.pinned) return fn(connection);
       return withPinnedPostgres(client, (tx) => fn(wrapPostgresClient(tx, role, { pinned: true })));
     },

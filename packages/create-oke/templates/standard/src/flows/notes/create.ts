@@ -2,7 +2,7 @@ import { on, flow, http } from "okengine/http";
 
 import { db, notesMutate, webhookSecret } from "@/core";
 import { notes } from "@/db/schema.decl";
-import { NoteCreateIn, NoteOut } from "./shapes";
+import { NoteCreateIn, NoteOut, toIsoInstant } from "./shapes";
 import { noteCreated } from "./signals";
 
 /** Create a note, emit `note-created`, touch vault. */
@@ -14,7 +14,7 @@ export const create = on(
     do: async (input, fx) => {
       await fx.vault.get(webhookSecret);
       const id = fx.id();
-      const createdAt = fx.clock.now();
+      const createdAt = new Date(fx.clock.now());
       await fx.store(db).insert(notes).values({
         id,
         title: input.title,
@@ -28,7 +28,7 @@ export const create = on(
         title: input.title,
         body: input.body,
         archivedAt: null,
-        createdAt,
+        createdAt: toIsoInstant(createdAt),
       };
     },
   }),

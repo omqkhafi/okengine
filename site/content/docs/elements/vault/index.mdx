@@ -265,6 +265,12 @@ export default defineConfig({
 | `memory`  | In-process map                  | Tests                                         |
 | `managed` | Remote provider bag             | AWS / Azure / GCP / Doppler / 1Password       |
 
+create-oke Notes starters pin `vault.dev: "vault"` and declare stack + app contracts in
+`src/vault.ts` (`vault.secret` / `vault.config`). Console Vault lists those contracts —
+values still resolve from `.env.local`, process env, `oke vault set`, or `dev:` /
+`vault.fromDocker` fallbacks. Pass `oke({ secrets: NOTES_VAULT })` so configs resolve
+(only `vault.secret` auto-registers).
+
 Managed provider ids: `aws-secrets-manager` · `azure-key-vault` · `gcp-secret-manager` ·
 `doppler` · `1password`. Env knobs: [Environment variables](/docs/reference/environment-variables).
 

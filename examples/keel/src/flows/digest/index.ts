@@ -26,7 +26,7 @@ export const daily = on(
       void summary;
       await fx.send(dailyDigestMail, {
         to: "ops@keel.dev",
-        data: { open: open.length, at: fx.clock.now() },
+        data: { open: open.length, at: new Date(fx.clock.now()).toISOString() },
       });
     },
   }),

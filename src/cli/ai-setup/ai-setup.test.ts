@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAiSetup, renderAiTs, upsertAiDrivers, upsertEnv } from "./apply.ts";
+import { applyAiSetup, mergeAiApiKeyVaultSecret, renderAiTs, upsertAiDrivers, upsertEnv } from "./apply.ts";
 import {
   aiProviderSelectOptions,
   cloudApplyDefaults,
@@ -437,6 +437,58 @@ export default defineConfig({
       const aiTs = readFileSync(join(dir, "src", "core", "ai.ts"), "utf8");
       expect(aiTs).toContain("smart");
       expect(aiTs).toContain('ai.model("vision"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("applyAiSetup writes API token to .env.local and vault.secret into core", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-ai-setup-key-"));
+    try {
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `import { defineConfig } from "okengine/config";
+export default defineConfig({
+  drivers: {
+    channel: {
+      email: { dev: "console", test: "console", prod: "console" },
+    },
+  },
+});
+`,
+        "utf8",
+      );
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(
+        join(dir, "src", "core.ts"),
+        `import { store, vault } from "okengine";
+
+// --- Vault -------------------------------------------------------------------
+
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
+  description: "HMAC",
+  dev: "dev-secret",
+});
+
+// --- AI ----------------------------------------------------------------------
+`,
+        "utf8",
+      );
+      writeFileSync(join(dir, ".env.local"), `# OPENROUTER_API_KEY=\n`, "utf8");
+
+      applyAiSetup(dir, {
+        driver: "openai-compatible",
+        provider: "openrouter",
+        chatModel: "openrouter/free",
+        apiKeyEnv: "OPENROUTER_API_KEY",
+        apiKey: "sk-or-v1-cli-test",
+      });
+
+      const env = readFileSync(join(dir, ".env.local"), "utf8");
+      expect(env).toMatch(/^OPENROUTER_API_KEY=sk-or-v1-cli-test$/m);
+      const core = readFileSync(join(dir, "src", "core.ts"), "utf8");
+      expect(core).toContain('vault.secret("OPENROUTER_API_KEY"');
+      expect(mergeAiApiKeyVaultSecret(core, "OPENROUTER_API_KEY")).toBe(core);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { buildStoreGridModel, sqlRowId } from "./grid-model.ts";
+import {
+  buildStoreGridModel,
+  formatStoreCell,
+  formatTemporalCell,
+  isTemporalColumnKey,
+  sqlRowId,
+} from "./grid-model.ts";
 
 describe("buildStoreGridModel", () => {
   test("sql rows map to editable typed columns with pii flags", () => {
@@ -123,5 +129,23 @@ describe("sqlRowId", () => {
     expect(sqlRowId({ Id: 42 })).toBe("42");
     expect(sqlRowId({ name: "vector" })).toBe("vector");
     expect(sqlRowId({})).toBe("");
+  });
+});
+
+describe("formatTemporalCell / formatStoreCell", () => {
+  test("formats epoch-ms *_at columns as ISO", () => {
+    expect(isTemporalColumnKey("created_at")).toBe(true);
+    expect(isTemporalColumnKey("createdAt")).toBe(true);
+    expect(isTemporalColumnKey("seats")).toBe(false);
+    expect(formatTemporalCell("created_at", 1_723_622_400_000)).toBe("2024-08-14T08:00:00.000Z");
+    expect(
+      formatStoreCell(
+        { key: "created_at", type: "integer", editable: false, pii: false },
+        1_723_622_400_000,
+      ),
+    ).toBe("2024-08-14T08:00:00.000Z");
+    expect(
+      formatStoreCell({ key: "seats", type: "integer", editable: true, pii: false }, 2),
+    ).toBe("2");
   });
 });

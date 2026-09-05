@@ -672,6 +672,7 @@ describe("scaffold structure", () => {
       });
       for (const path of [
         "src/core.ts",
+        "src/vault.ts",
         "src/locales/en.ts",
         "src/locales/index.ts",
         "src/flows/main/shapes.ts",

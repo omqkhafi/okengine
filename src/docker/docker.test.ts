@@ -372,6 +372,8 @@ describe("image recipes", () => {
     expect(applied.volumes).toContain("./pgdog/pgdog.toml:/pgdog/pgdog.toml:ro");
     expect(applied.volumes).toContain("./pgdog/users.toml:/pgdog/users.toml:ro");
     expect(applied.healthcheck?.test.join(" ")).toContain("pg_isready");
+    expect(applied.healthcheck?.interval).toBe("2s");
+    expect(applied.healthcheck?.start_period).toBe("2s");
   });
 
   test("pgdog.toml + users.toml match upstream config shape", () => {

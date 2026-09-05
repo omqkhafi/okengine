@@ -69,7 +69,8 @@ are inferred from what a Flow touches through it.
 |---|---|
 | **6530** | Backend |
 | **6533** | Console |
-| **6535** | MCP |
+| **6535** | App MCP |
+| **6536** | Docs MCP (read-only) |
 
 Mnemonic: O·K·E = 6·5·3.
 
@@ -81,7 +82,7 @@ oke dev          # or: bun run dev
 bun run web      # Vite SPA (proxies Flows to the app)
 \`\`\`
 
-App \`:6530\` · Console \`:6533\` · MCP \`:6535\`. Vite web is \`bun run web\`.
+App \`:6530\` · Console \`:6533\` · App MCP \`:6535\` · Docs MCP \`:6536\`. Vite web is \`bun run web\`.
 
 ## Common mistakes
 

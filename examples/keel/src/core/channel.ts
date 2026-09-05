@@ -47,7 +47,7 @@ export const dailyDigestMail = mail.template("daily-digest", {
   description: "Morning inbox + goal digest",
   schema: z.object({
     open: z.number(),
-    at: z.number(),
+    at: z.iso.datetime(),
   }),
 });
 

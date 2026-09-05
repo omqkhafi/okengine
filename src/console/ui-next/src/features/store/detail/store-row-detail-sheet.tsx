@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { useStoreEdit } from "../data/use-store-edit.ts";
 import { RevealCell } from "./reveal-cell.tsx";
 import {
-  formatGridCell,
+  formatStoreCell,
   type StoreGridColumn,
   type StoreGridModel,
   type StoreGridRow,
@@ -236,7 +236,7 @@ export function StoreRowDetailSheet({
                         className="min-w-0 flex-1 font-mono text-[11px] break-words"
                         dir={isRtlText(value) ? "rtl" : "ltr"}
                       >
-                        {formatGridCell(value)}
+                        {formatStoreCell(col, value)}
                       </span>
                     )}
                   </li>

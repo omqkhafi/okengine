@@ -19,7 +19,7 @@ async function welcomeNote(fx: Fx) {
       title: "Welcome",
       body: "Advanced Notes starter — attach files, summarize with AI, daily digest clock.",
       archivedAt: null,
-      createdAt: 1,
+      createdAt: new Date("2026-01-15T10:00:00.000Z"),
     },
   );
 }
@@ -33,7 +33,7 @@ async function sampleNotes(fx: Fx) {
       title: "Shipping checklist",
       body: "Confirm schema with oke db push (or migrate in docker), then oke db seed.",
       archivedAt: null,
-      createdAt: 2,
+      createdAt: new Date("2026-01-15T10:01:00.000Z"),
     },
   );
   await fx.store(db).upsert(
@@ -44,7 +44,7 @@ async function sampleNotes(fx: Fx) {
       title: "Try attach",
       body: "POST /notes/:id/attach stores a text blob on files:uploads.",
       archivedAt: null,
-      createdAt: 3,
+      createdAt: new Date("2026-01-15T10:02:00.000Z"),
     },
   );
   await fx.store(db).upsert(
@@ -55,7 +55,7 @@ async function sampleNotes(fx: Fx) {
       title: "Try summarize",
       body: "POST /notes/:id/summarize uses fx.ask with the prompt's via recovery chain.",
       archivedAt: null,
-      createdAt: 4,
+      createdAt: new Date("2026-01-15T10:03:00.000Z"),
     },
   );
 }

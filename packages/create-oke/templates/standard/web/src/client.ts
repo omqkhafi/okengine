@@ -12,8 +12,8 @@ export type Note = {
   readonly id: string;
   readonly title: string;
   readonly body: string;
-  readonly archivedAt: number | null;
-  readonly createdAt: number;
+  readonly archivedAt: string | null;
+  readonly createdAt: string;
 };
 
 const $routes = {

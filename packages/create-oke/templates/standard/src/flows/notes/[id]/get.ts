@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine/http";
 
 import { db } from "@/core";
 import { notes } from "@/db/schema.decl";
-import { NoteIdIn, NoteOut, NotFound } from "../shapes";
+import { NoteIdIn, NoteOut, NotFound, toIsoInstant } from "../shapes";
 
 /** Fetch one note by id. */
 export const get = on(
@@ -18,8 +18,8 @@ export const get = on(
         id: String(row.id),
         title: String(row.title),
         body: String(row.body),
-        archivedAt: row.archivedAt == null ? null : Number(row.archivedAt),
-        createdAt: Number(row.createdAt),
+        archivedAt: row.archivedAt == null ? null : toIsoInstant(row.archivedAt),
+        createdAt: toIsoInstant(row.createdAt),
       };
     },
   }),

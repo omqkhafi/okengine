@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils.ts";
 import { JsonValueSheet } from "../detail/json-value-sheet.tsx";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { cellExportText, rowsToCsv } from "../lib/grid-transfer.ts";
-import { formatGridCell } from "../lib/grid-model.ts";
+import { formatGridCell, formatTemporalCell } from "../lib/grid-model.ts";
 import { asInspectableJson } from "../lib/json-value.ts";
 import type { QueryHighlightLanguage } from "../lib/query-highlight.ts";
 import { QueryHighlightView } from "./query-highlight-view.tsx";
@@ -310,10 +310,10 @@ export function QueryResults({
                                     setInspect({ rowId: String(i), column: col, value })
                                   }
                                 >
-                                  {formatGridCell(value)}
+                                  {formatTemporalCell(col, value) ?? formatGridCell(value)}
                                 </button>
                               ) : (
-                                formatGridCell(value)
+                                (formatTemporalCell(col, value) ?? formatGridCell(value))
                               )}
                             </td>
                           );

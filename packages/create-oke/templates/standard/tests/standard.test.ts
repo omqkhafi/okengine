@@ -39,7 +39,9 @@ test("notes create → list → archive", async () => {
 
   const archived = await t.api.notes!.archive!({ id: row.id });
   expect(archived.error).toBeNull();
-  expect((archived.data as { archivedAt: number }).archivedAt).toBeTypeOf("number");
+  const archivedAt = (archived.data as { archivedAt: string }).archivedAt;
+  expect(archivedAt).toBeTypeOf("string");
+  expect(Number.isNaN(Date.parse(archivedAt))).toBe(false);
 
   const after = await t.api.notes!.list!({});
   const afterNotes = after.data as { id: string }[];

@@ -86,12 +86,14 @@ Engine: Bun `>=1.4.2`.
 
 ## Documentation authority
 
-| Surface  | Path                                 |
-| -------- | ------------------------------------ |
-| Theory   | `site/content/docs/elements/`        |
-| Console  | `site/content/docs/console/`         |
-| CLI      | `site/content/docs/reference/cli.md` |
-| Manifest | `manifest.v1.schema.json`            |
+| Surface      | Path                            |
+| ------------ | ------------------------------- |
+| Understand   | `site/content/docs/understand/` |
+| Elements     | `site/content/docs/elements/`   |
+| Client       | `site/content/docs/client/`     |
+| Reference    | `site/content/docs/reference/`  |
+| AI Resources | `site/content/docs/ai/`         |
+| Manifest     | `manifest.v1.schema.json`       |
 
 **If the documentation is silent, stop and ask.**
 

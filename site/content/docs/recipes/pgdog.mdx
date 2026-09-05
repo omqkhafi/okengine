@@ -99,7 +99,7 @@ not wired into the generated stack yet.
 | -------------- | ------------------------------------------------------- |
 | Container port | `6432`                                                  |
 | `dependsOn`    | `store-sql` healthy                                     |
-| Healthcheck    | `pg_isready -h 127.0.0.1 -p 6432`, every 5s, 12 retries |
+| Healthcheck    | `pg_isready -h 127.0.0.1 -p 6432`, every 2s, 20 retries |
 | Connection URL | `postgres://user:pass@host:6432/db`                     |
 
 ## Troubleshooting

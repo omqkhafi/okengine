@@ -291,7 +291,7 @@ export const cleanup = on(
         .store(db)
         .delete(metricLogs)
         .where(lt(metricLogs.timestamp, fx.clock.ago("7d")));
-      return { at: fx.clock.now() };
+      return { at: new Date(fx.clock.now()).toISOString() };
     },
   }),
 );

@@ -37,15 +37,18 @@ cd notes
 oke dev
 ```
 
-Compose comes up, the backend listens on **6530**, Console on **6533**, app MCP on
-**6535**, docs MCP on **6536**. Open `http://localhost:6533`.
+Compose comes up (pull / create / start progress streams into the boot status
+lines), the backend listens on **6530**, Console on **6533**, app MCP on
+**6535**, docs MCP on **6536**. Open `http://localhost:6533`. Quit with
+**Ctrl+C**.
 
 On a TTY, after schema push, `oke dev` also:
 
-1. Prompts one-by-one for any Vault boot gaps (writes `.env.local`) — e.g. Keel's
-   `OPENROUTER_API_KEY` when OpenRouter is the default AI.
+1. Prompts one-by-one for any Vault boot gaps (writes `.env.local`) — e.g.
+   `OPENROUTER_API_KEY` when create-oke / `oke ai setup` / Keel declared the
+   OpenRouter contract without a value.
 2. Asks to run `oke db seed` when a seed module exists and `.oke/state.json` has
-   not recorded that seed identity yet. Live key **`s`** still runs seed later.
+   not recorded that seed identity yet. Run `oke db seed` anytime later.
 
 
 </Step>

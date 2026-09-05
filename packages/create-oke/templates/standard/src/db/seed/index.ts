@@ -19,7 +19,7 @@ async function welcomeNote(fx: Fx) {
       title: "Welcome",
       body: "Your Notes API is ready. Create, list, and archive notes over HTTP.",
       archivedAt: null,
-      createdAt: 1,
+      createdAt: new Date("2026-01-15T10:00:00.000Z"),
     },
   );
 }
@@ -33,7 +33,7 @@ async function sampleNotes(fx: Fx) {
       title: "Shipping checklist",
       body: "Confirm schema with oke db push, then seed with oke db seed.",
       archivedAt: null,
-      createdAt: 2,
+      createdAt: new Date("2026-01-15T10:01:00.000Z"),
     },
   );
   await fx.store(db).upsert(
@@ -44,7 +44,7 @@ async function sampleNotes(fx: Fx) {
       title: "Ideas",
       body: "Replace these seed rows with your own domain data.",
       archivedAt: null,
-      createdAt: 3,
+      createdAt: new Date("2026-01-15T10:02:00.000Z"),
     },
   );
 }

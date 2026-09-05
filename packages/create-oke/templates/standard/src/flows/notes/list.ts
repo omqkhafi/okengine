@@ -3,7 +3,7 @@ import { isNull } from "drizzle-orm";
 
 import { db } from "@/core";
 import { notes } from "@/db/schema.decl";
-import { NoteListOut } from "./shapes";
+import { NoteListOut, toIsoInstant } from "./shapes";
 
 /** List active (non-archived) notes, newest first. */
 export const list = on(
@@ -18,8 +18,8 @@ export const list = on(
           id: String(r.id),
           title: String(r.title),
           body: String(r.body),
-          archivedAt: r.archivedAt == null ? null : Number(r.archivedAt),
-          createdAt: Number(r.createdAt),
+          archivedAt: r.archivedAt == null ? null : toIsoInstant(r.archivedAt),
+          createdAt: toIsoInstant(r.createdAt),
         }));
       return fx.json.withQuery(data, input);
     },

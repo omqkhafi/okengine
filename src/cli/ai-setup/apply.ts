@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAiProviderEntry } from "../../elements/ai/providers.ts";
+import { CLOUD_PROVIDERS } from "./catalog.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
@@ -98,6 +99,9 @@ export function applyAiSetup(
   writeFileSync(envPath, env.endsWith("\n") ? env : `${env}\n`, "utf8");
 
   const aiTsPath = writeAiModels(cwd, input);
+  if (input.apiKeyEnv) {
+    ensureAiApiKeyVaultSecret(cwd, input.apiKeyEnv);
+  }
 
   return { configPath, envPath, aiTsPath };
 }
@@ -327,6 +331,107 @@ function apiKeySpreadLines(apiKeyEnv: string | undefined): string[] {
     `    ? { apiKey: process.env.${apiKeyEnv}.trim() }`,
     `    : {}),`,
   ];
+}
+
+/**
+ * `OPENROUTER_API_KEY` → `openrouterApiKey`.
+ *
+ * @param envName - Env / vault contract name
+ */
+export function envNameToCamelBinding(envName: string): string {
+  const parts = envName
+    .toLowerCase()
+    .split(/_+/g)
+    .filter((p) => p.length > 0);
+  if (parts.length === 0) return "apiKey";
+  return parts
+    .map((part, i) => (i === 0 ? part : `${part[0]!.toUpperCase()}${part.slice(1)}`))
+    .join("");
+}
+
+/**
+ * Human description for a provider API key env.
+ *
+ * @param envName - Env / vault contract name
+ */
+export function apiKeyEnvDescription(envName: string): string {
+  const meta = CLOUD_PROVIDERS.find((p) => p.apiKeyEnv === envName);
+  if (meta) return `${meta.label} API key`;
+  const stem = envName.replace(/_API_KEY$/i, "").replace(/_/g, " ");
+  return `${stem} API key`;
+}
+
+/**
+ * Render a `vault.secret` block for an AI provider key (no `dev:` stub so
+ * missing values become Vault boot gaps on `oke dev`).
+ *
+ * @param apiKeyEnv - Env / contract name
+ */
+export function renderAiApiKeyVaultSecret(apiKeyEnv: string): string {
+  const binding = envNameToCamelBinding(apiKeyEnv);
+  const description = apiKeyEnvDescription(apiKeyEnv);
+  return `/** ${description} — no \`dev:\` stub so first \`oke dev\` asks via Vault gaps. */
+export const ${binding} = vault.secret(${JSON.stringify(apiKeyEnv)}, {
+  description: ${JSON.stringify(description)},
+  rotate: "90d",
+});
+`;
+}
+
+/**
+ * True when `source` already declares `vault.secret("ENV")` (or `vault("ENV")`).
+ *
+ * @param source - TypeScript source
+ * @param apiKeyEnv - Contract name
+ */
+export function hasAiApiKeyVaultSecret(source: string, apiKeyEnv: string): boolean {
+  const lit = apiKeyEnv.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\bvault(?:\\.secret)?\\s*\\(\\s*["']${lit}["']`).test(source);
+}
+
+/**
+ * Merge a vault.secret contract for the AI API key into core / vault sources.
+ *
+ * @param existing - Current module source
+ * @param apiKeyEnv - Env / contract name
+ */
+export function mergeAiApiKeyVaultSecret(existing: string, apiKeyEnv: string): string {
+  if (hasAiApiKeyVaultSecret(existing, apiKeyEnv)) return existing;
+  let next = ensureNamedOkengineImport(existing, "vault");
+  const block = renderAiApiKeyVaultSecret(apiKeyEnv);
+  const vaultHeading = /(\/\/ --- Vault[^\n]*\n)/;
+  if (vaultHeading.test(next)) {
+    return next.replace(vaultHeading, `$1\n${block}`);
+  }
+  const aiHeading = /(\/\/ --- AI[^\n]*\n)/;
+  if (aiHeading.test(next)) {
+    return next.replace(aiHeading, `${block}\n$1`);
+  }
+  return `${next.trimEnd()}\n\n${block}`;
+}
+
+/**
+ * Declare `vault.secret(apiKeyEnv)` in the project so missing keys surface as
+ * Vault gaps (and Console Vault) — never silently optional.
+ *
+ * Prefers `src/core/vault.ts` when present, else merges into `src/core.ts`.
+ *
+ * @param cwd - Project root
+ * @param apiKeyEnv - Env / contract name
+ */
+export function ensureAiApiKeyVaultSecret(cwd: string, apiKeyEnv: string): void {
+  const coreVaultPath = join(cwd, "src", "core", "vault.ts");
+  if (existsSync(coreVaultPath)) {
+    const prev = readFileSync(coreVaultPath, "utf8");
+    const next = mergeAiApiKeyVaultSecret(prev, apiKeyEnv);
+    if (next !== prev) writeFileSync(coreVaultPath, next, "utf8");
+    return;
+  }
+  const coreTsPath = join(cwd, "src", "core.ts");
+  if (!existsSync(coreTsPath)) return;
+  const prev = readFileSync(coreTsPath, "utf8");
+  const next = mergeAiApiKeyVaultSecret(prev, apiKeyEnv);
+  if (next !== prev) writeFileSync(coreTsPath, next, "utf8");
 }
 
 /**

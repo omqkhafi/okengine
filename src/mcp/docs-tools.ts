@@ -52,7 +52,7 @@ export const DOCS_MCP_TOOLS: readonly DocsToolDescriptor[] = [
       properties: {
         slug: {
           type: "string",
-          description: "Page slug (e.g. get-started/introduction) or path (…/introduction.mdx)",
+          description: "Page slug (e.g. understand/the-problem) or path (…/the-problem.mdx)",
         },
       },
       required: ["slug"],

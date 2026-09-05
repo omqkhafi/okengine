@@ -53,7 +53,8 @@ export const GENERATED = {
   index: 44,
 } as const;
 
-const T0 = 1_753_920_000_000;
+/** Seed origin — 2025-07-31T00:00:00.000Z (readable calendar anchor). */
+const T0 = Date.parse("2025-07-31T00:00:00.000Z");
 
 /** ISO-8601 instant for an epoch-ms seed timestamp. */
 const iso = (ms: number): string => new Date(ms).toISOString();

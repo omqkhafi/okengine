@@ -42,6 +42,7 @@ import type {
 } from "../elements/vault.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import type { InstanceRuntime, InstanceStore } from "./instances.ts";
+import { isBenignSqlDisconnect } from "./instances.ts";
 import { resolveInstanceId } from "./instance-id.ts";
 import {
   resolveRunsConsoleBridge,
@@ -537,10 +538,16 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     const clockRt = clock;
     const durableResume = options.onDurableResume;
     const fleet = instances;
+    /** Swallow pause / disconnect noise so compose-stop does not flood the TTY. */
+    const ignoreBenignSql = (err: unknown): void => {
+      if (isBenignSqlDisconnect(err)) return;
+      // Unexpected scheduler failures stay visible.
+      console.error(err);
+    };
     schedulerTimer = setInterval(() => {
-      if (clockRt) void clockRt.tick();
-      if (journal && durableResume) void durableResume();
-      if (fleet) void fleet.maybeHeartbeat();
+      if (clockRt) void Promise.resolve(clockRt.tick()).catch(ignoreBenignSql);
+      if (journal && durableResume) void Promise.resolve(durableResume()).catch(ignoreBenignSql);
+      if (fleet) void fleet.maybeHeartbeat().catch(ignoreBenignSql);
     }, period);
     schedulerTimer.unref?.();
   }

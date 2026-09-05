@@ -1,9 +1,8 @@
 /**
- * Shared keyboard mapping for Ink `useInput` and pure tests.
- * Parity with legacy `parseDevControlKey` (`? r s q u x`).
+ * Shared keyboard mapping for the `oke` TUI Dev panel (`useInput`).
  */
 
-/** Dev control action from a keypress. */
+/** Dev panel action from a keypress. */
 export type DevControlKey = "?" | "r" | "s" | "q" | "u" | "x";
 
 /**

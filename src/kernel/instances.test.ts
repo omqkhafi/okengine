@@ -11,7 +11,9 @@ import { INSTANCE_ID_PREFIX } from "./instance-id.ts";
 import {
   createInstanceRuntime,
   createMemoryInstanceStore,
+  isBenignSqlDisconnect,
   projectInstancesList,
+  type InstanceStore,
 } from "./instances.ts";
 
 describe("projectInstancesList", () => {
@@ -63,6 +65,44 @@ describe("instance heartbeat", () => {
     const second = await store.get("inst-h");
     expect(second?.heartbeatAt).toBe(1_100);
     expect(second?.startedAt).toBe(first?.startedAt);
+  });
+
+  test("heartbeat swallows paused / connection-closed SQL errors", async () => {
+    const store: InstanceStore = {
+      kind: "memory",
+      async upsert() {
+        const err = new Error("shared Postgres pools are paused (compose stopped)");
+        (err as { code?: string; name?: string }).code = "ERR_OKE_POSTGRES_PAUSED";
+        (err as { name?: string }).name = "SharedPostgresPausedError";
+        throw err;
+      },
+      async get() {
+        return undefined;
+      },
+      async list() {
+        return [];
+      },
+      async listAlive() {
+        return [];
+      },
+      async remove() {},
+    };
+    const rt = createInstanceRuntime({
+      instanceId: "inst-pause",
+      store,
+      env: "dev",
+      heartbeatMs: 1,
+      leaseMs: 300,
+    });
+    await expect(rt.heartbeat()).resolves.toBeUndefined();
+  });
+});
+
+describe("isBenignSqlDisconnect", () => {
+  test("matches pause and Bun connection codes", () => {
+    expect(isBenignSqlDisconnect({ code: "ERR_OKE_POSTGRES_PAUSED" })).toBe(true);
+    expect(isBenignSqlDisconnect({ code: "ERR_POSTGRES_CONNECTION_CLOSED" })).toBe(true);
+    expect(isBenignSqlDisconnect(new Error("relation missing"))).toBe(false);
   });
 });
 

@@ -216,7 +216,7 @@ Factories mirror Drizzle pg-core names. Chain modifiers after the factory:
 | `field.real()` / `doublePrecision()` | `number` | Float4 / float8 |
 | `field.json()` / `jsonb()` | generic | Narrow with `field.json<MyShape>()` |
 | `field.uuid()` | `string` | |
-| `field.time()` / `timestamp()` / `date()` / `interval()` | see type | `timestamp` / `date` default to `Date`; `{ mode: "string" }` for ISO |
+| `field.time()` / `timestamp()` / `date()` / `interval()` | see type | `timestamp` / `date` default to `Date`; `{ mode: "string" }` for ISO. On write, finite epoch-ms numbers (e.g. `fx.clock.now()`) coerce to `Date` for Postgres |
 | `field.point()` / `line()` | tuple | `{ mode: "xy" }` / `"abc"` for objects |
 | `field.bytea()` | `Buffer` | |
 | `field.inet()` / `cidr()` / `macaddr()` / `macaddr8()` | `string` | |
@@ -448,7 +448,7 @@ export const ensureWelcome = flow("notes.ensureWelcome", {
         title,
         body: "Your Notes API is ready.",
         archivedAt: null,
-        createdAt: new Date(1),
+        createdAt: new Date("2026-01-15T10:00:00.000Z"),
       },
       // { onExisting: "update" },
     );
@@ -766,9 +766,9 @@ own resources.
 
 <StoreSeeding />
 
-Seed never runs at boot without confirmation — only via `oke db seed`, the live
-`oke dev` **`s`** key, or the first-boot confirm when a seed module exists and
-`.oke/state.json` has not recorded that identity yet. Categories:
+Seed never runs at boot without confirmation — only via `oke db seed`, or the
+first-boot confirm when a seed module exists and `.oke/state.json` has not
+recorded that identity yet. Categories:
 
 | Block | Runs when |
 | ----- | --------- |
@@ -791,7 +791,7 @@ async function welcomeNote(fx: Fx) {
       title: "Welcome",
       body: "Your Notes API is ready.",
       archivedAt: null,
-      createdAt: new Date(1),
+      createdAt: new Date("2026-01-15T10:00:00.000Z"),
     },
   );
 }

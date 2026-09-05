@@ -80,11 +80,13 @@ export const pgdog: ImageRecipe = {
       [PGDOG_BACKEND_SERVICE]: { condition: "service_healthy" },
     },
     healthcheck: {
+      // Tight interval — pooler is ready seconds after store-sql healthy;
+      // 5s polls made `oke dev` look stuck on pgdog for a long time.
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 || exit 1"],
-      interval: "5s",
-      timeout: "3s",
-      retries: 12,
-      start_period: "5s",
+      interval: "2s",
+      timeout: "2s",
+      retries: 20,
+      start_period: "2s",
     },
   }),
   url: (_s, c) =>

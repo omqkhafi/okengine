@@ -1,6 +1,6 @@
 ---
 name: oke-docs
-description: Authors and rewrites OKE documentation pages under site/content/docs to the project's information-architecture standard — source-verified API claims, the progressive-disclosure page skeleton (plain intro, one rule, Quick start Steps, reference tables, Troubleshooting Accordions, Next cards), and the site's hard gates (prose density ≤3, fumadocs components, forbidden tokens). Use when creating a new docs page, editing or improving any page under site/content/docs (elements, console, get-started), or when the user asks to raise documentation quality. For the prompt "/oke-docs update site docs" after an implementation, use the oke-docs-update skill (it inventories stale pages then applies this standard).
+description: Authors and rewrites OKE documentation pages under site/content/docs to the project's information-architecture standard — source-verified API claims, the progressive-disclosure page skeleton (plain intro, one rule, Quick start Steps, reference tables, Troubleshooting Accordions, Next cards), and the site's hard gates (prose density ≤3, fumadocs components, forbidden tokens). Use when creating a new docs page, editing or improving any page under site/content/docs (understand, elements, client, reference, ai, plugins, providers, recipes, deployment), or when the user asks to raise documentation quality. For the prompt "/oke-docs update site docs" after an implementation, use the oke-docs-update skill (it inventories stale pages then applies this standard).
 ---
 
 # OKE Docs — information architecture standard
@@ -22,7 +22,7 @@ Follow this order — never skip step 2.
    - Driver id unions: `src/drivers/*-types.ts` (e.g. `ChannelDriverId`, `AiDriverId`)
    - Real default configs: `packages/create-oke/templates/standard/oke.config.ts`
    - Error codes users see: grep the error class name
-   - Cross-link targets must exist: check `site/content/docs/console/*.mdx` before linking
+   - Cross-link targets must exist: confirm the destination `.mdx` under `site/content/docs/` before linking
    - **Correct the old page when it lies** (precedents: it listed `kafka` as a signal driver that doesn't exist; it used `Date.now()` inside flows, violating the fx rule).
 3. **Write with the skeleton** — copy [skeleton.md](skeleton.md) and fill it.
 4. **Run the gates** (below) and fix every failure.
@@ -38,7 +38,7 @@ Follow this order — never skip step 2.
 6. **Element-specific deep sections** — the physics that make this element distinct (delivery semantics, durability, consent, PII egress…), each with a verified example.
 7. **Troubleshooting** — `<Accordions>` of _real_ failure modes: the error a user actually hits, why it happens, the fix. Not invented FAQs.
 8. **Learn more** — bulleted cross-links (only to pages that exist).
-9. **Next** — `<Cards>`: next element, Introduction, Console.
+9. **Next** — `<Cards>`: sibling pages, Reference, or the next element.
 
 ## Writing rules
 
@@ -65,7 +65,7 @@ bunx fumadocs-mdx   # MDX must compile
 | Prose density    | **≤3 consecutive plain paragraph lines** — blank lines reset, but _Callout and Accordion bodies count too_. Compress; never pad.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Components       | Fumadocs: `Cards`/`Card`, `Callout`, `Steps`/`Step`, `Accordions`/`Accordion`, `Tabs`/`Tab`, `TypeTable`. Docs visuals: `Features`, `CollapseDiagram`, `ManifestPipeline`, `Surfaces`, `Vocabulary`, `FlowShape`, `DevModes`, `ClientLoop`, `DriftBoard`, `CollapseBoard`. Element visuals: `FlowTriggers`, `FlowDurable`, `SignalDelivery`, `SignalOnceLease`, `SignalBroadcastFanout`, `SignalLiveReplay`, `StoreFacets`, `StoreFacetMark`, `StoreKvTtl`, `StoreFilesVariants`, `StoreIndexModes`, `StoreSeeding`, `ClockSchedules`, `ClockCatchUp`, `ClockSleep`, `GatePipeline`, `VaultResolution`, `VaultRedacted`, `VaultRotate`, `ChannelPhysics`, `AiBlocks`, `AiGuardrails`, `AiPiiEgress`. |
 | Forbidden tokens | `"--"+"stack"`, `".env."+"stack"`, `"OKE_"+"STACK"`, `"from"+"Stack"`, `"so"+"ps"` — never appear. Named peers (`"Ho"+"no"`, `"Ely"+"sia"`, `"Enc"+"ore"`, `"Nest"+"JS"`, `"Fast"+"ify"`, `"iii"+".dev"`, `"Ex"+"press"`) — never appear (see `src/cli/competitor-mention-removal.test.ts`).                                                                                                                                                                                                                                                                                                                                                                 |
-| Ports            | Backend `6530`, Console `6533` — no other numbers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Ports            | Backend `6530`, Console `6533`, app MCP `6535`, docs MCP `6536` — those four only (O·K·E = 6·5·3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 To locate a density violation precisely, run this scanner (it mirrors the gate):
 

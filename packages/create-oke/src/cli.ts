@@ -16,6 +16,7 @@ import {
   log,
   note,
   outro,
+  password,
   select,
   spinner,
   text,
@@ -715,6 +716,17 @@ export async function askInteractiveAnswers(
             ai: aiPrefWithModels(prev.ai, picked),
             updatedAt: new Date().toISOString(),
           });
+        } else if (aiApply?.apiKeyEnv && !aiApply.apiKey) {
+          // Prefs never store the token — ask again so `.env.local` + Vault get it.
+          const token = await password({
+            message: `API token (${aiApply.apiKeyEnv})`,
+            validate: (v) => {
+              if (!v?.trim()) return "API token is required";
+              return undefined;
+            },
+          });
+          if (isCancel(token)) return null;
+          aiApply = { ...aiApply, apiKey: String(token).trim() };
         }
       }
       note(`Reusing settings from ${io.path}`, "Previous settings");
@@ -724,10 +736,12 @@ export async function askInteractiveAnswers(
     const customized = await askCustomizeFlow(template);
     if (customized === null) return null;
     if (customized === WIZARD_BACK) continue;
-    createDefaults = customized;
+    createDefaults = customized.defaults;
     persistDefaults = true;
-    if (customized.ai.enabled && partial.ai !== "skip") {
-      aiApply = applyInputFromAiPref(customized.ai);
+    // Use the live apply payload (includes apiKey). Never rebuild from prefs
+    // alone — that drops the token and leaves `# OPENROUTER_API_KEY=` empty.
+    if (partial.ai !== "skip") {
+      aiApply = customized.aiApply;
     }
     break;
   }

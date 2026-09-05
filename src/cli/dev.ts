@@ -48,7 +48,6 @@ import {
 } from "../term.ts";
 import { clientAdd } from "./client-add.ts";
 import { resolveDriverId } from "../config/index.ts";
-import type { DevComposeControlAction } from "./dev-controls.ts";
 import {
   createDebouncedRunner,
   isDomainSchemaWatchPath,
@@ -630,30 +629,42 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         const up =
           options.composeUp ??
           (async (files, dir) => {
-            const args = [
-              "compose",
-              ...files.flatMap((f) => ["-f", f]),
-              "up",
-              "-d",
-              "--remove-orphans",
-            ];
-            const proc = Bun.spawn(["docker", ...args], {
+            const {
+              runComposeUp,
+              formatComposeUpEventMessage,
+              composeUpPhaseStatus,
+              shortenComposeTarget,
+            } = await import("../docker/compose-up.ts");
+            await runComposeUp({
+              files,
               cwd: dir,
-              stdout: "pipe",
-              stderr: "pipe",
-              env: { ...process.env, ...stackEnv! },
+              env: stackEnv!,
+              onEvent: (event) => {
+                const message = formatComposeUpEventMessage(event);
+                if (!message) return;
+                const status = event.phase
+                  ? composeUpPhaseStatus(event.phase)
+                  : ("pending" as const);
+                const perService =
+                  event.target &&
+                  event.phase &&
+                  event.phase !== "other" &&
+                  (event.kind === undefined ||
+                    event.kind === "container" ||
+                    event.kind === "image" ||
+                    event.kind === "service");
+                if (perService && event.target) {
+                  const key = `compose:${shortenComposeTarget(event.target)}`;
+                  bootProgress.set(key, formatStatusLine(message, undefined, status));
+                  return;
+                }
+                // Download / network / misc — one activity row so pulls never look frozen.
+                bootProgress.set(
+                  "compose:activity",
+                  formatStatusLine(message, undefined, status === "error" ? "error" : "pending"),
+                );
+              },
             });
-            const [stdout, stderr, code] = await Promise.all([
-              new Response(proc.stdout).text(),
-              new Response(proc.stderr).text(),
-              proc.exited,
-            ]);
-            if (code !== 0) {
-              const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-              throw new Error(
-                `oke dev: docker compose exited ${code}` + (detail ? `\n${detail}` : ""),
-              );
-            }
           });
         bootProgress.set("compose", formatStatusLine("docker compose up…", undefined, "pending"));
         // Compose files live under docker/; cwd for compose is that directory.
@@ -698,9 +709,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
               cwd: dockerOut,
               env: dockerStarted.env,
               run: composeHealthRun,
-              timeoutMs: 20_000,
+              // Postgres init + PgDog health can exceed 20s on a cold volume.
+              timeoutMs: 90_000,
               isDone: (map) => {
-                // Empty ps (compose just-created / injectable gap): do not spin 20s.
+                // Empty ps (compose just-created / injectable gap): do not spin forever.
                 if (map.size === 0) return true;
                 return [...map.entries()].every(
                   ([name, s]) => name === aiServiceName || s === "ready" || s === "error",
@@ -902,9 +914,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     return { code: 0, plan };
   }
 
-  let boardPaused = false;
   const repaintBoard = (aiStatus?: DevStatus): void => {
-    if (boardPaused) return;
     bootBoard.paint(paintBootBoard(aiStatus ?? heroAiStatus));
   };
 
@@ -1202,23 +1212,20 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     env[RUNS_INGEST_SECRET_ENV] = ingestSecret;
   }
 
-  const app = await startApp(plan.entry, env);
-  const boundAppPort = app.port ?? appPort;
+  let app: DevAppHandle | null = await startApp(plan.entry, env);
+  let boundAppPort = app.port ?? appPort;
+  env.PORT = String(boundAppPort);
 
   let mcpServer: DevMcpHandle | null = null;
   let secret: string | null = null;
   let sessions: SessionStore | null = null;
   let attachedHost: { readonly stop: () => Promise<void> } | null = null;
 
-  if (consoleServer.console) {
-    const state = consoleServer.console.state;
-    consoleState = state;
-    try {
-      const { attachHostToConsole } = await import("./attach-host-console.ts");
-      attachedHost = await attachHostToConsole({
+  const attachHostOpts = consoleServer.console
+    ? {
         entry: plan.entry,
         cwd,
-        state,
+        state: consoleServer.console.state,
         ...(ingestSecret
           ? {
               runsBridge: {
@@ -1227,7 +1234,15 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
               },
             }
           : {}),
-      });
+      }
+    : null;
+
+  if (consoleServer.console && attachHostOpts) {
+    const state = consoleServer.console.state;
+    consoleState = state;
+    try {
+      const { attachHostToConsole } = await import("./attach-host-console.ts");
+      attachedHost = await attachHostToConsole(attachHostOpts);
     } catch (err) {
       write(
         formatStatusLine(
@@ -1263,7 +1278,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const boundDocsMcpPort = docsMcpServer?.port ?? docsMcpPort;
   const docsMcpUrl = docsMcpServer?.url ?? null;
 
-  const appUrl = app.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
+  const appUrl = app?.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
   await regen(appUrl);
 
   const dbPush =
@@ -1359,15 +1374,11 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     }
   });
 
-  let stopDevControls: (() => void) | null = null;
-
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
     restoreWarn();
-    stopDevControls?.();
-    stopDevControls = null;
     stopAiModelWatch?.();
     stopAiModelWatch = null;
     stopComposeHealthWatch?.();
@@ -1378,7 +1389,15 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const host = attachedHost;
     attachedHost = null;
     void host?.stop();
-    void Promise.resolve(app.stop());
+    const appHandle = app;
+    app = null;
+    void Promise.resolve(appHandle?.stop());
+    void import("../drivers/postgres.ts")
+      .then(async ({ pauseSharedPostgresClients, resumeSharedPostgresClients }) => {
+        await pauseSharedPostgresClients();
+        resumeSharedPostgresClients();
+      })
+      .catch(() => {});
     consoleServer.stop();
     mcpServer?.stop();
     docsMcpServer?.stop();
@@ -1461,119 +1480,11 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   if (options.onReady) await options.onReady(session);
 
-  // Keyboard controls (docker + TTY): Ink replaces raw-mode stdin.
-  if (keepAlive && dockerStarted && (options.stdinIsTTY ?? process.stdin.isTTY)) {
-    const started = dockerStarted;
-    const syncComposeBoard = async (): Promise<void> => {
-      const { readComposeHealth } = await import("../docker/compose-health.ts");
-      liveComposeHealth = await readComposeHealth({
-        files: started.files,
-        cwd: started.cwd,
-        env: started.env,
-        run: composeHealthRun,
-      });
-      if (
-        started.aiServiceName &&
-        liveComposeHealth.get(started.aiServiceName) === "error"
-      ) {
-        heroAiStatus = "error";
-      }
-      repaintBoard();
-    };
-    const refreshChrome = async (): Promise<void> => {
-      await syncComposeBoard();
-      paintReadyChrome();
-    };
-    const waitComposeReady = async (): Promise<void> => {
-      const { watchComposeHealth } = await import("../docker/compose-health.ts");
-      const aiServiceName = started.aiServiceName;
-      liveComposeHealth = await watchComposeHealth({
-        files: started.files,
-        cwd: started.cwd,
-        env: started.env,
-        run: composeHealthRun,
-        timeoutMs: 20_000,
-        isDone: (map) => {
-          if (map.size === 0) return true;
-          return [...map.entries()].every(
-            ([name, s]) => name === aiServiceName || s === "ready" || s === "error",
-          );
-        },
-      });
-      if (aiServiceName && liveComposeHealth.get(aiServiceName) === "error") {
-        heroAiStatus = "error";
-      }
-    };
-
-    const composeAction = async (action: DevComposeControlAction): Promise<void> => {
-      const files = started.files;
-      const finalArgs =
-        action === "up"
-          ? ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"]
-          : ["compose", ...files.flatMap((f) => ["-f", f]), action];
-      const proc = Bun.spawn(["docker", ...finalArgs], {
-        cwd: started.cwd,
-        stdout: "pipe",
-        stderr: "pipe",
-        env: { ...process.env, ...started.env },
-      });
-      const [stdout, stderr, code] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ]);
-      if (code !== 0) {
-        const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-        throw new Error(`docker compose ${action} exited ${code}` + (detail ? `\n${detail}` : ""));
-      }
-      if (action === "up") await waitComposeReady();
-      await syncComposeBoard();
-    };
-
-    try {
-      const { launchDevLiveControls } = await import("./tui/DevLive.tsx");
-      await launchDevLiveControls({
-        onRefresh: () => refreshChrome(),
-        onSeed: async () => {
-          const { runSlashCli } = await import("./tui/slash-run.ts");
-          boardPaused = true;
-          const lines: string[] = [];
-          try {
-            const code = await runSlashCli(cwd, ["db", "seed", "--force"], (line) => {
-              lines.push(line);
-              write(line);
-            });
-            if (code === 0) return;
-            const last = [...lines]
-              .reverse()
-              .map((line) => line.trim())
-              .find((line) => line.length > 0 && !line.startsWith("✗") && !line.startsWith("$"));
-            throw new Error(last || "oke db seed failed");
-          } finally {
-            boardPaused = false;
-          }
-        },
-        onComposeUp: () => composeAction("up"),
-        onComposeStop: () => composeAction("stop"),
-        onQuit: () => {
-          stop();
-          process.exit(0);
-        },
-      });
-      // Esc / unmount without q — still tear down.
-      stop();
-    } catch {
-      // Inconsequential: Ink/TUI is optional chrome — fall back to keep-alive without keyboard.
-      await new Promise(() => {});
-    }
-    return { code: 0, plan: session.plan, session };
-  }
-
   if (!keepAlive) {
     return { code: 0, plan: session.plan, session };
   }
 
-  // Keep the process alive.
+  // Keep the process alive (Ctrl+C / SIGTERM → session.stop).
   await new Promise(() => {});
   return { code: 0, plan: session.plan, session };
 }

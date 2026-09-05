@@ -7,6 +7,7 @@ import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatTemporalCell, formatGridCell } from "../lib/grid-model.ts";
 import { useStoreReveal } from "../data/use-store-reveal.ts";
 
 /** Props for {@link RevealCell}. */
@@ -38,7 +39,9 @@ export function RevealCell({
   if (clear !== null) {
     return (
       <span className="inline-flex max-w-full items-center gap-1" data-slot="reveal-cell">
-        <span className="min-w-0 truncate font-mono text-[11px]">{formatCell(clear.value)}</span>
+        <span className="min-w-0 truncate font-mono text-[11px]">
+          {formatRevealCell(column, clear.value)}
+        </span>
         <Tooltip>
           <TooltipTrigger
             render={(props) => (
@@ -120,18 +123,11 @@ export function RevealCell({
           {reveal.error.message}
         </span>
       ) : null}
-      <span className="sr-only">{formatCell(maskedValue)}</span>
+      <span className="sr-only">{formatRevealCell(column, maskedValue)}</span>
     </span>
   );
 }
 
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "[unserializable]";
-  }
+function formatRevealCell(column: string, value: unknown): string {
+  return formatTemporalCell(column, value) ?? formatGridCell(value);
 }

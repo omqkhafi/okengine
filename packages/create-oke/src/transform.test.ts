@@ -104,6 +104,23 @@ describe("vault backend defaults", () => {
       const env = readFileSync(join(resolveTemplateDir(id), ".env.example"), "utf8");
       expect(env, id).toContain("OKE_VAULT_MASTER_KEY");
       expect(env, id).toContain("oke vault init");
+      expect(env, id).toContain("src/vault.ts");
+    }
+  });
+
+  test("both templates declare stack vault.secret / vault.config contracts", () => {
+    for (const id of ["standard", "advanced"] as const) {
+      const vault = readFileSync(join(resolveTemplateDir(id), "src/vault.ts"), "utf8");
+      expect(vault, id).toContain('vault.secret("APP_WEBHOOK_SECRET"');
+      expect(vault, id).toContain('vault.secret("DATABASE_URL"');
+      expect(vault, id).toContain('vault.config("OKE_APP_URL"');
+      expect(vault, id).toContain('vault.config("PUBLIC_API_URL"');
+      expect(vault, id).toContain('dev: "http://127.0.0.1:6530"');
+      expect(vault, id).not.toMatch(/PUBLIC_API_URL[\s\S]*?dev:\s*""/);
+      expect(vault, id).toContain("export const NOTES_VAULT");
+      expect(vault, id).toContain("vault.fromDocker");
+      const app = readFileSync(join(resolveTemplateDir(id), "src/app.ts"), "utf8");
+      expect(app, id).toContain("secrets: NOTES_VAULT");
     }
   });
 

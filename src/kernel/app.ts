@@ -64,7 +64,13 @@ import {
   logDevRequest,
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
-import { asBrowserJsonCodeBlock, httpNavGroups } from "../runtime/json-code-block.ts";
+import { GATE_PUBLIC_NAME } from "../elements/gate/flatten.ts";
+import {
+  asBrowserJsonCodeBlock,
+  httpNavGroups,
+  jsonCodeAuthFrom,
+  type JsonCodeAuth,
+} from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
 import { fail, throwOke } from "./errors.ts";
 import { consumeRegisteredFlowUnits, type FlowUnitBag } from "./flow-units.ts";
@@ -2165,6 +2171,7 @@ export function oke(options: OkeOptions): OkeApp {
       let flowLabel: string | undefined;
       let runLabel: string | undefined;
       let cacheLabel: "hit" | "miss" | "none" | undefined;
+      let authLabel: JsonCodeAuth | undefined;
       const url = new URL(request.url);
       const method = request.method.toUpperCase();
 
@@ -2191,6 +2198,7 @@ export function oke(options: OkeOptions): OkeApp {
           httpNavGroups(adopted, request),
           performance.now() - started,
           cacheLabel ?? "none",
+          authLabel ?? { kind: "none" },
         );
       };
 
@@ -2246,6 +2254,11 @@ export function oke(options: OkeOptions): OkeApp {
           );
           runLabel = internalResult.runId;
           cacheLabel = internalResult.cache;
+          authLabel = jsonCodeAuthFrom({
+            userId: internalResult.fx.auth.userId,
+            apiKeyId: internalResult.fx.auth.apiKeyId,
+            operatorId: internalResult.fx.operator.id,
+          });
           return respond(await encodeExecuteResult(internalResult));
         }
       }
@@ -2324,6 +2337,12 @@ export function oke(options: OkeOptions): OkeApp {
       });
       runLabel = result.runId;
       cacheLabel = result.cache;
+      authLabel = jsonCodeAuthFrom({
+        userId: result.fx.auth.userId,
+        apiKeyId: result.fx.auth.apiKeyId,
+        operatorId: result.fx.operator.id,
+        publicGate: gateNamesOf(binding.trigger).includes(GATE_PUBLIC_NAME),
+      });
 
       return respond(await encodeExecuteResult(result));
     },

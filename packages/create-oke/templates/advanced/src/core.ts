@@ -3,14 +3,16 @@
  *
  * Order matches how you usually extend the starter:
  * locales → store → gate → vault → channel → (AI via `oke ai setup`).
- * Keep this file until a section outgrows it, then split by element.
+ * Vault contracts live in `src/vault.ts` (re-exported below).
  */
 
 import "@/locales";
 
-import { channel, gate, store, vault } from "okengine";
+import { channel, gate, store } from "okengine";
 import { z } from "zod";
 import * as schema from "@/db/schema.decl";
+
+export * from "@/vault";
 
 // --- Store -------------------------------------------------------------------
 
@@ -46,14 +48,6 @@ export const notesWriteRate = gate.rate({
 
 /** Reuse on every notes mutate route. */
 export const notesMutate = gate.all(notesWrite, notesWriteRate);
-
-// --- Vault -------------------------------------------------------------------
-
-/** HMAC secret for outbound note webhooks (`fx.vault.get` on create). */
-export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
-  description: "HMAC secret for outbound note webhooks",
-  dev: "dev-webhook-secret-change-me",
-});
 
 // --- Channel -----------------------------------------------------------------
 

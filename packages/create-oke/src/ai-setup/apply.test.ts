@@ -3,14 +3,23 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   DEFAULT_SEARCH_EMBED_DIMS,
+  applyAiSetup,
+  ensureAiApiKeyVaultSecret,
   ensureAppStoreSearchEmbed,
   ensureNotesBodyEmbed,
   ensureSummarizeNotePrompt,
+  envNameToCamelBinding,
+  hasAiApiKeyVaultSecret,
   isIncompleteAiSetup,
+  mergeAiApiKeyVaultSecret,
   renderAiTs,
   resolveAiCoreSource,
+  upsertEnv,
 } from "./apply.ts";
 
 describe("ensureNotesBodyEmbed", () => {
@@ -137,5 +146,133 @@ export const summarizeNote = smart.prompt("summarize-note", {
     expect(fixed).toContain('provider: "openrouter"');
     expect(fixed.match(/export const local = ai\.model/g)?.length).toBe(1);
     expect(fixed.match(/export const summarizeNote/g)?.length).toBe(1);
+  });
+});
+
+describe("AI API key vault + env persistence", () => {
+  test("envNameToCamelBinding", () => {
+    expect(envNameToCamelBinding("OPENROUTER_API_KEY")).toBe("openrouterApiKey");
+    expect(envNameToCamelBinding("ANTHROPIC_API_KEY")).toBe("anthropicApiKey");
+  });
+
+  test("upsertEnv uncomments an empty # KEY= placeholder", () => {
+    const env = `# OPENROUTER_API_KEY=\n# OKE_AI_MODEL=openrouter/free\n`;
+    const next = upsertEnv(env, "OPENROUTER_API_KEY", "sk-or-v1-test");
+    expect(next).toMatch(/^OPENROUTER_API_KEY=sk-or-v1-test$/m);
+    expect(next).not.toMatch(/^#\s*OPENROUTER_API_KEY=/m);
+  });
+
+  test("mergeAiApiKeyVaultSecret inserts under Vault heading", () => {
+    const existing = `import { channel, gate, store, vault } from "okengine";
+
+// --- Vault -------------------------------------------------------------------
+
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
+  description: "HMAC",
+  dev: "dev-webhook-secret-change-me",
+});
+
+// --- AI ----------------------------------------------------------------------
+`;
+    const next = mergeAiApiKeyVaultSecret(existing, "OPENROUTER_API_KEY");
+    expect(hasAiApiKeyVaultSecret(next, "OPENROUTER_API_KEY")).toBe(true);
+    expect(next).toContain('export const openrouterApiKey = vault.secret("OPENROUTER_API_KEY"');
+    expect(next.indexOf("openrouterApiKey")).toBeLessThan(next.indexOf("webhookSecret"));
+    expect(mergeAiApiKeyVaultSecret(next, "OPENROUTER_API_KEY")).toBe(next);
+  });
+
+  test("mergeAiApiKeyVaultSecret prepends into NOTES_VAULT list", () => {
+    const existing = `import { vault } from "okengine";
+
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
+  description: "HMAC",
+  dev: "x",
+});
+
+export const NOTES_VAULT = [
+  webhookSecret,
+] as const;
+`;
+    const next = mergeAiApiKeyVaultSecret(existing, "OPENROUTER_API_KEY");
+    expect(next).toContain('export const openrouterApiKey = vault.secret("OPENROUTER_API_KEY"');
+    expect(next).toMatch(/NOTES_VAULT = \[\s*\n\s*openrouterApiKey,\s*\n\s*webhookSecret,/);
+    expect(mergeAiApiKeyVaultSecret(next, "OPENROUTER_API_KEY")).toBe(next);
+  });
+
+  test("ensureAiApiKeyVaultSecret prefers src/vault.ts over core.ts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-vault-ts-"));
+    try {
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(
+        join(dir, "src", "vault.ts"),
+        `import { vault } from "okengine";
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", { description: "HMAC", dev: "x" });
+export const NOTES_VAULT = [
+  webhookSecret,
+] as const;
+`,
+        "utf8",
+      );
+      writeFileSync(join(dir, "src", "core.ts"), `export * from "@/vault";\n`, "utf8");
+      ensureAiApiKeyVaultSecret(dir, "OPENROUTER_API_KEY");
+      const vault = readFileSync(join(dir, "src", "vault.ts"), "utf8");
+      const core = readFileSync(join(dir, "src", "core.ts"), "utf8");
+      expect(vault).toContain('vault.secret("OPENROUTER_API_KEY"');
+      expect(vault).toMatch(/NOTES_VAULT = \[\s*\n\s*openrouterApiKey,/);
+      expect(core).not.toContain("OPENROUTER_API_KEY");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("applyAiSetup writes apiKey into .env.local and vault.secret into core.ts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-ai-key-"));
+    try {
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `import { defineConfig } from "okengine/config";
+export default defineConfig({
+  drivers: {
+    channel: { email: { dev: "console", test: "console", prod: "console" } },
+  },
+});
+`,
+        "utf8",
+      );
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(
+        join(dir, "src", "core.ts"),
+        `import { store, vault } from "okengine";
+
+// --- Vault -------------------------------------------------------------------
+
+export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
+  description: "HMAC",
+  dev: "dev-secret",
+});
+
+// --- AI ----------------------------------------------------------------------
+`,
+        "utf8",
+      );
+      writeFileSync(join(dir, ".env.local"), `# OPENROUTER_API_KEY=\n`, "utf8");
+
+      applyAiSetup(dir, {
+        driver: "openai-compatible",
+        provider: "openrouter",
+        chatModel: "openrouter/free",
+        apiKeyEnv: "OPENROUTER_API_KEY",
+        apiKey: "sk-or-v1-from-wizard",
+      });
+
+      const env = readFileSync(join(dir, ".env.local"), "utf8");
+      expect(env).toMatch(/^OPENROUTER_API_KEY=sk-or-v1-from-wizard$/m);
+      const core = readFileSync(join(dir, "src", "core.ts"), "utf8");
+      expect(core).toContain('vault.secret("OPENROUTER_API_KEY"');
+      expect(core).toContain('export const smart = ai.model("smart"');
+      expect(existsSync(join(dir, "src", "core", "ai.ts"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

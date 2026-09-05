@@ -16,6 +16,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Browser JSON page: **Request** rail leveled to Console Call API dock IA —
+  Routes fill the top as primary nav; Params · Body · Cookies · Headers · Path
+  sit in a docked **Request** strip (Reset · **Send**). Body supports **Form**
+  (`application/x-www-form-urlencoded`) or **JSON** (`application/json`) with
+  live syntax highlight (same key/string/number colors as the response view) and
+  pretty-print on blur; Send posts when the body is set (or the selected route
+  method allows a body). Route leaf clicks only select the target (method /
+  path); the response view updates on **Send**. One Send persists option edits
+  and refetches; per-section Apply removed. Path chapter hides until a
+  parameterized route is selected. Header shows the handled-request auth mark
+  beside status, latency, and cache. Collapsed thin label is **Request**.
 - **`createClient({ auth })` → `api.auth`** — session options on `createClient` attach
   `AuthClient` (merged over the `auth` unit Flows). `createAuthClient` + `bind` remains the
   escape hatch. Thin `createServerClient` + `tokenFromRequestCookies` for SSR.
@@ -41,6 +52,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- create-oke Notes starters ship `src/vault.ts` with stack + app
+  `vault.secret` / `vault.config` contracts (`NOTES_VAULT`) and pass them to
+  `oke({ secrets })`, so Console Vault lists DATABASE_URL, SMTP, Redis, files,
+  console secret, and cleartext configs — values still resolve from `.env.local`,
+  process env, `oke vault set`, or `dev:` / `vault.fromDocker` fallbacks.
+  `oke ai setup` prefers `src/vault.ts` (and inserts into `NOTES_VAULT`) when
+  wiring provider API keys.
 - **Advanced starter** — cookie `gate.auth`, `csrf` + `cors` + `passkey`, web
   `createClient({ auth: { mode: "cookie" } })` + `<Can>` chrome demo.
 - `oke dev` asks once to run `oke db seed` when a seed module exists and
@@ -52,8 +70,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Vault overview notes create-oke Notes `src/vault.ts` contracts +
+  `oke({ secrets: NOTES_VAULT })` so Console lists secrets and configs while
+  values stay in `.env.local` / built-in vault / `oke vault set`.
 - CLI / Vault / Store seeding docs cover first-boot seed confirm and interactive
-  Vault gap fill; OpenRouter recipe notes Keel's `OPENROUTER_API_KEY` prompt.
+  Vault gap fill; OpenRouter recipe notes create-oke / `oke ai setup` write the
+  API token to `.env.local` + `vault.secret`, and `oke dev` asks when still missing.
 - Client Auth / Calling / React / CSRF / ClientLoop updated for `createClient({ auth })`,
   `authorize` / `Can`, binary downloads, CSRF soft-require, and SSR cookie helper.
 - Client Auth handbook rewritten for `createAuthClient` (secure defaults, methods, UI-only
@@ -201,6 +223,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- `oke dev` streams Docker Compose pull / create / start progress into the boot
+  status lines (and live keyboard **up**) instead of a silent
+  `docker compose up…` wait.
 - Compose default image pins: RustFS `1.0.0-rc.5`, Mailpit `v1.31.1`, PgDog
   `v0.1.57` (Meilisearch `v1.53`, Traefik `v3.7`, nginx `1.31-alpine`,
   floating postgres/redis/caddy unchanged). No `images.ai` / local inference
@@ -226,9 +251,22 @@ needed). Large groups add `####` area headings so the list stays scannable.
   OpenRouter and lists the full cloud registry set; OpenRouter **Select model**
   includes router aliases (`free` / `auto` / `pareto-code` / `fusion`).
 - create-oke `engines.bun` and Notes starter GitHub Actions use Bun 1.4.2.
+- PgDog Compose healthcheck polls every **2s** (was 5s) with a **2s**
+  start period; compose health wait timeout raised to **90s** so cold
+  Postgres + PgDog can finish before the board moves on.
 
 #### Docs
 
+- CLI docs note that `oke dev` streams Compose pull / create / start progress
+  into boot status lines.
+- PgDog recipe healthcheck table matches the 2s interval / 20 retries.
+- CLI docs drop the old `oke dev` TTY live-keys bar (`?`/`r`/`s`/`q`/`u`/`x`);
+  quit with Ctrl+C; seed via `oke db seed` or the first-boot prompt.
+- Aligned machine-facing agent surfaces with the live handbook IA: `llms-txt`
+  When-to-use prose, docs MCP `oke.docs.get` examples, `AGENTS.md` authority
+  table (Understand · Elements · Client · Reference · AI Resources), skills
+  path maps (`oke-ship` / `oke-docs` / `oke-docs-update`), and create-oke
+  scaffold ports (adds Docs MCP **6536**). Removed empty `docs/concepts/`.
 - Site deps: fumadocs `16.15.7`, `framer-motion` `^13.2.0`, `cnfast` `^0.2.0`,
   lucide / zod / PostCSS aligned; recipe + configuration docs mirror the new
   RustFS / Mailpit / PgDog pins.
@@ -286,6 +324,39 @@ needed). Large groups add `####` area headings so the list stays scannable.
   offline listener misses the event (no retained tape) — peers
   `SignalOnceLease` / `SignalLiveReplay` on once / live.
 
+### 🔥 Removed
+
+#### Runtime
+
+- Browser JSON page removes interactive Authentication (header key + rail
+  Inherit/Custom). Handled-request auth mark in the strip remains. Re-add later
+  with a clean plan.
+
+### 🐛 Fixed
+
+#### Dev, Keel & create-oke
+
+- create-oke Notes `PUBLIC_API_URL` no longer uses `dev: ""` — vault boot treats
+  empty strings as gaps, so `oke dev` failed with
+  `VaultBootError: PUBLIC_API_URL`. Templates now default to
+  `http://127.0.0.1:6530` (same as `OKE_APP_URL`); Vite web still leaves
+  `VITE_API_URL` unset for the same-origin proxy.
+- create-oke Customize / Reuse no longer drops the AI API token after the wizard:
+  the live `aiApply` (with `apiKey`) is applied so `.env.local` gets
+  `OPENROUTER_API_KEY=…` (etc.) instead of leaving `# OPENROUTER_API_KEY=` empty.
+  Reuse re-prompts for the token (prefs never store secrets). `oke ai setup` /
+  create-oke also declare `vault.secret(<apiKeyEnv>)` (no `dev:` stub) so a
+  missing key is a Vault gap on `oke dev` and shows in Console Vault.
+- `oke dev` quit / compose teardown no longer floods the TTY with
+  `ERR_POSTGRES_CONNECTION_*` / `SharedPostgresPausedError`: shared Bun.SQL
+  pools pause with a fail-soft facade, and fleet scheduler heartbeats swallow
+  pause / disconnect errors.
+- First-boot `oke db seed` inside `oke dev` no longer leaves a dead shared
+  Bun.SQL pool: journal / clock / instances `close()` on the shared client is
+  a no-op (process-owned via `closeSharedPostgresClients`). Previously seed
+  stop closed the cached pool, then Console reuse hit
+  `PostgresError: Connection closed` and exited the session.
+
 ### 💥 Breaking Changes
 
 #### Runtime
@@ -327,6 +398,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- `oke dev` TTY live controls bar (`?` help · `r` refresh · `s` seed · `q` quit ·
+  `u` up · `x` stop) and the Ink `DevLive` / `dev-controls` helpers. Session
+  stays up after Ready; quit with **Ctrl+C**. Seed with `oke db seed` or the
+  first-boot prompt. Compose lifecycle stays on boot / session quit.
 - Docker recipes + pins for llama.cpp, Ollama, vLLM, and SGLang
   (`src/docker/recipes/{llama-cpp,ollama,vllm,sglang}.ts`, ollama-pull/url,
   create-oke `LLAMA_CPP_IMAGE` / `OLLAMA_IMAGE` / `VLLM_IMAGE` /
@@ -414,6 +489,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- SQL insert/update/upsert coerces epoch-ms numbers to `Date` for
+  `timestamp` / `date` columns so `fx.clock.now()` and seed literals like
+  `createdAt: 1` bind on Postgres (was
+  `column "created_at" is of type timestamp … but expression is of type integer`).
 - Built-in Gate auth / plugin Flows no longer need hand-declared `effects: {}`.
   When a Manifest is present (`oke dev` / `oke build` extract) but a Flow is
   absent from it (framework code outside the app tree), `mintCapabilities`
@@ -437,6 +516,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Notes starter seeds (`standard` / `advanced`) use readable calendar
+  `Date`s (e.g. `2026-01-15T10:00:00.000Z`) for `createdAt` so `oke db seed`
+  matches `field.timestamp()` on Postgres.
 - Notes starters (`standard` / `advanced`) list `oxc-parser` so create-oke
   installs it even against older published `okengine` builds.
 - `oke ai setup` / create-oke no longer treats template comment examples of
@@ -466,8 +548,24 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Console — Store
+
+- Store browse / query / row detail format `*_at` / `*At` epoch-ms cells and
+  `Date` values as ISO-8601 instead of raw integers.
+
+#### Dev, Keel & create-oke
+
+- Notes starters (`standard` / `advanced`) expose `createdAt` / `archivedAt`
+  (and advanced digest `at`) as ISO-8601 strings on the HTTP wire
+  (`z.iso.datetime()`), write `new Date(fx.clock.now())` into
+  `field.timestamp()`, and seed with readable calendar instants.
+- Keel daily-digest mail schema + payload use ISO `at`; seed `T0` is a named
+  calendar anchor (`2025-07-31T00:00:00.000Z`).
+
 #### Docs
 
+- Store seed/upsert samples and Clock digest / cleanup receipts use readable
+  ISO instants on the wire; `fx.clock.now()` remains epoch-ms for math.
 - Store · SQL (`elements/store/sql`): rewritten to the HTTP page’s depth —
   Smallest Example with response envelope, Progressive Patterns, field /
   store declare reference, session-handle method tabs (select → upsert),

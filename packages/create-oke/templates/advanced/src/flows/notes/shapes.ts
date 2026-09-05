@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Instant on the HTTP wire — ISO-8601 UTC. */
+export const IsoInstant = z.iso.datetime();
+
 export const NoteCreateIn = z.object({
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(10_000),
@@ -9,8 +12,8 @@ export const NoteOut = z.object({
   id: z.string(),
   title: z.string(),
   body: z.string(),
-  archivedAt: z.number().nullable(),
-  createdAt: z.number(),
+  archivedAt: IsoInstant.nullable(),
+  createdAt: IsoInstant,
 });
 
 /** List `data` is the item array. Pagination lives in HTTP `meta`. */
@@ -37,7 +40,7 @@ export const NoteAttachOut = z.object({
 
 export const NoteDigestOut = z.object({
   active: z.number().int().nonnegative(),
-  at: z.number(),
+  at: IsoInstant,
 });
 
 export const NoteSummarizeIn = z.object({
@@ -55,3 +58,10 @@ export const NoteSummarizeOut = z.object({
 export const Unavailable = z.object({
   message: z.string(),
 });
+
+/** Map a store temporal (`Date` / ISO / epoch-ms) to an ISO wire string. */
+export function toIsoInstant(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return new Date(value).toISOString();
+  return new Date(Number(value)).toISOString();
+}

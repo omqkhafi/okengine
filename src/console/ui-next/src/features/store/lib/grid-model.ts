@@ -197,6 +197,7 @@ export function sqlRowId(row: Readonly<Record<string, unknown>>): string {
 /** Format a cell value for display. */
 export function formatGridCell(value: unknown): string {
   if (value === null || value === undefined) return "—";
+  if (value instanceof Date) return value.toISOString();
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   try {
@@ -207,7 +208,39 @@ export function formatGridCell(value: unknown): string {
 }
 
 /**
- * Format a cell using the column's display hint (TTL / bytes) when set.
+ * True when a SQL column name looks like an instant (`created_at`, `expiresAt`, …).
+ *
+ * @param key - Column key (camelCase or snake_case)
+ */
+export function isTemporalColumnKey(key: string): boolean {
+  return /(?:^|_)(at|time|timestamp)$/i.test(key) || /(?:At|Time|Timestamp)$/.test(key);
+}
+
+/**
+ * Format epoch-ms / `Date` / ISO for a temporal column. Returns `null` when the
+ * value should keep the default grid formatter (non-temporal or non-instant).
+ *
+ * @param key - Column key
+ * @param value - Raw cell
+ */
+export function formatTemporalCell(key: string, value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    if (!isTemporalColumnKey(key)) return null;
+    const ms = Date.parse(value);
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  }
+  if (typeof value === "number" && Number.isFinite(value) && isTemporalColumnKey(key)) {
+    // Auth / clock system tables store epoch-ms; reject tiny integers (counts).
+    if (value < 1_000_000_000_000 || value > 10_000_000_000_000) return null;
+    return new Date(value).toISOString();
+  }
+  return null;
+}
+
+/**
+ * Format a cell using the column's display hint (TTL / bytes / temporal) when set.
  *
  * @param col - Column descriptor
  * @param value - Raw cell
@@ -215,5 +248,7 @@ export function formatGridCell(value: unknown): string {
 export function formatStoreCell(col: StoreGridColumn, value: unknown): string {
   if (col.format === "ttl") return formatKvTtl(value);
   if (col.format === "bytes") return formatByteSize(value);
+  const temporal = formatTemporalCell(col.key, value);
+  if (temporal !== null) return temporal;
   return formatGridCell(value);
 }

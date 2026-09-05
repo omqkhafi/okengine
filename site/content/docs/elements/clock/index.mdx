@@ -50,7 +50,7 @@ export const digest = on(
         .select()
         .from(notes)
         .where(isNull(notes.archivedAt));
-      return { active: rows.length, at: fx.clock.now() };
+      return { active: rows.length, at: new Date(fx.clock.now()).toISOString() };
     },
   }),
 );
@@ -62,7 +62,9 @@ export const digest = on(
 ### See it tick
 
 With `oke dev`, the scheduler reconciles `notes.digest` into the Store and leader-elects
-before each fire. `do` receives no payload — read time with `fx.clock.now()`.
+before each fire. `do` receives no payload — read time with `fx.clock.now()` (epoch-ms for
+math). Map to ISO on the wire when the Flow returns a human-facing instant
+(`new Date(fx.clock.now()).toISOString()`).
 
 Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting a day.
 
