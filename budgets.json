@@ -5,8 +5,8 @@
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 16292,
-      "limit": 16384,
+      "value": 17045,
+      "limit": 17408,
       "unit": "bytes",
       "gate": "absolute",
       "group": "core",

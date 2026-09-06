@@ -90,6 +90,11 @@ function loadFxLiveStream(): typeof import("./fx-live-stream.ts") {
   return lazyRequire(import.meta.dir, ["fx", "live", "stream"].join("-"));
 }
 
+/** `fx.fetch` — keep host parsing + dry-run stub off cold edge / Store-only graphs. */
+function loadFxFetch(): typeof import("./fx-fetch.ts") {
+  return lazyRequire(import.meta.dir, ["fx", "fetch"].join("-"));
+}
+
 /** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
 export const RUNS_RESOURCE = "runs";
 
@@ -1102,13 +1107,7 @@ function stampAskTelemetry(
  * @param href - Absolute URL string
  */
 export function hostFromFetchUrl(href: string): string {
-  try {
-    const host = new URL(href).hostname;
-    if (host) return host;
-  } catch {
-    /* fall through */
-  }
-  throw new Error(`fx.fetch: invalid URL "${href}" — expected an absolute URL with a hostname`);
+  return loadFxFetch().hostFromFetchUrl(href);
 }
 
 /**
@@ -2145,20 +2144,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       });
     },
     fetch(url, init) {
-      const href = typeof url === "string" ? url : url.href;
-      const host = hostFromFetchUrl(href);
-      return gated(
-        "fetch",
-        host,
-        async () => {
-          if (isDryRun()) {
-            recordWouldHaveFired("fetch", host);
-            return new Response(null, { status: 204 });
-          }
-          return globalThis.fetch(url, init);
-        },
-        { host, kind: "third-party" },
-      );
+      return loadFxFetch().runFxFetch(gated, url, init);
     },
     run(agent, input) {
       const name = resolveName(agent);

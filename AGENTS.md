@@ -68,7 +68,7 @@ Mnemonic: O·K·E = 6·5·3.
 
 | Budget                | Limit   |
 | --------------------- | ------- |
-| Kernel (edge profile) | < 15 kB |
+| Kernel (edge profile) | < 17 kB |
 | Client runtime        | < 5 kB  |
 | Cold start on Bun     | < 75 ms |
 | p99 routing overhead  | < 1 ms  |

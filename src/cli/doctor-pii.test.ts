@@ -87,7 +87,7 @@ describe("doctor-pii", () => {
         db: { facet: "sql", classifications: { email: { pii: true } } },
       },
       ai: {
-        models: { m: { provider: "openai-compatible" } },
+        models: { m: { provider: "anthropic" } },
         prompts: { summarize: { model: "m" } },
       },
     });

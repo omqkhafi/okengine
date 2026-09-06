@@ -65,12 +65,7 @@ import {
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
 import { GATE_PUBLIC_NAME } from "../elements/gate/flatten.ts";
-import {
-  asBrowserJsonCodeBlock,
-  httpNavGroups,
-  jsonCodeAuthFrom,
-  type JsonCodeAuth,
-} from "../runtime/json-code-block.ts";
+import type { JsonCodeAuth } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
 import { fail, throwOke } from "./errors.ts";
 import { consumeRegisteredFlowUnits, type FlowUnitBag } from "./flow-units.ts";
@@ -186,6 +181,15 @@ function loadDurable(): {
   runDurable: (opts: RunDurableOptions) => Promise<DurableResult>;
 } {
   return lazyRequire(import.meta.dir, ["clock", "durable"].join("-"));
+}
+
+/**
+ * Browser JSON page helpers — loaded on `app.fetch` only.
+ * A static import pins the traces-language HTML/CSS graph on every Store-only
+ * `oke()` construction.
+ */
+function loadJsonCodeBlock(): typeof import("../runtime/json-code-block.ts") {
+  return lazyRequire(`${import.meta.dir}/../runtime`, ["json", "code", "block"].join("-"));
 }
 
 /** Options for {@link oke}. */
@@ -2191,11 +2195,12 @@ export function oke(options: OkeOptions): OkeApp {
             detail: await failureDetailFromResponse(response),
           });
         }
-        return asBrowserJsonCodeBlock(
+        const jcb = loadJsonCodeBlock();
+        return jcb.asBrowserJsonCodeBlock(
           request,
           response,
           options.name,
-          httpNavGroups(adopted, request),
+          jcb.httpNavGroups(adopted, request),
           performance.now() - started,
           cacheLabel ?? "none",
           authLabel ?? { kind: "none" },
@@ -2254,7 +2259,7 @@ export function oke(options: OkeOptions): OkeApp {
           );
           runLabel = internalResult.runId;
           cacheLabel = internalResult.cache;
-          authLabel = jsonCodeAuthFrom({
+          authLabel = loadJsonCodeBlock().jsonCodeAuthFrom({
             userId: internalResult.fx.auth.userId,
             apiKeyId: internalResult.fx.auth.apiKeyId,
             operatorId: internalResult.fx.operator.id,
@@ -2337,7 +2342,7 @@ export function oke(options: OkeOptions): OkeApp {
       });
       runLabel = result.runId;
       cacheLabel = result.cache;
-      authLabel = jsonCodeAuthFrom({
+      authLabel = loadJsonCodeBlock().jsonCodeAuthFrom({
         userId: result.fx.auth.userId,
         apiKeyId: result.fx.auth.apiKeyId,
         operatorId: result.fx.operator.id,

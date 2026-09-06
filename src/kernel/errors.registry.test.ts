@@ -60,4 +60,10 @@ describe("OKE error-code registry", () => {
     expect(lookupOkeError(1016)).toEqual(TENANT_NOT_MEMBER);
     expect(lookupOkeError(1017)).toEqual(TENANT_UNKNOWN_SCOPE);
   });
+
+  test("lookupOkeError finds UNDECLARED_EMBED at 1020 (not tenant 1015)", () => {
+    expect(lookupOkeError(1020)).toEqual(OKE_ERRORS.UNDECLARED_EMBED);
+    expect(OKE_ERRORS.UNDECLARED_EMBED.code).toBe(1020);
+    expect(TENANT_REQUIRED.code).toBe(1015);
+  });
 });

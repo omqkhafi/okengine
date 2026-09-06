@@ -54,7 +54,7 @@ describe("closeSharedPostgresClients", () => {
     // Same live pool — journal/instances close during in-process seed must not
     // tear Bun.SQL while the map still hands out this client.
     expect(sharedPostgresClient(url)).toBe(first);
-    expect(first.close?.({ timeout: 1 })).toBeUndefined();
+    await expect(first.close?.({ timeout: 1 })).resolves.toBeUndefined();
   });
 });
 

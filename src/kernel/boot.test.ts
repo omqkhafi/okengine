@@ -79,7 +79,7 @@ describe("boot — lazy element needs", () => {
     expect(needs.signal).toBe(false);
   });
 
-  test("oke() Store-only graph stays under the prior 50 kB baseline", async () => {
+  test("oke() Store-only graph stays under the prior 58 kB baseline", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
     const entry = join(dir, "entry.ts");
     const appPath = join(import.meta.dir, "app.ts");
@@ -118,6 +118,8 @@ describe("boot — lazy element needs", () => {
       }
       // Rebased after host API-key persist + allowlist on `oke()` and the
       // realtime bridge (CDC sink, LiveQuery runtime, openLiveStream).
+      // Browser JSON page (`json-code-block`) is lazy on `app.fetch` so this
+      // graph does not pin the traces-language HTML/CSS chunk.
       expect(total).toBeLessThan(58_000);
     } finally {
       await rm(dir, { recursive: true, force: true });

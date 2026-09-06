@@ -71,6 +71,7 @@ describe("SqlStoreHandle — no relational query surface (path b)", () => {
         "count",
         "page",
         "ensureTable",
+        "search",
       ].sort(),
     );
 

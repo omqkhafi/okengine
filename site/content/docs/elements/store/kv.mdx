@@ -480,9 +480,9 @@ oke store: durable store.kv needs a configured sql driver
 
 | Driver | TTL on `set(…, "30m")` |
 | ------ | ---------------------- |
-| `redis` | Honored (`SET … EX`); key expires |
+| `redis` | Applied (`SET … EX`); key expires |
 | `memory` | `ttlMs` may report remaining time; **`get` does not expire** the key |
-| Durable SQL (`oke_kv`) | Honored on read (`expires_at` filter) |
+| Durable SQL (`oke_kv`) | Applied on read (`expires_at` filter) |
 
 Valid units match `^(\d+)(ms|s|m|h|d)$`. Invalid strings parse to `0` (no
 useful expiry). Prefer explicit units: `"30s"`, `"15m"`, `"1h"`, `"1d"`.

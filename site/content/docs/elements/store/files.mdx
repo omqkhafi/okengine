@@ -411,7 +411,7 @@ const result = await fx.store(uploads).putImage(key, data, {
 | `variants` | `Record<string, ImageVariantSpec>` | omitted | Named derivatives beside the original |
 | `placeholder` | `boolean` | omitted | ThumbHash **data URL** on the result |
 | `maxPixels` | `number` \| `false` | `4096 * 4096` | Decode ceiling; `false` disables |
-| `autoOrient` | `boolean` | `true` | Honor EXIF orientation |
+| `autoOrient` | `boolean` | `true` | Respect EXIF orientation |
 
 </Accordion>
 

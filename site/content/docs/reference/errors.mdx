@@ -88,6 +88,9 @@ string. Custom app codes stay message-less until registered. Full catalogs:
 | `1015` | tenant required      | Tenant-scoped op with no `fx.tenant.id`           | `switchTenant`, signed `tid`, or tenant header       |
 | `1016` | tenant not member    | Client-supplied tenant id is not a membership     | Pick from `listTenants` or add the user as a member  |
 | `1017` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                     |
+| `1018` | MCP tool duplicate   | Two MCP tool bindings share the same tool name    | Give each MCP tool exposure a unique name            |
+| `1019` | undeclared fetch     | Flow fetches a host not in `effects.fetches`      | Add the hostname to the flow's `effects.fetches`     |
+| `1020` | undeclared embed     | Flow embeds with a model not in `effects.embeds`  | Add it to the flow's `effects.embeds`                |
 | `1042` | orphan emit          | Emit with zero subscribers and `optional` false   | Add `on(signal, …)` or declare `optional: true`      |
 | `1043` | signal schema        | Emit payload failed the signal's `schema`         | Pass a payload that matches `schema`, or remove it   |
 | `1101` | schema missing       | Domain table absent in `prod` — no auto-DDL       | Run `oke db migrate` against this environment        |

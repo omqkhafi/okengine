@@ -151,7 +151,7 @@ export const OKE_ERRORS = {
   },
   /** Flow embeds via a model not listed in `effects.embeds`. */
   UNDECLARED_EMBED: {
-    code: 1015,
+    code: 1020,
     cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.embeds.',
   },

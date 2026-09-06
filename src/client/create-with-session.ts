@@ -207,6 +207,16 @@ function mergeAuthSurface(auth: AuthClient, flows: unknown): AuthClient {
       }
       return undefined;
     },
+    has(target, prop) {
+      if (prop in (target as object)) return true;
+      if (flows === null || (typeof flows !== "object" && typeof flows !== "function")) {
+        return false;
+      }
+      // Unit namespaces from createClient are Proxies that often implement get
+      // without has — treat a defined get as present so `"me" in api.auth` works.
+      if (prop in (flows as object)) return true;
+      return Reflect.get(flows as object, prop, flows) !== undefined;
+    },
   }) as AuthClient;
 }
 

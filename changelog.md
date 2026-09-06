@@ -221,10 +221,29 @@ needed). Large groups add `####` area headings so the list stays scannable.
   bare `body.embed()` plus `oke({ store: { search: { embed: { model: embedModel, dims: 768 } } } })`
   (distinct from the index-facet `ai.embed("docs", …)` pipeline).
 
+### 💥 Breaking Changes
+
+#### Runtime
+
+- **OKE1020** is `UNDECLARED_EMBED` (was incorrectly sharing **OKE1015** with
+  `TENANT_REQUIRED`). `lookupOkeError(1015)` is tenant-only again; undeclared
+  `fx.embed` surfaces as OKE1020.
+
 ### ♻️ Changed
 
 #### Runtime
 
+- Kernel edge gzip budget is **17 kB** (was 16 kB). Measured ~17.0 kB after
+  hybrid-search embed effects, signal surface growth, and `fx.fetch` /
+  `EffectEntry.external` (fetch body lazy-loaded off the edge profile).
+  AGENTS.md / `KERNEL_EDGE_BUDGET_BYTES` aligned.
+- Store-only `oke()` lazy-loads the browser JSON page (`json-code-block`) on
+  `app.fetch` so graphs that never serve HTTP do not pin the traces-language
+  HTML/CSS chunk (~65 kB → ~51 kB gzip).
+- `fx.fetch` host parsing + dry-run stub live in a lazy `fx-fetch` chunk so
+  cold edge / Store-only graphs that never call outbound HTTP avoid that code.
+- `createClient({ auth })` `api.auth` Proxy implements `has` so
+  `"me" in api.auth` (and other unit Flow checks) match get semantics.
 - Dependency refresh (2026-09-05): Console / tooling minors + patches (`zod`
   `^4.5.4`, TanStack Query/Router/Form, Vite `^8.2.2`, Playwright `^1.63.0`,
   oxlint / oxfmt / `oxc-parser` `^0.148.0`, PGLite `^0.5.8`, …); majors
@@ -357,6 +376,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
   menus.
 
 ### 🐛 Fixed
+
+#### Runtime
+
+- **OKE1015** no longer collides with `UNDECLARED_EMBED` (embed is **OKE1020**).
+- Shared Postgres holder `.close()` test awaits the async no-op (Bun.SQL returns
+  a Promise; pool identity is unchanged).
+- SqlStoreHandle surface allowlist includes `search` (hybrid SQL search).
+- `oke doctor` PII ask fixture uses a third-party provider (`anthropic`) —
+  `openai-compatible` is infrastructure and correctly skips the gate.
+
+#### Docs
+
+- Store Files / KV wording no longer trips the competitor-mention gate on an
+  accidental peer-name substring in ordinary English (“honour” / past tense).
 
 #### Dev, Keel & create-oke
 
