@@ -94,7 +94,17 @@ describe("Architecture & Positioning Consistency Gate", () => {
   it("enforces observable effects definition", () => {
     expect(CANONICAL_EFFECTS.length).toBe(9);
     const kinds = CANONICAL_EFFECTS.map((e) => e.kind);
-    expect(kinds).toEqual(["read", "write", "emit", "send", "ask", "secret", "call"]);
+    expect(kinds).toEqual([
+      "read",
+      "write",
+      "emit",
+      "send",
+      "ask",
+      "embed",
+      "secret",
+      "call",
+      "fetch",
+    ]);
   });
 
   it("enforces derived surfaces catalog", () => {

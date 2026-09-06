@@ -58,11 +58,9 @@ export const ask = on(
 <Step>
 ### Optional setup via CLI
 
-create-oke **Recommended** / Customize / Reuse and `oke ai setup --provider
-openrouter` pick `openrouter/free`, prompt for `OPENROUTER_API_KEY`, write the
-token into `.env.local`, and declare `vault.secret("OPENROUTER_API_KEY")` (no
-`dev:` stub). If the key is still missing on first `oke dev`, Vault gaps ask
-again. Get a key at [openrouter.ai](https://openrouter.ai).
+create-oke **Recommended** / Customize / Reuse and `oke ai setup --provider openrouter`
+pick `openrouter/free`, write `OPENROUTER_API_KEY` to `.env.local` + `vault.secret` (no
+`dev:` stub). Missing key → `oke dev` asks again ([openrouter.ai](https://openrouter.ai)).
 
 </Step>
 

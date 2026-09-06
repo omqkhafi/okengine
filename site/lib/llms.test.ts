@@ -116,7 +116,8 @@ describe("expandTeachingFigures", () => {
           continue;
         }
         if (!entry.name.endsWith(".mdx")) continue;
-        const text = await Bun.file(abs).text();
+        // Skip fenced examples — React chrome like `<Denied />` is not a figure.
+        const text = (await Bun.file(abs).text()).replace(/```[\s\S]*?```/g, "");
         const re = /<([A-Z][A-Za-z]+)\s*(?:facet="\w+"\s*)?\/>/g;
         let match: RegExpExecArray | null;
         while ((match = re.exec(text)) !== null) {
@@ -147,6 +148,8 @@ describe("expandTeachingFigures", () => {
       "CollapseBoard",
       "Accordions",
       "Accordion",
+      // Inline React example chrome in prose (not teaching figures)
+      "Denied",
     ]);
 
     for (const name of used) {
