@@ -27,7 +27,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   AI complete/embed, Store network facets); never hostname-guessed at the ledger layer.
   In-process drivers (PGlite, mock AI, console Channel) omit the field.
 - **`fx.fetch(url, init?)`** — first-class outbound HTTP through `fx` (EffectKind `"fetch"`,
-  Manifest `effects.fetches` host refs, dry-run stub, `UNDECLARED_FETCH` / OKE1019). Always
+  Manifest `effects.fetches` host refs, dry-run stub, `UNDECLARED_FETCH` / OKE1008). Always
   stamps `external: { host, kind: "third-party" }`. Compose with `fx.step` / `fx.retry` like
   other irreversible effects.
 - Browser JSON page: **Request** rail leveled to Console Call API dock IA —
@@ -86,6 +86,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - `fx` reference documents `fx.fetch`, `effects.fetches`, and driver-reported
   `EffectEntry.external` (third-party vs infrastructure) on traces.
+- Errors reference lists **OKE1008** (`UNDECLARED_FETCH`) and **OKE1009**
+  (`UNDECLARED_EMBED`); the undeclared-effect Callout covers 1001–1009.
 - Vault overview notes create-oke Notes `src/vault.ts` contracts +
   `oke({ secrets: NOTES_VAULT })` so Console lists secrets and configs while
   values stay in `.env.local` / built-in vault / `oke vault set`.
@@ -187,7 +189,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Elevated [`Store · KV`](/docs/elements/store/kv) to HTTP-trigger docs depth:
   response envelope in Smallest Example, method tabs (`get` / `set` /
   `delete` / `list` / `ttlMs`), Namespaces, Durable Namespaces accordions,
-  TTL Physics, Tenant Scoping (OKE1015), key-prefix / effects layers, and
+  TTL Physics, Tenant Scoping (OKE1810), key-prefix / effects layers, and
   expanded Troubleshooting (`SCAN`, invented `incr` / `setNx`).
 - Elevated [`Store · Files`](/docs/elements/store/files) to HTTP-trigger docs
   depth: response envelope in Smallest Example, blob-op tabs (`put` / `get` /
@@ -225,9 +227,46 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- **OKE1020** is `UNDECLARED_EMBED` (was incorrectly sharing **OKE1015** with
-  `TENANT_REQUIRED`). `lookupOkeError(1015)` is tenant-only again; undeclared
-  `fx.embed` surfaces as OKE1020.
+- **OKE error codes renumbered into domain ranges** (full break; no legacy carve-out).
+  Every framework code is reassigned under: Kernel `1000–1099` · Store `1100–1199` ·
+  Signal `1200–1299` · Clock `1300–1399` · Gate `1400–1499` · Vault `1500–1599` ·
+  Channel `1600–1699` · AI `1700–1799` · MCP+Tenancy `1800–1899` · Compiler `1900–1999`.
+  Definitions now carry a `domain` field; registry tests enforce uniqueness **and**
+  range-correctness, discovering lazy `errors-*.ts` chunks automatically (no hand-maintained
+  `LAZY_DEFS` list). Historical `## v…` changelog text still cites pre-renumber numbers.
+
+  **OKE1020 changed meaning:** before this renumber it was `UNDECLARED_EMBED`; after this
+  renumber it is `NO_EFFECTS_DECLARED`. Anyone matching or bookmarking “OKE1020” without a
+  key name must re-check — embed is now **OKE1009**.
+
+  | Key | Old | New | Domain |
+  | --- | --- | --- | --- |
+  | `UNDECLARED_READ` | 1001 | 1001 | kernel |
+  | `UNDECLARED_WRITE` | 1002 | 1002 | kernel |
+  | `UNDECLARED_EMIT` | 1003 | 1003 | kernel |
+  | `UNDECLARED_SEND` | 1004 | 1004 | kernel |
+  | `UNDECLARED_ASK` | 1005 | 1005 | kernel |
+  | `UNDECLARED_SECRET` | 1006 | 1006 | kernel |
+  | `UNDECLARED_CALL` | 1007 | 1007 | kernel |
+  | `UNDECLARED_FETCH` | 1019 | 1008 | kernel |
+  | `UNDECLARED_EMBED` | 1020 | 1009 | kernel |
+  | `NO_EFFECTS_DECLARED` | 1008 | 1020 | kernel |
+  | `ADOPT_BARREL_STALE` | 1009 | 1030 | kernel |
+  | `HTTP_PATH_UNRESOLVED` | 1010 | 1040 | kernel |
+  | `HTTP_ROUTE_DUPLICATE` | 1011 | 1041 | kernel |
+  | `HTTP_FLOW_UNNAMED` | 1012 | 1045 | kernel |
+  | `LIVE_EXPOSURE_DUPLICATE` | 1013 | 1050 | kernel |
+  | `MCP_TOOL_DUPLICATE` | 1018 | 1060 | kernel |
+  | `DOMAIN_SCHEMA_MISSING` | 1101 | 1110 | store |
+  | `LIVE_RESUME_GAP` | 1014 | 1210 | signal |
+  | `ORPHAN_EMIT` | 1042 | 1240 | signal |
+  | `SIGNAL_SCHEMA` | 1043 | 1250 | signal |
+  | `TENANT_REQUIRED` | 1015 | 1810 | mcp_tenancy |
+  | `TENANT_NOT_MEMBER` | 1016 | 1820 | mcp_tenancy |
+  | `TENANT_UNKNOWN_SCOPE` | 1017 | 1830 | mcp_tenancy |
+
+- `UNDECLARED_EMBED` no longer shares a number with `TENANT_REQUIRED` (tenant codes moved to
+  **OKE1810–1830**; embed is **OKE1009**).
 
 ### ♻️ Changed
 
@@ -337,13 +376,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Rewrote Signal element docs (`/docs/elements/signal` + Once / Broadcast /
   Live) for `signal.once` / `broadcast` / `live` (HTTP-shaped helpers):
   progressive patterns, options tables, lease / retention / drivers honesty,
-  real error codes (OKE1042 · OKE1043 · OKE1014), teaching figures, and
+  real error codes (OKE1240 · OKE1250 · OKE1210), teaching figures, and
   Troubleshooting. Corrected `deadLetter` (boolean, not a queue name) and live
   exposure via `http.live` / `api.live` (not invented EventSource paths).
 - Elevated [`signal.once`](/docs/elements/signal/once) to HTTP-trigger docs
   depth: delivery / binding / emit reference, lease reclaim and ordering
   accordions, failure-reason + DLQ shapes, idempotency with `durable` +
-  `fx.step`, and expanded Troubleshooting (OKE1001 · OKE1042 · OKE1043).
+  `fx.step`, and expanded Troubleshooting (OKE1001 · OKE1240 · OKE1250).
   Dropped inaccurate “exponential” retry wording — attempts requeue with no
   delay backoff.
 - Signal · Live (`elements/signal/live`): rewritten to the HTTP page’s depth —
@@ -354,8 +393,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Signal · Broadcast (`elements/signal/broadcast`): rewritten to the HTTP
   page’s depth — three-step Smallest Example, Progressive Patterns, delivery
   reference + options, Fan-out Physics, Emit and Effects, Subscribers tabs,
-  Choosing Physics accordions, and expanded Troubleshooting (OKE1042 ·
-  OKE1043 · retention type error · browser vs Flow consumers).
+  Choosing Physics accordions, and expanded Troubleshooting (OKE1240 ·
+  OKE1250 · retention type error · browser vs Flow consumers).
 - Signal · Broadcast teaching figure (`SignalBroadcastFanout`): ambient demo
   that one emit fans an independent copy to every active subscriber while an
   offline listener misses the event (no retained tape) — peers
@@ -379,7 +418,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- **OKE1015** no longer collides with `UNDECLARED_EMBED` (embed is **OKE1020**).
+- **OKE1810** no longer collides with `UNDECLARED_EMBED` (embed is **OKE1009**).
 - Shared Postgres holder `.close()` test awaits the async no-op (Bun.SQL returns
   a Promise; pool identity is unchanged).
 - SqlStoreHandle surface allowlist includes `search` (hybrid SQL search).
@@ -530,7 +569,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Flow Overview (`elements/flow`): rewritten to the HTTP page’s depth — Smallest Example
   Steps, Progressive Patterns, trigger table + capability cards, verified `flow()` options
   (`cache` auto for read-only, `NotFound` → 400 not 404), `fx` door, call-only / `internal`,
-  plane / retry / OKE1008 troubleshooting.
+  plane / retry / OKE1020 troubleshooting.
 
 #### Dev, Keel & create-oke
 
@@ -553,7 +592,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Built-in Gate auth / plugin Flows no longer need hand-declared `effects: {}`.
   When a Manifest is present (`oke dev` / `oke build` extract) but a Flow is
   absent from it (framework code outside the app tree), `mintCapabilities`
-  stamps an empty least-privilege token automatically — fixing **OKE1008** on
+  stamps an empty least-privilege token automatically — fixing **OKE1020** on
   `auth.refresh` for advanced Docker scaffolds without reverting to open tokens.
 - Auth / plugin opaque ids (users, accounts, API keys, passkey ceremonies,
   verifications, tenants, invites, …) use OKID instead of `crypto.randomUUID`.
@@ -565,10 +604,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   routes bag, void-input binary call opts in transport tests, and legacy `useSession`
   token gate (cookie path is AuthClient-only).
 - `oxc-parser` is a hard `okengine` dependency again (no longer an optional peer).
-  Published scaffolds with Docker Compose were dying on **OKE1008** for
+  Published scaffolds with Docker Compose were dying on **OKE1020** for
   `main.health` because Manifest extract could not resolve `oxc-parser` and
   boot treated that as “no Manifest.” Strict boots now also warn
-  `Manifest extract failed — …` before throwing OKE1008.
+  `Manifest extract failed — …` before throwing OKE1020.
 - Threaded EffectKind `"embed"` through dry-run, signal replay stubs, Console run/effect schemas, Manifest diff `EFFECT_KEYS`, and Fx test doubles so `bun run typecheck` is clean after hybrid search. Restored concrete `dims` on Manifest `DeclaredColumn.embed` (project defaults still resolve at extract); runtime schema search fails loud when `.embed()` dims are unresolved. Fixed `search-bind` to import `OkeApp`, `SearchConfigError` `override` on `name`, and related compiler/bench typecheck noise.
 
 #### Dev, Keel & create-oke
@@ -601,7 +640,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Fixed trigger item row alignment, badge visibility, height symmetry, ambient auto-cycling (`useTick`), interactive tabbed contract inspector (`in`, `out`, `errors`, `do`), and unified domain pipeline examples (`orders.*`) in `FlowTriggers` (`flow-triggers.tsx`).
 - Fixed broken consumers doc example calling `users.changed()` without a store table receiver.
-- OKE1008 troubleshooting notes missing `oxc-parser` when Manifest extract fails.
+- OKE1020 troubleshooting notes missing `oxc-parser` when Manifest extract fails.
 
 ### ♻️ Changed
 

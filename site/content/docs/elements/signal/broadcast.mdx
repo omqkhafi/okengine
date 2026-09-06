@@ -150,7 +150,7 @@ claim-lock the message away from siblings the way `once` leases do.
 
 <Tab value="Optional">
 
-Hooks that may have no subscriber yet need `optional: true` or emit throws **OKE1042**:
+Hooks that may have no subscriber yet need `optional: true` or emit throws **OKE1240**:
 
 ```typescript
 export const clusterHint = signal.broadcast("cluster.hint", {
@@ -159,14 +159,14 @@ export const clusterHint = signal.broadcast("cluster.hint", {
 });
 ```
 
-**OKE1042** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+**OKE1240** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
 Fix: bind at least one `on(signal, flow)` or set `{ optional: true }`.
 
 </Tab>
 
 <Tab value="Schema">
 
-Invalid payloads fail at `fx.emit` with **OKE1043** before any subscriber runs:
+Invalid payloads fail at `fx.emit` with **OKE1250** before any subscriber runs:
 
 ```typescript
 export const priceTick = signal.broadcast("prices.tick", {
@@ -207,7 +207,7 @@ option.
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1043**) |
+| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1250**) |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |
 | `description` | `string` | the name | Console / docs blurb |
 | `retries` | `number` | `3` | Declared; not the `once` lease / DLQ path |
@@ -297,7 +297,7 @@ export const create = on(
 ```
 
 The producer WideEvent / run id is stamped as `parentRunId` for Console trace chains. Schema
-mismatches fail at emit (**OKE1043**) before any subscriber runs.
+mismatches fail at emit (**OKE1250**) before any subscriber runs.
 
 ## Subscribers
 
@@ -417,12 +417,12 @@ dead-letter queue for exhausted retries in the queue sense — see
 
 <Accordions>
 
-<Accordion title="Orphan emit (OKE1042)">
+<Accordion title="Orphan emit (OKE1240)">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
   Fix: bind at least one `on(signal, flow)` or set `{ optional: true }`.
 </Accordion>
 
-<Accordion title="Schema (OKE1043)">
+<Accordion title="Schema (OKE1250)">
   Cause: `"{resource}": {detail}`. Fix the payload or the `schema`. No subscriber ran.
 </Accordion>
 
@@ -460,12 +460,12 @@ dead-letter queue for exhausted retries in the queue sense — see
   [`signal.live`](/docs/elements/signal/live).
 </Accordion>
 
-<Accordion title="OKE1042 on emit">
+<Accordion title="OKE1240 on emit">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
   No subscriber is bound. Add `on(signal, …)` or `{ optional: true }`.
 </Accordion>
 
-<Accordion title="OKE1043 on emit">
+<Accordion title="OKE1250 on emit">
   Cause: `"{resource}": {detail}`. Align the payload with `schema` — no subscriber started.
 </Accordion>
 
@@ -495,7 +495,7 @@ dead-letter queue for exhausted retries in the queue sense — see
 - [Consumers](/docs/elements/flow/consumers) — binding `on(signal)`
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — when the consumer is a browser
 - [fx](/docs/reference/fx) — `fx.emit`
-- [Errors](/docs/reference/errors) — OKE1042 · OKE1043
+- [Errors](/docs/reference/errors) — OKE1240 · OKE1250
 
 ## Next
 

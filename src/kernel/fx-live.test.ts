@@ -130,7 +130,7 @@ describe("fx.live", () => {
     await runtime.close();
   });
 
-  test("ready throws OKE1014 for a missing afterId", async () => {
+  test("ready throws OKE1210 for a missing afterId", async () => {
     const orderStatus = signal.live("order-status", { optional: true });
     const runtime = openRuntime(orderStatus);
     const fx = createFx({
@@ -139,7 +139,7 @@ describe("fx.live", () => {
       signalRuntime: runtime,
     });
     const stream = fx.live(orderStatus, { afterId: "missing" });
-    await expect(stream.ready?.()).rejects.toMatchObject({ code: 1014 });
+    await expect(stream.ready?.()).rejects.toMatchObject({ code: 1210 });
     const res = await encodeExecuteResult({ output: stream });
     expect(res.status).toBe(410);
     expect(await res.json()).toMatchObject({

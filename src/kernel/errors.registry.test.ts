@@ -1,48 +1,140 @@
 /**
- * Error-code registry gate — unique codes, cause/fix/docsUrl shape (§21).
+ * Error-code registry gate — unique codes, domain ranges, lazy discovery (§21).
  *
  * Docs pages (docs/e/{code}.md) are deferred to a dedicated docs prompt;
  * this gate enforces registry invariants only.
  */
 
-import { describe, expect, test } from "bun:test";
-import { OKE_ERRORS, OkeError, lookupOkeError, type OkeErrorDefinition } from "./errors.ts";
+import { afterAll, describe, expect, test } from "bun:test";
+import { unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  OKE_ERROR_RANGES,
+  OKE_ERRORS,
+  OkeError,
+  lookupOkeError,
+  type OkeErrorDefinition,
+} from "./errors.ts";
 import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
 import { TENANT_NOT_MEMBER, TENANT_REQUIRED, TENANT_UNKNOWN_SCOPE } from "./errors-tenant.ts";
+import {
+  assertCodesInDomainRanges,
+  assertUniqueCodes,
+  discoverLazyErrorDefs,
+  findDuplicateCodes,
+  findOutOfRangeDefs,
+} from "./errors.registry-helpers.ts";
 
-const LAZY_DEFS: readonly OkeErrorDefinition[] = [
-  LIVE_RESUME_GAP,
-  TENANT_REQUIRED,
-  TENANT_NOT_MEMBER,
-  TENANT_UNKNOWN_SCOPE,
-];
+const KERNEL_DIR = import.meta.dir;
+const PROBE_FILE = "errors-__probe__.ts";
+const PROBE_PATH = join(KERNEL_DIR, PROBE_FILE);
 
 describe("OKE error-code registry", () => {
-  test("every code is unique", () => {
-    const codes = [
-      ...Object.values(OKE_ERRORS).map((d) => d.code),
-      ...LAZY_DEFS.map((d) => d.code),
-    ];
-    expect(new Set(codes).size).toBe(codes.length);
+  test("every code is unique across main + discovered lazy defs", async () => {
+    const { defs: lazy } = await discoverLazyErrorDefs(KERNEL_DIR);
+    const all = [...Object.values(OKE_ERRORS), ...lazy];
+    expect(findDuplicateCodes(all)).toEqual([]);
+    assertUniqueCodes(all);
   });
 
-  test("every entry has non-empty cause and fix templates", () => {
+  test("every code falls within its declared domain range", async () => {
+    const { defs: lazy } = await discoverLazyErrorDefs(KERNEL_DIR);
+    const all = [...Object.values(OKE_ERRORS), ...lazy];
+    expect(findOutOfRangeDefs(all)).toEqual([]);
+    assertCodesInDomainRanges(all);
+  });
+
+  test("OKE_ERROR_RANGES matches the locked domain scheme", () => {
+    expect(OKE_ERROR_RANGES.kernel).toEqual([1000, 1099]);
+    expect(OKE_ERROR_RANGES.store).toEqual([1100, 1199]);
+    expect(OKE_ERROR_RANGES.signal).toEqual([1200, 1299]);
+    expect(OKE_ERROR_RANGES.clock).toEqual([1300, 1399]);
+    expect(OKE_ERROR_RANGES.gate).toEqual([1400, 1499]);
+    expect(OKE_ERROR_RANGES.vault).toEqual([1500, 1599]);
+    expect(OKE_ERROR_RANGES.channel).toEqual([1600, 1699]);
+    expect(OKE_ERROR_RANGES.ai).toEqual([1700, 1799]);
+    expect(OKE_ERROR_RANGES.mcp_tenancy).toEqual([1800, 1899]);
+    expect(OKE_ERROR_RANGES.compiler).toEqual([1900, 1999]);
+  });
+
+  test("lazy discovery finds live-resume and tenant modules without a hand list", async () => {
+    const { files, defs } = await discoverLazyErrorDefs(KERNEL_DIR);
+    expect(files).toContain("errors-live-resume.ts");
+    expect(files).toContain("errors-tenant.ts");
+    expect(defs.map((d) => d.code).sort((a, b) => a - b)).toEqual([1210, 1810, 1820, 1830]);
+  });
+
+  test("adversarial: out-of-range synthetic def fails range check", () => {
+    const bad: OkeErrorDefinition = {
+      code: 1999,
+      domain: "kernel",
+      cause: "probe",
+      fix: "probe",
+    };
+    expect(findOutOfRangeDefs([bad])).toEqual([bad]);
+    expect(() => assertCodesInDomainRanges([bad])).toThrow(/outside domain range/);
+  });
+
+  test("adversarial: duplicate synthetic def fails uniqueness check", () => {
+    const clone: OkeErrorDefinition = {
+      ...OKE_ERRORS.UNDECLARED_READ,
+      cause: "dup",
+      fix: "dup",
+    };
+    expect(findDuplicateCodes([OKE_ERRORS.UNDECLARED_READ, clone])).toEqual([1001]);
+    expect(() => assertUniqueCodes([OKE_ERRORS.UNDECLARED_READ, clone])).toThrow(/Duplicate/);
+  });
+
+  test("adversarial: filesystem probe is discovered and fails range/uniqueness", async () => {
+    await writeFile(
+      PROBE_PATH,
+      [
+        'import type { OkeErrorDefinition } from "./errors.ts";',
+        "export const PROBE_OUT_OF_RANGE: OkeErrorDefinition = {",
+        "  code: 1999,",
+        '  domain: "kernel",',
+        '  cause: "adversarial probe",',
+        '  fix: "delete this file",',
+        "};",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const { files, defs } = await discoverLazyErrorDefs(KERNEL_DIR);
+      expect(files).toContain(PROBE_FILE);
+      const probe = defs.find((d) => d.code === 1999);
+      expect(probe).toBeDefined();
+      const all = [...Object.values(OKE_ERRORS), ...defs];
+      expect(findOutOfRangeDefs(all).some((d) => d.code === 1999)).toBe(true);
+      expect(() => assertCodesInDomainRanges(all)).toThrow(/OKE1999/);
+    } finally {
+      await unlink(PROBE_PATH).catch(() => undefined);
+    }
+  });
+
+  afterAll(async () => {
+    await unlink(PROBE_PATH).catch(() => undefined);
+  });
+
+  test("every entry has non-empty cause and fix templates", async () => {
+    const { defs: lazy } = await discoverLazyErrorDefs(KERNEL_DIR);
     for (const [key, def] of Object.entries(OKE_ERRORS)) {
       expect(def.cause.trim().length, `${key}.cause`).toBeGreaterThan(0);
       expect(def.fix.trim().length, `${key}.fix`).toBeGreaterThan(0);
       expect(Number.isInteger(def.code), `${key}.code`).toBe(true);
       expect(def.code, `${key}.code`).toBeGreaterThan(0);
+      expect(def.domain, `${key}.domain`).toBeTruthy();
     }
-    expect(LIVE_RESUME_GAP.cause.trim().length).toBeGreaterThan(0);
-    expect(LIVE_RESUME_GAP.fix.trim().length).toBeGreaterThan(0);
-    for (const def of LAZY_DEFS) {
+    for (const def of lazy) {
       expect(def.cause.trim().length, `${def.code}.cause`).toBeGreaterThan(0);
       expect(def.fix.trim().length, `${def.code}.fix`).toBeGreaterThan(0);
     }
   });
 
-  test("OkeError docsUrl matches docs origin /e/{code}", () => {
-    for (const def of [...Object.values(OKE_ERRORS), ...LAZY_DEFS] as OkeErrorDefinition[]) {
+  test("OkeError docsUrl matches docs origin /e/{code}", async () => {
+    const { defs: lazy } = await discoverLazyErrorDefs(KERNEL_DIR);
+    for (const def of [...Object.values(OKE_ERRORS), ...lazy] as OkeErrorDefinition[]) {
       const err = new OkeError(def);
       expect(err.docsUrl).toBe(`https://oke.omqkhafi.dev/e/${def.code}`);
       expect(err.message).toContain(err.docsUrl);
@@ -52,18 +144,23 @@ describe("OKE error-code registry", () => {
   });
 
   test("lookupOkeError finds the lazy LIVE_RESUME_GAP entry", () => {
-    expect(lookupOkeError(1014)).toEqual(LIVE_RESUME_GAP);
+    expect(lookupOkeError(1210)).toEqual(LIVE_RESUME_GAP);
   });
 
   test("lookupOkeError finds lazy tenant entries", () => {
-    expect(lookupOkeError(1015)).toEqual(TENANT_REQUIRED);
-    expect(lookupOkeError(1016)).toEqual(TENANT_NOT_MEMBER);
-    expect(lookupOkeError(1017)).toEqual(TENANT_UNKNOWN_SCOPE);
+    expect(lookupOkeError(1810)).toEqual(TENANT_REQUIRED);
+    expect(lookupOkeError(1820)).toEqual(TENANT_NOT_MEMBER);
+    expect(lookupOkeError(1830)).toEqual(TENANT_UNKNOWN_SCOPE);
   });
 
-  test("lookupOkeError finds UNDECLARED_EMBED at 1020 (not tenant 1015)", () => {
-    expect(lookupOkeError(1020)).toEqual(OKE_ERRORS.UNDECLARED_EMBED);
-    expect(OKE_ERRORS.UNDECLARED_EMBED.code).toBe(1020);
-    expect(TENANT_REQUIRED.code).toBe(1015);
+  test("lookupOkeError finds UNDECLARED_EMBED at 1009 (not tenant)", () => {
+    expect(lookupOkeError(1009)).toEqual(OKE_ERRORS.UNDECLARED_EMBED);
+    expect(OKE_ERRORS.UNDECLARED_EMBED.code).toBe(1009);
+    expect(TENANT_REQUIRED.code).toBe(1810);
+  });
+
+  test("NO_EFFECTS_DECLARED owns 1020 after renumber (was UNDECLARED_EMBED)", () => {
+    expect(OKE_ERRORS.NO_EFFECTS_DECLARED.code).toBe(1020);
+    expect(OKE_ERRORS.UNDECLARED_EMBED.code).toBe(1009);
   });
 });

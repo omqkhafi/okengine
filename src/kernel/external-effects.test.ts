@@ -56,7 +56,7 @@ describe("fx.fetch", () => {
       effects: { fetches: ["api.example.com"] },
     });
     await expect(fx.fetch("https://api.stripe.com/v1")).rejects.toMatchObject({
-      code: 1019,
+      code: 1008,
     });
   });
 

@@ -108,6 +108,7 @@ export {
   fail,
   formatOkeMessage,
   lookupOkeError,
+  OKE_ERROR_RANGES,
   OKE_ERRORS,
   OkeError,
   throwOke,
@@ -116,6 +117,7 @@ export {
   type FlowFailure,
   type OkeErrorCode,
   type OkeErrorDefinition,
+  type OkeErrorDomain,
   type OkeErrorParams,
 } from "./errors.ts";
 

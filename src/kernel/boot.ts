@@ -653,7 +653,7 @@ export function resetNoEffectsWarnForTests(): void {
 /** Result of a best-effort Manifest extract (never throws). */
 type AutoExtractResult = {
   readonly manifest?: Manifest;
-  /** Present when extract threw — surfaced before OKE1008 in strict boots. */
+  /** Present when extract threw — surfaced before OKE1020 in strict boots. */
   readonly error?: string;
 };
 
@@ -692,7 +692,7 @@ async function tryAutoExtractManifest(rootDir: string): Promise<AutoExtractResul
  *
  * When neither Manifest nor declared effects are available: `test` stays
  * open with a once-per-process `oke boot:` warning; `dev` with compose
- * infra and `prod` fail loud (`OKE1008`) — never a silent open door in a
+ * infra and `prod` fail loud (`OKE1020`) — never a silent open door in a
  * deploy-shaped environment.
  *
  * @param flows - Adopted flows
@@ -809,7 +809,7 @@ async function tryListFlowsUnits(rootDir: string): Promise<readonly string[] | u
  * Opt-in only via {@link BootOptions.rootDir} / `OKE_ROOT_DIR` (same gate as
  * {@link mintCapabilities}'s Manifest fallback) — never a filesystem read
  * the kernel performs on its own. `test` warns once per process; `prod`
- * (and `dev` with compose) fail loud (`OKE1009`) — same class as
+ * (and `dev` with compose) fail loud (`OKE1030`) — same class as
  * `NO_EFFECTS_DECLARED`, never a silently-incomplete route table in a
  * deploy-shaped environment.
  *

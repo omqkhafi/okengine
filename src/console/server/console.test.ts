@@ -502,7 +502,7 @@ describe("console boot under oke dev compose env", () => {
     },
   } as const;
 
-  test("docker:true + env:dev hard-fails OKE1008 on undeclared console flows", async () => {
+  test("docker:true + env:dev hard-fails OKE1020 on undeclared console flows", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "oke-console-docker-strict-"));
     const handle = createConsoleApp({
       cwd,
@@ -511,7 +511,7 @@ describe("console boot under oke dev compose env", () => {
     });
     await expect(
       handle.app.boot({ env: "dev", docker: true, config: isolatedDevConfig }),
-    ).rejects.toThrow(/OKE1008/);
+    ).rejects.toThrow(/OKE1020/);
   });
 
   test("docker:false + env:dev boots even when OKE_DOCKER=1 (serveConsole contract)", async () => {

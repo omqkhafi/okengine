@@ -710,7 +710,7 @@ on(
 ```
 
 Missing or non-Flow keys throw `on(http.resource(...)) expects the five CRUD FlowDefs`.
-A `GET /notes` you also declared by hand collides at boot (**OKE1011**).
+A `GET /notes` you also declared by hand collides at boot (**OKE1041**).
 
 </Accordion>
 
@@ -850,10 +850,10 @@ Same driver, identity, and extract guardrails as Resource Live. Prefer
 | ---- | ------ |
 | Member `:orderId` + admin firehose | Yes — gates and match differ |
 | Same params, different gates | Yes — the client disambiguates with `via` |
-| Two member firehoses on different paths | No — **OKE1013** |
-| Same method + path twice | No — **OKE1011** first |
+| Two member firehoses on different paths | No — **OKE1050** |
+| Same method + path twice | No — **OKE1041** first |
 
-**OKE1013** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
+**OKE1050** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
 Fix: a different gate, a path-param filter, or drop the extra route.
 
 </Accordion>
@@ -886,7 +886,7 @@ stop();
 `api.orders.events({ orderId }, { onEvent })` is the same shape on the exposing
 Flow. Reconnects send `Last-Event-ID` from the last `id:` received.
 
-A **410** `LiveResumeGap` (**OKE1014**) means that cursor is gone — drop it
+A **410** `LiveResumeGap` (**OKE1210**) means that cursor is gone — drop it
 and replay the remaining tape (`autoResubscribe: true`).
 
 Resource live queries use `useLiveQuery` (snapshot + classified events), not
@@ -1014,7 +1014,7 @@ Standard status code mappings:
   yourself instead of `http.resource`.
 </Accordion>
 
-<Accordion title="OKE1011 — method + path bound twice">
+<Accordion title="OKE1041 — method + path bound twice">
   Cause: `{method} {path} is bound twice (flow "{flow}").` A resource mount plus a
   handwritten `http.get("/notes")` (or two mounts on the same base path) collide.
   Drop one binding.
@@ -1025,13 +1025,13 @@ Standard status code mappings:
   (`http.get(...)` or `http.live(...)`). Other verbs reject live stream synthesis.
 </Accordion>
 
-<Accordion title="OKE1013 — live signal exposed twice">
+<Accordion title="OKE1050 — live signal exposed twice">
   Cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
   Two firehoses (`http.live` or param-less `.live`) that share the signal and
   gates cannot boot. Change the gate, add a path-param filter, or remove a route.
 </Accordion>
 
-<Accordion title="OKE1014 — 410 LiveResumeGap">
+<Accordion title="OKE1210 — 410 LiveResumeGap">
   Cause: `Cursor "{afterId}" missing on "{signal}".` That `Last-Event-ID` is
   gone from the tape. Reconnect without it; remaining events replay.
   `autoResubscribe: true` does this after backoff.
@@ -1052,7 +1052,7 @@ Standard status code mappings:
 - [Client](/docs/client/live) — `api.live`, `useLive`, `useLiveQuery`
 - [fx](/docs/reference/fx) — `fx.live`, `fx.json.stream`, `fx.json.create`
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers
-- [Errors](/docs/reference/errors) — OKE1011 · OKE1013 · OKE1014
+- [Errors](/docs/reference/errors) — OKE1041 · OKE1050 · OKE1210
 
 ## Next
 

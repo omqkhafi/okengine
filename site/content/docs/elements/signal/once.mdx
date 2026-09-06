@@ -188,7 +188,7 @@ Optional second argument to `signal.once`. Delivery is the helper name — not a
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1043**) |
+| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1250**) |
 | `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
 | `deadLetter` | `boolean` | `true` | Keep exhausted messages; not a queue name |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |
@@ -287,7 +287,7 @@ export const fulfillB = on(
 
 <Tab value="Optional">
 
-Hooks that may have no worker yet need `optional: true` or emit throws **OKE1042**:
+Hooks that may have no worker yet need `optional: true` or emit throws **OKE1240**:
 
 ```typescript
 export const webhook = signal.once("hooks.inbound", {
@@ -468,14 +468,14 @@ Returned entries include `payload`, `attempts`, `failures`, `key`, `createdAt`, 
 </Accordion>
 
 <Accordion title="Schema at emit">
-  Invalid payloads fail at `fx.emit` with **OKE1043** before any worker runs. Same Standard
+  Invalid payloads fail at `fx.emit` with **OKE1250** before any worker runs. Same Standard
   Schema path as Flow `in`.
 
 Cause: `"{resource}": {detail}`.
 </Accordion>
 
 <Accordion title="Orphan emit">
-  Zero subscribers + `optional: false` → **OKE1042**.
+  Zero subscribers + `optional: false` → **OKE1240**.
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
   Fix: add `on(signal, …)` or mark `{ optional: true }`.
 </Accordion>
@@ -520,7 +520,7 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 
 <Accordion title="Worker never runs after emit">
   Confirm `on(signalHandle, flow)` uses the same declared handle (or the same name) and is
-  adopted into the app. Check **OKE1042** if the emit itself threw. Live Signals are not
+  adopted into the app. Check **OKE1240** if the emit itself threw. Live Signals are not
   workers — use Once or Broadcast.
 </Accordion>
 
@@ -541,11 +541,11 @@ See [Durable Workflows](/docs/elements/flow/workflows).
   journal it.
 </Accordion>
 
-<Accordion title="OKE1043 on emit">
+<Accordion title="OKE1250 on emit">
   Cause: `"{resource}": {detail}`. Align the payload with `schema` — the worker never started.
 </Accordion>
 
-<Accordion title="OKE1042 on emit">
+<Accordion title="OKE1240 on emit">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
   Add a subscriber or set `{ optional: true }` on the Signal.
 </Accordion>
@@ -574,7 +574,7 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 - [Consumers](/docs/elements/flow/consumers) — `on(signal)` next to Clock / CDC
 - [Workflows](/docs/elements/flow/workflows) — `durable` + `fx.step` for idempotent side effects
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`
-- [Errors](/docs/reference/errors) — OKE1042 · OKE1043 · OKE1001
+- [Errors](/docs/reference/errors) — OKE1240 · OKE1250 · OKE1001
 
 ## Next
 

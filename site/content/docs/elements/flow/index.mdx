@@ -336,7 +336,7 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 <Accordion title="Name stamping">
   Prefer nameless `flow({ do })` on tree files — the file stamps `unit.export`.
   Pass `flow("notes.create", { … })` only for control. Nameless HTTP after adopt
-  fails **OKE1012** — see [Routing](/docs/elements/flow/routing#when-to-omit--when-to-pass).
+  fails **OKE1045** — see [Routing](/docs/elements/flow/routing#when-to-omit--when-to-pass).
 </Accordion>
 
 </Accordions>
@@ -379,7 +379,7 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 <Accordion title="Undeclared effects (OKE1001–1007)">
   Explicit `effects` that drift from the body throw at runtime (`Flow "{flow}" writes
   "{resource}" without declaring it.`). Most apps never write `effects` — inference
-  covers them. **OKE1008** is deploy-shaped boot with neither inference nor a block.
+  covers them. **OKE1020** is deploy-shaped boot with neither inference nor a block.
 </Accordion>
 
 </Accordions>
@@ -557,7 +557,7 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
   "operator"` and invoke it from Console, or split a user-safe callee.
 </Accordion>
 
-<Accordion title="OKE1008 — no declared effects">
+<Accordion title="OKE1020 — no declared effects">
   Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.`
   Boot with `oke build` / `oke dev` so extract can infer. Framework / plugin Flows
   outside the app tree get an empty least-privilege stamp automatically when a
@@ -573,12 +573,12 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 
 - [The Anatomy](/docs/understand/the-anatomy) — `on`, trigger, `flow`, `do`, `fx`
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, resources, live SSE
-- [Routing](/docs/elements/flow/routing) — file-tree stamps, barrels, OKE1009–1012
+- [Routing](/docs/elements/flow/routing) — file-tree stamps, barrels, OKE1030 · OKE1040–1045
 - [Consumers](/docs/elements/flow/consumers) — Signal / Clock / CDC
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step`
 - [fx](/docs/reference/fx) — every method inside `do`
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the trigger
-- [Errors](/docs/reference/errors) — OKE1001–1008 · ValidationError · denials
+- [Errors](/docs/reference/errors) — OKE1001–1009 · OKE1020 · ValidationError · denials
 - [MCP](/docs/elements/ai/mcp) — `mcp.tool` exposure
 
 ## Next

@@ -272,7 +272,7 @@ A second Flow bound to the same Signal also runs. That is the fan-out.
 
 <Tab value="Optional">
 
-Emit with zero subscribers throws **OKE1042** unless `optional: true`. Use that for live
+Emit with zero subscribers throws **OKE1240** unless `optional: true`. Use that for live
 firehoses and hook Signals that may have no worker yet:
 
 ```typescript
@@ -281,7 +281,7 @@ export const webhook = signal.once("hooks.inbound", { optional: true,
 });
 ```
 
-**OKE1042** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+**OKE1240** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
 Fix: add `on(signal, …)` or mark `{ optional: true }`.
 
 </Tab>
@@ -295,7 +295,7 @@ Fix: add `on(signal, …)` or mark `{ optional: true }`.
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1043** on mismatch) |
+| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1250** on mismatch) |
 | `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
 | `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |
@@ -326,7 +326,7 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 </Accordion>
 
 <Accordion title="Schema at emit">
-  Invalid payloads fail at `fx.emit` with **OKE1043** (`"{resource}": {detail}`) before any
+  Invalid payloads fail at `fx.emit` with **OKE1250** (`"{resource}": {detail}`) before any
   consumer runs. Fix the payload or the `schema`. Same Standard Schema path as Flow `in`.
 
 </Accordion>
@@ -623,12 +623,12 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
   `clock("name", { every: "1h" })`.
 </Accordion>
 
-<Accordion title="OKE1042 — emit with no subscriber">
+<Accordion title="OKE1240 — emit with no subscriber">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.` Add `on(signal, flow)` or
   set `{ optional: true }` on the Signal (live firehoses, unused hooks).
 </Accordion>
 
-<Accordion title="OKE1043 — emit failed schema">
+<Accordion title="OKE1250 — emit failed schema">
   Cause: `"{resource}": {detail}`. The payload failed the Signal's Standard Schema at emit.
   Fix the payload; the consumer never ran.
 </Accordion>
@@ -673,7 +673,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 - [Store · SQL](/docs/elements/store/sql) — tables CDC watches
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `signal.live` SSE
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.clock`
-- [Errors](/docs/reference/errors) — OKE1042 · OKE1043
+- [Errors](/docs/reference/errors) — OKE1240 · OKE1250
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` on a consumer
 
 ## Next

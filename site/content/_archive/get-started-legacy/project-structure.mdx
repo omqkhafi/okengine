@@ -259,7 +259,7 @@ These names do **not** add a segment. Same five ops as `http.resource`, plus `in
 
 Any other leaf **does** add a segment (`archive.ts` → `/archive`). Method always comes from `http.get` / `http.post` / … — never from the filename.
 
-Several Flow exports in one `route.ts` share the inferred path; different methods are OK. The same method twice fails boot (**OKE1011**).
+Several Flow exports in one `route.ts` share the inferred path; different methods are OK. The same method twice fails boot (**OKE1041**).
 
 <Tabs items={["list", "create", "get", "archive", "route.ts"]}>
 <Tab value="list">
@@ -860,19 +860,19 @@ Two files in one unit exporting `get` is a generate error. Rename one export. Se
 
 <Accordion title="Unresolved http.get()">
 
-`http.get()` with no path is a sentinel, not `/`. Import the generated barrel so the stamp runs, or pass an explicit path. Boot fails with **OKE1010** if the sentinel is still there.
+`http.get()` with no path is a sentinel, not `/`. Import the generated barrel so the stamp runs, or pass an explicit path. Boot fails with **OKE1040** if the sentinel is still there.
 
 </Accordion>
 
 <Accordion title="Duplicate method + path">
 
-Two bindings on the same method and path fail boot (**OKE1011**) — last-add-wins is refused. `list.ts` (`GET /notes`) plus a `GET` in `route.ts` is that collision. `list.ts` + `create.ts` share `/notes` on different methods and are fine.
+Two bindings on the same method and path fail boot (**OKE1041**) — last-add-wins is refused. `list.ts` (`GET /notes`) plus a `GET` in `route.ts` is that collision. `list.ts` + `create.ts` share `/notes` on different methods and are fine.
 
 </Accordion>
 
 <Accordion title="Stale generated.ts">
 
-A unit folder on disk with no adopted flows is **OKE1009**. Run `oke dev` or `oke build`. The watcher regenerates on `flows/**` changes except `generated.ts` itself.
+A unit folder on disk with no adopted flows is **OKE1030**. Run `oke dev` or `oke build`. The watcher regenerates on `flows/**` changes except `generated.ts` itself.
 
 </Accordion>
 
@@ -890,7 +890,7 @@ Mixed-barrel fires only for a barrel `index.ts` plus tree files — not because 
 
 <Accordion title="Unnamed HTTP flow">
 
-`flow({ do })` outside a unit is `flow_1` until stamped. Adopted HTTP still unnamed is **OKE1012**. Export from `flows/<unit>/` or pass `flow("unit.export", {…})`.
+`flow({ do })` outside a unit is `flow_1` until stamped. Adopted HTTP still unnamed is **OKE1045**. Export from `flows/<unit>/` or pass `flow("unit.export", {…})`.
 
 </Accordion>
 

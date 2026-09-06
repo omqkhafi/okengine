@@ -152,7 +152,7 @@ export async function serveConsole(
   // `env: "dev"` only with compose URLs (or memory overrides) available.
   // Never inherit `OKE_DOCKER=1` from `oke dev` into capability minting —
   // Console operator flows don't stamp Manifest effects, and docker+dev
-  // would otherwise hard-fail with OKE1008 on the first undeclared flow
+  // would otherwise hard-fail with OKE1020 on the first undeclared flow
   // (`console.setup.status`). Compose URLs for Manifest panels bind via
   // `bindManifest*` below, not this boot's driver map.
   const env = options.env ?? "test";

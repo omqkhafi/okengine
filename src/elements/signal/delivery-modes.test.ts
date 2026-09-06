@@ -233,7 +233,7 @@ for (const { label, driver, setup } of drivers) {
       expect(rest.map((e) => e.payload)).toEqual([{ seat: "12B" }, { seat: "12C" }]);
     });
 
-    test("live: unknown afterId throws OKE1014", async () => {
+    test("live: unknown afterId throws OKE1210", async () => {
       const live = signal.live("seat-feed", { optional: true });
       const bus = await openBus(driver, [live], setup?.() ?? {});
       await bus.emit("seat-feed", { seat: "12A" });
@@ -241,7 +241,7 @@ for (const { label, driver, setup } of drivers) {
 
       const it = bus.live("seat-feed", { afterId: "missing" })[Symbol.asyncIterator]();
       try {
-        await expect(it.next()).rejects.toMatchObject({ code: 1014 });
+        await expect(it.next()).rejects.toMatchObject({ code: 1210 });
       } finally {
         await it.return?.();
       }

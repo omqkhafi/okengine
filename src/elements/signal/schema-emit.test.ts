@@ -49,7 +49,7 @@ const drivers: Array<{
 
 for (const { label, driver, setup } of drivers) {
   describe(`signal schema emit · ${label}`, () => {
-    test("invalid payload rejected at emit with OKE1043; valid succeeds", async () => {
+    test("invalid payload rejected at emit with OKE1250; valid succeeds", async () => {
       const orderPlaced = signal.once("order-placed", { schema: z.object({
           orderId: z.string(),
           total: z.number() }),
@@ -71,7 +71,7 @@ for (const { label, driver, setup } of drivers) {
       expect(rejected).toBeInstanceOf(OkeError);
       const oke = rejected as OkeError;
       expect(oke.code).toBe(OKE_ERRORS.SIGNAL_SCHEMA.code);
-      expect(oke.message).toContain("OKE1043");
+      expect(oke.message).toContain("OKE1250");
       expect(oke.message).toContain("order-placed");
 
       // Nothing staged while invalid.

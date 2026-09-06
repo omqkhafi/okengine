@@ -38,9 +38,8 @@ oke dev
 ```
 
 Compose comes up (pull / create / start progress streams into the boot status
-lines), the backend listens on **6530**, Console on **6533**, app MCP on
-**6535**, docs MCP on **6536**. Open `http://localhost:6533`. Quit with
-**Ctrl+C**.
+lines), the backend listens on **6530**, Console on **6533**, app MCP on **6535**,
+docs MCP on **6536**. Open `http://localhost:6533`. Quit with **Ctrl+C**.
 
 On a TTY, after schema push, `oke dev` also:
 
@@ -197,7 +196,7 @@ oke db search-backfill notes --batch 500
   `prod` in [Configuration](/docs/reference/configuration).
 </Accordion>
 
-<Accordion title="OKE1101 after deploy">
+<Accordion title="OKE1110 after deploy">
   Domain tables are missing in prod (no auto-DDL). Run `oke db migrate` against
   that environment — see [Errors](/docs/reference/errors).
 </Accordion>

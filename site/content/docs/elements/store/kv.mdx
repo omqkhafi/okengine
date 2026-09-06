@@ -513,7 +513,7 @@ Opt out for genuinely global namespaces:
 export const catalog = store.kv("catalog", { tenantScoped: false });
 ```
 
-Missing tenant on a scoped op throws **OKE1015** (`TENANT_REQUIRED`):
+Missing tenant on a scoped op throws **OKE1810** (`TENANT_REQUIRED`):
 
 ```text
 This operation needs a tenant, but none is resolved for this request.
@@ -583,7 +583,7 @@ Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
   options bag on `set`.
 </Accordion>
 
-<Accordion title="OKE1015 — TENANT_REQUIRED on kv ops">
+<Accordion title="OKE1810 — TENANT_REQUIRED on kv ops">
   Cause: `This operation needs a tenant, but none is resolved for this request.`
   Tenancy is on and the namespace is tenant-scoped. Resolve `fx.tenant.id`, or
   set `tenantScoped: false` for global keys.
@@ -609,7 +609,7 @@ Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
 - [Gate](/docs/elements/gate) — rate buckets use Redis internally
 - [fx](/docs/reference/fx) — `fx.store(decl)`
 - [Configuration](/docs/reference/configuration) — `drivers.store.kv`
-- [Errors](/docs/reference/errors) — OKE1015
+- [Errors](/docs/reference/errors) — OKE1810
 
 ## Next
 

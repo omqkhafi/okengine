@@ -191,7 +191,7 @@ There is **no** `ai.prompt(...)` — mint prompts only via `model.prompt`.
 | `tools` | Flow refs | — | Offered as tools via `fx.call` |
 | `maxSteps` | `number` | `6` | Cap on tool rounds |
 
-Undeclared ask → **OKE1005** `UNDECLARED_ASK`. Undeclared embed → **OKE1020**.
+Undeclared ask → **OKE1005** `UNDECLARED_ASK`. Undeclared embed → **OKE1009**.
 
 ## Guardrails
 
@@ -315,7 +315,7 @@ Compose does not pin inference — BYO URL + keys, or [OpenRouter](/docs/recipes
 - [MCP](/docs/elements/ai/mcp) — inbound `mcp.tool` and outbound `ai.mcpServer`
 - [OpenRouter](/docs/recipes/openrouter) — zero-Docker cloud path
 - [fx](/docs/reference/fx) — `fx.ask` / `fx.run` / `fx.embed`
-- [Errors](/docs/reference/errors) — OKE1005 · OKE1020
+- [Errors](/docs/reference/errors) — OKE1005 · OKE1009
 
 ## Next
 

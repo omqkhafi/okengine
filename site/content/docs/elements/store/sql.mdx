@@ -649,7 +649,7 @@ do not fail the build. Full mount physics: [HTTP · Resource Live](/docs/element
 <Accordion title="Subset & Override">
   `http.resource` always mounts all five CRUD keys. Bind individual Flows for a
   subset; spread `.all()` and override one key to replace a verb. Collision
-  errors (**OKE1011**): [HTTP · Resources](/docs/elements/flow/http#resources).
+  errors (**OKE1041**): [HTTP · Resources](/docs/elements/flow/http#resources).
 </Accordion>
 
 </Accordions>
@@ -869,7 +869,7 @@ export default defineConfig({
 
 <Accordions>
 
-<Accordion title="OKE1101 — domain table not found">
+<Accordion title="OKE1110 — domain table not found">
   Cause: `domain table not found — migrations have not been applied.`
   Run `oke db push` locally or `oke db migrate` in that environment.
 </Accordion>
@@ -914,7 +914,7 @@ export default defineConfig({
   `store.schema.relations` is emit metadata only.
 </Accordion>
 
-<Accordion title="OKE1011 — method + path bound twice">
+<Accordion title="OKE1041 — method + path bound twice">
   A resource mount plus a handwritten `http.get("/notes")` (or two mounts on
   the same base path) collide. Drop one binding — see
   [HTTP · Troubleshooting](/docs/elements/flow/http#troubleshooting).
@@ -929,7 +929,7 @@ export default defineConfig({
 - [HTTP · Resources](/docs/elements/flow/http#resources) — mount, live SSE, verb table
 - [Consumers · CDC](/docs/elements/flow/consumers#cdc) — `db.table(…).changed()`
 - [fx](/docs/reference/fx) — `fx.store` session
-- [Errors](/docs/reference/errors) — OKE1101 · OKE1011
+- [Errors](/docs/reference/errors) — OKE1110 · OKE1041
 
 ## Next
 

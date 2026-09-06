@@ -1,5 +1,5 @@
 /**
- * Domain DDL policy — ensure vs migrate; missing schema → OKE1101.
+ * Domain DDL policy — ensure vs migrate; missing schema → OKE1110.
  */
 
 import { describe, expect, test } from "bun:test";

@@ -44,7 +44,7 @@ Follow this order — never skip step 2.
 
 - **Every API claim verified** against the files above — option names, defaults, unions, error text. Quote real error messages verbatim.
 - **Code examples must be real**: correct imports from `okengine`, real method chains, no invented helpers. If it wouldn't typecheck conceptually, it doesn't ship.
-- **No internal references**: no `src/…` paths, no test file names, no internal ticket/plan ids, no "Prompt 42". User-facing error codes (`OKE1101`) are fine.
+- **No internal references**: no `src/…` paths, no test file names, no internal ticket/plan ids, no "Prompt 42". User-facing error codes (`OKE1110`) are fine.
 - **No jargon without definition**: explain in the user's vocabulary first; the theory word comes after, if at all.
 - **Tables over prose** for enumerations; **examples over adjectives** for behavior.
 - **Duplicated headings are a defect** — if two `###` say the same thing, merge them.

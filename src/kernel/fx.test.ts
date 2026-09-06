@@ -129,7 +129,7 @@ describe("fx — capability enforcement", () => {
       err = e;
     }
     expect(err).toBeInstanceOf(OkeError);
-    expect((err as OkeError).code).toBe(1015);
+    expect((err as OkeError).code).toBe(1810);
   });
 
   test("index driverId is meilisearch before first I/O (not a function, not memory)", async () => {
@@ -685,31 +685,31 @@ describe("fx.json", () => {
 });
 
 describe("errors — registry", () => {
-  test("OKE1042 is reserved with the §21 shape", () => {
+  test("OKE1240 is reserved with the §21 shape", () => {
     const def = OKE_ERRORS.ORPHAN_EMIT;
-    expect(def.code).toBe(1042);
-    expect(lookupOkeError(1042)).toEqual(def);
+    expect(def.code).toBe(1240);
+    expect(lookupOkeError(1240)).toEqual(def);
     const err = new OkeError(def, {
       flow: "bookings.create",
       resource: "order-placed",
     });
-    expect(err.message).toContain("OKE1042");
+    expect(err.message).toContain("OKE1240");
     expect(err.message).toContain("no subscriber");
-    expect(err.message).toContain("https://oke.omqkhafi.dev/e/1042");
+    expect(err.message).toContain("https://oke.omqkhafi.dev/e/1240");
     expect(err.message).toContain("→");
   });
 
-  test("OKE1043 is reserved for signal schema emit failures", () => {
+  test("OKE1250 is reserved for signal schema emit failures", () => {
     const def = OKE_ERRORS.SIGNAL_SCHEMA;
-    expect(def.code).toBe(1043);
-    expect(lookupOkeError(1043)).toEqual(def);
+    expect(def.code).toBe(1250);
+    expect(lookupOkeError(1250)).toEqual(def);
     const err = new OkeError(def, {
       resource: "order-placed",
       detail: "total: Expected number, received string",
     });
-    expect(err.message).toContain("OKE1043");
+    expect(err.message).toContain("OKE1250");
     expect(err.message).toContain("order-placed");
-    expect(err.message).toContain("https://oke.omqkhafi.dev/e/1043");
+    expect(err.message).toContain("https://oke.omqkhafi.dev/e/1250");
   });
 
   test("fx.fail returns a value, not an exception", () => {

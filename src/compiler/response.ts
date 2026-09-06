@@ -98,7 +98,7 @@ function loadFxJson(): {
 /**
  * Encode an execute-style result (response / failure / output).
  *
- * Awaits {@link JsonStreamResult.ready} before the 200 SSE body so OKE1014
+ * Awaits {@link JsonStreamResult.ready} before the 200 SSE body so OKE1210
  * can return 410 instead of a half-open stream.
  *
  * @param result - Pipeline outcome pieces
@@ -119,7 +119,7 @@ export async function encodeExecuteResult(result: {
       result.error !== null &&
       typeof result.error === "object" &&
       "code" in result.error &&
-      (result.error as { code: unknown }).code === 1014
+      (result.error as { code: unknown }).code === 1210
         ? loadFxLiveStream().encodeGap(result.error)
         : undefined;
     if (gap) return gap;

@@ -2,9 +2,9 @@
  * Boot-level proof: a `src/flows/<unit>` folder on disk with no adopted
  * flow under that unit — the stale/missing `.adopt()` barrel case.
  *
- * Mirrors `effects-stamping.test.ts`'s OKE1008 shape exactly: opt-in only
+ * Mirrors `effects-stamping.test.ts`'s OKE1020 shape exactly: opt-in only
  * via `rootDir`, `test` warns once (dev-loop stays unbroken),
- * `dev`+compose / `prod` hard-fail (`OKE1009`) — never a silently-incomplete route
+ * `dev`+compose / `prod` hard-fail (`OKE1030`) — never a silently-incomplete route
  * table in a deploy-shaped environment.
  */
 
@@ -46,11 +46,11 @@ describe("assertAdoptBarrelFresh — direct", () => {
     }
   });
 
-  test("stale: unit on disk, zero adopted flows for it — dev+compose hard-fails OKE1009", async () => {
+  test("stale: unit on disk, zero adopted flows for it — dev+compose hard-fails OKE1030", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       await makeUnitDir(root, "notes");
-      await expect(assertAdoptBarrelFresh([], "dev", root, true)).rejects.toThrow(/OKE1009/);
+      await expect(assertAdoptBarrelFresh([], "dev", root, true)).rejects.toThrow(/OKE1030/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -60,7 +60,7 @@ describe("assertAdoptBarrelFresh — direct", () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       await makeUnitDir(root, "notes");
-      await expect(assertAdoptBarrelFresh([], "prod", root)).rejects.toThrow(/OKE1009/);
+      await expect(assertAdoptBarrelFresh([], "prod", root)).rejects.toThrow(/OKE1030/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -78,7 +78,7 @@ describe("assertAdoptBarrelFresh — direct", () => {
 });
 
 describe("boot-level: stale barrel through a real oke() boot", () => {
-  test("dev+compose: real app.boot() hard-fails OKE1009 when a unit folder was never adopted", async () => {
+  test("dev+compose: real app.boot() hard-fails OKE1030 when a unit folder was never adopted", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       // "notes" exists on disk but this app only ever adopted "main" —
@@ -109,7 +109,7 @@ describe("boot-level: stale barrel through a real oke() boot", () => {
             },
           },
         }),
-      ).rejects.toThrow(/OKE1009/);
+      ).rejects.toThrow(/OKE1030/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -534,7 +534,7 @@ export function createSqlStoreHandle(
   }
 
   /**
-   * Run a connection op; remap missing-relation driver errors to OKE1101
+   * Run a connection op; remap missing-relation driver errors to OKE1110
    * when domain auto-DDL is off.
    */
   async function withSchemaGuard<T>(fn: () => Promise<T>): Promise<T> {

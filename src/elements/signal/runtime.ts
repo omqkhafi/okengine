@@ -68,7 +68,7 @@ export interface SignalRuntime {
    */
   live(name: string, opts?: { readonly afterId?: string }): AsyncIterable<LiveEvent>;
   /**
-   * Validate a live resume cursor (auto-starts). Throws OKE1014 when missing.
+   * Validate a live resume cursor (auto-starts). Throws OKE1210 when missing.
    *
    * @param name - Signal name
    * @param afterId - SSE cursor

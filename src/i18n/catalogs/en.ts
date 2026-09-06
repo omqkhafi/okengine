@@ -32,27 +32,35 @@ export const builtinEn = {
       cause: 'Flow "{flow}" calls "{resource}" without declaring it.',
       fix: "Add \"{resource}\" to this flow''s effects.calls.",
     },
-    "1042": {
+    "1008": {
+      cause: 'Flow "{flow}" fetches "{resource}" without declaring it.',
+      fix: "Add \"{resource}\" to this flow''s effects.fetches.",
+    },
+    "1009": {
+      cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
+      fix: "Add \"{resource}\" to this flow''s effects.embeds.",
+    },
+    "1240": {
       cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
       fix: "Add on({resource}, …) or mark the signal '{'optional: true'}'.",
     },
-    "1014": {
+    "1210": {
       cause: 'Live cursor "{afterId}" is not on the tape for "{signal}".',
       fix: "Reconnect without Last-Event-ID to replay the remaining tape.",
     },
-    "1015": {
+    "1810": {
       cause: "This operation needs a tenant, but none is resolved for this request.",
       fix: "Call fx.auth.switchTenant(id), send a signed tid claim, or pass the tenant header.",
     },
-    "1016": {
+    "1820": {
       cause: 'The caller is not a member of tenant "{tenant}".',
       fix: "Pick a tenant from fx.auth.listTenants() or add the user as a member.",
     },
-    "1017": {
+    "1830": {
       cause: 'Tenant role scope "{scope}" is not a declared application scope.',
       fix: "Use a name from this app's Manifest catalog (never console:*).",
     },
-    "1101": {
+    "1110": {
       cause: "domain table not found — migrations have not been applied.",
       fix: "run `oke db migrate` against this environment.",
     },

@@ -30,13 +30,46 @@ function loadFailureMessage(): typeof import("../i18n/failure-message.ts") {
   }
 }
 
-/** Numeric OKE error code (permanent once published). */
+/** Numeric OKE error code (stable after the domain-range renumber). */
 export type OkeErrorCode = number;
+
+/**
+ * Error domain — each maps to a fixed numeric range in {@link OKE_ERROR_RANGES}.
+ * Kernel covers Flow/Trigger/Gate-posture (boot structural). Gate sessions/OAuth
+ * live in `gate`; MCP + tenancy share `mcp_tenancy`.
+ */
+export type OkeErrorDomain =
+  | "kernel"
+  | "store"
+  | "signal"
+  | "clock"
+  | "gate"
+  | "vault"
+  | "channel"
+  | "ai"
+  | "mcp_tenancy"
+  | "compiler";
+
+/** Inclusive `[lo, hi]` band for each {@link OkeErrorDomain}. */
+export const OKE_ERROR_RANGES = {
+  kernel: [1000, 1099],
+  store: [1100, 1199],
+  signal: [1200, 1299],
+  clock: [1300, 1399],
+  gate: [1400, 1499],
+  vault: [1500, 1599],
+  channel: [1600, 1699],
+  ai: [1700, 1799],
+  mcp_tenancy: [1800, 1899],
+  compiler: [1900, 1999],
+} as const satisfies Record<OkeErrorDomain, readonly [number, number]>;
 
 /** One registry entry — cause/fix may include `{name}` placeholders. */
 export interface OkeErrorDefinition {
-  /** Permanent numeric code. */
+  /** Permanent numeric code (must fall in {@link OKE_ERROR_RANGES} for `domain`). */
   readonly code: OkeErrorCode;
+  /** Domain that owns this code's numeric range. */
+  readonly domain: OkeErrorDomain;
   /** One-line cause template. */
   readonly cause: string;
   /** Suggested fix template. */
@@ -112,73 +145,92 @@ export interface FailOptions {
 }
 
 /**
- * Permanent error registry. Codes never change meaning once published.
+ * Permanent error registry. Codes are stable within their domain range after
+ * the domain-range renumber; each entry declares `domain` for range guards.
  *
- * Ranges (convention):
- * - `1000–1099` — capability / undeclared-effect violations
- * - `1042` — reserved by unified-theory §21 example (orphan emit)
+ * Ranges:
+ * - `1000–1099` — Kernel (Flow / Trigger / Gate-posture)
+ * - `1100–1199` — Store
+ * - `1200–1299` — Signal
+ * - `1300–1399` — Clock
+ * - `1400–1499` — Gate (sessions / OAuth / API keys)
+ * - `1500–1599` — Vault
+ * - `1600–1699` — Channel
+ * - `1700–1799` — AI
+ * - `1800–1899` — MCP + Tenancy
+ * - `1900–1999` — Compiler / Manifest
  */
 export const OKE_ERRORS = {
   /** Flow reads a store resource not listed in `effects.reads`. */
   UNDECLARED_READ: {
     code: 1001,
+    domain: "kernel",
     cause: 'Flow "{flow}" reads "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.reads.',
   },
   /** Flow writes a store resource not listed in `effects.writes`. */
   UNDECLARED_WRITE: {
     code: 1002,
+    domain: "kernel",
     cause: 'Flow "{flow}" writes "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.writes.',
   },
   /** Flow emits a signal not listed in `effects.emits`. */
   UNDECLARED_EMIT: {
     code: 1003,
+    domain: "kernel",
     cause: 'Flow "{flow}" emits "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.emits.',
   },
   /** Flow sends a channel template not listed in `effects.sends`. */
   UNDECLARED_SEND: {
     code: 1004,
+    domain: "kernel",
     cause: 'Flow "{flow}" sends "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.sends.',
   },
   /** Flow asks a prompt not listed in `effects.asks`. */
   UNDECLARED_ASK: {
     code: 1005,
+    domain: "kernel",
     cause: 'Flow "{flow}" asks "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.asks.',
-  },
-  /** Flow embeds via a model not listed in `effects.embeds`. */
-  UNDECLARED_EMBED: {
-    code: 1020,
-    cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.embeds.',
-  },
-  /** Flow fetches a host not listed in `effects.fetches`. */
-  UNDECLARED_FETCH: {
-    code: 1019,
-    cause: 'Flow "{flow}" fetches "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.fetches.',
   },
   /** Flow reads a secret not listed in `effects.secrets`. */
   UNDECLARED_SECRET: {
     code: 1006,
+    domain: "kernel",
     cause: 'Flow "{flow}" reads secret "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.secrets.',
   },
   /** Flow calls another flow not listed in `effects.calls`. */
   UNDECLARED_CALL: {
     code: 1007,
+    domain: "kernel",
     cause: 'Flow "{flow}" calls "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.calls.',
+  },
+  /** Flow fetches a host not listed in `effects.fetches`. */
+  UNDECLARED_FETCH: {
+    code: 1008,
+    domain: "kernel",
+    cause: 'Flow "{flow}" fetches "{resource}" without declaring it.',
+    fix: 'Add "{resource}" to this flow\'s effects.fetches.',
+  },
+  /** Flow embeds via a model not listed in `effects.embeds`. */
+  UNDECLARED_EMBED: {
+    code: 1009,
+    domain: "kernel",
+    cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
+    fix: 'Add "{resource}" to this flow\'s effects.embeds.',
   },
   /**
    * Flow has no declared `effects` and no Manifest-derived effects were
    * available to stamp at boot (dev+compose / prod — never a silent open token).
    */
   NO_EFFECTS_DECLARED: {
-    code: 1008,
+    code: 1020,
+    domain: "kernel",
     cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.',
     fix:
       "Add explicit `effects` to this flow, or boot with a Manifest (`oke build`) / " +
@@ -192,7 +244,8 @@ export const OKE_ERRORS = {
    * route table in a deploy-shaped environment.
    */
   ADOPT_BARREL_STALE: {
-    code: 1009,
+    code: 1030,
+    domain: "kernel",
     cause: "src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.",
     fix: "Run `oke dev` or `oke build` to regenerate `src/flows/generated.ts`.",
   },
@@ -200,7 +253,8 @@ export const OKE_ERRORS = {
    * `http.get()` was never stamped from the file tree — refuse a silent `/`.
    */
   HTTP_PATH_UNRESOLVED: {
-    code: 1010,
+    code: 1040,
+    domain: "kernel",
     cause: 'Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.',
     fix: 'Put the file under `src/flows/<unit>/` and import `@/flows/generated`, or pass an explicit path to `http.{method}("/…")`.',
   },
@@ -208,7 +262,8 @@ export const OKE_ERRORS = {
    * Two HTTP bindings share method + path — last-add-wins is the opposite of this DX.
    */
   HTTP_ROUTE_DUPLICATE: {
-    code: 1011,
+    code: 1041,
+    domain: "kernel",
     cause: '{method} {path} is bound twice (flow "{flow}").',
     fix: "Give each HTTP flow a unique method + path.",
   },
@@ -216,7 +271,8 @@ export const OKE_ERRORS = {
    * Adopted HTTP flow still has no name (`flow({ do })` outside a unit).
    */
   HTTP_FLOW_UNNAMED: {
-    code: 1012,
+    code: 1045,
+    domain: "kernel",
     cause: "An HTTP flow on {method} {path} has no name.",
     fix: 'Use `flow("unit.export", {…})` or export it from a `src/flows/<unit>/` file so the tree can stamp `unit.export`.',
   },
@@ -224,7 +280,8 @@ export const OKE_ERRORS = {
    * Two live HTTP exposures of the same signal share gates + match shape.
    */
   LIVE_EXPOSURE_DUPLICATE: {
-    code: 1013,
+    code: 1050,
+    domain: "kernel",
     cause:
       'Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).',
     fix: "Use a different gate or path-param filter, or drop the extra route.",
@@ -233,7 +290,8 @@ export const OKE_ERRORS = {
    * Two MCP tool bindings share the same exposed tool name.
    */
   MCP_TOOL_DUPLICATE: {
-    code: 1018,
+    code: 1060,
+    domain: "kernel",
     cause: 'MCP tool "{tool}" is bound twice (flow "{flow}").',
     fix: "Give each MCP tool exposure a unique tool name.",
   },
@@ -242,22 +300,24 @@ export const OKE_ERRORS = {
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */
   ORPHAN_EMIT: {
-    code: 1042,
+    code: 1240,
+    domain: "signal",
     cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
     fix: "Add `on({resource}, …)` or mark the signal `{ optional: true }`.",
   },
   /** Emit payload failed the signal's declared Standard Schema. */
   SIGNAL_SCHEMA: {
-    code: 1043,
+    code: 1250,
+    domain: "signal",
     cause: '"{resource}": {detail}',
     fix: "Fix schema payload.",
   },
   /**
    * Domain table/column missing under docker/prod (migrations not applied).
-   * Store/DDL band starts at 1100.
    */
   DOMAIN_SCHEMA_MISSING: {
-    code: 1101,
+    code: 1110,
+    domain: "store",
     cause: "domain table not found — migrations have not been applied.",
     fix: "run `oke db migrate` against this environment.",
   },
@@ -273,7 +333,7 @@ type TenantErrorChunk = {
 };
 
 /**
- * Load OKE1015–1017. Computed stem so Bun.build cannot inline the chunk.
+ * Load OKE1810–1830. Computed stem so Bun.build cannot inline the chunk.
  */
 function loadTenantErrors(): TenantErrorChunk {
   return lazyRequire(import.meta.dir, ["errors", "tenant"].join("-"));
@@ -302,15 +362,15 @@ export function throwOke(
  * @param code - Permanent numeric code
  */
 export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefined {
-  if (code === 1014) {
+  if (code === 1210) {
     return lazyRequire<typeof import("./errors-live-resume.ts")>(
       import.meta.dir,
       ["errors", "live", "resume"].join("-"),
     ).LIVE_RESUME_GAP;
   }
-  if (code === 1015) return loadTenantErrors().TENANT_REQUIRED;
-  if (code === 1016) return loadTenantErrors().TENANT_NOT_MEMBER;
-  if (code === 1017) return loadTenantErrors().TENANT_UNKNOWN_SCOPE;
+  if (code === 1810) return loadTenantErrors().TENANT_REQUIRED;
+  if (code === 1820) return loadTenantErrors().TENANT_NOT_MEMBER;
+  if (code === 1830) return loadTenantErrors().TENANT_UNKNOWN_SCOPE;
   for (const def of Object.values(OKE_ERRORS)) {
     if (def.code === code) return def;
   }

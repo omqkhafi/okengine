@@ -181,7 +181,7 @@ option.
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1043**) |
+| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1250**) |
 | `optional` | `boolean` | `false` | Allow emit with zero SSE clients / subscribers |
 | `retention` | `{ maxAge?, maxCount? }` | unbounded | Prune the tape (live-only) |
 | `description` | `string` | the name | Console / docs blurb |
@@ -316,10 +316,10 @@ For a handwritten list, bind the table on GET and open the window with
 | ---- | ------ |
 | Member `:orderId` + admin firehose | Yes — gates and match differ |
 | Same params, different gates | Yes — the client disambiguates with `via` |
-| Two member firehoses on different paths | No — **OKE1013** |
-| Same method + path twice | No — **OKE1011** first |
+| Two member firehoses on different paths | No — **OKE1050** |
+| Same method + path twice | No — **OKE1041** first |
 
-**OKE1013** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
+**OKE1050** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
 Fix: a different gate, a path-param filter, or drop the extra route.
 
 </Accordion>
@@ -339,7 +339,7 @@ Fix: a different gate, a path-param filter, or drop the extra route.
 | `fx.emit(signal, payload?)` | `emits` | Append to the live tape |
 | `fx.live(signal, { match? })` | `reads` `signal:<name>` | Server SSE body for a live tape |
 
-Invalid `schema` payloads fail at emit with **OKE1043** (`"{resource}": {detail}`) before any
+Invalid `schema` payloads fail at emit with **OKE1250** (`"{resource}": {detail}`) before any
 client receives the frame. Cross-signal `fx.live` without a declared read throws **OKE1001**.
 
 ```typescript title="src/flows/orders/[id]/ship.ts"
@@ -359,7 +359,7 @@ export const ship = on(
 );
 ```
 
-Zero SSE clients + `optional: false` → **OKE1042**. Cause:
+Zero SSE clients + `optional: false` → **OKE1240**. Cause:
 `Flow "{flow}" emits signal "{resource}" with no subscriber.`
 Fix: mount `http.live` (or a path `.live`) before emitting, or set `{ optional: true }`.
 
@@ -398,19 +398,19 @@ signal.live("…"): retention.maxCount must be an integer ≥ 1
 ```
 
 **Consequence:** a pruned `id:` becomes a resume gap — reconnects that still send that
-`Last-Event-ID` hit **OKE1014** / 410 `LiveResumeGap`. Prefer `autoResubscribe: true` on flaky
+`Last-Event-ID` hit **OKE1210** / 410 `LiveResumeGap`. Prefer `autoResubscribe: true` on flaky
 networks, or raise `maxCount` / `maxAge` if clients need longer catch-up.
 
 ## Resume and gaps
 
 <Callout title="Detailed section">
   Resume is exclusive: replay events **after** `Last-Event-ID`, then continue live. Unknown or
-  pruned ids throw **OKE1014** before the SSE body — HTTP maps that to **410** `LiveResumeGap`.
+  pruned ids throw **OKE1210** before the SSE body — HTTP maps that to **410** `LiveResumeGap`.
 </Callout>
 
 | Symptom | Meaning | Fix |
 | ------- | ------- | --- |
-| **OKE1014** / 410 `LiveResumeGap` | Cursor gone from the tape | Drop `Last-Event-ID`; replay remaining |
+| **OKE1210** / 410 `LiveResumeGap` | Cursor gone from the tape | Drop `Last-Event-ID`; replay remaining |
 | `autoResubscribe: true` | Client clears gap after backoff | Prefer for flaky networks |
 | Custom `fx.live(signal, { match })` | Server-side filter | Do not wrap with `fx.json.stream` |
 
@@ -513,30 +513,30 @@ SSE resume — not competing-consumer physics.
   synthesis: `on(http.*.live(signal)): live exposure must be GET`.
 </Accordion>
 
-<Accordion title="OKE1013 — live signal exposed twice">
+<Accordion title="OKE1050 — live signal exposed twice">
   Cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
   Two firehoses (`http.live` or param-less `.live`) that share the signal and gates cannot boot.
   Change the gate, add a path-param filter, or remove a route.
 </Accordion>
 
-<Accordion title="OKE1011 — method + path bound twice">
+<Accordion title="OKE1041 — method + path bound twice">
   Cause: `{method} {path} is bound twice (flow "{flow}").` Two mounts collide on the same
   method + path (for example two `http.live` firehoses that resolve to the same URL). Drop one
   binding.
 </Accordion>
 
-<Accordion title="OKE1014 — 410 LiveResumeGap">
+<Accordion title="OKE1210 — 410 LiveResumeGap">
   Cause: `Cursor "{afterId}" missing on "{signal}".` That `Last-Event-ID` was pruned or never
   existed. Reconnect without it; remaining events replay. `autoResubscribe: true` does this
   after backoff.
 </Accordion>
 
-<Accordion title="OKE1042 when emitting live">
+<Accordion title="OKE1240 when emitting live">
   No subscriber / exposure counted. Set `{ optional: true }` (usual for firehoses) or mount
   `http.live` before emitting in tests.
 </Accordion>
 
-<Accordion title="OKE1043 on emit">
+<Accordion title="OKE1250 on emit">
   Cause: `"{resource}": {detail}` from the Standard Schema issues. Align the payload with
   `schema` — no client receives a frame.
 </Accordion>
@@ -578,7 +578,7 @@ SSE resume — not competing-consumer physics.
 - [Client](/docs/client/live) — `api.live`, `useLive`, `useLiveQuery`
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.live`
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on triggers
-- [Errors](/docs/reference/errors) — OKE1013 · OKE1014 · OKE1042 · OKE1043
+- [Errors](/docs/reference/errors) — OKE1050 · OKE1210 · OKE1240 · OKE1250
 
 ## Next
 

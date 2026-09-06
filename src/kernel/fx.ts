@@ -391,7 +391,7 @@ export interface JsonStreamResult {
   readonly kind: "stream";
   readonly status: 200;
   readonly chunks: AsyncIterable<unknown>;
-  /** Awaited before the 200 SSE body; throws OKE1014 on a missing resume cursor. */
+  /** Awaited before the 200 SSE body; throws OKE1210 on a missing resume cursor. */
   ready?: () => Promise<void>;
   /** Set by the kernel to commit journal / Runs after the stream settles. */
   finalize?: () => Promise<void>;
@@ -698,7 +698,7 @@ export interface Fx {
    * Stream a `delivery: "live"` signal as SSE (records `read` on `signal:<name>`).
    *
    * HTTP `Last-Event-ID` is applied when `opts.afterId` is omitted. A missing
-   * cursor throws OKE1014; `JsonStreamResult.ready` turns that into HTTP 410.
+   * cursor throws OKE1210; `JsonStreamResult.ready` turns that into HTTP 410.
    *
    * @param signal - Signal name or handle
    * @param opts - Payload filter and optional resume cursor

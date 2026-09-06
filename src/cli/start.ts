@@ -61,7 +61,7 @@ export async function runStart(options: StartOptions = {}): Promise<number> {
       PORT: port,
       // Signal to boot() where to lazily extract effects from when a flow
       // has no hand-declared `effects` — kernel/boot.ts's mintCapabilities()
-      // reads this (explicit opt-in only). docker/prod hard-fail (OKE1008)
+      // reads this (explicit opt-in only). docker/prod hard-fail (OKE1020)
       // rather than silently open when neither this nor an explicit
       // `manifest` resolves anything — this just gives that resolution a
       // real chance to succeed instead of failing every time.

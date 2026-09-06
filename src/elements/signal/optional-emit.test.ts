@@ -1,5 +1,5 @@
 /**
- * Zero-subscriber emit — OKE1042 when optional is unset/false; allow when true.
+ * Zero-subscriber emit — OKE1240 when optional is unset/false; allow when true.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -44,7 +44,7 @@ for (const { label, driver, setup } of [
   },
 ] as const) {
   describe(`signal optional emit · ${label}`, () => {
-    test("optional unset/false: emit with zero subscribers throws OKE1042", async () => {
+    test("optional unset/false: emit with zero subscribers throws OKE1240", async () => {
       const once = signal.once("order-placed");
       expect(once.optional).toBe(false);
       const bus = await openBus(driver, [once], setup());
@@ -56,8 +56,8 @@ for (const { label, driver, setup } of [
         err = e;
       }
       expect(err).toBeInstanceOf(OkeError);
-      expect((err as OkeError).code).toBe(1042);
-      expect((err as Error).message).toContain("OKE1042");
+      expect((err as OkeError).code).toBe(1240);
+      expect((err as Error).message).toContain("OKE1240");
       expect((err as Error).message).toContain("no subscriber");
     });
 

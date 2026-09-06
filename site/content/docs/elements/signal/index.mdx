@@ -182,7 +182,7 @@ curl -N http://localhost:6530/_oke/live/order-status \
 
 <Tab value="Optional">
 
-Emit with zero subscribers throws **OKE1042** unless `optional: true`. Use that for live
+Emit with zero subscribers throws **OKE1240** unless `optional: true`. Use that for live
 firehoses and hooks that may have no worker yet:
 
 ```typescript
@@ -192,7 +192,7 @@ export const webhook = signal.once("hooks.inbound", {
 });
 ```
 
-**OKE1042** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
+**OKE1240** cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
 Fix: add `on(signal, …)` or mark `{ optional: true }`.
 
 </Tab>
@@ -233,7 +233,7 @@ Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. 
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1043** on mismatch) |
+| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1250** on mismatch) |
 | `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) — `once` path |
 | `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |
@@ -255,7 +255,7 @@ Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. 
 | `fx.deadLetters(signal)` | `reads` `signal:<name>` | Inspect exhausted `once` messages |
 | `fx.live(signal, { match? })` | `reads` `signal:<name>` | Server SSE body for a live tape |
 
-Invalid `schema` payloads fail at emit with **OKE1043** (`"{resource}": {detail}`) before any
+Invalid `schema` payloads fail at emit with **OKE1250** (`"{resource}": {detail}`) before any
 consumer runs. Cross-signal `fx.deadLetters` / `fx.live` without a declared read throws
 **OKE1001**.
 
@@ -296,12 +296,12 @@ export default defineConfig({
   to `signal.live`.
 </Accordion>
 
-<Accordion title="OKE1042 — emit with no subscriber">
+<Accordion title="OKE1240 — emit with no subscriber">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.`
   Fix: bind `on(signal, flow)` or set `{ optional: true }`.
 </Accordion>
 
-<Accordion title="OKE1043 — emit payload failed schema">
+<Accordion title="OKE1250 — emit payload failed schema">
   Cause: `"{resource}": {detail}` from the Standard Schema issues.
   Fix the payload or the `schema` on the Signal. The consumer never ran.
 </Accordion>
@@ -328,7 +328,7 @@ export default defineConfig({
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `http.live` exposure
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.live`
 - [Client](/docs/client/live) — `api.live` for browsers
-- [Errors](/docs/reference/errors) — OKE1042 · OKE1043 · OKE1014
+- [Errors](/docs/reference/errors) — OKE1240 · OKE1250 · OKE1210
 
 ## Next
 

@@ -108,13 +108,13 @@ export function createLiveStream(options: CreateLiveStreamOptions): LiveStreamRe
 }
 
 /**
- * Map OKE1014 to HTTP 410 `{ error: { code: "LiveResumeGap" } }`.
+ * Map OKE1210 to HTTP 410 `{ error: { code: "LiveResumeGap" } }`.
  *
  * @param err - Thrown value
  */
 export function encodeGap(err: unknown): Response | undefined {
   const o = err as { code?: unknown; params?: { signal?: string; afterId?: string } };
-  if (o?.code !== 1014) return;
+  if (o?.code !== 1210) return;
   return Response.json(
     {
       data: null,

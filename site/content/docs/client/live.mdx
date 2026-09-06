@@ -13,7 +13,7 @@ ops console.
 
 <Callout title="The one rule">
   Subscribe with a callback and an unsubscribe function. Reconnects send `Last-Event-ID` from the
-  last `id:` the client actually received. A **410** `LiveResumeGap` (**OKE1014**) means that
+  last `id:` the client actually received. A **410** `LiveResumeGap` (**OKE1210**) means that
   cursor is gone.
 </Callout>
 
@@ -150,7 +150,7 @@ Or call the exposing Flow directly: `api.orders.events(input, { onEvent })`.
 
 Reconnects send `Last-Event-ID` from the last `id:` the client actually received.
 
-A **410** `LiveResumeGap` (**OKE1014**) means that cursor is gone — `onError` fires, the cursor is
+A **410** `LiveResumeGap` (**OKE1210**) means that cursor is gone — `onError` fires, the cursor is
 dropped, and `autoResubscribe` replays the remaining tape after backoff.
 
 Server exposure: [Signal · Live](/docs/elements/signal/live) and
@@ -209,7 +209,7 @@ Full React wiring: [React](/docs/client/react).
 
 - [React](/docs/client/react) — `useLive`, `useLiveQuery`
 - [Calling](/docs/client/calling) — typed proxy and envelopes
-- [Signal · Live](/docs/elements/signal/live) — tape, resume, OKE1014
+- [Signal · Live](/docs/elements/signal/live) — tape, resume, OKE1210
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — server exposure
 - [Store](/docs/elements/store) — `live: true` on resources
 

@@ -1,5 +1,5 @@
 /**
- * Live HTTP exposure uniqueness (OKE1013) and GET-only synthesis.
+ * Live HTTP exposure uniqueness (OKE1050) and GET-only synthesis.
  */
 
 import { describe, expect, test, beforeEach } from "bun:test";
@@ -48,22 +48,22 @@ describe("live HTTP uniqueness", () => {
     expect(() => oke({ name: "t", autoBoot: false })).not.toThrow();
   });
 
-  test("two member firehoses on different paths fail OKE1013", () => {
+  test("two member firehoses on different paths fail OKE1050", () => {
     const sig = orderStatus();
     const a = on(http.get("/feed-a").gate(member).live(sig));
     const b = on(http.get("/feed-b").gate(member).live(sig));
     stampFlowName(a, "orders.feedA");
     stampFlowName(b, "orders.feedB");
-    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1013/);
+    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1050/);
   });
 
-  test("duplicate GET path still OKE1011", () => {
+  test("duplicate GET path still OKE1041", () => {
     const sig = orderStatus();
     const a = on(http.get("/orders/:orderId/events").gate(member).live(sig));
     const b = on(http.get("/orders/:orderId/events").gate(admin).live(sig));
     stampFlowName(a, "orders.events");
     stampFlowName(b, "admin.events");
-    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1011/);
+    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1041/);
   });
 
   test("POST .live(signal) is rejected", () => {

@@ -1,6 +1,6 @@
 ---
 title: "Errors"
-description: "OKE codes, gate denials, and subsystem errors — permanent codes with causes and fixes."
+description: "OKE codes, gate denials, and subsystem errors — stable numeric codes with causes and fixes."
 icon: "OctagonAlert"
 source: "docs/spec/unified-theory.md"
 ---
@@ -10,12 +10,13 @@ OKE has two error families: **failures are values** a Flow returns
 for invariant violations (permanent numeric code + cause + fix).
 
 ```text
-OKE1101  domain table not found — migrations have not been applied.
+OKE1110  domain table not found — migrations have not been applied.
          → run `oke db migrate` against this environment.
-         https://oke.omqkhafi.dev/e/1101
+         https://oke.omqkhafi.dev/e/1110
 ```
 
-Codes are permanent once published — match them safely across upgrades.
+Codes are stable after the domain-range renumber — match them safely across upgrades
+(see the Unreleased Breaking Changes mapping if you still have a pre-renumber note).
 
 <Callout title="The one rule">
   Switch on `error.code` for Flow failures. Catch / match `OKE####` only for thrown
@@ -79,26 +80,27 @@ string. Custom app codes stay message-less until registered. Full catalogs:
 | `1005` | undeclared ask       | Flow asks a prompt not in `effects.asks`          | Add it to the flow's `effects.asks`                  |
 | `1006` | undeclared secret    | Flow reads a secret not in `effects.secrets`      | Add it to the flow's `effects.secrets`               |
 | `1007` | undeclared call      | Flow calls a flow not in `effects.calls`          | Add it to the flow's `effects.calls`                 |
-| `1009` | adopt barrel stale   | A `src/flows/<unit>` folder was not adopted       | Run `oke dev` or `oke build` to regenerate `generated.ts` |
-| `1010` | HTTP path unresolved | Pathless `http.get()` never received a file-tree stamp | Import `@/flows/generated`, or pass `http.get("/…")` |
-| `1011` | HTTP route clash     | Two HTTP flows share the same method + path       | Give each flow a unique method + path                |
-| `1012` | HTTP flow unnamed    | Adopted HTTP flow still has no `unit.export`      | Export from `flows/<unit>/` or pass a named `flow`   |
-| `1013` | live exposure dup    | Same signal, gates, and match on two GET routes   | Change the gate or path-param filter                 |
-| `1014` | live resume gap      | `Last-Event-ID` is not on the retained tape       | Reconnect without the cursor; remaining tape replays |
-| `1015` | tenant required      | Tenant-scoped op with no `fx.tenant.id`           | `switchTenant`, signed `tid`, or tenant header       |
-| `1016` | tenant not member    | Client-supplied tenant id is not a membership     | Pick from `listTenants` or add the user as a member  |
-| `1017` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                     |
-| `1018` | MCP tool duplicate   | Two MCP tool bindings share the same tool name    | Give each MCP tool exposure a unique name            |
-| `1019` | undeclared fetch     | Flow fetches a host not in `effects.fetches`      | Add the hostname to the flow's `effects.fetches`     |
-| `1020` | undeclared embed     | Flow embeds with a model not in `effects.embeds`  | Add it to the flow's `effects.embeds`                |
-| `1042` | orphan emit          | Emit with zero subscribers and `optional` false   | Add `on(signal, …)` or declare `optional: true`      |
-| `1043` | signal schema        | Emit payload failed the signal's `schema`         | Pass a payload that matches `schema`, or remove it   |
-| `1101` | schema missing       | Domain table absent in `prod` — no auto-DDL       | Run `oke db migrate` against this environment        |
+| `1008` | undeclared fetch     | Flow fetches a host not in `effects.fetches`      | Add the hostname to the flow's `effects.fetches`     |
+| `1009` | undeclared embed     | Flow embeds with a model not in `effects.embeds`  | Add it to the flow's `effects.embeds`                |
+| `1020` | no effects declared  | Flow has no `effects` and no Manifest to infer from | Run `oke build` / `oke dev`, or declare effects      |
+| `1030` | adopt barrel stale   | A `src/flows/<unit>` folder was not adopted       | Run `oke dev` or `oke build` to regenerate `generated.ts` |
+| `1040` | HTTP path unresolved | Pathless `http.get()` never received a file-tree stamp | Import `@/flows/generated`, or pass `http.get("/…")` |
+| `1041` | HTTP route clash     | Two HTTP flows share the same method + path       | Give each flow a unique method + path                |
+| `1045` | HTTP flow unnamed    | Adopted HTTP flow still has no `unit.export`      | Export from `flows/<unit>/` or pass a named `flow`   |
+| `1050` | live exposure dup    | Same signal, gates, and match on two GET routes   | Change the gate or path-param filter                 |
+| `1060` | MCP tool duplicate   | Two MCP tool bindings share the same tool name    | Give each MCP tool exposure a unique name            |
+| `1110` | schema missing       | Domain table absent in `prod` — no auto-DDL       | Run `oke db migrate` against this environment        |
+| `1210` | live resume gap      | `Last-Event-ID` is not on the retained tape       | Reconnect without the cursor; remaining tape replays |
+| `1240` | orphan emit          | Emit with zero subscribers and `optional` false   | Add `on(signal, …)` or declare `optional: true`      |
+| `1250` | signal schema        | Emit payload failed the signal's `schema`         | Pass a payload that matches `schema`, or remove it   |
+| `1810` | tenant required      | Tenant-scoped op with no `fx.tenant.id`           | `switchTenant`, signed `tid`, or tenant header       |
+| `1820` | tenant not member    | Client-supplied tenant id is not a membership     | Pick from `listTenants` or add the user as a member  |
+| `1830` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                     |
 
 <Callout title="Effects are usually inferred">
-  The 1001–1007 family exists for flows that declare effects explicitly. Most apps never write an
-  `effects` block — inference covers them — so seeing one of these means an explicit declaration
-  drifted from the code.
+  The 1001–1007 · 1008 · 1009 family exists for flows that declare effects explicitly.
+  Most apps never write an `effects` block — inference covers them — so seeing one of
+  these means an explicit declaration drifted from the code.
 </Callout>
 
 ## Gate denials (typed failures)
@@ -148,22 +150,22 @@ Thrown by specific subsystems — each names its own cause:
 
 <Accordions>
 
-<Accordion title="I hit OKE1001–1007">
+<Accordion title="I hit OKE1001–1009">
   Explicit `effects` drifted from `do`. Add the missing ledger entry or remove the
   hand-written `effects` block so inference covers the Flow.
 </Accordion>
 
-<Accordion title="OKE1010 pathless HTTP never stamped">
+<Accordion title="OKE1040 pathless HTTP never stamped">
   Import `@/flows/generated`, or pass an explicit path:
   `http.get("/users/:id")`.
 </Accordion>
 
-<Accordion title="OKE1011 method + path bound twice">
+<Accordion title="OKE1041 method + path bound twice">
   A resource mount and a handwritten route share the same method + path. Drop one
   binding.
 </Accordion>
 
-<Accordion title="OKE1101 in production">
+<Accordion title="OKE1110 in production">
   Domain tables missing — prod has no auto-DDL. Run `oke db migrate` against that
   environment ([CLI](/docs/reference/cli)).
 </Accordion>

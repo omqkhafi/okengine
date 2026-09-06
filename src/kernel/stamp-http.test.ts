@@ -54,18 +54,18 @@ describe("stampFlowName", () => {
 describe("oke — unresolved sentinel and duplicate routes", () => {
   test("unresolved http.get() fails construction", () => {
     on(http.get().public(), flow("notes.get", { do: () => 1 }));
-    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1010/);
+    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1040/);
   });
 
   test("duplicate GET /notes fails construction", () => {
     on(http.get("/notes").public(), flow("notes.list", { do: () => 1 }));
     on(http.get("/notes").public(), flow("notes.also", { do: () => 1 }));
-    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1011/);
+    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1041/);
   });
 
   test("nameless HTTP flow fails construction", () => {
     on(http.get("/notes").public(), flow({ do: () => 1 }));
-    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1012/);
+    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1045/);
   });
 
   test("registerFlowUnits drains into $routes; registry ignore does not", () => {

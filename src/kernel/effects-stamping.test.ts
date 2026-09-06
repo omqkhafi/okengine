@@ -85,7 +85,7 @@ describe("boot-level: undeclared-effects flow, no manifest / rootDir", () => {
     expect(res.status).toBe(200);
   });
 
-  test("docker: hard fail at boot — OKE1008, never an open token in a deploy-shaped env", async () => {
+  test("docker: hard fail at boot — OKE1020, never an open token in a deploy-shaped env", async () => {
     resetBindings();
     resetFlowSeq();
     const db = store.sql("app", { schema: { notes } });
@@ -108,7 +108,7 @@ describe("boot-level: undeclared-effects flow, no manifest / rootDir", () => {
         startScheduler: false,
         config: { drivers: memoryDrivers },
       }),
-    ).rejects.toThrow(/OKE1008/);
+    ).rejects.toThrow(/OKE1020/);
   });
 
   test("prod: hard fail at boot — same posture as docker", async () => {
@@ -131,7 +131,7 @@ describe("boot-level: undeclared-effects flow, no manifest / rootDir", () => {
           },
         },
       }),
-    ).rejects.toThrow(/OKE1008/);
+    ).rejects.toThrow(/OKE1020/);
   });
 });
 

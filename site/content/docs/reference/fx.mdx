@@ -91,7 +91,7 @@ See [Store](/docs/elements/store) for the query-builder surface.
 
 | Signature                             | Records                | Notes                                                                                                                                                                                                     |
 | ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fx.emit(signal, payload?, { key? })` | `emit`                 | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1042** (orphan) or **OKE1043** (schema) |
+| `fx.emit(signal, payload?, { key? })` | `emit`                 | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1240** (orphan) or **OKE1250** (schema) |
 | `fx.deadLetters(signal)`              | `read` `signal:<name>` | Dead-lettered messages for that signal. Payload typed from `SignalDecl<T>`. Page with `fx.json.withQuery`. Cross-signal throws **OKE1001**.                                                               |
 | `fx.live(signal, { match? })`         | `read` `signal:<name>` | Live tape as SSE. Returns `JsonStreamResult` (object chunks, `id:` on the wire). Cross-signal throws **OKE1001**. Do not wrap with `fx.json.stream`.                                                      |
 
@@ -218,10 +218,11 @@ contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Ch
 | --- | --- | --- |
 | `fx.fetch(url, init?)` | `fetch` on the URL hostname | Always stamps `EffectEntry.external` with `{ host, kind: "third-party" }` |
 
-Declare hosts in `effects.fetches` (e.g. `["api.stripe.com"]`). Prefer wrapping inside
-`fx.step`; use `fx.retry` only when the remote API is safe to repeat. Dry runs stub the
-call and never hit the network. Use this for third-party REST that is not covered by
-Channel / AI / Store drivers — not as a substitute for those elements.
+Declare hosts in `effects.fetches` (e.g. `["api.stripe.com"]`). Prefer `fx.step`; use
+`fx.retry` only when the remote API is safe to repeat. Dry runs never hit the network.
+
+Use this for third-party REST outside Channel / AI / Store — not as a substitute for those
+elements.
 
 ## AI
 
@@ -235,8 +236,8 @@ Channel / AI / Store drivers — not as a substitute for those elements.
 AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them. `tools` are Flow refs — each model tool call goes through `fx.call` (same capability and Runs path).
 
 Driver-reported `EffectEntry.external` marks cloud providers as `third-party` and
-self-hosted / `provider: "local"` bindings as `infrastructure` — visible on Console
-trace waterfalls (dashed egress outline + host in the tooltip).
+self-hosted / `provider: "local"` as `infrastructure` (Console waterfall dashed egress +
+host tooltip).
 
 ## Vault
 
@@ -329,19 +330,18 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
 
 <Accordions>
 
-<Accordion title="OKE1001–1007 / 1019 / 1020 undeclared effect">
-  An explicit `effects` block drifted from what `do` touches. Add the missing
-  ledger entry (`reads` · `writes` · `emits` · `sends` · `asks` · `embeds` ·
-  `secrets` · `calls` · `fetches`), or drop the hand-written block so inference
-  covers the Flow — see [Errors](/docs/reference/errors).
+<Accordion title="OKE1001–1007 / 1008 / 1009 undeclared effect">
+  An explicit `effects` block drifted from what `do` touches. Add the missing ledger
+  entry (`reads` · `writes` · `emits` · `sends` · `asks` · `embeds` · `secrets` ·
+  `calls` · `fetches`), or drop the block so inference covers the Flow ([Errors](/docs/reference/errors)).
 </Accordion>
 
-<Accordion title="OKE1042 orphan emit">
+<Accordion title="OKE1240 orphan emit">
   `fx.emit` with zero subscribers and `optional: false`. Add `on(signal, …)` or
   declare the signal `optional: true`.
 </Accordion>
 
-<Accordion title="OKE1043 signal schema">
+<Accordion title="OKE1250 signal schema">
   Emit payload failed the signal's `schema`. Pass a matching payload or remove
   the schema.
 </Accordion>

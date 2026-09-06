@@ -1,6 +1,6 @@
 /**
  * MCP tool trigger — name validation, gated registration lookup,
- * duplicate-name boot failure (OKE1018), gate posture, and Manifest stamping.
+ * duplicate-name boot failure (OKE1060), gate posture, and Manifest stamping.
  */
 
 import { describe, expect, test, beforeEach } from "bun:test";
@@ -47,7 +47,7 @@ describe("mcp.tool(name)", () => {
     expect(app.resolveMcpTool("other.action")).toBeUndefined();
   });
 
-  test("duplicate tool name fails OKE1018 at construction", () => {
+  test("duplicate tool name fails OKE1060 at construction", () => {
     on(
       mcp.tool("bookings.create").gate(member),
       flow("bookings.create", { plane: "user", do: () => ({ ok: true }) }),
@@ -56,7 +56,7 @@ describe("mcp.tool(name)", () => {
       mcp.tool("bookings.create").gate(member),
       flow("bookings.also", { plane: "user", do: () => ({ ok: true }) }),
     );
-    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1018/);
+    expect(() => oke({ name: "t", autoBoot: false })).toThrow(/OKE1060/);
   });
 
   test("ungated mcp.tool passes on() but fails gate posture at boot", async () => {

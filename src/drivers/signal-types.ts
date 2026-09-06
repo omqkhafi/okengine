@@ -201,7 +201,7 @@ export interface LiveEvent {
 export interface LiveSubscribeOptions {
   /**
    * Exclusive SSE cursor — replay events after this id, then continue.
-   * Omit for the full retained tape. Unknown / pruned ids throw OKE1014.
+   * Omit for the full retained tape. Unknown / pruned ids throw OKE1210.
    */
   readonly afterId?: string;
 }
@@ -332,7 +332,7 @@ export interface SignalBus {
    *
    * Replays retained history, then yields new events until the iterator
    * returns. `delivery` must be `"live"`. `afterId` skips through that
-   * id (exclusive); unknown or pruned ids throw OKE1014.
+   * id (exclusive); unknown or pruned ids throw OKE1210.
    *
    * @param signal - Signal name
    * @param opts - Optional resume cursor
@@ -341,7 +341,7 @@ export interface SignalBus {
   /**
    * Validate a live resume cursor without waiting for new events.
    *
-   * Prunes the tape first. Throws OKE1014 when `afterId` is absent.
+   * Prunes the tape first. Throws OKE1210 when `afterId` is absent.
    *
    * @param signal - Signal name
    * @param afterId - SSE cursor
@@ -399,7 +399,7 @@ export interface SignalDriver {
 /**
  * Validate an emit payload against the signal declaration's Standard Schema.
  *
- * @param name - Signal name (for OKE1043)
+ * @param name - Signal name (for OKE1250)
  * @param decl - Declared signal
  * @param payload - Raw emit payload
  */

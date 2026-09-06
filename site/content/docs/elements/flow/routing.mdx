@@ -144,7 +144,7 @@ export const create = on(
 ```
 
 Pathless `http.get()` inside a barrel stays unresolved and fails boot
-(**OKE1010**).
+(**OKE1040**).
 
 </Tab>
 
@@ -381,7 +381,7 @@ registerFlowUnits({ notes });
 ```
 
 Declare `http.get("/notes")` and `flow("notes.list", {…})` (or rely on adopt to
-stamp the name from the export). Pathless HTTP fails **OKE1010**.
+stamp the name from the export). Pathless HTTP fails **OKE1040**.
 
 </Tab>
 
@@ -396,7 +396,7 @@ export type App = typeof app;
 ```
 
 Do not edit `generated.ts` by hand. Adding a unit folder without regenerating
-leaves a stale barrel — **OKE1009** in prod / `oke dev` with Compose.
+leaves a stale barrel — **OKE1030** in prod / `oke dev` with Compose.
 
 </Tab>
 
@@ -455,7 +455,7 @@ prefix). Wrong-unit prefixes fail generate.
 Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
 
-HTTP flows that remain nameless after adopt fail **OKE1012**.
+HTTP flows that remain nameless after adopt fail **OKE1045**.
 
 ## Runtime Matching
 
@@ -470,7 +470,7 @@ All adopted HTTP bindings go into one matcher. Wrong method on a known path is
 p99 match stays under **1 ms** on the compiled matcher. You do not pick buckets
 by hand — a catch-all in the table selects Trie for the whole app.
 
-Duplicate `METHOD + path` fails boot (**OKE1011**), including a resource mount
+Duplicate `METHOD + path` fails boot (**OKE1041**), including a resource mount
 plus a handwritten `http.get("/notes")`.
 
 ## Troubleshooting
@@ -489,25 +489,25 @@ plus a handwritten `http.get("/notes")`.
   is 405, not a missing file.
 </Accordion>
 
-<Accordion title="OKE1010 — pathless trigger never stamped">
+<Accordion title="OKE1040 — pathless trigger never stamped">
   Cause: `Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.`
   Import `@/flows/generated`, run `oke dev` / `oke build`, or pass `http.get("/…")`.
   Barrels do not stamp — they need the explicit path.
 </Accordion>
 
-<Accordion title="OKE1009 — adopt barrel stale">
+<Accordion title="OKE1030 — adopt barrel stale">
   Cause: `src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.`
   Run `oke dev` or `oke build` after adding a unit folder. Prod and Compose `oke
   dev` refuse to boot this way.
 </Accordion>
 
-<Accordion title="OKE1011 — method + path bound twice">
+<Accordion title="OKE1041 — method + path bound twice">
   Cause: `{method} {path} is bound twice (flow "{flow}").`
   Two tree files stamped the same verb + path (`list.ts` and `route.ts` both
   `http.get()`), or a resource mount plus a handwritten route. Drop one binding.
 </Accordion>
 
-<Accordion title="OKE1012 — HTTP flow unnamed">
+<Accordion title="OKE1045 — HTTP flow unnamed">
   Cause: `An HTTP flow on {method} {path} has no name.`
   Use `flow("unit.export", {…})` or `export const` from a `src/flows/<unit>/`
   file so the tree can stamp `unit.export`. `export default` is not picked up.
@@ -536,7 +536,7 @@ plus a handwritten `http.get("/notes")`.
 
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, `http.resource`, live SSE
 - [Client](/docs/client/calling) — `api.notes.get`, REST vs RPC, `$routes`
-- [Errors](/docs/reference/errors) — OKE1010 · OKE1009 · OKE1011 · OKE1012
+- [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045
 - [The Model](/docs/understand/the-model) — derived routes, no hand-written table
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the same trigger
 

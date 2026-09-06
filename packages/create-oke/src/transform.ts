@@ -88,7 +88,7 @@ export function transformPackageJson(
     dependencies["okengine"] = okengineDep;
   }
   // Always pin — published okengine ≤0.18.5 left oxc-parser optional; without it,
-  // Docker-first `oke dev` hard-fails OKE1008 (Manifest extract cannot run).
+  // Docker-first `oke dev` hard-fails OKE1020 (Manifest extract cannot run).
   dependencies["oxc-parser"] ??= OXC_PARSER_RANGE;
 
   return {
