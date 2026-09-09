@@ -19,8 +19,9 @@
 - Client, Console, and MCP are derived from the same Manifest — no separate codegen.
 
 # ---------- Imports & Public API ----------
-- The core programming vocabulary is 10 named values from `okengine`:
-  `on`, `flow`, `signal`, `store`, `clock`, `gate`, `vault`, `channel`, `ai`, `plugin`
+- The core programming vocabulary is 11 named values from `okengine`:
+ `on`, `flow`, `call`, `signal`, `store`, `clock`, `gate`, `vault`, `channel`, `ai`, `plugin`
+- Invoke contracts (`in` / `out` / `errors`) are authored on exposures (`http.*`, `call`, `mcp.tool`), not on `flow()`. Emit schemas stay on Signal / Channel.
 - World access goes through `fx` — effects are inferred.
 - Use `zod` for all runtime schema validation.
 - Use `drizzle-orm` for database operations; prefer `store.resource` for declarative CRUD.

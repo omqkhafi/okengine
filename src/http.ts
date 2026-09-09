@@ -18,7 +18,9 @@
 
 export { on, listBindings, resetBindings, type Binding } from "./kernel/on.ts";
 export { flow, isFlow, type FlowDef } from "./kernel/flow.ts";
+export { call } from "./kernel/call.ts";
 export { http, internal } from "./kernel/triggers.ts";
+export type { BoundaryContract } from "./kernel/boundary-contract.ts";
 export { clock } from "./elements/clock/declare.ts";
 export { gate, GATE_PUBLIC_NAME } from "./elements/gate/declare.ts";
 export { fail, type FlowFailure } from "./kernel/errors.ts";

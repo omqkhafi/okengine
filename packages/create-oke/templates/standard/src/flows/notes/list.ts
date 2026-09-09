@@ -7,9 +7,8 @@ import { NoteListOut, toIsoInstant } from "./shapes";
 
 /** List active (non-archived) notes, newest first. */
 export const list = on(
-  http.get().public(),
+  http.get({ out: NoteListOut }).public(),
   flow({
-    out: NoteListOut,
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(notes).where(isNull(notes.archivedAt));
       const data = [...rows]

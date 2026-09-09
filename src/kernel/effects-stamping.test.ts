@@ -48,10 +48,8 @@ const CreateOut = z.object({ ok: z.boolean() });
 
 function buildUnannotatedCreateFlow(db: ReturnType<typeof store.sql>) {
   return on(
-    http.post("/notes").public(),
+    http.post("/notes", { in: CreateIn, out: CreateOut }).public(),
     flow("notes.create", {
-      in: CreateIn,
-      out: CreateOut,
       // Deliberately no `effects` — the "let the compiler infer it" case.
       do: async (input, fx) => {
         await fx.store(db).insert(notes).values({ id: input.id, title: input.title, createdAt: 1 });
@@ -141,10 +139,8 @@ describe("boot-level: table-ref resolution stays backward compatible", () => {
     resetFlowSeq();
     const db = store.sql("app", { schema: { notes } });
     const create = on(
-      http.post("/notes").public(),
+      http.post("/notes", { in: CreateIn, out: CreateOut }).public(),
       flow("notes.create", {
-        in: CreateIn,
-        out: CreateOut,
         // The convention every template/test predates Direction B with —
         // store-level, not table-level. Must keep working unchanged.
         effects: { writes: ["sql:app"] },

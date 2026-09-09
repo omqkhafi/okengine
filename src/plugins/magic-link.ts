@@ -110,14 +110,17 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
         })
       : magicLinkTemplate;
 
-  const request = flow("auth.requestMagicLink", {
-    plane: "user",
+  const requestContract = {
     in: z.object({ email: z.string().min(3) }),
     out: z.object({
       ok: z.literal(true),
       devToken: z.string().optional(),
     }),
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const request = flow("auth.requestMagicLink", {
+    plane: "user",
     effects: { sends: ["auth-magic-link"] },
     do: async (input, fx) => {
       const email = normalizeEmail(input.email);
@@ -145,11 +148,14 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     },
   });
 
-  const verify = flow("auth.verifyMagicLink", {
-    plane: "user",
+  const verifyContract = {
     in: z.object({ token: z.string().min(1) }),
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const verify = flow("auth.verifyMagicLink", {
+    plane: "user",
     do: async (input) => {
       const hash = await hashChallenge(input.token);
       const now = runtime.now();
@@ -208,6 +214,6 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     .needs("channel")
     .channelTemplate(tmpl)
     .channelCatalog(magicLinkCatalog)
-    .binding(bindPublicAuth("/magic-link/request", request, "otp"))
-    .binding(bindPublicAuth("/magic-link/verify", verify, "otp"));
+    .binding(bindPublicAuth("/magic-link/request", request, "otp", requestContract))
+    .binding(bindPublicAuth("/magic-link/verify", verify, "otp", verifyContract));
 }

@@ -15,7 +15,7 @@
         "secrets": []
       },
       "slo": { "availability": "99.9%", "latency": { "p99": "200ms" } },
-      "source": "src/flows/bookings/index.ts:18"
+      "source": "src/flows/bookings/index.ts:24"
     },
     "bookings.mine": { "cacheKeys": "computed:sql:bookings/userId" },
     "payments.chargeBooking": {

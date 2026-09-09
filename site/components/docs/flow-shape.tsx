@@ -38,10 +38,10 @@ const STAGES: ReadonlyArray<StageSpec> = [
   {
     index: "02",
     title: "Contracts",
-    tags: ["in", "out", "errors"],
+    tags: ["in", "out", "errors", "exposure"],
     icon: ShieldCheck,
-    code: "in: z.object({ sku: z.string(), qty: z.number() })",
-    body: "Validated before and after do. Failures are typed values — returned, never thrown as mystery status text.",
+    code: 'http.post({ in: z.object({ sku: z.string() }) })',
+    body: "Invoke contracts live on the exposure (HTTP, call, MCP). Manifest projects in/out/errors onto flows.*.",
   },
   {
     index: "03",
@@ -379,7 +379,7 @@ function ContractsDemo({ live }: { readonly live: boolean }) {
         />
       </svg>
       <code className="text-[10px] font-mono text-fd-muted-foreground/80">
-        typed in/out schemas
+        exposure invoke contract
       </code>
     </div>
   );

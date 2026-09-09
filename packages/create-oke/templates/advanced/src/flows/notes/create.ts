@@ -7,10 +7,8 @@ import { noteCreated } from "./signals";
 
 /** Create a note, emit `note-created`, touch vault. */
 export const create = on(
-  http.post().gate(notesMutate),
+  http.post({ in: NoteCreateIn, out: NoteOut }).gate(notesMutate),
   flow({
-    in: NoteCreateIn,
-    out: NoteOut,
     do: async (input, fx) => {
       await fx.vault.get(webhookSecret);
       const id = fx.id();

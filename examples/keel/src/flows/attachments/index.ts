@@ -20,11 +20,8 @@ const UploadIn = z.object({
 
 /** Upload an attachment. */
 export const upload = on(
-  http.post("/attachments").gate(member, taskWrite),
+  http.post("/attachments", { in: UploadIn, out: IdOut, errors: { NotFound } }).gate(member,
   flow("attachments.upload", {
-    in: UploadIn,
-    out: IdOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const taskId = input.taskId ?? input.id;
       if (!taskId) return fail("NotFound", { id: "task" });
@@ -51,10 +48,8 @@ export const upload = on(
 
 /** List attachments for a task. */
 export const list = on(
-  http.get("/tasks/:id/attachments").gate(member),
+  http.get("/tasks/:id/attachments", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(FileRef) }).gate(member),
   flow("attachments.list", {
-    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
-    out: pageOut(FileRef),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(fileObjects);
       const prefix = `attachments/${input.id}/`;
@@ -68,11 +63,8 @@ export const list = on(
 
 /** Get one attachment row. */
 export const get = on(
-  http.get("/attachments/:id").gate(member),
+  http.get("/attachments/:id", { in: IdIn, out: FileRef, errors: { NotFound } }).gate(member),
   flow("attachments.get", {
-    in: IdIn,
-    out: FileRef,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(fileObjects, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -83,11 +75,8 @@ export const get = on(
 
 /** Delete attachment + object. */
 export const remove = on(
-  http.delete("/attachments/:id").gate(member, filesWrite),
+  http.delete("/attachments/:id", { in: IdIn, out: Ok, errors: { NotFound } }).gate(member,
   flow("attachments.delete", {
-    in: IdIn,
-    out: Ok,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(fileObjects, input.id);
       if (!row) return fail("NotFound", { id: input.id });

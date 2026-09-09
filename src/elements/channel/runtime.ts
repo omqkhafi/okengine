@@ -20,7 +20,12 @@ import type {
 } from "../../drivers/channel-types.ts";
 import type { DriverExternal } from "../../drivers/external.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
+import { OkeError, OKE_ERRORS } from "../../kernel/errors.ts";
 import { emitBootWarn } from "../../runtime/boot-warn.ts";
+import {
+  isStandardSchema,
+  type SchemaInput,
+} from "../../validation/standard-schema.ts";
 import type { ConsentStore } from "./consent.ts";
 import type { ChannelTemplateDecl } from "./declare.ts";
 import { DEFAULT_MEDIUM_COSTS, type MediumCosts } from "./costs.ts";
@@ -583,6 +588,31 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     );
   }
 
+  async function validateChannelTemplateData(
+    template: string,
+    decl: ChannelTemplateDecl,
+    data: unknown,
+  ): Promise<void> {
+    const schema = decl.schema as SchemaInput | undefined;
+    if (schema === undefined || schema === null || !isStandardSchema(schema)) {
+      return;
+    }
+    const result = await schema["~standard"].validate(data ?? {});
+    if (!result.issues) return;
+    const detail =
+      result.issues
+        .map((i) => {
+          const path = Array.isArray(i.path)
+            ? i.path
+                .map((p) => (typeof p === "object" && p && "key" in p ? String(p.key) : String(p)))
+                .join(".")
+            : "";
+          return path.length > 0 ? `${path}: ${i.message}` : i.message;
+        })
+        .join("; ") || "invalid payload";
+    throw new OkeError(OKE_ERRORS.CHANNEL_SCHEMA, { resource: template, detail });
+  }
+
   async function sendTemplate(
     template: string,
     opts: ChannelSendOptions,
@@ -591,6 +621,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     if (!decl) {
       throw new Error(`channel: unknown template "${template}"`);
     }
+    await validateChannelTemplateData(template, decl, opts.data);
     const medium = decl.medium;
     const checkMedium: ChannelMedium = medium === "any" ? "email" : medium;
 

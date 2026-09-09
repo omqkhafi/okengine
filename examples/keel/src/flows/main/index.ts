@@ -3,14 +3,13 @@ import { z } from "zod";
 
 /** First-run welcome — visit :6530/ after `oke dev` (browser code block; curl stays JSON). */
 export const root = on(
-  http.get("/").public(),
-  flow("main.root", {
-    out: z.object({
+  http.get("/", { out: z.object({
       ok: z.literal(true),
       app: z.string(),
       try: z.array(z.string()),
       console: z.string(),
-    }),
+    }) }).public(),
+  flow("main.root", {
     do: () => ({
       ok: true as const,
       app: "keel",
@@ -22,9 +21,8 @@ export const root = on(
 
 /** Liveness for probes and `bun test`. */
 export const health = on(
-  http.get("/health").public(),
+  http.get("/health", { out: z.object({ ok: z.literal(true) }) }).public(),
   flow("main.health", {
-    out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
   }),
 );

@@ -11,7 +11,8 @@ For developers wiring async work on okengine — declare the physics, emit with 
 
 <Callout title="The one rule">
   Declare every signal with `signal.once`, `signal.broadcast`, or `signal.live` — same idea as
-  `http.get` / `http.post`. Physics live on the Signal; the Flow is only the subscriber.
+  `http.get` / `http.post`. Physics and the **emit** `schema` live on the Signal; the Flow
+  worker is only `flow({ do })` — it inherits the payload type from the Signal, not `flow.in`.
 </Callout>
 
 <SignalDelivery />
@@ -233,7 +234,7 @@ Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. 
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1250** on mismatch) |
+| `schema` | Standard Schema | omitted | **Emit** contract — enforced at `fx.emit` (**OKE1250** on mismatch). Workers inherit the payload; do not put `in` on `flow({ do })`. |
 | `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) — `once` path |
 | `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |

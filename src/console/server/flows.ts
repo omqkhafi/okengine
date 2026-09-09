@@ -1933,67 +1933,85 @@ export function createConsoleBindings(state: ConsoleState): {
   const channelSendTest = createChannelSendTest(state);
 
   const bindings: Binding[] = [
-    bindHttp(http.get("/console/setup/status"), setupStatus),
-    bindHttp(http.post("/console/setup/claim"), setupClaim),
-    bindHttp(http.post("/console/session/login"), sessionLogin),
-    bindHttp(http.get("/console/session/me"), sessionMe),
-    bindHttp(http.post("/console/session/logout"), sessionLogout),
-    bindHttp(http.get("/console/manifest"), manifestGet),
-    bindHttp(http.get("/console/runs"), runsList),
-    bindHttp(http.post("/console/runs/query"), runsQuery),
-    bindHttp(http.post("/console/action/ping"), actionPing),
-    bindHttp(http.post("/console/structural/propose"), structuralPropose),
-    bindHttp(http.get("/console/flows/identities"), flowsIdentities),
-    bindHttp(http.post("/console/flows/invoke"), flowsInvoke),
-    bindHttp(http.post("/console/traces/replay"), tracesReplay),
-    bindHttp(http.get("/console/signals"), signalsList),
-    bindHttp(http.post("/console/signals/replay"), signalsReplay),
-    bindHttp(http.post("/console/signals/dry-run-replay"), signalsDryRunReplay),
-    bindHttp(http.post("/console/signals/discard"), signalsDiscard),
-    bindHttp(http.get("/console/store"), storeList),
-    bindHttp(http.query("/console/store/query"), storeQuery),
-    bindHttp(http.post("/console/store/reveal"), storeReveal),
-    bindHttp(http.post("/console/store/object"), storeObject),
-    bindHttp(http.post("/console/store/edit"), storeEdit),
-    bindHttp(http.post("/console/store/delete"), storeDelete),
-    bindHttp(http.post("/console/store/purge-cache"), storePurgeCache),
-    bindHttp(http.post("/console/store/sql"), storeSql),
-    bindHttp(http.post("/console/store/preview"), storePreview),
-    bindHttp(http.query("/console/store/sql/stats"), storeStats),
-    bindHttp(http.query("/console/store/sql/locks"), storeLocks),
-    bindHttp(http.query("/console/store/kv/stats"), storeKvStats),
-    bindHttp(http.post("/console/store/sql/advise"), storeAdvise),
-    bindHttp(http.get("/console/vault"), vaultList),
-    bindHttp(http.post("/console/vault/set"), vaultSet),
-    bindHttp(http.post("/console/vault/create"), vaultCreate),
-    bindHttp(http.post("/console/vault/rotate"), vaultRotate),
-    bindHttp(http.post("/console/vault/rotate-master"), vaultRotateMaster),
-    bindHttp(http.get("/console/vault/audit/verify"), vaultAuditVerify),
-    bindHttp(http.get("/console/ai"), aiList),
-    bindHttp(http.get("/console/gates"), gatesList),
-    bindHttp(http.query("/console/gates/simulate"), gatesSimulate),
-    bindHttp(http.query("/console/gates/powers"), gatesPowers),
-    bindHttp(http.get("/console/access"), accessList),
-    bindHttp(http.query("/console/access/effective"), accessEffective),
-    bindHttp(http.post("/console/access/key-blast"), accessKeyBlast),
-    bindHttp(http.post("/console/access/keys"), accessCreateKeyFlow),
-    bindHttp(http.post("/console/access/keys/revoke"), accessRevokeKeyFlow),
-    bindHttp(http.post("/console/access/keys/rotate"), accessRotateKeyFlow),
-    bindHttp(http.post("/console/access/keys/update"), accessUpdateKeyFlow),
-    bindHttp(http.post("/console/access/roles/grants"), accessSetRoleGrantsFlow),
-    bindHttp(http.get("/console/diff"), diffList),
-    bindHttp(http.get("/console/plugins"), pluginsList),
-    bindHttp(http.get("/console/clock"), clockList),
-    bindHttp(http.get("/console/instances"), instancesList),
-    bindHttp(http.post("/console/clock/run-now"), clockRunNow),
-    bindHttp(http.post("/console/clock/pause"), clockPause),
-    bindHttp(http.post("/console/clock/edit-schedule"), clockEditSchedule),
-    bindHttp(http.post("/console/clock/wake-early"), clockWakeEarly),
-    bindHttp(http.get("/console/channels"), channelsList),
-    bindHttp(http.query("/console/channels/preview"), channelPreview),
-    bindHttp(http.post("/console/channels/verify-auth"), channelVerifyAuth),
-    bindHttp(http.post("/console/channels/reveal"), channelReveal),
-    bindHttp(http.post("/console/channels/send-test"), channelSendTest),
+    bindHttp(http.get("/console/setup/status", { out: SetupStatusOut }), setupStatus),
+    bindHttp(http.post("/console/setup/claim", { in: ClaimIn, out: SessionOut, errors: { SetupClosed, ClaimFailed } }), setupClaim),
+    bindHttp(http.post("/console/session/login", { in: LoginIn, out: SessionOut, errors: { AuthFailed, AuthRateLimited } }), sessionLogin),
+    bindHttp(http.get("/console/session/me", { out: MeOut, errors: { AuthFailed } }), sessionMe),
+    bindHttp(http.post("/console/session/logout", { out: z.object({ ok: z.literal(true) }) }), sessionLogout),
+    bindHttp(http.get("/console/manifest", { out: ManifestOut, errors: { AuthFailed } }), manifestGet),
+    bindHttp(http.get("/console/runs", { out: RunsListOut, errors: { AuthFailed } }), runsList),
+    bindHttp(http.post("/console/runs/query", { in: RunsQueryIn, out: RunsQueryOut, errors: { AuthFailed, QueryRejected, QueryTimeout, QueryFailed } }), runsQuery),
+    bindHttp(http.post("/console/action/ping", { in: ActionPingIn, out: ActionPingOut, errors: { AuthFailed } }), actionPing),
+    bindHttp(http.post("/console/structural/propose", { in: StructuralIn, out: StructuralOut, errors: { AuthFailed } }), structuralPropose),
+    bindHttp(http.get("/console/flows/identities", { out: IdentitiesOut, errors: { AuthFailed } }), flowsIdentities),
+    bindHttp(http.post("/console/flows/invoke", { in: InvokeIn, out: InvokeOut, errors: { AuthFailed, NotFound, InvokeDenied, ConfirmRequired } }), flowsInvoke),
+    bindHttp(http.post("/console/traces/replay", { in: TracesReplayIn, out: TracesReplayOut, errors: { AuthFailed, NotFound, ReplayUnavailable, ReplayFailed } }), tracesReplay),
+    bindHttp(http.get("/console/signals", { out: SignalsListOut, errors: { AuthFailed } }), signalsList),
+    bindHttp(http.post("/console/signals/replay", { in: SignalsReplayIn, out: SignalsReplayOut, errors: { AuthFailed, SignalNotFound, ConfirmRequired } }), signalsReplay),
+    bindHttp(http.post("/console/signals/dry-run-replay", { in: SignalsReplayIn.omit({ dryRun: true }), out: SignalsReplayOut, errors: { AuthFailed, SignalNotFound, DryRunUnsafe } }), signalsDryRunReplay),
+    bindHttp(http.post("/console/signals/discard", { in: SignalsDiscardIn, out: SignalsDiscardOut, errors: { AuthFailed, SignalNotFound, ConfirmRequired } }), signalsDiscard),
+    bindHttp(http.get("/console/store", { out: StoreListOut, errors: { AuthFailed } }), storeList),
+    bindHttp(http.query("/console/store/query", { in: StoreQueryIn, out: StoreQueryOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeQuery),
+    bindHttp(http.post("/console/store/reveal", { in: StoreRevealIn, out: StoreRevealOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeReveal),
+    bindHttp(http.post("/console/store/object", { in: StoreFileGetIn, out: StoreFileGetOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeObject),
+    bindHttp(http.post("/console/store/edit", { in: StoreEditIn, out: StoreEditOut, errors: { AuthFailed, TenantRequired, ConfirmRequired, StoreNotFound } }), storeEdit),
+    bindHttp(http.post("/console/store/delete", { in: StoreDeleteIn, out: StoreDeleteOut, errors: { AuthFailed, TenantRequired, ConfirmRequired } }), storeDelete),
+    bindHttp(http.post("/console/store/purge-cache", { in: StorePurgeIn, out: StorePurgeOut, errors: { AuthFailed, ConfirmRequired } }), storePurgeCache),
+    bindHttp(http.post("/console/store/sql", { in: StoreSqlIn, out: StoreSqlOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeSql),
+    bindHttp(http.post("/console/store/preview", { in: StorePreviewIn, out: StorePreviewOut, errors: { AuthFailed, TenantRequired, DryRunUnsafe } }), storePreview),
+    bindHttp(http.query("/console/store/sql/stats", { in: StoreSqlStatsIn, out: StoreSqlStatsOut, errors: { AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      PgStatStatementsNotPreloaded,
+      PgStatStatementsUnsupported,
+      PgStatStatementsNotCreated, } }), storeStats),
+    bindHttp(http.query("/console/store/sql/locks", { in: StoreSqlLocksIn, out: StoreSqlLocksOut, errors: { AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      PgStatStatementsNotPreloaded,
+      PgStatStatementsUnsupported,
+      PgStatStatementsNotCreated, } }), storeLocks),
+    bindHttp(http.query("/console/store/kv/stats", { in: StoreKvStatsIn, out: StoreKvStatsOut, errors: { AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      KvStatsUnsupported, } }), storeKvStats),
+    bindHttp(http.post("/console/store/sql/advise", { in: StoreSqlAdviseIn, out: StoreSqlAdviseOut, errors: { AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      PgStatStatementsNotPreloaded,
+      PgStatStatementsUnsupported,
+      PgStatStatementsNotCreated, } }), storeAdvise),
+    bindHttp(http.get("/console/vault", { out: VaultListOut, errors: { AuthFailed } }), vaultList),
+    bindHttp(http.post("/console/vault/set", { in: VaultWriteIn, out: VaultWriteOut, errors: { AuthFailed, VaultNotFound } }), vaultSet),
+    bindHttp(http.post("/console/vault/create", { in: VaultCreateIn, out: VaultWriteOut, errors: { AuthFailed, VaultExists, VaultNotFound } }), vaultCreate),
+    bindHttp(http.post("/console/vault/rotate", { in: VaultWriteIn, out: VaultWriteOut, errors: { AuthFailed, VaultNotFound } }), vaultRotate),
+    bindHttp(http.post("/console/vault/rotate-master", { in: VaultRotateMasterIn, out: VaultRotateMasterOut, errors: { AuthFailed, ConfirmRequired, VaultSealed, VaultRotateBusy, VaultUnsupported } }), vaultRotateMaster),
+    bindHttp(http.get("/console/vault/audit/verify", { out: VaultAuditVerifyOut, errors: { AuthFailed, VaultUnsupported } }), vaultAuditVerify),
+    bindHttp(http.get("/console/ai", { out: AiListOut, errors: { AuthFailed } }), aiList),
+    bindHttp(http.get("/console/gates", { out: GatesListOut, errors: { AuthFailed } }), gatesList),
+    bindHttp(http.query("/console/gates/simulate", { in: GatesSimulateIn, out: GatesSimulateOut, errors: { AuthFailed } }), gatesSimulate),
+    bindHttp(http.query("/console/gates/powers", { in: GatesPowersIn, out: GatesPowersOut, errors: { AuthFailed } }), gatesPowers),
+    bindHttp(http.get("/console/access", { out: AccessListOut, errors: { AuthFailed } }), accessList),
+    bindHttp(http.query("/console/access/effective", { in: AccessEffectiveIn, out: AccessEffectiveOut, errors: { AuthFailed, NotFound } }), accessEffective),
+    bindHttp(http.post("/console/access/key-blast", { in: AccessKeyBlastIn, out: AccessKeyBlastOut, errors: { AuthFailed, AccessKeyNotFound } }), accessKeyBlast),
+    bindHttp(http.post("/console/access/keys", { in: AccessCreateKeyIn, out: AccessCreateKeyOut, errors: { AuthFailed, AccessGrantDenied } }), accessCreateKeyFlow),
+    bindHttp(http.post("/console/access/keys/revoke", { in: AccessRevokeKeyIn, out: AccessRevokeKeyOut, errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired } }), accessRevokeKeyFlow),
+    bindHttp(http.post("/console/access/keys/rotate", { in: AccessRotateKeyIn, out: AccessRotateKeyOut, errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired } }), accessRotateKeyFlow),
+    bindHttp(http.post("/console/access/keys/update", { in: AccessUpdateKeyIn, out: AccessUpdateKeyOut, errors: { AuthFailed, AccessKeyNotFound, AccessGrantDenied } }), accessUpdateKeyFlow),
+    bindHttp(http.post("/console/access/roles/grants", { in: AccessSetRoleGrantsIn, out: AccessSetRoleGrantsOut, errors: { AuthFailed, AccessGrantDenied } }), accessSetRoleGrantsFlow),
+    bindHttp(http.get("/console/diff", { out: DiffListOut, errors: { AuthFailed } }), diffList),
+    bindHttp(http.get("/console/plugins", { out: PluginsListOut, errors: { AuthFailed } }), pluginsList),
+    bindHttp(http.get("/console/clock", { out: ClockListOut, errors: { AuthFailed } }), clockList),
+    bindHttp(http.get("/console/instances", { out: InstancesListOut, errors: { AuthFailed } }), instancesList),
+    bindHttp(http.post("/console/clock/run-now", { in: ClockRunNowIn, out: ClockRunNowOut, errors: { AuthFailed, ClockNotFound, ConfirmRequired } }), clockRunNow),
+    bindHttp(http.post("/console/clock/pause", { in: ClockPauseIn, out: ClockPauseOut, errors: { AuthFailed, ClockNotFound } }), clockPause),
+    bindHttp(http.post("/console/clock/edit-schedule", { in: ClockEditIn, out: ClockEditOut, errors: { AuthFailed, ClockNotFound, ScheduleNotOverridable } }), clockEditSchedule),
+    bindHttp(http.post("/console/clock/wake-early", { in: ClockWakeEarlyIn, out: ClockWakeEarlyOut, errors: { AuthFailed, ClockNotFound } }), clockWakeEarly),
+    bindHttp(http.get("/console/channels", { out: ChannelsListOut, errors: { AuthFailed } }), channelsList),
+    bindHttp(http.query("/console/channels/preview", { in: ChannelPreviewIn, out: ChannelPreviewOut, errors: { AuthFailed, ChannelNotFound } }), channelPreview),
+    bindHttp(http.post("/console/channels/verify-auth", { in: ChannelVerifyAuthIn, out: ChannelVerifyAuthOut, errors: { AuthFailed } }), channelVerifyAuth),
+    bindHttp(http.post("/console/channels/reveal", { in: ChannelRevealIn, out: ChannelRevealOut, errors: { AuthFailed, ChannelNotFound } }), channelReveal),
+    bindHttp(http.post("/console/channels/send-test", { in: ChannelSendTestIn, out: ChannelSendTestOut, errors: { AuthFailed, ChannelNotFound, ConfirmRequired } }), channelSendTest),
   ];
 
   return {
@@ -2076,7 +2094,6 @@ export function createConsoleBindings(state: ConsoleState): {
 function createSetupStatus(state: ConsoleState) {
   return flow("console.setup.status", {
     plane: "operator",
-    out: SetupStatusOut,
     do: () => ({
       setupClosed: state.setupClosed,
       claimRequired: !state.setupClosed,
@@ -2087,9 +2104,6 @@ function createSetupStatus(state: ConsoleState) {
 function createSetupClaim(state: ConsoleState) {
   return flow("console.setup.claim", {
     plane: "operator",
-    in: ClaimIn,
-    out: SessionOut,
-    errors: { SetupClosed, ClaimFailed },
     do: async (input: z.infer<typeof ClaimIn>, fx) => {
       if (state.setupClosed) {
         const data = { reason: "first_operator_exists" };
@@ -2138,9 +2152,6 @@ function createSetupClaim(state: ConsoleState) {
 function createSessionLogin(state: ConsoleState) {
   return flow("console.session.login", {
     plane: "operator",
-    in: LoginIn,
-    out: SessionOut,
-    errors: { AuthFailed, AuthRateLimited },
     do: async (input: z.infer<typeof LoginIn>, fx) => {
       if (touchLoginRateLimit(state.loginAttempts, input.email, state.now()) === "rate_limited") {
         return fail("AuthRateLimited", {
@@ -2159,8 +2170,6 @@ function createSessionLogin(state: ConsoleState) {
 function createSessionMe(state: ConsoleState) {
   return flow("console.session.me", {
     plane: "operator",
-    out: MeOut,
-    errors: { AuthFailed },
     do: (_input, fx) => {
       const id = fx.operator.id;
       if (!id) return fail("AuthFailed", {});
@@ -2179,7 +2188,6 @@ function createSessionMe(state: ConsoleState) {
 function createSessionLogout() {
   return flow("console.session.logout", {
     plane: "operator",
-    out: z.object({ ok: z.literal(true) }),
     do: (_input, fx) => {
       fx.log.info("console.session.logout", {
         operatorId: fx.operator.id,
@@ -2192,8 +2200,6 @@ function createSessionLogout() {
 function createManifestGet(state: ConsoleState) {
   return flow("console.manifest.get", {
     plane: "operator",
-    out: ManifestOut,
-    errors: { AuthFailed },
     do: (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return { manifest: state.manifest };
@@ -2204,9 +2210,6 @@ function createManifestGet(state: ConsoleState) {
 function createRunsQuery(state: ConsoleState) {
   return flow("console.runs.query", {
     plane: "operator",
-    in: RunsQueryIn,
-    out: RunsQueryOut,
-    errors: { AuthFailed, QueryRejected, QueryTimeout, QueryFailed },
     do: async (input: z.infer<typeof RunsQueryIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (input.revealPii === true) {
@@ -2248,8 +2251,6 @@ function createRunsQuery(state: ConsoleState) {
 function createRunsList(state: ConsoleState) {
   return flow("console.runs.list", {
     plane: "operator",
-    out: RunsListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const all = await state.listRuns();
@@ -2328,9 +2329,6 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
 function createTracesReplay(state: ConsoleState) {
   return flow("console.traces.replay", {
     plane: "operator",
-    in: TracesReplayIn,
-    out: TracesReplayOut,
-    errors: { AuthFailed, NotFound, ReplayUnavailable, ReplayFailed },
     do: async (input: z.infer<typeof TracesReplayIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const all = await state.listRuns();
@@ -2393,8 +2391,6 @@ function createTracesReplay(state: ConsoleState) {
 function createSignalsList(state: ConsoleState) {
   return flow("console.signals.list", {
     plane: "operator",
-    out: SignalsListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const signals = await state.listSignals();
@@ -2406,9 +2402,6 @@ function createSignalsList(state: ConsoleState) {
 function createSignalsReplay(state: ConsoleState) {
   return flow("console.signals.replay", {
     plane: "operator",
-    in: SignalsReplayIn,
-    out: SignalsReplayOut,
-    errors: { AuthFailed, SignalNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof SignalsReplayIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return runSignalReplay(state, fx, { ...input, dryRun: false });
@@ -2419,9 +2412,6 @@ function createSignalsReplay(state: ConsoleState) {
 function createSignalsDryRunReplay(state: ConsoleState) {
   return flow("console.signals.dryRunReplay", {
     plane: "operator",
-    in: SignalsReplayIn.omit({ dryRun: true }),
-    out: SignalsReplayOut,
-    errors: { AuthFailed, SignalNotFound, DryRunUnsafe },
     do: async (input: Omit<z.infer<typeof SignalsReplayIn>, "dryRun">, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return runSignalReplay(state, fx, { ...input, dryRun: true });
@@ -2432,9 +2422,6 @@ function createSignalsDryRunReplay(state: ConsoleState) {
 function createSignalsDiscard(state: ConsoleState) {
   return flow("console.signals.discard", {
     plane: "operator",
-    in: SignalsDiscardIn,
-    out: SignalsDiscardOut,
-    errors: { AuthFailed, SignalNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof SignalsDiscardIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const rows = await state.listSignals();
@@ -2574,9 +2561,6 @@ function dryRunSafety(row: {
 function createActionPing(state: ConsoleState) {
   return flow("console.action.ping", {
     plane: "operator",
-    in: ActionPingIn,
-    out: ActionPingOut,
-    errors: { AuthFailed },
     do: (input: z.infer<typeof ActionPingIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       fx.log.info("console.action.ping", {
@@ -2591,9 +2575,6 @@ function createActionPing(state: ConsoleState) {
 function createStructuralPropose(state: ConsoleState) {
   return flow("console.structural.propose", {
     plane: "operator",
-    in: StructuralIn,
-    out: StructuralOut,
-    errors: { AuthFailed },
     do: async (input: z.infer<typeof StructuralIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const proposal = await emitStructuralDiff({
@@ -2617,8 +2598,6 @@ function createStructuralPropose(state: ConsoleState) {
 function createFlowsIdentities(state: ConsoleState) {
   return flow("console.flows.identities", {
     plane: "operator",
-    out: IdentitiesOut,
-    errors: { AuthFailed },
     do: (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return {
@@ -2637,9 +2616,6 @@ function createFlowsIdentities(state: ConsoleState) {
 function createFlowsInvoke(state: ConsoleState) {
   return flow("console.flows.invoke", {
     plane: "operator",
-    in: InvokeIn,
-    out: InvokeOut,
-    errors: { AuthFailed, NotFound, InvokeDenied, ConfirmRequired },
     do: async (input: z.infer<typeof InvokeIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const manifest = state.manifest;
@@ -2824,8 +2800,6 @@ function requireTenantIfDeclared(
 function createStoreList(state: ConsoleState) {
   return flow("console.store.list", {
     plane: "operator",
-    out: StoreListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listStores();
@@ -2862,9 +2836,6 @@ function consoleStoreRls(
 function createStoreQuery(state: ConsoleState) {
   return flow("console.store.query", {
     plane: "operator",
-    in: StoreQueryIn,
-    out: StoreQueryOut,
-    errors: { AuthFailed, TenantRequired, StoreNotFound },
     do: async (input: z.infer<typeof StoreQueryIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -2900,9 +2871,6 @@ function createStoreQuery(state: ConsoleState) {
 function createStoreReveal(state: ConsoleState) {
   return flow("console.store.reveal", {
     plane: "operator",
-    in: StoreRevealIn,
-    out: StoreRevealOut,
-    errors: { AuthFailed, TenantRequired, StoreNotFound },
     do: async (input: z.infer<typeof StoreRevealIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -2936,9 +2904,6 @@ function createStoreReveal(state: ConsoleState) {
 function createStoreObject(state: ConsoleState) {
   return flow("console.store.object", {
     plane: "operator",
-    in: StoreFileGetIn,
-    out: StoreFileGetOut,
-    errors: { AuthFailed, TenantRequired, StoreNotFound },
     do: async (input: z.infer<typeof StoreFileGetIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -2972,9 +2937,6 @@ function createStoreObject(state: ConsoleState) {
 function createStoreEdit(state: ConsoleState) {
   return flow("console.store.edit", {
     plane: "operator",
-    in: StoreEditIn,
-    out: StoreEditOut,
-    errors: { AuthFailed, TenantRequired, ConfirmRequired, StoreNotFound },
     do: async (input: z.infer<typeof StoreEditIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3057,9 +3019,6 @@ function createStoreEdit(state: ConsoleState) {
 function createStoreDelete(state: ConsoleState) {
   return flow("console.store.delete", {
     plane: "operator",
-    in: StoreDeleteIn,
-    out: StoreDeleteOut,
-    errors: { AuthFailed, TenantRequired, ConfirmRequired },
     do: async (input: z.infer<typeof StoreDeleteIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3097,9 +3056,6 @@ function createStoreDelete(state: ConsoleState) {
 function createStorePurgeCache(state: ConsoleState) {
   return flow("console.store.purgeCache", {
     plane: "operator",
-    in: StorePurgeIn,
-    out: StorePurgeOut,
-    errors: { AuthFailed, ConfirmRequired },
     do: async (input: z.infer<typeof StorePurgeIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (state.production) {
@@ -3129,9 +3085,6 @@ function createStorePurgeCache(state: ConsoleState) {
 function createStoreSql(state: ConsoleState) {
   return flow("console.store.sql", {
     plane: "operator",
-    in: StoreSqlIn,
-    out: StoreSqlOut,
-    errors: { AuthFailed, TenantRequired, StoreNotFound },
     do: async (input: z.infer<typeof StoreSqlIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3199,16 +3152,6 @@ function failStoreSqlStats(err: unknown) {
 function createStoreSqlStats(state: ConsoleState) {
   return flow("console.store.sql.stats", {
     plane: "operator",
-    in: StoreSqlStatsIn,
-    out: StoreSqlStatsOut,
-    errors: {
-      AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      PgStatStatementsNotPreloaded,
-      PgStatStatementsUnsupported,
-      PgStatStatementsNotCreated,
-    },
     do: async (input: z.infer<typeof StoreSqlStatsIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3231,16 +3174,6 @@ function createStoreSqlStats(state: ConsoleState) {
 function createStoreSqlLocks(state: ConsoleState) {
   return flow("console.store.sql.locks", {
     plane: "operator",
-    in: StoreSqlLocksIn,
-    out: StoreSqlLocksOut,
-    errors: {
-      AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      PgStatStatementsNotPreloaded,
-      PgStatStatementsUnsupported,
-      PgStatStatementsNotCreated,
-    },
     do: async (input: z.infer<typeof StoreSqlLocksIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3273,16 +3206,6 @@ function createStoreSqlLocks(state: ConsoleState) {
 function createStoreSqlAdvise(state: ConsoleState) {
   return flow("console.store.sql.advise", {
     plane: "operator",
-    in: StoreSqlAdviseIn,
-    out: StoreSqlAdviseOut,
-    errors: {
-      AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      PgStatStatementsNotPreloaded,
-      PgStatStatementsUnsupported,
-      PgStatStatementsNotCreated,
-    },
     do: async (input: z.infer<typeof StoreSqlAdviseIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3314,14 +3237,6 @@ function failStoreKvStats(err: unknown) {
 function createStoreKvStats(state: ConsoleState) {
   return flow("console.store.kv.stats", {
     plane: "operator",
-    in: StoreKvStatsIn,
-    out: StoreKvStatsOut,
-    errors: {
-      AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      KvStatsUnsupported,
-    },
     do: async (input: z.infer<typeof StoreKvStatsIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3355,9 +3270,6 @@ function createStoreKvStats(state: ConsoleState) {
 function createStorePreview(state: ConsoleState) {
   return flow("console.store.preview", {
     plane: "operator",
-    in: StorePreviewIn,
-    out: StorePreviewOut,
-    errors: { AuthFailed, TenantRequired, DryRunUnsafe },
     do: async (input: z.infer<typeof StorePreviewIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
@@ -3405,8 +3317,6 @@ function createStorePreview(state: ConsoleState) {
 function createVaultList(state: ConsoleState) {
   return flow("console.vault.list", {
     plane: "operator",
-    out: VaultListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listVault();
@@ -3417,9 +3327,6 @@ function createVaultList(state: ConsoleState) {
 function createVaultCreate(state: ConsoleState) {
   return flow("console.vault.create", {
     plane: "operator",
-    in: VaultCreateIn,
-    out: VaultWriteOut,
-    errors: { AuthFailed, VaultExists, VaultNotFound },
     do: async (input: z.infer<typeof VaultCreateIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -3456,9 +3363,6 @@ function createVaultCreate(state: ConsoleState) {
 function createVaultSet(state: ConsoleState) {
   return flow("console.vault.set", {
     plane: "operator",
-    in: VaultWriteIn,
-    out: VaultWriteOut,
-    errors: { AuthFailed, VaultNotFound },
     do: async (input: z.infer<typeof VaultWriteIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (!(await vaultNameKnown(state, input.name))) {
@@ -3495,9 +3399,6 @@ function createVaultSet(state: ConsoleState) {
 function createVaultRotate(state: ConsoleState) {
   return flow("console.vault.rotate", {
     plane: "operator",
-    in: VaultWriteIn,
-    out: VaultWriteOut,
-    errors: { AuthFailed, VaultNotFound },
     do: async (input: z.infer<typeof VaultWriteIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (!(await vaultNameKnown(state, input.name))) {
@@ -3539,9 +3440,6 @@ function createVaultRotate(state: ConsoleState) {
 function createVaultRotateMaster(state: ConsoleState) {
   return flow("console.vault.rotateMaster", {
     plane: "operator",
-    in: VaultRotateMasterIn,
-    out: VaultRotateMasterOut,
-    errors: { AuthFailed, ConfirmRequired, VaultSealed, VaultRotateBusy, VaultUnsupported },
     do: async (input: z.infer<typeof VaultRotateMasterIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (input.confirmation !== "ROTATE_MASTER" || !input.reason || input.reason.length < 3) {
@@ -3576,8 +3474,6 @@ function createVaultRotateMaster(state: ConsoleState) {
 function createVaultAuditVerify(state: ConsoleState) {
   return flow("console.vault.auditVerify", {
     plane: "operator",
-    out: VaultAuditVerifyOut,
-    errors: { AuthFailed, VaultUnsupported },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -3620,8 +3516,6 @@ async function vaultNameKnown(state: ConsoleState, name: string): Promise<boolea
 function createAiList(state: ConsoleState) {
   return flow("console.ai.list", {
     plane: "operator",
-    out: AiListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const projection = await state.listAi();
@@ -3676,8 +3570,6 @@ function createAiList(state: ConsoleState) {
 function createGatesList(state: ConsoleState) {
   return flow("console.gates.list", {
     plane: "operator",
-    out: GatesListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const projection = await state.listGates();
@@ -3740,8 +3632,6 @@ function createGatesList(state: ConsoleState) {
 function createDiffList(state: ConsoleState) {
   return flow("console.diff.list", {
     plane: "operator",
-    out: DiffListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const projection = await state.listDiff();
@@ -3772,8 +3662,6 @@ function createDiffList(state: ConsoleState) {
 function createPluginsList(state: ConsoleState) {
   return flow("console.plugin.list", {
     plane: "operator",
-    out: PluginsListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listPlugins();
@@ -3784,9 +3672,6 @@ function createPluginsList(state: ConsoleState) {
 function createGatesSimulate(state: ConsoleState) {
   return flow("console.gates.simulate", {
     plane: "operator",
-    in: GatesSimulateIn,
-    out: GatesSimulateOut,
-    errors: { AuthFailed },
     do: async (input: z.infer<typeof GatesSimulateIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const result = await state.simulateGates(input);
@@ -3818,9 +3703,6 @@ function createGatesSimulate(state: ConsoleState) {
 function createGatesPowers(state: ConsoleState) {
   return flow("console.gates.powers", {
     plane: "operator",
-    in: GatesPowersIn,
-    out: GatesPowersOut,
-    errors: { AuthFailed },
     do: async (input: z.infer<typeof GatesPowersIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const result = await state.powersForPrincipal(input);
@@ -3889,8 +3771,6 @@ export function resolveAccessKeyIssuer(
 function createAccessList(state: ConsoleState) {
   return flow("console.access.list", {
     plane: "operator",
-    out: AccessListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listAccess(actorScopesOf(state, fx.operator.id));
@@ -3901,9 +3781,6 @@ function createAccessList(state: ConsoleState) {
 function createAccessEffective(state: ConsoleState) {
   return flow("console.access.effective", {
     plane: "operator",
-    in: AccessEffectiveIn,
-    out: AccessEffectiveOut,
-    errors: { AuthFailed, NotFound },
     do: async (input: z.infer<typeof AccessEffectiveIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const result = await state.accessEffective(input);
@@ -3926,9 +3803,6 @@ function createAccessEffective(state: ConsoleState) {
 function createAccessKeyBlast(state: ConsoleState) {
   return flow("console.access.keyBlast", {
     plane: "operator",
-    in: AccessKeyBlastIn,
-    out: AccessKeyBlastOut,
-    errors: { AuthFailed, AccessKeyNotFound },
     do: async (input: z.infer<typeof AccessKeyBlastIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (!state.apiKeys.keys.has(input.keyId)) {
@@ -3942,9 +3816,6 @@ function createAccessKeyBlast(state: ConsoleState) {
 function createAccessCreateKey(state: ConsoleState) {
   return flow("console.access.createKey", {
     plane: "operator",
-    in: AccessCreateKeyIn,
-    out: AccessCreateKeyOut,
-    errors: { AuthFailed, AccessGrantDenied },
     do: async (input: z.infer<typeof AccessCreateKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -3980,9 +3851,6 @@ function createAccessCreateKey(state: ConsoleState) {
 function createAccessRevokeKey(state: ConsoleState) {
   return flow("console.access.revokeKey", {
     plane: "operator",
-    in: AccessRevokeKeyIn,
-    out: AccessRevokeKeyOut,
-    errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof AccessRevokeKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (input.confirmation !== "REVOKE" || (input.reason?.trim().length ?? 0) < 3) {
@@ -4010,9 +3878,6 @@ function createAccessRevokeKey(state: ConsoleState) {
 function createAccessRotateKey(state: ConsoleState) {
   return flow("console.access.rotateKey", {
     plane: "operator",
-    in: AccessRotateKeyIn,
-    out: AccessRotateKeyOut,
-    errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof AccessRotateKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (input.confirmation !== "ROTATE" || (input.reason?.trim().length ?? 0) < 3) {
@@ -4043,9 +3908,6 @@ function createAccessRotateKey(state: ConsoleState) {
 function createAccessUpdateKey(state: ConsoleState) {
   return flow("console.access.updateKey", {
     plane: "operator",
-    in: AccessUpdateKeyIn,
-    out: AccessUpdateKeyOut,
-    errors: { AuthFailed, AccessKeyNotFound, AccessGrantDenied },
     do: async (input: z.infer<typeof AccessUpdateKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -4070,9 +3932,6 @@ function createAccessUpdateKey(state: ConsoleState) {
 function createAccessSetRoleGrants(state: ConsoleState) {
   return flow("console.access.setRoleGrants", {
     plane: "operator",
-    in: AccessSetRoleGrantsIn,
-    out: AccessSetRoleGrantsOut,
-    errors: { AuthFailed, AccessGrantDenied },
     do: async (input: z.infer<typeof AccessSetRoleGrantsIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -4099,8 +3958,6 @@ function createAccessSetRoleGrants(state: ConsoleState) {
 function createClockList(state: ConsoleState) {
   return flow("console.clock.list", {
     plane: "operator",
-    out: ClockListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listClocks();
@@ -4111,8 +3968,6 @@ function createClockList(state: ConsoleState) {
 function createInstancesList(state: ConsoleState) {
   return flow("console.instances.list", {
     plane: "operator",
-    out: InstancesListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listInstances();
@@ -4123,9 +3978,6 @@ function createInstancesList(state: ConsoleState) {
 function createClockRunNow(state: ConsoleState) {
   return flow("console.clock.runNow", {
     plane: "operator",
-    in: ClockRunNowIn,
-    out: ClockRunNowOut,
-    errors: { AuthFailed, ClockNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof ClockRunNowIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const list = await state.listClocks();
@@ -4168,9 +4020,6 @@ function createClockRunNow(state: ConsoleState) {
 function createClockPause(state: ConsoleState) {
   return flow("console.clock.pause", {
     plane: "operator",
-    in: ClockPauseIn,
-    out: ClockPauseOut,
-    errors: { AuthFailed, ClockNotFound },
     do: async (input: z.infer<typeof ClockPauseIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -4198,9 +4047,6 @@ function createClockPause(state: ConsoleState) {
 function createClockEditSchedule(state: ConsoleState) {
   return flow("console.clock.editSchedule", {
     plane: "operator",
-    in: ClockEditIn,
-    out: ClockEditOut,
-    errors: { AuthFailed, ClockNotFound, ScheduleNotOverridable },
     do: async (input: z.infer<typeof ClockEditIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -4236,9 +4082,6 @@ function createClockEditSchedule(state: ConsoleState) {
 function createClockWakeEarly(state: ConsoleState) {
   return flow("console.clock.wakeEarly", {
     plane: "operator",
-    in: ClockWakeEarlyIn,
-    out: ClockWakeEarlyOut,
-    errors: { AuthFailed, ClockNotFound },
     do: async (input: z.infer<typeof ClockWakeEarlyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       try {
@@ -4268,8 +4111,6 @@ function createClockWakeEarly(state: ConsoleState) {
 function createChannelsList(state: ConsoleState) {
   return flow("console.channel.list", {
     plane: "operator",
-    out: ChannelsListOut,
-    errors: { AuthFailed },
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listChannels();
@@ -4280,9 +4121,6 @@ function createChannelsList(state: ConsoleState) {
 function createChannelPreview(state: ConsoleState) {
   return flow("console.channel.preview", {
     plane: "operator",
-    in: ChannelPreviewIn,
-    out: ChannelPreviewOut,
-    errors: { AuthFailed, ChannelNotFound },
     do: async (input: z.infer<typeof ChannelPreviewIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (
@@ -4300,9 +4138,6 @@ function createChannelPreview(state: ConsoleState) {
 function createChannelVerifyAuth(state: ConsoleState) {
   return flow("console.channel.verifyAuth", {
     plane: "operator",
-    in: ChannelVerifyAuthIn,
-    out: ChannelVerifyAuthOut,
-    errors: { AuthFailed },
     do: async (input: z.infer<typeof ChannelVerifyAuthIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.verifyChannelAuth(input.from);
@@ -4313,9 +4148,6 @@ function createChannelVerifyAuth(state: ConsoleState) {
 function createChannelReveal(state: ConsoleState) {
   return flow("console.channel.reveal", {
     plane: "operator",
-    in: ChannelRevealIn,
-    out: ChannelRevealOut,
-    errors: { AuthFailed, ChannelNotFound },
     do: async (input: z.infer<typeof ChannelRevealIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const revealed = await state.revealChannel(input.id);
@@ -4339,9 +4171,6 @@ function createChannelReveal(state: ConsoleState) {
 function createChannelSendTest(state: ConsoleState) {
   return flow("console.channel.sendTest", {
     plane: "operator",
-    in: ChannelSendTestIn,
-    out: ChannelSendTestOut,
-    errors: { AuthFailed, ChannelNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof ChannelSendTestIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (state.production) {

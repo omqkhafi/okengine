@@ -33,11 +33,12 @@ import { z } from "zod";
 import { db, charges, orders } from "@/schema";
 
 export const checkout = on(
-  http.post(),
-  flow({
-    durable: true,
+  http.post({
     in: z.object({ userId: z.string(), sku: z.string() }),
     out: z.object({ orderId: z.string() }),
+  }),
+  flow({
+    durable: true,
     do: async ({ userId, sku }, fx) => {
       const charge = await fx.step("charge", async () => {
         const id = fx.id();
@@ -110,11 +111,12 @@ import { z } from "zod";
 import { db, payments } from "@/schema";
 
 export const charge = on(
-  http.post(),
-  flow({
-    durable: true,
+  http.post({
     in: z.object({ userId: z.string(), amount: z.number() }),
     out: z.object({ paymentId: z.string() }),
+  }),
+  flow({
+    durable: true,
     do: async ({ userId, amount }, fx) => {
       const paymentId = await fx.step("create-intent", async () => {
         const id = fx.id();
@@ -144,10 +146,9 @@ import { eq } from "drizzle-orm";
 import { db, charges } from "@/schema";
 
 export const checkout = on(
-  http.post(),
+  http.post({ in: z.object({ userId: z.string() }) }),
   flow({
     durable: true,
-    in: z.object({ userId: z.string() }),
     do: async ({ userId }, fx) => {
       const charge = await fx.step(
         "charge",
@@ -184,10 +185,9 @@ import { z } from "zod";
 import { trialExpiringEmail } from "@/channels/trial";
 
 export const reminder = on(
-  http.post(),
+  http.post({ in: z.object({ email: z.string().email() }) }),
   flow({
     durable: true,
-    in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {
       await fx.step("mark-trial", async () => {
         await fx.call(startTrial, { email });
@@ -215,10 +215,9 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const checkout = on(
-  http.post(),
+  http.post({ in: z.object({ userId: z.string(), sku: z.string() }) }),
   flow({
     durable: true,
-    in: z.object({ userId: z.string(), sku: z.string() }),
     do: async ({ userId, sku }, fx) => {
       await fx.step("reserve", () => fx.call(reserveStock, { sku }), {
         undo: () => fx.call(releaseStock, { sku }),

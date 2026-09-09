@@ -45,10 +45,8 @@ describe("fx.store(db).upsert via app.fetch (real boot)", () => {
     const db = store.sql("app", { schema: { notes } });
 
     const seed = on(
-      http.post("/seed").public(),
+      http.post("/seed", { in: UpsertIn, out: UpsertOut }).public(),
       flow("notes.seed", {
-        in: UpsertIn,
-        out: UpsertOut,
         effects: { writes: ["sql:app"], reads: ["sql:app"] },
         do: async (input, fx) =>
           fx

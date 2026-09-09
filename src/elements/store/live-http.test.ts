@@ -79,9 +79,8 @@ describe("manual live flow (.live(table) + liveQuery) — real boot", () => {
     const db = store.sql("app", { schema: { tasks, activity } });
 
     const tasksLive = on(
-      http.get("/tasks/live").public().live(tasks),
+      http.get("/tasks/live", { in: { unknown: true } }).public().live(tasks),
       flow("tasks.live", {
-        in: { unknown: true },
         effects: { reads: ["sql:app"] },
         do: async (input, fx) =>
           liveQuery(fx, tasks, input, {
@@ -93,9 +92,12 @@ describe("manual live flow (.live(table) + liveQuery) — real boot", () => {
     );
     // A plain flow writing to BOTH tables — the keel `writeActivity` shape.
     const createTask = on(
-      http.post("/tasks").public(),
+      http
+        .post("/tasks", {
+          in: { title: { type: "string" }, status: { type: "string" } },
+        })
+        .public(),
       flow("tasks.create", {
-        in: { title: { type: "string" }, status: { type: "string" } },
         effects: { writes: ["sql:app"] },
         do: async (input, fx) => {
           const s = fx.store(db);

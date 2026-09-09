@@ -39,10 +39,13 @@ describe("createTestApp tenancy testing & RLS isolation", () => {
     const docStore = store.sql("docs", { schema: { documents } });
 
     on(
-      http.post("/docs").gate(memberGate),
+      http
+        .post("/docs", {
+          in: z.object({ title: z.string() }),
+          out: z.object({ id: z.string(), tenantId: z.string().nullable() }),
+        })
+        .gate(memberGate),
       flow("docs.create", {
-        in: z.object({ title: z.string() }),
-        out: z.object({ id: z.string(), tenantId: z.string().nullable() }),
         effects: { writes: ["sql:docs"], reads: ["sql:docs"] },
         do: async (input, fx) => {
           const id = fx.id();
@@ -57,10 +60,13 @@ describe("createTestApp tenancy testing & RLS isolation", () => {
     );
 
     on(
-      http.get("/docs").gate(memberGate),
+      http
+        .get("/docs", {
+          in: z.void(),
+          out: z.array(z.object({ id: z.string(), title: z.string() })),
+        })
+        .gate(memberGate),
       flow("docs.list", {
-        in: z.void(),
-        out: z.array(z.object({ id: z.string(), title: z.string() })),
         effects: { reads: ["sql:docs"] },
         do: async (_input, fx) => {
           const rows = await fx.store(docStore).select().from(documents);

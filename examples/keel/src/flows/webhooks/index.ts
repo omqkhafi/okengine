@@ -12,10 +12,8 @@ const WebhookIn = z.object({
 
 /** List outbound webhooks. */
 export const list = on(
-  http.get("/webhooks").gate(webhookAdminWrite),
+  http.get("/webhooks", { in: listIn({ mode: "offset" }), out: pageOut(z.object({ id: z.string(), url: z.string() })) }).gate(webhookAdminWrite),
   flow("webhooks.list", {
-    in: listIn({ mode: "offset" }),
-    out: pageOut(z.object({ id: z.string(), url: z.string() })),
     do: async (input, fx) => {
       await fx.vault.get(webhookSecret);
       const keys = await fx.store(webhooksKv).list();
@@ -31,10 +29,8 @@ export const list = on(
 
 /** Register a webhook. */
 export const create = on(
-  http.post("/webhooks").gate(webhookAdminWrite),
+  http.post("/webhooks", { in: WebhookIn, out: IdOut }).gate(webhookAdminWrite),
   flow("webhooks.create", {
-    in: WebhookIn,
-    out: IdOut,
     do: async (input, fx) => {
       await fx.vault.get(webhookSecret);
       const id = fx.id();
@@ -46,10 +42,8 @@ export const create = on(
 
 /** Delete a webhook. */
 export const remove = on(
-  http.delete("/webhooks/:id").gate(webhookAdminWrite),
+  http.delete("/webhooks/:id", { in: IdIn, out: Ok }).gate(webhookAdminWrite),
   flow("webhooks.delete", {
-    in: IdIn,
-    out: Ok,
     do: async (input, fx) => {
       await fx.vault.get(webhookSecret);
       await fx.store(webhooksKv).delete(input.id);
@@ -60,10 +54,8 @@ export const remove = on(
 
 /** Rotate the signing secret (reads the contract — no outbound call). */
 export const rotate = on(
-  http.post("/webhooks/:id/rotate").gate(webhookAdminWrite),
+  http.post("/webhooks/:id/rotate", { in: IdIn, out: Ok }).gate(webhookAdminWrite),
   flow("webhooks.rotate", {
-    in: IdIn,
-    out: Ok,
     do: async (_input, fx) => {
       await fx.vault.get(webhookSecret);
       return { ok: true as const };

@@ -327,8 +327,9 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 
 <Accordion title="Schema at emit">
   Invalid payloads fail at `fx.emit` with **OKE1250** (`"{resource}": {detail}`) before any
-  consumer runs. Fix the payload or the `schema`. Same Standard Schema path as Flow `in`.
-
+  consumer runs. Fix the payload or the Signal's `schema`. This is an **emit** contract — not
+  an HTTP invoke contract on `flow()`. Workers inherit the typed payload from the Signal
+  declaration; they do not declare `in` on `flow({ do })`.
 </Accordion>
 
 </Accordions>

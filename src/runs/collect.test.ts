@@ -3,7 +3,6 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
 import { createEffectLedger } from "../kernel/effects.ts";
 import { flow } from "../kernel/flow.ts";
 import { createFx } from "../kernel/fx.ts";
@@ -13,7 +12,6 @@ import { fail } from "../kernel/errors.ts";
 import { collectWideEvent } from "./collect.ts";
 
 const demo = flow("demo.fast", {
-  in: z.object({}),
   do: () => ({ ok: true }),
 });
 

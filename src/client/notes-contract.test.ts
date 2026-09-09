@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { oke } from "../kernel/app.ts";
+import { call } from "../kernel/call.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
 import { http } from "../kernel/triggers.ts";
@@ -38,20 +39,15 @@ const NewNote = z.object({
 const NotFound = z.object({});
 
 const create = on(
-  http.post("/notes"),
+  http.post("/notes", { in: NewNote, out: NoteId }),
   flow("notes.create", {
-    in: NewNote,
-    out: NoteId,
     do: (input) => ({ id: `n_${input.title}` }),
   }),
 );
 
 const get = on(
-  http.get("/notes/:id"),
+  http.get("/notes/:id", { in: NoteId, out: Note, errors: { NotFound } }),
   flow("notes.get", {
-    in: NoteId,
-    out: Note,
-    errors: { NotFound },
     do: ({ id }, fx) =>
       id === "missing" ? fx.fail("NotFound", {}) : { id, title: "First", body: "Hello" },
   }),
@@ -252,7 +248,7 @@ describe("Notes — typeof app carries contracts", () => {
   });
 
   test("untriggered adopted flow is RPC-only on the client", async () => {
-    const stats = flow("notes.stats", {
+    const stats = call("notes.stats", {
       in: NoteId,
       out: z.object({ clicks: z.number() }),
       do: () => ({ clicks: 7 }),

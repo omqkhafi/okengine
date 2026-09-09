@@ -91,7 +91,7 @@ App \`:6530\` · Console \`:6533\` · App MCP \`:6535\` · Docs MCP \`:6536\`. V
 - ❌ Inventing a ninth “element” or a parallel handler stack beside Flows
 - ✅ New capability = new **driver** on an existing element, or a new Flow
 - ❌ Untyped HTTP handlers that skip \`on\` / \`flow\` / contracts
-- ✅ \`on(http.get(), flow({ in, out, do }))\` — or \`http.get("/…")\` / \`flow("unit.export", {…})\` when the folder is not the URL
+- ✅ \`on(http.get({ in, out }), flow({ do }))\` — or \`http.get("/…", { in, out })\` / \`call("unit.export", { in, out, do })\` when the folder is not the URL
 - ❌ Returning \`{ items, count }\` from a list \`do\` (nests the pager inside \`data\`)
 - ✅ \`out: z.array(Item)\` + \`fx.json.withQuery(rows, input)\` — or any other \`out\` you declare
 

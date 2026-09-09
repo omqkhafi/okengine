@@ -50,11 +50,10 @@ function unwrapSummaryText(text: string): string {
  * Exhausted / failed asks surface as Unavailable — never a body excerpt.
  */
 export const summarize = on(
-  http.post().gate(notesMutate),
+  http.post({ in: NoteSummarizeIn, out: NoteSummarizeOut, errors: { NotFound, Unavailable } }).gate(
+    notesMutate,
+  ),
   flow({
-    in: NoteSummarizeIn,
-    out: NoteSummarizeOut,
-    errors: { NotFound, Unavailable },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });

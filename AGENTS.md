@@ -32,10 +32,12 @@ An element earns its place only if it has irreducible physics. New infrastructur
 ## Core programming vocabulary
 
 ```typescript
-import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
+import { on, flow, call, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
 That is the core programming vocabulary. Everything else is derived.
+
+**Invoke contracts** (`in` / `out` / `errors`) are authored on the exposure — `http.*(path?, { … })`, `call(name, { … })`, or `mcp.tool(name, { … })` — not on `flow()`. **Emit schemas** live on Signal / Channel templates. Flow is behavior (`do` + runtime options) only.
 
 ## Governing rule
 

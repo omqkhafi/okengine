@@ -57,12 +57,13 @@ describe("Architecture & Positioning Consistency Gate", () => {
     expect(SITE_DESCRIPTION).toContain("A new programming model for backends.");
   });
 
-  it("enforces the ten core programming vocabulary exports", () => {
-    expect(EXPORTS.length).toBe(10);
+  it("enforces the core programming vocabulary exports", () => {
+    expect(EXPORTS.length).toBe(11);
     const names = EXPORTS.map((e) => e.name);
     expect(names).toEqual([
       "on",
       "flow",
+      "call",
       "signal",
       "store",
       "clock",

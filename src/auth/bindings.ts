@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { gate, type PolicyGateDecl } from "../elements/gate.ts";
 import type { GateDecl } from "../elements/gate/declare.ts";
+import { applyBoundaryContract, stampBoundaryContract } from "../kernel/boundary-contract.ts";
 import { fail } from "../kernel/errors.ts";
 import { flow, type AnyFlowDef } from "../kernel/flow.ts";
 import type { Binding } from "../kernel/on.ts";
@@ -225,11 +226,14 @@ export function createAuthHttpBindings(
 
   const base = config.basePath;
 
-  const refresh = flow("auth.refresh", {
-    plane: "user",
+  const refreshContract = {
     in: RefreshIn,
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const refresh = flow("auth.refresh", {
+    plane: "user",
     do: async (input) => {
       try {
         const issued = await rotateRefresh(sessions, ctx.sessionCrypto(), input.refreshToken);
@@ -249,11 +253,14 @@ export function createAuthHttpBindings(
     },
   });
 
-  const revoke = flow("auth.revoke", {
-    plane: "user",
+  const revokeContract = {
     in: RevokeIn,
     out: z.object({ ok: z.literal(true) }),
     errors: { AuthFailed },
+  };
+
+  const revoke = flow("auth.revoke", {
+    plane: "user",
     do: async (input) => {
       if (input.refreshToken) {
         try {
@@ -268,10 +275,13 @@ export function createAuthHttpBindings(
     },
   });
 
-  const me = flow("auth.me", {
-    plane: "user",
+  const meContract = {
     out: MeOut,
     errors: { AuthFailed },
+  };
+
+  const me = flow("auth.me", {
+    plane: "user",
     do: (_input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
@@ -300,21 +310,24 @@ export function createAuthHttpBindings(
   const bindings: Binding[] = [
     bindAuthHttp(
       http
-        .post(`${base}/refresh`)
+        .post(`${base}/refresh`, refreshContract)
         .public()
         .gate(...(refreshRate ? [refreshRate] : [])),
       refresh,
     ),
-    bindAuthHttp(http.post(`${base}/revoke`).public(), revoke),
-    bindAuthHttp(http.get(`${base}/me`).gate(AUTH_SESSION_GATE), me),
+    bindAuthHttp(http.post(`${base}/revoke`, revokeContract).public(), revoke),
+    bindAuthHttp(http.get(`${base}/me`, meContract).gate(AUTH_SESSION_GATE), me),
   ];
 
   if (config.emailAndPassword.enabled) {
-    const signInEmail = flow("auth.signInEmail", {
-      plane: "user",
+    const signInEmailContract = {
       in: EmailPasswordIn,
       out: SignInOut,
       errors: { AuthFailed, AuthRateLimited },
+    };
+
+    const signInEmail = flow("auth.signInEmail", {
+      plane: "user",
       do: async (input) => {
         // Rate limit is Gate KV (`signInRate` on the binding) — shared across
         // instances when `drivers.store.kv` is redis. No process-local email bag.
@@ -343,11 +356,14 @@ export function createAuthHttpBindings(
       },
     });
 
-    const signUpEmail = flow("auth.signUpEmail", {
-      plane: "user",
+    const signUpEmailContract = {
       in: EmailPasswordIn,
       out: SessionTokensOut,
       errors: { AuthFailed, AuthRateLimited },
+    };
+
+    const signUpEmail = flow("auth.signUpEmail", {
+      plane: "user",
       do: async (input) => {
         try {
           const user = await createUserWithPassword(identities, {
@@ -404,14 +420,14 @@ export function createAuthHttpBindings(
     bindings.push(
       bindAuthHttp(
         http
-          .post(`${base}/sign-in/email`)
+          .post(`${base}/sign-in/email`, signInEmailContract)
           .public()
           .gate(...(signInRate ? [signInRate] : [])),
         signInEmail,
       ),
       bindAuthHttp(
         http
-          .post(`${base}/sign-up/email`)
+          .post(`${base}/sign-up/email`, signUpEmailContract)
           .public()
           .gate(...(signUpRate ? [signUpRate] : [])),
         signUpEmail,
@@ -449,6 +465,9 @@ export function bindAuthHttp(trigger: HttpTrigger, flowDef: AnyFlowDef): Binding
   const list = flowDef.triggers as Trigger[];
   list.push(normalized);
   (flowDef as { $trigger: Trigger }).$trigger = normalized;
+  if (normalized.kind === "http" && normalized.contract !== undefined) {
+    applyBoundaryContract(flowDef, stampBoundaryContract(normalized.contract));
+  }
   return { trigger: normalized, flow: flowDef };
 }
 

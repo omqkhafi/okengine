@@ -986,9 +986,8 @@ export const tasksTable = store.schema.table(
 );
 
 export const tasksLive = on(
-  http.get("/tasks/live").gate(member).live(tasksTable),
+  http.get("/tasks/live", { in: { unknown: true } }).gate(member).live(tasksTable),
   flow("tasks.live", {
-    in: { unknown: true },
     do: async (_input, fx) => liveQuery(fx, tasksTable, _input),
   }),
 );
@@ -1346,12 +1345,12 @@ export const send = on(
   });
 });
 
-describe("extractManifest — flow(name, options) positional signature", () => {
-  test("bare flow(name, {...}) extracts name, in, out, effects", async () => {
+describe("extractManifest — call(name, options) invoke contract", () => {
+  test("bare call(name, {...}) extracts name, in, out, effects", async () => {
     const source = `
-import { flow } from "okengine";
+import { call } from "okengine";
 
-export const chargeOrder = flow("checkout.chargeOrder", {
+export const chargeOrder = call("checkout.chargeOrder", {
   in: ChargeIn,
   out: ChargeOut,
   effects: { reads: ["sql:orders"], writes: ["sql:orders"] },
@@ -1369,14 +1368,13 @@ export const chargeOrder = flow("checkout.chargeOrder", {
     expect(manifest.flows?.["checkout.chargeOrder"]?.effects?.writes).toEqual(["sql:orders"]);
   });
 
-  test("on(trigger, flow(name, {...})) extracts the same shape as bare flow()", async () => {
+  test("on(trigger, flow(name, {...})) extracts HTTP contract from the trigger", async () => {
     const source = `
 import { on, http, flow } from "okengine";
 
 export const getOrder = on(
-  http.get("/orders/:id"),
+  http.get("/orders/:id", { out: OrderOut }),
   flow("checkout.getOrder", {
-    out: OrderOut,
     effects: { reads: ["sql:orders"] },
     do: async (input, fx) => {
       return { id: input.id };
@@ -1588,10 +1586,10 @@ export const get = on(
   });
 });
 
-describe("extractManifest — flow in/out schema expansion", () => {
+describe("extractManifest — invoke contract schema expansion", () => {
   test("expands z.object identifiers into JSON Schema fields", async () => {
     const source = `
-import { flow } from "okengine";
+import { call } from "okengine";
 import { z } from "zod";
 
 export const TaskCreateIn = z.object({
@@ -1605,7 +1603,7 @@ export const TaskCreateOut = z.object({
   identifier: z.string(),
 });
 
-export const create = flow("tasks.create", {
+export const create = call("tasks.create", {
   in: TaskCreateIn,
   out: TaskCreateOut,
   do: async () => ({ id: "1", identifier: "ENG-1" }),
@@ -1644,7 +1642,7 @@ export const users = store.schema.table("users", {
 });
 `;
     const flows = `
-import { flow } from "okengine";
+import { call } from "okengine";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { users } from "../schema.decl.ts";
 
@@ -1652,13 +1650,13 @@ export const userSelect = createSelectSchema(users);
 export const userInsert = createInsertSchema(users);
 export const userUpdate = createUpdateSchema(users);
 
-export const create = flow("users.create", {
+export const create = call("users.create", {
   in: userInsert,
   out: userSelect,
   do: async () => ({}),
 });
 
-export const patch = flow("users.patch", {
+export const patch = call("users.patch", {
   in: userUpdate,
   do: async () => ({}),
 });
@@ -1719,8 +1717,8 @@ export function tableZod(table) {
 export const spacesZod = tableZod(spaces);
 `;
     const flows = `
-import { flow } from "okengine";
-export const create = flow("spaces.create", {
+import { call } from "okengine";
+export const create = call("spaces.create", {
   in: spacesZod.insert,
   out: spacesZod.select.pick({ id: true, key: true }),
   do: async () => ({}),
@@ -1796,19 +1794,19 @@ export const { list, create, get, update, remove } = bindCrud({
 
   test("same-named createIn stays file-local (does not leak across units)", async () => {
     const spaces = `
-import { flow } from "okengine";
+import { call } from "okengine";
 import { z } from "zod";
 const createIn = z.object({ key: z.string(), name: z.string() });
-export const create = flow("spaces.create", {
+export const create = call("spaces.create", {
   in: createIn,
   do: async () => ({}),
 });
 `;
     const views = `
-import { flow } from "okengine";
+import { call } from "okengine";
 import { z } from "zod";
 const createIn = z.object({ kind: z.enum(["list", "board"]) });
-export const create = flow("views.create", {
+export const create = call("views.create", {
   in: createIn,
   do: async () => ({}),
 });

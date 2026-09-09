@@ -24,7 +24,9 @@ export {
 } from "./kernel/app.ts";
 export { on, type Binding } from "./kernel/on.ts";
 export { flow, isFlow, type FlowDef } from "./kernel/flow.ts";
+export { call } from "./kernel/call.ts";
 export { http, internal, mcp } from "./kernel/triggers.ts";
+export type { BoundaryContract } from "./kernel/boundary-contract.ts";
 export { registerFlowUnits } from "./kernel/flow-units.ts";
 export { stampFlowName, stampHttpPath } from "./kernel/stamp-http.ts";
 export { fail, type FlowFailure, type FlowErrorValue } from "./kernel/errors.ts";

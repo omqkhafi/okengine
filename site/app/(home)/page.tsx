@@ -220,13 +220,13 @@ export default function HomePage() {
           <Reveal>
             <BandHeading title="The core programming vocabulary">
               The core programming vocabulary fits on one line. Everything else in the docs is
-              derived from these ten names.
+              derived from it.
             </BandHeading>
           </Reveal>
           <Reveal delay={0.05}>
             <div className="overflow-x-auto rounded-xl border border-fd-border bg-fd-card px-4 py-3">
               <code className="font-mono text-xs whitespace-nowrap text-fd-foreground sm:text-[13px]">
-                import {"{"} on, flow, signal, store, clock, gate, vault, channel, ai, plugin {"}"}{" "}
+                import {"{"} on, flow, call, signal, store, clock, gate, vault, channel, ai, plugin {"}"}{" "}
                 from &quot;okengine&quot;;
               </code>
             </div>

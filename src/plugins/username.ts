@@ -323,11 +323,14 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
   resolveUsernamePolicy(usernamePolicy);
   const crypto = createBunCrypto();
 
-  const signUp = flow("auth.signUpUsername", {
-    plane: "user",
+  const signUpContract = {
     in: UsernameIn,
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const signUp = flow("auth.signUpUsername", {
+    plane: "user",
     do: async (input) => {
       const key = normalizeUsername(input.username);
       try {
@@ -403,11 +406,14 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
     },
   });
 
-  const signIn = flow("auth.signInUsername", {
-    plane: "user",
+  const signInContract = {
     in: UsernameIn,
     out: SignInOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const signIn = flow("auth.signInUsername", {
+    plane: "user",
     do: async (input) => {
       const key = normalizeUsername(input.username);
       const row = usernames.byUsername.get(key);
@@ -450,8 +456,8 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
   return plugin("username", { version: "0.0.1", config: { method: "username" } })
     .needs("auth")
     .table("oke_usernames", undefined, { plane: "user", description: "Username credentials" })
-    .binding(bindPublicAuth("/sign-up/username", signUp, "signUp"))
-    .binding(bindPublicAuth("/sign-in/username", signIn, "signIn"));
+    .binding(bindPublicAuth("/sign-up/username", signUp, "signUp", signUpContract))
+    .binding(bindPublicAuth("/sign-in/username", signIn, "signIn", signInContract));
 }
 
 let dummyPasswordHash: string | null = null;

@@ -33,10 +33,13 @@ describe("createTestApp — four-applications surface", () => {
     });
 
     on(
-      http.post("/orders").gate(member),
+      http
+        .post("/orders", {
+          in: z.object({ sku: z.string(), qty: z.number() }),
+          out: z.object({ id: z.string() }),
+        })
+        .gate(member),
       flow("orders.create", {
-        in: z.object({ sku: z.string(), qty: z.number() }),
-        out: z.object({ id: z.string() }),
         effects: { emits: ["order-placed"] },
         do: async (input, fx) => {
           const id = fx.id();

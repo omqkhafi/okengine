@@ -11,6 +11,7 @@ import { gate } from "../elements/gate.ts";
 import { signal } from "../elements/signal.ts";
 import { vault } from "../elements/vault.ts";
 import { oke } from "../kernel/app.ts";
+import { call } from "../kernel/call.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
 import { http } from "../kernel/triggers.ts";
@@ -42,7 +43,7 @@ describe("Provisions integration", () => {
       }),
     });
 
-    const chargeOrder = flow("payments.chargeOrder", {
+    const chargeOrder = call("payments.chargeOrder", {
       durable: true,
       in: z.object({ orderId: z.string() }),
       out: z.boolean(),
@@ -61,10 +62,13 @@ describe("Provisions integration", () => {
     });
 
     on(
-      http.post("/orders").gate(member, canOrder),
+      http
+        .post("/orders", {
+          in: z.object({ sku: z.string(), qty: z.number() }),
+          out: z.object({ id: z.string() }),
+        })
+        .gate(member, canOrder),
       flow("orders.create", {
-        in: z.object({ sku: z.string(), qty: z.number() }),
-        out: z.object({ id: z.string() }),
         effects: { emits: ["order-placed"], calls: ["payments.chargeOrder"] },
         do: async (input, fx) => {
           const id = fx.id();

@@ -18,7 +18,8 @@ describe("loadStarterFlowSnippet", () => {
     expect(existsSync(STARTER_ROUTE)).toBe(true);
     const snippet = loadStarterFlowSnippet();
     expect(snippet.startsWith("export const root = on(")).toBe(true);
-    expect(snippet).toContain("http.get().public()");
+    expect(snippet).toContain("http.get({");
+    expect(snippet).toContain("}).public()");
     expect(snippet).toContain('app: "notes"');
     expect(snippet).not.toContain("export const health");
   });

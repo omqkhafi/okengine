@@ -13,12 +13,10 @@ const IngestIn = z.object({
 
 /** Stub GitHub webhook — reads vault, creates a task. No outbound HTTP. */
 export const ingest = on(
-  http.post("/integrations/github").gate(member),
+  http.post("/integrations/github", { in: IngestIn, out: TaskCreateOut.pick({ id: true, identifier: true }) }).gate(member),
   flow("github.ingest", {
     plane: "user",
     durable: true,
-    in: IngestIn,
-    out: TaskCreateOut.pick({ id: true, identifier: true }),
     do: async (input, fx) => {
       await fx.vault.get(githubToken);
       const created = (await fx.call("tasks.create", {
@@ -34,9 +32,8 @@ export const ingest = on(
 
 /** Connection status from whether the token is set. */
 export const status = on(
-  http.get("/integrations/github").gate(member),
+  http.get("/integrations/github", { out: z.object({ connected: z.boolean(), repo: z.string().optional() }) }).gate(member),
   flow("github.status", {
-    out: z.object({ connected: z.boolean(), repo: z.string().optional() }),
     do: async (_input, fx) => {
       const token = await fx.vault.get(githubToken);
       const connected = token.reveal().length > 0;
@@ -47,9 +44,8 @@ export const status = on(
 
 /** Stub disconnect. */
 export const disconnect = on(
-  http.delete("/integrations/github").gate(projectAdminWrite),
+  http.delete("/integrations/github", { out: Ok }).gate(projectAdminWrite),
   flow("github.disconnect", {
-    out: Ok,
     do: async (_input, fx) => {
       await fx.vault.get(githubToken);
       return { ok: true as const };

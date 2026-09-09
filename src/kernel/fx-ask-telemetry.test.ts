@@ -8,12 +8,12 @@ import { z } from "zod";
 import { ai, createAiRuntime } from "../elements/ai.ts";
 import { collectWideEvent } from "../runs/collect.ts";
 import { createEffectLedger } from "./effects.ts";
-import { flow } from "./flow.ts";
+import { call } from "./call.ts";
 import { createFx } from "./fx.ts";
 import { createRunTelemetry } from "./run-telemetry.ts";
 import { internal } from "./triggers.ts";
 
-const triageFlow = flow("support.triage", {
+const triageFlow = call("support.triage", {
   in: z.object({}),
   do: () => ({ ok: true }),
 });

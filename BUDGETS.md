@@ -2,52 +2,52 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.18.5 · measured 2026-08-28T16:47:17.834Z_
+_okengine v0.18.5 · measured 2026-09-08T11:25:28.667Z_
 
-Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
+Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
 ## Core
 
 |                                 | Measured  | Limit     |
 | ------------------------------- | --------- | --------- |
-| Kernel (edge profile)           | 15.91 kB  | 16.00 kB  |
-| Client runtime                  | 3.94 kB   | 4.00 kB   |
-| Console initial load            | 348.13 kB | 700.00 kB |
-| Cold start on Bun               | 18.295 ms | 75.000 ms |
-| p99 routing overhead            | 0.002 ms  | 1.000 ms  |
-| HTTP ping app (gzip, externals) | 49.63 kB  | 50.63 kB  |
-| HTTP ping app (raw, externals)  | 144.49 kB | 147.38 kB |
+| Kernel (edge profile)           | 16.67 kB  | 17.00 kB  |
+| Client runtime                  | 4.96 kB   | 5.00 kB   |
+| Console initial load            | 336.02 kB | 700.00 kB |
+| Cold start on Bun               | 21.497 ms | 75.000 ms |
+| p99 routing overhead            | 0.000 ms  | 1.000 ms  |
+| HTTP ping app (gzip, externals) | 42.55 kB  | 43.40 kB  |
+| HTTP ping app (raw, externals)  | 123.10 kB | 125.56 kB |
 
 ## Exports
 
 |              | Measured  | Ceiling   |
 | ------------ | --------- | --------- |
-| okengine     | 98.30 kB  | 100.27 kB |
-| ai           | 12.01 kB  | 12.26 kB  |
-| auth         | 16.67 kB  | 17.00 kB  |
-| channel      | 6.52 kB   | 6.77 kB   |
-| client       | 4.58 kB   | 4.83 kB   |
-| client-react | 11.11 kB  | 11.36 kB  |
-| client/auth  | 559 B     | 815 B     |
-| clock        | 16.70 kB  | 17.04 kB  |
-| compiler     | 18.69 kB  | 19.06 kB  |
+| okengine     | 96.44 kB  | 98.36 kB  |
+| ai           | 13.23 kB  | 13.49 kB  |
+| auth         | 18.53 kB  | 18.90 kB  |
+| channel      | 6.79 kB   | 7.04 kB   |
+| client       | 8.83 kB   | 9.08 kB   |
+| client-react | 11.69 kB  | 11.94 kB  |
+| client/auth  | 8.57 kB   | 8.82 kB   |
+| clock        | 18.29 kB  | 18.66 kB  |
+| compiler     | 21.74 kB  | 22.18 kB  |
 | config       | 1.21 kB   | 1.46 kB   |
-| console      | 163.55 kB | 166.82 kB |
-| full         | 108.83 kB | 111.01 kB |
+| console      | 164.49 kB | 167.78 kB |
+| full         | 106.85 kB | 108.99 kB |
 | gate         | 4.53 kB   | 4.78 kB   |
-| http         | 50.79 kB  | 51.81 kB  |
-| i18n         | 4.29 kB   | 4.54 kB   |
-| journal      | 2.88 kB   | 3.13 kB   |
-| kernel       | 56.89 kB  | 58.02 kB  |
-| mcp          | 9.54 kB   | 9.79 kB   |
-| okid         | 1.10 kB   | 1.35 kB   |
-| plugins      | 31.92 kB  | 32.56 kB  |
-| runs         | 9.67 kB   | 9.92 kB   |
+| http         | 43.67 kB  | 44.54 kB  |
+| i18n         | 4.38 kB   | 4.63 kB   |
+| journal      | 3.02 kB   | 3.27 kB   |
+| kernel       | 50.15 kB  | 51.15 kB  |
+| mcp          | 9.58 kB   | 9.83 kB   |
+| okid         | 1.24 kB   | 1.49 kB   |
+| plugins      | 34.79 kB  | 35.48 kB  |
+| runs         | 9.79 kB   | 10.04 kB  |
 | signal       | 1.26 kB   | 1.51 kB   |
-| store        | 25.02 kB  | 25.52 kB  |
-| test         | 19.86 kB  | 20.26 kB  |
-| testing      | 19.86 kB  | 20.26 kB  |
-| vault        | 12.77 kB  | 13.02 kB  |
+| store        | 30.92 kB  | 31.54 kB  |
+| test         | 21.29 kB  | 21.72 kB  |
+| testing      | 21.29 kB  | 21.72 kB  |
+| vault        | 12.75 kB  | 13.01 kB  |
 
 ## Plugins
 
@@ -55,110 +55,109 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |           | Measured | Ceiling |
 | --------- | -------- | ------- |
-| username  | 6.47 kB  | 6.72 kB |
-| anonymous | 4.35 kB  | 4.60 kB |
-| magicLink | 5.38 kB  | 5.63 kB |
-| otp       | 7.15 kB  | 7.40 kB |
-| twoFactor | 5.09 kB  | 5.34 kB |
-| passkey   | 5.76 kB  | 6.01 kB |
+| username  | 7.52 kB  | 7.77 kB |
+| anonymous | 5.39 kB  | 5.64 kB |
+| magicLink | 6.56 kB  | 6.81 kB |
+| otp       | 8.54 kB  | 8.79 kB |
+| twoFactor | 8.45 kB  | 8.70 kB |
+| passkey   | 7.03 kB  | 7.28 kB |
 
 ### OAuth
 
 |          | Measured | Ceiling  |
 | -------- | -------- | -------- |
-| oauth    | 12.73 kB | 12.99 kB |
-| mcpOauth | 8.80 kB  | 9.05 kB  |
+| oauth    | 13.42 kB | 13.68 kB |
+| mcpOauth | 8.96 kB  | 9.21 kB  |
 
 ### Security
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
-| headers     | 4.07 kB  | 4.32 kB |
-| cors        | 3.91 kB  | 4.16 kB |
-| csrf        | 3.52 kB  | 3.77 kB |
-| ipAllowlist | 3.60 kB  | 3.85 kB |
+| headers     | 4.58 kB  | 4.83 kB |
+| cors        | 4.42 kB  | 4.67 kB |
+| csrf        | 4.03 kB  | 4.28 kB |
+| ipAllowlist | 4.10 kB  | 4.35 kB |
 
 ### Ops
 
 |                 | Measured | Ceiling |
 | --------------- | -------- | ------- |
-| maintenanceMode | 3.42 kB  | 3.67 kB |
+| maintenanceMode | 3.94 kB  | 4.19 kB |
 
 ### Perf
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
-| compression | 3.73 kB  | 3.98 kB |
+| compression | 4.24 kB  | 4.49 kB |
 
 ## Drivers
 
 |                           | Measured | Ceiling  |
 | ------------------------- | -------- | -------- |
-| drivers                   | 73.69 kB | 75.17 kB |
-| ai-anthropic              | 979 B    | 1.21 kB  |
+| drivers                   | 72.37 kB | 73.82 kB |
+| ai-anthropic              | 1.06 kB  | 1.31 kB  |
 | ai-mock                   | 1.05 kB  | 1.30 kB  |
-| ai-ollama                 | 1.96 kB  | 2.21 kB  |
-| ai-openai-compatible      | 1.77 kB  | 2.02 kB  |
-| cdc-outbox                | 2.88 kB  | 3.13 kB  |
+| ai-openai-compatible      | 1.88 kB  | 2.13 kB  |
+| cdc-outbox                | 2.90 kB  | 3.15 kB  |
 | channel-console           | 701 B    | 957 B    |
-| channel-fcm               | 934 B    | 1.16 kB  |
-| channel-msegat            | 710 B    | 966 B    |
-| channel-resend            | 345 B    | 601 B    |
+| channel-fcm               | 974 B    | 1.20 kB  |
+| channel-msegat            | 746 B    | 1002 B   |
+| channel-resend            | 387 B    | 643 B    |
 | channel-sently-map        | 434 B    | 690 B    |
-| channel-smtp              | 438 B    | 694 B    |
-| channel-sndr              | 361 B    | 617 B    |
-| channel-taqnyat           | 706 B    | 962 B    |
-| channel-taqnyat-mail      | 413 B    | 669 B    |
-| channel-taqnyat-whatsapp  | 798 B    | 1.03 kB  |
-| channel-unifonic          | 725 B    | 981 B    |
-| channel-wa-cloud          | 769 B    | 1.00 kB  |
-| channel-webpush           | 910 B    | 1.14 kB  |
-| clock-postgres            | 2.61 kB  | 2.86 kB  |
+| channel-smtp              | 468 B    | 724 B    |
+| channel-sndr              | 453 B    | 709 B    |
+| channel-taqnyat           | 741 B    | 997 B    |
+| channel-taqnyat-mail      | 452 B    | 708 B    |
+| channel-taqnyat-whatsapp  | 833 B    | 1.06 kB  |
+| channel-unifonic          | 763 B    | 1019 B   |
+| channel-wa-cloud          | 809 B    | 1.04 kB  |
+| channel-webpush           | 937 B    | 1.17 kB  |
+| clock-postgres            | 2.84 kB  | 3.09 kB  |
 | drizzle-dialect           | 303 B    | 559 B    |
+| external                  | 262 B    | 518 B    |
 | fs                        | 674 B    | 930 B    |
-| instances-postgres        | 1.12 kB  | 1.37 kB  |
-| journal-postgres          | 3.12 kB  | 3.37 kB  |
+| instances-postgres        | 1.38 kB  | 1.63 kB  |
+| journal-postgres          | 3.35 kB  | 3.60 kB  |
 | kv-lua                    | 995 B    | 1.22 kB  |
-| meilisearch               | 1.67 kB  | 1.92 kB  |
+| meilisearch               | 1.74 kB  | 1.99 kB  |
 | memory                    | 9.81 kB  | 10.06 kB |
-| oauth-apple               | 3.72 kB  | 3.97 kB  |
+| oauth-apple               | 3.29 kB  | 3.54 kB  |
 | oauth-discord             | 1.52 kB  | 1.77 kB  |
 | oauth-facebook            | 1.53 kB  | 1.78 kB  |
 | oauth-figma               | 1.51 kB  | 1.76 kB  |
 | oauth-github              | 1.58 kB  | 1.83 kB  |
-| oauth-google              | 3.34 kB  | 3.59 kB  |
-| oauth-microsoft           | 3.47 kB  | 3.72 kB  |
-| oauth-oidc                | 3.28 kB  | 3.53 kB  |
-| oauth-shared              | 1.94 kB  | 2.19 kB  |
+| oauth-google              | 2.88 kB  | 3.13 kB  |
+| oauth-microsoft           | 2.99 kB  | 3.24 kB  |
+| oauth-oidc                | 2.68 kB  | 2.93 kB  |
+| oauth-shared              | 1.95 kB  | 2.20 kB  |
 | oauth-x                   | 1.52 kB  | 1.77 kB  |
 | oauth2-common             | 643 B    | 899 B    |
 | oauth2-token              | 796 B    | 1.03 kB  |
-| ollama                    | 1.96 kB  | 2.21 kB  |
 | pg-extensions             | 6.72 kB  | 6.97 kB  |
 | pg-rls                    | 4.53 kB  | 4.78 kB  |
 | pg-rls-row-passes         | 2.32 kB  | 2.57 kB  |
 | pg-vault-rls              | 731 B    | 987 B    |
-| pglite                    | 822 B    | 1.05 kB  |
-| pgvector                  | 21.88 kB | 22.31 kB |
-| postgres                  | 2.00 kB  | 2.25 kB  |
+| pglite                    | 808 B    | 1.04 kB  |
+| pgvector                  | 21.11 kB | 21.53 kB |
+| postgres                  | 2.60 kB  | 2.85 kB  |
 | redis                     | 2.00 kB  | 2.25 kB  |
 | s3                        | 1.82 kB  | 2.07 kB  |
 | s3-ensure-bucket          | 1.12 kB  | 1.37 kB  |
-| signal-engine             | 6.22 kB  | 6.47 kB  |
+| signal-engine             | 6.34 kB  | 6.59 kB  |
 | signal-live-iter          | 443 B    | 699 B    |
-| signal-memory             | 6.26 kB  | 6.51 kB  |
-| signal-nats               | 6.74 kB  | 6.99 kB  |
-| signal-postgres           | 9.12 kB  | 9.37 kB  |
-| signal-redis              | 7.33 kB  | 7.58 kB  |
+| signal-memory             | 6.38 kB  | 6.63 kB  |
+| signal-nats               | 6.86 kB  | 7.11 kB  |
+| signal-postgres           | 9.35 kB  | 9.60 kB  |
+| signal-redis              | 7.45 kB  | 7.70 kB  |
 | signal-retention          | 611 B    | 867 B    |
 | vault-1password           | 1.91 kB  | 2.16 kB  |
 | vault-aws-secrets-manager | 1.55 kB  | 1.80 kB  |
 | vault-azure-key-vault     | 1.55 kB  | 1.80 kB  |
-| vault-builtin             | 11.82 kB | 12.07 kB |
+| vault-builtin             | 10.88 kB | 11.13 kB |
 | vault-doppler             | 1.57 kB  | 1.82 kB  |
 | vault-dotenv-parse        | 715 B    | 971 B    |
 | vault-env                 | 856 B    | 1.09 kB  |
 | vault-gcp-secret-manager  | 1.81 kB  | 2.06 kB  |
-| vault-managed             | 4.95 kB  | 5.20 kB  |
+| vault-managed             | 4.83 kB  | 5.08 kB  |
 | vault-memory              | 361 B    | 617 B    |
 | vault-remote-bag          | 1012 B   | 1.24 kB  |

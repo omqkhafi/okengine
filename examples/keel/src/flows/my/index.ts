@@ -7,10 +7,8 @@ import { TaskOut } from "@/flows/tasks/shapes";
 
 /** My Tasks — assigned to the caller, not completed. */
 export const tasksMine = on(
-  http.get("/me/tasks").gate(member),
+  http.get("/me/tasks", { in: listIn({ mode: "offset" }), out: pageOut(TaskOut) }).gate(member),
   flow("my.tasks", {
-    in: listIn({ mode: "offset" }),
-    out: pageOut(TaskOut),
     do: async (input, fx) => {
       const email = fx.auth.userId ?? "";
       const assignees = await fx.store(db).select().from(taskAssignees);

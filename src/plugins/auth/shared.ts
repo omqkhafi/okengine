@@ -9,6 +9,7 @@ import { getActiveGateAuthContext } from "../../auth/method-context.ts";
 import { createSessionStore, type SessionCrypto, type SessionStore } from "../../auth/sessions.ts";
 import { gate } from "../../elements/gate.ts";
 import type { GateDecl } from "../../elements/gate/declare.ts";
+import type { BoundaryContract } from "../../kernel/boundary-contract.ts";
 import { fail } from "../../kernel/errors.ts";
 import { flow, type AnyFlowDef } from "../../kernel/flow.ts";
 import type { Binding } from "../../kernel/on.ts";
@@ -136,9 +137,11 @@ export function bindPublicAuth(
   path: string,
   flowDef: AnyFlowDef,
   kind: keyof typeof AUTH_RATE_PRESETS = "otp",
+  contract?: BoundaryContract,
 ): Binding {
   const gates = authPublicGates(kind);
-  let trigger = http.post(`/auth${path}`);
+  let trigger =
+    contract !== undefined ? http.post(`/auth${path}`, contract) : http.post(`/auth${path}`);
   for (const g of gates) trigger = trigger.gate(g);
   return bindAuthHttp(trigger, flowDef);
 }
@@ -149,8 +152,16 @@ export function bindPublicAuth(
  * @param path - Path under `/auth`
  * @param flowDef - Flow
  */
-export function bindSessionAuth(path: string, flowDef: AnyFlowDef): Binding {
-  return bindAuthHttp(http.post(`/auth${path}`).gate(AUTH_SESSION_GATE), flowDef);
+export function bindSessionAuth(
+  path: string,
+  flowDef: AnyFlowDef,
+  contract?: BoundaryContract,
+): Binding {
+  const trigger =
+    contract !== undefined
+      ? http.post(`/auth${path}`, contract)
+      : http.post(`/auth${path}`);
+  return bindAuthHttp(trigger.gate(AUTH_SESSION_GATE), flowDef);
 }
 
 export { AUTH_SESSION_GATE, fail, flow, http, z };

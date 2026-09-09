@@ -7,11 +7,8 @@ import { NoteIdIn, NoteOut, NotFound, toIsoInstant } from "../shapes";
 
 /** Soft-archive a note. */
 export const archive = on(
-  http.post().gate(notesMutate),
+  http.post({ in: NoteIdIn, out: NoteOut, errors: { NotFound } }).gate(notesMutate),
   flow({
-    in: NoteIdIn,
-    out: NoteOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });

@@ -44,9 +44,8 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").public(),
+      http.get("/notes", { out: z.array(NoteOut) }).public(),
       flow("notes.list", {
-        out: z.array(NoteOut),
         effects: { reads: ["sql:notes"] },
         do: () => {
           lists += 1;
@@ -80,9 +79,8 @@ describe("automatic tier-1 cache from effects", () => {
     resetFlowSeq();
     const db = store.sql("app", { schema: { notes } });
     const list = on(
-      http.get("/notes").public(),
+      http.get("/notes", { out: z.array(NoteOut) }).public(),
       flow("notes.list", {
-        out: z.array(NoteOut),
         effects: { reads: ["sql:notes"] },
         do: () => [{ id: "n1", title: "Harbor" }],
       }),
@@ -146,9 +144,8 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").public(),
+      http.get("/notes", { out: z.array(NoteOut) }).public(),
       flow("notes.list", {
-        out: z.array(NoteOut),
         do: async (_input, fx) => {
           lists += 1;
           const rows = await fx.store(db).select().from(notes);
@@ -201,9 +198,8 @@ describe("automatic tier-1 cache from effects", () => {
       }),
     );
     const create = on(
-      http.post("/notes").public(),
+      http.post("/notes", { in: z.object({ title: z.string() }) }).public(),
       flow("notes.create", {
-        in: z.object({ title: z.string() }),
         effects: { writes: ["sql:notes"] },
         do: (input) => ({ id: "n-new", title: input.title }),
       }),
@@ -231,9 +227,8 @@ describe("automatic tier-1 cache from effects", () => {
     const db = store.sql("app", { schema: { notes } });
     let lists = 0;
     const list = on(
-      http.get("/notes").public(),
+      http.get("/notes", { out: z.array(NoteOut) }).public(),
       flow("notes.list", {
-        out: z.array(NoteOut),
         do: async (_input, fx) => {
           lists += 1;
           const rows = await fx.store(db).select().from(notes);
@@ -242,9 +237,8 @@ describe("automatic tier-1 cache from effects", () => {
       }),
     );
     const create = on(
-      http.post("/notes").public(),
+      http.post("/notes", { in: z.object({ title: z.string() }) }).public(),
       flow("notes.create", {
-        in: z.object({ title: z.string() }),
         do: async (input, fx) => {
           const id = `n-${lists + 1}`;
           await fx.store(db).insert(notes).values({ id, title: input.title });

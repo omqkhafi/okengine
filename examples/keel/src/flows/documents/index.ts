@@ -35,10 +35,8 @@ export const { list, get, update, remove } = bindCrud({
 
 /** Upsert a document. */
 export const upsert = on(
-  http.post("/documents").gate(member),
+  http.post("/documents", { in: DocumentIn.extend({ id: z.string().optional() }), out: IdOut }).gate(member),
   flow("documents.upsert", {
-    in: DocumentIn.extend({ id: z.string().optional() }),
-    out: IdOut,
     do: async (input, fx) => {
       const id = input.id ?? fx.id();
       await fx.store(db).upsert(
@@ -59,11 +57,8 @@ export const upsert = on(
 
 /** Summarize via `document-summary`. */
 export const summarize = on(
-  http.post("/documents/:id/summarize").gate(member),
+  http.post("/documents/:id/summarize", { in: IdIn, out: z.object({ summary: z.string() }), errors: { NotFound, Unavailable } }).gate(member),
   flow("documents.summarize", {
-    in: IdIn,
-    out: z.object({ summary: z.string() }),
-    errors: { NotFound, Unavailable },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(documents, input.id);
       if (!row) return fail("NotFound", { id: input.id });

@@ -1,13 +1,14 @@
 /**
  * `flow` — the one species of backend behavior.
  *
- * A Flow is a typed contract (`in` / `out` / `errors`) plus a `do` body.
- * Triggers are attached by {@link on}; a flow with no trigger is still a
- * Flow and is callable via `fx.call` (unified-theory §4, Linkly ⑤).
+ * A Flow is a `do` body plus runtime options. Invoke contracts (`in` / `out` /
+ * `errors` / `breaking`) are authored on the exposure (`http.*`, `call`,
+ * `mcp.tool`) and stamped onto the FlowDef for Manifest / validation.
+ * Triggers are attached by {@link on}; {@link call} is the call-only sugar.
  */
 
 import type { Effects, FlowPlane, Slo } from "../manifest/types.ts";
-import type { InferSchemaOutput, SchemaInput } from "../validation/standard-schema.ts";
+import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { FxRetryOptions } from "./concurrency.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
@@ -22,7 +23,7 @@ export type StandardSchemaResult<Output> =
   | { readonly value: Output; readonly issues?: undefined }
   | { readonly issues: ReadonlyArray<{ readonly message: string }> };
 
-/** Map of declared flow-boundary error names to their schemas. */
+/** Map of declared boundary error names to their schemas. */
 export type FlowErrorMap = Readonly<Record<string, SchemaInput>>;
 
 /**
@@ -36,22 +37,12 @@ export type FlowHandler<I = unknown, O = unknown> = (
   fx: Fx,
 ) => O | FlowFailure | Promise<O | FlowFailure>;
 
-/** Options for {@link flow}. */
-export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = FlowErrorMap> {
-  /** Input schema (Standard Schema when present). */
-  readonly in?: SchemaInput;
-  /** Output schema (Standard Schema when present). */
-  readonly out?: SchemaInput;
-  /** Declared typed errors. */
-  readonly errors?: E;
+/** Runtime / behavior options for {@link flow} (no invoke contract). */
+export interface FlowOptions<I = unknown, O = unknown> {
   /** Declared effects (capability token). Inferred later by AoT. */
   readonly effects?: Effects;
   /** Journal every effect call. */
   readonly durable?: boolean;
-  /**
-   * Retry the whole `do` body on thrown errors (same journal session when
-   * durable). Prefer {@link Fx.retry} inside {@link Fx.step} for fine control.
-   */
   /**
    * Retry the whole `do` body on thrown errors (same journal session when
    * durable). Prefer {@link Fx.retry} inside {@link Fx.step} for fine control.
@@ -70,11 +61,6 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
    * Cross-plane invocation is a compile error.
    */
   readonly plane?: FlowPlane;
-  /**
-   * Acknowledge intentional Manifest contract breaks for this flow
-   * (`oke doctor --diff` / CI gate).
-   */
-  readonly breaking?: boolean;
   /**
    * Compensation phase after terminal failure on a durable flow.
    * Runs under the same journal session after auto per-step `{ undo }`
@@ -106,37 +92,22 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
 }
 
 /**
- * Infer validated input from a flow options bag.
+ * Infer validated input from a flow options bag (handler signature).
  *
  * @typeParam Opts - {@link FlowOptions} / call-site object
  */
-export type InferFlowIn<Opts> = Opts extends { readonly in: infer S }
-  ? InferSchemaOutput<S>
-  : Opts extends { readonly do: FlowHandler<infer I, infer _O> }
-    ? I
-    : unknown;
+export type InferFlowIn<Opts> = Opts extends { readonly do: FlowHandler<infer I, infer _O> }
+  ? I
+  : unknown;
 
 /**
- * Infer success output from a flow options bag.
+ * Infer success output from a flow options bag (handler signature).
  *
  * @typeParam Opts - {@link FlowOptions} / call-site object
  */
-export type InferFlowOut<Opts> = Opts extends { readonly out: infer S }
-  ? InferSchemaOutput<S>
-  : Opts extends { readonly do: FlowHandler<infer _I, infer O> }
-    ? O
-    : unknown;
-
-/**
- * Infer the error schema map from a flow options bag.
- *
- * @typeParam Opts - {@link FlowOptions} / call-site object
- */
-export type InferFlowErrors<Opts> = Opts extends {
-  readonly errors: infer E extends FlowErrorMap;
-}
-  ? E
-  : {};
+export type InferFlowOut<Opts> = Opts extends { readonly do: FlowHandler<infer _I, infer O> }
+  ? O
+  : unknown;
 
 /**
  * Phantom brand for the bound trigger type parameter. Optional so
@@ -146,6 +117,9 @@ declare const triggerPhantom: unique symbol;
 
 /**
  * A Flow definition — one species, trigger-agnostic until {@link on} binds.
+ *
+ * `in` / `out` / `errors` / `breaking` are **projections** stamped from the
+ * exposure (`http.*` / `call` / `mcp.tool` / signal schema), not authored here.
  *
  * @typeParam I - Input type
  * @typeParam O - Output type
@@ -171,12 +145,12 @@ export interface FlowDef<
   readonly name: string;
   /** Unit scope — derived from `name`'s first dot segment (e.g. `"auth.refresh"` → `"auth"`). */
   readonly unit: string | undefined;
-  /** Input schema. */
-  readonly in: SchemaInput | undefined;
-  /** Output schema. */
-  readonly out: SchemaInput | undefined;
-  /** Declared errors. */
-  readonly errors: E | undefined;
+  /** Input schema (stamped from exposure). */
+  in: SchemaInput | undefined;
+  /** Output schema (stamped from exposure). */
+  out: SchemaInput | undefined;
+  /** Declared errors (stamped from exposure). */
+  errors: E | undefined;
   /** Declared effects. */
   readonly effects: Effects | undefined;
   /** Durability flag. */
@@ -198,8 +172,8 @@ export interface FlowDef<
   readonly slo: Slo | undefined;
   /** Plane (user vs operator). */
   readonly plane: FlowPlane | undefined;
-  /** Intentional contract-break acknowledgement for Manifest Diff. */
-  readonly breaking: boolean;
+  /** Intentional contract-break acknowledgement (stamped from exposure). */
+  breaking: boolean;
   /**
    * When `false`, this flow is tenant-unaware (no tenant-role scope union).
    * Default `true` when `gate.auth.tenant` is on.
@@ -262,37 +236,52 @@ export interface FlowDef<
 export const flowBrand: unique symbol = Symbol("oke.flow");
 
 /**
- * Define a Flow — the one species of backend behavior.
- *
- * Input / output types are inferred from Standard Schema `in` / `out` when
- * present; otherwise from the `do` handler signature.
+ * Define a Flow — behavior only. Author invoke contracts on `http.*` /
+ * {@link call} / `mcp.tool`, not here.
  *
  * A nameless `flow({ do })` is stamped `unit.export` by the file-tree
  * generator, {@link unit}, or `.adopt()`. Explicit `flow("notes.get", {…})`
  * still wins.
  *
- * @param options - Contract and handler (name stamped later)
+ * @param options - Runtime options and handler (name stamped later)
  */
-export function flow<Opts extends FlowOptions<any, any, any>>(
+export function flow<Opts extends FlowOptions<any, any>>(
   options: Opts,
-): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>>;
+): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>>;
 /**
  * @param name - Stable name (used by `fx.call` and the Manifest)
- * @param options - Contract and handler
+ * @param options - Runtime options and handler
  */
-export function flow<Opts extends FlowOptions<any, any, any>>(
+export function flow<Opts extends FlowOptions<any, any>>(
   name: string,
   options: Opts & { readonly name?: never },
-): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>>;
+): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>>;
 export function flow(
-  nameOrOptions: string | FlowOptions<any, any, any>,
-  maybeOptions?: FlowOptions<any, any, any> & { readonly name?: never },
+  nameOrOptions: string | FlowOptions<any, any>,
+  maybeOptions?: FlowOptions<any, any> & { readonly name?: never },
 ): FlowDef {
   const named = typeof nameOrOptions === "string";
   const name = named ? nameOrOptions : "";
-  const options = (named ? maybeOptions : nameOrOptions) as FlowOptions<any, any, any> | undefined;
+  const options = (named ? maybeOptions : nameOrOptions) as FlowOptions<any, any> | undefined;
   if (!options || typeof options.do !== "function") {
     throw new TypeError("flow() expected an options bag with a do handler");
+  }
+  // Reject legacy contract keys so misuse fails loud at definition time.
+  const legacy = options as FlowOptions<any, any> & {
+    in?: unknown;
+    out?: unknown;
+    errors?: unknown;
+    breaking?: unknown;
+  };
+  if (
+    legacy.in !== undefined ||
+    legacy.out !== undefined ||
+    legacy.errors !== undefined ||
+    legacy.breaking !== undefined
+  ) {
+    throw new TypeError(
+      "flow() no longer accepts in/out/errors/breaking — put the invoke contract on http.*(…), call(…), or mcp.tool(…)",
+    );
   }
 
   const triggers: Trigger[] = [];
@@ -306,9 +295,9 @@ export function flow(
     [flowBrand]: true,
     name,
     unit,
-    in: options.in,
-    out: options.out,
-    errors: (options.errors ?? undefined) as FlowErrorMap | undefined,
+    in: undefined,
+    out: undefined,
+    errors: undefined,
     effects: options.effects,
     durable: options.durable ?? false,
     retry: options.retry,
@@ -317,7 +306,7 @@ export function flow(
     cache: options.cache,
     slo: options.slo,
     plane: options.plane,
-    breaking: options.breaking ?? false,
+    breaking: false,
     tenantScoped: options.tenantScoped,
     stream: options.stream,
     compensate: options.compensate as FlowDef["compensate"],
@@ -333,7 +322,6 @@ export function flow(
     },
     plug(pluginDef) {
       pendingPlugins.push(pluginDef);
-      // Decorations accumulate on the interface; runtime object is unchanged.
       return def as never;
     },
   };

@@ -14,11 +14,14 @@ void 0;
 void 0;
 
 export const create = on(
-  http.post("/bookings").gate(book),
+  http
+    .post("/bookings", {
+      in: BookingIn,
+      out: BookingOut,
+      errors: { FlightFull },
+    })
+    .gate(book),
   flow("bookings.create", {
-    in: BookingIn,
-    out: BookingOut,
-    errors: { FlightFull },
     slo: { availability: "99.9%", latency: { p99: "200ms" } },
     plane: "user",
     do: async (input, fx) => {

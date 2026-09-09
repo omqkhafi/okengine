@@ -7,11 +7,13 @@
 
 import { flattenGateArgs, GATE_PUBLIC_NAME, type GateAllDecl } from "../elements/gate/flatten.ts";
 import type { ClockDecl } from "../elements/clock/declare.ts";
+import type { BoundaryContract } from "./boundary-contract.ts";
 import type { NamedRef } from "./fx.ts";
 import { HTTP_PATH_PENDING, type HttpPathPending } from "./http-path-pending.ts";
 import { lazyRequire } from "./lazy-require.ts";
 
 export { HTTP_PATH_PENDING, isPendingHttpPath, type HttpPathPending } from "./http-path-pending.ts";
+export type { BoundaryContract } from "./boundary-contract.ts";
 
 /** HTTP methods accepted by {@link http}. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD" | "QUERY";
@@ -37,6 +39,8 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
   readonly method: M;
   readonly path: P;
   readonly gates: readonly GateRef[];
+  /** Invoke contract authored on the verb options bag. */
+  readonly contract?: BoundaryContract;
   /**
    * Signal this GET exposes as a live SSE feed (`undefined` when not a live route).
    */
@@ -137,6 +141,8 @@ export interface McpToolTrigger {
   /** Tool name exposed in MCP `tools/list`. */
   readonly name: string;
   readonly gates: readonly GateRef[];
+  /** Invoke contract authored on `mcp.tool(name, bag)`. */
+  readonly contract?: BoundaryContract;
   readonly gate: GateAttach<McpToolTrigger>;
 }
 
@@ -179,28 +185,35 @@ export function createHttpTrigger<M extends HttpMethod, P extends string>(
   path: P,
   gates: readonly GateRef[],
   liveSignal: SignalSource,
+  contract?: BoundaryContract,
 ): LiveHttpTrigger<M, P>;
 export function createHttpTrigger<M extends HttpMethod, P extends string>(
   method: M,
   path: P,
   gates?: readonly GateRef[],
   liveSignal?: SignalSource,
+  contract?: BoundaryContract,
 ): HttpTrigger<M, P>;
 export function createHttpTrigger<M extends HttpMethod, P extends string>(
   method: M,
   path: P,
   gates: readonly GateRef[] = [],
   liveSignal?: SignalSource,
+  contract?: BoundaryContract,
 ): HttpTrigger<M, P> {
   const trigger: HttpTrigger<M, P> = {
     kind: "http",
     method,
     path,
     gates,
+    ...(contract !== undefined ? { contract } : {}),
     ...(liveSignal !== undefined ? { liveSignal } : {}),
-    gate: createGateAttach((next) => createHttpTrigger(method, path, next, liveSignal), gates),
+    gate: createGateAttach(
+      (next) => createHttpTrigger(method, path, next, liveSignal, contract),
+      gates,
+    ),
     public() {
-      return createHttpTrigger(method, path, [...gates, GATE_PUBLIC_NAME], liveSignal);
+      return createHttpTrigger(method, path, [...gates, GATE_PUBLIC_NAME], liveSignal, contract);
     },
     live(source: SignalSource | object) {
       if (typeof source === "object" && !("name" in source)) {
@@ -212,9 +225,9 @@ export function createHttpTrigger<M extends HttpMethod, P extends string>(
           "table",
         );
         const signal = { name: `oke/live/sql:${storeTable.resolveTableName(source)}` };
-        return createHttpTrigger(method, path, gates, signal);
+        return createHttpTrigger(method, path, gates, signal, contract);
       }
-      return createHttpTrigger(method, path, gates, source as SignalSource);
+      return createHttpTrigger(method, path, gates, source as SignalSource, contract);
     },
   };
   return trigger;
@@ -281,64 +294,71 @@ function loadHttpResource(): typeof import("./http-resource.ts") {
 /**
  * Shape of the {@link http} trigger namespace. Each method keeps `P` as a
  * generic type parameter so callers (and the client) retain literal path
- * types for param extraction.
+ * types for param extraction. Invoke contracts use an options bag
+ * (`http.post({ in, out })` or `http.post("/notes", { in, out })`).
  */
 export interface HttpTriggerNamespace {
-  /**
-   * Pathless — file-tree stamp fills the URL. Unresolved sentinel fails boot.
-   */
-  get(): HttpTrigger<"GET", HttpPathPending>;
+  /** Pathless — file-tree stamp fills the URL. Unresolved sentinel fails boot. */
+  get(contract?: BoundaryContract): HttpTrigger<"GET", HttpPathPending>;
   /**
    * @param path - Route path (`/:id` params supported)
+   * @param contract - Invoke contract bag
    */
-  get<P extends string>(path: P): HttpTrigger<"GET", P>;
+  get<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"GET", P>;
   /** Pathless — file-tree stamp fills the URL. */
-  post(): HttpTrigger<"POST", HttpPathPending>;
+  post(contract?: BoundaryContract): HttpTrigger<"POST", HttpPathPending>;
   /**
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  post<P extends string>(path: P): HttpTrigger<"POST", P>;
+  post<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"POST", P>;
   /** Pathless — file-tree stamp fills the URL. */
-  put(): HttpTrigger<"PUT", HttpPathPending>;
+  put(contract?: BoundaryContract): HttpTrigger<"PUT", HttpPathPending>;
   /**
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  put<P extends string>(path: P): HttpTrigger<"PUT", P>;
+  put<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"PUT", P>;
   /** Pathless — file-tree stamp fills the URL. */
-  patch(): HttpTrigger<"PATCH", HttpPathPending>;
+  patch(contract?: BoundaryContract): HttpTrigger<"PATCH", HttpPathPending>;
   /**
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  patch<P extends string>(path: P): HttpTrigger<"PATCH", P>;
+  patch<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"PATCH", P>;
   /** Pathless — file-tree stamp fills the URL. */
-  delete(): HttpTrigger<"DELETE", HttpPathPending>;
+  delete(contract?: BoundaryContract): HttpTrigger<"DELETE", HttpPathPending>;
   /**
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  delete<P extends string>(path: P): HttpTrigger<"DELETE", P>;
+  delete<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"DELETE", P>;
   /** Pathless — file-tree stamp fills the URL. */
-  options(): HttpTrigger<"OPTIONS", HttpPathPending>;
+  options(contract?: BoundaryContract): HttpTrigger<"OPTIONS", HttpPathPending>;
   /**
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  options<P extends string>(path: P): HttpTrigger<"OPTIONS", P>;
+  options<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"OPTIONS", P>;
   /** Pathless — file-tree stamp fills the URL. */
-  head(): HttpTrigger<"HEAD", HttpPathPending>;
+  head(contract?: BoundaryContract): HttpTrigger<"HEAD", HttpPathPending>;
   /**
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  head<P extends string>(path: P): HttpTrigger<"HEAD", P>;
+  head<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"HEAD", P>;
   /**
    * Safe, idempotent read that carries a JSON body (RFC 10008).
    * Pathless — file-tree stamp fills the URL.
    */
-  query(): HttpTrigger<"QUERY", HttpPathPending>;
+  query(contract?: BoundaryContract): HttpTrigger<"QUERY", HttpPathPending>;
   /**
    * Safe, idempotent read that carries a JSON body (RFC 10008).
    *
    * @param path - Route path
+   * @param contract - Invoke contract bag
    */
-  query<P extends string>(path: P): HttpTrigger<"QUERY", P>;
+  query<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"QUERY", P>;
   /**
    * Mount a CRUD resource (list/create on `path`, get/update/remove on
    * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`
@@ -353,17 +373,34 @@ export interface HttpTriggerNamespace {
   live(signal: SignalSource): LiveHttpTrigger<"GET">;
 }
 
+/** True when `value` looks like a {@link BoundaryContract} options bag (not a path). */
+function isHttpContractBag(value: unknown): value is BoundaryContract {
+  if (typeof value !== "object" || value === null) return false;
+  const o = value as Record<string, unknown>;
+  return "in" in o || "out" in o || "errors" in o || "breaking" in o;
+}
+
 /** Bind an HTTP verb constructor (`http.get`, `http.query`, …). */
 function httpVerb<M extends HttpMethod>(
   method: M,
 ): {
-  (): HttpTrigger<M, HttpPathPending>;
-  <P extends string>(path: P): HttpTrigger<M, P>;
+  (contract?: BoundaryContract): HttpTrigger<M, HttpPathPending>;
+  <P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<M, P>;
 } {
-  return ((path?: string) =>
-    createHttpTrigger(method, path === undefined ? HTTP_PATH_PENDING : path)) as {
-    (): HttpTrigger<M, HttpPathPending>;
-    <P extends string>(path: P): HttpTrigger<M, P>;
+  return ((pathOrContract?: string | BoundaryContract, maybeContract?: BoundaryContract) => {
+    if (pathOrContract === undefined) {
+      return createHttpTrigger(method, HTTP_PATH_PENDING);
+    }
+    if (typeof pathOrContract === "string") {
+      return createHttpTrigger(method, pathOrContract, [], undefined, maybeContract);
+    }
+    if (isHttpContractBag(pathOrContract)) {
+      return createHttpTrigger(method, HTTP_PATH_PENDING, [], undefined, pathOrContract);
+    }
+    throw new TypeError(`http.${method.toLowerCase()}(…): expected a path string or contract bag`);
+  }) as {
+    (contract?: BoundaryContract): HttpTrigger<M, HttpPathPending>;
+    <P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<M, P>;
   };
 }
 
@@ -450,33 +487,39 @@ export function isSignalTriggerSource(value: unknown): value is SignalSource {
 export const internal: InternalTrigger = { kind: "internal" };
 
 /**
- * MCP tool namespace — `mcp.tool("bookings.create")` marks a flow as an
- * explicitly exposed MCP tool for OAuth user-plane clients. Chain `.gate(...)`
- * like HTTP triggers; no gates ⇒ not exposed (deny-by-default).
+ * MCP tool namespace — `mcp.tool("bookings.create", { in, out })` marks a flow
+ * as an explicitly exposed MCP tool for OAuth user-plane clients. Chain
+ * `.gate(...)` like HTTP triggers; no gates ⇒ not exposed (deny-by-default).
  *
  * @param name - Tool name (namespaced, e.g. `bookings.create`)
  */
 export const mcp: {
   /**
    * @param name - Tool name
+   * @param contract - Invoke contract bag
    */
-  tool(name: string): McpToolTrigger;
+  tool(name: string, contract?: BoundaryContract): McpToolTrigger;
 } = {
-  tool(name: string): McpToolTrigger {
+  tool(name: string, contract?: BoundaryContract): McpToolTrigger {
     if (typeof name !== "string" || name.trim().length === 0) {
       throw new TypeError("mcp.tool(name): name is required");
     }
-    return withMcpGates(name, []);
+    return withMcpGates(name, [], contract);
   },
 };
 
 /** @internal Attach a resolved gate list onto a fresh {@link McpToolTrigger}. */
-function withMcpGates(name: string, gates: readonly GateRef[]): McpToolTrigger {
+function withMcpGates(
+  name: string,
+  gates: readonly GateRef[],
+  contract?: BoundaryContract,
+): McpToolTrigger {
   return {
     kind: "mcp",
     name,
     gates,
-    gate: createGateAttach((next) => withMcpGates(name, next), gates),
+    ...(contract !== undefined ? { contract } : {}),
+    gate: createGateAttach((next) => withMcpGates(name, next, contract), gates),
   };
 }
 

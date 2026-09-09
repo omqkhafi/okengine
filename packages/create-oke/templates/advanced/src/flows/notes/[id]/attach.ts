@@ -6,11 +6,8 @@ import { NoteAttachIn, NoteAttachOut, NotFound } from "../shapes";
 
 /** Store a text attachment next to a note (`files:uploads`). */
 export const attach = on(
-  http.post().gate(notesMutate),
+  http.post({ in: NoteAttachIn, out: NoteAttachOut, errors: { NotFound } }).gate(notesMutate),
   flow({
-    in: NoteAttachIn,
-    out: NoteAttachOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });

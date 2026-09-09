@@ -30,12 +30,14 @@ import { z } from "zod";
 import { member } from "@/core/gate";
 
 export const create = on(
-  mcp.tool("bookings.create").gate(member),
-  flow({
+  mcp.tool("bookings.create", {
     in: z.object({
       guest: z.string().min(1),
       night: z.string(),
     }),
+    out: z.object({ id: z.string(), guest: z.string(), night: z.string() }),
+  }).gate(member),
+  flow({
     do: async (input, fx) => {
       return { id: fx.id(), ...input };
     },
@@ -182,7 +184,7 @@ server. Use it for documentation search, not business Flows.
 
 | Piece | Detail |
 | ----- | ------ |
-| Trigger | `mcp.tool(name)` from `okengine` |
+| Trigger | `mcp.tool(name, { in, out, errors? })` from `okengine` |
 | Gates | `.gate(...)` required for exposure |
 | Port | **6535** (`ports.mcp`) |
 | Path | `POST /mcp` · `GET /health` |

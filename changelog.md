@@ -14,6 +14,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+#### Runtime
+
+- **`call(name, options)`** — call-only Flow sugar with invoke contract on the same bag
+  (`in` / `out` / `errors` / `breaking` + `do` + runtime). Exported from `okengine` and
+  `okengine/http`.
+- **`BoundaryContract`** — shared `{ in?, out?, errors?, breaking? }` on HTTP verb bags and
+  `mcp.tool(name, bag)`.
+- **OKE1605 `CHANNEL_SCHEMA`** — `fx.send` rejects template `data` that fails the template's
+  Standard Schema (parity with Signal emit **OKE1250**).
+
 #### Console — Flows & traces
 
 - Trace waterfall marks egress effects with a dashed outline when
@@ -227,6 +237,19 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- **Invoke contracts leave `flow()`** — `in` / `out` / `errors` / `breaking` are authored on the
+  exposure, not on `flow()`. Use `http.post({ in, out, errors })` (or `http.get("/path", { … })`),
+  `call("unit.export", { in, out, do, … })` for call-only work, and
+  `mcp.tool("name", { in, out, errors })` for MCP. Signal / Channel keep emit `schema`
+  (Channel `schema` is enforced at `fx.send` as **OKE1605** / `CHANNEL_SCHEMA`). Manifest still
+  stores flat `flows.*.in/out/errors/breaking` as a projection. `flow()` throws if those keys
+  are passed.
+
+#### Docs
+
+- Flow / HTTP / Consumers / Signal / errors reference updated for exposure-owned invoke
+  contracts vs emit `schema`, plus `call()` call-only sugar.
+
 - **OKE error codes renumbered into domain ranges** (full break; no legacy carve-out).
   Every framework code is reassigned under: Kernel `1000–1099` · Store `1100–1199` ·
   Signal `1200–1299` · Clock `1300–1399` · Gate `1400–1499` · Vault `1500–1599` ·
@@ -267,6 +290,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - `UNDECLARED_EMBED` no longer shares a number with `TENANT_REQUIRED` (tenant codes moved to
   **OKE1810–1830**; embed is **OKE1009**).
+- **`flow()` invoke contracts** — `in` / `out` / `errors` / `breaking` must live on the
+  exposure (`http.*(…)`, `call(…)`, `mcp.tool(…)`). Passing them to `flow()` throws at
+  definition time. Call-only flows use `call(name, { in, out, do, … })` (exported from
+  `okengine` and `okengine/http`).
 
 ### ♻️ Changed
 
@@ -297,6 +324,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Keel flows, `bindCrud`, auth HTTP bindings, Console seed invoke host, and
+  remaining kernel / test call sites finish the invoke-contract migration off
+  `flow({ in, out, … })`.
 - `oke dev` streams Docker Compose pull / create / start progress into the boot
   status lines (and live keyboard **up**) instead of a silent
   `docker compose up…` wait.
@@ -331,6 +361,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Scrubbed leftover "ten exports" / "ten words" marketing: landing vocabulary
+  band, docs hub Vocabulary card, and site `EXPORTS` now use "core programming
+  vocabulary" and include `call` (11 names, matching `AGENTS.md`).
 - CLI docs note that `oke dev` streams Compose pull / create / start progress
   into boot status lines.
 - Models docs drop the incorrect `meta` registry row; Cloudflare and Meta are

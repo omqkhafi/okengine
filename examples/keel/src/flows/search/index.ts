@@ -1,4 +1,4 @@
-import { on, flow, http, fail, type Fx } from "okengine";
+import { on, flow, call, http, fail, type Fx } from "okengine";
 
 import { db, member, openaiKey, publicDocsUrl, taskIndex } from "@/core";
 import { comments, tasks } from "@/db/schema.decl";
@@ -38,10 +38,8 @@ async function upsertTask(fx: Fx, row: Record<string, unknown>): Promise<void> {
 
 /** QUERY search — index first, SQL fallback. */
 export const query = on(
-  http.query("/search").gate(member),
+  http.query("/search", { in: SearchIn, out: SearchOut }).gate(member),
   flow("search.query", {
-    in: SearchIn,
-    out: SearchOut,
     do: async (input, fx) => {
       if (!input.q?.trim()) {
         return fx.json.with(queryPage([], input, { mode: "offset", maxLimit: 50 }));
@@ -84,10 +82,8 @@ export const query = on(
 
 /** Suggest from the index. */
 export const suggest = on(
-  http.get("/search/suggest").gate(member),
+  http.get("/search/suggest", { in: SearchIn, out: SearchOut }).gate(member),
   flow("search.suggest", {
-    in: SearchIn,
-    out: SearchOut,
     do: async (input, fx) => {
       if (!input.q) {
         return fx.json.with(
@@ -101,11 +97,10 @@ export const suggest = on(
 
 /** Reindex every task. */
 export const reindex = on(
-  http.post("/search/reindex").gate(member),
+  http.post("/search/reindex", { out: Ok }).gate(member),
   flow("search.reindex", {
     plane: "operator",
     durable: true,
-    out: Ok,
     do: async (_input, fx) => {
       const rows = await fx.store(db).select().from(tasks);
       for (const row of rows) {
@@ -117,7 +112,7 @@ export const reindex = on(
 );
 
 /** Index one task (call-only). */
-export const embedTask = flow("search.embedTask", {
+export const embedTask = call("search.embedTask", {
   plane: "operator",
   in: tasksZod.select.pick({ id: true }),
   out: Ok,

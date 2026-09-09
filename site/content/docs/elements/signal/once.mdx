@@ -188,7 +188,7 @@ Optional second argument to `signal.once`. Delivery is the helper name — not a
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Validated at `fx.emit` (**OKE1250**) |
+| `schema` | Standard Schema | omitted | **Emit** contract — validated at `fx.emit` (**OKE1250**). Workers inherit payload typing. |
 | `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
 | `deadLetter` | `boolean` | `true` | Keep exhausted messages; not a queue name |
 | `optional` | `boolean` | `false` | Allow emit with zero subscribers |
@@ -468,8 +468,9 @@ Returned entries include `payload`, `attempts`, `failures`, `key`, `createdAt`, 
 </Accordion>
 
 <Accordion title="Schema at emit">
-  Invalid payloads fail at `fx.emit` with **OKE1250** before any worker runs. Same Standard
-  Schema path as Flow `in`.
+  Invalid payloads fail at `fx.emit` with **OKE1250** before any worker runs. The Signal's
+  `schema` is an **emit** contract (like Channel `schema` at `fx.send`) — distinct from HTTP
+  invoke contracts on `http.*` / `call` / `mcp.tool`.
 
 Cause: `"{resource}": {detail}`.
 </Accordion>

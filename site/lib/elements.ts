@@ -152,7 +152,8 @@ export const EXPORTS: ReadonlyArray<{
   readonly role: string;
 }> = [
   { name: "on", role: "bind a trigger to a flow" },
-  { name: "flow", role: "define behavior + contracts" },
+  { name: "flow", role: "define behavior" },
+  { name: "call", role: "call-only invoke contract" },
   { name: "signal", role: "data in motion" },
   { name: "store", role: "data at rest" },
   { name: "clock", role: "time" },

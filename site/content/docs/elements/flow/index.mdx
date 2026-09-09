@@ -7,7 +7,8 @@ source: "docs/spec/unified-theory.md"
 
 Flow is the element for **behavior**. An HTTP endpoint, a Signal worker, a named Clock tick, a SQL change handler, and a multi-step checkout are the same shape: `on(trigger, flow)`. Only the trigger changes.
 
-For developers writing backend work on okengine — declare the contract, keep `do` on `fx`.
+For developers writing backend work on okengine — put the invoke contract on the exposure
+(`http.*` / `call` / `mcp.tool`), keep `do` on `fx`.
 
 <Callout title="The one rule">
   All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside
@@ -64,9 +65,9 @@ Response:
 </Callout>
 
 <Callout title="Call-only Flows">
-  A Flow with no trigger — just `flow({ … })` or `flow("payments.charge", { … })` —
-  is internal. Nothing outside your code can start it. Other Flows invoke it with
-  `fx.call(flowRef, input)`. Pass a name when you want a stable `fx.call` target.
+  Use `call("payments.charge", { in, out, do, … })` for internal callees — same species as
+  `flow`, with the invoke contract on the bag. Nothing outside your code can start it unless you
+  also bind a trigger. Other Flows invoke it with `fx.call(flowRef, input)`.
 </Callout>
 ## Progressive Patterns
 
@@ -93,17 +94,18 @@ export const ping = on(
 
 <Tab value="Validated">
 
-`in` / `out` are Standard Schema. Invalid input never enters `do`:
+`in` / `out` live on the HTTP bag. Invalid input never enters `do`:
 
 ```typescript title="src/flows/notes/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ title: z.string().min(1) }),
     out: z.object({ id: z.string(), title: z.string() }),
+  }),
+  flow({
     do: async ({ title }, fx) => {
       const id = fx.id();
       return { id, title };
@@ -116,7 +118,7 @@ export const create = on(
 
 <Tab value="Failures">
 
-Declare domain errors and return `fx.fail` — do not throw for expected failures:
+Declare domain errors on the exposure bag and return `fx.fail` — do not throw for expected failures:
 
 ```typescript title="src/flows/orders/[id]/get.ts"
 import { on, flow, http } from "okengine";
@@ -125,11 +127,12 @@ import { eq } from "drizzle-orm";
 import { db, orders } from "@/schema";
 
 export const get = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
     errors: { NotFound: z.object({ id: z.string() }) },
+  }),
+  flow({
     do: async ({ id }, fx) => {
       const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id));
       if (!order) return fx.fail("NotFound", { id });
@@ -143,14 +146,15 @@ export const get = on(
 
 <Tab value="Call-only">
 
-No `on()`. The parent records `calls: ["payments.charge"]`. `fx.call` waits for the callee:
+Use `call(name, { … })` — contract and `do` on one bag. The parent records `calls: ["payments.charge"]`.
+`fx.call` waits for the callee:
 
 ```typescript title="src/flows/payments/charge.ts"
-import { flow } from "okengine";
+import { call } from "okengine";
 import { z } from "zod";
 import { db, charges } from "@/schema";
 
-export const chargeCard = flow("payments.charge", {
+export const chargeCard = call("payments.charge", {
   in: z.object({ amount: z.number() }),
   out: z.object({ chargeId: z.string() }),
   do: async ({ amount }, fx) => {
@@ -181,8 +185,8 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
 | Signal | `on(signalHandle, flow)` | `fx.emit` | Payload (`schema`) |
 | Clock | `on(clockDecl, flow)` | Scheduler tick | none (`_`) |
 | CDC | `on(db.table(t).changed(), flow)` | Committed SQL write | `{ before, after }` |
-| Call-only | `flow({ … })` or `flow(name, { … })` | `fx.call` | Callee `in` |
-| MCP | `on(mcp.tool("x").gate(…), flow)` | MCP `tools/call` | Tool args |
+| Call-only | `call("name", { in, out, do, … })` | `fx.call` | Callee `in` |
+| MCP | `on(mcp.tool("x", { in, out }).gate(…), flow)` | MCP `tools/call` | Tool args |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
 
@@ -214,13 +218,12 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
 ## Options Reference
 
 Second argument to `flow(name, options)` — or the only argument to a nameless `flow({ do })`.
+Invoke contracts (`in` / `out` / `errors` / `breaking`) belong on the exposure — see
+[Contracts](#contracts) below.
 
 | Option | Type | Default | Meaning |
 | ------ | ---- | ------- | ------- |
 | `do` | `(input, fx) => output \| FlowFailure` | *(required)* | Handler. Missing `do` throws `flow() expected an options bag with a do handler` |
-| `in` | Standard Schema | omitted | Validated before `do` |
-| `out` | Standard Schema | omitted | Validated after `do` |
-| `errors` | `Record<string, Schema>` | omitted | Typed domain failures for `fx.fail` |
 | `durable` | `boolean` | `false` | Journal `fx.step` / sleep / gated `fx` calls |
 | `retry` | `FxRetryOptions` | omitted | Whole-`do` retry on throw (same journal when durable) |
 | `cache` | `boolean \| string` | omitted (auto) | Read-only Flows cache automatically; `false` opts out; `"30s"` adds TTL |
@@ -228,7 +231,6 @@ Second argument to `flow(name, options)` — or the only argument to a nameless 
 | `plane` | `"user" \| "operator"` | `"user"` | Operator bypasses RLS; user must not `fx.call` operator |
 | `effects` | `Effects` | inferred | Capability token — write this only when inference cannot see the body |
 | `slo` | `{ availability?, latency? }` | omitted | Manifest metadata (Console / docs) |
-| `breaking` | `boolean` | `false` | Acknowledge a Manifest contract break (`oke doctor --diff`) |
 | `tenantScoped` | `boolean` | `true` when tenancy is on | `false` skips tenant-role scope union |
 
 **Consequence:** `durable: true` disables automatic read-cache for that Flow.
@@ -236,9 +238,11 @@ Second argument to `flow(name, options)` — or the only argument to a nameless 
 ## Contracts
 
 <Callout title="Detailed section">
-  If you only need `in` / `out`, jump to Standard Schema below. `in` runs before `do`; `out` runs
-  after a successful return. `fx.fail` skips `out`. HTTP status for typed failures is a small
-  fixed map — custom codes are **400**, not 404.
+  Invoke contracts live on the **exposure** — `http.post({ in, out, errors })`, `call("name", {
+  in, out, do })`, or `mcp.tool("x", { in, out })`. The Manifest still shows flat
+  `flows.*.{in,out,errors,breaking}` as a projection from that exposure. `in` runs before `do`;
+  `out` runs after a successful return. `fx.fail` skips `out`. Signal / Channel `schema` is a
+  separate **emit** contract (validated at `fx.emit` / `fx.send`).
 </Callout>
 
 <Tabs items={["Standard Schema", "Failures", "Envelope"]}>
@@ -248,13 +252,18 @@ Second argument to `flow(name, options)` — or the only argument to a nameless 
 Any library with `~standard` (Standard Schema V1) works. Zod is the usual choice:
 
 ```typescript
+import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-flow({
-  in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
-  out: z.object({ id: z.string() }),
-  do: async (input, fx) => ({ id: fx.id() }),
-});
+on(
+  http.post({
+    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+    out: z.object({ id: z.string() }),
+  }),
+  flow({
+    do: async (input, fx) => ({ id: fx.id() }),
+  }),
+);
 ```
 
 Valibot (`v.object`) and ArkType (`type({…})`) bind the same way. Shared DTOs belong in
@@ -264,11 +273,11 @@ Valibot (`v.object`) and ArkType (`type({…})`) bind the same way. Shared DTOs 
 
 <Tab value="Failures">
 
-Errors at the Flow boundary are **values**. Throw only for bugs. Expected failures go in
-`errors` and return from `do`:
+Errors at the Flow boundary are **values**. Throw only for bugs. Declare `errors` on the
+exposure and return from `do`:
 
 ```typescript
-flow("orders.create", {
+call("orders.create", {
   in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
   out: z.object({ id: z.string() }),
   errors: {
@@ -324,8 +333,9 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 
 <Accordion title="store.resource schemas">
   `store.resource(db, table, { in, out })` requires `in` (create body) and `out` (item
-  shape). List / get / update / remove Flows are built for you. Handwritten `in` / `out`
-  are for custom business Flows — see [HTTP · Resources](/docs/elements/flow/http#resources).
+  shape). List / get / update / remove Flows are built for you — contracts are stamped
+  from the resource factory. Handwritten invoke contracts go on `http.*` / `call` /
+  `mcp.tool` — see [HTTP · Resources](/docs/elements/flow/http#resources).
 </Accordion>
 
 <Accordion title="ValidationError payload">
@@ -387,7 +397,7 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 ## Call-only
 
 <Callout title="Detailed section">
-  Prefer an untriggered `flow(name, { … })`. `internal` exists so call-only is a trigger
+  Prefer `call("name", { in, out, do, … })`. `internal` exists so call-only is a trigger
   *value* — `on(internal, flow)` — when you need all kinds addressable the same way.
 </Callout>
 
@@ -397,9 +407,8 @@ import { z } from "zod";
 import { chargeCard } from "@/flows/payments/charge";
 
 export const checkout = on(
-  http.post(),
+  http.post({ in: z.object({ sku: z.string() }) }),
   flow({
-    in: z.object({ sku: z.string() }),
     do: async ({ sku }, fx) => {
       const { chargeId } = await fx.call(chargeCard, { amount: 50 });
       return { sku, chargeId };
@@ -488,8 +497,8 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 </Accordion>
 
 <Accordion title="breaking and tenantScoped">
-  `breaking: true` lets `oke doctor --diff` accept that Flow's contract break. It does
-  not cover a different Flow.
+  `breaking: true` on the exposure bag lets `oke doctor --diff` accept that Flow's contract
+  break. It does not cover a different Flow.
 
   `tenantScoped: false` skips tenant-role scope union even when `fx.tenant.id` is set.
   Default is `true` once `gate.auth.tenant` is on.
@@ -531,7 +540,7 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 </Accordion>
 
 <Accordion title="Thrown Error becomes a mystery 500 instead of a typed envelope">
-  Uncaught exceptions are defects. Declare the code in `errors` and
+  Uncaught exceptions are defects. Declare the code in `errors` on the exposure and
   `return fx.fail("OutOfStock", payload)` from `do`.
 </Accordion>
 

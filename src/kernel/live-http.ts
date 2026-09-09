@@ -4,6 +4,10 @@
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalResourceRef } from "../manifest/types.ts";
+import {
+  applyBoundaryContract,
+  stampBoundaryContract,
+} from "./boundary-contract.ts";
 import type { Fx } from "./fx.ts";
 import { flow, type AnyFlowDef } from "./flow.ts";
 import type { GateRef, SignalSource } from "./triggers.ts";
@@ -103,12 +107,15 @@ export function synthesizeLiveFlow(signal: SignalSource, path: string): AnyFlowD
   const fields = httpPathParams(path);
   const name = signal.name;
   const schema = "schema" in signal ? (signal as SignalDecl).schema : undefined;
-  return flow({
+  const def = flow({
     effects: { reads: [`signal:${name}` as SignalResourceRef] },
-    ...(schema !== undefined ? { out: schema } : {}),
     do: (input, fx: Fx) =>
       fx.live(signal, {
         match: (payload) => payloadAutoMatch(payload, input, fields),
       }),
   });
+  if (schema !== undefined) {
+    applyBoundaryContract(def, stampBoundaryContract({ out: schema as never }));
+  }
+  return def;
 }

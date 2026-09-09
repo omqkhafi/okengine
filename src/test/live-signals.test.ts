@@ -20,9 +20,12 @@ describe("createTestApp live-signal subscriptions", () => {
     const orderStatus = signal.live("order-status", { retention: { maxCount: 10 } });
 
     on(
-      http.post("/orders/status").public(),
+      http
+        .post("/orders/status", {
+          in: z.object({ orderId: z.string(), status: z.string() }),
+        })
+        .public(),
       flow("orders.updateStatus", {
-        in: z.object({ orderId: z.string(), status: z.string() }),
         effects: { emits: ["order-status"] },
         do: async (input, fx) => {
           await fx.emit(orderStatus, input);

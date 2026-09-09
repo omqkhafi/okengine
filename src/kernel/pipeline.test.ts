@@ -79,10 +79,13 @@ describe("pipeline — Unauthorized for anonymous", () => {
     resetFlowSeq();
 
     on(
-      http.post("/orders").gate(member),
+      http
+        .post("/orders", {
+          in: z.object({ sku: z.string() }),
+          out: z.object({ id: z.string() }),
+        })
+        .gate(member),
       flow("orders.create", {
-        in: z.object({ sku: z.string() }),
-        out: z.object({ id: z.string() }),
         do: (_input, fx) => ({ id: fx.id() }),
       }),
     );
@@ -117,9 +120,8 @@ describe("pipeline — Unauthorized for anonymous", () => {
     resetFlowSeq();
 
     on(
-      http.post("/orders").gate(member, canOrder),
+      http.post("/orders", { in: z.object({ sku: z.string() }) }).gate(member, canOrder),
       flow("orders.create2", {
-        in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),
     );
@@ -154,9 +156,8 @@ describe("pipeline — Unauthorized for anonymous", () => {
 
     const write = gate.all(member, canOrder);
     on(
-      http.post("/orders").gate(write),
+      http.post("/orders", { in: z.object({ sku: z.string() }) }).gate(write),
       flow("orders.createAll", {
-        in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),
     );
@@ -201,9 +202,8 @@ describe("pipeline — evaluated gates on the run", () => {
     resetFlowSeq();
 
     on(
-      http.post("/orders").gate(member, canOrder),
+      http.post("/orders", { in: z.object({ sku: z.string() }) }).gate(member, canOrder),
       flow("orders.create3", {
-        in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),
     );
@@ -361,9 +361,8 @@ describe("pipeline — Bearer cryptographic verification", () => {
     resetFlowSeq();
 
     on(
-      http.post("/orders").gate(member),
+      http.post("/orders", { in: z.object({ sku: z.string() }) }).gate(member),
       flow("orders.inject", {
-        in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),
     );
@@ -413,9 +412,8 @@ describe("pipeline — Bearer cryptographic verification", () => {
     resetFlowSeq();
 
     on(
-      http.post("/orders").gate(member),
+      http.post("/orders", { in: z.object({ sku: z.string() }) }).gate(member),
       flow("orders.trusted", {
-        in: z.object({ sku: z.string() }),
         do: (_input, fx) => ({ userId: fx.auth.userId }),
       }),
     );
@@ -467,9 +465,8 @@ describe("pipeline — Bearer cryptographic verification", () => {
     resetFlowSeq();
 
     on(
-      http.post("/orders").gate(member),
+      http.post("/orders", { in: z.object({ sku: z.string() }) }).gate(member),
       flow("orders.bypass", {
-        in: z.object({ sku: z.string() }),
         do: (_input, fx) => ({ userId: fx.auth.userId }),
       }),
     );

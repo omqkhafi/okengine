@@ -1798,8 +1798,8 @@ function collectFlows(file: SourceFile, program: AstNode, scope: ProjectScope): 
       return;
     }
 
-    if (callee === "flow") {
-      // Bare flow — skip when this call is the second arg of an on().
+    if (callee === "flow" || callee === "call") {
+      // Bare flow / call — skip when this call is the second arg of an on().
       if (isOnFlowArgument(call, program)) return;
       const exportName = enclosingConstName(call, program);
       registerFlow({
@@ -1837,12 +1837,9 @@ function isOnFlowArgument(flowCall: CallExpression, program: AstNode): boolean {
 }
 
 function unwrapFlowCall(node: AstNode): CallExpression | undefined {
-  if (
-    node.type === "CallExpression" &&
-    identifierName((node as CallExpression).callee) === "flow"
-  ) {
-    return node as CallExpression;
-  }
+  if (node.type !== "CallExpression") return undefined;
+  const name = identifierName((node as CallExpression).callee);
+  if (name === "flow" || name === "call") return node as CallExpression;
   return undefined;
 }
 
@@ -1925,12 +1922,18 @@ function registerFlow(args: {
   }
   if (gates && gates.length > 0) flow.gates = gates;
 
-  const inSchema = schemaProp(opts, "in", args.scope, args.file.path);
+  const inSchema =
+    schemaProp(opts, "in", args.scope, args.file.path) ??
+    exposureSchemaProp(trigger?.contract, "in", args.scope, args.file.path);
   if (inSchema !== undefined) flow.in = inSchema;
-  const outSchema = schemaProp(opts, "out", args.scope, args.file.path);
+  const outSchema =
+    schemaProp(opts, "out", args.scope, args.file.path) ??
+    exposureSchemaProp(trigger?.contract, "out", args.scope, args.file.path);
   if (outSchema !== undefined) flow.out = outSchema;
 
-  const errors = parseErrors(objectProp(opts, "errors"));
+  const errors =
+    parseErrors(objectProp(opts, "errors")) ??
+    parseErrors(objectProp(trigger?.contract, "errors"));
   if (errors) flow.errors = errors;
 
   if (effects) flow.effects = effects;
@@ -1954,7 +1957,7 @@ function registerFlow(args: {
       };
     }
   }
-  if (boolProp(opts, "breaking")) flow.breaking = true;
+  if (boolProp(opts, "breaking") || boolProp(trigger?.contract, "breaking")) flow.breaking = true;
 
   const slo = parseSlo(objectProp(opts, "slo"));
   if (slo) flow.slo = slo;
@@ -2362,6 +2365,8 @@ interface ParsedTrigger {
   live?: string;
   /** Physical table name when `.live(tableBinding)` — manual live surface. */
   liveTable?: string;
+  /** Invoke contract bag authored on `http.*` / `mcp.tool`. */
+  contract?: AstNode;
 }
 
 function parseTrigger(
@@ -2474,6 +2479,7 @@ function parseHttpTrigger(
   let live: string | undefined;
   /** Table name when `.live(tableBinding)` — a manual live query surface. */
   let liveTable: string | undefined;
+  let contract: AstNode | undefined;
   const gateNames: string[] = [];
 
   for (const node of chain) {
@@ -2506,7 +2512,14 @@ function parseHttpTrigger(
           continue;
         }
         method = prop.toUpperCase();
-        path = stringArg(c.arguments[0]);
+        const pathArg = c.arguments[0];
+        const contractArg = c.arguments[1];
+        if (stringArg(pathArg) !== undefined) {
+          path = stringArg(pathArg);
+          if (isBoundaryContractObject(contractArg)) contract = contractArg;
+        } else if (isBoundaryContractObject(pathArg)) {
+          contract = pathArg;
+        }
         continue;
       }
 
@@ -2560,6 +2573,7 @@ function parseHttpTrigger(
     gates: gateNames.length > 0 ? gateNames : undefined,
     ...(live !== undefined ? { live } : {}),
     ...(liveTable !== undefined ? { liveTable } : {}),
+    ...(contract !== undefined ? { contract } : {}),
   };
 }
 
@@ -2606,6 +2620,7 @@ function stripTriggerExtras(trigger: Trigger): Trigger {
 function parseMcpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | undefined {
   const chain = flattenMemberCallChain(leaf);
   let toolName: string | undefined;
+  let contract: AstNode | undefined;
   const gateNames: string[] = [];
 
   for (const node of chain) {
@@ -2621,6 +2636,7 @@ function parseMcpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | un
       (member.object as Identifier).name === "mcp"
     ) {
       toolName = stringArg(c.arguments[0]);
+      if (isBoundaryContractObject(c.arguments[1])) contract = c.arguments[1];
       continue;
     }
     if (prop === "gate") {
@@ -2634,6 +2650,7 @@ function parseMcpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | un
   return {
     trigger: { mcp: { name: toolName } },
     gates: gateNames.length > 0 ? gateNames : undefined,
+    ...(contract !== undefined ? { contract } : {}),
   };
 }
 
@@ -2766,6 +2783,26 @@ function schemaProp(
   const lit = stringArg(node);
   if (lit) return lit;
   return "…";
+}
+
+/** Read invoke contract fields from an exposure bag (`http.*` / `mcp.tool`). */
+function exposureSchemaProp(
+  contract: AstNode | undefined,
+  key: string,
+  scope: ProjectScope,
+  filePath: string,
+): JsonSchema | undefined {
+  return schemaProp(contract, key, scope, filePath);
+}
+
+/** True when an AST node looks like a {@link BoundaryContract} bag (not a path). */
+function isBoundaryContractObject(node: AstNode | undefined): node is AstNode {
+  if (!node || node.type !== "ObjectExpression") return false;
+  for (const prop of objectProperties(node)) {
+    const key = propKey(prop);
+    if (key === "in" || key === "out" || key === "errors" || key === "breaking") return true;
+  }
+  return false;
 }
 
 // ── AST helpers ────────────────────────────────────────────────────────────
@@ -3028,9 +3065,10 @@ function cronFromPresetHelper(
 }
 
 /**
- * `flow("name", { do })` options live in arg1; `flow({ do })` in arg0.
+ * `flow("name", { do })` / `call("name", { do })` options live in arg1;
+ * `flow({ do })` in arg0.
  *
- * @param flowCall - `flow(...)` AST node
+ * @param flowCall - `flow(...)` / `call(...)` AST node
  */
 function flowOptionsArg(flowCall: CallExpression): AstNode | undefined {
   const named = objectArg(flowCall.arguments[1]);

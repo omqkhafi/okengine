@@ -7,6 +7,7 @@ import type { VerificationStore } from "../../auth/verification.ts";
 import type { SessionStore } from "../../auth/sessions.ts";
 import { generateCodeVerifier, codeChallengeS256 } from "../../drivers/oauth-shared.ts";
 import type { OAuthDriverId } from "../../drivers/oauth-types.ts";
+import type { BoundaryContract } from "../../kernel/boundary-contract.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { bindAuthHttp } from "../../auth/bindings.ts";
 import { http } from "../auth/shared.ts";
@@ -97,10 +98,11 @@ export function bindPublicAuthGet(
   path: string,
   flowDef: AnyFlowDef,
   gates: readonly Parameters<ReturnType<typeof http.get>["gate"]>[0][] = [],
+  contract?: BoundaryContract,
 ): Binding {
   return bindAuthHttp(
     http
-      .get(path)
+      .get(path, contract)
       .public()
       .gate(...gates),
     flowDef,

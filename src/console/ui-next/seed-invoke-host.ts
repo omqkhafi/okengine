@@ -41,15 +41,28 @@ const memoryDrivers = {
   vault: { dev: "memory", test: "memory", prod: "memory" },
 } as const;
 
+const SeedIn = z.record(z.string(), z.unknown()).optional();
+const SeedOut = z.record(z.string(), z.unknown());
+const NotFoundData = z.object({
+  id: z.string(),
+  flow: z.string(),
+});
+
+const seedInvokeContract = {
+  in: SeedIn,
+  out: SeedOut,
+  errors: { NotFound: NotFoundData },
+} as const;
+
 const HTTP_VERBS: Record<HttpMethod, (path: string) => HttpTrigger> = {
-  GET: (path) => http.get(path),
-  POST: (path) => http.post(path),
-  PUT: (path) => http.put(path),
-  PATCH: (path) => http.patch(path),
-  DELETE: (path) => http.delete(path),
-  OPTIONS: (path) => http.options(path),
-  HEAD: (path) => http.head(path),
-  QUERY: (path) => http.query(path),
+  GET: (path) => http.get(path, seedInvokeContract),
+  POST: (path) => http.post(path, seedInvokeContract),
+  PUT: (path) => http.put(path, seedInvokeContract),
+  PATCH: (path) => http.patch(path, seedInvokeContract),
+  DELETE: (path) => http.delete(path, seedInvokeContract),
+  OPTIONS: (path) => http.options(path, seedInvokeContract),
+  HEAD: (path) => http.head(path, seedInvokeContract),
+  QUERY: (path) => http.query(path, seedInvokeContract),
 };
 
 const member = gate.policy("member", ({ auth }) => !!auth.verified);
@@ -96,13 +109,6 @@ function clearElementRegistries(): void {
   aiMcpServerRegistry.length = 0;
 }
 
-const SeedIn = z.record(z.string(), z.unknown()).optional();
-const SeedOut = z.record(z.string(), z.unknown());
-const NotFoundData = z.object({
-  id: z.string(),
-  flow: z.string(),
-});
-
 /** Options for {@link bootUiNextSeedInvoke}. */
 export interface BootUiNextSeedInvokeOptions {
   /** Shared Console Store — when omitted, a private seeded runtime is created. */
@@ -128,9 +134,6 @@ function bindSeedHttpSurface(runtime: StoreRuntime, manifest: Manifest): void {
     on(
       trigger,
       flow(id, {
-        in: SeedIn,
-        out: SeedOut,
-        errors: { NotFound: NotFoundData },
         do: async (input, fx) => {
           const assembled =
             input && typeof input === "object" && !Array.isArray(input) ? { ...input } : {};

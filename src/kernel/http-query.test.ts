@@ -19,16 +19,14 @@ describe("http.query — RFC 10008", () => {
   test("a QUERY flow receives the JSON body exactly as POST does", async () => {
     const schema = z.object({ n: z.number() });
     on(
-      http.query("/q"),
+      http.query("/q", { in: schema }),
       flow("q.run", {
-        in: schema,
         do: (input: { n: number }) => input,
       }),
     );
     on(
-      http.post("/p"),
+      http.post("/p", { in: schema }),
       flow("p.run", {
-        in: schema,
         do: (input: { n: number }) => input,
       }),
     );
@@ -70,9 +68,8 @@ describe("http.query — RFC 10008", () => {
 describe("http.query — RFC 10008 media type", () => {
   function queryApp(aot = true) {
     on(
-      http.query("/q"),
+      http.query("/q", { in: z.object({ n: z.number() }) }),
       flow("q.run", {
-        in: z.object({ n: z.number() }),
         do: (input: { n: number }) => input,
       }),
     );

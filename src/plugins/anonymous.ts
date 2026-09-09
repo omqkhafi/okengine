@@ -35,10 +35,13 @@ export function anonymous(opts: AnonymousPluginOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
   const identities = resolveSharedIdentities(opts);
 
-  const signIn = flow("auth.signInAnonymous", {
-    plane: "user",
+  const signInContract = {
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const signIn = flow("auth.signInAnonymous", {
+    plane: "user",
     do: async () => {
       let userId: string;
       try {
@@ -71,5 +74,5 @@ export function anonymous(opts: AnonymousPluginOptions = {}): PluginDef {
 
   return plugin("anonymous", { version: "0.0.1", config: { method: "anonymous" } })
     .needs("auth")
-    .binding(bindPublicAuth("/sign-in/anonymous", signIn, "signIn"));
+    .binding(bindPublicAuth("/sign-in/anonymous", signIn, "signIn", signInContract));
 }

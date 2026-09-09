@@ -16,10 +16,8 @@ const DraftIn = z.object({
 
 /** List compose drafts. */
 export const list = on(
-  http.get("/drafts").gate(member),
+  http.get("/drafts", { in: listIn({ mode: "offset" }), out: pageOut(z.object({ id: z.string(), title: z.string() })) }).gate(member),
   flow("drafts.list", {
-    in: listIn({ mode: "offset" }),
-    out: pageOut(z.object({ id: z.string(), title: z.string() })),
     do: async (input, fx) => {
       const keys = await fx.store(draftsKv).list();
       const items: { id: string; title: string }[] = [];
@@ -34,10 +32,8 @@ export const list = on(
 
 /** Save a draft. */
 export const save = on(
-  http.put("/drafts/:id").gate(member),
+  http.put("/drafts/:id", { in: DraftIn, out: IdOut }).gate(member),
   flow("drafts.save", {
-    in: DraftIn,
-    out: IdOut,
     do: async (input, fx) => {
       await fx.store(draftsKv).set(input.id, { title: input.title, body: input.body ?? "" }, "7d");
       return { id: input.id };
@@ -47,10 +43,8 @@ export const save = on(
 
 /** Discard a draft. */
 export const discard = on(
-  http.delete("/drafts/:id").gate(member),
+  http.delete("/drafts/:id", { in: IdIn, out: Ok }).gate(member),
   flow("drafts.discard", {
-    in: IdIn,
-    out: Ok,
     do: async (input, fx) => {
       await fx.store(draftsKv).delete(input.id);
       return { ok: true as const };

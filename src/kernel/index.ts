@@ -136,6 +136,14 @@ export {
   type StandardSchemaV1,
 } from "./flow.ts";
 
+export { call } from "./call.ts";
+export type {
+  BoundaryContract,
+  InferBoundaryErrors,
+  InferBoundaryIn,
+  InferBoundaryOut,
+} from "./boundary-contract.ts";
+
 export {
   createFx,
   createFxContext,

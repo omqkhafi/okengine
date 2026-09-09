@@ -1,7 +1,6 @@
 /**
- * Ten exports — the whole public vocabulary, listed with the role of each name.
- * Original okengine section (unified-theory §6). Cards settle on scroll with
- * a pointer spotlight.
+ * Core programming vocabulary — each exported name and its role.
+ * Cards settle on scroll with a pointer spotlight.
  */
 
 "use client";
@@ -34,7 +33,7 @@ function trackSpotlight(event: MouseEvent<HTMLLIElement>): void {
 }
 
 /**
- * Grid of the ten exported names and what each one is for.
+ * Grid of the core programming vocabulary and what each name is for.
  */
 export function Vocabulary(): ReactNode {
   const reduced = useClientReducedMotion();

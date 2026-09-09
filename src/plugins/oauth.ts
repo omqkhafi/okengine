@@ -30,6 +30,7 @@ import {
 import { bindAuthHttp } from "../auth/bindings.ts";
 import { hashChallenge } from "../auth/verification.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
+import type { BoundaryContract } from "../kernel/boundary-contract.ts";
 import type { Binding } from "../kernel/on.ts";
 import type { Fx } from "../kernel/fx.ts";
 import type { AnyFlowDef } from "../kernel/flow.ts";
@@ -117,11 +118,14 @@ export function oauth(options: OAuthOptions = {}) {
   const now: () => number = () => runtime.now();
   const providers = buildProviders(options);
 
-  const start = flow("auth.oauthStart", {
-    plane: "user",
+  const startContract = {
     in: StartIn,
     out: StartOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const start = flow("auth.oauthStart", {
+    plane: "user",
     do: async (input) => {
       const p = providers.find((c) => c.id === input.provider);
       if (!p) return fail("AuthFailed", { reason: "provider_disabled" });
@@ -161,11 +165,14 @@ export function oauth(options: OAuthOptions = {}) {
     },
   });
 
-  const callback = flow("auth.oauthCallback", {
-    plane: "user",
+  const callbackContract = {
     in: CallbackIn,
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const callback = flow("auth.oauthCallback", {
+    plane: "user",
     effects: { secrets: callbackSecretRefs(providers) },
     do: async (input, fx) => {
       if (typeof input.error === "string" && input.error.length > 0) {
@@ -256,11 +263,14 @@ export function oauth(options: OAuthOptions = {}) {
     },
   });
 
-  const linkStart = flow("auth.oauthLinkStart", {
-    plane: "user",
+  const linkStartContract = {
     in: StartIn,
     out: StartOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const linkStart = flow("auth.oauthLinkStart", {
+    plane: "user",
     do: async (input, fx) => {
       const currentUserId = fx.auth.userId;
       if (!currentUserId) return fail("AuthFailed", { reason: "unauthenticated" });
@@ -312,9 +322,9 @@ export function oauth(options: OAuthOptions = {}) {
     .flow(callback)
     .flow(linkStart);
 
-  def.binding(bindPublicAuth("/oauth/:provider/start", start, "otp"));
-  for (const b of bindCallbackBothMethods(callback)) def.binding(b);
-  def.binding(bindSessionAuth("/oauth/:provider/link", linkStart));
+  def.binding(bindPublicAuth("/oauth/:provider/start", start, "otp", startContract));
+  for (const b of bindCallbackBothMethods(callback, callbackContract)) def.binding(b);
+  def.binding(bindSessionAuth("/oauth/:provider/link", linkStart, linkStartContract));
 
   for (const contract of vaultContracts(providers)) def.vault(contract);
 
@@ -333,12 +343,12 @@ const OAUTH_FLOW_TTL_MS = 10 * 60_000;
  *
  * @param flowDef - Callback flow
  */
-function bindCallbackBothMethods(flowDef: AnyFlowDef): Binding[] {
+function bindCallbackBothMethods(flowDef: AnyFlowDef, contract: BoundaryContract): Binding[] {
   const gates = authPublicGates("otp");
-  const getBinding = bindPublicAuthGet("/auth/oauth/callback/:provider", flowDef, gates);
+  const getBinding = bindPublicAuthGet("/auth/oauth/callback/:provider", flowDef, gates, contract);
   const postBinding = bindAuthHttp(
     http
-      .post("/auth/oauth/callback/:provider")
+      .post("/auth/oauth/callback/:provider", contract)
       .public()
       .gate(...gates),
     flowDef,

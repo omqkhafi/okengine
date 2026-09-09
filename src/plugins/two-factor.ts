@@ -232,10 +232,13 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     return true;
   }
 
-  const enable = flow("auth.twoFactorEnable", {
-    plane: "user",
+  const enableContract = {
     out: EnableOut,
     errors: { AuthFailed, Forbidden },
+  };
+
+  const enable = flow("auth.twoFactorEnable", {
+    plane: "user",
     do: async (_input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
@@ -277,14 +280,17 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const verify = flow("auth.twoFactorVerify", {
-    plane: "user",
+  const verifyContract = {
     in: z.object({
       challengeId: z.string().min(1),
       code: z.string().min(4).max(16),
     }),
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const verify = flow("auth.twoFactorVerify", {
+    plane: "user",
     do: async (input) => {
       const now = runtime.now();
       const challenge = getChallenge(pending, input.challengeId, now);
@@ -311,14 +317,17 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const stepUpFlow = flow("auth.twoFactorStepUp", {
-    plane: "user",
+  const stepUpContract = {
     in: z.object({
       code: z.string().min(4).max(16),
       purpose: z.enum(["enroll", "change", "disable"]).default("enroll"),
     }),
     out: z.object({ ok: z.literal(true), purpose: z.enum(["enroll", "change", "disable"]) }),
     errors: { AuthFailed, Forbidden },
+  };
+
+  const stepUpFlow = flow("auth.twoFactorStepUp", {
+    plane: "user",
     effects: { sends: ["auth-2fa-email"] },
     do: async (input, fx) => {
       const userId = fx.auth.userId;
@@ -346,8 +355,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const changeMethod = flow("auth.twoFactorChangeMethod", {
-    plane: "user",
+  const changeMethodContract = {
     in: z.object({
       method: z.enum(["totp", "email_otp"]),
       /** Required when switching to email_otp if the identity has no email. */
@@ -363,6 +371,10 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
       }),
     ]),
     errors: { AuthFailed, Forbidden },
+  };
+
+  const changeMethod = flow("auth.twoFactorChangeMethod", {
+    plane: "user",
     effects: { sends: ["auth-2fa-email"] },
     do: async (input, fx) => {
       const userId = fx.auth.userId;
@@ -427,8 +439,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const confirmChange = flow("auth.twoFactorConfirmChange", {
-    plane: "user",
+  const confirmChangeContract = {
     in: z.object({
       code: z.string().min(4).max(16),
     }),
@@ -437,6 +448,10 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
       method: z.enum(["totp", "email_otp"]),
     }),
     errors: { AuthFailed, Forbidden },
+  };
+
+  const confirmChange = flow("auth.twoFactorConfirmChange", {
+    plane: "user",
     do: async (input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
@@ -490,8 +505,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const requestEmailOtp = flow("auth.twoFactorRequestEmailOtp", {
-    plane: "user",
+  const requestEmailOtpContract = {
     in: z.object({
       challengeId: z.string().min(1).optional(),
     }),
@@ -500,6 +514,10 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
       devOtp: z.string().optional(),
     }),
     errors: { AuthFailed, AuthRateLimited, Forbidden },
+  };
+
+  const requestEmailOtp = flow("auth.twoFactorRequestEmailOtp", {
+    plane: "user",
     effects: { sends: [emailTmpl.name] },
     do: async (input, fx) => {
       const now = runtime.now();
@@ -536,10 +554,13 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const disable = flow("auth.twoFactorDisable", {
-    plane: "user",
+  const disableContract = {
     out: z.object({ ok: z.literal(true) }),
     errors: { AuthFailed, Forbidden },
+  };
+
+  const disable = flow("auth.twoFactorDisable", {
+    plane: "user",
     do: (_input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
@@ -561,13 +582,15 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
   return plugin("twoFactor", { version: "0.0.1", config: { method: "two-factor" } })
     .needs("auth")
     .table("oke_two_factor", undefined, { plane: "user", description: "TOTP secrets + recovery" })
-    .binding(bindSessionAuth("/two-factor/enable", enable))
-    .binding(bindPublicAuth("/two-factor/verify", verify, "otp"))
-    .binding(bindSessionAuth("/two-factor/step-up", stepUpFlow))
-    .binding(bindSessionAuth("/two-factor/change-method", changeMethod))
-    .binding(bindSessionAuth("/two-factor/confirm-change", confirmChange))
-    .binding(bindPublicAuth("/two-factor/request-email-otp", requestEmailOtp, "otp"))
-    .binding(bindSessionAuth("/two-factor/disable", disable));
+    .binding(bindSessionAuth("/two-factor/enable", enable, enableContract))
+    .binding(bindPublicAuth("/two-factor/verify", verify, "otp", verifyContract))
+    .binding(bindSessionAuth("/two-factor/step-up", stepUpFlow, stepUpContract))
+    .binding(bindSessionAuth("/two-factor/change-method", changeMethod, changeMethodContract))
+    .binding(bindSessionAuth("/two-factor/confirm-change", confirmChange, confirmChangeContract))
+    .binding(
+      bindPublicAuth("/two-factor/request-email-otp", requestEmailOtp, "otp", requestEmailOtpContract),
+    )
+    .binding(bindSessionAuth("/two-factor/disable", disable, disableContract));
 }
 
 /**

@@ -77,8 +77,7 @@ async function bootInvokeHost() {
   resetFlowSeq();
 
   on(
-    http.post("/bookings").gate(member).gate(bookingCreate),
-    flow("bookings.create", {
+    http.post("/bookings", {
       in: z.object({
         flightId: z.string(),
         seats: z.number().int().min(1),
@@ -88,6 +87,10 @@ async function bootInvokeHost() {
         userId: z.string(),
         scopes: z.array(z.string()),
       }),
+    })
+      .gate(member)
+      .gate(bookingCreate),
+    flow("bookings.create", {
       do: (input, fx) => ({
         id: `real_${input.flightId}_${input.seats}`,
         userId: fx.auth.userId ?? "missing",
@@ -97,10 +100,11 @@ async function bootInvokeHost() {
   );
 
   on(
-    http.get("/notes/:id").gate(member),
-    flow("notes.get", {
+    http.get("/notes/:id", {
       in: z.object({ id: z.string() }),
       out: z.object({ id: z.string(), title: z.string() }),
+    }).gate(member),
+    flow("notes.get", {
       do: (input) => ({ id: input.id, title: `note-${input.id}` }),
     }),
   );
@@ -562,14 +566,15 @@ describe("console flows invoke", () => {
     resetBindings();
     resetFlowSeq();
     on(
-      http.post("/views").gate(member),
-      flow("views.seed", {
+      http.post("/views", {
         in: z.object({
           id: z.string(),
           name: z.string(),
           ownerEmail: z.string(),
         }),
         out: z.object({ id: z.string() }),
+      }).gate(member),
+      flow("views.seed", {
         do: async (input, fx) => {
           await fx.store(db).insert(views).values(input);
           return { id: input.id };
@@ -577,8 +582,7 @@ describe("console flows invoke", () => {
       }),
     );
     on(
-      http.get("/views").gate(member),
-      flow("views.list", {
+      http.get("/views", {
         in: z.object({}),
         out: z.object({
           items: z.array(
@@ -589,6 +593,8 @@ describe("console flows invoke", () => {
             }),
           ),
         }),
+      }).gate(member),
+      flow("views.list", {
         do: async (_input, fx) => {
           const items = await fx.store(db).select().from(views);
           return {
@@ -696,10 +702,11 @@ describe("console flows invoke", () => {
     resetBindings();
     resetFlowSeq();
     on(
-      http.get("/notes").gate(member),
-      flow("notes.list", {
+      http.get("/notes", {
         in: z.object({}),
         out: z.array(z.object({ id: z.string(), title: z.string() })),
+      }).gate(member),
+      flow("notes.list", {
         effects: { reads: ["sql:notes"] },
         do: () => [{ id: "n1", title: "Harbor" }],
       }),

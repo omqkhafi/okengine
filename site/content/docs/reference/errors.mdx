@@ -31,12 +31,19 @@ Codes are stable after the domain-range renumber — match them safely across up
 ### Return a typed failure
 
 ```typescript
-errors: { NotFound: z.object({ id: z.string() }) },
-do: async ({ id }, fx) => {
-  const [row] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
-  if (!row) return fx.fail("NotFound", { id });
-  return row;
-},
+on(
+  http.get({
+    in: z.object({ id: z.string() }),
+    errors: { NotFound: z.object({ id: z.string() }) },
+  }),
+  flow({
+    do: async ({ id }, fx) => {
+      const [row] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
+      if (!row) return fx.fail("NotFound", { id });
+      return row;
+    },
+  }),
+);
 ```
 
 </Step>
@@ -93,6 +100,7 @@ string. Custom app codes stay message-less until registered. Full catalogs:
 | `1210` | live resume gap      | `Last-Event-ID` is not on the retained tape       | Reconnect without the cursor; remaining tape replays |
 | `1240` | orphan emit          | Emit with zero subscribers and `optional` false   | Add `on(signal, …)` or declare `optional: true`      |
 | `1250` | signal schema        | Emit payload failed the signal's `schema`         | Pass a payload that matches `schema`, or remove it   |
+| `1605` | channel schema       | Send payload failed the template's `schema`       | Fix template `data` payload or the template `schema` |
 | `1810` | tenant required      | Tenant-scoped op with no `fx.tenant.id`           | `switchTenant`, signed `tid`, or tenant header       |
 | `1820` | tenant not member    | Client-supplied tenant id is not a membership     | Pick from `listTenants` or add the user as a member  |
 | `1830` | tenant unknown scope | Tenant role used an invented or `console:*` scope | Use a declared application scope                     |

@@ -2,6 +2,10 @@
  * Local HTTP bindings that do not touch the global {@link on} registry.
  */
 
+import {
+  applyBoundaryContract,
+  stampBoundaryContract,
+} from "../../kernel/boundary-contract.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { normalizeTrigger, type HttpTrigger, type Trigger } from "../../kernel/triggers.ts";
@@ -27,5 +31,8 @@ export function bindHttp(trigger: HttpTrigger, flowDef: AnyFlowDef): Binding {
   const list = flowDef.triggers as Trigger[];
   list.push(normalized);
   (flowDef as { $trigger: Trigger }).$trigger = normalized;
+  if (normalized.kind === "http" && normalized.contract !== undefined) {
+    applyBoundaryContract(flowDef, stampBoundaryContract(normalized.contract));
+  }
   return { trigger: normalized, flow: flowDef };
 }

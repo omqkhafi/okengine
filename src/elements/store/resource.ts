@@ -13,6 +13,10 @@
  */
 
 import { flow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "../../kernel/flow.ts";
+import {
+  applyBoundaryContract,
+  stampBoundaryContract,
+} from "../../kernel/boundary-contract.ts";
 import { fail } from "../../kernel/errors.ts";
 import type { Fx } from "../../kernel/fx.ts";
 import {
@@ -260,11 +264,9 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   }
 
   const listFlow = flow("list", {
-    ...(breaking ? { breaking: true as const } : {}),
     // Loose record so the HTTP AoT infers `query` and lets every list URL
     // key through; real validation happens in parseListQuery (PostgREST
     // grammar).
-    in: z.record(z.string(), z.unknown()) as never,
     effects: { reads: [db.ref] },
     do: async (input, fx) => {
       const result = await runList(input, fx);
@@ -272,10 +274,15 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       return fx.json.with(result);
     },
   });
+  applyBoundaryContract(
+    listFlow,
+    stampBoundaryContract({
+      in: z.record(z.string(), z.unknown()) as never,
+      ...(breaking ? { breaking: true } : {}),
+    }),
+  );
 
   const createFlow = flow("create", {
-    ...(breaking ? { breaking: true as const } : {}),
-    in: options.in as never,
     effects: { writes: [db.ref] },
     do: async (input, fx) => {
       const store = fx.store(db) as {
@@ -288,10 +295,16 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       return fx.json.create(row);
     },
   });
+  applyBoundaryContract(
+    createFlow,
+    stampBoundaryContract({
+      in: options.in as never,
+      out: options.out as never,
+      ...(breaking ? { breaking: true } : {}),
+    }),
+  );
 
   const getFlow = flow("get", {
-    ...(breaking ? { breaking: true as const } : {}),
-    errors,
     effects: { reads: [db.ref] },
     do: async (input, fx) => {
       const id = (input as Record<string, unknown>)[idKey];
@@ -303,6 +316,14 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       return row;
     },
   });
+  applyBoundaryContract(
+    getFlow,
+    stampBoundaryContract({
+      out: options.out as never,
+      errors,
+      ...(breaking ? { breaking: true } : {}),
+    }),
+  );
 
   // Wire update body is `{ id, ...patch }`. The patch schema (`update`,
   // default `in`) describes the mutable fields; the path id rides along and
@@ -315,9 +336,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         ? patchSchema.extend({ [idKey]: z.string() })
         : patchSchema;
   const updateFlow = flow("update", {
-    ...(breaking ? { breaking: true as const } : {}),
-    in: updateIn as never,
-    errors,
     effects: { reads: [db.ref], writes: [db.ref] },
     do: async (input, fx) => {
       const { [idKey]: id, ...patch } = input as Record<string, unknown>;
@@ -338,10 +356,17 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       return row;
     },
   });
+  applyBoundaryContract(
+    updateFlow,
+    stampBoundaryContract({
+      in: updateIn as never,
+      out: options.out as never,
+      errors,
+      ...(breaking ? { breaking: true } : {}),
+    }),
+  );
 
   const removeFlow = flow("remove", {
-    ...(breaking ? { breaking: true as const } : {}),
-    errors,
     effects: { writes: [db.ref] },
     do: async (input, fx) => {
       const id = (input as Record<string, unknown>)[idKey];
@@ -353,6 +378,13 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       return fx.json.empty();
     },
   });
+  applyBoundaryContract(
+    removeFlow,
+    stampBoundaryContract({
+      errors,
+      ...(breaking ? { breaking: true } : {}),
+    }),
+  );
 
   const defs: ResourceFlowDefs = {
     list: listFlow as FlowDef<any, any, any>,
@@ -389,7 +421,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       if (kind !== undefined) columnKinds[c.key] = kind;
     }
     const liveFlow = flow(`_live_${tableName}`, {
-      ...(options.out !== undefined ? { out: options.out } : {}),
       effects: { reads: [db.ref, `signal:${signalName}`] },
       do: async (input: unknown, fx: Fx) => {
         const bridge = realtimeBridgeRuntime();
@@ -428,6 +459,9 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         return fx.json.stream(stream.chunks);
       },
     }) as unknown as AnyFlowDef;
+    if (options.out !== undefined) {
+      applyBoundaryContract(liveFlow, stampBoundaryContract({ out: options.out as never }));
+    }
     return { signal: signalName, flow: liveFlow };
   };
 

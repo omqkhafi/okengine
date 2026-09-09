@@ -55,10 +55,11 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const get = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string() }),
+  }),
+  flow({
     do: async ({ id }) => ({ id }),
   }),
 );
@@ -135,9 +136,8 @@ export const list = on(
 );
 
 export const create = on(
-  http.post("/notes"),
+  http.post("/notes", { in: z.object({ title: z.string().min(1) }) }),
   flow("notes.create", {
-    in: z.object({ title: z.string().min(1) }),
     do: async ({ title }, fx) => ({ id: fx.id(), title }),
   }),
 );
@@ -158,9 +158,8 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const archive = on(
-  http.post(),
+  http.post({ in: z.object({ id: z.string() }) }),
   flow({
-    in: z.object({ id: z.string() }),
     do: async ({ id }) => ({ id, archived: true }),
   }),
 );
@@ -178,9 +177,8 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const get = on(
-  http.get().public(),
+  http.get({ in: z.object({ "*": z.string() }) }).public(),
   flow({
-    in: z.object({ "*": z.string() }),
     do: async (input) => ({ path: input["*"] }),
   }),
 );
@@ -269,9 +267,8 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const get = on(
-  http.get(),
+  http.get({ in: z.object({ orgId: z.string(), memberId: z.string() }) }),
   flow({
-    in: z.object({ orgId: z.string(), memberId: z.string() }),
     do: async ({ orgId, memberId }) => ({ orgId, memberId }),
   }),
 );

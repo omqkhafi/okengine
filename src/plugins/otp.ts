@@ -240,14 +240,17 @@ export function otp(opts: OtpOptions): PluginDef {
   });
 
   if (opts.mode === "provider") {
-    const request = flow("auth.requestOtp", {
-      plane: "user",
+    const requestContract = {
       in: z.object({
         phone: z.string().min(8),
         lang: z.enum(["en", "ar"]).optional(),
       }),
       out: requestOut,
       errors: { AuthFailed, AuthRateLimited },
+    };
+
+    const request = flow("auth.requestOtp", {
+      plane: "user",
       effects: { sends: ["sms-otp"] },
       do: async (input, fx) => {
         const phone = input.phone.trim();
@@ -279,8 +282,7 @@ export function otp(opts: OtpOptions): PluginDef {
       },
     });
 
-    const verify = flow("auth.verifyOtp", {
-      plane: "user",
+    const verifyContract = {
       in: z.object({
         phone: z.string().min(8),
         otp: z.string().min(4).max(8),
@@ -288,6 +290,10 @@ export function otp(opts: OtpOptions): PluginDef {
       }),
       out: SessionTokensOut,
       errors: { AuthFailed, AuthRateLimited },
+    };
+
+    const verify = flow("auth.verifyOtp", {
+      plane: "user",
       effects: { sends: ["sms-otp"] },
       do: async (input, fx) => {
         const phone = input.phone.trim();
@@ -354,13 +360,12 @@ export function otp(opts: OtpOptions): PluginDef {
 
     return plugin("otp", { version: "0.0.1", config: configSnapshot })
       .needs("auth")
-      .binding(bindPublicAuth("/otp/request", request, "otp"))
-      .binding(bindPublicAuth("/otp/verify", verify, "otp"));
+      .binding(bindPublicAuth("/otp/request", request, "otp", requestContract))
+      .binding(bindPublicAuth("/otp/verify", verify, "otp", verifyContract));
   }
 
   // ── App mode ───────────────────────────────────────────────────────────
-  const request = flow("auth.requestOtp", {
-    plane: "user",
+  const requestContract = {
     in: z.object({
       email: z.string().min(3).optional(),
       phone: z.string().min(8).optional(),
@@ -369,6 +374,10 @@ export function otp(opts: OtpOptions): PluginDef {
     }),
     out: requestOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const request = flow("auth.requestOtp", {
+    plane: "user",
     effects: { sends: ["auth-otp", "auth-otp-email", "auth-otp-sms", "auth-otp-whatsapp"] },
     do: async (input, fx) => {
       const email = input.email ? normalizeEmail(input.email) : undefined;
@@ -425,8 +434,7 @@ export function otp(opts: OtpOptions): PluginDef {
     },
   });
 
-  const resend = flow("auth.resendOtp", {
-    plane: "user",
+  const resendContract = {
     in: z.object({
       email: z.string().min(3).optional(),
       phone: z.string().min(8).optional(),
@@ -435,6 +443,10 @@ export function otp(opts: OtpOptions): PluginDef {
     }),
     out: requestOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const resend = flow("auth.resendOtp", {
+    plane: "user",
     effects: { sends: ["auth-otp", "auth-otp-email", "auth-otp-sms", "auth-otp-whatsapp"] },
     do: async (input, fx) => {
       const email = input.email ? normalizeEmail(input.email) : undefined;
@@ -494,8 +506,7 @@ export function otp(opts: OtpOptions): PluginDef {
     },
   });
 
-  const verify = flow("auth.verifyOtp", {
-    plane: "user",
+  const verifyContract = {
     in: z.object({
       email: z.string().min(3).optional(),
       phone: z.string().min(8).optional(),
@@ -503,6 +514,10 @@ export function otp(opts: OtpOptions): PluginDef {
     }),
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const verify = flow("auth.verifyOtp", {
+    plane: "user",
     do: async (input) => {
       const email = input.email ? normalizeEmail(input.email) : undefined;
       const phone = input.phone?.trim();
@@ -599,7 +614,7 @@ export function otp(opts: OtpOptions): PluginDef {
     .channelTemplate(otpSmsTemplate)
     .channelTemplate(otpWhatsappTemplate)
     .channelCatalog(otpCatalog)
-    .binding(bindPublicAuth("/otp/request", request, "otp"))
-    .binding(bindPublicAuth("/otp/verify", verify, "otp"))
-    .binding(bindPublicAuth("/otp/resend", resend, "otp"));
+    .binding(bindPublicAuth("/otp/request", request, "otp", requestContract))
+    .binding(bindPublicAuth("/otp/verify", verify, "otp", verifyContract))
+    .binding(bindPublicAuth("/otp/resend", resend, "otp", resendContract));
 }

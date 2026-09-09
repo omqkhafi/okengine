@@ -312,6 +312,13 @@ export const OKE_ERRORS = {
     cause: '"{resource}": {detail}',
     fix: "Fix schema payload.",
   },
+  /** Send payload failed the channel template's declared Standard Schema. */
+  CHANNEL_SCHEMA: {
+    code: 1605,
+    domain: "channel",
+    cause: '"{resource}": {detail}',
+    fix: "Fix template data payload or the template schema.",
+  },
   /**
    * Domain table/column missing under docker/prod (migrations not applied).
    */

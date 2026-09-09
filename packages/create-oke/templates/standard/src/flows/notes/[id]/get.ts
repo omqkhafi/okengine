@@ -6,11 +6,8 @@ import { NoteIdIn, NoteOut, NotFound, toIsoInstant } from "../shapes";
 
 /** Fetch one note by id. */
 export const get = on(
-  http.get().public(),
+  http.get({ in: NoteIdIn, out: NoteOut, errors: { NotFound } }).public(),
   flow({
-    in: NoteIdIn,
-    out: NoteOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });

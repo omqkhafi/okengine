@@ -25,10 +25,8 @@ const CommentIn = z.object({
 
 /** List comments on a task. */
 export const list = on(
-  http.get("/tasks/:id/comments").gate(member),
+  http.get("/tasks/:id/comments", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(CommentOut) }).gate(member),
   flow("comments.list", {
-    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
-    out: pageOut(CommentOut),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(comments);
       const items = rows
@@ -46,11 +44,8 @@ export const list = on(
 
 /** Create a comment. */
 export const create = on(
-  http.post("/tasks/:id/comments").gate(tasksWrite),
+  http.post("/tasks/:id/comments", { in: CommentIn, out: CommentOut, errors: { NotFound } }).gate(tasksWrite),
   flow("comments.create", {
-    in: CommentIn,
-    out: CommentOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const task = await fx.store(db).findById(tasks, input.id);
       if (!task) return fail("NotFound", { id: input.id });
@@ -74,11 +69,8 @@ export const create = on(
 
 /** Get one comment. */
 export const get = on(
-  http.get("/comments/:id").gate(member),
+  http.get("/comments/:id", { in: IdIn, out: CommentOut, errors: { NotFound } }).gate(member),
   flow("comments.get", {
-    in: IdIn,
-    out: CommentOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -94,11 +86,8 @@ export const get = on(
 
 /** Edit a comment. */
 export const update = on(
-  http.patch("/comments/:id").gate(commentsWrite),
+  http.patch("/comments/:id", { in: CommentIn, out: CommentOut, errors: { NotFound } }).gate(commentsWrite),
   flow("comments.update", {
-    in: CommentIn,
-    out: CommentOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -122,11 +111,8 @@ export const update = on(
 
 /** Delete a comment. */
 export const remove = on(
-  http.delete("/comments/:id").gate(commentsWrite),
+  http.delete("/comments/:id", { in: IdIn, out: Ok, errors: { NotFound } }).gate(commentsWrite),
   flow("comments.delete", {
-    in: IdIn,
-    out: Ok,
-    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -138,10 +124,8 @@ export const remove = on(
 
 /** Mark resolved. */
 export const resolve = on(
-  http.post("/comments/:id/resolve").gate(commentsWrite),
+  http.post("/comments/:id/resolve", { in: IdIn, out: Ok }).gate(commentsWrite),
   flow("comments.resolve", {
-    in: IdIn,
-    out: Ok,
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
       if (!row) return { ok: true as const };

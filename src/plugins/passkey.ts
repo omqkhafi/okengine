@@ -121,8 +121,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
   const rpId = opts.rpId ?? "localhost";
   const origins = opts.origins ?? ["http://localhost", "https://localhost"];
 
-  const registerOptions = flow("auth.passkeyRegisterOptions", {
-    plane: "user",
+  const registerOptionsContract = {
     out: z.object({
       challenge: z.string(),
       sessionId: z.string(),
@@ -130,6 +129,10 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
       userId: z.string(),
     }),
     errors: { AuthFailed },
+  };
+
+  const registerOptions = flow("auth.passkeyRegisterOptions", {
+    plane: "user",
     do: async (_input, fx) => {
       const userId = fx.auth.userId;
       if (!userId) return fail("AuthFailed", { reason: "unauthenticated" });
@@ -150,14 +153,17 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     },
   });
 
-  const register = flow("auth.passkeyRegister", {
-    plane: "user",
+  const registerContract = {
     in: CeremonyIn.extend({
       publicKey: z.string().min(1),
       userId: z.string().min(1),
     }),
     out: z.object({ ok: z.literal(true) }),
     errors: { AuthFailed },
+  };
+
+  const register = flow("auth.passkeyRegister", {
+    plane: "user",
     do: async (input, fx) => {
       const sessionUser = fx.auth.userId;
       if (!sessionUser || sessionUser !== input.userId) {
@@ -219,8 +225,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     },
   });
 
-  const authenticateOptions = flow("auth.passkeyAuthenticateOptions", {
-    plane: "user",
+  const authenticateOptionsContract = {
     in: z.object({ email: z.string().optional() }),
     out: z.object({
       challenge: z.string(),
@@ -229,6 +234,10 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
       allowCredentials: z.array(z.string()),
     }),
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const authenticateOptions = flow("auth.passkeyAuthenticateOptions", {
+    plane: "user",
     do: async (input) => {
       const challenge = okid();
       const sessionId = okid();
@@ -248,8 +257,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     },
   });
 
-  const authenticate = flow("auth.passkeyAuthenticate", {
-    plane: "user",
+  const authenticateContract = {
     in: CeremonyIn.extend({
       challenge: z.string().min(1),
       /** Challenge bucket key from authenticate options (default `anonymous`). */
@@ -257,6 +265,10 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     }),
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
+  };
+
+  const authenticate = flow("auth.passkeyAuthenticate", {
+    plane: "user",
     do: async (input) => {
       const cred = passkeys.byCredentialId.get(input.credentialId);
       if (!cred) return fail("AuthFailed", { reason: "invalid_credentials" });
@@ -311,10 +323,17 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
   return plugin("passkey", { version: "0.0.1", config: { method: "passkey" } })
     .needs("auth")
     .table("oke_passkeys", undefined, { plane: "user", description: "WebAuthn credentials" })
-    .binding(bindSessionAuth("/passkey/register/options", registerOptions))
-    .binding(bindSessionAuth("/passkey/register", register))
-    .binding(bindPublicAuth("/passkey/authenticate/options", authenticateOptions, "otp"))
-    .binding(bindPublicAuth("/passkey/authenticate", authenticate, "otp"));
+    .binding(bindSessionAuth("/passkey/register/options", registerOptions, registerOptionsContract))
+    .binding(bindSessionAuth("/passkey/register", register, registerContract))
+    .binding(
+      bindPublicAuth(
+        "/passkey/authenticate/options",
+        authenticateOptions,
+        "otp",
+        authenticateOptionsContract,
+      ),
+    )
+    .binding(bindPublicAuth("/passkey/authenticate", authenticate, "otp", authenticateContract));
 }
 
 /**

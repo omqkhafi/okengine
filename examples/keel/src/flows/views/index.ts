@@ -30,14 +30,12 @@ export const { list, get, update, remove } = bindCrud({
 
 /** Create a saved view. */
 export const create = on(
-  http.post("/views").gate(projectAdminWrite),
-  flow("views.create", {
-    in: createIn.extend({
+  http.post("/views", { in: createIn.extend({
       projectId: z.string().min(1),
       name: z.string().min(1),
       kind: z.enum(["list", "board", "timeline", "calendar"]),
-    }),
-    out: IdOut,
+    }), out: IdOut }).gate(projectAdminWrite),
+  flow("views.create", {
     do: async (input, fx) => {
       const id = fx.id();
       await fx
@@ -59,17 +57,14 @@ export const create = on(
 
 /** Board = tasks grouped by section. */
 export const board = on(
-  http.get("/views/:id/board").gate(member),
-  flow("views.board", {
-    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
-    out: pageOut(
+  http.get("/views/:id/board", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(
       z.object({
         sectionId: z.string(),
         name: z.string(),
         tasks: z.array(z.object({ id: z.string(), title: z.string(), identifier: z.string() })),
       }),
-    ),
-    errors: { NotFound },
+    ), errors: { NotFound } }).gate(member),
+  flow("views.board", {
     do: async (input, fx) => {
       const view = await fx.store(db).findById(views, input.id);
       if (!view) return fail("NotFound", { id: input.id });

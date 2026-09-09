@@ -37,10 +37,8 @@ export const { list, get, update, remove } = bindCrud({
 
 /** Create a project. */
 export const create = on(
-  http.post("/projects").gate(projectAdminWrite),
+  http.post("/projects", { in: createIn.extend({ spaceId: z.string().min(1), name: z.string().min(1).max(200) }), out: IdOut }).gate(projectAdminWrite),
   flow("projects.create", {
-    in: createIn.extend({ spaceId: z.string().min(1), name: z.string().min(1).max(200) }),
-    out: IdOut,
     do: async (input, fx) => {
       const id = fx.id();
       await fx
@@ -64,10 +62,8 @@ export const create = on(
 
 /** Archive a project. */
 export const archive = on(
-  http.post("/projects/:id/archive").gate(projectAdminWrite),
+  http.post("/projects/:id/archive", { in: IdIn, out: Ok }).gate(projectAdminWrite),
   flow("projects.archive", {
-    in: IdIn,
-    out: Ok,
     do: async (input, fx) => {
       const row = await fx.store(db).findById(projects, input.id);
       if (!row) return { ok: true as const };
@@ -92,15 +88,12 @@ export const archive = on(
 
 /** Post a health update. */
 export const postUpdate = on(
-  http.post("/projects/:id/updates").gate(projectAdminWrite),
-  flow("projects.postUpdate", {
-    in: projectUpdatesZod.insert.pick({ body: true, health: true }).extend({
+  http.post("/projects/:id/updates", { in: projectUpdatesZod.insert.pick({ body: true, health: true }).extend({
       id: z.string(),
       body: z.string().min(1),
       health: z.string().optional(),
-    }),
-    out: IdOut,
-    errors: { NotFound },
+    }), out: IdOut, errors: { NotFound } }).gate(projectAdminWrite),
+  flow("projects.postUpdate", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(projects, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -132,10 +125,8 @@ export const postUpdate = on(
 
 /** List project updates. */
 export const listUpdates = on(
-  http.get("/projects/:id/updates").gate(member),
+  http.get("/projects/:id/updates", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(projectUpdatesZod.select.pick({ id: true, body: true, health: true })) }).gate(member),
   flow("projects.listUpdates", {
-    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
-    out: pageOut(projectUpdatesZod.select.pick({ id: true, body: true, health: true })),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(projectUpdates);
       const items = rows
@@ -152,10 +143,8 @@ export const listUpdates = on(
 
 /** List sections (board columns). */
 export const listSections = on(
-  http.get("/projects/:id/sections").gate(member),
+  http.get("/projects/:id/sections", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(sectionsZod.select.pick({ id: true, name: true, sortOrder: true })) }).gate(member),
   flow("projects.listSections", {
-    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
-    out: pageOut(sectionsZod.select.pick({ id: true, name: true, sortOrder: true })),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(sections);
       const items = rows
@@ -173,11 +162,8 @@ export const listSections = on(
 
 /** Add a section. */
 export const addSection = on(
-  http.post("/projects/:id/sections").gate(projectAdminWrite),
+  http.post("/projects/:id/sections", { in: z.object({ id: z.string(), name: z.string().min(1) }), out: IdOut, errors: { NotFound } }).gate(projectAdminWrite),
   flow("projects.addSection", {
-    in: z.object({ id: z.string(), name: z.string().min(1) }),
-    out: IdOut,
-    errors: { NotFound },
     do: async (input, fx) => {
       const project = await fx.store(db).findById(projects, input.id);
       if (!project) return fail("NotFound", { id: input.id });

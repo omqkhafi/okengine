@@ -81,7 +81,7 @@ export async function runDoctorDiff(options: DoctorDiffOptions = {}): Promise<Do
   for (const c of undeclared) {
     write(`  [contract-breaking] ${c.path}: ${c.summary}\n`);
   }
-  write("Acknowledge intentional breaks with `breaking: true` on the owning flow.\n");
+  write("Acknowledge intentional breaks with `breaking: true` on the HTTP / call / MCP / resource contract bag.\n");
   return { code: EXIT_RUNTIME, undeclared, allChanges: all };
 }
 
@@ -223,7 +223,7 @@ export async function doctorDiffCli(args: readonly string[]): Promise<number> {
 
 CI gate: fail on undeclared contract-breaking Manifest changes.
 Default: git merge-base (main/master) vs working-tree manifest.
-Acknowledge intentional breaks with breaking: true on the flow.
+Acknowledge intentional breaks with breaking: true on the HTTP / call / MCP / resource contract bag.
 `);
       return EXIT_OK;
     }

@@ -64,7 +64,9 @@ export function bindCrud(spec: {
   const readFx = tableRef ? { reads: [tableRef] } : undefined;
   const writeFx = tableRef ? { writes: [tableRef] } : undefined;
   const bothFx = tableRef ? { reads: [tableRef], writes: [tableRef] } : undefined;
-  const listTrigger = http.get(path).gate(read);
+  const listTrigger = http
+    .get(path, { in: listIn({ mode: "offset" }), out: pageOut(spec.out) })
+    .gate(read);
   const resource = store.resource(db, table, {
     in: spec.createIn,
     out: spec.out,
@@ -81,8 +83,6 @@ export function bindCrud(spec: {
   const list = on(
     listTrigger,
     flow(`${unit}.list`, {
-      in: listIn({ mode: "offset" }),
-      out: pageOut(spec.out),
       effects: readFx,
       do: async (input, fx) => {
         const pageOpts = resource.page(input);
@@ -103,10 +103,8 @@ export function bindCrud(spec: {
   const create = spec.skipCreate
     ? undefined
     : on(
-        http.post(path).gate(write),
+        http.post(path, { in: spec.createIn, out: z.object({ id: z.string() }) }).gate(write),
         flow(`${unit}.create`, {
-          in: spec.createIn,
-          out: z.object({ id: z.string() }),
           effects: writeFx,
           do: async (input, fx) => {
             const id = fx.id();
@@ -120,11 +118,8 @@ export function bindCrud(spec: {
       );
 
   const get = on(
-    http.get(item).gate(read),
+    http.get(item, { in: IdIn, out: spec.out, errors: { NotFound } }).gate(read),
     flow(`${unit}.get`, {
-      in: IdIn,
-      out: spec.out,
-      errors: { NotFound },
       effects: readFx,
       do: async (input, fx) => {
         const row = await fx.store(db).findById(table, input.id);
@@ -135,11 +130,12 @@ export function bindCrud(spec: {
   );
 
   const update = on(
-    http.patch(item).gate(write),
-    flow(`${unit}.update`, {
+    http.patch(item, {
       in: z.intersection(IdIn, spec.updateIn ?? spec.createIn),
       out: z.object({ id: z.string() }),
       errors: { NotFound },
+    }).gate(write),
+    flow(`${unit}.update`, {
       effects: bothFx,
       do: async (input, fx) => {
         const row = await fx.store(db).findById(table, input.id);
@@ -158,11 +154,8 @@ export function bindCrud(spec: {
   );
 
   const remove = on(
-    http.delete(item).gate(write),
+    http.delete(item, { in: IdIn, out: Ok, errors: { NotFound } }).gate(write),
     flow(`${unit}.delete`, {
-      in: IdIn,
-      out: Ok,
-      errors: { NotFound },
       effects: bothFx,
       do: async (input, fx) => {
         const row = await fx.store(db).findById(table, input.id);

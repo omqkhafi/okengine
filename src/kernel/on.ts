@@ -7,6 +7,10 @@
  */
 
 import type { ClockDecl } from "../elements/clock/declare.ts";
+import {
+  applyBoundaryContract,
+  stampBoundaryContract,
+} from "./boundary-contract.ts";
 import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import {
@@ -16,8 +20,10 @@ import {
   type HttpMethod,
   type HttpTrigger,
   type LiveHttpTrigger,
+  type McpToolTrigger,
   type ResourceFlowBag,
   type ResourceMount,
+  type SignalAsTrigger,
   type SignalSource,
   type Trigger,
 } from "./triggers.ts";
@@ -150,8 +156,48 @@ export function on(
   list.push(normalized);
   // Stamp runtime carrier for the first bound trigger (type follows BoundTriggerOf).
   (flowDef as { $trigger: Trigger }).$trigger = normalized;
+  stampExposureContract(flowDef as AnyFlowDef, normalized, triggerOrMount);
   bindings.push({ trigger: normalized, flow: flowDef as AnyFlowDef });
   return flowDef;
+}
+
+/**
+ * Project invoke / emit contract from the exposure onto the FlowDef for
+ * Manifest, validation, and typed client (flat `flows.*.in/out/errors`).
+ */
+function stampExposureContract(
+  flowDef: AnyFlowDef,
+  normalized: Trigger,
+  raw: Trigger | SignalSource | ClockDecl,
+): void {
+  if (normalized.kind === "http" && normalized.contract !== undefined) {
+    applyBoundaryContract(flowDef, stampBoundaryContract(normalized.contract));
+    return;
+  }
+  if (normalized.kind === "mcp" && (normalized as McpToolTrigger).contract !== undefined) {
+    applyBoundaryContract(
+      flowDef,
+      stampBoundaryContract((normalized as McpToolTrigger).contract),
+    );
+    return;
+  }
+  if (normalized.kind === "signal") {
+    const handle =
+      (normalized as SignalAsTrigger).signal ??
+      (isSignalSourceWithSchema(raw) ? raw : undefined);
+    const schema =
+      handle && typeof handle === "object" && "schema" in handle
+        ? (handle as { schema?: unknown }).schema
+        : undefined;
+    if (schema !== undefined && flowDef.in === undefined) {
+      applyBoundaryContract(flowDef, stampBoundaryContract({ in: schema as never }));
+    }
+  }
+  // HTTP/MCP without a bag leave any pre-stamped FlowDef contract (e.g. store.resource).
+}
+
+function isSignalSourceWithSchema(value: unknown): value is SignalSource & { schema?: unknown } {
+  return typeof value === "object" && value !== null && "name" in value;
 }
 
 /**
