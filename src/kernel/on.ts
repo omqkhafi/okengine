@@ -10,6 +10,8 @@ import type { ClockDecl } from "../elements/clock/declare.ts";
 import {
   applyBoundaryContract,
   stampBoundaryContract,
+  type InferBoundaryIn,
+  type InferBoundaryOut,
 } from "./boundary-contract.ts";
 import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
 import { lazyRequire } from "./lazy-require.ts";
@@ -46,8 +48,58 @@ export interface Binding {
 const bindings: Binding[] = [];
 
 /**
+ * Invoke-contract bag on an HTTP / MCP exposure (type parameter), if any.
+ *
+ * @typeParam T - Bound trigger
+ */
+type ExposureContractOf<T> = BoundTriggerOf<T> extends HttpTrigger<
+  HttpMethod,
+  string,
+  infer C
+>
+  ? C
+  : BoundTriggerOf<T> extends McpToolTrigger<infer C>
+    ? C
+    : undefined;
+
+/**
+ * Input type for `on(trigger, flow)` — exposure `in` wins over the handler.
+ *
+ * @typeParam T - Trigger argument
+ * @typeParam Fallback - FlowDef input from `flow()`
+ */
+type InferOnIn<T, Fallback> = ExposureContractOf<T> extends { readonly in: unknown }
+  ? InferBoundaryIn<ExposureContractOf<T>>
+  : Fallback;
+
+/**
+ * Output type for `on(trigger, flow)` — exposure `out` wins over the handler.
+ *
+ * @typeParam T - Trigger argument
+ * @typeParam Fallback - FlowDef output from `flow()`
+ */
+type InferOnOut<T, Fallback> = ExposureContractOf<T> extends { readonly out: unknown }
+  ? InferBoundaryOut<ExposureContractOf<T>>
+  : Fallback;
+
+/**
+ * Error map for `on(trigger, flow)` — exposure `errors` wins over Flow defaults.
+ *
+ * @typeParam T - Trigger argument
+ * @typeParam Fallback - FlowDef error map from `flow()`
+ */
+type InferOnErrors<T, Fallback extends FlowErrorMap> = ExposureContractOf<T> extends {
+  readonly errors: infer E extends FlowErrorMap;
+}
+  ? E
+  : Fallback;
+
+/**
  * Bind a trigger to a Flow. Returns the same Flow (one species) with the
  * trigger stamped into the type parameter for client route derivation.
+ * When the trigger carries an invoke contract (`http.*` / `mcp.tool` bag),
+ * `in` / `out` / `errors` are projected onto the returned {@link FlowDef}
+ * (same as {@link import("./call.ts").call}).
  *
  * @param trigger - HTTP, named clock, signal handle, CDC, or internal
  * @param flowDef - Flow definition
@@ -61,7 +113,7 @@ export function on<
 >(
   trigger: T,
   flowDef: FlowDef<I, O, E, D, Trigger | undefined>,
-): FlowDef<I, O, E, D, BoundTriggerOf<T>>;
+): FlowDef<InferOnIn<T, I>, InferOnOut<T, O>, InferOnErrors<T, E>, D, BoundTriggerOf<T>>;
 /**
  * Expose a live signal: `on(http.get(path).gate(g).live(signal))`.
  * Synthesizes the stream Flow (name stamped by `.adopt`).

@@ -30,17 +30,25 @@ export type GateAttach<T> = (...gates: GateArg[]) => T;
 /**
  * HTTP trigger value. Method and path are literal type parameters so
  * `typeof app` / the client can derive REST wire shape from the declaration.
+ * `C` preserves the invoke-contract bag for {@link on} → `$routes` typing.
  *
  * @typeParam M - HTTP method literal
  * @typeParam P - Path template literal (`/notes/:id`)
+ * @typeParam C - Invoke contract bag (or `undefined` when omitted)
  */
-export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string = string> {
+export interface HttpTrigger<
+  M extends HttpMethod = HttpMethod,
+  P extends string = string,
+  // Default `any` so `Trigger` accepts contracted + contractless HTTP triggers;
+  // verb overloads still pin `C` to `undefined` or the authored bag.
+  C extends BoundaryContract | undefined = any,
+> {
   readonly kind: "http";
   readonly method: M;
   readonly path: P;
   readonly gates: readonly GateRef[];
   /** Invoke contract authored on the verb options bag. */
-  readonly contract?: BoundaryContract;
+  readonly contract?: C extends undefined ? never : C;
   /**
    * Signal this GET exposes as a live SSE feed (`undefined` when not a live route).
    */
@@ -48,17 +56,17 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
   /**
    * Attach gates (registration order). `gate.all` handles and arrays flatten.
    */
-  readonly gate: GateAttach<HttpTrigger<M, P>>;
+  readonly gate: GateAttach<HttpTrigger<M, P, C>>;
   /**
    * Attach the unauthenticated public sentinel.
    */
-  public(): HttpTrigger<M, P>;
+  public(): HttpTrigger<M, P, C>;
   /**
    * Expose a `delivery: "live"` signal as SSE on this GET.
    *
    * @param signal - Live signal handle
    */
-  live(signal: SignalSource): LiveHttpTrigger<M, P>;
+  live(signal: SignalSource): LiveHttpTrigger<M, P, C>;
   /**
    * Declare a live query surface over a table on this GET: same CDC +
    * per-subscriber RLS classification physics as
@@ -67,7 +75,7 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
    *
    * @param table - `store.schema.table` (or drizzle/table handle) binding
    */
-  live(table: object): LiveHttpTrigger<M, P>;
+  live(table: object): LiveHttpTrigger<M, P, C>;
 }
 
 /**
@@ -78,14 +86,16 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
  *
  * @typeParam M - HTTP method literal
  * @typeParam P - Path template literal
+ * @typeParam C - Invoke contract bag (or `undefined` when omitted)
  */
 export interface LiveHttpTrigger<
   M extends HttpMethod = "GET",
   P extends string = string,
-> extends HttpTrigger<M, P> {
+  C extends BoundaryContract | undefined = any,
+> extends HttpTrigger<M, P, C> {
   readonly liveSignal: SignalSource;
-  readonly gate: GateAttach<LiveHttpTrigger<M, P>>;
-  public(): LiveHttpTrigger<M, P>;
+  readonly gate: GateAttach<LiveHttpTrigger<M, P, C>>;
+  public(): LiveHttpTrigger<M, P, C>;
 }
 
 /** Clock / cron trigger (`clock("daily", { every: "1d" })`). */
@@ -136,14 +146,14 @@ export interface InternalTrigger {
  * Gates are required (typically `gate.auth` + `gate.scope(...)`) exactly
  * like sensitive HTTP routes.
  */
-export interface McpToolTrigger {
+export interface McpToolTrigger<C extends BoundaryContract | undefined = any> {
   readonly kind: "mcp";
   /** Tool name exposed in MCP `tools/list`. */
   readonly name: string;
   readonly gates: readonly GateRef[];
   /** Invoke contract authored on `mcp.tool(name, bag)`. */
-  readonly contract?: BoundaryContract;
-  readonly gate: GateAttach<McpToolTrigger>;
+  readonly contract?: C extends undefined ? never : C;
+  readonly gate: GateAttach<McpToolTrigger<C>>;
 }
 
 /** Discriminated union of all trigger kinds. */
@@ -179,30 +189,43 @@ export function createGateAttach<T>(
  * @param path - Route path
  * @param gates - Attached gate refs
  * @param liveSignal - Live signal when `.live(signal)` was applied
+ * @param contract - Invoke contract bag from the verb options
  */
-export function createHttpTrigger<M extends HttpMethod, P extends string>(
+export function createHttpTrigger<
+  M extends HttpMethod,
+  P extends string,
+  C extends BoundaryContract | undefined = undefined,
+>(
   method: M,
   path: P,
   gates: readonly GateRef[],
   liveSignal: SignalSource,
-  contract?: BoundaryContract,
-): LiveHttpTrigger<M, P>;
-export function createHttpTrigger<M extends HttpMethod, P extends string>(
+  contract?: C,
+): LiveHttpTrigger<M, P, C>;
+export function createHttpTrigger<
+  M extends HttpMethod,
+  P extends string,
+  C extends BoundaryContract | undefined = undefined,
+>(
   method: M,
   path: P,
   gates?: readonly GateRef[],
   liveSignal?: SignalSource,
-  contract?: BoundaryContract,
-): HttpTrigger<M, P>;
-export function createHttpTrigger<M extends HttpMethod, P extends string>(
+  contract?: C,
+): HttpTrigger<M, P, C>;
+export function createHttpTrigger<
+  M extends HttpMethod,
+  P extends string,
+  C extends BoundaryContract | undefined = undefined,
+>(
   method: M,
   path: P,
   gates: readonly GateRef[] = [],
   liveSignal?: SignalSource,
-  contract?: BoundaryContract,
-): HttpTrigger<M, P> {
-  const trigger: HttpTrigger<M, P> = {
-    kind: "http",
+  contract?: C,
+): HttpTrigger<M, P, C> {
+  const trigger = {
+    kind: "http" as const,
     method,
     path,
     gates,
@@ -230,7 +253,7 @@ export function createHttpTrigger<M extends HttpMethod, P extends string>(
       return createHttpTrigger(method, path, gates, source as SignalSource, contract);
     },
   };
-  return trigger;
+  return trigger as HttpTrigger<M, P, C>;
 }
 
 /** Flow shape accepted by {@link http.resource} (duck-typed — any FlowDef). */
@@ -295,70 +318,112 @@ function loadHttpResource(): typeof import("./http-resource.ts") {
  * Shape of the {@link http} trigger namespace. Each method keeps `P` as a
  * generic type parameter so callers (and the client) retain literal path
  * types for param extraction. Invoke contracts use an options bag
- * (`http.post({ in, out })` or `http.post("/notes", { in, out })`).
+ * (`http.post({ in, out })` or `http.post("/notes", { in, out })`); the bag
+ * type is preserved so {@link on} can project `in` / `out` / `errors` onto
+ * `FlowDef` / `$routes`.
  */
 export interface HttpTriggerNamespace {
   /** Pathless — file-tree stamp fills the URL. Unresolved sentinel fails boot. */
-  get(contract?: BoundaryContract): HttpTrigger<"GET", HttpPathPending>;
+  get<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"GET", HttpPathPending, C>;
   /**
    * @param path - Route path (`/:id` params supported)
    * @param contract - Invoke contract bag
    */
-  get<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"GET", P>;
+  get<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"GET", P, C>;
   /** Pathless — file-tree stamp fills the URL. */
-  post(contract?: BoundaryContract): HttpTrigger<"POST", HttpPathPending>;
+  post<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"POST", HttpPathPending, C>;
   /**
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  post<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"POST", P>;
+  post<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"POST", P, C>;
   /** Pathless — file-tree stamp fills the URL. */
-  put(contract?: BoundaryContract): HttpTrigger<"PUT", HttpPathPending>;
+  put<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"PUT", HttpPathPending, C>;
   /**
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  put<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"PUT", P>;
+  put<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"PUT", P, C>;
   /** Pathless — file-tree stamp fills the URL. */
-  patch(contract?: BoundaryContract): HttpTrigger<"PATCH", HttpPathPending>;
+  patch<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"PATCH", HttpPathPending, C>;
   /**
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  patch<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"PATCH", P>;
+  patch<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"PATCH", P, C>;
   /** Pathless — file-tree stamp fills the URL. */
-  delete(contract?: BoundaryContract): HttpTrigger<"DELETE", HttpPathPending>;
+  delete<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"DELETE", HttpPathPending, C>;
   /**
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  delete<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"DELETE", P>;
+  delete<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"DELETE", P, C>;
   /** Pathless — file-tree stamp fills the URL. */
-  options(contract?: BoundaryContract): HttpTrigger<"OPTIONS", HttpPathPending>;
+  options<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"OPTIONS", HttpPathPending, C>;
   /**
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  options<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"OPTIONS", P>;
+  options<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"OPTIONS", P, C>;
   /** Pathless — file-tree stamp fills the URL. */
-  head(contract?: BoundaryContract): HttpTrigger<"HEAD", HttpPathPending>;
+  head<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"HEAD", HttpPathPending, C>;
   /**
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  head<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"HEAD", P>;
+  head<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"HEAD", P, C>;
   /**
    * Safe, idempotent read that carries a JSON body (RFC 10008).
    * Pathless — file-tree stamp fills the URL.
    */
-  query(contract?: BoundaryContract): HttpTrigger<"QUERY", HttpPathPending>;
+  query<C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<"QUERY", HttpPathPending, C>;
   /**
    * Safe, idempotent read that carries a JSON body (RFC 10008).
    *
    * @param path - Route path
    * @param contract - Invoke contract bag
    */
-  query<P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<"QUERY", P>;
+  query<P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<"QUERY", P, C>;
   /**
    * Mount a CRUD resource (list/create on `path`, get/update/remove on
    * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`
@@ -384,8 +449,13 @@ function isHttpContractBag(value: unknown): value is BoundaryContract {
 function httpVerb<M extends HttpMethod>(
   method: M,
 ): {
-  (contract?: BoundaryContract): HttpTrigger<M, HttpPathPending>;
-  <P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<M, P>;
+  <C extends BoundaryContract | undefined = undefined>(
+    contract?: C,
+  ): HttpTrigger<M, HttpPathPending, C>;
+  <P extends string, C extends BoundaryContract | undefined = undefined>(
+    path: P,
+    contract?: C,
+  ): HttpTrigger<M, P, C>;
 } {
   return ((pathOrContract?: string | BoundaryContract, maybeContract?: BoundaryContract) => {
     if (pathOrContract === undefined) {
@@ -399,8 +469,13 @@ function httpVerb<M extends HttpMethod>(
     }
     throw new TypeError(`http.${method.toLowerCase()}(…): expected a path string or contract bag`);
   }) as {
-    (contract?: BoundaryContract): HttpTrigger<M, HttpPathPending>;
-    <P extends string>(path: P, contract?: BoundaryContract): HttpTrigger<M, P>;
+    <C extends BoundaryContract | undefined = undefined>(
+      contract?: C,
+    ): HttpTrigger<M, HttpPathPending, C>;
+    <P extends string, C extends BoundaryContract | undefined = undefined>(
+      path: P,
+      contract?: C,
+    ): HttpTrigger<M, P, C>;
   };
 }
 
@@ -498,7 +573,10 @@ export const mcp: {
    * @param name - Tool name
    * @param contract - Invoke contract bag
    */
-  tool(name: string, contract?: BoundaryContract): McpToolTrigger;
+  tool<C extends BoundaryContract | undefined = undefined>(
+    name: string,
+    contract?: C,
+  ): McpToolTrigger<C>;
 } = {
   tool(name: string, contract?: BoundaryContract): McpToolTrigger {
     if (typeof name !== "string" || name.trim().length === 0) {
@@ -509,18 +587,18 @@ export const mcp: {
 };
 
 /** @internal Attach a resolved gate list onto a fresh {@link McpToolTrigger}. */
-function withMcpGates(
+function withMcpGates<C extends BoundaryContract | undefined = undefined>(
   name: string,
   gates: readonly GateRef[],
-  contract?: BoundaryContract,
-): McpToolTrigger {
+  contract?: C,
+): McpToolTrigger<C> {
   return {
     kind: "mcp",
     name,
     gates,
     ...(contract !== undefined ? { contract } : {}),
     gate: createGateAttach((next) => withMcpGates(name, next, contract), gates),
-  };
+  } as McpToolTrigger<C>;
 }
 
 /**

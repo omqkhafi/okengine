@@ -307,18 +307,24 @@ export interface ClientCallOpts {
  * @typeParam O - Output
  * @typeParam E - Errors
  */
-type ClientCallFn<I, O, E extends Record<string, unknown>> = [I] extends [void]
+type IsAnyInput<T> = 0 extends 1 & T ? true : false;
+
+type ClientCallFn<I, O, E extends Record<string, unknown>> = IsAnyInput<I> extends true
   ? {
-      (): ClientThenableIterable<ClientResult<O, E>>;
-      (opts: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+      (input?: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
     }
-  : Partial<I> extends I
+  : [I] extends [void]
     ? {
-        (input?: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+        (): ClientThenableIterable<ClientResult<O, E>>;
+        (opts: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
       }
-    : {
-        (input: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
-      };
+    : Partial<I> extends I
+      ? {
+          (input?: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+        }
+      : {
+          (input: I, opts?: ClientCallOpts): ClientThenableIterable<ClientResult<O, E>>;
+        };
 
 /**
  * Call signature for one flow. No `.pages()` — iterate the call or the page.

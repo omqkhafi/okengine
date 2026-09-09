@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db, filesWrite, keelFiles, member, taskWrite } from "@/core";
+import { db, keelFiles, member } from "@/core";
 import { fileObjects, tasks } from "@/db/schema.decl";
 import { fileObjectsZod } from "@/db/zod";
 import { listIn, pageOut } from "@/lib/http";
@@ -20,7 +20,7 @@ const UploadIn = z.object({
 
 /** Upload an attachment. */
 export const upload = on(
-  http.post("/attachments", { in: UploadIn, out: IdOut, errors: { NotFound } }).gate(member,
+  http.post("/attachments", { in: UploadIn, out: IdOut, errors: { NotFound } }).gate(member),
   flow("attachments.upload", {
     do: async (input, fx) => {
       const taskId = input.taskId ?? input.id;
@@ -75,7 +75,7 @@ export const get = on(
 
 /** Delete attachment + object. */
 export const remove = on(
-  http.delete("/attachments/:id", { in: IdIn, out: Ok, errors: { NotFound } }).gate(member,
+  http.delete("/attachments/:id", { in: IdIn, out: Ok, errors: { NotFound } }).gate(member),
   flow("attachments.delete", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(fileObjects, input.id);

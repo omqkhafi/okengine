@@ -451,20 +451,21 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- **OKE1810** no longer collides with `UNDECLARED_EMBED` (embed is **OKE1009**).
+- **`$routes` / typed client after exposure-owned contracts** — `http.*` / `mcp.tool`
+  preserve the authored `{ in, out, errors }` bag type, and `on()` projects it onto
+  `FlowDef` (parity with `call()`). Fixes `createClient<typeof app>` treating inputs as
+  `ClientCallOpts` and dropping declared error narrowing (e.g. Notes `NotFound`).
 - Shared Postgres holder `.close()` test awaits the async no-op (Bun.SQL returns
   a Promise; pool identity is unchanged).
 - SqlStoreHandle surface allowlist includes `search` (hybrid SQL search).
 - `oke doctor` PII ask fixture uses a third-party provider (`anthropic`) —
   `openai-compatible` is infrastructure and correctly skips the gate.
-
-#### Docs
-
-- Store Files / KV wording no longer trips the competitor-mention gate on an
-  accidental peer-name substring in ordinary English (“honour” / past tense).
+- **OKE1810** no longer collides with `UNDECLARED_EMBED` (embed is **OKE1009**).
 
 #### Dev, Keel & create-oke
 
+- Keel `attachments` upload/delete: restore missing `).gate(member),` closers from the
+  exposure-contract migration (syntax broke `examples/keel` typecheck).
 - create-oke Notes `PUBLIC_API_URL` no longer uses `dev: ""` — vault boot treats
   empty strings as gaps, so `oke dev` failed with
   `VaultBootError: PUBLIC_API_URL`. Templates now default to
@@ -485,6 +486,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
   a no-op (process-owned via `closeSharedPostgresClients`). Previously seed
   stop closed the cached pool, then Console reuse hit
   `PostgresError: Connection closed` and exited the session.
+
+#### Docs
+
+- Store Files / KV wording no longer trips the competitor-mention gate on an
+  accidental peer-name substring in ordinary English (“honour” / past tense).
 
 ### 💥 Breaking Changes
 
