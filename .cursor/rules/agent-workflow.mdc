@@ -10,6 +10,7 @@ alwaysApply: true
    - Never run `bun run ci` (or the full CI gate suite) automatically after finishing implementation tasks.
    - Only run `bun run ci` when the user explicitly requests it (e.g., "run CI", "run pre-push check", "/oke-ci").
    - For verifying edits, use targeted tests like `bun test <file>` or linter/typecheck only if needed.
+   - Exception — core gzip budgets: after changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts`, run `bun run budgets:core` before claiming done. Do not raise those caps without a measured before/after.
 
 2. **Always update `changelog.md` after implementation**:
    - After completing any implementation (feature, bug fix, refactor, CLI, driver, plugins, docs), append the changes to `changelog.md` under `## Unreleased`.

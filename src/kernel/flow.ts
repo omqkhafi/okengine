@@ -280,7 +280,7 @@ export function flow(
     legacy.breaking !== undefined
   ) {
     throw new TypeError(
-      "flow() no longer accepts in/out/errors/breaking — put the invoke contract on http.*(…), call(…), or mcp.tool(…)",
+      "flow() no longer accepts in/out/errors/breaking — author the contract on http.*/call/mcp.tool",
     );
   }
 

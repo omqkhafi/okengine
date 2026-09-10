@@ -312,13 +312,6 @@ export const OKE_ERRORS = {
     cause: '"{resource}": {detail}',
     fix: "Fix schema payload.",
   },
-  /** Send payload failed the channel template's declared Standard Schema. */
-  CHANNEL_SCHEMA: {
-    code: 1605,
-    domain: "channel",
-    cause: '"{resource}": {detail}',
-    fix: "Fix template data payload or the template schema.",
-  },
   /**
    * Domain table/column missing under docker/prod (migrations not applied).
    */
@@ -374,6 +367,12 @@ export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefin
       import.meta.dir,
       ["errors", "live", "resume"].join("-"),
     ).LIVE_RESUME_GAP;
+  }
+  if (code === 1605) {
+    return lazyRequire<typeof import("./errors-channel.ts")>(
+      import.meta.dir,
+      ["errors", "channel"].join("-"),
+    ).CHANNEL_SCHEMA;
   }
   if (code === 1810) return loadTenantErrors().TENANT_REQUIRED;
   if (code === 1820) return loadTenantErrors().TENANT_NOT_MEMBER;

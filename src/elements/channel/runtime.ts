@@ -20,12 +20,10 @@ import type {
 } from "../../drivers/channel-types.ts";
 import type { DriverExternal } from "../../drivers/external.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
-import { OkeError, OKE_ERRORS } from "../../kernel/errors.ts";
+import { CHANNEL_SCHEMA } from "../../kernel/errors-channel.ts";
+import { OkeError } from "../../kernel/errors.ts";
 import { emitBootWarn } from "../../runtime/boot-warn.ts";
-import {
-  isStandardSchema,
-  type SchemaInput,
-} from "../../validation/standard-schema.ts";
+import { isStandardSchema, type SchemaInput } from "../../validation/standard-schema.ts";
 import type { ConsentStore } from "./consent.ts";
 import type { ChannelTemplateDecl } from "./declare.ts";
 import { DEFAULT_MEDIUM_COSTS, type MediumCosts } from "./costs.ts";
@@ -314,10 +312,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       const mailResult = await fallback.send(mail);
       const providerIndex = mailResult.providerIndex ?? 0;
       const driverId =
-        mailResult.provider ??
-        transports[providerIndex]?.provider ??
-        chain[0]?.id ??
-        "email";
+        mailResult.provider ?? transports[providerIndex]?.provider ?? chain[0]?.id ?? "email";
       const external = externalForChannelProvider(chain, driverId, providerIndex);
       attempts.push({
         driverId,
@@ -432,10 +427,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       const sendResult = await fallback.send(body);
       const providerIndex = sendResult.providerIndex ?? 0;
       const driverId =
-        sendResult.provider ??
-        transports[providerIndex]?.provider ??
-        sms[0]?.driver.id ??
-        "sms";
+        sendResult.provider ?? transports[providerIndex]?.provider ?? sms[0]?.driver.id ?? "sms";
       const smsDrivers = sms.map((s) => s.driver);
       const external = externalForChannelProvider(smsDrivers, driverId, providerIndex);
       attempts.push({
@@ -517,9 +509,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
         const r = await d.channel.send(message);
         const stampedAttempts = r.attempts.map((a) => ({
           ...a,
-          ...(a.external === undefined && d.external !== undefined
-            ? { external: d.external }
-            : {}),
+          ...(a.external === undefined && d.external !== undefined ? { external: d.external } : {}),
         }));
         attempts.push(...stampedAttempts);
         if (r.ok) {
@@ -610,7 +600,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           return path.length > 0 ? `${path}: ${i.message}` : i.message;
         })
         .join("; ") || "invalid payload";
-    throw new OkeError(OKE_ERRORS.CHANNEL_SCHEMA, { resource: template, detail });
+    throw new OkeError(CHANNEL_SCHEMA, { resource: template, detail });
   }
 
   async function sendTemplate(

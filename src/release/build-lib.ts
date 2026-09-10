@@ -35,6 +35,7 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   { src: "src/kernel/pipeline-tenant.ts", out: "dist/pipeline-tenant.js" },
   { src: "src/kernel/fx-live-stream.ts", out: "dist/fx-live-stream.js" },
   { src: "src/kernel/errors-live-resume.ts", out: "dist/errors-live-resume.js" },
+  { src: "src/kernel/errors-channel.ts", out: "dist/errors-channel.js" },
   { src: "src/kernel/errors-tenant.ts", out: "dist/errors-tenant.js" },
   { src: "src/kernel/clock-durable.ts", out: "dist/clock-durable.js" },
   { src: "src/kernel/clock-reconcile.ts", out: "dist/clock-reconcile.js" },

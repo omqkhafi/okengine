@@ -16,6 +16,7 @@ import {
   type OkeErrorDefinition,
 } from "./errors.ts";
 import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
+import { CHANNEL_SCHEMA } from "./errors-channel.ts";
 import { TENANT_NOT_MEMBER, TENANT_REQUIRED, TENANT_UNKNOWN_SCOPE } from "./errors-tenant.ts";
 import {
   assertCodesInDomainRanges,
@@ -57,11 +58,17 @@ describe("OKE error-code registry", () => {
     expect(OKE_ERROR_RANGES.compiler).toEqual([1900, 1999]);
   });
 
-  test("lazy discovery finds live-resume and tenant modules without a hand list", async () => {
+  test("lazy discovery finds live-resume, channel, and tenant modules without a hand list", async () => {
     const { files, defs } = await discoverLazyErrorDefs(KERNEL_DIR);
     expect(files).toContain("errors-live-resume.ts");
+    expect(files).toContain("errors-channel.ts");
     expect(files).toContain("errors-tenant.ts");
-    expect(defs.map((d) => d.code).sort((a, b) => a - b)).toEqual([1210, 1810, 1820, 1830]);
+    const codes = defs.map((d) => d.code);
+    expect(codes).toContain(1210);
+    expect(codes).toContain(1605);
+    expect(codes).toContain(1810);
+    expect(codes).toContain(1820);
+    expect(codes).toContain(1830);
   });
 
   test("adversarial: out-of-range synthetic def fails range check", () => {
@@ -145,6 +152,10 @@ describe("OKE error-code registry", () => {
 
   test("lookupOkeError finds the lazy LIVE_RESUME_GAP entry", () => {
     expect(lookupOkeError(1210)).toEqual(LIVE_RESUME_GAP);
+  });
+
+  test("lookupOkeError finds the lazy CHANNEL_SCHEMA entry", () => {
+    expect(lookupOkeError(1605)).toEqual(CHANNEL_SCHEMA);
   });
 
   test("lookupOkeError finds lazy tenant entries", () => {

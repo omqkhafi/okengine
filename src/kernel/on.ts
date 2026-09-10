@@ -7,12 +7,7 @@
  */
 
 import type { ClockDecl } from "../elements/clock/declare.ts";
-import {
-  applyBoundaryContract,
-  stampBoundaryContract,
-  type InferBoundaryIn,
-  type InferBoundaryOut,
-} from "./boundary-contract.ts";
+import type { InferBoundaryIn, InferBoundaryOut } from "./boundary-contract.ts";
 import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import {
@@ -52,15 +47,12 @@ const bindings: Binding[] = [];
  *
  * @typeParam T - Bound trigger
  */
-type ExposureContractOf<T> = BoundTriggerOf<T> extends HttpTrigger<
-  HttpMethod,
-  string,
-  infer C
->
-  ? C
-  : BoundTriggerOf<T> extends McpToolTrigger<infer C>
+type ExposureContractOf<T> =
+  BoundTriggerOf<T> extends HttpTrigger<HttpMethod, string, infer C>
     ? C
-    : undefined;
+    : BoundTriggerOf<T> extends McpToolTrigger<infer C>
+      ? C
+      : undefined;
 
 /**
  * Input type for `on(trigger, flow)` — exposure `in` wins over the handler.
@@ -68,9 +60,10 @@ type ExposureContractOf<T> = BoundTriggerOf<T> extends HttpTrigger<
  * @typeParam T - Trigger argument
  * @typeParam Fallback - FlowDef input from `flow()`
  */
-type InferOnIn<T, Fallback> = ExposureContractOf<T> extends { readonly in: unknown }
-  ? InferBoundaryIn<ExposureContractOf<T>>
-  : Fallback;
+type InferOnIn<T, Fallback> =
+  ExposureContractOf<T> extends { readonly in: unknown }
+    ? InferBoundaryIn<ExposureContractOf<T>>
+    : Fallback;
 
 /**
  * Output type for `on(trigger, flow)` — exposure `out` wins over the handler.
@@ -78,9 +71,10 @@ type InferOnIn<T, Fallback> = ExposureContractOf<T> extends { readonly in: unkno
  * @typeParam T - Trigger argument
  * @typeParam Fallback - FlowDef output from `flow()`
  */
-type InferOnOut<T, Fallback> = ExposureContractOf<T> extends { readonly out: unknown }
-  ? InferBoundaryOut<ExposureContractOf<T>>
-  : Fallback;
+type InferOnOut<T, Fallback> =
+  ExposureContractOf<T> extends { readonly out: unknown }
+    ? InferBoundaryOut<ExposureContractOf<T>>
+    : Fallback;
 
 /**
  * Error map for `on(trigger, flow)` — exposure `errors` wins over Flow defaults.
@@ -88,11 +82,12 @@ type InferOnOut<T, Fallback> = ExposureContractOf<T> extends { readonly out: unk
  * @typeParam T - Trigger argument
  * @typeParam Fallback - FlowDef error map from `flow()`
  */
-type InferOnErrors<T, Fallback extends FlowErrorMap> = ExposureContractOf<T> extends {
-  readonly errors: infer E extends FlowErrorMap;
-}
-  ? E
-  : Fallback;
+type InferOnErrors<T, Fallback extends FlowErrorMap> =
+  ExposureContractOf<T> extends {
+    readonly errors: infer E extends FlowErrorMap;
+  }
+    ? E
+    : Fallback;
 
 /**
  * Bind a trigger to a Flow. Returns the same Flow (one species) with the
@@ -216,36 +211,36 @@ export function on(
 /**
  * Project invoke / emit contract from the exposure onto the FlowDef for
  * Manifest, validation, and typed client (flat `flows.*.in/out/errors`).
+ *
+ * Inlined so the edge profile does not pull `boundary-contract` helpers
+ * (`call()` / live-http / store.resource still import those from their graphs).
  */
 function stampExposureContract(
   flowDef: AnyFlowDef,
   normalized: Trigger,
   raw: Trigger | SignalSource | ClockDecl,
 ): void {
-  if (normalized.kind === "http" && normalized.contract !== undefined) {
-    applyBoundaryContract(flowDef, stampBoundaryContract(normalized.contract));
+  if (normalized.kind === "http" || normalized.kind === "mcp") {
+    const bag = (normalized as HttpTrigger | McpToolTrigger).contract;
+    if (bag === undefined) return;
+    flowDef.in = bag.in as AnyFlowDef["in"];
+    flowDef.out = bag.out as AnyFlowDef["out"];
+    flowDef.errors = bag.errors as AnyFlowDef["errors"];
+    if (bag.breaking) flowDef.breaking = true;
     return;
   }
-  if (normalized.kind === "mcp" && (normalized as McpToolTrigger).contract !== undefined) {
-    applyBoundaryContract(
-      flowDef,
-      stampBoundaryContract((normalized as McpToolTrigger).contract),
-    );
-    return;
+  if (normalized.kind !== "signal") return;
+  const handle =
+    (normalized as SignalAsTrigger).signal ?? (isSignalSourceWithSchema(raw) ? raw : undefined);
+  const schema =
+    handle && typeof handle === "object" && "schema" in handle
+      ? (handle as { schema?: unknown }).schema
+      : undefined;
+  if (schema !== undefined && flowDef.in === undefined) {
+    flowDef.in = schema as AnyFlowDef["in"];
+    flowDef.out = undefined;
+    flowDef.errors = undefined;
   }
-  if (normalized.kind === "signal") {
-    const handle =
-      (normalized as SignalAsTrigger).signal ??
-      (isSignalSourceWithSchema(raw) ? raw : undefined);
-    const schema =
-      handle && typeof handle === "object" && "schema" in handle
-        ? (handle as { schema?: unknown }).schema
-        : undefined;
-    if (schema !== undefined && flowDef.in === undefined) {
-      applyBoundaryContract(flowDef, stampBoundaryContract({ in: schema as never }));
-    }
-  }
-  // HTTP/MCP without a bag leave any pre-stamped FlowDef contract (e.g. store.resource).
 }
 
 function isSignalSourceWithSchema(value: unknown): value is SignalSource & { schema?: unknown } {

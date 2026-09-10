@@ -79,7 +79,7 @@
 # ---------- Testing & CI ----------
 - Use `bun test --pass-with-no-tests` as the default test runner for targeted tests.
 - Playwright is used for Console smoke tests (`tests/console/smoke.spec.ts`).
-- Budget tests exist for kernel, client, console, and runtime — respect them.
+- After changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts` (not just their tests), run `bun run budgets:core` before claiming done. Do not raise `KERNEL_EDGE_BUDGET_BYTES` / `CLIENT_BUDGET_BYTES` without a measured before/after and an Unreleased changelog justification; prefer lazy-loading off the edge graph (`fx-fetch`, `errors-tenant`, `errors-channel`) over raising the published 17 kB / 5 kB caps.
 - Fixtures for compiler tests live in `src/compiler/fixtures/` — excluded from tsconfig.
 - NEVER run `bun run ci` automatically after finishing an implementation. Only run `bun run ci` when the user explicitly asks for CI / pre-push gate.
 

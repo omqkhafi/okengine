@@ -77,6 +77,8 @@ Mnemonic: O·K·E = 6·5·3.
 
 A regression fails the build. Claims we cannot measure, we do not make.
 
+After changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts`, run `bun run budgets:core` (kernel edge + client gzip) before claiming done. Do not raise the published 17 kB / 5 kB caps without a measured before/after and an Unreleased changelog note; prefer lazy-loading off the edge graph.
+
 ## Package shape
 
 Published packages:

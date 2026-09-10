@@ -123,6 +123,12 @@ bun test ./lib/changelog.test.ts
 bun test lib   # when docs changed
 ```
 
+When the diff touches `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts`:
+
+```bash
+bun run budgets:core   # kernel edge + client gzip; do not raise caps without a measured before/after
+```
+
 Fix every failure before finishing.
 
 ## Done checklist

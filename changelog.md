@@ -324,6 +324,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- `bun run budgets:core` runs the kernel-edge + client gzip gates. Required after
+  `src/kernel/` / `src/client/` / `src/compiler/` / `src/validation/` / `src/release/limits.ts`
+  / `measure.ts` changes (agent workflow + oke-ship). Optional git hook:
+  `git config core.hooksPath .githooks`.
 - Keel flows, `bindCrud`, auth HTTP bindings, Console seed invoke host, and
   remaining kernel / test call sites finish the invoke-contract migration off
   `flow({ in, out, … })`.
@@ -451,6 +455,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Kernel edge gzip is back under the 17 kB cap after exposure-contract landing
+  (+395 B gzip over the cap). OKE1605 `CHANNEL_SCHEMA` lives in a lazy
+  `errors-channel` chunk (channel runtime is not on the edge profile); `on()`
+  inlines exposure-contract stamping so `boundary-contract` helpers stay off that
+  graph. `lookupOkeError(1605)` still resolves.
 - **`$routes` / typed client after exposure-owned contracts** — `http.*` / `mcp.tool`
   preserve the authored `{ in, out, errors }` bag type, and `on()` projects it onto
   `FlowDef` (parity with `call()`). Fixes `createClient<typeof app>` treating inputs as

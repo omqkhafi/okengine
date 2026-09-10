@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Kernel edge + client gzip. Opt-in: git config core.hooksPath .githooks
+set -euo pipefail
+if ! git diff --cached --name-only | grep -qE '^(src/(kernel|client|compiler|validation)/|src/release/(limits|measure)\.ts)'; then
+  exit 0
+fi
+echo "oke: core budgets (kernel edge + client gzip)"
+exec bun test src/kernel/budget.test.ts src/client/budget.test.ts
