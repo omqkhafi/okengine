@@ -7,7 +7,7 @@ import type { DeclaredColumn, Manifest } from "../../manifest/types.ts";
 import type { Fx } from "../../kernel/fx.ts";
 import { LSH_DEFAULT_K, SearchConfigError } from "./search-errors.ts";
 import { embColumn, lshColumn, OKE_SEARCH_PLANES } from "./search-ddl.ts";
-import { deserializePlanes, lshBucket } from "./search-lsh.ts";
+import { deserializePlanes, lshBucket, lshBucketToSql } from "./search-lsh.ts";
 
 /** CDC payload shape from bindRealtimeBridge / dispatchCdc. */
 export interface SearchEmbedCdcPayload {
@@ -134,8 +134,8 @@ export async function applySearchEmbedCdc(
     const bucket = lshBucket(vector, planes);
 
     await store.raw(
-      `UPDATE ${table} SET ${embColumn(col.sqlName)} = ?, ${lshColumn(col.sqlName)} = ? WHERE ${pk} = ?`,
-      [Array.from(vector), bucket.toString(), id],
+      `UPDATE ${table} SET ${embColumn(col.sqlName)} = ?::real[], ${lshColumn(col.sqlName)} = ? WHERE ${pk} = ?`,
+      [`{${Array.from(vector).join(",")}}`, lshBucketToSql(bucket), id],
     );
   }
 }

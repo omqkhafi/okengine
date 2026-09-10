@@ -14,7 +14,7 @@ import { LSH_DEFAULT_K } from "./search-errors.ts";
  * @param k - Number of planes
  */
 export function hyperplaneSeed(table: string, column: string, dims: number, k: number): string {
-  return `${table}\0${column}\0${dims}\0${k}`;
+  return `${table}|${column}|${dims}|${k}`;
 }
 
 /**
@@ -77,6 +77,31 @@ export function lshBucket(vector: readonly number[], planes: readonly Float32Arr
     if (dot >= 0) bits |= 1n << BigInt(i);
   }
   return bits;
+}
+
+/**
+ * Encode an LSH bucket for PostgreSQL `bigint` (signed int64).
+ * K=64 bit patterns with the high bit set exceed unsigned range when passed
+ * as a decimal string — reinterpret as two's-complement signed.
+ *
+ * @param bucket - Unsigned bit pack from {@link lshBucket}
+ */
+export function lshBucketToSql(bucket: bigint): string {
+  const masked = bucket & 0xffff_ffff_ffff_ffffn;
+  if (masked >= 0x8000_0000_0000_0000n) {
+    return (masked - 0x1_0000_0000_0000_0000n).toString();
+  }
+  return masked.toString();
+}
+
+/**
+ * Decode a PostgreSQL `bigint` LSH value back to an unsigned bit pack.
+ *
+ * @param value - Driver value (string | number | bigint)
+ */
+export function lshBucketFromSql(value: unknown): bigint {
+  const n = typeof value === "bigint" ? value : BigInt(String(value));
+  return n < 0n ? n + 0x1_0000_0000_0000_0000n : n;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   cosineSimilarity,
   deserializePlanes,
   lshBucket,
+  lshBucketToSql,
   neighborBuckets,
 } from "./search-lsh.ts";
 import {
@@ -143,8 +144,8 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
       for (const b of neighborBuckets(bucket, k)) {
         bucketParams.push(b);
       }
-      whereSql += ` OR ${lshColumn(field.sqlName)} = ANY(?)`;
-      params.push(bucketParams.map((b) => b.toString()));
+      whereSql += ` OR ${lshColumn(field.sqlName)} = ANY(?::bigint[])`;
+      params.push(`{${bucketParams.map((b) => lshBucketToSql(b)).join(",")}}`);
     }
   }
 
@@ -211,8 +212,8 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
       const id = String(row[pkSqlName] ?? row["id"] ?? "");
       let best = -1;
       for (const field of embedFields) {
-        const emb = row[embColumn(field.sqlName)];
-        if (!Array.isArray(emb)) continue;
+        const emb = parseRealArray(row[embColumn(field.sqlName)]);
+        if (!emb) continue;
         if (emb.length !== field.embed!.dims) {
           throw new SearchConfigError(
             tableName,
@@ -220,7 +221,7 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
             `stored embedding length ${emb.length} !== declared dims ${field.embed!.dims}`,
           );
         }
-        const sim = cosineSimilarity(queryVec, emb as number[]);
+        const sim = cosineSimilarity(queryVec, emb);
         if (sim > best) best = sim;
       }
       if (best >= 0) vecHits.push({ id, score: best, rank: 0, row });
@@ -288,4 +289,19 @@ function quoteIdent(name: string): string {
     return `"${name.replaceAll('"', '""')}"`;
   }
   return name;
+}
+
+/**
+ * Coerce a Postgres `real[]` driver value into a number array.
+ *
+ * @param value - Array or `{1,2,3}` text
+ */
+function parseRealArray(value: unknown): number[] | undefined {
+  if (Array.isArray(value)) return value.map((x) => Number(x));
+  if (typeof value === "string") {
+    const inner = value.trim().replace(/^\{/, "").replace(/\}$/, "");
+    if (inner.length === 0) return [];
+    return inner.split(",").map((x) => Number(x.trim()));
+  }
+  return undefined;
 }

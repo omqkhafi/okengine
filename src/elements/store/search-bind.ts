@@ -4,7 +4,7 @@
  */
 
 import type { Manifest } from "../../manifest/types.ts";
-import type { OkeApp } from "../../kernel/app.ts";
+import type { Binding } from "../../kernel/on.ts";
 import { flow } from "../../kernel/flow.ts";
 import {
   applySearchEmbedCdc,
@@ -13,16 +13,18 @@ import {
 } from "./search-embed-flow.ts";
 
 /**
- * Adopt `_oke_search_embed_<table>` durable flows for each embed-declared table.
- * Idempotent on flow name — safe to call once at boot after Manifest is loaded.
+ * Adopt `_oke_search_embed_<table>` durable CDC bindings for each embed-declared
+ * table. Idempotent on flow name — safe to call once at boot after Manifest is
+ * known. Prefer {@link adopt} with real CDC {@link Binding}s so
+ * `dispatchCdc` runs them (bare `app.adopt([flow])` only registers the flow).
  *
- * @param app - Booted app (dispatchCdc already wired)
+ * @param adopt - App binding adopter (`adoptBinding` inside `oke()`)
  * @param manifest - Project manifest
  */
-export function bindSearchEmbedFlows(app: {
-  readonly adopt?: (flows: unknown[]) => void;
-  readonly dispatchCdc?: OkeApp["dispatchCdc"];
-}, manifest: Manifest): readonly string[] {
+export function bindSearchEmbedFlows(
+  adopt: (binding: Binding) => void,
+  manifest: Manifest,
+): readonly string[] {
   const tables = tablesNeedingSearchEmbed(manifest);
   const names: string[] = [];
   for (const t of tables) {
@@ -54,10 +56,11 @@ export function bindSearchEmbedFlows(app: {
         });
       },
     });
-    // Prefer app.adopt when present; otherwise flows are returned for the caller to register.
-    if (typeof app.adopt === "function") {
-      app.adopt([embedFlow]);
-    }
+    const binding: Binding = {
+      trigger: { kind: "cdc", table: t.table, store: t.store },
+      flow: embedFlow,
+    };
+    adopt(binding);
   }
   return names;
 }

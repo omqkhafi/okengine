@@ -580,7 +580,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
-- Built-in hybrid SQL search on `store.schema.table()` columns: `field.text().searchable({ weight? })` (BM25F) and separate `.embed({ model?, dims })` (async LSH). `fx.store(db).search(table, { query, fuse?, rerank?, …listFilters })` reuses `parseListQuery`. Default fusion is RRF with **k = 60** (Cormack et al., SIGIR 2009); weighted fusion is opt-in. `fx.embed(model, text)` is a distinct effect kind from `fx.ask` (`effects.embeds`). CDC-driven durable system flow embeds asynchronously (writer flows never gain embed effects). `oke db search-backfill <table>` rebuilds corpus stats / embeddings (never auto on push). PostgreSQL 15+, zero required extensions. G17 bench scaffold at `src/bench/g17-hybrid-search.bench.ts` — no published latency/recall numbers until that gate runs.
+- Built-in hybrid SQL search on `store.schema.table()` columns: `field.text().searchable({ weight? })` (BM25F) and separate `.embed({ model?, dims })` (async LSH). `fx.store(db).search(table, { query, fuse?, rerank?, …listFilters })` reuses `parseListQuery`. Default fusion is RRF with **k = 60** (Cormack et al., SIGIR 2009); weighted fusion is opt-in. `fx.embed(model, text)` is a distinct effect kind from `fx.ask` (`effects.embeds`). CDC embed flows auto-register at boot when the Manifest has any `.embed()` column (writer flows stay embed-free). `oke db search-backfill <table>` opens a live SQL connection and rebuilds corpus stats / embeddings (never auto on push). PostgreSQL 15+, zero required extensions. **G17** (live Postgres): latency + precision@10 vs exact cosine published in `src/bench/REPORT.md` — LSH recall vs exact is near-zero on that corpus; treat LSH as a candidate hint, not HNSW.
 - Project default for field `.embed()` via `oke({ store: { search: { embed: { model, dims } } } })`. Bare `.embed()` inherits; per-field `{ model?, dims? }` overrides. Extract stamps concrete `{ model, dims }` on Manifest columns and fails loud (`SearchConfigError`) when either is still missing.
 
 - `twoFactor` step-up / change-method / confirm-change / request-email-otp surfaces;
@@ -594,6 +594,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 #### Docs
 
 - Rewrote Store Search docs for built-in hybrid search, with a prominent side-by-side of list-grammar `?search=`/`?q=` (LIKE) vs hybrid `query` (BM25/LSH).
+- Published G17 measured latency / LSH precision@10 / corpus-size guidance on Store Search (honest near-zero LSH recall vs exact cosine; Seq Scan EXPLAIN at 100k).
 - Documented project-wide `oke({ store: { search: { embed } } })` default for bare `.embed()` plus per-field overrides.
 - Added "The Anatomy" documentation page under Understand (`/docs/understand/the-anatomy`) detailing the five components of `on(trigger, flow)` (`on`, `trigger`, `flow`, `do`, `fx`) and mapping the five element triggers with timeline resolution.
 - Added modular subpages for all eight core elements (`Flow`, `Signal`, `Store`, `Clock`, `Gate`, `Vault`, `Channel`, `AI`) covering architecture, execution patterns, and driver bindings.
@@ -637,6 +638,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `timestamp` / `date` columns so `fx.clock.now()` and seed literals like
   `createdAt: 1` bind on Postgres (was
   `column "created_at" is of type timestamp … but expression is of type integer`).
+- Hybrid search: encode LSH buckets as signed int64 for Postgres `bigint`, insert
+  `real[]` via `{…}` text, and store hyperplane seeds without NUL bytes so
+  Bun.SQL + Postgres 15+ accept plane/embedding writes.
+- `oke db search-backfill <table> [--batch]` opens live SQL (compose env /
+  `DATABASE_URL`), extracts the Manifest, and runs `runSearchBackfill` (supports
+  `AbortSignal` for interrupt + safe re-run).
+- Boot auto-registers `_oke_search_embed_*` CDC bindings when the Manifest has
+  `.embed()` columns (`bindSearchEmbedFlows` via `adoptBinding`).
 - Built-in Gate auth / plugin Flows no longer need hand-declared `effects: {}`.
   When a Manifest is present (`oke dev` / `oke build` extract) but a Flow is
   absent from it (framework code outside the app tree), `mintCapabilities`

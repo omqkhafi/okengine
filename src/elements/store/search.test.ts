@@ -12,6 +12,8 @@ import {
   generateHyperplanes,
   hyperplaneSeed,
   lshBucket,
+  lshBucketFromSql,
+  lshBucketToSql,
   neighborBuckets,
 } from "./search-lsh.ts";
 
@@ -90,6 +92,14 @@ describe("LSH", () => {
   test("dimension mismatch fails loud", () => {
     const planes = generateHyperplanes("s", 4, 8);
     expect(() => lshBucket([1, 2], planes)).toThrow(/length/);
+  });
+
+  test("lshBucketToSql round-trips high bit into signed bigint range", () => {
+    const high = 1n << 63n;
+    const sql = lshBucketToSql(high);
+    expect(BigInt(sql) < 0n).toBe(true);
+    expect(lshBucketFromSql(sql)).toBe(high);
+    expect(lshBucketToSql(42n)).toBe("42");
   });
 });
 

@@ -712,15 +712,15 @@ Use the Manifest SQL table name (the string passed to `store.schema.table`), not
 a Flow name.
 </Accordion>
 
-<Accordion title="CLI not fully wired yet">
-  The subcommand is registered (`<table>`, `--batch` default 32) and never
-  auto-runs on push. Until a live SQL connection is wired for the project, the
-  CLI prints the programmatic path:
+<Accordion title="search-backfill needs a live SQL URL">
+  Cause: `oke db search-backfill: no DATABASE_URL / OKE_STORE_SQL_URL / OKE_PGLITE_URL — cannot open SQL`.
+  Set a connection URL (compose `.env.local` or process env), then:
 
-```text
-oke db search-backfill: use the programmatic runSearchBackfill(conn, manifest, { table }) API, or pass --table via CLI once a live SQL connection is wired for this project.
+```bash
+oke db search-backfill articles --batch 500
 ```
 
+The CLI opens SQL, extracts the Manifest, and calls `runSearchBackfill`. Never auto-runs on push.
 </Accordion>
 
 </Accordions>
@@ -786,6 +786,24 @@ if (idx.driverId === "pgvector" || idx.driverId === "memory") {
 </Tab>
 
 </Tabs>
+
+## Measured latency & recall (G17)
+
+Headline numbers from the live-Postgres G17 gate (`OKE_TEST_POSTGRES=1`, Bun 1.4.2, Apple M4, Postgres 16). Trend-analysis only — not an SLA. Full tables and EXPLAIN live in the repo load-test report: `src/bench/REPORT.md` (G17).
+
+### When to stay on BM25 vs add LSH vs use an external index
+
+| Corpus size | BM25 (text) p50 | LSH/hybrid p50 | LSH precision@10 vs exact cosine | Guidance |
+| ----------- | --------------- | -------------- | -------------------------------- | -------- |
+| ≤10k | ~1–4 ms | ~1–6 ms | ≈0 on this gate | Built-in hybrid is fine for ranking UX; do not market LSH recall |
+| ~100k | ~40 ms | ~50–60 ms | ≈0 | Expect tens of ms; re-`EXPLAIN` after `ANALYZE` |
+| ~1M | ~0.6–1.2 s | ~0.6–1.2 s | ≈0 | Prefer external `store.index` (pgvector / Meilisearch) for semantic recall at this scale |
+
+**Honest LSH note:** random-hyperplane LSH (K=64, Hamming-1, ≤50 candidates) did **not** match exact brute-force cosine top-10 on the G17 corpus (precision@10 mostly **0**). Same class of honesty as earlier LSH-vs-HNSW design notes — use LSH as a cheap candidate hint inside RRF, not as a recall guarantee. BM25-only needs no AI and remains the smallest path.
+
+**Query plan:** at N=100k, `EXPLAIN (ANALYZE, BUFFERS)` showed a **Seq Scan** with a tsvector/LSH Filter — not BitmapOr — despite GIN + B-tree indexes. Capture your own plan on production data before assuming an index path.
+
+**Backfill:** `oke db search-backfill` is interrupt-safe to re-run (G17 killed at 2k/50k embeds, resumed to completion in ~29 s on that table).
 
 ## Requirements
 

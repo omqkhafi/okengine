@@ -990,6 +990,30 @@ export function oke(options: OkeOptions): OkeApp {
     }
   }
 
+  /** Once-per-app: system `_oke_search_embed_*` CDC bindings from Manifest. */
+  let searchEmbedFlowsBound = false;
+  /**
+   * Auto-register hybrid-search embed CDC flows when any `.embed()` column
+   * exists. Lazy-loads search-bind so edge graphs without search stay lean.
+   * Requires an explicit Manifest on `oke({ manifest })` / boot overrides —
+   * does not AoT-extract the project tree (that path is for capability stamping).
+   *
+   * @param manifest - Boot / options Manifest (optional)
+   */
+  async function ensureSearchEmbedFlows(
+    manifest: BootOptions["manifest"] | undefined,
+  ): Promise<void> {
+    if (searchEmbedFlowsBound || !manifest) return;
+    const { tablesNeedingSearchEmbed } = await import("../elements/store/search-embed-flow.ts");
+    if (tablesNeedingSearchEmbed(manifest).length === 0) {
+      searchEmbedFlowsBound = true;
+      return;
+    }
+    const { bindSearchEmbedFlows } = await import("../elements/store/search-bind.ts");
+    bindSearchEmbedFlows(adoptBinding, manifest);
+    searchEmbedFlowsBound = true;
+  }
+
   // Project-wide `store.live` default — drain deferred resource live mounts
   // now that the flag is known. Off flag: pending state is discarded and the
   // behavior is 100% today's explicit-only. On flag: every pending resource
@@ -1395,6 +1419,9 @@ export function oke(options: OkeOptions): OkeApp {
         );
       }
     }
+    // Built-in hybrid search — auto-register durable embed CDC flows when the
+    // Manifest declares any `.embed()` column (writer flows stay embed-free).
+    await ensureSearchEmbedFlows(overrides?.manifest ?? options.manifest);
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");

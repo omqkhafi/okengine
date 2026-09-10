@@ -132,6 +132,20 @@ export interface DbOptions {
   readonly createFx?: SeedOptions["createFx"];
   readonly confirmEnv?: SeedOptions["confirmEnv"];
   readonly stdinIsTTY?: boolean;
+  /** `oke db search-backfill <table>` target. */
+  readonly table?: string;
+  /** Rows per backfill page (default 32). */
+  readonly batchSize?: number;
+  /** Injectable embedder (tests / programmatic). */
+  readonly embed?: (
+    model: string,
+    text: string,
+    dims: number,
+  ) => Promise<readonly number[]>;
+  /** Injectable SQL connection (tests). */
+  readonly sqlConn?: import("../drivers/types.ts").SqlConnection;
+  /** Injectable Manifest (tests). */
+  readonly manifest?: import("../manifest/types.ts").Manifest;
 }
 
 /** drizzle-kit SDK hint — create vs rename vs confirm data loss. */
@@ -240,13 +254,7 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
   }
 
   if (sub === "search-backfill") {
-    write(
-      `oke db search-backfill: use the programmatic runSearchBackfill(conn, manifest, { table }) API, or pass --table via CLI once a live SQL connection is wired for this project.\n`,
-    );
-    write(
-      `Never auto-runs on oke db push — rebuild corpus stats / embeddings deliberately.\n`,
-    );
-    return EXIT_OK;
+    return runSearchBackfillCli(cwd, options, write, env, loaded?.config ?? null);
   }
 
   if (!options.skipEmit) {
@@ -627,6 +635,8 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
   let env: ConfigEnv | undefined;
   let force = false;
   let entry: string | undefined;
+  let table: string | undefined;
+  let batchSize: number | undefined;
   for (let i = 1; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--config" || a === "-c") config = args[++i];
@@ -640,15 +650,138 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
       env = parsed;
     } else if (a === "--force") force = true;
     else if (a === "--entry" || a === "-e") entry = args[++i];
-    else if (a === "--help" || a === "-h") {
+    else if (a === "--batch") {
+      const raw = args[++i];
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 1) {
+        console.error(`oke db search-backfill: invalid --batch ${JSON.stringify(raw)}`);
+        return EXIT_USAGE;
+      }
+      batchSize = Math.floor(n);
+    } else if (a === "--help" || a === "-h") {
       return dbCli(["--help"]);
     } else if (a.startsWith("-")) {
       console.error(`oke db ${sub}: unknown flag ${a}`);
       return EXIT_USAGE;
+    } else if (sub === "search-backfill" && table === undefined) {
+      table = a;
+    } else {
+      console.error(`oke db ${sub}: unexpected argument ${JSON.stringify(a)}`);
+      return EXIT_USAGE;
     }
   }
 
-  return runDb(sub, { config, env, force, entry });
+  return runDb(sub, { config, env, force, entry, table, batchSize });
+}
+
+/**
+ * `oke db search-backfill <table>` — live SQL + Manifest-driven corpus rebuild.
+ * Never a side effect of push.
+ *
+ * @param cwd - Project root
+ * @param options - Table / batch / injectables
+ * @param write - Output
+ * @param env - Active config env
+ * @param config - Loaded oke config
+ */
+async function runSearchBackfillCli(
+  cwd: string,
+  options: DbOptions,
+  write: (text: string) => void,
+  env: ConfigEnv,
+  config: OkeConfig | null,
+): Promise<number> {
+  const table = options.table?.trim();
+  if (!table) {
+    write(`oke db search-backfill: missing <table> (Manifest SQL table name)\n`);
+    return EXIT_USAGE;
+  }
+
+  const { applyComposeEnvToProcess } = await import("./drizzle-env.ts");
+  await applyComposeEnvToProcess(cwd);
+  const { overlay } = await resolveDrizzleKitEnv(cwd, config, env);
+  const restoreEnv = applyDrizzleEnvOverlay(overlay);
+
+  let manifest = options.manifest;
+  if (!manifest) {
+    try {
+      const { extractManifest } = await import("../compiler/extract.ts");
+      manifest = await extractManifest({ rootDir: cwd });
+    } catch (err) {
+      restoreEnv();
+      write(
+        `oke db search-backfill: Manifest extract failed — ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return EXIT_RUNTIME;
+    }
+  }
+
+  const ownsConn = !options.sqlConn;
+  let conn = options.sqlConn;
+  if (!conn) {
+    const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL;
+    const pgliteUrl = process.env.OKE_PGLITE_URL;
+    try {
+      if (pgliteUrl && !url) {
+        const { connectPglite } = await import("../drivers/pglite.ts");
+        conn = await connectPglite({ url: pgliteUrl });
+      } else if (url) {
+        const { connectPostgres } = await import("../drivers/postgres.ts");
+        conn = await connectPostgres({ url });
+      } else {
+        restoreEnv();
+        write(
+          `oke db search-backfill: no DATABASE_URL / OKE_STORE_SQL_URL / OKE_PGLITE_URL — cannot open SQL\n`,
+        );
+        return EXIT_RUNTIME;
+      }
+    } catch (err) {
+      restoreEnv();
+      write(
+        `oke db search-backfill: SQL connect failed — ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return EXIT_RUNTIME;
+    }
+  }
+
+  try {
+    const { runSearchBackfill } = await import("../elements/store/search-backfill.ts");
+    const { createHash } = await import("node:crypto");
+    const embed =
+      options.embed ??
+      (async (_model: string, text: string, dims: number) => {
+        // Dims-matched local stand-in when no injectable AI embedder is passed.
+        // Production semantic quality still needs a real AI embed via the
+        // programmatic API; this keeps CLI backfill runnable for LSH columns.
+        const v = new Array<number>(dims).fill(0);
+        for (let i = 0; i < text.length; i++) {
+          v[i % dims]! += text.charCodeAt(i) / 255;
+        }
+        const h = createHash("sha256").update(text).digest();
+        for (let i = 0; i < dims; i++) v[i]! += (h[i % h.length]! / 255) * 0.1;
+        return v;
+      });
+
+    write(`oke db search-backfill: rebuilding "${table}" (batch=${options.batchSize ?? 32})…\n`);
+    const result = await runSearchBackfill(conn, manifest, {
+      table,
+      batchSize: options.batchSize ?? 32,
+      embedPauseMs: 0,
+      embed,
+    });
+    write(
+      `oke db search-backfill: done — rows=${result.rows} embedded=${result.embedded}${result.warnedLowCorpus ? " (low corpus warn)" : ""}\n`,
+    );
+    return EXIT_OK;
+  } catch (err) {
+    write(
+      `oke db search-backfill: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    return EXIT_RUNTIME;
+  } finally {
+    if (ownsConn && conn) await conn.close().catch(() => {});
+    restoreEnv();
+  }
 }
 
 /**

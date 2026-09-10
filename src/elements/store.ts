@@ -194,6 +194,8 @@ export {
   generateHyperplanes,
   hyperplaneSeed,
   lshBucket,
+  lshBucketToSql,
+  lshBucketFromSql,
   cosineSimilarity,
   neighborBuckets,
   serializePlanes,

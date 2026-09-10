@@ -15,7 +15,7 @@ import {
 } from "./search-ddl.ts";
 import { tokenize } from "./search-bm25.ts";
 import { embColumn, lshColumn, OKE_SEARCH_PLANES } from "./search-ddl.ts";
-import { deserializePlanes, lshBucket } from "./search-lsh.ts";
+import { deserializePlanes, lshBucket, lshBucketToSql } from "./search-lsh.ts";
 import { LSH_DEFAULT_K, SearchConfigError } from "./search-errors.ts";
 
 export interface SearchBackfillOptions {
@@ -23,7 +23,16 @@ export interface SearchBackfillOptions {
   readonly batchSize?: number;
   /** Sleep between embed batches (ms) — rate-limit pacing. */
   readonly embedPauseMs?: number;
-  readonly embed?: (model: string, text: string) => Promise<readonly number[]>;
+  readonly embed?: (
+    model: string,
+    text: string,
+    dims: number,
+  ) => Promise<readonly number[]>;
+  /**
+   * Optional abort — mid-backfill kill. Re-running the same command is safe
+   * (idempotent UPDATEs + DF/stats rebuild) and completes the remaining work.
+   */
+  readonly signal?: AbortSignal;
 }
 
 export interface SearchBackfillResult {
@@ -78,6 +87,9 @@ export async function runSearchBackfill(
     }));
 
   for (;;) {
+    if (options.signal?.aborted) {
+      throw new DOMException("search-backfill aborted", "AbortError");
+    }
     const params: unknown[] = [];
     let sql = `SELECT * FROM ${options.table}`;
     if (cursor !== null) {
@@ -89,6 +101,9 @@ export async function runSearchBackfill(
     if (rows.length === 0) break;
 
     for (const row of rows) {
+      if (options.signal?.aborted) {
+        throw new DOMException("search-backfill aborted", "AbortError");
+      }
       n += 1;
       const seenTerms = new Set<string>();
       let docLen = 0;
@@ -110,7 +125,7 @@ export async function runSearchBackfill(
         const id = String(row[pk] ?? "");
         for (const col of embedCols) {
           const text = String(row[col.sqlName] ?? "");
-          const vector = await options.embed(col.model, text);
+          const vector = await options.embed(col.model, text, col.dims);
           if (vector.length !== col.dims) {
             throw new SearchConfigError(
               options.table,
@@ -130,8 +145,8 @@ export async function runSearchBackfill(
           const planes = deserializePlanes(Buffer.from(prow["planes"] as Buffer), k);
           const bucket = lshBucket(vector, planes);
           await conn.exec(
-            `UPDATE ${options.table} SET ${embColumn(col.sqlName)} = ?, ${lshColumn(col.sqlName)} = ? WHERE ${pk} = ?`,
-            [Array.from(vector), bucket.toString(), id],
+            `UPDATE ${options.table} SET ${embColumn(col.sqlName)} = ?::real[], ${lshColumn(col.sqlName)} = ? WHERE ${pk} = ?`,
+            [`{${Array.from(vector).join(",")}}`, lshBucketToSql(bucket), id],
           );
           embedded += 1;
         }

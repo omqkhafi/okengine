@@ -125,11 +125,12 @@ export function ensureHyperplaneInserts(
     const seed = hyperplaneSeed(table, sqlName, dims, k);
     const planes = generateHyperplanes(seed, dims, k);
     const blob = serializePlanes(planes);
+    const hex = blob.toString("hex");
     out.push({
       sql: `INSERT INTO ${OKE_SEARCH_PLANES} (table_name, column_name, dims, k, seed, planes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, decode(?, 'hex'))
             ON CONFLICT (table_name, column_name) DO NOTHING`,
-      params: [table, sqlName, dims, k, seed, blob],
+      params: [table, sqlName, dims, k, seed, hex],
     });
   }
   return out;
