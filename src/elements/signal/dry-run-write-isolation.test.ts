@@ -18,10 +18,7 @@ describe("signal dry-run replay — write isolation", () => {
     const before = structuredClone(stockRow);
 
     const runtime = createSignalRuntime({ driver: memorySignalDriver });
-    runtime.register(
-      signal.once("order-placed", { retries: 0,
-        deadLetter: true }),
-    );
+    runtime.register(signal.once("order-placed", { retries: 0, deadLetter: true }));
     const bus = await runtime.start();
 
     const unsubFail = await bus.subscribe("order-placed", "flaky", async () => {

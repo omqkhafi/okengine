@@ -418,8 +418,18 @@ export function cloudApplyDefaults(
   }
   const provider = meta.provider ?? meta.value;
   const registryKnown = new Set([
-    "openai", "openrouter", "groq", "together", "deepinfra", "xai",
-    "mistral", "deepseek", "vercel", "google", "gemini", "anthropic",
+    "openai",
+    "openrouter",
+    "groq",
+    "together",
+    "deepinfra",
+    "xai",
+    "mistral",
+    "deepseek",
+    "vercel",
+    "google",
+    "gemini",
+    "anthropic",
   ]);
   // Registry openai-compat: omit baseUrl so ai.model auto-resolves.
   const omitBase = registryKnown.has(provider) && meta.driver === "openai-compatible";

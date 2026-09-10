@@ -49,11 +49,7 @@ export interface ReplayOptions {
  */
 export function eventHasIrreversible(event: WideEvent): boolean {
   return event.effects.some(
-    (e) =>
-      e.kind === "send" ||
-      e.kind === "ask" ||
-      e.kind === "embed" ||
-      e.kind === "fetch",
+    (e) => e.kind === "send" || e.kind === "ask" || e.kind === "embed" || e.kind === "fetch",
   );
 }
 

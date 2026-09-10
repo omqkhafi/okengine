@@ -13,8 +13,8 @@ For operators and Flows that must cut over keys safely — prefer CLI for master
 `fx.vault.rotate` for path versions inside privileged Flows.
 
 <Callout title="The one rule">
-  Never pass master keys as CLI argv in shared shells — they land in history. Prefer
-  `oke vault unseal --key -`, the env `OKE_VAULT_MASTER_KEY`, or the hidden prompt.
+  Never pass master keys as CLI argv in shared shells — they land in history. Prefer `oke vault
+  unseal --key -`, the env `OKE_VAULT_MASTER_KEY`, or the hidden prompt.
 </Callout>
 
 ## Smallest Example
@@ -153,12 +153,12 @@ Overlapping batches surface `VaultRotateBusy`. Console rotate-master while seale
 Builtin storage encrypts each version with its own data key (DEK), wrapped by a KEK derived from
 the master key:
 
-| Operation              | What changes                         | Readers see                          |
-| ---------------------- | ------------------------------------ | ------------------------------------ |
-| `set` / `rotate` + value | New version + (rotate) fresh DEK   | New cleartext on next `get`          |
-| `rotate` without value | New version + fresh DEK            | Same cleartext                       |
-| `rotate-master`        | New KEK; DEKs re-wrapped           | Same cleartexts; new master required |
-| `delete`               | Crypto-shred path                  | Subsequent `get` misses              |
+| Operation                | What changes                     | Readers see                          |
+| ------------------------ | -------------------------------- | ------------------------------------ |
+| `set` / `rotate` + value | New version + (rotate) fresh DEK | New cleartext on next `get`          |
+| `rotate` without value   | New version + fresh DEK          | Same cleartext                       |
+| `rotate-master`          | New KEK; DEKs re-wrapped         | Same cleartexts; new master required |
+| `delete`                 | Crypto-shred path                | Subsequent `get` misses              |
 
 Paths are slash-separated with no leading slash (`prod/api/stripe`). Invalid paths throw
 `VaultError` `INVALID_PATH`.
@@ -168,12 +168,12 @@ after a rotate instead of replaying a stale credential from the journal.
 
 ## Seal & unseal
 
-| Command / state        | Meaning                                                    |
-| ---------------------- | ---------------------------------------------------------- |
-| `oke vault init`       | Create backend state; print master key **once**            |
-| `oke vault seal`       | Drop in-memory master; reads fail with `SEALED`            |
-| `oke vault unseal`     | Restore master from `--key` / env / prompt                 |
-| `oke vault status`     | `initialized`, sealed flag, `kekVersion`, `secretCount`    |
+| Command / state    | Meaning                                                 |
+| ------------------ | ------------------------------------------------------- |
+| `oke vault init`   | Create backend state; print master key **once**         |
+| `oke vault seal`   | Drop in-memory master; reads fail with `SEALED`         |
+| `oke vault unseal` | Restore master from `--key` / env / prompt              |
+| `oke vault status` | `initialized`, sealed flag, `kekVersion`, `secretCount` |
 
 ```bash
 oke vault unseal --key -          # read base64 master from stdin
@@ -184,25 +184,25 @@ oke vault status --json
 
 Env / dotenv bag loop:
 
-| Command                    | Purpose                          |
-| -------------------------- | -------------------------------- |
-| `oke vault set <NAME> [value]` | Write / overwrite a name     |
-| `oke vault list`           | List names (never values)        |
-| `oke vault import <file>`  | Bulk import                      |
-| `oke vault key rotate`     | Env-loop key helper              |
+| Command                        | Purpose                   |
+| ------------------------------ | ------------------------- |
+| `oke vault set <NAME> [value]` | Write / overwrite a name  |
+| `oke vault list`               | List names (never values) |
+| `oke vault import <file>`      | Bulk import               |
+| `oke vault key rotate`         | Env-loop key helper       |
 
 Builtin encrypted store:
 
-| Command                         | Purpose                                      |
-| ------------------------------- | -------------------------------------------- |
-| `oke vault init`                | First-time initialize                        |
-| `oke vault status [--json]`     | Seal / KEK / counts                          |
-| `oke vault seal` / `unseal`     | Master lifecycle                             |
-| `oke vault rotate <path> [value]` | Version + fresh DEK                        |
-| `oke vault rotate-master`       | KEK rewrap                                   |
-| `oke vault audit` …             | Audit trail / verify / purge                 |
-| `oke vault purge-expired`       | Drop expired rows                            |
-| `oke vault backup` / `restore`  | File snapshot                                |
+| Command                           | Purpose                      |
+| --------------------------------- | ---------------------------- |
+| `oke vault init`                  | First-time initialize        |
+| `oke vault status [--json]`       | Seal / KEK / counts          |
+| `oke vault seal` / `unseal`       | Master lifecycle             |
+| `oke vault rotate <path> [value]` | Version + fresh DEK          |
+| `oke vault rotate-master`         | KEK rewrap                   |
+| `oke vault audit` …               | Audit trail / verify / purge |
+| `oke vault purge-expired`         | Drop expired rows            |
+| `oke vault backup` / `restore`    | File snapshot                |
 
 `--url` overrides the SQL URL (`DATABASE_URL` / `OKE_STORE_SQL_URL`).
 
@@ -221,8 +221,8 @@ Builtin encrypted store:
 </Accordion>
 
 <Accordion title="VaultRotateBusy">
-  Another master-rotation lease or batch is in flight. Wait, or resume with
-  `oke vault rotate-master --new-key` (stdin `-` preferred).
+  Another master-rotation lease or batch is in flight. Wait, or resume with `oke vault rotate-master
+  --new-key` (stdin `-` preferred).
 </Accordion>
 
 <Accordion title="VaultUnsupported / needs drivers.vault = vault">

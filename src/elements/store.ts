@@ -204,7 +204,11 @@ export {
 export { fuseRrf, fuseWeighted, fuseLists } from "./store/search-fusion.ts";
 export type { FuseOptions, FuseStrategy, RankedHit } from "./store/search-fusion.ts";
 export { runSqlSearch } from "./store/search-runtime.ts";
-export type { SqlSearchOptions, SqlSearchResult, SearchColumnMeta } from "./store/search-runtime.ts";
+export type {
+  SqlSearchOptions,
+  SqlSearchResult,
+  SearchColumnMeta,
+} from "./store/search-runtime.ts";
 export {
   searchDdlForTable,
   ensureHyperplaneInserts,
@@ -222,7 +226,11 @@ export {
   applySearchEmbedCdc,
 } from "./store/search-embed-flow.ts";
 export { bindSearchEmbedFlows } from "./store/search-bind.ts";
-export type { SearchableOptions, EmbedFieldOptions, ColumnSearchDecl } from "./store/schema-decl.ts";
+export type {
+  SearchableOptions,
+  EmbedFieldOptions,
+  ColumnSearchDecl,
+} from "./store/schema-decl.ts";
 export {
   createFilesImagePipeline,
   putImageToBucket,

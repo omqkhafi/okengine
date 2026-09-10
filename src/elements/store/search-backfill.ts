@@ -23,11 +23,7 @@ export interface SearchBackfillOptions {
   readonly batchSize?: number;
   /** Sleep between embed batches (ms) — rate-limit pacing. */
   readonly embedPauseMs?: number;
-  readonly embed?: (
-    model: string,
-    text: string,
-    dims: number,
-  ) => Promise<readonly number[]>;
+  readonly embed?: (model: string, text: string, dims: number) => Promise<readonly number[]>;
   /**
    * Optional abort — mid-backfill kill. Re-running the same command is safe
    * (idempotent UPDATEs + DF/stats rebuild) and completes the remaining work.

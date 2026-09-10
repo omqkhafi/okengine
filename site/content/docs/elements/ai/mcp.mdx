@@ -30,13 +30,15 @@ import { z } from "zod";
 import { member } from "@/core/gate";
 
 export const create = on(
-  mcp.tool("bookings.create", {
-    in: z.object({
-      guest: z.string().min(1),
-      night: z.string(),
-    }),
-    out: z.object({ id: z.string(), guest: z.string(), night: z.string() }),
-  }).gate(member),
+  mcp
+    .tool("bookings.create", {
+      in: z.object({
+        guest: z.string().min(1),
+        night: z.string(),
+      }),
+      out: z.object({ id: z.string(), guest: z.string(), night: z.string() }),
+    })
+    .gate(member),
   flow({
     do: async (input, fx) => {
       return { id: fx.id(), ...input };
@@ -182,47 +184,47 @@ server. Use it for documentation search, not business Flows.
 
 ## Inbound reference
 
-| Piece | Detail |
-| ----- | ------ |
+| Piece   | Detail                                                 |
+| ------- | ------------------------------------------------------ |
 | Trigger | `mcp.tool(name, { in, out, errors? })` from `okengine` |
-| Gates | `.gate(...)` required for exposure |
-| Port | **6535** (`ports.mcp`) |
-| Path | `POST /mcp` · `GET /health` |
-| Auth | Bearer required (`Bearer token required`) |
+| Gates   | `.gate(...)` required for exposure                     |
+| Port    | **6535** (`ports.mcp`)                                 |
+| Path    | `POST /mcp` · `GET /health`                            |
+| Auth    | Bearer required (`Bearer token required`)              |
 
 Empty name throws `TypeError: mcp.tool(name): name is required`.
 
 ## Outbound reference — `ai.mcpServer`
 
-| Option | Type | Required | Meaning |
-| ------ | ---- | -------- | ------- |
-| `url` | `string` | XOR `command` | Streamable HTTP endpoint |
-| `command` | `string` | XOR `url` | stdio executable (no shell string) |
-| `args` | `string[]` | no | Arguments for `command` |
-| `auth.bearer` | secret / name | no | Vault contract for Bearer |
-| `tools` | `string[]` | **yes** | Allowlist — never raw `tools/list` |
+| Option        | Type          | Required      | Meaning                            |
+| ------------- | ------------- | ------------- | ---------------------------------- |
+| `url`         | `string`      | XOR `command` | Streamable HTTP endpoint           |
+| `command`     | `string`      | XOR `url`     | stdio executable (no shell string) |
+| `args`        | `string[]`    | no            | Arguments for `command`            |
+| `auth.bearer` | secret / name | no            | Vault contract for Bearer          |
+| `tools`       | `string[]`    | **yes**       | Allowlist — never raw `tools/list` |
 
-| Method | Returns | Meaning |
-| ------ | ------- | ------- |
+| Method              | Returns                       | Meaning                                    |
+| ------------------- | ----------------------------- | ------------------------------------------ |
 | `server.tool(name)` | `{ name: "mcp:server/tool" }` | Capability ref for ask / agent / `fx.call` |
 
 ### Declare errors
 
-| Message | Fix |
-| ------- | --- |
-| `ai.mcpServer: name is required` | Pass a non-empty server id |
-| `name "…" must not contain "/" or "__"` | Use a simple id (`github`, not `org/repo`) |
-| `tools allowlist is required` | Pass `tools: ["…"]` |
-| `declare exactly one of url or command` | Pick HTTP **or** stdio |
-| `tool "…" is not in the allowlist` | Add the name to `tools` before `.tool(...)` |
+| Message                                 | Fix                                         |
+| --------------------------------------- | ------------------------------------------- |
+| `ai.mcpServer: name is required`        | Pass a non-empty server id                  |
+| `name "…" must not contain "/" or "__"` | Use a simple id (`github`, not `org/repo`)  |
+| `tools allowlist is required`           | Pass `tools: ["…"]`                         |
+| `declare exactly one of url or command` | Pick HTTP **or** stdio                      |
+| `tool "…" is not in the allowlist`      | Add the name to `tools` before `.tool(...)` |
 
 ## Ports
 
-| Port | Surface |
-| ---- | ------- |
-| **6530** | Backend HTTP |
+| Port     | Surface                  |
+| -------- | ------------------------ |
+| **6530** | Backend HTTP             |
 | **6535** | App MCP (Flows as tools) |
-| **6536** | Docs MCP (read-only) |
+| **6536** | Docs MCP (read-only)     |
 
 Mnemonic: O·K·E = 6·5·3.
 
@@ -231,18 +233,18 @@ Mnemonic: O·K·E = 6·5·3.
 <Accordions>
 
 <Accordion title="Bearer token required">
-  Clients must send `Authorization: Bearer …`. Missing or invalid Bearer is rejected before
-  tool dispatch.
+  Clients must send `Authorization: Bearer …`. Missing or invalid Bearer is rejected before tool
+  dispatch.
 </Accordion>
 
 <Accordion title="Tool missing from Cursor / client list">
-  The Flow is not bound with `mcp.tool(…).gate(…)`, gates deny the identity, or the client
-  points at `:6530` instead of `:6535/mcp`.
+  The Flow is not bound with `mcp.tool(…).gate(…)`, gates deny the identity, or the client points at
+  `:6530` instead of `:6535/mcp`.
 </Accordion>
 
 <Accordion title="Ungated mcp.tool fails at boot">
-  Deny-by-default posture: attach at least one gate. Public-style exposure still needs an
-  explicit gate policy you intend (there is no `.public()` on MCP triggers).
+  Deny-by-default posture: attach at least one gate. Public-style exposure still needs an explicit
+  gate policy you intend (there is no `.public()` on MCP triggers).
 </Accordion>
 
 <Accordion title="ai.mcpServer allowlist / transport errors">
@@ -263,7 +265,11 @@ Mnemonic: O·K·E = 6·5·3.
 ## Next
 
 <Cards>
-  <Card title="Agents" description="Run bounded agents that call MCP tools." href="/docs/elements/ai/agents" />
+  <Card
+    title="Agents"
+    description="Run bounded agents that call MCP tools."
+    href="/docs/elements/ai/agents"
+  />
   <Card title="AI" description="Models, prompts, and fx.ask." href="/docs/elements/ai" />
   <Card title="Flow" description="Flows are the tools MCP exposes." href="/docs/elements/flow" />
 </Cards>

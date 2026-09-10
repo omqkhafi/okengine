@@ -76,9 +76,9 @@ Response:
 </Steps>
 
 <Callout title="Import the declaration">
-  `store.kv(…)` must run when the app loads — export it from a module Flows
-  import (starters: `@/core`). A Flow that only types the name as a string never
-  opens a namespace; the handle needs the decl object.
+  `store.kv(…)` must run when the app loads — export it from a module Flows import (starters:
+  `@/core`). A Flow that only types the name as a string never opens a namespace; the handle needs
+  the decl object.
 </Callout>
 
 ## Progressive Patterns
@@ -191,13 +191,13 @@ driver-level `eval` (Gate rate Lua stays on Redis). See
 
 `fx.store(kvDecl)`:
 
-| Method   | Signature                 | Purpose                         | Side effect |
-| -------- | ------------------------- | ------------------------------- | ----------- |
-| `get`    | `get(key)`                | Read value (or miss)            | Read        |
-| `set`    | `set(key, value, ttl?)`   | Write; optional duration string | Write       |
-| `delete` | `delete(key)`             | Remove; returns whether deleted | Write       |
-| `list`   | `list(prefix?)`           | List keys (optional prefix)     | Read        |
-| `ttlMs`  | `ttlMs(key)`              | Remaining ms, or `null`         | Read        |
+| Method   | Signature               | Purpose                         | Side effect |
+| -------- | ----------------------- | ------------------------------- | ----------- |
+| `get`    | `get(key)`              | Read value (or miss)            | Read        |
+| `set`    | `set(key, value, ttl?)` | Write; optional duration string | Write       |
+| `delete` | `delete(key)`           | Remove; returns whether deleted | Write       |
+| `list`   | `list(prefix?)`         | List keys (optional prefix)     | Read        |
+| `ttlMs`  | `ttlMs(key)`            | Remaining ms, or `null`         | Read        |
 
 Handle also exposes `ref` (`kv:name`) and `driverId`
 (`memory` · `redis` · `postgres` · `pglite` when durable).
@@ -377,18 +377,17 @@ export const ttl = on(
 
 Second argument to `store.kv(name, options)`:
 
-| Option          | Type      | Default                    | Meaning |
-| --------------- | --------- | -------------------------- | ------- |
-| `description`   | `string`  | omitted                    | Console / Manifest label |
-| `durable`       | `true`    | omitted                    | Persist in SQL `oke_kv` (not Redis) |
-| `tenantScoped`  | `boolean` | `true` when tenancy is on  | Prefix keys with `{tenantId}:`; set `false` for global namespaces |
+| Option         | Type      | Default                   | Meaning                                                           |
+| -------------- | --------- | ------------------------- | ----------------------------------------------------------------- |
+| `description`  | `string`  | omitted                   | Console / Manifest label                                          |
+| `durable`      | `true`    | omitted                   | Persist in SQL `oke_kv` (not Redis)                               |
+| `tenantScoped` | `boolean` | `true` when tenancy is on | Prefix keys with `{tenantId}:`; set `false` for global namespaces |
 
 ## Durable Namespaces
 
 <Callout title="Detailed section">
-  If you only need a Redis/memory cache, skip this section. `durable: true` is
-  a different backend — SQL table `oke_kv` on the shared store.sql connection —
-  not a Redis persistence mode.
+  If you only need a Redis/memory cache, skip this section. `durable: true` is a different backend —
+  SQL table `oke_kv` on the shared store.sql connection — not a Redis persistence mode.
 </Callout>
 
 Use durable KV when values must survive Redis flushes or Compose recreate
@@ -432,12 +431,12 @@ export const save = on(
   `expires_at`, `updated_at`). Schema is ensured at open — not part of
   `oke db push` domain migrations.
 
-| Fact | Detail |
-| ---- | ------ |
-| Connection | Shared primary SQL URL (`DATABASE_URL` / project SQL) |
-| `driverId` on the handle | `postgres` or `pglite` (the SQL driver), not `redis` |
-| TTL | `expires_at` filtered on `get` / `list` / `ttlMs`; expired rows purged on write paths |
-| Distinct from | Flow `durable: true` (step journaling) |
+| Fact                     | Detail                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| Connection               | Shared primary SQL URL (`DATABASE_URL` / project SQL)                                 |
+| `driverId` on the handle | `postgres` or `pglite` (the SQL driver), not `redis`                                  |
+| TTL                      | `expires_at` filtered on `get` / `list` / `ttlMs`; expired rows purged on write paths |
+| Distinct from            | Flow `durable: true` (step journaling)                                                |
 
 </Accordion>
 
@@ -459,11 +458,11 @@ oke store: durable store.kv needs a configured sql driver
 
 <Accordion title="When to prefer durable vs redis">
 
-| Need | Prefer |
-| ---- | ------ |
-| Sessions, OTP, short locks, Gate rates | `redis` / `memory` cache namespace |
-| Flags / drafts that must outlive Redis recreate | `durable: true` |
-| Relational queries / joins | [SQL](/docs/elements/store/sql), not KV `list` |
+| Need                                            | Prefer                                         |
+| ----------------------------------------------- | ---------------------------------------------- |
+| Sessions, OTP, short locks, Gate rates          | `redis` / `memory` cache namespace             |
+| Flags / drafts that must outlive Redis recreate | `durable: true`                                |
+| Relational queries / joins                      | [SQL](/docs/elements/store/sql), not KV `list` |
 
 </Accordion>
 
@@ -472,17 +471,17 @@ oke store: durable store.kv needs a configured sql driver
 ## TTL Physics
 
 <Callout title="Detailed section">
-  TTL is best-effort and driver-dependent. The same `set(key, value, "30m")`
-  call does not mean identical expiry semantics on every backend.
+  TTL is best-effort and driver-dependent. The same `set(key, value, "30m")` call does not mean
+  identical expiry semantics on every backend.
 </Callout>
 
 <StoreKvTtl />
 
-| Driver | TTL on `set(…, "30m")` |
-| ------ | ---------------------- |
-| `redis` | Applied (`SET … EX`); key expires |
-| `memory` | `ttlMs` may report remaining time; **`get` does not expire** the key |
-| Durable SQL (`oke_kv`) | Applied on read (`expires_at` filter) |
+| Driver                 | TTL on `set(…, "30m")`                                               |
+| ---------------------- | -------------------------------------------------------------------- |
+| `redis`                | Applied (`SET … EX`); key expires                                    |
+| `memory`               | `ttlMs` may report remaining time; **`get` does not expire** the key |
+| Durable SQL (`oke_kv`) | Applied on read (`expires_at` filter)                                |
 
 Valid units match `^(\d+)(ms|s|m|h|d)$`. Invalid strings parse to `0` (no
 useful expiry). Prefer explicit units: `"30s"`, `"15m"`, `"1h"`, `"1d"`.
@@ -496,10 +495,10 @@ When [`gate.auth.tenant`](/docs/elements/gate/tenancy) is on, KV namespaces
 default to tenant-prefixed keys. Application code still uses logical keys —
 the runtime rewrites:
 
-| Op | Physical key (when scoped) |
-| -- | -------------------------- |
-| `get` / `set` / `delete` / `ttlMs` | `{tenantId}:{key}` |
-| `list(prefix?)` | scans `{tenantId}:{prefix…}`; strips the prefix on return |
+| Op                                 | Physical key (when scoped)                                |
+| ---------------------------------- | --------------------------------------------------------- |
+| `get` / `set` / `delete` / `ttlMs` | `{tenantId}:{key}`                                        |
+| `list(prefix?)`                    | scans `{tenantId}:{prefix…}`; strips the prefix on return |
 
 ```typescript
 // With tenancy on and fx.tenant.id = "acme":
@@ -526,10 +525,10 @@ the tenant header — see [Tenancy](/docs/elements/gate/tenancy).
 
 Two prefix layers sit under the logical key you pass to `fx.store`:
 
-| Layer | Shape | Who sees it |
-| ----- | ----- | ----------- |
-| Tenant (when scoped) | `{tenantId}:` | Stripped from `list` results |
-| Driver | Redis `oke:kv:{ns}:` · memory `{ns}:` · durable SQL `namespace` column | Console / Redis tools |
+| Layer                | Shape                                                                  | Who sees it                  |
+| -------------------- | ---------------------------------------------------------------------- | ---------------------------- |
+| Tenant (when scoped) | `{tenantId}:`                                                          | Stripped from `list` results |
+| Driver               | Redis `oke:kv:{ns}:` · memory `{ns}:` · durable SQL `namespace` column | Console / Redis tools        |
 
 Compiler effects stamp `kv:name` on reads (`get` · `list` · `ttlMs`) and
 writes (`set` · `delete`). Declare the same refs when you hand-write
@@ -537,11 +536,11 @@ writes (`set` · `delete`). Declare the same refs when you hand-write
 
 ## Drivers
 
-| Driver | Runs as | Best for |
-| ------ | ------- | -------- |
-| `redis` | Docker Redis / Valkey-compatible | Dev + prod default |
-| `memory` | Process map | Test default |
-| Durable (`postgres` / `pglite` via `oke_kv`) | Shared SQL URL | Namespaces that must outlive Redis |
+| Driver                                       | Runs as                          | Best for                           |
+| -------------------------------------------- | -------------------------------- | ---------------------------------- |
+| `redis`                                      | Docker Redis / Valkey-compatible | Dev + prod default                 |
+| `memory`                                     | Process map                      | Test default                       |
+| Durable (`postgres` / `pglite` via `oke_kv`) | Shared SQL URL                   | Namespaces that must outlive Redis |
 
 Defaults: `redis` / `memory` / `redis` (dev / test / prod). Pin overrides in
 `oke.config.ts`; image pins stay under `images.store.kv` — the driver id stays
@@ -554,49 +553,47 @@ Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
 <Accordions>
 
 <Accordion title="No kv driver configured">
-  Boot needs `drivers.store.kv` (or `DRIVER_DEFAULTS`). Check `REDIS_URL` when
-  the id is `redis`.
+  Boot needs `drivers.store.kv` (or `DRIVER_DEFAULTS`). Check `REDIS_URL` when the id is `redis`.
 </Accordion>
 
 <Accordion title="oke store: durable store.kv needs a configured sql driver">
-  `durable: true` opens `oke_kv` on the SQL connection. Configure
-  `drivers.store.sql` and `DATABASE_URL` (or the project SQL URL).
+  `durable: true` opens `oke_kv` on the SQL connection. Configure `drivers.store.sql` and
+  `DATABASE_URL` (or the project SQL URL).
 </Accordion>
 
 <Accordion title="oke store: durable store.kv does not support eval">
-  Durable namespaces reject Lua/`eval`. Keep rate-limit buckets on a Redis
-  namespace; use durable KV for flags and similar durable maps.
+  Durable namespaces reject Lua/`eval`. Keep rate-limit buckets on a Redis namespace; use durable KV
+  for flags and similar durable maps.
 </Accordion>
 
 <Accordion title="Unknown kv ref">
-  Cause: `Unknown kv ref: …`. The declaration was never imported. Export
-  `store.kv(…)` from a module the app loads before Flows run (starters: `@/core`).
+  Cause: `Unknown kv ref: …`. The declaration was never imported. Export `store.kv(…)` from a module
+  the app loads before Flows run (starters: `@/core`).
 </Accordion>
 
 <Accordion title="TTL set but key still readable (memory)">
-  Expected on the `memory` driver — see [TTL Physics](#ttl-physics). Use
-  `redis` in Docker when expiry must be enforced on read.
+  Expected on the `memory` driver — see [TTL Physics](#ttl-physics). Use `redis` in Docker when
+  expiry must be enforced on read.
 </Accordion>
 
-<Accordion title="I passed { ttl: &quot;15m&quot; } and it did not typecheck">
-  Third argument is a bare string: `set(key, value, "15m")`. There is no
-  options bag on `set`.
+<Accordion title='I passed { ttl: "15m" } and it did not typecheck'>
+  Third argument is a bare string: `set(key, value, "15m")`. There is no options bag on `set`.
 </Accordion>
 
 <Accordion title="OKE1810 — TENANT_REQUIRED on kv ops">
-  Cause: `This operation needs a tenant, but none is resolved for this request.`
-  Tenancy is on and the namespace is tenant-scoped. Resolve `fx.tenant.id`, or
-  set `tenantScoped: false` for global keys.
+  Cause: `This operation needs a tenant, but none is resolved for this request.` Tenancy is on and
+  the namespace is tenant-scoped. Resolve `fx.tenant.id`, or set `tenantScoped: false` for global
+  keys.
 </Accordion>
 
 <Accordion title="redis kv.list: client lacks SCAN">
-  Browse refused rather than `KEYS *`. Use a Redis client that supports
-  `SCAN` (Bun.RedisClient does). Prefer prefix filters in admin Flows.
+  Browse refused rather than `KEYS *`. Use a Redis client that supports `SCAN` (Bun.RedisClient
+  does). Prefer prefix filters in admin Flows.
 </Accordion>
 
 <Accordion title="I expected incr / setNx / fx.store.kv">
-  Those helpers are not on the public handle. Use `get` / `set` / `delete` /
-  `list` / `ttlMs` via `fx.store(decl)`. Gate rates use Redis Lua internally.
+  Those helpers are not on the public handle. Use `get` / `set` / `delete` / `list` / `ttlMs` via
+  `fx.store(decl)`. Gate rates use Redis Lua internally.
 </Accordion>
 
 </Accordions>

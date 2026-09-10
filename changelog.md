@@ -12,6 +12,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.0 — 2026-09-10
+
+Pre-1.0 minor for deliberate breakages since v0.18.5: exposure-owned invoke
+contracts, Signal declaration reshape, and the full OKE error-code renumber —
+plus Realtime, built-in hybrid search (G17 measured), OAuth / MCP authorization,
+external-call tracing, and the AI provider registry. Scan by area below.
+
 ### ✨ Added
 
 #### Runtime
@@ -262,31 +269,31 @@ needed). Large groups add `####` area headings so the list stays scannable.
   renumber it is `NO_EFFECTS_DECLARED`. Anyone matching or bookmarking “OKE1020” without a
   key name must re-check — embed is now **OKE1009**.
 
-  | Key | Old | New | Domain |
-  | --- | --- | --- | --- |
-  | `UNDECLARED_READ` | 1001 | 1001 | kernel |
-  | `UNDECLARED_WRITE` | 1002 | 1002 | kernel |
-  | `UNDECLARED_EMIT` | 1003 | 1003 | kernel |
-  | `UNDECLARED_SEND` | 1004 | 1004 | kernel |
-  | `UNDECLARED_ASK` | 1005 | 1005 | kernel |
-  | `UNDECLARED_SECRET` | 1006 | 1006 | kernel |
-  | `UNDECLARED_CALL` | 1007 | 1007 | kernel |
-  | `UNDECLARED_FETCH` | 1019 | 1008 | kernel |
-  | `UNDECLARED_EMBED` | 1020 | 1009 | kernel |
-  | `NO_EFFECTS_DECLARED` | 1008 | 1020 | kernel |
-  | `ADOPT_BARREL_STALE` | 1009 | 1030 | kernel |
-  | `HTTP_PATH_UNRESOLVED` | 1010 | 1040 | kernel |
-  | `HTTP_ROUTE_DUPLICATE` | 1011 | 1041 | kernel |
-  | `HTTP_FLOW_UNNAMED` | 1012 | 1045 | kernel |
-  | `LIVE_EXPOSURE_DUPLICATE` | 1013 | 1050 | kernel |
-  | `MCP_TOOL_DUPLICATE` | 1018 | 1060 | kernel |
-  | `DOMAIN_SCHEMA_MISSING` | 1101 | 1110 | store |
-  | `LIVE_RESUME_GAP` | 1014 | 1210 | signal |
-  | `ORPHAN_EMIT` | 1042 | 1240 | signal |
-  | `SIGNAL_SCHEMA` | 1043 | 1250 | signal |
-  | `TENANT_REQUIRED` | 1015 | 1810 | mcp_tenancy |
-  | `TENANT_NOT_MEMBER` | 1016 | 1820 | mcp_tenancy |
-  | `TENANT_UNKNOWN_SCOPE` | 1017 | 1830 | mcp_tenancy |
+  | Key                       | Old  | New  | Domain      |
+  | ------------------------- | ---- | ---- | ----------- |
+  | `UNDECLARED_READ`         | 1001 | 1001 | kernel      |
+  | `UNDECLARED_WRITE`        | 1002 | 1002 | kernel      |
+  | `UNDECLARED_EMIT`         | 1003 | 1003 | kernel      |
+  | `UNDECLARED_SEND`         | 1004 | 1004 | kernel      |
+  | `UNDECLARED_ASK`          | 1005 | 1005 | kernel      |
+  | `UNDECLARED_SECRET`       | 1006 | 1006 | kernel      |
+  | `UNDECLARED_CALL`         | 1007 | 1007 | kernel      |
+  | `UNDECLARED_FETCH`        | 1019 | 1008 | kernel      |
+  | `UNDECLARED_EMBED`        | 1020 | 1009 | kernel      |
+  | `NO_EFFECTS_DECLARED`     | 1008 | 1020 | kernel      |
+  | `ADOPT_BARREL_STALE`      | 1009 | 1030 | kernel      |
+  | `HTTP_PATH_UNRESOLVED`    | 1010 | 1040 | kernel      |
+  | `HTTP_ROUTE_DUPLICATE`    | 1011 | 1041 | kernel      |
+  | `HTTP_FLOW_UNNAMED`       | 1012 | 1045 | kernel      |
+  | `LIVE_EXPOSURE_DUPLICATE` | 1013 | 1050 | kernel      |
+  | `MCP_TOOL_DUPLICATE`      | 1018 | 1060 | kernel      |
+  | `DOMAIN_SCHEMA_MISSING`   | 1101 | 1110 | store       |
+  | `LIVE_RESUME_GAP`         | 1014 | 1210 | signal      |
+  | `ORPHAN_EMIT`             | 1042 | 1240 | signal      |
+  | `SIGNAL_SCHEMA`           | 1043 | 1250 | signal      |
+  | `TENANT_REQUIRED`         | 1015 | 1810 | mcp_tenancy |
+  | `TENANT_NOT_MEMBER`       | 1016 | 1820 | mcp_tenancy |
+  | `TENANT_UNKNOWN_SCOPE`    | 1017 | 1830 | mcp_tenancy |
 
 - `UNDECLARED_EMBED` no longer shares a number with `TENANT_REQUIRED` (tenant codes moved to
   **OKE1810–1830**; embed is **OKE1009**).
@@ -299,6 +306,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Export gzip regression baselines refreshed in `budgets.json` after the
+  dependency refresh (kernel edge 16.98 kB and client 4.96 kB still under
+  the 17 kB / 5 kB absolute caps).
+- Dependency refresh: React `^19.3.0`, zod `^4.6.1`, Vite `^8.3.0`, oxc
+  `^0.149.0`, oxlint `^1.82.0`, oxfmt `^0.67.0`, `@clack/prompts` `^1.8.0`
+  (`oke docker clean` narrows 1.8 cancel symbols), plus Console patches
+  (TanStack Router/Virtual, happy-dom, Hugeicons). Drizzle stays on
+  intentional `1.0.0-rc.5-*` (npm `latest` is still `0.x`).
 - Kernel edge gzip budget is **17 kB** (was 16 kB). Measured ~17.0 kB after
   hybrid-search embed effects, signal surface growth, and `fx.fetch` /
   `EffectEntry.external` (fetch body lazy-loaded off the edge profile).
@@ -324,6 +339,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- create-oke and Notes templates track the same React 19.3, zod, Vite, and
+  oxc bumps; Keel PGLite aligned to `^0.5.8` / pgvector `^0.0.9`.
 - `bun run budgets:core` runs the kernel-edge + client gzip gates. Required after
   `src/kernel/` / `src/client/` / `src/compiler/` / `src/validation/` / `src/release/limits.ts`
   / `measure.ts` changes (agent workflow + oke-ship). Optional git hook:
@@ -365,6 +382,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Site deps: fumadocs `16.15.8`, lucide `^1.44.0`, React 19.3, zod `^4.6.1`.
 - Scrubbed leftover "ten exports" / "ten words" marketing: landing vocabulary
   band, docs hub Vocabulary card, and site `EXPORTS` now use "core programming
   vocabulary" and include `call` (11 names, matching `AGENTS.md`).

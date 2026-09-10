@@ -57,8 +57,8 @@ emit commits — the HTTP request does not wait for the welcome mail.
 </Steps>
 
 <Callout title="Jobs are consumers">
-  A named Clock bound with `on(clockDecl, flow)` is the same species — an asynchronous Flow.
-  There is no separate job runner. See [Clock jobs](#clock-jobs).
+  A named Clock bound with `on(clockDecl, flow)` is the same species — an asynchronous Flow. There
+  is no separate job runner. See [Clock jobs](#clock-jobs).
 </Callout>
 
 ## Progressive Patterns
@@ -75,7 +75,8 @@ Declare delivery physics on the Signal, then bind the worker with `on(handle, fl
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const emailTask = signal.once("tasks.email", { schema: z.object({ to: z.string().email(), body: z.string() }),
+export const emailTask = signal.once("tasks.email", {
+  schema: z.object({ to: z.string().email(), body: z.string() }),
   retries: 3,
   deadLetter: true,
 });
@@ -182,11 +183,11 @@ Omit `key` for competing consumers with no ordering.
 
 ## Trigger Reference
 
-| Trigger | Signature | Purpose | `do` input |
-| ------- | --------- | ------- | ---------- |
-| Signal | `on(signalHandle, flow)` | Queue (`once`) or fan-out (`broadcast`) | Payload (`schema`) |
-| Clock | `on(clockDecl, flow)` | Interval or cron tick | none (`_`) |
-| CDC any | `on(db.table(t).changed(), flow)` | Every insert / update / delete | `{ before, after }` |
+| Trigger    | Signature                              | Purpose                                     | `do` input          |
+| ---------- | -------------------------------------- | ------------------------------------------- | ------------------- |
+| Signal     | `on(signalHandle, flow)`               | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)  |
+| Clock      | `on(clockDecl, flow)`                  | Interval or cron tick                       | none (`_`)          |
+| CDC any    | `on(db.table(t).changed(), flow)`      | Every insert / update / delete              | `{ before, after }` |
 | CDC column | `on(db.table(t).changed("col"), flow)` | Same writes; column stamped on the Manifest | `{ before, after }` |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
@@ -213,10 +214,12 @@ dead-letter when `deadLetter` is true (default):
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const orderPlaced = signal.once("orders.placed", { schema: z.object({
+export const orderPlaced = signal.once("orders.placed", {
+  schema: z.object({
     orderId: z.string(),
     amount: z.number(),
-    userId: z.string() }),
+    userId: z.string(),
+  }),
   retries: 5,
   deadLetter: true,
 });
@@ -248,7 +251,8 @@ Every subscribed Flow gets a copy. Offline listeners miss the event — there is
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const catalogChanged = signal.broadcast("catalog.changed", { schema: z.object({ sku: z.string() }),
+export const catalogChanged = signal.broadcast("catalog.changed", {
+  schema: z.object({ sku: z.string() }),
 });
 ```
 
@@ -276,7 +280,8 @@ Emit with zero subscribers throws **OKE1240** unless `optional: true`. Use that 
 firehoses and hook Signals that may have no worker yet:
 
 ```typescript
-export const webhook = signal.once("hooks.inbound", { optional: true,
+export const webhook = signal.once("hooks.inbound", {
+  optional: true,
   schema: z.object({ id: z.string() }),
 });
 ```
@@ -293,14 +298,14 @@ Fix: add `on(signal, …)` or mark `{ optional: true }`.
 <Accordion title="Signal Options">
   Optional second argument to `signal.once` / `broadcast` / `live`. Delivery is the helper name.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | Enforced at `fx.emit` (**OKE1250** on mismatch) |
-| `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
-| `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
-| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
-| `retention` | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast` |
-| `description` | `string` | the name | Console / docs blurb |
+| Option        | Type                     | Default   | Meaning                                                      |
+| ------------- | ------------------------ | --------- | ------------------------------------------------------------ |
+| `schema`      | Standard Schema          | omitted   | Enforced at `fx.emit` (**OKE1250** on mismatch)              |
+| `retries`     | `number`                 | `3`       | Extra attempts after the first (`retries + 1` total)         |
+| `deadLetter`  | `boolean`                | `true`    | Keep exhausted `once` messages; `false` marks them delivered |
+| `optional`    | `boolean`                | `false`   | Allow emit with zero subscribers                             |
+| `retention`   | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast`  |
+| `description` | `string`                 | the name  | Console / docs blurb                                         |
 
 </Accordion>
 
@@ -337,9 +342,9 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 ## Clock Jobs
 
 <Callout title="Detailed section">
-  If you only need an interval, jump to the example below. `clock(name)` requires `cron` or
-  `every` — missing both throws `clock("name"): require cron or every`. Bind the returned handle
-  with `on(clockDecl, flow)`.
+  If you only need an interval, jump to the example below. `clock(name)` requires `cron` or `every`
+  — missing both throws `clock("name"): require cron or every`. Bind the returned handle with
+  `on(clockDecl, flow)`.
 </Callout>
 
 Named clocks reconcile into the Store at boot. The scheduler leader-elects so N instances do not
@@ -429,14 +434,14 @@ Equivalent: `clock("invoices", { every: "1h", perTenant: true })`.
 <Accordion title="Clock Options">
   Second argument to `clock(name, options)` / `clock.perTenant(name, options)`.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `cron` | `string` | — | Five-field cron (`m h dom mon dow`) |
-| `every` | `string` | — | Interval (`"10s"`, `"1h"`, `"7d"`, …) |
-| `timezone` | IANA string | `"UTC"` | Zone for cron (intervals are duration-based) |
-| `overridable` | `boolean` | `false` | Console may override the schedule in the Store |
-| `perTenant` | `boolean` | `false` | Expand `{name}#{tenantId}` rows |
-| `description` | `string` | the name | Console / docs blurb |
+| Option        | Type        | Default  | Meaning                                        |
+| ------------- | ----------- | -------- | ---------------------------------------------- |
+| `cron`        | `string`    | —        | Five-field cron (`m h dom mon dow`)            |
+| `every`       | `string`    | —        | Interval (`"10s"`, `"1h"`, `"7d"`, …)          |
+| `timezone`    | IANA string | `"UTC"`  | Zone for cron (intervals are duration-based)   |
+| `overridable` | `boolean`   | `false`  | Console may override the schedule in the Store |
+| `perTenant`   | `boolean`   | `false`  | Expand `{name}#{tenantId}` rows                |
+| `description` | `string`    | the name | Console / docs blurb                           |
 
 At least one of `cron` or `every` is required.
 
@@ -548,11 +553,11 @@ export const onStatus = on(
 
 Op is inferred from which image is null:
 
-| Write | `before` | `after` |
-| ----- | -------- | ------- |
-| Insert | `null` | new row |
+| Write  | `before`     | `after` |
+| ------ | ------------ | ------- |
+| Insert | `null`       | new row |
 | Update | previous row | new row |
-| Delete | previous row | `null` |
+| Delete | previous row | `null`  |
 
 ```typescript
 do: async ({ before, after }, fx) => {
@@ -596,12 +601,12 @@ CDC path but classify per subscriber — see [HTTP · Live Streams](/docs/elemen
 Consumers share the Flow species with HTTP. The differences are the trigger and how failure
 is retried.
 
-| Kind | Start | Failure | Time |
-| ---- | ----- | ------- | ---- |
-| Signal `once` | `fx.emit` | Signal `retries` then DLQ | `fx.clock.now()` |
-| Signal `broadcast` | `fx.emit` | Per-subscriber; no `once` DLQ | `fx.clock.now()` |
-| Clock | scheduler tick | Flow `retry` if set; no catch-up burst | `fx.clock.*` |
-| CDC | committed SQL write | Flow `retry` if set | `fx.clock.now()` |
+| Kind               | Start               | Failure                                | Time             |
+| ------------------ | ------------------- | -------------------------------------- | ---------------- |
+| Signal `once`      | `fx.emit`           | Signal `retries` then DLQ              | `fx.clock.now()` |
+| Signal `broadcast` | `fx.emit`           | Per-subscriber; no `once` DLQ          | `fx.clock.now()` |
+| Clock              | scheduler tick      | Flow `retry` if set; no catch-up burst | `fx.clock.*`     |
+| CDC                | committed SQL write | Flow `retry` if set                    | `fx.clock.now()` |
 
 Mark long work `durable: true` and wrap side effects in `fx.step` — see
 [Workflows](/docs/elements/flow/workflows).
@@ -614,8 +619,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 <Accordions>
 
 <Accordion title='TypeError: clock("name"): require cron or every'>
-  `clock(name)` needs `{ cron }` and/or `{ every }`. Empty options throw at declaration, before
-  `on()`.
+  `clock(name)` needs `{cron}` and/or `{every}`. Empty options throw at declaration, before `on()`.
 </Accordion>
 
 <Accordion title="TypeError: on() expected a trigger or signal handle">
@@ -630,13 +634,13 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="OKE1250 — emit failed schema">
-  Cause: `"{resource}": {detail}`. The payload failed the Signal's Standard Schema at emit.
-  Fix the payload; the consumer never ran.
+  Cause: `"{resource}": {detail}`. The payload failed the Signal's Standard Schema at emit. Fix the
+  payload; the consumer never ran.
 </Accordion>
 
 <Accordion title='changed("insert") never fires on inserts only'>
-  `changed()` takes an optional **column** name, not an op. `changed("insert")` waits for a
-  column named `insert`. Use `changed()` and branch on `before` / `after` being null.
+  `changed()` takes an optional **column** name, not an op. `changed("insert")` waits for a column
+  named `insert`. Use `changed()` and branch on `before` / `after` being null.
 </Accordion>
 
 <Accordion title="CDC do never sees record / op">
@@ -645,9 +649,9 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="Cron fired 24 times after overnight downtime">
-  It should not. Catch-up is `"one"` — one fire per overdue clock, then `nextRunAt` advances.
-  If you see a burst, you likely bound several clocks (or `clock.perTenant` expanded many
-  tenants), not a replay of missed hourly slots.
+  It should not. Catch-up is `"one"` — one fire per overdue clock, then `nextRunAt` advances. If you
+  see a burst, you likely bound several clocks (or `clock.perTenant` expanded many tenants), not a
+  replay of missed hourly slots.
 </Accordion>
 
 <Accordion title="Two pods ran the same job">
@@ -656,8 +660,8 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="ScheduleNotOverridableError from Console">
-  The clock was declared without `overridable: true`. Add it and redeploy, or edit the
-  declaration in source instead of Console.
+  The clock was declared without `overridable: true`. Add it and redeploy, or edit the declaration
+  in source instead of Console.
 </Accordion>
 
 <Accordion title="tz is not a clock option">

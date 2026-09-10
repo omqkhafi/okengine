@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.18.5 · measured 2026-09-08T11:25:28.667Z_
+_okengine v0.19.0 · measured 2026-09-10T14:49:50.348Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
@@ -10,43 +10,43 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |                                 | Measured  | Limit     |
 | ------------------------------- | --------- | --------- |
-| Kernel (edge profile)           | 16.67 kB  | 17.00 kB  |
+| Kernel (edge profile)           | 16.98 kB  | 17.00 kB  |
 | Client runtime                  | 4.96 kB   | 5.00 kB   |
-| Console initial load            | 336.02 kB | 700.00 kB |
-| Cold start on Bun               | 21.497 ms | 75.000 ms |
+| Console initial load            | 346.25 kB | 700.00 kB |
+| Cold start on Bun               | 19.242 ms | 75.000 ms |
 | p99 routing overhead            | 0.000 ms  | 1.000 ms  |
-| HTTP ping app (gzip, externals) | 42.55 kB  | 43.40 kB  |
-| HTTP ping app (raw, externals)  | 123.10 kB | 125.56 kB |
+| HTTP ping app (gzip, externals) | 44.08 kB  | 44.96 kB  |
+| HTTP ping app (raw, externals)  | 127.05 kB | 129.59 kB |
 
 ## Exports
 
 |              | Measured  | Ceiling   |
 | ------------ | --------- | --------- |
-| okengine     | 96.44 kB  | 98.36 kB  |
+| okengine     | 98.09 kB  | 100.05 kB |
 | ai           | 13.23 kB  | 13.49 kB  |
-| auth         | 18.53 kB  | 18.90 kB  |
-| channel      | 6.79 kB   | 7.04 kB   |
+| auth         | 18.84 kB  | 19.22 kB  |
+| channel      | 7.61 kB   | 7.86 kB   |
 | client       | 8.83 kB   | 9.08 kB   |
-| client-react | 11.69 kB  | 11.94 kB  |
+| client-react | 11.95 kB  | 12.20 kB  |
 | client/auth  | 8.57 kB   | 8.82 kB   |
 | clock        | 18.29 kB  | 18.66 kB  |
-| compiler     | 21.74 kB  | 22.18 kB  |
+| compiler     | 21.95 kB  | 22.39 kB  |
 | config       | 1.21 kB   | 1.46 kB   |
-| console      | 164.49 kB | 167.78 kB |
-| full         | 106.85 kB | 108.99 kB |
+| console      | 165.88 kB | 169.20 kB |
+| full         | 108.35 kB | 110.52 kB |
 | gate         | 4.53 kB   | 4.78 kB   |
-| http         | 43.67 kB  | 44.54 kB  |
+| http         | 45.40 kB  | 46.31 kB  |
 | i18n         | 4.38 kB   | 4.63 kB   |
 | journal      | 3.02 kB   | 3.27 kB   |
-| kernel       | 50.15 kB  | 51.15 kB  |
+| kernel       | 51.66 kB  | 52.70 kB  |
 | mcp          | 9.58 kB   | 9.83 kB   |
 | okid         | 1.24 kB   | 1.49 kB   |
-| plugins      | 34.79 kB  | 35.48 kB  |
+| plugins      | 35.27 kB  | 35.98 kB  |
 | runs         | 9.79 kB   | 10.04 kB  |
 | signal       | 1.26 kB   | 1.51 kB   |
-| store        | 30.92 kB  | 31.54 kB  |
-| test         | 21.29 kB  | 21.72 kB  |
-| testing      | 21.29 kB  | 21.72 kB  |
+| store        | 31.35 kB  | 31.97 kB  |
+| test         | 22.07 kB  | 22.51 kB  |
+| testing      | 22.07 kB  | 22.51 kB  |
 | vault        | 12.75 kB  | 13.01 kB  |
 
 ## Plugins
@@ -55,18 +55,18 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |           | Measured | Ceiling |
 | --------- | -------- | ------- |
-| username  | 7.52 kB  | 7.77 kB |
-| anonymous | 5.39 kB  | 5.64 kB |
-| magicLink | 6.56 kB  | 6.81 kB |
-| otp       | 8.54 kB  | 8.79 kB |
-| twoFactor | 8.45 kB  | 8.70 kB |
-| passkey   | 7.03 kB  | 7.28 kB |
+| username  | 7.81 kB  | 8.06 kB |
+| anonymous | 5.67 kB  | 5.92 kB |
+| magicLink | 6.84 kB  | 7.09 kB |
+| otp       | 8.90 kB  | 9.15 kB |
+| twoFactor | 8.76 kB  | 9.01 kB |
+| passkey   | 7.32 kB  | 7.57 kB |
 
 ### OAuth
 
 |          | Measured | Ceiling  |
 | -------- | -------- | -------- |
-| oauth    | 13.42 kB | 13.68 kB |
+| oauth    | 13.71 kB | 13.99 kB |
 | mcpOauth | 8.96 kB  | 9.21 kB  |
 
 ### Security

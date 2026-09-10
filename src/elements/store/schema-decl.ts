@@ -497,7 +497,9 @@ function createBuilder<TData, TNotNull extends boolean>(
       }
       const weight = options?.weight ?? 1;
       if (!(typeof weight === "number" && Number.isFinite(weight) && weight > 0)) {
-        throw new Error(`searchable({ weight }) must be a finite number > 0 (got ${String(weight)})`);
+        throw new Error(
+          `searchable({ weight }) must be a finite number > 0 (got ${String(weight)})`,
+        );
       }
       return next<TNotNull>({
         search: {
@@ -514,11 +516,15 @@ function createBuilder<TData, TNotNull extends boolean>(
         );
       }
       if (!TEXT_SEARCHABLE_TYPES.has(state.sqlType)) {
-        throw new Error(`field.${state.sqlType}().embed() is only valid on text / varchar / char columns`);
+        throw new Error(
+          `field.${state.sqlType}().embed() is only valid on text / varchar / char columns`,
+        );
       }
       const dims = options?.dims;
       if (dims !== undefined && !(typeof dims === "number" && Number.isInteger(dims) && dims > 0)) {
-        throw new Error(`.embed({ dims }) requires a positive integer when set (got ${String(dims)})`);
+        throw new Error(
+          `.embed({ dims }) requires a positive integer when set (got ${String(dims)})`,
+        );
       }
       const modelRaw = options?.model;
       const model =

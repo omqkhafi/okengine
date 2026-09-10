@@ -73,7 +73,10 @@ export interface SessionState {
  * @param apiOrAuth - AuthClient or typed client with `auth.me`
  * @param session - Optional memory session when using raw client
  */
-export function useSession(apiOrAuth: AuthClient | SessionClient, session?: MemorySession): SessionState {
+export function useSession(
+  apiOrAuth: AuthClient | SessionClient,
+  session?: MemorySession,
+): SessionState {
   const authClient = isAuthClient(apiOrAuth) ? apiOrAuth : null;
   const api = authClient ? null : (apiOrAuth as SessionClient);
   const bag = authClient?.session ?? session;
@@ -177,7 +180,11 @@ function isAuthClient(value: unknown): value is AuthClient {
  */
 export function useScope(auth: AuthClient | SessionState, scope: string): boolean {
   const scopes = useMemo(() => {
-    if ("hasScope" in auth && typeof (auth as AuthClient).hasScope === "function" && "signIn" in auth) {
+    if (
+      "hasScope" in auth &&
+      typeof (auth as AuthClient).hasScope === "function" &&
+      "signIn" in auth
+    ) {
       return (auth as AuthClient).session.user?.scopes ?? (auth as AuthClient).session.scopes;
     }
     return (auth as SessionState).scopes;

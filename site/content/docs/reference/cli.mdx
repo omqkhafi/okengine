@@ -12,8 +12,8 @@ For developers who already know the model — look up a command, its flags, and 
 writes.
 
 <Callout title="The one rule">
-  Prefer the CLI for environment wiring (`oke dev`, `oke db`, `oke docker`). Put behavior in
-  Flows and `oke.config.ts` — never invent a ninth element or hand-edit the Manifest.
+  Prefer the CLI for environment wiring (`oke dev`, `oke db`, `oke docker`). Put behavior in Flows
+  and `oke.config.ts` — never invent a ninth element or hand-edit the Manifest.
 </Callout>
 
 ## Smallest Example
@@ -48,7 +48,6 @@ On a TTY, after schema push, `oke dev` also:
    OpenRouter contract without a value.
 2. Asks to run `oke db seed` when a seed module exists and `.oke/state.json` has
    not recorded that seed identity yet. Run `oke db seed` anytime later.
-
 
 </Step>
 
@@ -107,42 +106,42 @@ bunx create-oke@latest          # interactive (TTY only)
 
 ## Port Map
 
-| Port     | Surface        | Who starts it      |
-| -------- | -------------- | ------------------ |
-| **6530** | Backend API    | `oke dev` / `oke start` |
-| **6533** | Developer Console | `oke dev`       |
-| **6535** | App MCP        | `oke dev`          |
-| **6536** | Docs MCP (read-only) | `oke dev`    |
+| Port     | Surface              | Who starts it           |
+| -------- | -------------------- | ----------------------- |
+| **6530** | Backend API          | `oke dev` / `oke start` |
+| **6533** | Developer Console    | `oke dev`               |
+| **6535** | App MCP              | `oke dev`               |
+| **6536** | Docs MCP (read-only) | `oke dev`               |
 
 Override app / console / mcp listen ports in `oke.config.ts` `ports` — see
 [Configuration](/docs/reference/configuration#ports).
 
 ## `oke` Commands
 
-| Command | Purpose | Key flags / subs |
-| ------- | ------- | ---------------- |
-| `dev` | Watch · hot reload · Console · client types (Docker Compose) | `--docker\|-d [roles]`, `--no-db-push`, `--entry\|-e` |
-| `test` | Run bun test with PGLite test posture | |
-| `start` | Production entry (Docker CMD) | `--entry\|-e`, `--port\|-p` |
-| `doctor` | Secrets · ports · stub/domain schema drift | `--manifest`, `--diff`, `--before`, `--after`, `--base`, `--json` |
-| `stack` | Preview images / tags / ports (writes nothing) | `--config`, `--json` |
-| `schema` | Core + plugin tables → `.oke/schema/oke.ts` | `generate` (`--check`, `--manifest`, `--out`) |
-| `db` | Domain schema | `push` · `generate` · `migrate` · `seed` · `studio` · `search-backfill` |
-| `client` | Ambient types for a separate frontend repo | `add <url>` (`--out`) |
-| `vault` | Secrets | `set` · `list` · `import` · `key` · `init` · `status` · `seal` · `unseal` · `rotate` · `rotate-master` · `audit` · `purge-expired` · `backup` · `restore` |
-| `docker` | Derive compose · clean leftover stacks | `--prod\|-p`, `--out`, `--config`, `--manifest`; sub `clean` |
-| `images` | List / pin digests | `list` · `pin` |
-| `build` | Tree-shaken bundle | `--target\|-t bun\|node\|edge`, `--entry`, `--outdir` |
-| `eval` | Prompt eval sets (CI gate) | `--manifest` |
-| `ai` | Configure AI driver + models | `setup` (`--provider`, `--chat`, `--vision`, `--embed`, `--yes`) |
-| `branch` | Fork journaled state | `<name>`, `--at\|-a` |
-| `replay` | Re-invoke a past Flow from Runs | `--request-id\|-r`, `--entry`, `--dry-run`, `--live` |
-| `privacy` | Crypto-shred subject data | `erase` (`--subject\|-s`) |
-| `upgrade` | Breaking-change codemods + diff | `--apply\|-a` |
-| `console` | Console helpers | `claim-code` (`--json`) |
-| `gates` | Gate catalogue from Manifest | `list` (`--manifest`, `--json`) |
-| `completion` | Shell completion script | `bash` · `zsh` · `fish` |
-| `mode` | **Deprecated** — `oke dev` always uses Docker Compose | `--help` |
+| Command      | Purpose                                                      | Key flags / subs                                                                                                                                          |
+| ------------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev`        | Watch · hot reload · Console · client types (Docker Compose) | `--docker\|-d [roles]`, `--no-db-push`, `--entry\|-e`                                                                                                     |
+| `test`       | Run bun test with PGLite test posture                        |                                                                                                                                                           |
+| `start`      | Production entry (Docker CMD)                                | `--entry\|-e`, `--port\|-p`                                                                                                                               |
+| `doctor`     | Secrets · ports · stub/domain schema drift                   | `--manifest`, `--diff`, `--before`, `--after`, `--base`, `--json`                                                                                         |
+| `stack`      | Preview images / tags / ports (writes nothing)               | `--config`, `--json`                                                                                                                                      |
+| `schema`     | Core + plugin tables → `.oke/schema/oke.ts`                  | `generate` (`--check`, `--manifest`, `--out`)                                                                                                             |
+| `db`         | Domain schema                                                | `push` · `generate` · `migrate` · `seed` · `studio` · `search-backfill`                                                                                   |
+| `client`     | Ambient types for a separate frontend repo                   | `add <url>` (`--out`)                                                                                                                                     |
+| `vault`      | Secrets                                                      | `set` · `list` · `import` · `key` · `init` · `status` · `seal` · `unseal` · `rotate` · `rotate-master` · `audit` · `purge-expired` · `backup` · `restore` |
+| `docker`     | Derive compose · clean leftover stacks                       | `--prod\|-p`, `--out`, `--config`, `--manifest`; sub `clean`                                                                                              |
+| `images`     | List / pin digests                                           | `list` · `pin`                                                                                                                                            |
+| `build`      | Tree-shaken bundle                                           | `--target\|-t bun\|node\|edge`, `--entry`, `--outdir`                                                                                                     |
+| `eval`       | Prompt eval sets (CI gate)                                   | `--manifest`                                                                                                                                              |
+| `ai`         | Configure AI driver + models                                 | `setup` (`--provider`, `--chat`, `--vision`, `--embed`, `--yes`)                                                                                          |
+| `branch`     | Fork journaled state                                         | `<name>`, `--at\|-a`                                                                                                                                      |
+| `replay`     | Re-invoke a past Flow from Runs                              | `--request-id\|-r`, `--entry`, `--dry-run`, `--live`                                                                                                      |
+| `privacy`    | Crypto-shred subject data                                    | `erase` (`--subject\|-s`)                                                                                                                                 |
+| `upgrade`    | Breaking-change codemods + diff                              | `--apply\|-a`                                                                                                                                             |
+| `console`    | Console helpers                                              | `claim-code` (`--json`)                                                                                                                                   |
+| `gates`      | Gate catalogue from Manifest                                 | `list` (`--manifest`, `--json`)                                                                                                                           |
+| `completion` | Shell completion script                                      | `bash` · `zsh` · `fish`                                                                                                                                   |
+| `mode`       | **Deprecated** — `oke dev` always uses Docker Compose        | `--help`                                                                                                                                                  |
 
 Bare `oke` (TTY) opens the interactive board; `oke --help` prints the catalogue.
 
@@ -161,49 +160,48 @@ oke db search-backfill notes --batch 500
 
 ## `create-oke`
 
-| Flag | Meaning |
-| ---- | ------- |
-| `-t, --template <id>` | `standard` (default) or `advanced` |
-| `--sql <id>` | Store SQL dialect — only `postgres` (test stays `pglite`) |
-| `-y, --yes` | No prompts; defaults + bun install (no `oke dev`) |
-| `--install` / `--no-install` | Run or skip `bun install` after scaffold |
-| `--agents-md` / `--no-agents-md` | Write `AGENTS.md` (default on) |
-| `--ai` / `--no-ai` / `--ai skip` | Configure or skip AI setup |
-| `--locales <tags>` | Extra languages beyond English (e.g. `ar` or `ar,fr`) |
-| `--pgdog` / `--no-pgdog` | Pin PgDog in front of Postgres |
-| `--proxy <id>` / `--no-proxy` | `none` · `caddy` · `traefik` · `nginx` |
-| `-h, --help` | Show help |
+| Flag                             | Meaning                                                   |
+| -------------------------------- | --------------------------------------------------------- |
+| `-t, --template <id>`            | `standard` (default) or `advanced`                        |
+| `--sql <id>`                     | Store SQL dialect — only `postgres` (test stays `pglite`) |
+| `-y, --yes`                      | No prompts; defaults + bun install (no `oke dev`)         |
+| `--install` / `--no-install`     | Run or skip `bun install` after scaffold                  |
+| `--agents-md` / `--no-agents-md` | Write `AGENTS.md` (default on)                            |
+| `--ai` / `--no-ai` / `--ai skip` | Configure or skip AI setup                                |
+| `--locales <tags>`               | Extra languages beyond English (e.g. `ar` or `ar,fr`)     |
+| `--pgdog` / `--no-pgdog`         | Pin PgDog in front of Postgres                            |
+| `--proxy <id>` / `--no-proxy`    | `none` · `caddy` · `traefik` · `nginx`                    |
+| `-h, --help`                     | Show help                                                 |
 
 ## Troubleshooting
 
 <Accordions>
 
 <Accordion title="oke start: no entry found">
-  Set `package.json` `okengine.entry` or `main`, pass `--entry`, or keep a
-  conventional `src/app.ts`. Production imports that module; the app must call
-  `createBunRuntime().serve` itself.
+  Set `package.json` `okengine.entry` or `main`, pass `--entry`, or keep a conventional
+  `src/app.ts`. Production imports that module; the app must call `createBunRuntime().serve` itself.
 </Accordion>
 
 <Accordion title="Confusion: oke schema generate vs oke db generate">
-  `oke schema generate` emits framework / plugin stub tables under `.oke/schema/`.
-  `oke db generate` emits versioned domain SQL via Drizzle. Use `db` for your
-  app tables; use `schema` when the stub drifted after a plugin change.
+  `oke schema generate` emits framework / plugin stub tables under `.oke/schema/`. `oke db generate`
+  emits versioned domain SQL via Drizzle. Use `db` for your app tables; use `schema` when the stub
+  drifted after a plugin change.
 </Accordion>
 
 <Accordion title="oke mode still in muscle memory">
-  `oke mode` is deprecated. `oke dev` always starts Docker Compose. There is no
-  soft-compat for old `local` / `docker` env map keys — rename to `dev` / `test` /
-  `prod` in [Configuration](/docs/reference/configuration).
+  `oke mode` is deprecated. `oke dev` always starts Docker Compose. There is no soft-compat for old
+  `local` / `docker` env map keys — rename to `dev` / `test` / `prod` in
+  [Configuration](/docs/reference/configuration).
 </Accordion>
 
 <Accordion title="OKE1110 after deploy">
-  Domain tables are missing in prod (no auto-DDL). Run `oke db migrate` against
-  that environment — see [Errors](/docs/reference/errors).
+  Domain tables are missing in prod (no auto-DDL). Run `oke db migrate` against that environment —
+  see [Errors](/docs/reference/errors).
 </Accordion>
 
 <Accordion title="Claim code missing for first Console operator">
-  The setup claim code prints on the `oke dev` TTY board and is mirrored to
-  gitignored `.oke/claim-code`. Run `oke console claim-code` while setup is open.
+  The setup claim code prints on the `oke dev` TTY board and is mirrored to gitignored
+  `.oke/claim-code`. Run `oke console claim-code` while setup is open.
 </Accordion>
 
 </Accordions>
@@ -229,9 +227,5 @@ oke db search-backfill notes --batch 500
     description="Host, Origin, planes, and MCP posture."
     href="/docs/reference/security"
   />
-  <Card
-    title="Client"
-    description="Typed createClient for your flows."
-    href="/docs/client"
-  />
+  <Card title="Client" description="Typed createClient for your flows." href="/docs/client" />
 </Cards>

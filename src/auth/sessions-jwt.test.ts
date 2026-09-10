@@ -4,12 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  createSessionStore,
-  issueSession,
-  SessionError,
-  verifyAccess,
-} from "./sessions.ts";
+import { createSessionStore, issueSession, SessionError, verifyAccess } from "./sessions.ts";
 
 const SECRET = "test-secret-at-least-32-bytes-long!!";
 

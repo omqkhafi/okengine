@@ -13,10 +13,7 @@
  */
 
 import { flow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "../../kernel/flow.ts";
-import {
-  applyBoundaryContract,
-  stampBoundaryContract,
-} from "../../kernel/boundary-contract.ts";
+import { applyBoundaryContract, stampBoundaryContract } from "../../kernel/boundary-contract.ts";
 import { fail } from "../../kernel/errors.ts";
 import type { Fx } from "../../kernel/fx.ts";
 import {

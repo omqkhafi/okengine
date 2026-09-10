@@ -761,8 +761,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   // BYO OpenAI-compatible server (LM Studio, llama.cpp, …) — poll readiness
   // without blocking boot. Registry cloud (OpenRouter) has no OKE_AI_URL.
   if (!pendingAiModelWatch) {
-    const byoUrl =
-      stackEnv?.OKE_AI_URL?.trim() || process.env.OKE_AI_URL?.trim() || undefined;
+    const byoUrl = stackEnv?.OKE_AI_URL?.trim() || process.env.OKE_AI_URL?.trim() || undefined;
     const byoModel = heroAiModel;
     if (byoUrl && byoModel) {
       pendingAiModelWatch = {
@@ -934,10 +933,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       onStatus: (_line, status) => {
         const st = devStatusFromAiPhase(status.phase);
         // Container stopped wins over model-phase "loading".
-        if (
-          stackAiServiceName &&
-          liveComposeHealth.get(stackAiServiceName) === "error"
-        ) {
+        if (stackAiServiceName && liveComposeHealth.get(stackAiServiceName) === "error") {
           heroAiStatus = "error";
           repaintBoard("error");
           if (!sawAiPaint) {

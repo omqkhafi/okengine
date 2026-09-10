@@ -63,9 +63,14 @@ describe("denials", () => {
   test("narrowers", () => {
     expect(isUnauthorized({ code: "Unauthorized", data: {} })).toBe(true);
     expect(isForbidden({ code: "Forbidden", data: { reason: "csrf" } })).toBe(true);
-    expect(isTwoFactorRequired({ twoFactorRequired: true, challengeId: "c", method: "totp", userId: "u" })).toBe(
-      true,
-    );
+    expect(
+      isTwoFactorRequired({
+        twoFactorRequired: true,
+        challengeId: "c",
+        method: "totp",
+        userId: "u",
+      }),
+    ).toBe(true);
     expect(isSessionTokens({ accessToken: "a", refreshToken: "r" })).toBe(true);
   });
 });
@@ -73,7 +78,10 @@ describe("denials", () => {
 describe("createAuthClient", () => {
   test("refuses cookie mode with localStorage persist", () => {
     expect(() =>
-      createAuthClient({ auth: {} }, { mode: "cookie", persist: "localStorage", csrfConfigured: true }),
+      createAuthClient(
+        { auth: {} },
+        { mode: "cookie", persist: "localStorage", csrfConfigured: true },
+      ),
     ).toThrow(/cannot persist/);
   });
 
@@ -233,9 +241,9 @@ describe("createClient session auth", () => {
     expect(api.auth).toBeDefined();
     expect(typeof api.auth?.authorize).toBe("function");
     // Runtime merge keeps unit Flows (`me`) on the AuthClient proxy.
-    expect(api.auth && "me" in api.auth && typeof (api.auth as { me: unknown }).me === "function").toBe(
-      true,
-    );
+    expect(
+      api.auth && "me" in api.auth && typeof (api.auth as { me: unknown }).me === "function",
+    ).toBe(true);
     const user = await api.auth!.getSession();
     expect(user?.scopes).toEqual(["notes:write"]);
     expect(calls.some((u) => u.includes("/auth/me"))).toBe(true);

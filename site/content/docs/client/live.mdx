@@ -13,8 +13,8 @@ ops console.
 
 <Callout title="The one rule">
   Subscribe with a callback and an unsubscribe function. Reconnects send `Last-Event-ID` from the
-  last `id:` the client actually received. A **410** `LiveResumeGap` (**OKE1210**) means that
-  cursor is gone.
+  last `id:` the client actually received. A **410** `LiveResumeGap` (**OKE1210**) means that cursor
+  is gone.
 </Callout>
 
 ## Smallest Example
@@ -65,9 +65,13 @@ stop(); // useEffect cleanup / process exit
 <Tab value="Callback">
 
 ```typescript
-const stop = api.live(shipmentStatus, { orderId: "ord_9c2e" }, {
-  onEvent: (event) => updateTrackingCard(event.status, event.eta),
-});
+const stop = api.live(
+  shipmentStatus,
+  { orderId: "ord_9c2e" },
+  {
+    onEvent: (event) => updateTrackingCard(event.status, event.eta),
+  },
+);
 stop();
 ```
 
@@ -124,13 +128,13 @@ Prefer [React · useLiveQuery](/docs/client/react) for UI. Core transport helper
 
 ## Live handlers
 
-| Option            | Type                      | Default | Meaning                                      |
-| ----------------- | ------------------------- | ------- | -------------------------------------------- |
-| `onEvent`         | `(event) => void`         | —       | Required — each SSE payload                  |
-| `onError`         | `(err) => void`           | —       | 4xx, envelope, network drop                  |
-| `onOpen`          | `() => void`              | —       | Stream connected                             |
-| `autoResubscribe` | `boolean`                 | `false` | Reopen after drop (500ms…30s backoff)        |
-| `via`             | `"unit.flow"` string      | —       | Disambiguate when two exposures match equally |
+| Option            | Type                 | Default | Meaning                                       |
+| ----------------- | -------------------- | ------- | --------------------------------------------- |
+| `onEvent`         | `(event) => void`    | —       | Required — each SSE payload                   |
+| `onError`         | `(err) => void`      | —       | 4xx, envelope, network drop                   |
+| `onOpen`          | `() => void`         | —       | Stream connected                              |
+| `autoResubscribe` | `boolean`            | `false` | Reopen after drop (500ms…30s backoff)         |
+| `via`             | `"unit.flow"` string | —       | Disambiguate when two exposures match equally |
 
 ## Exposure matching
 
@@ -138,10 +142,14 @@ The client picks the unique exposure whose `matchKey` fields are a subset of the
 the largest match (`{ orderId }` beats firehose). A tie needs `via: "unit.flow"`.
 
 ```typescript
-api.live(shipmentStatus, { orderId: "ord_9c2e" }, {
-  onEvent: updateTrackingCard,
-  via: "orders.events",
-});
+api.live(
+  shipmentStatus,
+  { orderId: "ord_9c2e" },
+  {
+    onEvent: updateTrackingCard,
+    via: "orders.events",
+  },
+);
 ```
 
 Or call the exposing Flow directly: `api.orders.events(input, { onEvent })`.
@@ -189,18 +197,18 @@ Full React wiring: [React](/docs/client/react).
 
 <Accordion title="api.live throws Multiple live exposures">
   Two routes share the same match shape. Pass `via: "unit.flow"` or call the exposing flow
-  (`api.orders.events(input, { onEvent })`).
+  (`api.orders.events(input, {onEvent})`).
 </Accordion>
 
 <Accordion title="onError sees LiveResumeGap / HTTP 410">
-  The last `id:` is not on the server tape. The client drops the cursor. With
-  `autoResubscribe: true` the next request omits `Last-Event-ID` and replays what remains.
+  The last `id:` is not on the server tape. The client drops the cursor. With `autoResubscribe:
+  true` the next request omits `Last-Event-ID` and replays what remains.
 </Accordion>
 
 <Accordion title="No events after subscribe">
   Confirm the server exposed the signal (`.live(signal)` on GET or `http.live(signal)`), the
-  `matchKey` fields are present in `input`, and gates allow the identity. See
-  [Signal · Live](/docs/elements/signal/live).
+  `matchKey` fields are present in `input`, and gates allow the identity. See [Signal ·
+  Live](/docs/elements/signal/live).
 </Accordion>
 
 </Accordions>
@@ -216,19 +224,11 @@ Full React wiring: [React](/docs/client/react).
 ## Next
 
 <Cards>
-  <Card
-    title="React"
-    description="useLive and useLiveQuery hooks."
-    href="/docs/client/react"
-  />
+  <Card title="React" description="useLive and useLiveQuery hooks." href="/docs/client/react" />
   <Card
     title="Signal · Live"
     description="Server tape, Last-Event-ID, resume gaps."
     href="/docs/elements/signal/live"
   />
-  <Card
-    title="Calling"
-    description="createClient and REST vs RPC."
-    href="/docs/client/calling"
-  />
+  <Card title="Calling" description="createClient and REST vs RPC." href="/docs/client/calling" />
 </Cards>

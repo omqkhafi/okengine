@@ -130,11 +130,13 @@ export function bindCrud(spec: {
   );
 
   const update = on(
-    http.patch(item, {
-      in: z.intersection(IdIn, spec.updateIn ?? spec.createIn),
-      out: z.object({ id: z.string() }),
-      errors: { NotFound },
-    }).gate(write),
+    http
+      .patch(item, {
+        in: z.intersection(IdIn, spec.updateIn ?? spec.createIn),
+        out: z.object({ id: z.string() }),
+        errors: { NotFound },
+      })
+      .gate(write),
     flow(`${unit}.update`, {
       effects: bothFx,
       do: async (input, fx) => {

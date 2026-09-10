@@ -1949,10 +1949,7 @@ function cacheHtml(cache: JsonCodeCache | undefined): string {
 }
 
 const AUTH_MARK: Readonly<
-  Record<
-    JsonCodeAuthKind,
-    { readonly title: string; readonly text: string; readonly icon: string }
-  >
+  Record<JsonCodeAuthKind, { readonly title: string; readonly text: string; readonly icon: string }>
 > = {
   none: {
     title: "Unauthenticated",
@@ -1986,7 +1983,7 @@ function authHtml(auth: JsonCodeAuth | undefined): string {
   const mark = AUTH_MARK[value.kind];
   const label =
     value.kind === "user" || value.kind === "key" || value.kind === "operator"
-      ? (value.id?.trim() || mark.text)
+      ? value.id?.trim() || mark.text
       : mark.text;
   const title =
     value.id && (value.kind === "user" || value.kind === "key" || value.kind === "operator")

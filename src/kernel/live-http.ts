@@ -4,10 +4,7 @@
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalResourceRef } from "../manifest/types.ts";
-import {
-  applyBoundaryContract,
-  stampBoundaryContract,
-} from "./boundary-contract.ts";
+import { applyBoundaryContract, stampBoundaryContract } from "./boundary-contract.ts";
 import type { Fx } from "./fx.ts";
 import { flow, type AnyFlowDef } from "./flow.ts";
 import type { GateRef, SignalSource } from "./triggers.ts";

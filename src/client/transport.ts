@@ -173,11 +173,7 @@ async function once(
     signals.push(t);
   }
   const signal =
-    signals.length === 0
-      ? undefined
-      : signals.length === 1
-        ? signals[0]
-        : AbortSignal.any(signals);
+    signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
 
   return await fetchFn(url, {
     method,
@@ -323,10 +319,7 @@ async function decode(res: Response): Promise<ClientEnvelope> {
   };
 }
 
-async function decodeBinary(
-  res: Response,
-  mode: "blob" | "arrayBuffer",
-): Promise<ClientEnvelope> {
+async function decodeBinary(res: Response, mode: "blob" | "arrayBuffer"): Promise<ClientEnvelope> {
   if (!res.ok) {
     const structured = await decodeIfEnvelopeClone(res);
     if (structured) return structured;

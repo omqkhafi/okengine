@@ -16,7 +16,12 @@ const DraftIn = z.object({
 
 /** List compose drafts. */
 export const list = on(
-  http.get("/drafts", { in: listIn({ mode: "offset" }), out: pageOut(z.object({ id: z.string(), title: z.string() })) }).gate(member),
+  http
+    .get("/drafts", {
+      in: listIn({ mode: "offset" }),
+      out: pageOut(z.object({ id: z.string(), title: z.string() })),
+    })
+    .gate(member),
   flow("drafts.list", {
     do: async (input, fx) => {
       const keys = await fx.store(draftsKv).list();

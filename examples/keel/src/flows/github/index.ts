@@ -13,7 +13,12 @@ const IngestIn = z.object({
 
 /** Stub GitHub webhook — reads vault, creates a task. No outbound HTTP. */
 export const ingest = on(
-  http.post("/integrations/github", { in: IngestIn, out: TaskCreateOut.pick({ id: true, identifier: true }) }).gate(member),
+  http
+    .post("/integrations/github", {
+      in: IngestIn,
+      out: TaskCreateOut.pick({ id: true, identifier: true }),
+    })
+    .gate(member),
   flow("github.ingest", {
     plane: "user",
     durable: true,
@@ -32,7 +37,11 @@ export const ingest = on(
 
 /** Connection status from whether the token is set. */
 export const status = on(
-  http.get("/integrations/github", { out: z.object({ connected: z.boolean(), repo: z.string().optional() }) }).gate(member),
+  http
+    .get("/integrations/github", {
+      out: z.object({ connected: z.boolean(), repo: z.string().optional() }),
+    })
+    .gate(member),
   flow("github.status", {
     do: async (_input, fx) => {
       const token = await fx.vault.get(githubToken);

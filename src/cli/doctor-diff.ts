@@ -81,7 +81,9 @@ export async function runDoctorDiff(options: DoctorDiffOptions = {}): Promise<Do
   for (const c of undeclared) {
     write(`  [contract-breaking] ${c.path}: ${c.summary}\n`);
   }
-  write("Acknowledge intentional breaks with `breaking: true` on the HTTP / call / MCP / resource contract bag.\n");
+  write(
+    "Acknowledge intentional breaks with `breaking: true` on the HTTP / call / MCP / resource contract bag.\n",
+  );
   return { code: EXIT_RUNTIME, undeclared, allChanges: all };
 }
 

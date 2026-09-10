@@ -169,30 +169,30 @@ export const list = on(
 
 ## Delivery Reference
 
-| Surface | Signature | Purpose |
-| ------- | --------- | ------- |
-| Declare | `signal.once(name, options?)` | Competing queue — one claim per message |
-| Bind | `on(signalHandle, flow)` | Worker Flow; payload is `do`'s input |
-| Emit | `fx.emit(signal, payload?, { key? })` | Enrol in the outbox; records `emits` |
-| Inspect DLQ | `fx.deadLetters(signal)` | Exhausted messages; records `reads` `signal:<name>` |
+| Surface     | Signature                             | Purpose                                             |
+| ----------- | ------------------------------------- | --------------------------------------------------- |
+| Declare     | `signal.once(name, options?)`         | Competing queue — one claim per message             |
+| Bind        | `on(signalHandle, flow)`              | Worker Flow; payload is `do`'s input                |
+| Emit        | `fx.emit(signal, payload?, { key? })` | Enrol in the outbox; records `emits`                |
+| Inspect DLQ | `fx.deadLetters(signal)`              | Exhausted messages; records `reads` `signal:<name>` |
 
-| Need | Use instead |
-| ---- | ----------- |
-| Every active subscriber gets a copy | [`broadcast`](/docs/elements/signal/broadcast) |
-| Browser / SSE resume after disconnect | [`live`](/docs/elements/signal/live) |
+| Need                                   | Use instead                                        |
+| -------------------------------------- | -------------------------------------------------- |
+| Every active subscriber gets a copy    | [`broadcast`](/docs/elements/signal/broadcast)     |
+| Browser / SSE resume after disconnect  | [`live`](/docs/elements/signal/live)               |
 | Durable multi-step work with a journal | [Durable Workflows](/docs/elements/flow/workflows) |
 
 ## Options for once
 
 Optional second argument to `signal.once`. Delivery is the helper name — not an option.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | **Emit** contract — validated at `fx.emit` (**OKE1250**). Workers inherit payload typing. |
-| `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) |
-| `deadLetter` | `boolean` | `true` | Keep exhausted messages; not a queue name |
-| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
-| `description` | `string` | the name | Console / docs blurb |
+| Option        | Type            | Default  | Meaning                                                                                   |
+| ------------- | --------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `schema`      | Standard Schema | omitted  | **Emit** contract — validated at `fx.emit` (**OKE1250**). Workers inherit payload typing. |
+| `retries`     | `number`        | `3`      | Extra attempts after the first (`retries + 1` total)                                      |
+| `deadLetter`  | `boolean`       | `true`   | Keep exhausted messages; not a queue name                                                 |
+| `optional`    | `boolean`       | `false`  | Allow emit with zero subscribers                                                          |
+| `description` | `string`        | the name | Console / docs blurb                                                                      |
 
 `retention` is a type error on `signal.once` — that option is live-only:
 
@@ -316,22 +316,18 @@ export const create = on(
     in: z.object({ userId: z.string(), amount: z.number() }),
     do: async ({ userId, amount }, fx) => {
       const orderId = fx.id();
-      await fx.emit(
-        orderPlaced,
-        { orderId, amount, userId },
-        { key: userId },
-      );
+      await fx.emit(orderPlaced, { orderId, amount, userId }, { key: userId });
       return { orderId };
     },
   }),
 );
 ```
 
-| Call | Records | Meaning |
-| ---- | ------- | ------- |
-| `fx.emit(signal, payload?)` | `emits` | Competing pool — no ordering |
-| `fx.emit(signal, payload, { key })` | `emits` | Per-key FIFO for that `(signal, key)` |
-| `fx.deadLetters(signal)` | `reads` `signal:<name>` | Inspect `dead` messages |
+| Call                                | Records                 | Meaning                               |
+| ----------------------------------- | ----------------------- | ------------------------------------- |
+| `fx.emit(signal, payload?)`         | `emits`                 | Competing pool — no ordering          |
+| `fx.emit(signal, payload, { key })` | `emits`                 | Per-key FIFO for that `(signal, key)` |
+| `fx.deadLetters(signal)`            | `reads` `signal:<name>` | Inspect `dead` messages               |
 
 `parentRunId` is stamped automatically from the producer run for Console trace chains — you do
 not set it by hand in app code.
@@ -340,15 +336,15 @@ not set it by hand in app code.
 
 <Callout title="Detailed section">
   If you only need the default 30s lease, jump to Ordering. Claims set `lockedBy` +
-  `leaseExpiresAt`. There is no background sweeper — reclaim happens lazily on the next claim
-  after expiry.
+  `leaseExpiresAt`. There is no background sweeper — reclaim happens lazily on the next claim after
+  expiry.
 </Callout>
 
-| Concept | Default | Meaning |
-| ------- | ------- | ------- |
-| Visibility lease | `30_000` ms | How long an inflight claim holds the message |
-| Reclaim | next claim after expiry | Another worker may take the same message |
-| Status path | `pending` → `inflight` → `delivered` \| `dead` | Operator inspect / Console |
+| Concept          | Default                                        | Meaning                                      |
+| ---------------- | ---------------------------------------------- | -------------------------------------------- |
+| Visibility lease | `30_000` ms                                    | How long an inflight claim holds the message |
+| Reclaim          | next claim after expiry                        | Another worker may take the same message     |
+| Status path      | `pending` → `inflight` → `delivered` \| `dead` | Operator inspect / Console                   |
 
 **Consequence:** treat every `once` handler as at-least-once. Prefer idempotent `do` bodies
 (or durable steps for side effects that must not double-fire).
@@ -356,15 +352,15 @@ not set it by hand in app code.
 <Accordions>
 
 <Accordion title="Claim">
-  Eligible messages are `pending` unlocked, or `inflight` whose `leaseExpiresAt` has passed.
-  Claim sets status to `inflight`, stamps `lockedBy` + `leaseExpiresAt`, and increments
-  `attempts` before the handler runs — so a crash mid-handler leaves a reclaimable row.
+  Eligible messages are `pending` unlocked, or `inflight` whose `leaseExpiresAt` has passed. Claim
+  sets status to `inflight`, stamps `lockedBy` + `leaseExpiresAt`, and increments `attempts` before
+  the handler runs — so a crash mid-handler leaves a reclaimable row.
 </Accordion>
 
 <Accordion title="Reclaim">
   There is no timeout daemon. After the lease expires, the next drain/claim may hand the same
-  message to another (or the same) worker. Slow handlers that outlive the lease can overlap with
-  a reclaim — keep side effects short or journal them.
+  message to another (or the same) worker. Slow handlers that outlive the lease can overlap with a
+  reclaim — keep side effects short or journal them.
 </Accordion>
 
 <Accordion title="Status path">
@@ -382,8 +378,8 @@ not set it by hand in app code.
 ## Ordering
 
 <Callout title="Detailed section">
-  Partition with `{ key }` only when you need per-tenant / per-user FIFO. Unkeyed messages stay
-  a competing pool and may run concurrently.
+  Partition with `{key}` only when you need per-tenant / per-user FIFO. Unkeyed messages stay a
+  competing pool and may run concurrently.
 </Callout>
 
 ```typescript title="src/flows/orders/ship.ts"
@@ -404,23 +400,23 @@ export const shipOrder = on(
 await fx.emit(orderPlaced, { orderId: "ord_1", userId: "usr_1" }, { key: "usr_1" });
 ```
 
-| Emit | Concurrency | Order |
-| ---- | ----------- | ----- |
-| No `key` | Competing — may overlap | None |
-| Same `key` | Serialized by lease | FIFO for that key |
-| Different keys | May overlap | Independent |
+| Emit           | Concurrency             | Order             |
+| -------------- | ----------------------- | ----------------- |
+| No `key`       | Competing — may overlap | None              |
+| Same `key`     | Serialized by lease     | FIFO for that key |
+| Different keys | May overlap             | Independent       |
 
 <Accordions>
 
 <Accordion title="Lease is the lock">
-  No two messages sharing `(signal, key)` are claimed while one holds an unexpired lease.
-  When the first completes (or its lease expires and is reclaimed), the next same-key message
-  becomes eligible — emission order is preserved for that key.
+  No two messages sharing `(signal, key)` are claimed while one holds an unexpired lease. When the
+  first completes (or its lease expires and is reclaimed), the next same-key message becomes
+  eligible — emission order is preserved for that key.
 </Accordion>
 
 <Accordion title="Unkeyed pool">
-  Omit `key` for maximum parallelism across workers. There is no global FIFO across unkeyed
-  messages — only competing claim exclusivity per message.
+  Omit `key` for maximum parallelism across workers. There is no global FIFO across unkeyed messages
+  — only competing claim exclusivity per message.
 </Accordion>
 
 </Accordions>
@@ -428,8 +424,8 @@ await fx.emit(orderPlaced, { orderId: "ord_1", userId: "usr_1" }, { key: "usr_1"
 ## Retries and dead letters
 
 <Callout title="Detailed section">
-  If you only need defaults (`retries: 3`, `deadLetter: true`), jump to Idempotency. Retries
-  requeue immediately — there is no delay backoff between attempts.
+  If you only need defaults (`retries: 3`, `deadLetter: true`), jump to Idempotency. Retries requeue
+  immediately — there is no delay backoff between attempts.
 </Callout>
 
 <Accordions>
@@ -443,19 +439,20 @@ await fx.emit(orderPlaced, { orderId: "ord_1", userId: "usr_1" }, { key: "usr_1"
 <Accordion title="Failure reasons">
   Each failed attempt appends a `SignalFailureReason`:
 
-| Field | Meaning |
-| ----- | ------- |
-| `code` | Machine-readable failure code |
-| `message` | Human-readable detail |
-| `at` | Epoch-ms when the attempt failed |
+| Field     | Meaning                            |
+| --------- | ---------------------------------- |
+| `code`    | Machine-readable failure code      |
+| `message` | Human-readable detail              |
+| `at`      | Epoch-ms when the attempt failed   |
 | `attempt` | 1-based attempt number that failed |
 
 The full history survives on the dead-letter entry for operator inspect.
+
 </Accordion>
 
 <Accordion title="deadLetter: false">
-  Exhausted messages are marked `delivered` instead of entering the DLQ. Use when dropping
-  is acceptable and you do not want operator replay.
+  Exhausted messages are marked `delivered` instead of entering the DLQ. Use when dropping is
+  acceptable and you do not want operator replay.
 </Accordion>
 
 <Accordion title="fx.deadLetters">
@@ -465,6 +462,7 @@ The full history survives on the dead-letter entry for operator inspect.
 
 Returned entries include `payload`, `attempts`, `failures`, `key`, `createdAt`, and
 `status: "dead"`.
+
 </Accordion>
 
 <Accordion title="Schema at emit">
@@ -473,6 +471,7 @@ Returned entries include `payload`, `attempts`, `failures`, `key`, `createdAt`, 
   invoke contracts on `http.*` / `call` / `mcp.tool`.
 
 Cause: `"{resource}": {detail}`.
+
 </Accordion>
 
 <Accordion title="Orphan emit">
@@ -487,11 +486,11 @@ Cause: `"{resource}": {detail}`.
 
 Lease reclaim and retries mean a handler can run more than once for the same message.
 
-| Approach | When |
-| -------- | ---- |
-| Idempotent `do` | Side effects are safe to repeat (upsert, set-once flags) |
-| `durable: true` + `fx.step` | Multi-step work that must not double-fire |
-| Short handlers | Finish before the 30s lease so reclaim does not overlap |
+| Approach                    | When                                                     |
+| --------------------------- | -------------------------------------------------------- |
+| Idempotent `do`             | Side effects are safe to repeat (upsert, set-once flags) |
+| `durable: true` + `fx.step` | Multi-step work that must not double-fire                |
+| Short handlers              | Finish before the 30s lease so reclaim does not overlap  |
 
 ```typescript title="src/flows/payments/sync.ts"
 import { on, flow } from "okengine";
@@ -520,26 +519,25 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 <Accordions>
 
 <Accordion title="Worker never runs after emit">
-  Confirm `on(signalHandle, flow)` uses the same declared handle (or the same name) and is
-  adopted into the app. Check **OKE1240** if the emit itself threw. Live Signals are not
-  workers — use Once or Broadcast.
+  Confirm `on(signalHandle, flow)` uses the same declared handle (or the same name) and is adopted
+  into the app. Check **OKE1240** if the emit itself threw. Live Signals are not workers — use Once
+  or Broadcast.
 </Accordion>
 
 <Accordion title="Same message processed twice">
-  Lease reclaim after a crash or slow handler is expected at-least-once physics.
-  Make `do` idempotent, or journal side effects with `durable: true` + `fx.step`.
+  Lease reclaim after a crash or slow handler is expected at-least-once physics. Make `do`
+  idempotent, or journal side effects with `durable: true` + `fx.step`.
 </Accordion>
 
 <Accordion title="Both of two Flows ran on one once message">
-  That is broadcast physics, not once. Confirm both files import the same
-  `signal.once` handle — competing workers share one claim. If you need fan-out, switch the
-  declaration to `signal.broadcast`.
+  That is broadcast physics, not once. Confirm both files import the same `signal.once` handle —
+  competing workers share one claim. If you need fan-out, switch the declaration to
+  `signal.broadcast`.
 </Accordion>
 
 <Accordion title="Messages stuck inflight">
-  Wait for the 30s lease and the next drain/claim. There is no separate timeout daemon.
-  A handler still running past the lease can overlap with a reclaim — shorten the work or
-  journal it.
+  Wait for the 30s lease and the next drain/claim. There is no separate timeout daemon. A handler
+  still running past the lease can overlap with a reclaim — shorten the work or journal it.
 </Accordion>
 
 <Accordion title="OKE1250 on emit">
@@ -557,8 +555,8 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 </Accordion>
 
 <Accordion title="deadLetter as a string name">
-  `deadLetter` is `boolean` (default `true`). There is no separate named DLQ signal string —
-  inspect with `fx.deadLetters(signal)`.
+  `deadLetter` is `boolean` (default `true`). There is no separate named DLQ signal string — inspect
+  with `fx.deadLetters(signal)`.
 </Accordion>
 
 <Accordion title="TypeError: retention is only valid with signal.live">

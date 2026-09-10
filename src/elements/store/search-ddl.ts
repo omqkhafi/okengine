@@ -4,11 +4,7 @@
 
 import type { DeclaredColumn } from "../../manifest/types.ts";
 import { LSH_DEFAULT_K } from "./search-errors.ts";
-import {
-  generateHyperplanes,
-  hyperplaneSeed,
-  serializePlanes,
-} from "./search-lsh.ts";
+import { generateHyperplanes, hyperplaneSeed, serializePlanes } from "./search-lsh.ts";
 
 /** Shadow / system column and index names. */
 export const OKE_TSV_COL = "__oke_tsv";
@@ -82,7 +78,9 @@ export function searchDdlForTable(
   ];
 
   // Weighted tsvector expression for GIN candidate retrieval.
-  const tsvParts = searchable.map((c) => `coalesce(to_tsvector('english', ${quoteIdent(c.sqlName)}), '')`);
+  const tsvParts = searchable.map(
+    (c) => `coalesce(to_tsvector('english', ${quoteIdent(c.sqlName)}), '')`,
+  );
   const tsvExpr = tsvParts.join(" || ");
   stmts.push(
     `ALTER TABLE ${quoteIdent(table)} ADD COLUMN IF NOT EXISTS ${OKE_TSV_COL} tsvector GENERATED ALWAYS AS (${tsvExpr}) STORED`,

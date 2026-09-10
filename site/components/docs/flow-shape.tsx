@@ -40,7 +40,7 @@ const STAGES: ReadonlyArray<StageSpec> = [
     title: "Contracts",
     tags: ["in", "out", "errors", "exposure"],
     icon: ShieldCheck,
-    code: 'http.post({ in: z.object({ sku: z.string() }) })',
+    code: "http.post({ in: z.object({ sku: z.string() }) })",
     body: "Invoke contracts live on the exposure (HTTP, call, MCP). Manifest projects in/out/errors onto flows.*.",
   },
   {

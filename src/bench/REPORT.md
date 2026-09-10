@@ -188,21 +188,21 @@ Synthetic 32-dim embeddings (deterministic hash bag — not a production model).
 
 ### Latency (p50 / p99 ms)
 
-| N | text p50 | text p99 | vector p50 | vector p99 | hybrid p50 | hybrid p99 |
-| --- | -------- | -------- | ---------- | ---------- | ---------- | ---------- |
-| 1k | 1.32 | 3.6 | 1.35 | 2.19 | 1.43 | 2.04 |
-| 10k | 2.77 | 3.85 | 3.74 | 4.38 | 2.99 | 5.97 |
-| 100k | 39.86 | 59.73 | 57.05 | 126.14 | 52.08 | 288.09 |
-| 1M | 877.57 | 2243.68 | 1165.5 | 3370.19 | 649.14 | 1861.91 |
+| N    | text p50 | text p99 | vector p50 | vector p99 | hybrid p50 | hybrid p99 |
+| ---- | -------- | -------- | ---------- | ---------- | ---------- | ---------- |
+| 1k   | 1.32     | 3.6      | 1.35       | 2.19       | 1.43       | 2.04       |
+| 10k  | 2.77     | 3.85     | 3.74       | 4.38       | 2.99       | 5.97       |
+| 100k | 39.86    | 59.73    | 57.05      | 126.14     | 52.08      | 288.09     |
+| 1M   | 877.57   | 2243.68  | 1165.5     | 3370.19    | 649.14     | 1861.91    |
 
 ### Recall — LSH approx vs exact cosine (precision@10)
 
-| N | vector P@10 | hybrid P@10 | exact cosine p50 (ms) | approx p50 (ms) |
-| --- | ----------- | ----------- | --------------------- | --------------- |
-| 1k | **0.000** | 0.067 | 0.16 | 1.41 / 1.6 |
-| 10k | **0.000** | **0.000** | ~1.6 | ~3.5 |
-| 100k | **0.000** | **0.000** | ~36 | ~54 |
-| 1M | 0.008 | **0.000** | ~445 | ~600 |
+| N    | vector P@10 | hybrid P@10 | exact cosine p50 (ms) | approx p50 (ms) |
+| ---- | ----------- | ----------- | --------------------- | --------------- |
+| 1k   | **0.000**   | 0.067       | 0.16                  | 1.41 / 1.6      |
+| 10k  | **0.000**   | **0.000**   | ~1.6                  | ~3.5            |
+| 100k | **0.000**   | **0.000**   | ~36                   | ~54             |
+| 1M   | 0.008       | **0.000**   | ~445                  | ~600            |
 
 **Honest verdict:** on this corpus the random-hyperplane LSH path (K=64, Hamming-1 neighbors, candidate oversample ≤50) does **not** recover the exact cosine top-10. Treat built-in LSH as a cheap candidate generator for hybrid fusion — **not** a drop-in for HNSW/pgvector recall. Prefer BM25-only or an external `store.index` (`pgvector` / Meilisearch) when semantic recall matters.
 
@@ -212,15 +212,14 @@ Postgres 16 chose a **Seq Scan** with a Filter on `__oke_tsv @@ plainto_tsquery(
 
 ### Backfill kill / resume (50k pre-populated rows)
 
-| Metric | Value |
-| ------ | ----- |
-| Kill after embeds | 2,000 |
-| Embeds at kill | 2,000 |
-| Kill wall | 726 ms |
+| Metric                             | Value  |
+| ---------------------------------- | ------ |
+| Kill after embeds                  | 2,000  |
+| Embeds at kill                     | 2,000  |
+| Kill wall                          | 726 ms |
 | Resume wall (re-run to completion) | 29.3 s |
-| Final embedded rows | 50,000 |
+| Final embedded rows                | 50,000 |
 
 Re-running `oke db search-backfill` after interrupt completed idempotently (safe re-entry; DF/stats rebuilt).
 
 **Issues recorded in artifact:** eight low-recall notes (all sizes). No product fix applied mid-bench — numbers stand as measured.
-

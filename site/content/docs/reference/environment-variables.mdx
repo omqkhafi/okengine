@@ -10,8 +10,8 @@ behavior you could declare in `oke.config.ts`. Under `oke dev`, Compose writes t
 into `.env.local`; this page is the full map.
 
 <Callout title="The one rule">
-  Put drivers, images, and locale lists in `oke.config.ts`. Use env vars for URLs,
-  credentials, and runtime posture the host injects — not for inventing new behavior.
+  Put drivers, images, and locale lists in `oke.config.ts`. Use env vars for URLs, credentials, and
+  runtime posture the host injects — not for inventing new behavior.
 </Callout>
 
 ## Smallest Example
@@ -46,9 +46,8 @@ Conventional names win over `OKE_*` aliases, then built-in defaults.
 ## Precedence
 
 <Callout title="Resolution order">
-  For anything with both an `OKE_*` variable and a conventional one (like
-  `DATABASE_URL`), the conventional variable wins first, then the `OKE_*` form,
-  then the built-in default.
+  For anything with both an `OKE_*` variable and a conventional one (like `DATABASE_URL`), the
+  conventional variable wins first, then the `OKE_*` form, then the built-in default.
 </Callout>
 
 ## SQL store
@@ -154,17 +153,17 @@ send. App projects can ignore these.
 
 ## AI providers
 
-| Variable              | Used for                                                                                                | Default when unset                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`   | `anthropic` driver credential                                                                           | —                                                                          |
-| `ANTHROPIC_MODEL`     | Model override for the anthropic driver                                                                 | —                                                                          |
-| `OPENAI_API_KEY`      | `openai-compatible` driver credential                                                                   | —                                                                          |
-| `OPENAI_BASE_URL`     | `openai-compatible` base URL                                                                            | OpenAI cloud                                                               |
-| `OKE_AI_DRIVER`       | Force the AI driver id (honoured under Compose / `oke dev`)                                             | config map                                                                 |
-| `OKE_AI_URL`          | openai-compatible base URL (must end in `/v1`) — BYO; Compose does not manage inference                 | —                                                                          |
-| `OKE_AI_MODEL`        | Default model id for openai-compatible / setup bindings                                                 | —                                                                          |
-| `OKE_AI_VISION_MODEL` | Vision model id written by `oke ai setup` (logical `ai.model("vision")`)                                | —                                                                          |
-| `OKE_AI_EMBED_MODEL`  | Embedding model id written by `oke ai setup`                                                            | —                                                                          |
+| Variable              | Used for                                                                                | Default when unset |
+| --------------------- | --------------------------------------------------------------------------------------- | ------------------ |
+| `ANTHROPIC_API_KEY`   | `anthropic` driver credential                                                           | —                  |
+| `ANTHROPIC_MODEL`     | Model override for the anthropic driver                                                 | —                  |
+| `OPENAI_API_KEY`      | `openai-compatible` driver credential                                                   | —                  |
+| `OPENAI_BASE_URL`     | `openai-compatible` base URL                                                            | OpenAI cloud       |
+| `OKE_AI_DRIVER`       | Force the AI driver id (honoured under Compose / `oke dev`)                             | config map         |
+| `OKE_AI_URL`          | openai-compatible base URL (must end in `/v1`) — BYO; Compose does not manage inference | —                  |
+| `OKE_AI_MODEL`        | Default model id for openai-compatible / setup bindings                                 | —                  |
+| `OKE_AI_VISION_MODEL` | Vision model id written by `oke ai setup` (logical `ai.model("vision")`)                | —                  |
+| `OKE_AI_EMBED_MODEL`  | Embedding model id written by `oke ai setup`                                            | —                  |
 
 ## Framework behavior
 
@@ -190,9 +189,8 @@ Console uses PGlite under `.oke/console-pg` for local reopen durability.
 <Accordions>
 
 <Accordion title="Compose did not write .env.local">
-  Run `oke dev` (not a bare `bun` entry) so Compose posture sets `OKE_DOCKER=1`
-  and writes connection URLs. Confirm `images` pins exist in
-  [Configuration](/docs/reference/configuration).
+  Run `oke dev` (not a bare `bun` entry) so Compose posture sets `OKE_DOCKER=1` and writes
+  connection URLs. Confirm `images` pins exist in [Configuration](/docs/reference/configuration).
 </Accordion>
 
 <Accordion title="Vault sealed / missing master key">
@@ -201,8 +199,8 @@ Console uses PGlite under `.oke/console-pg` for local reopen durability.
 </Accordion>
 
 <Accordion title="Console operator store missing">
-  Operator rows need `DATABASE_URL` or `OKE_STORE_SQL_URL` (schema `oke_console`).
-  Without Postgres, Console uses PGlite under `.oke/console-pg`.
+  Operator rows need `DATABASE_URL` or `OKE_STORE_SQL_URL` (schema `oke_console`). Without Postgres,
+  Console uses PGlite under `.oke/console-pg`.
 </Accordion>
 
 </Accordions>

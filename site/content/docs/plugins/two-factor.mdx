@@ -10,9 +10,9 @@ TOTP or email OTP. When 2FA is enabled, first-factor success withholds session
 tokens and returns a **method-locked** challenge.
 
 <Callout title="The one rule">
-  Enable `gate.auth`, then `.plug(twoFactor())`. Login challenges lock the
-  configured method (`totp` or `email_otp`). Mid-challenge QR enrollment returns
-  `Forbidden`. Method change needs step-up verify → provision → confirm.
+  Enable `gate.auth`, then `.plug(twoFactor())`. Login challenges lock the configured method (`totp`
+  or `email_otp`). Mid-challenge QR enrollment returns `Forbidden`. Method change needs step-up
+  verify → provision → confirm.
 </Callout>
 
 ## Quick start
@@ -99,29 +99,29 @@ Disable also requires step-up when 2FA is already enabled.
 
 ## Options
 
-| Option           | Type                    | Default    | Meaning                                      |
-| ---------------- | ----------------------- | ---------- | -------------------------------------------- |
-| `secret`         | `string`                | active\*   | HMAC secret (\*from `gate.auth`)             |
-| `sessions`       | `SessionStore`          | active\*   | Session store                                |
-| `now`            | `() => number`          | `Date.now` | Injectable clock                             |
-| `factors`        | `TwoFactorStore`        | new        | Per-user method + TOTP / recovery            |
-| `issuer`         | `string`                | `"oke"`    | Label in `otpauth://` URLs                   |
-| `pending`        | `PendingTwoFactorStore` | active\*   | Login challenges                             |
-| `stepUp`         | `StepUpStore`           | active\*   | Privileged-op grants                         |
-| `verifications`  | `VerificationStore`     | active\*   | Email OTP as second factor (`2fa:{userId}`)  |
-| `exposeDevOtp`   | `boolean`               | `false`    | Return `devOtp` on email_otp challenge paths |
+| Option          | Type                    | Default    | Meaning                                      |
+| --------------- | ----------------------- | ---------- | -------------------------------------------- |
+| `secret`        | `string`                | active\*   | HMAC secret (\*from `gate.auth`)             |
+| `sessions`      | `SessionStore`          | active\*   | Session store                                |
+| `now`           | `() => number`          | `Date.now` | Injectable clock                             |
+| `factors`       | `TwoFactorStore`        | new        | Per-user method + TOTP / recovery            |
+| `issuer`        | `string`                | `"oke"`    | Label in `otpauth://` URLs                   |
+| `pending`       | `PendingTwoFactorStore` | active\*   | Login challenges                             |
+| `stepUp`        | `StepUpStore`           | active\*   | Privileged-op grants                         |
+| `verifications` | `VerificationStore`     | active\*   | Email OTP as second factor (`2fa:{userId}`)  |
+| `exposeDevOtp`  | `boolean`               | `false`    | Return `devOtp` on email_otp challenge paths |
 
 ## Surfaces
 
-| Flow                           | Path                                   | Gate                     |
-| ------------------------------ | -------------------------------------- | ------------------------ |
-| `auth.twoFactorEnable`         | `POST /auth/two-factor/enable`         | session + bearer         |
-| `auth.twoFactorVerify`         | `POST /auth/two-factor/verify`         | `gate.public` + otp rate |
-| `auth.twoFactorStepUp`         | `POST /auth/two-factor/step-up`         | session + bearer         |
-| `auth.twoFactorChangeMethod`   | `POST /auth/two-factor/change-method`  | session + bearer         |
-| `auth.twoFactorConfirmChange`  | `POST /auth/two-factor/confirm-change` | session + bearer         |
-| `auth.twoFactorRequestEmailOtp`| `POST /auth/two-factor/request-email-otp` | public + otp rate     |
-| `auth.twoFactorDisable`        | `POST /auth/two-factor/disable`        | session + bearer         |
+| Flow                            | Path                                      | Gate                     |
+| ------------------------------- | ----------------------------------------- | ------------------------ |
+| `auth.twoFactorEnable`          | `POST /auth/two-factor/enable`            | session + bearer         |
+| `auth.twoFactorVerify`          | `POST /auth/two-factor/verify`            | `gate.public` + otp rate |
+| `auth.twoFactorStepUp`          | `POST /auth/two-factor/step-up`           | session + bearer         |
+| `auth.twoFactorChangeMethod`    | `POST /auth/two-factor/change-method`     | session + bearer         |
+| `auth.twoFactorConfirmChange`   | `POST /auth/two-factor/confirm-change`    | session + bearer         |
+| `auth.twoFactorRequestEmailOtp` | `POST /auth/two-factor/request-email-otp` | public + otp rate        |
+| `auth.twoFactorDisable`         | `POST /auth/two-factor/disable`           | session + bearer         |
 
 **Consequence:** email/password and username sign-in return
 `{ twoFactorRequired, challengeId, method, userId }` (no tokens) when the

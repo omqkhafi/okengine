@@ -195,9 +195,7 @@ function emitFlowContract(
     c.path ? `          path: ${JSON.stringify(c.path)};` : undefined,
     c.live ? `          live: ${JSON.stringify(c.live)};` : undefined,
     c.stream === true ? `          stream: true;` : undefined,
-    c.matchKey
-      ? `          matchKey: ${JSON.stringify(c.matchKey)};`
-      : undefined,
+    c.matchKey ? `          matchKey: ${JSON.stringify(c.matchKey)};` : undefined,
     c.gates && c.gates.length > 0 ? `          gates: ${JSON.stringify(c.gates)};` : undefined,
     `        }`,
   ]

@@ -10,9 +10,9 @@ const withMDX = createMDX();
 const siteDir = dirname(fileURLToPath(import.meta.url));
 /** Monorepo root — owns the single `bun.lock` for workspaces. */
 const rootDir = join(siteDir, "..");
-const { version: okeVersion } = JSON.parse(
-  readFileSync(join(rootDir, "package.json"), "utf8"),
-) as { version: string };
+const { version: okeVersion } = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8")) as {
+  version: string;
+};
 
 const config: NextConfig = {
   // Do not set `output: "export"`: `proxy.ts` negotiates `Accept: text/markdown`,

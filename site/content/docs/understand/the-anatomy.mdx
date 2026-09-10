@@ -7,7 +7,14 @@ icon: "PenTool"
 Everything a Flow does reduces to one line:
 
 ```typescript
-on(trigger, flow({ do: (input, fx) => { /* ... */ } }))
+on(
+  trigger,
+  flow({
+    do: (input, fx) => {
+      /* ... */
+    },
+  }),
+);
 ```
 
 If that line doesn't mean much yet, that's what this page is for. Five pieces make it up. We'll take them one at a time, then put them together using a complete signup example.
@@ -24,17 +31,17 @@ That's the whole job. The interesting parts are what goes in each slot.
 
 ## A trigger — the answer to "when"
 
-The first argument to `on` is the trigger: whatever wakes the code up. A trigger doesn't run any of your logic — it only answers one question: *when should this happen?*
+The first argument to `on` is the trigger: whatever wakes the code up. A trigger doesn't run any of your logic — it only answers one question: _when should this happen?_
 
 ```typescript
 http.post(); // path from the file tree — e.g. src/flows/users/signup.ts → POST /users/signup
 ```
 
-There are five kinds of trigger in total — the table at the end of this page lists them. For now: the trigger is the *when*, and it's the only thing that changes between an endpoint, a scheduled job, and everything else.
+There are five kinds of trigger in total — the table at the end of this page lists them. For now: the trigger is the _when_, and it's the only thing that changes between an endpoint, a scheduled job, and everything else.
 
 ## `flow(...)` — the actual unit of work
 
-The second argument to `on` is a Flow — declared with the `flow()` function. It answers *what*: what work is this, and what does it promise about its inputs and outputs?
+The second argument to `on` is a Flow — declared with the `flow()` function. It answers _what_: what work is this, and what does it promise about its inputs and outputs?
 
 ```typescript
 flow({
@@ -48,7 +55,7 @@ moves, or call-only Flows you `fx.call` by name.
 
 ## `do` — the code that actually runs
 
-`do` is a function you write. It answers *how*. It receives two things: `input` (your data) and `fx` (next). Everything your Flow actually does lives here.
+`do` is a function you write. It answers _how_. It receives two things: `input` (your data) and `fx` (next). Everything your Flow actually does lives here.
 
 ```typescript
 do: async (input, fx) => {
@@ -110,13 +117,13 @@ None of that required new code beyond what's above. It required the four lines t
 
 `flow`, `do`, and `fx` never change shape. Only the trigger does — and there are exactly five kinds, one per element that can independently wake a Flow up:
 
-| Trigger                            | Element | Starts When                       |
-| ----------------------------------- | ------- | ------------------------------------ |
-| `http.post()` (path from file tree) | Flow    | A request arrives                  |
-| `clock("name", { every: "10m" })`  | Clock   | A time interval elapses            |
-| `signal.once("name", {…})` / `.broadcast` / `.live` | Signal  | Another flow announces something   |
-| `db.table(users).changed("email")` | Store   | A database row changes             |
-| `mcp.tool("name")`                 | AI      | An AI agent calls it               |
+| Trigger                                             | Element | Starts When                      |
+| --------------------------------------------------- | ------- | -------------------------------- |
+| `http.post()` (path from file tree)                 | Flow    | A request arrives                |
+| `clock("name", { every: "10m" })`                   | Clock   | A time interval elapses          |
+| `signal.once("name", {…})` / `.broadcast` / `.live` | Signal  | Another flow announces something |
+| `db.table(users).changed("email")`                  | Store   | A database row changes           |
+| `mcp.tool("name")`                                  | AI      | An AI agent calls it             |
 
 The next section walks through each element in depth — this is just enough to recognize them when you see them.
 

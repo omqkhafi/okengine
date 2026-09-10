@@ -8,11 +8,7 @@ import { pgliteDriver } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
 import { field, store } from "../store.ts";
 import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
-import {
-  coerceTemporalBindValue,
-  prepareInsertRow,
-  prepareUpdateRow,
-} from "./table.ts";
+import { coerceTemporalBindValue, prepareInsertRow, prepareUpdateRow } from "./table.ts";
 
 describe("coerceTemporalBindValue", () => {
   test("epoch-ms number → Date for TIMESTAMP and DATE", () => {
@@ -100,9 +96,7 @@ describe("SqlStoreHandle upsert — epoch-ms into timestamp (Postgres)", () => {
       routedRole: "primary",
       domainDdl: "ensure",
     });
-    await handle
-      .insert(notesTs)
-      .values({ id: "_warmup", title: "x", createdAt: new Date(0) });
+    await handle.insert(notesTs).values({ id: "_warmup", title: "x", createdAt: new Date(0) });
     await conn.exec(`TRUNCATE "notes_ts" RESTART IDENTITY CASCADE`);
   }, 15_000);
 

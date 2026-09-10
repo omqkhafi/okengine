@@ -90,9 +90,8 @@ describe("fx.fetch", () => {
 describe("Channel failover — winning provider on EffectEntry", () => {
   test("send stamps external.provider from the winning attempt, not the primary binding", async () => {
     const { channel } = await import("../elements/channel.ts");
-    const { driverFromTransport, failingTransport, okTransport } = await import(
-      "../elements/channel/test-helpers.ts"
-    );
+    const { driverFromTransport, failingTransport, okTransport } =
+      await import("../elements/channel/test-helpers.ts");
     const smtp = {
       ...driverFromTransport("smtp", failingTransport("smtp")),
       external: {

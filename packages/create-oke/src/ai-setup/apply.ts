@@ -158,8 +158,9 @@ export function ensureNotesBodyEmbed(source: string): string {
   for (const re of patterns) {
     if (!re.test(source)) continue;
     return source.replace(re, (_m, head: string, notNull?: string) => {
-      const mid =
-        /\.searchable\s*\(/.test(head) ? `${head}.embed()` : `${head}.searchable().embed()`;
+      const mid = /\.searchable\s*\(/.test(head)
+        ? `${head}.embed()`
+        : `${head}.searchable().embed()`;
       return `${mid}${notNull ?? ""}`;
     });
   }
@@ -434,9 +435,7 @@ function smartBaseUrlLines(
     ];
   }
   if (input.baseUrl) {
-    return [
-      `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || ${JSON.stringify(input.baseUrl)},`,
-    ];
+    return [`  baseUrl: process.env.OPENAI_BASE_URL?.trim() || ${JSON.stringify(input.baseUrl)},`];
   }
   return [
     `  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),`,
@@ -505,9 +504,7 @@ export const ${binding} = vault.secret(${JSON.stringify(apiKeyEnv)}, {
  */
 export function hasAiApiKeyVaultSecret(source: string, apiKeyEnv: string): boolean {
   const lit = apiKeyEnv.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(
-    `\\bvault(?:\\.secret)?\\s*\\(\\s*["']${lit}["']`,
-  ).test(source);
+  return new RegExp(`\\bvault(?:\\.secret)?\\s*\\(\\s*["']${lit}["']`).test(source);
 }
 
 /**

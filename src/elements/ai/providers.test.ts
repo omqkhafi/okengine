@@ -88,9 +88,7 @@ describe("resolveAiModelBaseUrl", () => {
     expect(anth.tier2Provider).toBe("anthropic");
 
     const google = resolveAiModelBaseUrl({ provider: "google" });
-    expect(google.baseUrl).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/openai",
-    );
+    expect(google.baseUrl).toBe("https://generativelanguage.googleapis.com/v1beta/openai");
     expect(google.tier2Caveat).toContain("tool");
 
     const gemini = resolveAiModelBaseUrl({ provider: "gemini" });
@@ -155,10 +153,10 @@ describe("ai.model provider registry", () => {
       console.warn = original;
     }
     expect(
-      warns.some((w) => w.includes('provider "anthropic"') && w.includes("limited OpenAI-compatible")),
-    ).toBe(
-      true,
-    );
+      warns.some(
+        (w) => w.includes('provider "anthropic"') && w.includes("limited OpenAI-compatible"),
+      ),
+    ).toBe(true);
     expect(warns.some((w) => w.includes("testing/evaluation only"))).toBe(true);
   });
 });
@@ -285,7 +283,7 @@ describe("registry entries", () => {
   test("formatAiProviderTier2Warn prefixes correctly", () => {
     const entry = getAiProviderEntry("anthropic")!;
     expect(formatAiProviderTier2Warn("anthropic", entry.caveat!, "ai.model")).toContain(
-      "ai.model: provider \"anthropic\"",
+      'ai.model: provider "anthropic"',
     );
   });
 });

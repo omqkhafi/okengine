@@ -116,7 +116,9 @@ describe("hero-meta", () => {
       },
       { docker: true, sqlDriver: "postgres", kvDriver: "redis", aiModel: "openrouter/free" },
     );
-    expect(rows.find((r) => r.element === "ai")?.detail).toBe("openai-compatible · openrouter/free");
+    expect(rows.find((r) => r.element === "ai")?.detail).toBe(
+      "openai-compatible · openrouter/free",
+    );
     expect(rows.find((r) => r.element === "ai")?.status).not.toBe("idle");
   });
 

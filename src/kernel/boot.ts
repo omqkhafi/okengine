@@ -754,9 +754,7 @@ export async function mintCapabilities(
     if (!noEffectsWarned) {
       noEffectsWarned = true;
       const extractHint =
-        extractError !== undefined
-          ? ` Manifest extract failed (${extractError}).`
-          : "";
+        extractError !== undefined ? ` Manifest extract failed (${extractError}).` : "";
       emitBootWarn(
         `oke boot: flow "${f.name}" (and possibly others) has no declared effects and no ` +
           "Manifest-derived effects — running with an OPEN capability token (every access " +

@@ -139,11 +139,15 @@ describe("CVE-2026-67327 — HTTP pre-account hijack", () => {
     const planted = (await signUp.json()) as { data: { userId: string; refreshToken: string } };
     expect(identities.users.get(planted.data.userId)?.emailVerified).toBe(false);
 
-    const req = await app.fetch(jsonPost("/auth/magic-link/request", { email: "hijack@example.com" }));
+    const req = await app.fetch(
+      jsonPost("/auth/magic-link/request", { email: "hijack@example.com" }),
+    );
     expect(req.status).toBe(200);
     const { data: challenge } = (await req.json()) as { data: { devToken: string } };
 
-    const verify = await app.fetch(jsonPost("/auth/magic-link/verify", { token: challenge.devToken }));
+    const verify = await app.fetch(
+      jsonPost("/auth/magic-link/verify", { token: challenge.devToken }),
+    );
     expect(verify.status).toBe(200);
     const session = (await verify.json()) as { data: { userId: string; accessToken: string } };
     expect(session.data.userId).toBe(planted.data.userId);
@@ -185,9 +189,7 @@ describe("CVE-2026-67327 — HTTP pre-account hijack", () => {
     expect(signUp.status).toBe(200);
     const planted = (await signUp.json()) as { data: { userId: string } };
 
-    const req = await app.fetch(
-      jsonPost("/auth/otp/request", { email: "otp-hijack@example.com" }),
-    );
+    const req = await app.fetch(jsonPost("/auth/otp/request", { email: "otp-hijack@example.com" }));
     expect(req.status).toBe(200);
     const { data: challenge } = (await req.json()) as { data: { devOtp: string } };
 

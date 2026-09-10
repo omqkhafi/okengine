@@ -9,15 +9,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  Bot,
-  Database,
-  Globe,
-  Radio,
-  Timer,
-  RotateCcw,
-  type LucideIcon,
-} from "lucide-react";
+import { Bot, Database, Globe, Radio, Timer, RotateCcw, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { BeatPing, RevealGroup, RevealItem, useTick } from "@/components/docs/reveal";
 import { CHIP_TONE, type ElementChipTone } from "@/lib/element-tones";
@@ -57,7 +49,7 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     contracts: {
       in: '{ sku: "desk-mat", qty: 2 }',
       out: '{ id: "ord_01jq7z", status: "pending" }',
-      errors: '{ OutOfStock: { available: 0 } }',
+      errors: "{ OutOfStock: { available: 0 } }",
       do: "async (input, fx) => { const id = fx.id(); ... }",
     },
     description: "HTTP requests validate JSON body, query params, and headers directly into in.",
@@ -110,7 +102,7 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     flowName: "orders.onStatusChange",
     contracts: {
       in: '{ before: { status: "pending" }, after: { status: "paid" } }',
-      out: '{ acknowledged: true }',
+      out: "{ acknowledged: true }",
       errors: '{ LockContention: { table: "orders" } }',
       do: "async ({ before, after }, fx) => { ... }",
     },
@@ -218,10 +210,7 @@ export function FlowTriggers() {
       </div>
 
       <div className="grid gap-px bg-fd-border @min-[40rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <RevealGroup
-          as="ul"
-          className="flex min-w-0 flex-col gap-1.5 bg-fd-card p-3 sm:p-4"
-        >
+        <RevealGroup as="ul" className="flex min-w-0 flex-col gap-1.5 bg-fd-card p-3 sm:p-4">
           {TRIGGERS.map((trigger, i) => {
             const Icon = trigger.icon;
             const firing = i === activeIndex;
@@ -248,7 +237,9 @@ export function FlowTriggers() {
                       <Icon
                         className={cn(
                           "size-3.5 shrink-0 transition-colors duration-200",
-                          firing ? itemTone.icon : "text-fd-muted-foreground group-hover:text-fd-foreground",
+                          firing
+                            ? itemTone.icon
+                            : "text-fd-muted-foreground group-hover:text-fd-foreground",
                         )}
                         aria-hidden
                         strokeWidth={1.75}
@@ -269,9 +260,7 @@ export function FlowTriggers() {
                         {trigger.element}
                       </span>
                       <span className="relative flex size-1.5 shrink-0" aria-hidden>
-                        {firing && isLive ? (
-                          <BeatPing className={itemTone.wash} />
-                        ) : null}
+                        {firing && isLive ? <BeatPing className={itemTone.wash} /> : null}
                         <span
                           className={cn(
                             "size-1.5 rounded-full transition-colors duration-200",
@@ -312,11 +301,7 @@ export function FlowTriggers() {
                   {activeTrigger.flowName}
                 </code>
               </div>
-              <FanInPacket
-                firing={isLive}
-                color={activePacket}
-                key={activeTrigger.id}
-              />
+              <FanInPacket firing={isLive} color={activePacket} key={activeTrigger.id} />
             </RevealItem>
 
             <RevealItem as="div" className="min-w-0">
@@ -331,7 +316,11 @@ export function FlowTriggers() {
             </RevealItem>
 
             <RevealItem as="div" className="flex flex-col gap-1.5 min-w-0">
-              <div className="flex flex-wrap gap-1 items-center" role="tablist" aria-label="Flow contracts">
+              <div
+                className="flex flex-wrap gap-1 items-center"
+                role="tablist"
+                aria-label="Flow contracts"
+              >
                 {CONTRACTS.map((c) => {
                   const isActive = c === activeContract;
                   return (
@@ -376,13 +365,7 @@ export function FlowTriggers() {
 }
 
 /** Packet crosses the “all become” lane into the Flow panel on trigger change/interaction. */
-function FanInPacket({
-  firing,
-  color,
-}: {
-  readonly firing: boolean;
-  readonly color: string;
-}) {
+function FanInPacket({ firing, color }: { readonly firing: boolean; readonly color: string }) {
   return (
     <svg viewBox="0 0 100 16" className="h-4 w-24 shrink-0" role="presentation" aria-hidden>
       <line x1="4" y1="8" x2="96" y2="8" stroke={BOX_LINE} strokeWidth="1" strokeDasharray="2 3" />

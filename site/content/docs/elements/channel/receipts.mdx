@@ -13,9 +13,9 @@ For operators watching deliverability — Console projects the ledger; Flows onl
 results via `fx.send`’s `{ ok: true }` gate.
 
 <Callout title="The one rule">
-  Consent and prior hard bounces suppress **before** any driver runs. Default
-  suppression / consent / receipts stores are **process-local memory** — inject shared stores
-  for multi-instance, or run a single Channel consumer, until a durable driver ships.
+  Consent and prior hard bounces suppress **before** any driver runs. Default suppression / consent
+  / receipts stores are **process-local memory** — inject shared stores for multi-instance, or run a
+  single Channel consumer, until a durable driver ships.
 </Callout>
 
 ## Smallest Example
@@ -41,13 +41,13 @@ Dry-run never contacts a provider and still records _would have fired_.
 <Step>
 ### Understand statuses
 
-| Status | Meaning |
-| ------ | ------- |
-| `sent` | First (or only) attempt succeeded |
-| `fallback` | An earlier attempt failed; a later same-medium driver succeeded |
-| `suppressed/opted-out` | Consent store blocked the address |
-| `suppressed/prior-bounce` | Prior hard bounce on the suppression list |
-| `failed` / `opted-out` | Legacy aliases kept for older callers |
+| Status                    | Meaning                                                         |
+| ------------------------- | --------------------------------------------------------------- |
+| `sent`                    | First (or only) attempt succeeded                               |
+| `fallback`                | An earlier attempt failed; a later same-medium driver succeeded |
+| `suppressed/opted-out`    | Consent store blocked the address                               |
+| `suppressed/prior-bounce` | Prior hard bounce on the suppression list                       |
+| `failed` / `opted-out`    | Legacy aliases kept for older callers                           |
 
 </Step>
 
@@ -86,15 +86,15 @@ Errors on the receipt: `"opted out"` or `"prior hard bounce"`.
 
 Post-send taxonomy (`DeliveryOutcomeState`):
 
-| State | Verdict |
-| ----- | ------- |
-| `suppressed/opted-out` | `correct` |
-| `suppressed/prior-bounce` | `correct` |
-| `blocked/invalid-address` | `review` |
-| `soft-bounce` | `retry` |
-| `hard-bounce` | `suppress` |
-| `provider-error` | `retry` |
-| `delivered-then-complained` | `review` |
+| State                       | Verdict    |
+| --------------------------- | ---------- |
+| `suppressed/opted-out`      | `correct`  |
+| `suppressed/prior-bounce`   | `correct`  |
+| `blocked/invalid-address`   | `review`   |
+| `soft-bounce`               | `retry`    |
+| `hard-bounce`               | `suppress` |
+| `provider-error`            | `retry`    |
+| `delivered-then-complained` | `review`   |
 
 `ingestOutcome({ messageId, state })` updates the receipt. Hard bounce also adds the address
 to suppression (`prior-bounce`). Invalid-address heuristics include patterns such as
@@ -125,25 +125,25 @@ Shapes: `SuppressionStore`, `ConsentStore`, `ReceiptLedger` from `okengine` — 
 
 ## Receipt shape
 
-| Field | Meaning |
-| ----- | ------- |
-| `id` | Runtime receipt id |
-| `template` | Template name |
-| `to` | Recipient |
-| `medium` | `email` · `sms` · `whatsapp` · `push` · … |
-| `locale` / `localeChain` | Resolved locale + chain steps |
-| `status` | Success, legacy, or outcome state |
-| `messageId` | Provider / runtime message id |
-| `driverId` | Winning driver (or `suppression`) |
-| `attempts` | Every try (`driverId`, `ok`, `error`, `at`) |
-| `at` | Epoch ms |
-| `error` | Aggregated attempt errors when failed |
+| Field                    | Meaning                                     |
+| ------------------------ | ------------------------------------------- |
+| `id`                     | Runtime receipt id                          |
+| `template`               | Template name                               |
+| `to`                     | Recipient                                   |
+| `medium`                 | `email` · `sms` · `whatsapp` · `push` · …   |
+| `locale` / `localeChain` | Resolved locale + chain steps               |
+| `status`                 | Success, legacy, or outcome state           |
+| `messageId`              | Provider / runtime message id               |
+| `driverId`               | Winning driver (or `suppression`)           |
+| `attempts`               | Every try (`driverId`, `ok`, `error`, `at`) |
+| `at`                     | Epoch ms                                    |
+| `error`                  | Aggregated attempt errors when failed       |
 
 ## Consent & suppression
 
-| Store | Role |
-| ----- | ---- |
-| Consent | `isOptedOut` / `optOut` / `optIn` / `list` per subject + medium |
+| Store       | Role                                                             |
+| ----------- | ---------------------------------------------------------------- |
+| Consent     | `isOptedOut` / `optOut` / `optIn` / `list` per subject + medium  |
 | Suppression | Reasons `"opted-out"` \| `"prior-bounce"`; checked on every send |
 
 **Consequence:** suppression is not failure — verdict `correct` for opted-out and prior-bounce
@@ -167,8 +167,8 @@ from operator tooling.
 </Accordion>
 
 <Accordion title="Status fallback with multiple attempts">
-  Same-medium `via` (or ordered driver chain) recovered after a provider error. Inspect
-  `attempts[]` for which driver failed and which succeeded.
+  Same-medium `via` (or ordered driver chain) recovered after a provider error. Inspect `attempts[]`
+  for which driver failed and which succeeded.
 </Accordion>
 
 <Accordion title="No fx.channel.getReceipt">
@@ -202,9 +202,5 @@ from operator tooling.
     description="Mailpit and production email drivers."
     href="/docs/elements/channel/email"
   />
-  <Card
-    title="AI Element"
-    description="Models, prompts, and agents."
-    href="/docs/elements/ai"
-  />
+  <Card title="AI Element" description="Models, prompts, and agents." href="/docs/elements/ai" />
 </Cards>

@@ -5,11 +5,7 @@
 
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  OKE_ERROR_RANGES,
-  type OkeErrorDefinition,
-  type OkeErrorDomain,
-} from "./errors.ts";
+import { OKE_ERROR_RANGES, type OkeErrorDefinition, type OkeErrorDomain } from "./errors.ts";
 
 const LAZY_FILE_RE = /^errors-.+\.ts$/;
 
@@ -27,9 +23,7 @@ export function isOkeErrorDefinition(value: unknown): value is OkeErrorDefinitio
 }
 
 /** Collect every `OkeErrorDefinition` export from a module namespace. */
-export function collectDefsFromModule(
-  mod: Record<string, unknown>,
-): readonly OkeErrorDefinition[] {
+export function collectDefsFromModule(mod: Record<string, unknown>): readonly OkeErrorDefinition[] {
   const out: OkeErrorDefinition[] = [];
   for (const value of Object.values(mod)) {
     if (isOkeErrorDefinition(value)) out.push(value);
@@ -43,9 +37,7 @@ export function collectDefsFromModule(
  *
  * @param dir - Absolute directory to scan (typically `import.meta.dir`)
  */
-export async function discoverLazyErrorDefs(
-  dir: string,
-): Promise<{
+export async function discoverLazyErrorDefs(dir: string): Promise<{
   readonly files: readonly string[];
   readonly defs: readonly OkeErrorDefinition[];
 }> {
@@ -98,9 +90,7 @@ export function assertUniqueCodes(defs: readonly OkeErrorDefinition[]): void {
 export function assertCodesInDomainRanges(defs: readonly OkeErrorDefinition[]): void {
   const bad = findOutOfRangeDefs(defs);
   if (bad.length > 0) {
-    const detail = bad
-      .map((d) => `OKE${d.code} domain=${d.domain}`)
-      .join("; ");
+    const detail = bad.map((d) => `OKE${d.code} domain=${d.domain}`).join("; ");
     throw new Error(`OKE error codes outside domain range: ${detail}`);
   }
 }

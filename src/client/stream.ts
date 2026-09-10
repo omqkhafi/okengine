@@ -83,7 +83,13 @@ export async function* openStream(
       signal: ctrl.signal,
       ...(opts.credentials !== undefined ? { credentials: opts.credentials } : {}),
     });
-    if (res.status === 401 && opts.auth && "refresh" in opts.auth && typeof opts.auth.refresh === "function" && !refreshed) {
+    if (
+      res.status === 401 &&
+      opts.auth &&
+      "refresh" in opts.auth &&
+      typeof opts.auth.refresh === "function" &&
+      !refreshed
+    ) {
       refreshed = true;
       await opts.auth.refresh();
       continue;

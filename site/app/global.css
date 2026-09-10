@@ -435,7 +435,9 @@ html > body[data-scroll-locked] {
  * Lowers color/opacity on non-target code and highlights focused lines.
  */
 pre.has-focused .line {
-  transition: opacity 180ms ease, filter 180ms ease;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
 }
 
 pre.has-focused .line:not(.focused) {
@@ -457,4 +459,3 @@ pre .line.highlighted {
   display: inline-block;
   width: 100%;
 }
-

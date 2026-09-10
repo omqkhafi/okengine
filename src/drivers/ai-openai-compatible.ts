@@ -214,9 +214,7 @@ function resolveOpenaiCompatibleExternal(
   return {
     host,
     kind,
-    ...(options.external?.provider !== undefined
-      ? { provider: options.external.provider }
-      : {}),
+    ...(options.external?.provider !== undefined ? { provider: options.external.provider } : {}),
   };
 }
 

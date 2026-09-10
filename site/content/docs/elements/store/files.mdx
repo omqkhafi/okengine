@@ -10,9 +10,8 @@ The Files facet is a typed object bucket for uploads, exports, and media. Declar
 For developers storing blobs on okengine — put bytes, optionally derive image variants, serve keys from Flows.
 
 <Callout title="The one rule">
-  Pass the **declaration** into `fx.store(uploads)`. There is no `fx.store.files`
-  namespace, no `presignPut`, and no `transform(…)` helper — use `put` / `get` /
-  `putImage` / `image(…)`.
+  Pass the **declaration** into `fx.store(uploads)`. There is no `fx.store.files` namespace, no
+  `presignPut`, and no `transform(…)` helper — use `put` / `get` / `putImage` / `image(…)`.
 </Callout>
 
 ## Smallest Example
@@ -81,9 +80,8 @@ Response:
 </Steps>
 
 <Callout title="Effects are inferred">
-  Every `fx.store(uploads)` touch stamps `reads` / `writes` as `files:uploads` on
-  the Flow. That powers the Manifest, Console, and least privilege — no hand-written
-  effect lists.
+  Every `fx.store(uploads)` touch stamps `reads` / `writes` as `files:uploads` on the Flow. That
+  powers the Manifest, Console, and least privilege — no hand-written effect lists.
 </Callout>
 
 ## Progressive Patterns
@@ -225,13 +223,13 @@ export const card = on(
 
 `fx.store(filesDecl)`:
 
-| Method | Signature | Meaning |
-| ------ | --------- | ------- |
-| `put` | `put(key, data)` | Store bytes or UTF-8 string |
-| `get` | `get(key)` | Read bytes, or `null` if missing |
-| `delete` | `delete(key)` | Remove; returns whether deleted |
-| `list` | `list(prefix?)` | List object keys (optional prefix) |
-| `image` | `image(source, options?)` | Chainable Bun.Image pipeline |
+| Method     | Signature                    | Meaning                             |
+| ---------- | ---------------------------- | ----------------------------------- |
+| `put`      | `put(key, data)`             | Store bytes or UTF-8 string         |
+| `get`      | `get(key)`                   | Read bytes, or `null` if missing    |
+| `delete`   | `delete(key)`                | Remove; returns whether deleted     |
+| `list`     | `list(prefix?)`              | List object keys (optional prefix)  |
+| `image`    | `image(source, options?)`    | Chainable Bun.Image pipeline        |
 | `putImage` | `putImage(key, data, opts?)` | Original + variants + optional LQIP |
 
 Handle also exposes `ref` (`files:name`) and `driverId` (`memory` · `fs` · `s3`).
@@ -261,12 +259,12 @@ dedupe on `put`.
 Invalid object key: ../secret
 ```
 
-| Rule | Why |
-| ---- | --- |
+| Rule                   | Why                                                       |
+| ---------------------- | --------------------------------------------------------- |
 | Prefer printable ASCII | S3-compatible signed URLs are fragile with non-ASCII keys |
-| No leading `/` | Absolute paths are rejected on `fs` |
-| No `..` segments | Path escape is rejected on `fs` |
-| Stable extensions | MIME / Console kind inference uses the suffix |
+| No leading `/`         | Absolute paths are rejected on `fs`                       |
+| No `..` segments       | Path escape is rejected on `fs`                           |
+| Stable extensions      | MIME / Console kind inference uses the suffix             |
 
 ## Blob Operations
 
@@ -382,8 +380,8 @@ export const attachments = on(
 ## putImage
 
 <Callout title="Detailed section">
-  If you only need the original + one thumb, jump to Progressive Patterns →
-  putImage. This section covers options, variant key naming, and decode guards.
+  If you only need the original + one thumb, jump to Progressive Patterns → putImage. This section
+  covers options, variant key naming, and decode guards.
 </Callout>
 
 `putImage(key, data, opts?)` writes the **original** at `key`, then optional
@@ -406,24 +404,24 @@ const result = await fx.store(uploads).putImage(key, data, {
 
 <Accordion title="putImage Options">
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `variants` | `Record<string, ImageVariantSpec>` | omitted | Named derivatives beside the original |
-| `placeholder` | `boolean` | omitted | ThumbHash **data URL** on the result |
-| `maxPixels` | `number` \| `false` | `4096 * 4096` | Decode ceiling; `false` disables |
-| `autoOrient` | `boolean` | `true` | Respect EXIF orientation |
+| Option        | Type                               | Default       | Meaning                               |
+| ------------- | ---------------------------------- | ------------- | ------------------------------------- |
+| `variants`    | `Record<string, ImageVariantSpec>` | omitted       | Named derivatives beside the original |
+| `placeholder` | `boolean`                          | omitted       | ThumbHash **data URL** on the result  |
+| `maxPixels`   | `number` \| `false`                | `4096 * 4096` | Decode ceiling; `false` disables      |
+| `autoOrient`  | `boolean`                          | `true`        | Respect EXIF orientation              |
 
 </Accordion>
 
 <Accordion title="ImageVariantSpec">
   Each variant may set geometry and **exactly one** encode target:
 
-| Field | Meaning |
-| ----- | ------- |
-| `resize` | `[width]`, `[width, height]`, or `[width, height, options]` |
-| `rotate` · `flip` · `flop` | Geometry |
-| `modulate` | `{ brightness?, saturation? }` |
-| `jpeg` / `png` / `webp` / `heic` / `avif` | Encode — set **one** only |
+| Field                                     | Meaning                                                     |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| `resize`                                  | `[width]`, `[width, height]`, or `[width, height, options]` |
+| `rotate` · `flip` · `flop`                | Geometry                                                    |
+| `modulate`                                | `{ brightness?, saturation? }`                              |
+| `jpeg` / `png` / `webp` / `heic` / `avif` | Encode — set **one** only                                   |
 
 Resize options: `filter`, `fit` (`"fill"` \| `"inside"`), `withoutEnlargement`.
 
@@ -443,11 +441,11 @@ files image variant: set only one of jpeg/png/webp/heic/avif (got jpeg, webp)
   Keys are derived from the original stem + variant name + encode extension
   (`jpeg` → `jpg`):
 
-| Original | Variant | Format | Stored key |
-| -------- | ------- | ------ | ---------- |
-| `photos/x.jpg` | `thumb` | `webp` | `photos/x.thumb.webp` |
-| `photos/x.png` | `card` | `jpeg` | `photos/x.card.jpg` |
-| `a/b/hero` (no ext) | `sm` | `png` | `a/b/hero.sm.png` |
+| Original            | Variant | Format | Stored key            |
+| ------------------- | ------- | ------ | --------------------- |
+| `photos/x.jpg`      | `thumb` | `webp` | `photos/x.thumb.webp` |
+| `photos/x.png`      | `card`  | `jpeg` | `photos/x.card.jpg`   |
+| `a/b/hero` (no ext) | `sm`    | `png`  | `a/b/hero.sm.png`     |
 
 **Consequence:** `get(result.key)` is the original; read derivatives from
 `result.variants.thumb` (and friends), not by guessing.
@@ -456,12 +454,12 @@ files image variant: set only one of jpeg/png/webp/heic/avif (got jpeg, webp)
 
 <Accordion title="PutImageResult">
 
-| Field | Type | Meaning |
-| ----- | ---- | ------- |
-| `key` | `string` | Original object key |
-| `meta` | `{ width, height, format }` | Header metadata of the original |
-| `variants` | `Record<string, string>` | Variant name → object key |
-| `placeholder` | `string?` | ThumbHash data URL when requested |
+| Field         | Type                        | Meaning                           |
+| ------------- | --------------------------- | --------------------------------- |
+| `key`         | `string`                    | Original object key               |
+| `meta`        | `{ width, height, format }` | Header metadata of the original   |
+| `variants`    | `Record<string, string>`    | Variant name → object key         |
+| `placeholder` | `string?`                   | ThumbHash data URL when requested |
 
 </Accordion>
 
@@ -470,24 +468,24 @@ files image variant: set only one of jpeg/png/webp/heic/avif (got jpeg, webp)
 ## Image Pipeline
 
 <Callout title="Detailed section">
-  Prefer `putImage` when you want original + named variants in one call. Use
-  `image(…)` when you need a one-off transform, metadata probe, or custom out key.
+  Prefer `putImage` when you want original + named variants in one call. Use `image(…)` when you
+  need a one-off transform, metadata probe, or custom out key.
 </Callout>
 
 <StoreFilesVariants />
 
 Chain on `fx.store(uploads).image(source, options?)`:
 
-| Step | Meaning |
-| ---- | ------- |
-| `.resize(w, h?, opts?)` | Resize (Bun fit options) |
-| `.rotate(degrees)` · `.flip()` · `.flop()` | Geometry |
-| `.modulate({ brightness?, saturation? })` | Color |
-| `.jpeg` / `.png` / `.webp` / `.heic` / `.avif` | Encode |
-| `.metadata()` | Width / height / format (header) |
-| `.bytes()` · `.blob()` | Materialize |
-| `.placeholder()` | ThumbHash data URL |
-| `.put(outKey)` | Write the transformed bytes |
+| Step                                           | Meaning                          |
+| ---------------------------------------------- | -------------------------------- |
+| `.resize(w, h?, opts?)`                        | Resize (Bun fit options)         |
+| `.rotate(degrees)` · `.flip()` · `.flop()`     | Geometry                         |
+| `.modulate({ brightness?, saturation? })`      | Color                            |
+| `.jpeg` / `.png` / `.webp` / `.heic` / `.avif` | Encode                           |
+| `.metadata()`                                  | Width / height / format (header) |
+| `.bytes()` · `.blob()`                         | Materialize                      |
+| `.placeholder()`                               | ThumbHash data URL               |
+| `.put(outKey)`                                 | Write the transformed bytes      |
 
 Decode guards (`maxPixels`, `autoOrient`) pass as the second argument to
 `image(…)`, same defaults as `putImage`.
@@ -497,10 +495,10 @@ Decode guards (`maxPixels`, `autoOrient`) pass as the second argument to
 <Accordion title="Source resolution">
   `image(source)` accepts an object key **or** raw `Uint8Array`.
 
-| Source | Behavior |
-| ------ | -------- |
+| Source       | Behavior                                                          |
+| ------------ | ----------------------------------------------------------------- |
 | `string` key | Loads via `get`; missing → `files image: object not found: {key}` |
-| `Uint8Array` | Transforms in memory (no prior put required) |
+| `Uint8Array` | Transforms in memory (no prior put required)                      |
 
 ```typescript
 const webp = await fx
@@ -531,10 +529,10 @@ await fx
 
 <Accordion title="Decode guards">
 
-| Option | Default | Meaning |
-| ------ | ------- | ------- |
-| `maxPixels` | `4096 * 4096` (16 MP) | Reject oversized width×height before pixel alloc |
-| `autoOrient` | `true` | Apply JPEG EXIF Orientation first |
+| Option       | Default               | Meaning                                          |
+| ------------ | --------------------- | ------------------------------------------------ |
+| `maxPixels`  | `4096 * 4096` (16 MP) | Reject oversized width×height before pixel alloc |
+| `autoOrient` | `true`                | Apply JPEG EXIF Orientation first                |
 
 Exceeding the ceiling surfaces Bun’s `ERR_IMAGE_TOO_MANY_PIXELS`. Pass a higher
 ceiling, or `maxPixels: false` only when you trust the source.
@@ -545,8 +543,8 @@ ceiling, or `maxPixels: false` only when you trust the source.
 
 ## Declare Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
+| Option        | Type     | Default | Meaning                  |
+| ------------- | -------- | ------- | ------------------------ |
 | `description` | `string` | omitted | Console / Manifest label |
 
 ```typescript
@@ -557,11 +555,11 @@ export const uploads = store.files("uploads", {
 
 ## Drivers
 
-| Driver | Runs as | Best for |
-| ------ | ------- | -------- |
-| `s3` | S3-compatible (RustFS in Compose) | Dev + prod default |
-| `fs` | Local filesystem root | Single-node laptop paths |
-| `memory` | Process map | Test default |
+| Driver   | Runs as                           | Best for                 |
+| -------- | --------------------------------- | ------------------------ |
+| `s3`     | S3-compatible (RustFS in Compose) | Dev + prod default       |
+| `fs`     | Local filesystem root             | Single-node laptop paths |
+| `memory` | Process map                       | Test default             |
 
 Defaults: `s3` / `memory` / `s3` (dev / test / prod). Image pins (e.g.
 RustFS) live under `images.store.files` — the driver id stays `s3`.
@@ -591,44 +589,42 @@ For `s3`, Compose / env typically supply `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
 <Accordions>
 
 <Accordion title="No files driver configured">
-  Boot needs `drivers.store.files` (or `DRIVER_DEFAULTS`). For `s3`, set the
-  bucket / endpoint env your Compose stack expects (`S3_ENDPOINT`,
-  `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`).
+  Boot needs `drivers.store.files` (or `DRIVER_DEFAULTS`). For `s3`, set the bucket / endpoint env
+  your Compose stack expects (`S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`).
 </Accordion>
 
 <Accordion title="Unknown store ref for files">
-  Cause: `Unknown store ref: …`. Import the module that calls
-  `store.files(…)` before Flows run (starters load `@/core`).
+  Cause: `Unknown store ref: …`. Import the module that calls `store.files(…)` before Flows run
+  (starters load `@/core`).
 </Accordion>
 
 <Accordion title="Invalid object key">
-  Cause: `Invalid object key: …` on the `fs` driver when the key starts with
-  `/` or contains `..`. Use relative, non-escaping keys.
+  Cause: `Invalid object key: …` on the `fs` driver when the key starts with `/` or contains `..`.
+  Use relative, non-escaping keys.
 </Accordion>
 
 <Accordion title="ERR_IMAGE_TOO_MANY_PIXELS">
-  Decode exceeded `maxPixels` (default `4096 * 4096`). Pass a higher ceiling
-  or `maxPixels: false` only when you trust the source.
+  Decode exceeded `maxPixels` (default `4096 * 4096`). Pass a higher ceiling or `maxPixels: false`
+  only when you trust the source.
 </Accordion>
 
 <Accordion title="files image: object not found">
-  Cause: `files image: object not found: {key}`. `image(key)` loads via `get`
-  first — put the original, or pass raw `Uint8Array` as the source.
+  Cause: `files image: object not found: {key}`. `image(key)` loads via `get` first — put the
+  original, or pass raw `Uint8Array` as the source.
 </Accordion>
 
 <Accordion title="files image variant: set only one of jpeg/png/…">
-  Each `ImageVariantSpec` may set at most one encode field. Pick `webp` **or**
-  `jpeg`, not both.
+  Each `ImageVariantSpec` may set at most one encode field. Pick `webp` **or** `jpeg`, not both.
 </Accordion>
 
 <Accordion title="get returns null after putImage variant">
-  Read the **variant key** from `result.variants.thumb`, not the original key.
-  Naming is `{stem}.{variant}.{ext}` beside the original.
+  Read the **variant key** from `result.variants.thumb`, not the original key. Naming is `{stem}.
+  {variant}.{ext}` beside the original.
 </Accordion>
 
 <Accordion title="I expected presignPut / transform">
-  Those helpers are not on the fx handle. Upload with `put` / `putImage`, and
-  transform with `image(…).resize(…).webp(…).put(…)` (or `putImage` variants).
+  Those helpers are not on the fx handle. Upload with `put` / `putImage`, and transform with
+  `image(…).resize(…).webp(…).put(…)` (or `putImage` variants).
 </Accordion>
 
 </Accordions>

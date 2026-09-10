@@ -137,11 +137,7 @@ export interface DbOptions {
   /** Rows per backfill page (default 32). */
   readonly batchSize?: number;
   /** Injectable embedder (tests / programmatic). */
-  readonly embed?: (
-    model: string,
-    text: string,
-    dims: number,
-  ) => Promise<readonly number[]>;
+  readonly embed?: (model: string, text: string, dims: number) => Promise<readonly number[]>;
   /** Injectable SQL connection (tests). */
   readonly sqlConn?: import("../drivers/types.ts").SqlConnection;
   /** Injectable Manifest (tests). */
@@ -774,9 +770,7 @@ async function runSearchBackfillCli(
     );
     return EXIT_OK;
   } catch (err) {
-    write(
-      `oke db search-backfill: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
+    write(`oke db search-backfill: ${err instanceof Error ? err.message : String(err)}\n`);
     return EXIT_RUNTIME;
   } finally {
     if (ownsConn && conn) await conn.close().catch(() => {});

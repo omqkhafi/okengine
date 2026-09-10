@@ -10,9 +10,9 @@ Store is how your backend **holds data at rest**. Declare a facet once (`store.s
 For developers persisting domain data on okengine — one handle shape, drivers swapped by environment.
 
 <Callout title="The one rule">
-  World access goes through `fx.store(decl)`. Drivers are **protocol-named** in
-  `oke.config.ts` (`postgres`, `redis`, `s3` — never vendors). Application code never
-  imports a driver client directly.
+  World access goes through `fx.store(decl)`. Drivers are **protocol-named** in `oke.config.ts`
+  (`postgres`, `redis`, `s3` — never vendors). Application code never imports a driver client
+  directly.
 </Callout>
 
 <StoreFacets />
@@ -84,9 +84,9 @@ Response:
 </Steps>
 
 <Callout title="Effects are inferred">
-  Every `fx.store` touch is recorded on the Flow as `reads` / `writes`
-  (`sql:app`, `kv:sessions`, `files:uploads`, …). That powers the Manifest,
-  Console, cache invalidation, and least privilege — no hand-written effect lists.
+  Every `fx.store` touch is recorded on the Flow as `reads` / `writes` (`sql:app`, `kv:sessions`,
+  `files:uploads`, …). That powers the Manifest, Console, cache invalidation, and least privilege —
+  no hand-written effect lists.
 </Callout>
 
 ## Progressive Patterns
@@ -111,11 +111,7 @@ export const get = on(
     in: z.object({ id: z.string() }),
     errors: { NotFound: z.object({ id: z.string() }) },
     do: async ({ id }, fx) => {
-      const [note] = await fx
-        .store(db)
-        .select()
-        .from(notes)
-        .where(eq(notes.id, id));
+      const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
       if (!note) return fx.fail("NotFound", { id });
       return note;
     },
@@ -197,12 +193,12 @@ Full surface: [Search](/docs/elements/store/search).
 
 ## Facet Reference
 
-| Facet | Declare | `fx.store` handle | Resource ref | Default drivers (dev / test / prod) |
-| ----- | ------- | ----------------- | ------------ | ----------------------------------- |
-| SQL | `store.sql(name, opts?)` | select / insert / update / page / search / … | `sql:name` | `postgres` / `pglite` / `postgres` |
-| KV | `store.kv(name, opts?)` | `get` · `set` · `delete` · `list` · `ttlMs` | `kv:name` | `redis` / `memory` / `redis` |
-| Files | `store.files(name, opts?)` | `put` · `get` · `delete` · `list` · `image` · `putImage` | `files:name` | `s3` / `memory` / `s3` |
-| Index | `store.index(name, opts?)` | vector or Meilisearch (by `driverId`) | `index:name` | pin explicitly — no three-env default |
+| Facet | Declare                    | `fx.store` handle                                        | Resource ref | Default drivers (dev / test / prod)   |
+| ----- | -------------------------- | -------------------------------------------------------- | ------------ | ------------------------------------- |
+| SQL   | `store.sql(name, opts?)`   | select / insert / update / page / search / …             | `sql:name`   | `postgres` / `pglite` / `postgres`    |
+| KV    | `store.kv(name, opts?)`    | `get` · `set` · `delete` · `list` · `ttlMs`              | `kv:name`    | `redis` / `memory` / `redis`          |
+| Files | `store.files(name, opts?)` | `put` · `get` · `delete` · `list` · `image` · `putImage` | `files:name` | `s3` / `memory` / `s3`                |
+| Index | `store.index(name, opts?)` | vector or Meilisearch (by `driverId`)                    | `index:name` | pin explicitly — no three-env default |
 
 Built-in hybrid search (`fx.store(db).search`) lives on the **SQL** handle — see [Search](/docs/elements/store/search). `store.index` is the optional external engine facet.
 
@@ -227,12 +223,12 @@ export default defineConfig({
 });
 ```
 
-| Facet | Protocol ids | Best for |
-| ----- | ------------ | -------- |
-| `sql` | `postgres` · `pglite` · `memory` | Domain tables, RLS, live queries, BM25 |
-| `kv` | `redis` · `memory` (+ durable SQL via `oke_kv`) | Sessions, caches, short-lived locks |
-| `files` | `s3` · `fs` · `memory` | Uploads, exports, image variants |
-| `index` | `memory` · `pgvector` · `meilisearch` | Hosted FTS / ANN outside the primary table |
+| Facet   | Protocol ids                                    | Best for                                   |
+| ------- | ----------------------------------------------- | ------------------------------------------ |
+| `sql`   | `postgres` · `pglite` · `memory`                | Domain tables, RLS, live queries, BM25     |
+| `kv`    | `redis` · `memory` (+ durable SQL via `oke_kv`) | Sessions, caches, short-lived locks        |
+| `files` | `s3` · `fs` · `memory`                          | Uploads, exports, image variants           |
+| `index` | `memory` · `pgvector` · `meilisearch`           | Hosted FTS / ANN outside the primary table |
 
 ## The Capabilities of Store
 
@@ -264,24 +260,23 @@ export default defineConfig({
 <Accordions>
 
 <Accordion title="No sql/kv/files/index driver configured">
-  Boot needs a driver for that facet. Check `drivers.store.*` (or rely on
-  `DRIVER_DEFAULTS`) and that Compose / env URLs match the protocol.
+  Boot needs a driver for that facet. Check `drivers.store.*` (or rely on `DRIVER_DEFAULTS`) and
+  that Compose / env URLs match the protocol.
 </Accordion>
 
 <Accordion title="Unknown store ref / Unknown kv ref">
-  `fx.store` received a declaration that was never registered — import the
-  module that calls `store.sql` / `store.kv` / … before the Flow runs (starters
-  load `@/core`).
+  `fx.store` received a declaration that was never registered — import the module that calls
+  `store.sql` / `store.kv` / … before the Flow runs (starters load `@/core`).
 </Accordion>
 
-<Accordion title="fx.store(&quot;sql:…&quot;): no store runtime">
-  The app has not booted a store runtime. Run through `oke` / `oke dev` so
-  drivers bind; do not call `fx.store` outside a Flow invoke.
+<Accordion title='fx.store("sql:…"): no store runtime'>
+  The app has not booted a store runtime. Run through `oke` / `oke dev` so drivers bind; do not call
+  `fx.store` outside a Flow invoke.
 </Accordion>
 
 <Accordion title="OKE1110 — domain table not found">
-  Cause: `domain table not found — migrations have not been applied.`
-  Run `oke db push` (dev) or `oke db migrate` against that environment.
+  Cause: `domain table not found — migrations have not been applied.` Run `oke db push` (dev) or
+  `oke db migrate` against that environment.
 </Accordion>
 
 </Accordions>

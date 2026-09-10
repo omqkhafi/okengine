@@ -85,11 +85,11 @@ missing → `user_not_verified`; cloned counter → `reregister_required`.
 
 ## Server checks
 
-| Check | Behavior |
-| ----- | -------- |
-| Ceremony type | `clientDataJSON.type` must be `webauthn.create` (register) or `webauthn.get` (authenticate) |
-| User verification | AuthenticatorData UV bit must be set — UV=false is always rejected |
-| Challenge binding | Challenge hash + `sessionId` must match; TTL ≤ 5 minutes; single-use |
+| Check             | Behavior                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Ceremony type     | `clientDataJSON.type` must be `webauthn.create` (register) or `webauthn.get` (authenticate)                             |
+| User verification | AuthenticatorData UV bit must be set — UV=false is always rejected                                                      |
+| Challenge binding | Challenge hash + `sessionId` must match; TTL ≤ 5 minutes; single-use                                                    |
 | Signature counter | Stored per credential; if stored ≠ 0 and incoming `signCount` ≤ stored → delete credential, warn, `reregister_required` |
 
 ## Options

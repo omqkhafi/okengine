@@ -37,11 +37,7 @@ type Gated = <T>(
  * @param url - Absolute URL
  * @param init - Fetch init
  */
-export function runFxFetch(
-  gated: Gated,
-  url: string | URL,
-  init?: RequestInit,
-): Promise<Response> {
+export function runFxFetch(gated: Gated, url: string | URL, init?: RequestInit): Promise<Response> {
   const href = typeof url === "string" ? url : url.href;
   const host = hostFromFetchUrl(href);
   return gated(

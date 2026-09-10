@@ -6,7 +6,13 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyAiSetup, mergeAiApiKeyVaultSecret, renderAiTs, upsertAiDrivers, upsertEnv } from "./apply.ts";
+import {
+  applyAiSetup,
+  mergeAiApiKeyVaultSecret,
+  renderAiTs,
+  upsertAiDrivers,
+  upsertEnv,
+} from "./apply.ts";
 import {
   aiProviderSelectOptions,
   cloudApplyDefaults,
@@ -80,7 +86,9 @@ describe("apply", () => {
 
   test("upsertEnv uncomment / set", () => {
     const env = `# OKE_AI_DRIVER=mock\nOKE_AI_URL=http://x\n`;
-    expect(upsertEnv(env, "OKE_AI_DRIVER", "openai-compatible")).toContain("OKE_AI_DRIVER=openai-compatible");
+    expect(upsertEnv(env, "OKE_AI_DRIVER", "openai-compatible")).toContain(
+      "OKE_AI_DRIVER=openai-compatible",
+    );
   });
 
   test("upsertEnv comment keeps stack keys as overrides", () => {
@@ -105,7 +113,7 @@ describe("apply", () => {
     });
     expect(ts).toContain('ai.model("smart"');
     expect(ts).toContain('provider: "openai-compatible"');
-    expect(ts).not.toContain('driverId:');
+    expect(ts).not.toContain("driverId:");
     expect(ts).toContain('ai.model("local"');
     expect(ts).toContain('ai.model("vision"');
     expect(ts).toContain("docsEmbed");
@@ -122,7 +130,9 @@ describe("apply", () => {
     expect(ts).toContain('provider: "openrouter"');
     expect(ts).toContain("openrouter/free");
     expect(ts).toContain("OPENROUTER_API_KEY");
-    expect(ts).not.toContain('baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1"');
+    expect(ts).not.toContain(
+      'baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1"',
+    );
     expect(ts).toContain("OPENAI_BASE_URL?.trim() ? { baseUrl:");
   });
 
@@ -249,7 +259,11 @@ export default defineConfig({
 `,
         "utf8",
       );
-      writeFileSync(join(dir, "src", "app.ts"), `import "@/core";\nexport const app = {};\n`, "utf8");
+      writeFileSync(
+        join(dir, "src", "app.ts"),
+        `import "@/core";\nexport const app = {};\n`,
+        "utf8",
+      );
 
       applyAiSetup(dir, {
         driver: "openai-compatible",
@@ -315,7 +329,11 @@ export const summarizeNote = smart.prompt("summarize-note", {
 `,
         "utf8",
       );
-      writeFileSync(join(dir, "src", "app.ts"), `import "@/core";\nexport const app = {};\n`, "utf8");
+      writeFileSync(
+        join(dir, "src", "app.ts"),
+        `import "@/core";\nexport const app = {};\n`,
+        "utf8",
+      );
 
       applyAiSetup(dir, {
         driver: "openai-compatible",
@@ -363,7 +381,11 @@ export default defineConfig({
       );
       mkdirSync(join(dir, "src"), { recursive: true });
       writeFileSync(join(dir, "src", "core.ts"), `import { store } from "okengine";\n`, "utf8");
-      writeFileSync(join(dir, "src", "app.ts"), `import "@/core";\nexport const app = {};\n`, "utf8");
+      writeFileSync(
+        join(dir, "src", "app.ts"),
+        `import "@/core";\nexport const app = {};\n`,
+        "utf8",
+      );
 
       applyAiSetup(dir, {
         driver: "openai-compatible",
@@ -497,12 +519,7 @@ export const webhookSecret = vault.secret("APP_WEBHOOK_SECRET", {
 
 describe("parseAiSetupArgs", () => {
   test("parses provider and models", () => {
-    const a = parseAiSetupArgs([
-      "--provider",
-      "openrouter",
-      "--chat=openrouter/free",
-      "--yes",
-    ]);
+    const a = parseAiSetupArgs(["--provider", "openrouter", "--chat=openrouter/free", "--yes"]);
     expect(a.provider).toBe("openrouter");
     expect(a.chat).toBe("openrouter/free");
     expect(a.yes).toBe(true);

@@ -9,17 +9,13 @@ import { ai } from "okengine";
 import { z } from "zod";
 
 const chatModel =
-  process.env.OKE_AI_CLOUD_MODEL?.trim() ||
-  process.env.OKE_AI_MODEL?.trim() ||
-  "openrouter/free";
+  process.env.OKE_AI_CLOUD_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || "openrouter/free";
 
 const smart = ai.model("smart", {
   provider: "openrouter",
   tier: "smart",
   model: chatModel,
-  ...(process.env.OPENAI_BASE_URL?.trim()
-    ? { baseUrl: process.env.OPENAI_BASE_URL.trim() }
-    : {}),
+  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),
   ...(process.env.OPENROUTER_API_KEY?.trim()
     ? { apiKey: process.env.OPENROUTER_API_KEY.trim() }
     : {}),
@@ -28,9 +24,7 @@ const fast = ai.model("fast", {
   provider: "openrouter",
   tier: "fast",
   model: chatModel,
-  ...(process.env.OPENAI_BASE_URL?.trim()
-    ? { baseUrl: process.env.OPENAI_BASE_URL.trim() }
-    : {}),
+  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),
   ...(process.env.OPENROUTER_API_KEY?.trim()
     ? { apiKey: process.env.OPENROUTER_API_KEY.trim() }
     : {}),

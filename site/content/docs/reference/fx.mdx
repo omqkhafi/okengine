@@ -10,9 +10,9 @@ whole surface; each entry notes the **effect it records**, which feeds the Manif
 and capability checks.
 
 <Callout title="The one rule">
-  All world access goes through `fx`. No `node:` I/O, no raw `fetch` for side effects
-  (use `fx.fetch` instead), no `Date.now()` — clocks, stores, channels, vault, AI, and
-  outbound HTTP only through this object.
+  All world access goes through `fx`. No `node:` I/O, no raw `fetch` for side effects (use
+  `fx.fetch` instead), no `Date.now()` — clocks, stores, channels, vault, AI, and outbound HTTP only
+  through this object.
 </Callout>
 
 ## Smallest Example
@@ -61,29 +61,29 @@ A narrower structural type will not match `store()` overloads. See [Flow](/docs/
 
 ## What the effects ledger powers
 
-| Derived behavior | From |
-| ---------------- | ---- |
-| Cache invalidation | Inferred / ledgered `reads` · `writes` |
-| Live queries / CDC | Store `writes` observed as row events |
-| Least-privilege tokens | Effect matrices on Flows |
-| Deterministic tests | Injectable clock · store · channel |
-| Runs observability | Wide events per invocation (`fx.runs`) |
+| Derived behavior       | From                                   |
+| ---------------------- | -------------------------------------- |
+| Cache invalidation     | Inferred / ledgered `reads` · `writes` |
+| Live queries / CDC     | Store `writes` observed as row events  |
+| Least-privilege tokens | Effect matrices on Flows               |
+| Deterministic tests    | Injectable clock · store · channel     |
+| Runs observability     | Wide events per invocation (`fx.runs`) |
 
 ## Stores
 
-| Signature                                                           | Records      | Returns                                                                                     |
-| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------- |
-| `fx.store(sqlDecl).select().from(t)…`                               | `read`       | inferred rows (`where` · `orderBy` · `limit` · `offset` chainable)                          |
-| `fx.store(sqlDecl).insert(t).values(v)`                             | `write`      | `Promise<void>`                                                                             |
-| `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`      | `Promise<void>`                                                                             |
-| `fx.store(sqlDecl).delete(t).where(…)`                              | `write`      | `Promise<void>`                                                                             |
-| `fx.store(sqlDecl).findById(t, id)`                                 | `read`       | row \| undefined                                                                            |
-| `fx.store(sqlDecl).search(table, { query, fuse?, rerank?, … })`     | `read` (+ `ask` if rerank) | `{ data, meta }` hybrid BM25 ± LSH — see [Search](/docs/elements/store/search)     |
-| `fx.store(kv).get / set(key, value, ttl?) / delete / list(prefix?)` | read / write | per op                                                                                      |
-| `fx.store(files).put / get / delete / list(prefix?)`                | read / write | per op                                                                                      |
-| `fx.store(files).image(key\|bytes).…`                               | read / write | Bun.Image chain; terminals gate (see [Store](/docs/elements/store#images--image--putimage)) |
-| `fx.store(files).putImage(key, data, opts?)`                        | `write`      | original + variants (+ optional LQIP)                                                       |
-| `fx.store(index).upsert / search(vector, topK?) / delete`           | read / write | per op                                                                                      |
+| Signature                                                           | Records                    | Returns                                                                                     |
+| ------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
+| `fx.store(sqlDecl).select().from(t)…`                               | `read`                     | inferred rows (`where` · `orderBy` · `limit` · `offset` chainable)                          |
+| `fx.store(sqlDecl).insert(t).values(v)`                             | `write`                    | `Promise<void>`                                                                             |
+| `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`                    | `Promise<void>`                                                                             |
+| `fx.store(sqlDecl).delete(t).where(…)`                              | `write`                    | `Promise<void>`                                                                             |
+| `fx.store(sqlDecl).findById(t, id)`                                 | `read`                     | row \| undefined                                                                            |
+| `fx.store(sqlDecl).search(table, { query, fuse?, rerank?, … })`     | `read` (+ `ask` if rerank) | `{ data, meta }` hybrid BM25 ± LSH — see [Search](/docs/elements/store/search)              |
+| `fx.store(kv).get / set(key, value, ttl?) / delete / list(prefix?)` | read / write               | per op                                                                                      |
+| `fx.store(files).put / get / delete / list(prefix?)`                | read / write               | per op                                                                                      |
+| `fx.store(files).image(key\|bytes).…`                               | read / write               | Bun.Image chain; terminals gate (see [Store](/docs/elements/store#images--image--putimage)) |
+| `fx.store(files).putImage(key, data, opts?)`                        | `write`                    | original + variants (+ optional LQIP)                                                       |
+| `fx.store(index).upsert / search(vector, topK?) / delete`           | read / write               | per op                                                                                      |
 
 See [Store](/docs/elements/store) for the query-builder surface.
 
@@ -214,8 +214,8 @@ contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Ch
 
 ## Outbound HTTP
 
-| Signature | Records | Notes |
-| --- | --- | --- |
+| Signature              | Records                     | Notes                                                                     |
+| ---------------------- | --------------------------- | ------------------------------------------------------------------------- |
 | `fx.fetch(url, init?)` | `fetch` on the URL hostname | Always stamps `EffectEntry.external` with `{ host, kind: "third-party" }` |
 
 Declare hosts in `effects.fetches` (e.g. `["api.stripe.com"]`). Prefer `fx.step`; use
@@ -331,19 +331,18 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
 <Accordions>
 
 <Accordion title="OKE1001–1007 / 1008 / 1009 undeclared effect">
-  An explicit `effects` block drifted from what `do` touches. Add the missing ledger
-  entry (`reads` · `writes` · `emits` · `sends` · `asks` · `embeds` · `secrets` ·
-  `calls` · `fetches`), or drop the block so inference covers the Flow ([Errors](/docs/reference/errors)).
+  An explicit `effects` block drifted from what `do` touches. Add the missing ledger entry (`reads`
+  · `writes` · `emits` · `sends` · `asks` · `embeds` · `secrets` · `calls` · `fetches`), or drop the
+  block so inference covers the Flow ([Errors](/docs/reference/errors)).
 </Accordion>
 
 <Accordion title="OKE1240 orphan emit">
-  `fx.emit` with zero subscribers and `optional: false`. Add `on(signal, …)` or
-  declare the signal `optional: true`.
+  `fx.emit` with zero subscribers and `optional: false`. Add `on(signal, …)` or declare the signal
+  `optional: true`.
 </Accordion>
 
 <Accordion title="OKE1250 signal schema">
-  Emit payload failed the signal's `schema`. Pass a matching payload or remove
-  the schema.
+  Emit payload failed the signal's `schema`. Pass a matching payload or remove the schema.
 </Accordion>
 
 <Accordion title="Cross-signal fx.live / fx.deadLetters">
@@ -370,14 +369,6 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
 
 <Cards>
   <Card title="Flow" description="Triggers, effects, and durability." href="/docs/elements/flow" />
-  <Card
-    title="Errors"
-    description="OKE codes and failure values."
-    href="/docs/reference/errors"
-  />
-  <Card
-    title="Client"
-    description="Call Flows with the same envelope."
-    href="/docs/client"
-  />
+  <Card title="Errors" description="OKE codes and failure values." href="/docs/reference/errors" />
+  <Card title="Client" description="Call Flows with the same envelope." href="/docs/client" />
 </Cards>

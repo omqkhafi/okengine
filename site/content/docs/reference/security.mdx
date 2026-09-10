@@ -12,9 +12,9 @@ Reach for this page when you put a public hostname in front of the app, open Con
 in production, or wire MCP tokens.
 
 <Callout title="The one rule">
-  Pass every public hostname in `allowedHosts` on `createBunRuntime().serve` (and the
-  Console / MCP serve options). Loopback is always allowed; `Origin: null` is always
-  rejected. Failures return **403**.
+  Pass every public hostname in `allowedHosts` on `createBunRuntime().serve` (and the Console / MCP
+  serve options). Loopback is always allowed; `Origin: null` is always rejected. Failures return
+  **403**.
 </Callout>
 
 ## Smallest Example
@@ -89,10 +89,10 @@ exceeds the creator's scopes.
 
 <Tab value="MCP">
 
-| Surface | Port | Auth |
-| ------- | ---- | ---- |
-| App MCP | **6535** | Bearer required **even on localhost**; audience `oke-mcp` |
-| Docs MCP | **6536** | Host / Origin only — public docs, not a live Manifest |
+| Surface  | Port     | Auth                                                      |
+| -------- | -------- | --------------------------------------------------------- |
+| App MCP  | **6535** | Bearer required **even on localhost**; audience `oke-mcp` |
+| Docs MCP | **6536** | Host / Origin only — public docs, not a live Manifest     |
 
 App MCP inherits **operator-plane** capability and never exceeds it. Tokens are
 never forwarded upstream. Tools declare scopes; writes need confirmation.
@@ -103,36 +103,36 @@ never forwarded upstream. Tools declare scopes; writes need confirmation.
 
 ## Host / Origin Rules
 
-| Check | Behavior |
-| ----- | -------- |
-| `Host` | Required; must match the effective allow-list |
-| `Origin` | When present, host must match; `Origin: null` → 403 |
+| Check    | Behavior                                                             |
+| -------- | -------------------------------------------------------------------- |
+| `Host`   | Required; must match the effective allow-list                        |
+| `Origin` | When present, host must match; `Origin: null` → 403                  |
 | Defaults | Always includes loopback + listen hostname (unless `0.0.0.0` / `::`) |
-| Extras | `ServeOptions.allowedHosts` — never replaces the mandatory check |
+| Extras   | `ServeOptions.allowedHosts` — never replaces the mandatory check     |
 
 `allowedHosts` lives on **serve options**, not in `oke.config.ts`. Pass it wherever
 you call `serve` for **6530**, Console **6533**, and app MCP **6535**.
 
 ## Console Posture
 
-| Control | Meaning |
-| ------- | ------- |
-| Host / Origin | Same allow-list logic as the backend |
-| CSP | `default-src 'self'`; `frame-ancestors 'none'` |
-| Cookies | `SameSite=Strict` |
-| Claim code | Printed on `oke dev` TTY; `oke console claim-code` while setup is open |
-| PII | Store / Call API mask classified fields unless `revealPii: true` (audited) |
+| Control       | Meaning                                                                    |
+| ------------- | -------------------------------------------------------------------------- |
+| Host / Origin | Same allow-list logic as the backend                                       |
+| CSP           | `default-src 'self'`; `frame-ancestors 'none'`                             |
+| Cookies       | `SameSite=Strict`                                                          |
+| Claim code    | Printed on `oke dev` TTY; `oke console claim-code` while setup is open     |
+| PII           | Store / Call API mask classified fields unless `revealPii: true` (audited) |
 
 Production Console: set `OKE_CONSOLE_SECRET` and configure
 `console.prod` in [Configuration](/docs/reference/configuration#console).
 
 ## Sessions and Audiences
 
-| Audience | Surface |
-| -------- | ------- |
-| `oke-app` | Application sessions |
-| `oke-console` | Console operators |
-| `oke-mcp` | App MCP |
+| Audience      | Surface              |
+| ------------- | -------------------- |
+| `oke-app`     | Application sessions |
+| `oke-console` | Console operators    |
+| `oke-mcp`     | App MCP              |
 
 Short access JWT (default ~14m) + rotating refresh. Refresh-token reuse revokes
 the family.
@@ -142,30 +142,28 @@ the family.
 <Accordions>
 
 <Accordion title="403 Forbidden: unexpected Host header">
-  The request `Host` is not on the allow-list. Add the public hostname to
-  `allowedHosts`, or hit loopback (`localhost` / `127.0.0.1`) during local
-  `oke dev`.
+  The request `Host` is not on the allow-list. Add the public hostname to `allowedHosts`, or hit
+  loopback (`localhost` / `127.0.0.1`) during local `oke dev`.
 </Accordion>
 
 <Accordion title="403 Forbidden: unexpected Origin header">
-  Browser sent an `Origin` whose host is not allowed, or `Origin: null`. Align
-  the page origin with `allowedHosts`, or call same-origin / non-browser clients
-  without a spoofed Origin.
+  Browser sent an `Origin` whose host is not allowed, or `Origin: null`. Align the page origin with
+  `allowedHosts`, or call same-origin / non-browser clients without a spoofed Origin.
 </Accordion>
 
 <Accordion title="MCP tools refuse without Bearer on localhost">
-  App MCP on **6535** requires a Bearer with audience `oke-mcp` even on
-  loopback. Docs MCP on **6536** does not — it serves documentation only.
+  App MCP on **6535** requires a Bearer with audience `oke-mcp` even on loopback. Docs MCP on
+  **6536** does not — it serves documentation only.
 </Accordion>
 
 <Accordion title="CrossPlaneError">
-  A user-plane token reached an operator Flow (or the reverse). Use the principal
-  that matches the Flow's `plane`.
+  A user-plane token reached an operator Flow (or the reverse). Use the principal that matches the
+  Flow's `plane`.
 </Accordion>
 
 <Accordion title="AttenuationError">
-  A derived key or invoke-as identity requested a scope the creator cannot grant.
-  Re-issue with a subset of the creator's scopes.
+  A derived key or invoke-as identity requested a scope the creator cannot grant. Re-issue with a
+  subset of the creator's scopes.
 </Accordion>
 
 </Accordions>

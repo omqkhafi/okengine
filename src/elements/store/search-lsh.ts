@@ -66,9 +66,7 @@ export function lshBucket(vector: readonly number[], planes: readonly Float32Arr
   for (let i = 0; i < planes.length; i++) {
     const plane = planes[i]!;
     if (vector.length !== plane.length) {
-      throw new Error(
-        `lshBucket: vector length ${vector.length} !== plane dims ${plane.length}`,
-      );
+      throw new Error(`lshBucket: vector length ${vector.length} !== plane dims ${plane.length}`);
     }
     let dot = 0;
     for (let j = 0; j < plane.length; j++) {

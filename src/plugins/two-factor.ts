@@ -7,10 +7,7 @@
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
 import { IdentityError, ensureUserExists, getUserById } from "../auth/identity.ts";
-import {
-  getActiveGateAuthContext,
-  patchActiveGateAuthContext,
-} from "../auth/method-context.ts";
+import { getActiveGateAuthContext, patchActiveGateAuthContext } from "../auth/method-context.ts";
 import { sealOtp } from "../auth/otp-seal.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import {
@@ -123,21 +120,17 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
   const issuer = opts.issuer ?? "oke";
   const secret = resolveMethodSecret(opts);
   const active = getActiveGateAuthContext();
-  const pending =
-    opts.pending ?? active?.pendingTwoFactor ?? createPendingTwoFactorStore();
+  const pending = opts.pending ?? active?.pendingTwoFactor ?? createPendingTwoFactorStore();
   const stepUp = opts.stepUp ?? active?.stepUp ?? createStepUpStore();
   const verifications =
     opts.verifications ?? active?.twoFactorVerifications ?? createVerificationStore();
   const exposeDevOtp = opts.exposeDevOtp === true;
 
-  const emailTmpl = channel.email({ from: "OKE <no-reply@oke.local>" }).template(
-    "auth-2fa-email",
-    {
-      description: "Two-factor email OTP",
-      schema: z.object({ email: z.string(), otp: z.string() }),
-      locales: ["en", "ar"],
-    },
-  );
+  const emailTmpl = channel.email({ from: "OKE <no-reply@oke.local>" }).template("auth-2fa-email", {
+    description: "Two-factor email OTP",
+    schema: z.object({ email: z.string(), otp: z.string() }),
+    locales: ["en", "ar"],
+  });
 
   async function provisionEmailOtp(userId: string, now: number): Promise<string | undefined> {
     const user = getUserById(identities, userId);
@@ -198,11 +191,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  async function verifyCurrentFactor(
-    userId: string,
-    code: string,
-    now: number,
-  ): Promise<boolean> {
+  async function verifyCurrentFactor(userId: string, code: string, now: number): Promise<boolean> {
     const row = factors.byUserId.get(userId);
     if (!row?.enabled) return false;
     const trimmed = code.trim().replace(/\s+/g, "");
@@ -482,11 +471,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
         return { ok: true as const, method: "totp" as const };
       }
       // Confirm email_otp by consuming the sealed OTP for this user.
-      const vRow = findActiveVerification(
-        verifications,
-        twoFactorEmailOtpIdentifier(userId),
-        now,
-      );
+      const vRow = findActiveVerification(verifications, twoFactorEmailOtpIdentifier(userId), now);
       if (!vRow) return fail("AuthFailed", { reason: "invalid_credentials" });
       const trimmed = input.code.trim().replace(/\s+/g, "");
       const hash = await hashChallenge(trimmed);
@@ -588,7 +573,12 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     .binding(bindSessionAuth("/two-factor/change-method", changeMethod, changeMethodContract))
     .binding(bindSessionAuth("/two-factor/confirm-change", confirmChange, confirmChangeContract))
     .binding(
-      bindPublicAuth("/two-factor/request-email-otp", requestEmailOtp, "otp", requestEmailOtpContract),
+      bindPublicAuth(
+        "/two-factor/request-email-otp",
+        requestEmailOtp,
+        "otp",
+        requestEmailOtpContract,
+      ),
     )
     .binding(bindSessionAuth("/two-factor/disable", disable, disableContract));
 }

@@ -73,7 +73,8 @@ async function askCloudPath(provider: AiSetupProvider): Promise<AiSetupApplyInpu
   const declProvider = meta.provider ?? meta.value;
 
   let baseUrl: string | undefined = meta.baseUrl;
-  const needsUrlPrompt = meta.promptBaseUrl === true || (baseUrl === undefined && driver !== "anthropic");
+  const needsUrlPrompt =
+    meta.promptBaseUrl === true || (baseUrl === undefined && driver !== "anthropic");
   if (needsUrlPrompt) {
     const urlValue = await text({
       message: "OpenAI-compatible base URL",
@@ -104,7 +105,8 @@ async function askCloudPath(provider: AiSetupProvider): Promise<AiSetupApplyInpu
 
   const finish = (chatModel: string): AiSetupApplyInput => {
     // Registry openai-compat: omit baseUrl so ai.model auto-resolves.
-    const omitBase = meta.baseUrl !== undefined && !meta.promptBaseUrl && driver === "openai-compatible";
+    const omitBase =
+      meta.baseUrl !== undefined && !meta.promptBaseUrl && driver === "openai-compatible";
     return {
       driver,
       provider: declProvider,

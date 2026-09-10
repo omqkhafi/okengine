@@ -315,9 +315,7 @@ function smartBaseUrlLines(
   }
   // custom / lmstudio — prefer OPENAI_BASE_URL, fall back to setup-time URL when present
   if (input.baseUrl) {
-    return [
-      `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || ${JSON.stringify(input.baseUrl)},`,
-    ];
+    return [`  baseUrl: process.env.OPENAI_BASE_URL?.trim() || ${JSON.stringify(input.baseUrl)},`];
   }
   return [
     `  ...(process.env.OPENAI_BASE_URL?.trim() ? { baseUrl: process.env.OPENAI_BASE_URL.trim() } : {}),`,

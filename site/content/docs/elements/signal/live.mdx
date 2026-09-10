@@ -76,9 +76,8 @@ Response `Content-Type` is `text/event-stream`. Frames are JSON `data:` lines
 </Steps>
 
 <Callout title="Pathless firehose">
-  `on(http.live(signal))` always mounts `GET /_oke/live/{name}` — there is no pathless
-  file-tree stamp for live. Custom paths use `http.get(path).live(signal)`. See
-  [Exposure](#exposure).
+  `on(http.live(signal))` always mounts `GET /_oke/live/{name}` — there is no pathless file-tree
+  stamp for live. Custom paths use `http.get(path).live(signal)`. See [Exposure](#exposure).
 </Callout>
 
 ## Progressive Patterns
@@ -113,9 +112,7 @@ import { on, http } from "okengine";
 import { member } from "@/core/gate";
 import { orderStatus } from "@/signals/orders";
 
-export const events = on(
-  http.get("/orders/:orderId/events").gate(member).live(orderStatus),
-);
+export const events = on(http.get("/orders/:orderId/events").gate(member).live(orderStatus));
 ```
 
 `GET /orders/ord_1/events` receives `{ orderId: "ord_1", status: "shipped" }` and drops other
@@ -179,14 +176,14 @@ Reconnects send `Last-Event-ID` from the last `id:` received. See
 Optional second argument to `signal.live(name, options?)`. Delivery is the helper name — not an
 option.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | **Emit** contract — validated at `fx.emit` (**OKE1250**) |
-| `optional` | `boolean` | `false` | Allow emit with zero SSE clients / subscribers |
-| `retention` | `{ maxAge?, maxCount? }` | unbounded | Prune the tape (live-only) |
-| `description` | `string` | the name | Console / docs blurb |
-| `retries` | `number` | `3` | Declared; live uses the tape, not once DLQ |
-| `deadLetter` | `boolean` | `true` | Declared; live does not use once DLQ |
+| Option        | Type                     | Default   | Meaning                                                  |
+| ------------- | ------------------------ | --------- | -------------------------------------------------------- |
+| `schema`      | Standard Schema          | omitted   | **Emit** contract — validated at `fx.emit` (**OKE1250**) |
+| `optional`    | `boolean`                | `false`   | Allow emit with zero SSE clients / subscribers           |
+| `retention`   | `{ maxAge?, maxCount? }` | unbounded | Prune the tape (live-only)                               |
+| `description` | `string`                 | the name  | Console / docs blurb                                     |
+| `retries`     | `number`                 | `3`       | Declared; live uses the tape, not once DLQ               |
+| `deadLetter`  | `boolean`                | `true`    | Declared; live does not use once DLQ                     |
 
 **Consequence:** `retention` on `signal.once` / `signal.broadcast` is a type error — switch to
 `signal.live` or drop the option.
@@ -225,12 +222,12 @@ curl -N http://localhost:6530/_oke/live/order-status \
 
 Three GET shapes expose a live SSE body. Pick the physics first, then the path.
 
-| Declaration | Path | Physics |
-| ----------- | ---- | ------- |
-| `on(http.live(signal))` | `GET /_oke/live/{name}` | Signal tape — every event |
-| `on(http.get(path).live(signal))` | Your path | Signal tape — auto-match on `:params` |
-| `on(http.get(path).live(table), flow)` | Your path | Live **query** — classified CDC rows |
-| `store.resource({ live: true })` + `http.resource` | `GET <path>/live` | Same live-query physics |
+| Declaration                                        | Path                    | Physics                               |
+| -------------------------------------------------- | ----------------------- | ------------------------------------- |
+| `on(http.live(signal))`                            | `GET /_oke/live/{name}` | Signal tape — every event             |
+| `on(http.get(path).live(signal))`                  | Your path               | Signal tape — auto-match on `:params` |
+| `on(http.get(path).live(table), flow)`             | Your path               | Live **query** — classified CDC rows  |
+| `store.resource({ live: true })` + `http.resource` | `GET <path>/live`       | Same live-query physics               |
 
 Signal firehoses and resource live queries are different physics — see Live Queries below.
 
@@ -246,9 +243,7 @@ import { on, http } from "okengine";
 import { member } from "@/core/gate";
 import { orderStatus } from "@/signals/orders";
 
-export const events = on(
-  http.get("/orders/:orderId/events").gate(member).live(orderStatus),
-);
+export const events = on(http.get("/orders/:orderId/events").gate(member).live(orderStatus));
 ```
 
 `GET /orders/ord_1/events` receives `{ orderId: "ord_1", status: "shipped" }`
@@ -288,19 +283,19 @@ firehoses that share signal **and** gates fail uniqueness — see Uniqueness.
   row events (RLS + list filters). Prefer `http.resource` + `{ live: true }` when
   you already mount the five CRUD ops.
 
-| `live` on the resource | Result |
-| ---------------------- | ------ |
-| `{ live: true }`       | Mount `GET <path>/live` now |
+| `live` on the resource | Result                                         |
+| ---------------------- | ---------------------------------------------- |
+| `{ live: true }`       | Mount `GET <path>/live` now                    |
 | omitted                | Mount only if `oke({ store: { live: true } })` |
-| `{ live: false }`      | Never mount live for this resource |
+| `{ live: false }`      | Never mount live for this resource             |
 
 Wire events (consumed with `useLiveQuery` on the [typed client](/docs/client/react)):
 
-| `kind`    | Meaning |
-| --------- | ------- |
-| `upsert`  | Row visible under stamp + query — merge by primary key |
+| `kind`    | Meaning                                                     |
+| --------- | ----------------------------------------------------------- |
+| `upsert`  | Row visible under stamp + query — merge by primary key      |
 | `revoked` | Row left visibility (`reason: "rls"` or `"query"`) — remove |
-| `delete`  | Row deleted — remove |
+| `delete`  | Row deleted — remove                                        |
 
 For a handwritten list, bind the table on GET and open the window with
 `liveQuery` — full detail under [HTTP · Live Streams](/docs/elements/flow/http#live-streams).
@@ -312,12 +307,12 @@ For a handwritten list, bind the table on GET and open the window with
   sorted path-param names, or `custom:<flow>` when you passed a Flow, or
   `(firehose)` when there are no params.
 
-| Pair | Boots? |
-| ---- | ------ |
-| Member `:orderId` + admin firehose | Yes — gates and match differ |
-| Same params, different gates | Yes — the client disambiguates with `via` |
-| Two member firehoses on different paths | No — **OKE1050** |
-| Same method + path twice | No — **OKE1041** first |
+| Pair                                    | Boots?                                    |
+| --------------------------------------- | ----------------------------------------- |
+| Member `:orderId` + admin firehose      | Yes — gates and match differ              |
+| Same params, different gates            | Yes — the client disambiguates with `via` |
+| Two member firehoses on different paths | No — **OKE1050**                          |
+| Same method + path twice                | No — **OKE1041** first                    |
 
 **OKE1050** cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
 Fix: a different gate, a path-param filter, or drop the extra route.
@@ -329,14 +324,13 @@ Fix: a different gate, a path-param filter, or drop the extra route.
 ## Emit through fx
 
 <Callout title="Detailed section">
-  If you only need `fx.emit(signal, payload)`, jump to the table. Emit appends to the retained
-  tape when the call resolves. The producer run id is stamped as `parentRunId` for Console
-  trace chains.
+  If you only need `fx.emit(signal, payload)`, jump to the table. Emit appends to the retained tape
+  when the call resolves. The producer run id is stamped as `parentRunId` for Console trace chains.
 </Callout>
 
-| Call | Records | Use |
-| ---- | ------- | --- |
-| `fx.emit(signal, payload?)` | `emits` | Append to the live tape |
+| Call                          | Records                 | Use                             |
+| ----------------------------- | ----------------------- | ------------------------------- |
+| `fx.emit(signal, payload?)`   | `emits`                 | Append to the live tape         |
 | `fx.live(signal, { match? })` | `reads` `signal:<name>` | Server SSE body for a live tape |
 
 Invalid `schema` payloads fail at emit with **OKE1250** (`"{resource}": {detail}`) before any
@@ -366,14 +360,14 @@ Fix: mount `http.live` (or a path `.live`) before emitting, or set `{ optional: 
 ## Retention
 
 <Callout title="Detailed section">
-  If you only need an unbounded tape, skip this section. `retention` is live-only — omit both
-  fields (or omit `retention`) for unlimited history.
+  If you only need an unbounded tape, skip this section. `retention` is live-only — omit both fields
+  (or omit `retention`) for unlimited history.
 </Callout>
 
-| Field | Type | Meaning |
-| ----- | ---- | ------- |
-| `maxAge` | duration string (`"24h"`, `"30s"`, …) | Drop events older than this |
-| `maxCount` | integer ≥ 1 | Keep only the newest N events |
+| Field      | Type                                  | Meaning                       |
+| ---------- | ------------------------------------- | ----------------------------- |
+| `maxAge`   | duration string (`"24h"`, `"30s"`, …) | Drop events older than this   |
+| `maxCount` | integer ≥ 1                           | Keep only the newest N events |
 
 ```typescript title="src/signals/chat.ts"
 import { signal } from "okengine";
@@ -408,11 +402,11 @@ networks, or raise `maxCount` / `maxAge` if clients need longer catch-up.
   pruned ids throw **OKE1210** before the SSE body — HTTP maps that to **410** `LiveResumeGap`.
 </Callout>
 
-| Symptom | Meaning | Fix |
-| ------- | ------- | --- |
-| **OKE1210** / 410 `LiveResumeGap` | Cursor gone from the tape | Drop `Last-Event-ID`; replay remaining |
-| `autoResubscribe: true` | Client clears gap after backoff | Prefer for flaky networks |
-| Custom `fx.live(signal, { match })` | Server-side filter | Do not wrap with `fx.json.stream` |
+| Symptom                             | Meaning                         | Fix                                    |
+| ----------------------------------- | ------------------------------- | -------------------------------------- |
+| **OKE1210** / 410 `LiveResumeGap`   | Cursor gone from the tape       | Drop `Last-Event-ID`; replay remaining |
+| `autoResubscribe: true`             | Client clears gap after backoff | Prefer for flaky networks              |
+| Custom `fx.live(signal, { match })` | Server-side filter              | Do not wrap with `fx.json.stream`      |
 
 ```text
 Cursor "{afterId}" missing on "{signal}".
@@ -425,8 +419,8 @@ gone — drop it and replay the remaining tape.
 ## Client subscription
 
 <Callout title="Detailed section">
-  `signal.live` is HTTP SSE. `for await` stays on the server; the browser uses a callback.
-  Prefer `api.live` or `useLive` — not raw `EventSource` on an invented path.
+  `signal.live` is HTTP SSE. `for await` stays on the server; the browser uses a callback. Prefer
+  `api.live` or `useLive` — not raw `EventSource` on an invented path.
 </Callout>
 
 The client picks the unique exposure whose `matchKey` fields are a subset of the input,
@@ -455,14 +449,14 @@ stop();
 `api.orders.events({ orderId }, { onEvent })` is the same shape on the exposing Flow.
 Reconnects send `Last-Event-ID` from the last `id:` received.
 
-| Option | Default | Meaning |
-| ------ | ------- | ------- |
-| `onEvent` | *(required)* | Each JSON frame from the tape |
-| `onError` | omitted | 4xx, envelope errors, or network drop |
-| `onOpen` | omitted | After a successful SSE open (incl. reconnects) |
-| `autoResubscribe` | `false` | Re-open after a drop (500ms…30s backoff) |
-| `via` | omitted | Disambiguate when two exposures share a match shape |
-| `signal` | omitted | `AbortSignal` to cancel the subscribe |
+| Option            | Default      | Meaning                                             |
+| ----------------- | ------------ | --------------------------------------------------- |
+| `onEvent`         | _(required)_ | Each JSON frame from the tape                       |
+| `onError`         | omitted      | 4xx, envelope errors, or network drop               |
+| `onOpen`          | omitted      | After a successful SSE open (incl. reconnects)      |
+| `autoResubscribe` | `false`      | Re-open after a drop (500ms…30s backoff)            |
+| `via`             | omitted      | Disambiguate when two exposures share a match shape |
+| `signal`          | omitted      | `AbortSignal` to cancel the subscribe               |
 
 React:
 
@@ -483,16 +477,16 @@ See [Client · Live](/docs/client/live).
 ## What live is not
 
 <Callout title="Detailed section">
-  Pick physics from the guarantee you need. Live is the wrong tool when work must be claimed
-  once, or when every in-process listener should react with no retained history.
+  Pick physics from the guarantee you need. Live is the wrong tool when work must be claimed once,
+  or when every in-process listener should react with no retained history.
 </Callout>
 
-| Need | Use instead |
-| ---- | ----------- |
-| Exactly one worker processes the job | [`once`](/docs/elements/signal/once) |
-| Every active Flow gets a copy, no tape | [`broadcast`](/docs/elements/signal/broadcast) |
-| Classified CDC rows for a list window | [`http.resource` live](/docs/elements/flow/http#resources) / `useLiveQuery` |
-| Durable multi-step work with journal | [Durable Workflows](/docs/elements/flow/workflows) |
+| Need                                   | Use instead                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------- |
+| Exactly one worker processes the job   | [`once`](/docs/elements/signal/once)                                        |
+| Every active Flow gets a copy, no tape | [`broadcast`](/docs/elements/signal/broadcast)                              |
+| Classified CDC rows for a list window  | [`http.resource` live](/docs/elements/flow/http#resources) / `useLiveQuery` |
+| Durable multi-step work with journal   | [Durable Workflows](/docs/elements/flow/workflows)                          |
 
 Live does **not** use the `once` visibility lease or dead-letter queue. `retries` /
 `deadLetter` may appear on the declare options bag, but the live path is the retained tape +
@@ -503,32 +497,31 @@ SSE resume — not competing-consumer physics.
 <Accordions>
 
 <Accordion title="404 on /_oke/live/…">
-  Confirm `on(http.live(signal))` (or a path `.live(signal)`) is adopted. Names in the default
-  path are URI-encoded (`encodeURIComponent`). A bare `404` with body `Not Found` means the
-  router found no match.
+  Confirm `on(http.live(signal))` (or a path `.live(signal)`) is adopted. Names in the default path
+  are URI-encoded (`encodeURIComponent`). A bare `404` with body `Not Found` means the router found
+  no match.
 </Accordion>
 
 <Accordion title="TypeError: live exposure must be GET">
-  `.live(signal)` only attaches to `http.get` / `http.live`. Other verbs reject live
-  synthesis: `on(http.*.live(signal)): live exposure must be GET`.
+  `.live(signal)` only attaches to `http.get` / `http.live`. Other verbs reject live synthesis:
+  `on(http.*.live(signal)): live exposure must be GET`.
 </Accordion>
 
 <Accordion title="OKE1050 — live signal exposed twice">
-  Cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).`
-  Two firehoses (`http.live` or param-less `.live`) that share the signal and gates cannot boot.
+  Cause: `Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}
+  ).` Two firehoses (`http.live` or param-less `.live`) that share the signal and gates cannot boot.
   Change the gate, add a path-param filter, or remove a route.
 </Accordion>
 
 <Accordion title="OKE1041 — method + path bound twice">
-  Cause: `{method} {path} is bound twice (flow "{flow}").` Two mounts collide on the same
-  method + path (for example two `http.live` firehoses that resolve to the same URL). Drop one
-  binding.
+  Cause: `{method} {path} is bound twice (flow "{flow}").` Two mounts collide on the same method +
+  path (for example two `http.live` firehoses that resolve to the same URL). Drop one binding.
 </Accordion>
 
 <Accordion title="OKE1210 — 410 LiveResumeGap">
   Cause: `Cursor "{afterId}" missing on "{signal}".` That `Last-Event-ID` was pruned or never
-  existed. Reconnect without it; remaining events replay. `autoResubscribe: true` does this
-  after backoff.
+  existed. Reconnect without it; remaining events replay. `autoResubscribe: true` does this after
+  backoff.
 </Accordion>
 
 <Accordion title="OKE1240 when emitting live">
@@ -537,8 +530,8 @@ SSE resume — not competing-consumer physics.
 </Accordion>
 
 <Accordion title="OKE1250 on emit">
-  Cause: `"{resource}": {detail}` from the Standard Schema issues. Align the payload with
-  `schema` — no client receives a frame.
+  Cause: `"{resource}": {detail}` from the Standard Schema issues. Align the payload with `schema` —
+  no client receives a frame.
 </Accordion>
 
 <Accordion title="Bound on(liveSignal, flow) as a worker">
@@ -553,7 +546,7 @@ SSE resume — not competing-consumer physics.
 
 <Accordion title="Multiple live exposures (client)">
   Two routes share the same match shape. Pass `via: "unit.flow"` or call the exposing Flow
-  (`api.orders.events({ orderId }, { onEvent })`) instead of root `api.live`.
+  (`api.orders.events({orderId}, {onEvent})`) instead of root `api.live`.
 </Accordion>
 
 <Accordion title="TypeError: retention is only valid with signal.live">
@@ -562,9 +555,9 @@ SSE resume — not competing-consumer physics.
 </Accordion>
 
 <Accordion title="live query requires a primary key / RLS driver">
-  Extract: `live: true on table "…" requires a primary key column`. Runtime needs an
-  RLS-capable SQL driver (`postgres` / `pglite`) and a gated identity. That path is
-  resource live — not `signal.live`. Attach `.gate(...)` and declare a PK.
+  Extract: `live: true on table "…" requires a primary key column`. Runtime needs an RLS-capable SQL
+  driver (`postgres` / `pglite`) and a gated identity. That path is resource live — not
+  `signal.live`. Attach `.gate(...)` and declare a PK.
 </Accordion>
 
 </Accordions>
@@ -588,11 +581,7 @@ SSE resume — not competing-consumer physics.
     description="Firehose paths, filters, uniqueness, and client subscribe."
     href="/docs/elements/flow/http#live-streams"
   />
-  <Card
-    title="Client"
-    description="api.live and useLive for browsers."
-    href="/docs/client/live"
-  />
+  <Card title="Client" description="api.live and useLive for browsers." href="/docs/client/live" />
   <Card
     title="Signal Overview"
     description="once / broadcast / live in one place."

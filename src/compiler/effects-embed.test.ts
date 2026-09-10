@@ -34,9 +34,7 @@ describe("inferEffects — fx.embed ≠ fx.ask", () => {
     const doNode = doNodeFrom(`async (_input, fx) => {
       return fx.ask("triage", { q: "x" });
     }`);
-    const bindings = new Map<string, InferBinding>([
-      ["triage", { kind: "prompt", ref: "triage" }],
-    ]);
+    const bindings = new Map<string, InferBinding>([["triage", { kind: "prompt", ref: "triage" }]]);
     const inferred = inferEffects({ doNode, bindings, hasExplicitEffects: false });
     expect(inferred.effects.asks).toEqual(["triage"]);
     expect(inferred.effects.embeds).toBeUndefined();

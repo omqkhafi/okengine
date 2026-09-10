@@ -81,11 +81,11 @@ export const publicApiUrl = vault.config("PUBLIC_API_URL", {
 });
 ```
 
-| Runtime                                    | Base URL for `createClient`                                    |
-| ------------------------------------------ | -------------------------------------------------------------- |
+| Runtime                                    | Base URL for `createClient`                                     |
+| ------------------------------------------ | --------------------------------------------------------------- |
 | Browser / Bun (create-oke web)             | `vault.env("PUBLIC_API_URL") ?? ""` — empty = same-origin proxy |
-| Node / worker / CLI                        | `vault.env.required("PUBLIC_API_URL")`                         |
-| Separate storefront after `oke client add` | Same `vault.env("PUBLIC_API_URL") ?? ""`                       |
+| Node / worker / CLI                        | `vault.env.required("PUBLIC_API_URL")`                          |
+| Separate storefront after `oke client add` | Same `vault.env("PUBLIC_API_URL") ?? ""`                        |
 
 Set `PUBLIC_API_URL` via environment or `oke vault set`. Prefer `vault.env` over raw
 `process.env` — same helpers as the rest of the measure. See
@@ -167,10 +167,7 @@ envelope — never a declared Flow code.
 <Tab value="Binary">
 
 ```typescript
-const { data, error } = await api.files.download(
-  { id: "file_1" },
-  { response: "blob" },
-);
+const { data, error } = await api.files.download({ id: "file_1" }, { response: "blob" });
 if (error || !data) return;
 a.href = URL.createObjectURL(data);
 a.download = "report.pdf";
@@ -199,11 +196,11 @@ See [Base URL](#base-url-vault--env).
 
 ## REST vs RPC
 
-| Situation                                            | Request                                                                                                                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HTTP trigger with method + path on `$routes`         | That method and path (`:id` filled from input; leftover fields → query on GET/HEAD, JSON body otherwise). QUERY always sends JSON (`{}` when only path params) |
-| Adopted flow with no HTTP trigger                    | `POST {base}/_oke/{unit}/{flow}` with JSON body                                                                                                                |
-| Incomplete proxy path (`api.bookings()` with no flow) | Result error: `Incomplete path: api.bookings(…)`                                                                                                              |
+| Situation                                             | Request                                                                                                                                                        |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP trigger with method + path on `$routes`          | That method and path (`:id` filled from input; leftover fields → query on GET/HEAD, JSON body otherwise). QUERY always sends JSON (`{}` when only path params) |
+| Adopted flow with no HTTP trigger                     | `POST {base}/_oke/{unit}/{flow}` with JSON body                                                                                                                |
+| Incomplete proxy path (`api.bookings()` with no flow) | Result error: `Incomplete path: api.bookings(…)`                                                                                                               |
 
 ```typescript
 // REST — method/path from the bound HTTP trigger (file tree or explicit)
@@ -297,9 +294,7 @@ await api.orders.remove({ id: "ord_9c2e" }); // DELETE → 204, data undefined
 Mount a resource, adopt the returned ops, then call the five Flows like any other:
 
 ```typescript
-const ordersR = store.resource(db, orders, {
-  /* in, out, list */
-});
+const ordersR = store.resource(db, orders, {/* in, out, list */});
 const mounted = on(http.resource("/orders", ordersR.all()).gate(member));
 // .adopt({ orders: mounted }) →
 const page = await api.orders.list({ limit: 20, status: "open" });
@@ -395,8 +390,9 @@ Budget: the `./client` export stays under the measured client-runtime cap (hard 
   Confirm the Flow is `export`ed from a generated unit (`import "@/flows/generated"` then
   `oke({ name })`), or from a module you still `.adopt({ bookings })`.
 
-  Type `createClient` with that `App` (or ambient `Register` after `oke-client.d.ts` regenerates).
-  Restart `oke dev` after renaming exports.
+Type `createClient` with that `App` (or ambient `Register` after `oke-client.d.ts` regenerates).
+Restart `oke dev` after renaming exports.
+
 </Accordion>
 
 <Accordion title="Calls hit /_oke/… instead of my HTTP path">
@@ -417,7 +413,7 @@ Budget: the `./client` export stays under the measured client-runtime cap (hard 
 </Accordion>
 
 <Accordion title="Incomplete path: api.bookings(…)">
-  The proxy path stopped at a unit. Call a Flow: `api.bookings.get({ id })`, not `api.bookings()`.
+  The proxy path stopped at a unit. Call a Flow: `api.bookings.get({id})`, not `api.bookings()`.
 </Accordion>
 
 </Accordions>

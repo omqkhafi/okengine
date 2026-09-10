@@ -19,10 +19,7 @@ describe("ai boot binder", () => {
   test("resolveAiDriverId defaults to mock; honours config + OKE_AI_DRIVER in docker", () => {
     expect(resolveAiDriverId({}, "test")).toBe("mock");
     expect(
-      resolveAiDriverId(
-        { config: { drivers: { ai: { test: "openai-compatible" } } } },
-        "test",
-      ),
+      resolveAiDriverId({ config: { drivers: { ai: { test: "openai-compatible" } } } }, "test"),
     ).toBe("openai-compatible");
 
     const prev = process.env.OKE_AI_DRIVER;

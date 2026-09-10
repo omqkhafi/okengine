@@ -25,7 +25,12 @@ const CommentIn = z.object({
 
 /** List comments on a task. */
 export const list = on(
-  http.get("/tasks/:id/comments", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(CommentOut) }).gate(member),
+  http
+    .get("/tasks/:id/comments", {
+      in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
+      out: pageOut(CommentOut),
+    })
+    .gate(member),
   flow("comments.list", {
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(comments);
@@ -44,7 +49,9 @@ export const list = on(
 
 /** Create a comment. */
 export const create = on(
-  http.post("/tasks/:id/comments", { in: CommentIn, out: CommentOut, errors: { NotFound } }).gate(tasksWrite),
+  http
+    .post("/tasks/:id/comments", { in: CommentIn, out: CommentOut, errors: { NotFound } })
+    .gate(tasksWrite),
   flow("comments.create", {
     do: async (input, fx) => {
       const task = await fx.store(db).findById(tasks, input.id);
@@ -86,7 +93,9 @@ export const get = on(
 
 /** Edit a comment. */
 export const update = on(
-  http.patch("/comments/:id", { in: CommentIn, out: CommentOut, errors: { NotFound } }).gate(commentsWrite),
+  http
+    .patch("/comments/:id", { in: CommentIn, out: CommentOut, errors: { NotFound } })
+    .gate(commentsWrite),
   flow("comments.update", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);

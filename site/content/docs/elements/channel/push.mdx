@@ -13,8 +13,8 @@ For developers notifying installed apps — FCM uses the device token as `to`; W
 VAPID keys on the driver.
 
 <Callout title="The one rule">
-  Declare with `channel.push().template(…)`. Bind push drivers yourself — `drivers.channel.push`
-  in config is not auto-opened today. WhatsApp is a different medium
+  Declare with `channel.push().template(…)`. Bind push drivers yourself — `drivers.channel.push` in
+  config is not auto-opened today. WhatsApp is a different medium
   ([WhatsApp](/docs/elements/channel/whatsapp)).
 </Callout>
 
@@ -142,11 +142,11 @@ through as FCM data payload when present.
 
 ## Drivers
 
-| Driver id | How it binds | Role |
-| --------- | ------------ | ---- |
+| Driver id | How it binds                             | Role                             |
+| --------- | ---------------------------------------- | -------------------------------- |
 | `fcm`     | `openFcmChannel(…)` in `channel.drivers` | Firebase Cloud Messaging HTTP v1 |
-| `webpush` | `openWebPushChannel(…)` | RFC 8030 + VAPID |
-| `console` | `openConsoleChannel()` | Dev inbox (all mediums) |
+| `webpush` | `openWebPushChannel(…)`                  | RFC 8030 + VAPID                 |
+| `console` | `openConsoleChannel()`                   | Dev inbox (all mediums)          |
 
 Config key `drivers.channel.push` exists for Manifest / tooling ids (`console` · `webpush` ·
 `fcm`) but the boot binder does **not** open push from that map yet — pass drivers on
@@ -156,10 +156,10 @@ Config key `drivers.channel.push` exists for Manifest / tooling ids (`console` �
 
 ### `channel.push(options?)`
 
-| Option   | Type     | Meaning           |
-| -------- | -------- | ----------------- |
-| `from`   | `string` | Optional default  |
-| `sender` | `string` | Alias for `from`  |
+| Option   | Type     | Meaning          |
+| -------- | -------- | ---------------- |
+| `from`   | `string` | Optional default |
+| `sender` | `string` | Alias for `from` |
 
 ### `.template(name, options?)`
 
@@ -170,13 +170,13 @@ Config key `drivers.channel.push` exists for Manifest / tooling ids (`console` �
 <Accordions>
 
 <Accordion title="Push template sends but nothing is delivered">
-  No push driver in `channel.drivers`. Email/SMS/WhatsApp boot chain does not include FCM or
-  Web Push — add `openFcmChannel` / `openWebPushChannel`.
+  No push driver in `channel.drivers`. Email/SMS/WhatsApp boot chain does not include FCM or Web
+  Push — add `openFcmChannel` / `openWebPushChannel`.
 </Accordion>
 
 <Accordion title="fcm channel: projectId / credentials required">
-  Open options missing project id or service-account pair / access token. See Progressive
-  Patterns → FCM.
+  Open options missing project id or service-account pair / access token. See Progressive Patterns →
+  FCM.
 </Accordion>
 
 <Accordion title="webpush: pushSubscription with endpoint + keys is required">

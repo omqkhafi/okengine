@@ -137,10 +137,14 @@ smart.prompt("ticket-triage", {
 Offer Flows for one ask without declaring an agent:
 
 ```typescript
-await fx.ask(triage, { message }, {
-  tools: ["docs.search", "tickets.create"],
-  maxSteps: 4,
-});
+await fx.ask(
+  triage,
+  { message },
+  {
+    tools: ["docs.search", "tickets.create"],
+    maxSteps: 4,
+  },
+);
 ```
 
 Default `maxSteps` is `6`. Tool names also stamp `effects.calls`.
@@ -151,15 +155,15 @@ Default `maxSteps` is `6`. Tool names also stamp `effects.calls`.
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `version` | `number` | — | Pin with `fx.ask("name@N")` |
-| `evals` | `string` | — | Path for `oke eval` JSONL |
-| `budget` | `{ maxCostPerCall?, maxCostPerRun? }` | — | Cost contracts |
-| `via` | `string[]` | `[parent model]` | Recovery chain of logical names |
-| `timeout` | `"30s"` \| ms | — | Ask deadline (not a cost budget) |
-| `in` | Schema | — | Declared / Manifest / doctor — **not** runtime-validated on ask |
-| `out` | Schema | — | Runtime-validated (Zod / JSON Schema / field shorthand) |
+| Option    | Type                                  | Default          | Meaning                                                         |
+| --------- | ------------------------------------- | ---------------- | --------------------------------------------------------------- |
+| `version` | `number`                              | —                | Pin with `fx.ask("name@N")`                                     |
+| `evals`   | `string`                              | —                | Path for `oke eval` JSONL                                       |
+| `budget`  | `{ maxCostPerCall?, maxCostPerRun? }` | —                | Cost contracts                                                  |
+| `via`     | `string[]`                            | `[parent model]` | Recovery chain of logical names                                 |
+| `timeout` | `"30s"` \| ms                         | —                | Ask deadline (not a cost budget)                                |
+| `in`      | Schema                                | —                | Declared / Manifest / doctor — **not** runtime-validated on ask |
+| `out`     | Schema                                | —                | Runtime-validated (Zod / JSON Schema / field shorthand)         |
 
 ## How input reaches the model
 
@@ -175,12 +179,12 @@ Pass the fields you need as the second argument to `fx.ask` — do not invent `t
 
 ## `fx.ask` options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `via` | refs | prompt chain | Override recovery for this call |
-| `timeout` | duration | prompt `timeout` | Per-call deadline |
-| `tools` | Flow refs | — | Tool loop via `fx.call` |
-| `maxSteps` | `number` | `6` | Cap on tool rounds |
+| Option     | Type      | Default          | Meaning                         |
+| ---------- | --------- | ---------------- | ------------------------------- |
+| `via`      | refs      | prompt chain     | Override recovery for this call |
+| `timeout`  | duration  | prompt `timeout` | Per-call deadline               |
+| `tools`    | Flow refs | —                | Tool loop via `fx.call`         |
+| `maxSteps` | `number`  | `6`              | Cap on tool rounds              |
 
 ## Embeds (related)
 
@@ -204,8 +208,7 @@ runtime with `ai: embed "…" has no into` / vector-index errors.
 <Accordions>
 
 <Accordion title='ai: unknown prompt "…"'>
-  The name was never registered with `model.prompt`, or the AI module was not imported before
-  boot.
+  The name was never registered with `model.prompt`, or the AI module was not imported before boot.
 </Accordion>
 
 <Accordion title="OKE1005 — UNDECLARED_ASK">
@@ -214,8 +217,8 @@ runtime with `ai: embed "…" has no into` / vector-index errors.
 </Accordion>
 
 <Accordion title='ai: schema validation failed for prompt "…"@N'>
-  `AiSchemaValidationError` — the model reply failed `out`. Message includes missing / extra /
-  type issues. There is no retry-with-corrections loop.
+  `AiSchemaValidationError` — the model reply failed `out`. Message includes missing / extra / type
+  issues. There is no retry-with-corrections loop.
 </Accordion>
 
 <Accordion title='ai: prompt "…" exceeded maxCostPerCall'>
@@ -223,8 +226,8 @@ runtime with `ai: embed "…" has no into` / vector-index errors.
 </Accordion>
 
 <Accordion title='ai: all models failed for prompt "…"'>
-  Every entry in the `via` chain failed (network, auth, or provider error). Check each
-  binding’s `apiKey` / `baseUrl` and driver health.
+  Every entry in the `via` chain failed (network, auth, or provider error). Check each binding’s
+  `apiKey` / `baseUrl` and driver health.
 </Accordion>
 
 </Accordions>
@@ -239,7 +242,15 @@ runtime with `ai: embed "…" has no into` / vector-index errors.
 ## Next
 
 <Cards>
-  <Card title="Agents" description="Bounded agents whose tools are Flows." href="/docs/elements/ai/agents" />
-  <Card title="Models" description="Provider registry and drivers." href="/docs/elements/ai/models" />
+  <Card
+    title="Agents"
+    description="Bounded agents whose tools are Flows."
+    href="/docs/elements/ai/agents"
+  />
+  <Card
+    title="Models"
+    description="Provider registry and drivers."
+    href="/docs/elements/ai/models"
+  />
   <Card title="AI" description="Element overview." href="/docs/elements/ai" />
 </Cards>

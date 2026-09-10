@@ -165,28 +165,28 @@ Resolves from `OKE_STORE_SQL_URL` (and peers) when `allowDevFallbacks` is on.
 
 ## Declaration Reference
 
-| Declaration       | Signature                                     | Purpose                                      |
-| ----------------- | --------------------------------------------- | -------------------------------------------- |
-| `vault.secret`    | `vault.secret(name, options?)`                | Fingerprinted secret contract                |
-| `vault`           | `vault(name, options?)`                       | Alias for `vault.secret`                     |
-| `vault.config`    | `vault.config(name, options?)`                | Cleartext config contract                    |
-| `vault.fromDocker`| `vault.fromDocker(role)`                      | Dev fallback marker for an image role        |
-| `vault.env`       | `vault.env` / `.required` / `.int` / `.bool` / `.json` | Sync process env — no contract       |
+| Declaration        | Signature                                              | Purpose                               |
+| ------------------ | ------------------------------------------------------ | ------------------------------------- |
+| `vault.secret`     | `vault.secret(name, options?)`                         | Fingerprinted secret contract         |
+| `vault`            | `vault(name, options?)`                                | Alias for `vault.secret`              |
+| `vault.config`     | `vault.config(name, options?)`                         | Cleartext config contract             |
+| `vault.fromDocker` | `vault.fromDocker(role)`                               | Dev fallback marker for an image role |
+| `vault.env`        | `vault.env` / `.required` / `.int` / `.bool` / `.json` | Sync process env — no contract        |
 
-| Option        | Type      | Default                         | Meaning                                                                 |
-| ------------- | --------- | ------------------------------- | ----------------------------------------------------------------------- |
-| `description` | `string`  | —                               | Shown in boot-gap listings and Console                                  |
-| `rotate`      | `string`  | omit ≈ `"never"`                | Cadence hint (`"90d"`) or `"never"` — Console posture, not auto-rotate  |
-| `schema`      | Schema    | —                               | Declared shape (Zod / Standard Schema) for docs and tooling             |
-| `dev`         | `string`  | —                               | Dev-only fallback; never used in prod boot                              |
-| `sensitive`   | `boolean` | `true` secret · `false` config  | Whether cleartext must never leave the runtime                          |
-| `perTenant`   | `boolean` | `true` when tenancy on          | Resolve `{tenantId}/{name}` at request time; not boot-gap fatal         |
+| Option        | Type      | Default                        | Meaning                                                                |
+| ------------- | --------- | ------------------------------ | ---------------------------------------------------------------------- |
+| `description` | `string`  | —                              | Shown in boot-gap listings and Console                                 |
+| `rotate`      | `string`  | omit ≈ `"never"`               | Cadence hint (`"90d"`) or `"never"` — Console posture, not auto-rotate |
+| `schema`      | Schema    | —                              | Declared shape (Zod / Standard Schema) for docs and tooling            |
+| `dev`         | `string`  | —                              | Dev-only fallback; never used in prod boot                             |
+| `sensitive`   | `boolean` | `true` secret · `false` config | Whether cleartext must never leave the runtime                         |
+| `perTenant`   | `boolean` | `true` when tenancy on         | Resolve `{tenantId}/{name}` at request time; not boot-gap fatal        |
 
 ## Resolution Chain
 
 <Callout title="Detailed section">
-  If you only need “declare and `fx.vault.get`”, the Smallest Example is enough. This section is
-  how boot finds a value — first hit wins.
+  If you only need “declare and `fx.vault.get`”, the Smallest Example is enough. This section is how
+  boot finds a value — first hit wins.
 </Callout>
 
 Order (Console labels match these source ids):
@@ -222,14 +222,14 @@ Loaded secret substrings are also scrubbed from `fx.log` even when you pass clea
 
 ## `fx.vault` surface
 
-| Method                             | Needs backend | Meaning                                              |
-| ---------------------------------- | ------------- | ---------------------------------------------------- |
-| `get(contract)`                    | No            | `Redacted<string>` — every app has this              |
-| `set(path, value, opts?)`          | Yes (`vault`) | New version; optional `ttlMs` / `metadata`           |
-| `rotate(path, value)`              | Yes (`vault`) | New version under a fresh data key                   |
-| `delete(path)`                     | Yes (`vault`) | Crypto-shred; returns whether anything went          |
-| `list(prefix?)`                    | Yes (`vault`) | Paths only — never values                            |
-| `status()`                         | Yes (`vault`) | `{ sealed, initialized, backend }`                   |
+| Method                    | Needs backend | Meaning                                     |
+| ------------------------- | ------------- | ------------------------------------------- |
+| `get(contract)`           | No            | `Redacted<string>` — every app has this     |
+| `set(path, value, opts?)` | Yes (`vault`) | New version; optional `ttlMs` / `metadata`  |
+| `rotate(path, value)`     | Yes (`vault`) | New version under a fresh data key          |
+| `delete(path)`            | Yes (`vault`) | Crypto-shred; returns whether anything went |
+| `list(prefix?)`           | Yes (`vault`) | Paths only — never values                   |
+| `status()`                | Yes (`vault`) | `{ sealed, initialized, backend }`          |
 
 Without a bound encrypted backend, mutations throw:
 
@@ -258,12 +258,12 @@ export default defineConfig({
 });
 ```
 
-| Driver    | Runs as                         | Best for                                      |
-| --------- | ------------------------------- | --------------------------------------------- |
-| `env`     | Process / dotenv bag            | Simple local / CI without SQL vault tables    |
-| `vault`   | Built-in AES-256-GCM in Postgres| Docker-first apps; `oke vault init` / unseal  |
-| `memory`  | In-process map                  | Tests                                         |
-| `managed` | Remote provider bag             | AWS / Azure / GCP / Doppler / 1Password       |
+| Driver    | Runs as                          | Best for                                     |
+| --------- | -------------------------------- | -------------------------------------------- |
+| `env`     | Process / dotenv bag             | Simple local / CI without SQL vault tables   |
+| `vault`   | Built-in AES-256-GCM in Postgres | Docker-first apps; `oke vault init` / unseal |
+| `memory`  | In-process map                   | Tests                                        |
+| `managed` | Remote provider bag              | AWS / Azure / GCP / Doppler / 1Password      |
 
 create-oke Notes starters pin `vault.dev: "vault"` and declare stack + app contracts in
 `src/vault.ts` (`vault.secret` / `vault.config`). Console Vault lists those contracts —
@@ -299,14 +299,14 @@ Managed provider ids: `aws-secrets-manager` · `azure-key-vault` · `gcp-secret-
 <Accordions>
 
 <Accordion title="VaultBootError — N missing secret(s)">
-  Cause: `vault boot failed — N missing secret(s):` with every gap listed. On a
-  TTY, `oke dev` prompts each into `.env.local`; otherwise use `oke vault set` /
-  env / managed, or a `dev:` fallback. `vault.env.required` joins the same list.
+  Cause: `vault boot failed — N missing secret(s):` with every gap listed. On a TTY, `oke dev`
+  prompts each into `.env.local`; otherwise use `oke vault set` / env / managed, or a `dev:`
+  fallback. `vault.env.required` joins the same list.
 </Accordion>
 
 <Accordion title='vault: secret "…" is not loaded'>
-  `fx.vault.get` ran after boot without that name in the merged bag. Declare the contract, ensure
-  a resolution layer supplies it, and import the declaring module before `oke()`.
+  `fx.vault.get` ran after boot without that name in the merged bag. Declare the contract, ensure a
+  resolution layer supplies it, and import the declaring module before `oke()`.
 </Accordion>
 
 <Accordion title="fx.vault.set / rotate needs a bound Vault backend">
@@ -320,8 +320,8 @@ Managed provider ids: `aws-secrets-manager` · `azure-key-vault` · `gcp-secret-
 </Accordion>
 
 <Accordion title="VaultSealed / cannot rotate while sealed">
-  Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal`. See
-  [Key Rotation](/docs/elements/vault/rotation).
+  Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal`. See [Key
+  Rotation](/docs/elements/vault/rotation).
 </Accordion>
 
 </Accordions>

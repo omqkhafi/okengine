@@ -34,7 +34,9 @@ const InviteIn = z.object({
 
 /** Invite a member. */
 export const invite = on(
-  http.post("/members/invite", { in: InviteIn, out: IdOut, errors: { NotFound } }).gate(memberAdminWrite),
+  http
+    .post("/members/invite", { in: InviteIn, out: IdOut, errors: { NotFound } })
+    .gate(memberAdminWrite),
   flow("members.invite", {
     do: async (input, fx) => {
       if (input.spaceId) {

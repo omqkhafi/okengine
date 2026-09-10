@@ -143,11 +143,11 @@ provider vs app mode.
 
 ## Drivers
 
-| Driver id            | Env |
-| -------------------- | --- |
-| `wa-cloud`           | `WHATSAPP_TOKEN` / `WA_CLOUD_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` / `WA_CLOUD_PHONE_NUMBER_ID` |
-| `taqnyat-whatsapp`   | `TAQNYAT_WHATSAPP_TOKEN` or `TAQNYAT_BEARER_TOKEN` |
-| `console`            | Config id — opens **no** WhatsApp driver |
+| Driver id          | Env                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `wa-cloud`         | `WHATSAPP_TOKEN` / `WA_CLOUD_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` / `WA_CLOUD_PHONE_NUMBER_ID` |
+| `taqnyat-whatsapp` | `TAQNYAT_WHATSAPP_TOKEN` or `TAQNYAT_BEARER_TOKEN`                                            |
+| `console`          | Config id — opens **no** WhatsApp driver                                                      |
 
 ```text
 oke boot: wa-cloud channel needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID
@@ -158,10 +158,10 @@ oke boot: unknown whatsapp channel driver "…"
 
 ### `channel.whatsapp(options?)`
 
-| Option   | Type     | Meaning                |
-| -------- | -------- | ---------------------- |
-| `from`   | `string` | Default sender id      |
-| `sender` | `string` | Alias for `from`       |
+| Option   | Type     | Meaning           |
+| -------- | -------- | ----------------- |
+| `from`   | `string` | Default sender id |
+| `sender` | `string` | Alias for `from`  |
 
 ### `.template(name, options?)`
 
@@ -172,8 +172,8 @@ oke boot: unknown whatsapp channel driver "…"
 <Accordions>
 
 <Accordion title="oke boot: wa-cloud channel needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID">
-  Both token and phone-number id are required for Meta Cloud. Check alias env names
-  (`WA_CLOUD_*`) if you use those.
+  Both token and phone-number id are required for Meta Cloud. Check alias env names (`WA_CLOUD_*`)
+  if you use those.
 </Accordion>
 
 <Accordion title="oke boot: taqnyat-whatsapp channel needs TAQNYAT_WHATSAPP_TOKEN">
@@ -186,8 +186,8 @@ oke boot: unknown whatsapp channel driver "…"
 </Accordion>
 
 <Accordion title="channel: unknown template">
-  Template not auto-registered — import the `channel.whatsapp().template(…)` module before
-  `oke()`, or pass `channel.templates`.
+  Template not auto-registered — import the `channel.whatsapp().template(…)` module before `oke()`,
+  or pass `channel.templates`.
 </Accordion>
 
 </Accordions>

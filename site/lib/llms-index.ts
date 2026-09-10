@@ -75,13 +75,7 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
   },
   {
     heading: "Client",
-    slugs: [
-      "client",
-      "client/calling",
-      "client/auth",
-      "client/live",
-      "client/react",
-    ],
+    slugs: ["client", "client/calling", "client/auth", "client/live", "client/react"],
   },
   {
     heading: "For agents",

@@ -56,15 +56,15 @@ The same 21-character id lands in your SQL primary keys, KV keys, and trace ids.
 
 ## Reference
 
-| Call                                               | Result                                    | Notes                                   |
-| -------------------------------------------------- | ----------------------------------------- | --------------------------------------- |
-| `okid()`                                           | 21-char URL-safe id, 126 bits of entropy  | 64-char alphabet, `a-zA-Z0-9-_`         |
-| `okid(length)`                                     | id of exactly `length` characters         | integer between 8 and 128               |
-| `okid({ length })`                                 | options form, body of `length`            | default 21                              |
-| `okid({ prefix })`                                 | `prefix` + body                           | body length unchanged; see Options      |
-| `okid({ sortable })`                               | time-prefixed body, 8 + `length − 8`      | lexicographic order ≈ creation order    |
-| `okid({ numbers, lowercase, uppercase, symbols })` | charset control                           | each group defaults to on               |
-| `okid({ lookAlikes })`                             | confusable-char control                   | `lookAlikes: false` drops `1lI0Oouv5Ss` |
+| Call                                               | Result                                   | Notes                                   |
+| -------------------------------------------------- | ---------------------------------------- | --------------------------------------- |
+| `okid()`                                           | 21-char URL-safe id, 126 bits of entropy | 64-char alphabet, `a-zA-Z0-9-_`         |
+| `okid(length)`                                     | id of exactly `length` characters        | integer between 8 and 128               |
+| `okid({ length })`                                 | options form, body of `length`           | default 21                              |
+| `okid({ prefix })`                                 | `prefix` + body                          | body length unchanged; see Options      |
+| `okid({ sortable })`                               | time-prefixed body, 8 + `length − 8`     | lexicographic order ≈ creation order    |
+| `okid({ numbers, lowercase, uppercase, symbols })` | charset control                          | each group defaults to on               |
+| `okid({ lookAlikes })`                             | confusable-char control                  | `lookAlikes: false` drops `1lI0Oouv5Ss` |
 
 ### Options
 

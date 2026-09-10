@@ -226,8 +226,8 @@ export default function HomePage() {
           <Reveal delay={0.05}>
             <div className="overflow-x-auto rounded-xl border border-fd-border bg-fd-card px-4 py-3">
               <code className="font-mono text-xs whitespace-nowrap text-fd-foreground sm:text-[13px]">
-                import {"{"} on, flow, call, signal, store, clock, gate, vault, channel, ai, plugin {"}"}{" "}
-                from &quot;okengine&quot;;
+                import {"{"} on, flow, call, signal, store, clock, gate, vault, channel, ai, plugin{" "}
+                {"}"} from &quot;okengine&quot;;
               </code>
             </div>
           </Reveal>

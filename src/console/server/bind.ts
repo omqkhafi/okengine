@@ -2,10 +2,7 @@
  * Local HTTP bindings that do not touch the global {@link on} registry.
  */
 
-import {
-  applyBoundaryContract,
-  stampBoundaryContract,
-} from "../../kernel/boundary-contract.ts";
+import { applyBoundaryContract, stampBoundaryContract } from "../../kernel/boundary-contract.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { normalizeTrigger, type HttpTrigger, type Trigger } from "../../kernel/triggers.ts";

@@ -4,10 +4,7 @@
  * @module
  */
 
-import {
-  isSessionTokens,
-  isTwoFactorRequired,
-} from "./denials.ts";
+import { isSessionTokens, isTwoFactorRequired } from "./denials.ts";
 import { memorySession, type MemorySession, type SessionUser } from "./session.ts";
 
 /** Auth transport mode. */
@@ -135,12 +132,16 @@ export interface AuthApi {
       error: unknown;
     }>;
     passkeyRegisterOptions?: (input?: unknown) => Promise<{ data: unknown; error: unknown }>;
-    passkeyRegister?: (input: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+    passkeyRegister?: (
+      input: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: unknown }>;
     twoFactorVerify?: (input: {
       challengeId: string;
       code: string;
     }) => Promise<{ data: unknown; error: unknown }>;
-    twoFactorStepUp?: (input: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+    twoFactorStepUp?: (
+      input: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: unknown }>;
     [key: string]: unknown;
   };
 }
@@ -225,10 +226,7 @@ export interface AuthClient {
  * @param api - Client from {@link createClient} (must expose `auth.*` Flows)
  * @param options - Mode / persist / CSRF checklist
  */
-export function createAuthClient(
-  api: AuthApi,
-  options: CreateAuthClientOptions = {},
-): AuthClient {
+export function createAuthClient(api: AuthApi, options: CreateAuthClientOptions = {}): AuthClient {
   let apiRef = api;
   const mode: AuthMode = options.mode ?? "bearer";
   const persist: AuthPersist = options.persist ?? "memory";
@@ -246,7 +244,7 @@ export function createAuthClient(
   }
   if (persist === "localStorage") {
     warn(
-      "[okengine/client/auth] persist: \"localStorage\" stores access/refresh where XSS can read them. Prefer cookie mode or memory / sessionStorage.",
+      '[okengine/client/auth] persist: "localStorage" stores access/refresh where XSS can read them. Prefer cookie mode or memory / sessionStorage.',
     );
   }
 
@@ -446,11 +444,7 @@ export function createAuthClient(
   };
 
   const signUp = {
-    async email(input: {
-      email: string;
-      password: string;
-      name?: string;
-    }): Promise<SignInResult> {
+    async email(input: { email: string; password: string; name?: string }): Promise<SignInResult> {
       if (!apiRef.auth.signUpEmail) {
         return { ok: false, error: { code: "AuthFailed", data: { reason: "method_unavailable" } } };
       }
@@ -480,12 +474,8 @@ export function createAuthClient(
       ...(mode === "cookie" ? { credentials: "include" as const } : {}),
       auth: {
         // Cookie mode: access is HttpOnly — do not attach Bearer (avoids dual surface).
-        getToken:
-          options.getToken ??
-          (() => (mode === "cookie" ? null : session.getToken())),
-        refresh:
-          options.refresh ??
-          (() => session.refresh(apiRef as never)),
+        getToken: options.getToken ?? (() => (mode === "cookie" ? null : session.getToken())),
+        refresh: options.refresh ?? (() => session.refresh(apiRef as never)),
       },
       headers: () => {
         const h: Record<string, string> = {};

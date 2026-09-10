@@ -26,7 +26,13 @@ import {
   searchDdlForTable,
 } from "../elements/store/search-ddl.ts";
 import { LSH_DEFAULT_K, RRF_DEFAULT_K } from "../elements/store/search-errors.ts";
-import { cosineSimilarity, deserializePlanes, lshBucket, lshBucketToSql, neighborBuckets } from "../elements/store/search-lsh.ts";
+import {
+  cosineSimilarity,
+  deserializePlanes,
+  lshBucket,
+  lshBucketToSql,
+  neighborBuckets,
+} from "../elements/store/search-lsh.ts";
 import { runSqlSearch, type SearchColumnMeta } from "../elements/store/search-runtime.ts";
 import { resolveLivePg } from "./lib/infra.ts";
 import { DISCLAIMER, HARDWARE, percentile, writeArtifact } from "./lib/report.ts";
@@ -432,7 +438,8 @@ describe.skipIf(!ENABLED)("G17 hybrid search", () => {
             mode: "vector" as const,
             // Lexically rare token so GIN contributes little; LSH buckets carry the load.
             query: "zxqwv semantic neighbor probe",
-            embedQuery: async (text: string) => synthEmbed(text.includes("zxqwv") ? TOPICS[3]! : text, DIMS),
+            embedQuery: async (text: string) =>
+              synthEmbed(text.includes("zxqwv") ? TOPICS[3]! : text, DIMS),
           },
           {
             mode: "hybrid" as const,

@@ -9,15 +9,8 @@ import { resolve } from "node:path";
 import { resolveDriverId } from "../config/index.ts";
 import { VAULT_DEFAULTS } from "../config/driver-defaults.ts";
 import { resolveAppEntryForPluginTables } from "../elements/store/load-plugin-tables.ts";
-import {
-  buildVaultBootChain,
-  normalizeVaultDriverId,
-} from "../elements/vault/boot-chain.ts";
-import {
-  createVaultRuntime,
-  VaultBootError,
-  type VaultGap,
-} from "../elements/vault/runtime.ts";
+import { buildVaultBootChain, normalizeVaultDriverId } from "../elements/vault/boot-chain.ts";
+import { createVaultRuntime, VaultBootError, type VaultGap } from "../elements/vault/runtime.ts";
 import { requiredEnvRegistry, secretRegistry } from "../kernel/element-registries.ts";
 import { formatCliChrome } from "../term.ts";
 import { loadOkeConfig } from "./load-config.ts";
@@ -53,10 +46,7 @@ export interface AskVaultGapsOptions {
  * @param cwd - Project root
  * @param entry - Optional entry override
  */
-export async function probeVaultGaps(
-  cwd: string,
-  entry?: string,
-): Promise<readonly VaultGap[]> {
+export async function probeVaultGaps(cwd: string, entry?: string): Promise<readonly VaultGap[]> {
   const prevSecrets = secretRegistry.slice();
   const prevRequired = requiredEnvRegistry.slice();
   secretRegistry.length = 0;

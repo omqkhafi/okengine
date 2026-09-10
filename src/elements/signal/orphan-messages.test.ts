@@ -28,8 +28,7 @@ describe("orphan signal messages", () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-signal-orphan-"));
     const durablePath = join(dir, "bus.json");
     try {
-      const legacy = signal.once("legacy-shipped", { retries: 0,
-        deadLetter: true });
+      const legacy = signal.once("legacy-shipped", { retries: 0, deadLetter: true });
       const runtime = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,
@@ -72,8 +71,7 @@ describe("orphan signal messages", () => {
       openRuntimes.pop();
 
       // Re-declare → DLQ processable again via replay.
-      const restored = signal.once("legacy-shipped", { retries: 0,
-        deadLetter: true });
+      const restored = signal.once("legacy-shipped", { retries: 0, deadLetter: true });
       const again = await reconcileSignals([restored], store);
       expect(again.active).toEqual(["legacy-shipped"]);
       expect(again.orphaned).toEqual([]);

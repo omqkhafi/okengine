@@ -30,11 +30,17 @@ export const { list, get, update, remove } = bindCrud({
 
 /** Create a form. */
 export const create = on(
-  http.post("/forms", { in: z.object({
-      projectId: z.string().min(1),
-      name: z.string().min(1),
-      schemaJson: z.string().optional(),
-    }), out: IdOut, errors: { NotFound } }).gate(projectAdminWrite),
+  http
+    .post("/forms", {
+      in: z.object({
+        projectId: z.string().min(1),
+        name: z.string().min(1),
+        schemaJson: z.string().optional(),
+      }),
+      out: IdOut,
+      errors: { NotFound },
+    })
+    .gate(projectAdminWrite),
   flow("forms.create", {
     do: async (input, fx) => {
       const project = await fx.store(db).findById(projects, input.projectId);
@@ -56,12 +62,18 @@ export const create = on(
 
 /** Submit a form — durable intake → task. */
 export const submit = on(
-  http.post("/forms/:id/submit", { in: z.object({
-      id: z.string().min(1),
-      title: z.string().min(1).optional(),
-      body: z.string().optional(),
-      customerName: z.string().min(1),
-    }), out: z.object({ id: z.string(), taskId: z.string(), identifier: z.string() }), errors: { NotFound, Unavailable } }).gate(member),
+  http
+    .post("/forms/:id/submit", {
+      in: z.object({
+        id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        body: z.string().optional(),
+        customerName: z.string().min(1),
+      }),
+      out: z.object({ id: z.string(), taskId: z.string(), identifier: z.string() }),
+      errors: { NotFound, Unavailable },
+    })
+    .gate(member),
   flow("forms.submit", {
     plane: "user",
     durable: true,

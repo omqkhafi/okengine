@@ -900,7 +900,17 @@ const AiListOut = z.object({
           status: z.enum(["ok", "denied"]),
           effects: z.array(
             z.object({
-              kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call", "fetch"]),
+              kind: z.enum([
+                "read",
+                "write",
+                "emit",
+                "send",
+                "ask",
+                "embed",
+                "secret",
+                "call",
+                "fetch",
+              ]),
               resource: z.string(),
             }),
           ),
@@ -1934,84 +1944,418 @@ export function createConsoleBindings(state: ConsoleState): {
 
   const bindings: Binding[] = [
     bindHttp(http.get("/console/setup/status", { out: SetupStatusOut }), setupStatus),
-    bindHttp(http.post("/console/setup/claim", { in: ClaimIn, out: SessionOut, errors: { SetupClosed, ClaimFailed } }), setupClaim),
-    bindHttp(http.post("/console/session/login", { in: LoginIn, out: SessionOut, errors: { AuthFailed, AuthRateLimited } }), sessionLogin),
+    bindHttp(
+      http.post("/console/setup/claim", {
+        in: ClaimIn,
+        out: SessionOut,
+        errors: { SetupClosed, ClaimFailed },
+      }),
+      setupClaim,
+    ),
+    bindHttp(
+      http.post("/console/session/login", {
+        in: LoginIn,
+        out: SessionOut,
+        errors: { AuthFailed, AuthRateLimited },
+      }),
+      sessionLogin,
+    ),
     bindHttp(http.get("/console/session/me", { out: MeOut, errors: { AuthFailed } }), sessionMe),
-    bindHttp(http.post("/console/session/logout", { out: z.object({ ok: z.literal(true) }) }), sessionLogout),
-    bindHttp(http.get("/console/manifest", { out: ManifestOut, errors: { AuthFailed } }), manifestGet),
+    bindHttp(
+      http.post("/console/session/logout", { out: z.object({ ok: z.literal(true) }) }),
+      sessionLogout,
+    ),
+    bindHttp(
+      http.get("/console/manifest", { out: ManifestOut, errors: { AuthFailed } }),
+      manifestGet,
+    ),
     bindHttp(http.get("/console/runs", { out: RunsListOut, errors: { AuthFailed } }), runsList),
-    bindHttp(http.post("/console/runs/query", { in: RunsQueryIn, out: RunsQueryOut, errors: { AuthFailed, QueryRejected, QueryTimeout, QueryFailed } }), runsQuery),
-    bindHttp(http.post("/console/action/ping", { in: ActionPingIn, out: ActionPingOut, errors: { AuthFailed } }), actionPing),
-    bindHttp(http.post("/console/structural/propose", { in: StructuralIn, out: StructuralOut, errors: { AuthFailed } }), structuralPropose),
-    bindHttp(http.get("/console/flows/identities", { out: IdentitiesOut, errors: { AuthFailed } }), flowsIdentities),
-    bindHttp(http.post("/console/flows/invoke", { in: InvokeIn, out: InvokeOut, errors: { AuthFailed, NotFound, InvokeDenied, ConfirmRequired } }), flowsInvoke),
-    bindHttp(http.post("/console/traces/replay", { in: TracesReplayIn, out: TracesReplayOut, errors: { AuthFailed, NotFound, ReplayUnavailable, ReplayFailed } }), tracesReplay),
-    bindHttp(http.get("/console/signals", { out: SignalsListOut, errors: { AuthFailed } }), signalsList),
-    bindHttp(http.post("/console/signals/replay", { in: SignalsReplayIn, out: SignalsReplayOut, errors: { AuthFailed, SignalNotFound, ConfirmRequired } }), signalsReplay),
-    bindHttp(http.post("/console/signals/dry-run-replay", { in: SignalsReplayIn.omit({ dryRun: true }), out: SignalsReplayOut, errors: { AuthFailed, SignalNotFound, DryRunUnsafe } }), signalsDryRunReplay),
-    bindHttp(http.post("/console/signals/discard", { in: SignalsDiscardIn, out: SignalsDiscardOut, errors: { AuthFailed, SignalNotFound, ConfirmRequired } }), signalsDiscard),
+    bindHttp(
+      http.post("/console/runs/query", {
+        in: RunsQueryIn,
+        out: RunsQueryOut,
+        errors: { AuthFailed, QueryRejected, QueryTimeout, QueryFailed },
+      }),
+      runsQuery,
+    ),
+    bindHttp(
+      http.post("/console/action/ping", {
+        in: ActionPingIn,
+        out: ActionPingOut,
+        errors: { AuthFailed },
+      }),
+      actionPing,
+    ),
+    bindHttp(
+      http.post("/console/structural/propose", {
+        in: StructuralIn,
+        out: StructuralOut,
+        errors: { AuthFailed },
+      }),
+      structuralPropose,
+    ),
+    bindHttp(
+      http.get("/console/flows/identities", { out: IdentitiesOut, errors: { AuthFailed } }),
+      flowsIdentities,
+    ),
+    bindHttp(
+      http.post("/console/flows/invoke", {
+        in: InvokeIn,
+        out: InvokeOut,
+        errors: { AuthFailed, NotFound, InvokeDenied, ConfirmRequired },
+      }),
+      flowsInvoke,
+    ),
+    bindHttp(
+      http.post("/console/traces/replay", {
+        in: TracesReplayIn,
+        out: TracesReplayOut,
+        errors: { AuthFailed, NotFound, ReplayUnavailable, ReplayFailed },
+      }),
+      tracesReplay,
+    ),
+    bindHttp(
+      http.get("/console/signals", { out: SignalsListOut, errors: { AuthFailed } }),
+      signalsList,
+    ),
+    bindHttp(
+      http.post("/console/signals/replay", {
+        in: SignalsReplayIn,
+        out: SignalsReplayOut,
+        errors: { AuthFailed, SignalNotFound, ConfirmRequired },
+      }),
+      signalsReplay,
+    ),
+    bindHttp(
+      http.post("/console/signals/dry-run-replay", {
+        in: SignalsReplayIn.omit({ dryRun: true }),
+        out: SignalsReplayOut,
+        errors: { AuthFailed, SignalNotFound, DryRunUnsafe },
+      }),
+      signalsDryRunReplay,
+    ),
+    bindHttp(
+      http.post("/console/signals/discard", {
+        in: SignalsDiscardIn,
+        out: SignalsDiscardOut,
+        errors: { AuthFailed, SignalNotFound, ConfirmRequired },
+      }),
+      signalsDiscard,
+    ),
     bindHttp(http.get("/console/store", { out: StoreListOut, errors: { AuthFailed } }), storeList),
-    bindHttp(http.query("/console/store/query", { in: StoreQueryIn, out: StoreQueryOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeQuery),
-    bindHttp(http.post("/console/store/reveal", { in: StoreRevealIn, out: StoreRevealOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeReveal),
-    bindHttp(http.post("/console/store/object", { in: StoreFileGetIn, out: StoreFileGetOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeObject),
-    bindHttp(http.post("/console/store/edit", { in: StoreEditIn, out: StoreEditOut, errors: { AuthFailed, TenantRequired, ConfirmRequired, StoreNotFound } }), storeEdit),
-    bindHttp(http.post("/console/store/delete", { in: StoreDeleteIn, out: StoreDeleteOut, errors: { AuthFailed, TenantRequired, ConfirmRequired } }), storeDelete),
-    bindHttp(http.post("/console/store/purge-cache", { in: StorePurgeIn, out: StorePurgeOut, errors: { AuthFailed, ConfirmRequired } }), storePurgeCache),
-    bindHttp(http.post("/console/store/sql", { in: StoreSqlIn, out: StoreSqlOut, errors: { AuthFailed, TenantRequired, StoreNotFound } }), storeSql),
-    bindHttp(http.post("/console/store/preview", { in: StorePreviewIn, out: StorePreviewOut, errors: { AuthFailed, TenantRequired, DryRunUnsafe } }), storePreview),
-    bindHttp(http.query("/console/store/sql/stats", { in: StoreSqlStatsIn, out: StoreSqlStatsOut, errors: { AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      PgStatStatementsNotPreloaded,
-      PgStatStatementsUnsupported,
-      PgStatStatementsNotCreated, } }), storeStats),
-    bindHttp(http.query("/console/store/sql/locks", { in: StoreSqlLocksIn, out: StoreSqlLocksOut, errors: { AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      PgStatStatementsNotPreloaded,
-      PgStatStatementsUnsupported,
-      PgStatStatementsNotCreated, } }), storeLocks),
-    bindHttp(http.query("/console/store/kv/stats", { in: StoreKvStatsIn, out: StoreKvStatsOut, errors: { AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      KvStatsUnsupported, } }), storeKvStats),
-    bindHttp(http.post("/console/store/sql/advise", { in: StoreSqlAdviseIn, out: StoreSqlAdviseOut, errors: { AuthFailed,
-      TenantRequired,
-      StoreNotFound,
-      PgStatStatementsNotPreloaded,
-      PgStatStatementsUnsupported,
-      PgStatStatementsNotCreated, } }), storeAdvise),
+    bindHttp(
+      http.query("/console/store/query", {
+        in: StoreQueryIn,
+        out: StoreQueryOut,
+        errors: { AuthFailed, TenantRequired, StoreNotFound },
+      }),
+      storeQuery,
+    ),
+    bindHttp(
+      http.post("/console/store/reveal", {
+        in: StoreRevealIn,
+        out: StoreRevealOut,
+        errors: { AuthFailed, TenantRequired, StoreNotFound },
+      }),
+      storeReveal,
+    ),
+    bindHttp(
+      http.post("/console/store/object", {
+        in: StoreFileGetIn,
+        out: StoreFileGetOut,
+        errors: { AuthFailed, TenantRequired, StoreNotFound },
+      }),
+      storeObject,
+    ),
+    bindHttp(
+      http.post("/console/store/edit", {
+        in: StoreEditIn,
+        out: StoreEditOut,
+        errors: { AuthFailed, TenantRequired, ConfirmRequired, StoreNotFound },
+      }),
+      storeEdit,
+    ),
+    bindHttp(
+      http.post("/console/store/delete", {
+        in: StoreDeleteIn,
+        out: StoreDeleteOut,
+        errors: { AuthFailed, TenantRequired, ConfirmRequired },
+      }),
+      storeDelete,
+    ),
+    bindHttp(
+      http.post("/console/store/purge-cache", {
+        in: StorePurgeIn,
+        out: StorePurgeOut,
+        errors: { AuthFailed, ConfirmRequired },
+      }),
+      storePurgeCache,
+    ),
+    bindHttp(
+      http.post("/console/store/sql", {
+        in: StoreSqlIn,
+        out: StoreSqlOut,
+        errors: { AuthFailed, TenantRequired, StoreNotFound },
+      }),
+      storeSql,
+    ),
+    bindHttp(
+      http.post("/console/store/preview", {
+        in: StorePreviewIn,
+        out: StorePreviewOut,
+        errors: { AuthFailed, TenantRequired, DryRunUnsafe },
+      }),
+      storePreview,
+    ),
+    bindHttp(
+      http.query("/console/store/sql/stats", {
+        in: StoreSqlStatsIn,
+        out: StoreSqlStatsOut,
+        errors: {
+          AuthFailed,
+          TenantRequired,
+          StoreNotFound,
+          PgStatStatementsNotPreloaded,
+          PgStatStatementsUnsupported,
+          PgStatStatementsNotCreated,
+        },
+      }),
+      storeStats,
+    ),
+    bindHttp(
+      http.query("/console/store/sql/locks", {
+        in: StoreSqlLocksIn,
+        out: StoreSqlLocksOut,
+        errors: {
+          AuthFailed,
+          TenantRequired,
+          StoreNotFound,
+          PgStatStatementsNotPreloaded,
+          PgStatStatementsUnsupported,
+          PgStatStatementsNotCreated,
+        },
+      }),
+      storeLocks,
+    ),
+    bindHttp(
+      http.query("/console/store/kv/stats", {
+        in: StoreKvStatsIn,
+        out: StoreKvStatsOut,
+        errors: { AuthFailed, TenantRequired, StoreNotFound, KvStatsUnsupported },
+      }),
+      storeKvStats,
+    ),
+    bindHttp(
+      http.post("/console/store/sql/advise", {
+        in: StoreSqlAdviseIn,
+        out: StoreSqlAdviseOut,
+        errors: {
+          AuthFailed,
+          TenantRequired,
+          StoreNotFound,
+          PgStatStatementsNotPreloaded,
+          PgStatStatementsUnsupported,
+          PgStatStatementsNotCreated,
+        },
+      }),
+      storeAdvise,
+    ),
     bindHttp(http.get("/console/vault", { out: VaultListOut, errors: { AuthFailed } }), vaultList),
-    bindHttp(http.post("/console/vault/set", { in: VaultWriteIn, out: VaultWriteOut, errors: { AuthFailed, VaultNotFound } }), vaultSet),
-    bindHttp(http.post("/console/vault/create", { in: VaultCreateIn, out: VaultWriteOut, errors: { AuthFailed, VaultExists, VaultNotFound } }), vaultCreate),
-    bindHttp(http.post("/console/vault/rotate", { in: VaultWriteIn, out: VaultWriteOut, errors: { AuthFailed, VaultNotFound } }), vaultRotate),
-    bindHttp(http.post("/console/vault/rotate-master", { in: VaultRotateMasterIn, out: VaultRotateMasterOut, errors: { AuthFailed, ConfirmRequired, VaultSealed, VaultRotateBusy, VaultUnsupported } }), vaultRotateMaster),
-    bindHttp(http.get("/console/vault/audit/verify", { out: VaultAuditVerifyOut, errors: { AuthFailed, VaultUnsupported } }), vaultAuditVerify),
+    bindHttp(
+      http.post("/console/vault/set", {
+        in: VaultWriteIn,
+        out: VaultWriteOut,
+        errors: { AuthFailed, VaultNotFound },
+      }),
+      vaultSet,
+    ),
+    bindHttp(
+      http.post("/console/vault/create", {
+        in: VaultCreateIn,
+        out: VaultWriteOut,
+        errors: { AuthFailed, VaultExists, VaultNotFound },
+      }),
+      vaultCreate,
+    ),
+    bindHttp(
+      http.post("/console/vault/rotate", {
+        in: VaultWriteIn,
+        out: VaultWriteOut,
+        errors: { AuthFailed, VaultNotFound },
+      }),
+      vaultRotate,
+    ),
+    bindHttp(
+      http.post("/console/vault/rotate-master", {
+        in: VaultRotateMasterIn,
+        out: VaultRotateMasterOut,
+        errors: { AuthFailed, ConfirmRequired, VaultSealed, VaultRotateBusy, VaultUnsupported },
+      }),
+      vaultRotateMaster,
+    ),
+    bindHttp(
+      http.get("/console/vault/audit/verify", {
+        out: VaultAuditVerifyOut,
+        errors: { AuthFailed, VaultUnsupported },
+      }),
+      vaultAuditVerify,
+    ),
     bindHttp(http.get("/console/ai", { out: AiListOut, errors: { AuthFailed } }), aiList),
     bindHttp(http.get("/console/gates", { out: GatesListOut, errors: { AuthFailed } }), gatesList),
-    bindHttp(http.query("/console/gates/simulate", { in: GatesSimulateIn, out: GatesSimulateOut, errors: { AuthFailed } }), gatesSimulate),
-    bindHttp(http.query("/console/gates/powers", { in: GatesPowersIn, out: GatesPowersOut, errors: { AuthFailed } }), gatesPowers),
-    bindHttp(http.get("/console/access", { out: AccessListOut, errors: { AuthFailed } }), accessList),
-    bindHttp(http.query("/console/access/effective", { in: AccessEffectiveIn, out: AccessEffectiveOut, errors: { AuthFailed, NotFound } }), accessEffective),
-    bindHttp(http.post("/console/access/key-blast", { in: AccessKeyBlastIn, out: AccessKeyBlastOut, errors: { AuthFailed, AccessKeyNotFound } }), accessKeyBlast),
-    bindHttp(http.post("/console/access/keys", { in: AccessCreateKeyIn, out: AccessCreateKeyOut, errors: { AuthFailed, AccessGrantDenied } }), accessCreateKeyFlow),
-    bindHttp(http.post("/console/access/keys/revoke", { in: AccessRevokeKeyIn, out: AccessRevokeKeyOut, errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired } }), accessRevokeKeyFlow),
-    bindHttp(http.post("/console/access/keys/rotate", { in: AccessRotateKeyIn, out: AccessRotateKeyOut, errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired } }), accessRotateKeyFlow),
-    bindHttp(http.post("/console/access/keys/update", { in: AccessUpdateKeyIn, out: AccessUpdateKeyOut, errors: { AuthFailed, AccessKeyNotFound, AccessGrantDenied } }), accessUpdateKeyFlow),
-    bindHttp(http.post("/console/access/roles/grants", { in: AccessSetRoleGrantsIn, out: AccessSetRoleGrantsOut, errors: { AuthFailed, AccessGrantDenied } }), accessSetRoleGrantsFlow),
+    bindHttp(
+      http.query("/console/gates/simulate", {
+        in: GatesSimulateIn,
+        out: GatesSimulateOut,
+        errors: { AuthFailed },
+      }),
+      gatesSimulate,
+    ),
+    bindHttp(
+      http.query("/console/gates/powers", {
+        in: GatesPowersIn,
+        out: GatesPowersOut,
+        errors: { AuthFailed },
+      }),
+      gatesPowers,
+    ),
+    bindHttp(
+      http.get("/console/access", { out: AccessListOut, errors: { AuthFailed } }),
+      accessList,
+    ),
+    bindHttp(
+      http.query("/console/access/effective", {
+        in: AccessEffectiveIn,
+        out: AccessEffectiveOut,
+        errors: { AuthFailed, NotFound },
+      }),
+      accessEffective,
+    ),
+    bindHttp(
+      http.post("/console/access/key-blast", {
+        in: AccessKeyBlastIn,
+        out: AccessKeyBlastOut,
+        errors: { AuthFailed, AccessKeyNotFound },
+      }),
+      accessKeyBlast,
+    ),
+    bindHttp(
+      http.post("/console/access/keys", {
+        in: AccessCreateKeyIn,
+        out: AccessCreateKeyOut,
+        errors: { AuthFailed, AccessGrantDenied },
+      }),
+      accessCreateKeyFlow,
+    ),
+    bindHttp(
+      http.post("/console/access/keys/revoke", {
+        in: AccessRevokeKeyIn,
+        out: AccessRevokeKeyOut,
+        errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
+      }),
+      accessRevokeKeyFlow,
+    ),
+    bindHttp(
+      http.post("/console/access/keys/rotate", {
+        in: AccessRotateKeyIn,
+        out: AccessRotateKeyOut,
+        errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
+      }),
+      accessRotateKeyFlow,
+    ),
+    bindHttp(
+      http.post("/console/access/keys/update", {
+        in: AccessUpdateKeyIn,
+        out: AccessUpdateKeyOut,
+        errors: { AuthFailed, AccessKeyNotFound, AccessGrantDenied },
+      }),
+      accessUpdateKeyFlow,
+    ),
+    bindHttp(
+      http.post("/console/access/roles/grants", {
+        in: AccessSetRoleGrantsIn,
+        out: AccessSetRoleGrantsOut,
+        errors: { AuthFailed, AccessGrantDenied },
+      }),
+      accessSetRoleGrantsFlow,
+    ),
     bindHttp(http.get("/console/diff", { out: DiffListOut, errors: { AuthFailed } }), diffList),
-    bindHttp(http.get("/console/plugins", { out: PluginsListOut, errors: { AuthFailed } }), pluginsList),
+    bindHttp(
+      http.get("/console/plugins", { out: PluginsListOut, errors: { AuthFailed } }),
+      pluginsList,
+    ),
     bindHttp(http.get("/console/clock", { out: ClockListOut, errors: { AuthFailed } }), clockList),
-    bindHttp(http.get("/console/instances", { out: InstancesListOut, errors: { AuthFailed } }), instancesList),
-    bindHttp(http.post("/console/clock/run-now", { in: ClockRunNowIn, out: ClockRunNowOut, errors: { AuthFailed, ClockNotFound, ConfirmRequired } }), clockRunNow),
-    bindHttp(http.post("/console/clock/pause", { in: ClockPauseIn, out: ClockPauseOut, errors: { AuthFailed, ClockNotFound } }), clockPause),
-    bindHttp(http.post("/console/clock/edit-schedule", { in: ClockEditIn, out: ClockEditOut, errors: { AuthFailed, ClockNotFound, ScheduleNotOverridable } }), clockEditSchedule),
-    bindHttp(http.post("/console/clock/wake-early", { in: ClockWakeEarlyIn, out: ClockWakeEarlyOut, errors: { AuthFailed, ClockNotFound } }), clockWakeEarly),
-    bindHttp(http.get("/console/channels", { out: ChannelsListOut, errors: { AuthFailed } }), channelsList),
-    bindHttp(http.query("/console/channels/preview", { in: ChannelPreviewIn, out: ChannelPreviewOut, errors: { AuthFailed, ChannelNotFound } }), channelPreview),
-    bindHttp(http.post("/console/channels/verify-auth", { in: ChannelVerifyAuthIn, out: ChannelVerifyAuthOut, errors: { AuthFailed } }), channelVerifyAuth),
-    bindHttp(http.post("/console/channels/reveal", { in: ChannelRevealIn, out: ChannelRevealOut, errors: { AuthFailed, ChannelNotFound } }), channelReveal),
-    bindHttp(http.post("/console/channels/send-test", { in: ChannelSendTestIn, out: ChannelSendTestOut, errors: { AuthFailed, ChannelNotFound, ConfirmRequired } }), channelSendTest),
+    bindHttp(
+      http.get("/console/instances", { out: InstancesListOut, errors: { AuthFailed } }),
+      instancesList,
+    ),
+    bindHttp(
+      http.post("/console/clock/run-now", {
+        in: ClockRunNowIn,
+        out: ClockRunNowOut,
+        errors: { AuthFailed, ClockNotFound, ConfirmRequired },
+      }),
+      clockRunNow,
+    ),
+    bindHttp(
+      http.post("/console/clock/pause", {
+        in: ClockPauseIn,
+        out: ClockPauseOut,
+        errors: { AuthFailed, ClockNotFound },
+      }),
+      clockPause,
+    ),
+    bindHttp(
+      http.post("/console/clock/edit-schedule", {
+        in: ClockEditIn,
+        out: ClockEditOut,
+        errors: { AuthFailed, ClockNotFound, ScheduleNotOverridable },
+      }),
+      clockEditSchedule,
+    ),
+    bindHttp(
+      http.post("/console/clock/wake-early", {
+        in: ClockWakeEarlyIn,
+        out: ClockWakeEarlyOut,
+        errors: { AuthFailed, ClockNotFound },
+      }),
+      clockWakeEarly,
+    ),
+    bindHttp(
+      http.get("/console/channels", { out: ChannelsListOut, errors: { AuthFailed } }),
+      channelsList,
+    ),
+    bindHttp(
+      http.query("/console/channels/preview", {
+        in: ChannelPreviewIn,
+        out: ChannelPreviewOut,
+        errors: { AuthFailed, ChannelNotFound },
+      }),
+      channelPreview,
+    ),
+    bindHttp(
+      http.post("/console/channels/verify-auth", {
+        in: ChannelVerifyAuthIn,
+        out: ChannelVerifyAuthOut,
+        errors: { AuthFailed },
+      }),
+      channelVerifyAuth,
+    ),
+    bindHttp(
+      http.post("/console/channels/reveal", {
+        in: ChannelRevealIn,
+        out: ChannelRevealOut,
+        errors: { AuthFailed, ChannelNotFound },
+      }),
+      channelReveal,
+    ),
+    bindHttp(
+      http.post("/console/channels/send-test", {
+        in: ChannelSendTestIn,
+        out: ChannelSendTestOut,
+        errors: { AuthFailed, ChannelNotFound, ConfirmRequired },
+      }),
+      channelSendTest,
+    ),
   ];
 
   return {

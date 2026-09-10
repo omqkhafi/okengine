@@ -45,7 +45,6 @@ export const SignInOut = z.union([
   }),
 ]);
 
-
 /** Common options for auth method plugins (session issue). */
 export interface AuthMethodOptions {
   /** HMAC secret; falls back to `OKE_AUTH_SECRET`, then a dev default. */
@@ -158,9 +157,7 @@ export function bindSessionAuth(
   contract?: BoundaryContract,
 ): Binding {
   const trigger =
-    contract !== undefined
-      ? http.post(`/auth${path}`, contract)
-      : http.post(`/auth${path}`);
+    contract !== undefined ? http.post(`/auth${path}`, contract) : http.post(`/auth${path}`);
   return bindAuthHttp(trigger.gate(AUTH_SESSION_GATE), flowDef);
 }
 

@@ -29,14 +29,14 @@ Also match plain: `update site docs`, `sync docs to source`, `refresh the docs p
 
 Map the change to pages that exist under `site/content/docs/`:
 
-| Change surface                    | Primary page          | Also check                                              |
-| --------------------------------- | --------------------- | ------------------------------------------------------- |
-| Official plugin (`src/plugins/…`) | `plugins/<name>.mdx`  | `plugins/index.mdx`, related peers, Gate if shared opts |
-| Gate / auth                       | `elements/gate/`      | auth method plugin pages                                |
-| Element                           | `elements/<name>/`    | `reference/fx.mdx` if fx surface moved                  |
-| CLI / config / security           | `reference/…`         | `understand/` if install / onboarding story changed     |
-| Client SDK                        | `client/…`            | Auth / Calling / React siblings                         |
-| AI Resources (MCP / skills / llms)| `ai/…`                | —                                                       |
+| Change surface                     | Primary page         | Also check                                              |
+| ---------------------------------- | -------------------- | ------------------------------------------------------- |
+| Official plugin (`src/plugins/…`)  | `plugins/<name>.mdx` | `plugins/index.mdx`, related peers, Gate if shared opts |
+| Gate / auth                        | `elements/gate/`     | auth method plugin pages                                |
+| Element                            | `elements/<name>/`   | `reference/fx.mdx` if fx surface moved                  |
+| CLI / config / security            | `reference/…`        | `understand/` if install / onboarding story changed     |
+| Client SDK                         | `client/…`           | Auth / Calling / React siblings                         |
+| AI Resources (MCP / skills / llms) | `ai/…`               | —                                                       |
 
 If no page exists and the surface is public — **stop and ask** whether to create one via oke-docs (do not invent).
 

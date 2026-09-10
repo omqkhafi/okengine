@@ -8,12 +8,7 @@
 import type { DriverExternal } from "./external.ts";
 
 /** Protocol ids for AI model drivers. */
-export type AiDriverId =
-  | "mock"
-  | "anthropic"
-  | "openai-compatible"
-  | "bedrock"
-  | "vertex";
+export type AiDriverId = "mock" | "anthropic" | "openai-compatible" | "bedrock" | "vertex";
 
 /** Tool definition offered to a model (Flow-backed at the fx layer). */
 export interface AiToolDef {

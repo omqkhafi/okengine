@@ -114,16 +114,9 @@ export function composeUpPhaseLabel(phase: ComposeUpPhase): string {
  *
  * @param phase - Parsed phase
  */
-export function composeUpPhaseStatus(
-  phase: ComposeUpPhase,
-): "ready" | "pending" | "error" {
+export function composeUpPhaseStatus(phase: ComposeUpPhase): "ready" | "pending" | "error" {
   if (phase === "error") return "error";
-  if (
-    phase === "pulled" ||
-    phase === "created" ||
-    phase === "started" ||
-    phase === "healthy"
-  ) {
+  if (phase === "pulled" || phase === "created" || phase === "started" || phase === "healthy") {
     return "ready";
   }
   return "pending";
@@ -284,26 +277,16 @@ export async function runComposeUp(options: RunComposeUpOptions): Promise<void> 
   };
 
   await Promise.all([
-    pumpComposeStream(
-      proc.stdout,
-      emitLine,
-      (c) => {
-        stdout += c;
-      },
-    ),
-    pumpComposeStream(
-      proc.stderr,
-      emitLine,
-      (c) => {
-        stderr += c;
-      },
-    ),
+    pumpComposeStream(proc.stdout, emitLine, (c) => {
+      stdout += c;
+    }),
+    pumpComposeStream(proc.stderr, emitLine, (c) => {
+      stderr += c;
+    }),
   ]);
   const code = await proc.exited;
   if (code !== 0) {
     const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-    throw new Error(
-      `oke dev: docker compose exited ${code}` + (detail ? `\n${detail}` : ""),
-    );
+    throw new Error(`oke dev: docker compose exited ${code}` + (detail ? `\n${detail}` : ""));
   }
 }

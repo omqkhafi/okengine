@@ -141,7 +141,9 @@ function hasScheduleSignal(fields: CronFields): boolean {
  */
 export function buildCronExpression(fields: CronFields): string {
   if (!hasScheduleSignal(fields)) {
-    throw new TypeError("cron fields: require at least one of at, minute, hour, dayOfMonth, month, dayOfWeek");
+    throw new TypeError(
+      "cron fields: require at least one of at, minute, hour, dayOfMonth, month, dayOfWeek",
+    );
   }
 
   let minute = fields.minute;

@@ -188,9 +188,7 @@ export const create = on(
 Gates chain on the **trigger**, not on a `gates: [...]` field inside `flow()`:
 
 ```typescript
-http
-  .post()
-  .gate(member, gate.scope("editor"), gate.rate({ max: 100, per: "1m", keyBy: "user" }));
+http.post().gate(member, gate.scope("editor"), gate.rate({ max: 100, per: "1m", keyBy: "user" }));
 ```
 
 **Public** — open the route without authentication:

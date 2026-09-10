@@ -54,13 +54,13 @@ Task:
 
 ### 1. Scope
 
-| User says                                      | Do                                                                 |
-| ---------------------------------------------- | ------------------------------------------------------------------ |
-| “update images” / “all”                        | all versioned default pins in the catalog                          |
-| named image (`rustfs`, `mailpit`, `meilisearch`) | that pin only, everywhere it appears                             |
-| “AI images” / llama / Ollama / vLLM / SGLang   | **Refuse** — no Compose AI recipes; point to OpenRouter / BYO URL  |
-| “vendor” / Cockroach / Yugabyte / Dragonfly    | optional recipe docs + matcher fixtures — **not** in the default   |
-| “majors” / “family bump”                       | floating tags may move (`postgres:18` → `19`) — only if they asked |
+| User says                                        | Do                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| “update images” / “all”                          | all versioned default pins in the catalog                          |
+| named image (`rustfs`, `mailpit`, `meilisearch`) | that pin only, everywhere it appears                               |
+| “AI images” / llama / Ollama / vLLM / SGLang     | **Refuse** — no Compose AI recipes; point to OpenRouter / BYO URL  |
+| “vendor” / Cockroach / Yugabyte / Dragonfly      | optional recipe docs + matcher fixtures — **not** in the default   |
+| “majors” / “family bump”                         | floating tags may move (`postgres:18` → `19`) — only if they asked |
 
 Do **not** bump unrelated pins when a name is given.
 

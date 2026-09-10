@@ -18,20 +18,20 @@ export interface AiProviderEntry {
 }
 
 /** Drivers that own their own base URL — never inject openai-compat registry. */
-export const AI_NATIVE_DRIVER_IDS = new Set(["anthropic", "mock"]);
+export const AI_NATIVE_DRIVER_IDS: ReadonlySet<string> = new Set(["anthropic", "mock"]);
 
 /**
  * Provider labels that are not OpenAI-compat cloud names and do not require
  * `baseUrl` (native/local/mock bindings; driver defaults apply).
  */
-export const AI_PROVIDER_BASEURL_EXEMPT = new Set([
+export const AI_PROVIDER_BASEURL_EXEMPT: ReadonlySet<string> = new Set([
   "mock",
   "local",
   "openai-compatible",
 ]);
 
 const ANTHROPIC_OPENAI_COMPAT_CAVEAT =
-  "Anthropic's OpenAI-compatible endpoint (https://api.anthropic.com/v1) is for testing/evaluation only — Anthropic recommends the native Claude API for production. Caveats: tools[].function.strict is ignored (no schema guarantee), n must be 1, no embeddings on this surface. Prefer driverId: \"anthropic\" for production Anthropic usage.";
+  'Anthropic\'s OpenAI-compatible endpoint (https://api.anthropic.com/v1) is for testing/evaluation only — Anthropic recommends the native Claude API for production. Caveats: tools[].function.strict is ignored (no schema guarantee), n must be 1, no embeddings on this surface. Prefer driverId: "anthropic" for production Anthropic usage.';
 
 const GOOGLE_OPENAI_COMPAT_CAVEAT =
   "Google's OpenAI-compatible endpoint does not follow full OpenAI tool/parameter JSON Schema fidelity (OpenAPI-shaped params; complex schemas with $ref / anyOf / additionalProperties / $schema commonly fail). Agents that call Flows as tools can misbehave silently — do not treat this as a verified provider for tool-calling-dependent production.";

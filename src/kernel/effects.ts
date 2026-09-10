@@ -155,8 +155,7 @@ export async function recordEffect<T>(
     error = e;
     throw e;
   } finally {
-    const external =
-      typeof externalOf === "function" ? externalOf(result, error) : externalOf;
+    const external = typeof externalOf === "function" ? externalOf(result, error) : externalOf;
     recordObservedEffect(
       ledger,
       kind,

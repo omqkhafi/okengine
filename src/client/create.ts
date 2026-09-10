@@ -192,10 +192,7 @@ export function flattenRoutes(
  * @param path - Accumulated property path
  */
 function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): unknown {
-  const invoke = async (
-    input?: unknown,
-    callOpts?: CallOpts,
-  ): Promise<ClientResult> => {
+  const invoke = async (input?: unknown, callOpts?: CallOpts): Promise<ClientResult> => {
     if (path.length < 2) {
       return attachPager(
         {

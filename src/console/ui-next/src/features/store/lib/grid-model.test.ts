@@ -144,8 +144,8 @@ describe("formatTemporalCell / formatStoreCell", () => {
         1_723_622_400_000,
       ),
     ).toBe("2024-08-14T08:00:00.000Z");
-    expect(
-      formatStoreCell({ key: "seats", type: "integer", editable: true, pii: false }, 2),
-    ).toBe("2");
+    expect(formatStoreCell({ key: "seats", type: "integer", editable: true, pii: false }, 2)).toBe(
+      "2",
+    );
   });
 });

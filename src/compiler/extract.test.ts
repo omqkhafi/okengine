@@ -285,9 +285,9 @@ export const articles = store.schema.table("articles", {
 
 export const db = store.sql("app", { schema: { articles } });
 `;
-    await expect(
-      extractFromSources({ "src/schema.decl.ts": source }),
-    ).rejects.toThrow(/SearchConfigError|ai element/);
+    await expect(extractFromSources({ "src/schema.decl.ts": source })).rejects.toThrow(
+      /SearchConfigError|ai element/,
+    );
   });
 
   test("project search.embed default stamps bare .embed()", async () => {
@@ -368,9 +368,9 @@ export const articles = store.schema.table("articles", {
 
 export const db = store.sql("app", { schema: { articles } });
 `;
-    await expect(
-      extractFromSources({ "src/schema.decl.ts": source }),
-    ).rejects.toThrow(/SearchConfigError|model and dims|store: \{ search: \{ embed/);
+    await expect(extractFromSources({ "src/schema.decl.ts": source })).rejects.toThrow(
+      /SearchConfigError|model and dims|store: \{ search: \{ embed/,
+    );
   });
 
   test("extracts RLS helpers onto store.tables", async () => {

@@ -604,11 +604,7 @@ describe("auth methods — 2FA method lock (July–August 2026 bypass)", () => {
 
     // Mid-challenge: attempt TOTP QR enrollment without completing email OTP.
     const enroll = await app.fetch(
-      jsonPost(
-        "/auth/two-factor/enable",
-        {},
-        { authorization: `Bearer ${session.accessToken}` },
-      ),
+      jsonPost("/auth/two-factor/enable", {}, { authorization: `Bearer ${session.accessToken}` }),
     );
     expect(enroll.status).toBeGreaterThanOrEqual(400);
     const err = await readError(enroll);

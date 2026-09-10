@@ -26,10 +26,12 @@ if (!durablePath) {
   process.exit(2);
 }
 
-const orderPlaced = signal.once("order-placed", { retries: 3,
+const orderPlaced = signal.once("order-placed", {
+  retries: 3,
   deadLetter: true,
   // Producer-only / cross-process consumer: no local subscriber at emit time.
-  optional: true });
+  optional: true,
+});
 
 if (mode === "consume-hang") {
   if (!markerPath) {

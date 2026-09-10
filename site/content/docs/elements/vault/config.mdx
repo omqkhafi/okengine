@@ -150,13 +150,13 @@ alongside secret contracts.
 
 Same option bag as secrets (`VaultSecretOptions`), with different defaults:
 
-| Option        | Type      | Default   | Meaning                                                         |
-| ------------- | --------- | --------- | --------------------------------------------------------------- |
-| `description` | `string`  | —         | Boot-gap and Console label                                      |
-| `rotate`      | `string`  | omit      | Optional cadence hint (rarely used for config)                  |
-| `schema`      | Schema    | —         | Declared shape for docs / tooling                               |
-| `dev`         | `string`  | —         | Dev-only fallback                                               |
-| `sensitive`   | `boolean` | `false`   | Set `true` only if this config must never show in Console       |
+| Option        | Type      | Default | Meaning                                                   |
+| ------------- | --------- | ------- | --------------------------------------------------------- |
+| `description` | `string`  | —       | Boot-gap and Console label                                |
+| `rotate`      | `string`  | omit    | Optional cadence hint (rarely used for config)            |
+| `schema`      | Schema    | —       | Declared shape for docs / tooling                         |
+| `dev`         | `string`  | —       | Dev-only fallback                                         |
+| `sensitive`   | `boolean` | `false` | Set `true` only if this config must never show in Console |
 
 Empty name throws `TypeError: vault.config: name is required`.
 
@@ -167,13 +167,13 @@ prefer `vault.secret` when that is the intent.
 
 Synchronous reads of process environment. Empty strings count as unset.
 
-| Helper                     | Returns            | Throws when                                      |
-| -------------------------- | ------------------ | ------------------------------------------------ |
-| `vault.env(name)`          | `string \| undefined` | —                                             |
-| `vault.env.required(name)` | `string`           | unset — also registers for boot gaps             |
-| `vault.env.int(name, def?)`| `number`           | unset without default, or not an integer         |
-| `vault.env.bool(name, def?)`| `boolean`         | unset without default, or not boolean-shaped     |
-| `vault.env.json(name)`     | `T \| undefined`   | value present but not valid JSON                 |
+| Helper                       | Returns               | Throws when                                  |
+| ---------------------------- | --------------------- | -------------------------------------------- |
+| `vault.env(name)`            | `string \| undefined` | —                                            |
+| `vault.env.required(name)`   | `string`              | unset — also registers for boot gaps         |
+| `vault.env.int(name, def?)`  | `number`              | unset without default, or not an integer     |
+| `vault.env.bool(name, def?)` | `boolean`             | unset without default, or not boolean-shaped |
+| `vault.env.json(name)`       | `T \| undefined`      | value present but not valid JSON             |
 
 Boolean true: `1` · `true` · `yes` · `on`. False: `0` · `false` · `no` · `off` (case-insensitive).
 
@@ -212,7 +212,7 @@ Both still return `Redacted` from `fx.vault.get` — reveal when you need a plai
   fail boot just like secrets when registered.
 </Accordion>
 
-<Accordion title='TypeError: vault.env.required: NAME is not set'>
+<Accordion title="TypeError: vault.env.required: NAME is not set">
   Call site threw immediately. For boot-time collection, keep the `required` call so the name is
   registered; boot then lists it with other gaps.
 </Accordion>

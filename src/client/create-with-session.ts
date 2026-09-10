@@ -52,8 +52,7 @@ const SESSION_AUTH_KEYS = [
 export function isTransportAuthOnly(auth: unknown): auth is ClientTransportAuth {
   if (auth === null || typeof auth !== "object") return false;
   const bag = auth as Record<string, unknown>;
-  const hasHooks =
-    typeof bag.getToken === "function" && typeof bag.refresh === "function";
+  const hasHooks = typeof bag.getToken === "function" && typeof bag.refresh === "function";
   if (!hasHooks) return false;
   for (const key of SESSION_AUTH_KEYS) {
     if (key in bag && bag[key] !== undefined) return false;
@@ -142,14 +141,8 @@ function mergeClientOptions(
 ): ClientOptions {
   const fromAuth = authClient.clientOptions;
   const transportAuth: ClientTransportAuth = {
-    getToken:
-      sessionOpts.getToken ??
-      fromAuth.auth?.getToken ??
-      (() => null),
-    refresh:
-      sessionOpts.refresh ??
-      fromAuth.auth?.refresh ??
-      (async () => null),
+    getToken: sessionOpts.getToken ?? fromAuth.auth?.getToken ?? (() => null),
+    refresh: sessionOpts.refresh ?? fromAuth.auth?.refresh ?? (async () => null),
   };
   return {
     ...base,
@@ -245,8 +238,7 @@ export function createServerClient(
     auth: {
       ...sessionBase,
       mode: "cookie",
-      csrfConfigured:
-        "csrfConfigured" in sessionBase ? sessionBase.csrfConfigured : true,
+      csrfConfigured: "csrfConfigured" in sessionBase ? sessionBase.csrfConfigured : true,
       getToken: () => tokenFromRequestCookies(req),
     },
   });

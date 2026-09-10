@@ -101,9 +101,9 @@ const { data } = await api.auth.verifyOtp({
 </Steps>
 
 <Callout type="info" title="Pre-account hijack defense (email)">
-  App-mode email verify proves inbox ownership. An **unverified** parked
-  email+password account is reclaimed (sessions revoked, hashes cleared,
-  `emailVerified` set) before the OTP session. Verified owners re-auth only.
+  App-mode email verify proves inbox ownership. An **unverified** parked email+password account is
+  reclaimed (sessions revoked, hashes cleared, `emailVerified` set) before the OTP session. Verified
+  owners re-auth only.
 </Callout>
 
 ## Modes
@@ -216,6 +216,10 @@ In `local` / `test` the `console` driver captures messages. Use
 
 <Cards>
   <Card title="Magic link" description="Email link sign-in." href="/docs/plugins/magic-link" />
-  <Card title="Two-factor" description="TOTP / email OTP second factor." href="/docs/plugins/two-factor" />
+  <Card
+    title="Two-factor"
+    description="TOTP / email OTP second factor."
+    href="/docs/plugins/two-factor"
+  />
   <Card title="Channel" description="Delivery drivers and Mailpit." href="/docs/elements/channel" />
 </Cards>

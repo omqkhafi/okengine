@@ -3,12 +3,16 @@ import { z } from "zod";
 
 /** First-run welcome — visit :6530/ after `oke dev` (browser code block; curl stays JSON). */
 export const root = on(
-  http.get("/", { out: z.object({
-      ok: z.literal(true),
-      app: z.string(),
-      try: z.array(z.string()),
-      console: z.string(),
-    }) }).public(),
+  http
+    .get("/", {
+      out: z.object({
+        ok: z.literal(true),
+        app: z.string(),
+        try: z.array(z.string()),
+        console: z.string(),
+      }),
+    })
+    .public(),
   flow("main.root", {
     do: () => ({
       ok: true as const,

@@ -85,8 +85,8 @@ outbox commits — the HTTP request does not wait for every subscriber to finish
 </Steps>
 
 <Callout title="Same handle everywhere">
-  Import the declared Signal handle (or the same name) in every subscriber and producer. A typo
-  in the name creates a different Manifest entry — fan-out never crosses names.
+  Import the declared Signal handle (or the same name) in every subscriber and producer. A typo in
+  the name creates a different Manifest entry — fan-out never crosses names.
 </Callout>
 
 ## Progressive Patterns
@@ -187,31 +187,31 @@ Cause shape: `"{resource}": {detail}`. Align the payload with `schema` — no su
 
 How broadcast sits next to the other helpers when you are choosing physics:
 
-| Helper | Pattern | Who runs | Replay | Typical use |
-| ------ | ------- | -------- | ------ | ----------- |
-| `signal.once` | Work queue | Exactly one competing worker | Retries + DLQ | Emails, fulfillment, sync |
-| `signal.broadcast` | Pub/sub | Every active subscriber | None (miss if offline) | Cache bust, multi-side-effect fan-out |
-| `signal.live` | SSE tape | HTTP clients via `http.live` | `Last-Event-ID` resume | Status feeds, progress |
+| Helper             | Pattern    | Who runs                     | Replay                 | Typical use                           |
+| ------------------ | ---------- | ---------------------------- | ---------------------- | ------------------------------------- |
+| `signal.once`      | Work queue | Exactly one competing worker | Retries + DLQ          | Emails, fulfillment, sync             |
+| `signal.broadcast` | Pub/sub    | Every active subscriber      | None (miss if offline) | Cache bust, multi-side-effect fan-out |
+| `signal.live`      | SSE tape   | HTTP clients via `http.live` | `Last-Event-ID` resume | Status feeds, progress                |
 
-| Guarantee | Broadcast | Once | Live |
-| --------- | --------- | ---- | ---- |
-| Competing claim / visibility lease | No | Yes (default 30s) | No |
-| Dead-letter queue path | No | Yes (`deadLetter`) | No |
-| Retained history for late joiners | No | No | Yes |
-| Multiple Flows on one emit | Yes — each gets a copy | One claimer | Not a Flow worker |
+| Guarantee                          | Broadcast              | Once               | Live              |
+| ---------------------------------- | ---------------------- | ------------------ | ----------------- |
+| Competing claim / visibility lease | No                     | Yes (default 30s)  | No                |
+| Dead-letter queue path             | No                     | Yes (`deadLetter`) | No                |
+| Retained history for late joiners  | No                     | No                 | Yes               |
+| Multiple Flows on one emit         | Yes — each gets a copy | One claimer        | Not a Flow worker |
 
 ## Options for broadcast
 
 Second argument to `signal.broadcast(name, options?)`. Delivery is the helper name — not an
 option.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | **Emit** contract — validated at `fx.emit` (**OKE1250**) |
-| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
-| `description` | `string` | the name | Console / docs blurb |
-| `retries` | `number` | `3` | Declared; not the `once` lease / DLQ path |
-| `deadLetter` | `boolean` | `true` | Declared; broadcast does not use once DLQ |
+| Option        | Type            | Default  | Meaning                                                  |
+| ------------- | --------------- | -------- | -------------------------------------------------------- |
+| `schema`      | Standard Schema | omitted  | **Emit** contract — validated at `fx.emit` (**OKE1250**) |
+| `optional`    | `boolean`       | `false`  | Allow emit with zero subscribers                         |
+| `description` | `string`        | the name | Console / docs blurb                                     |
+| `retries`     | `number`        | `3`      | Declared; not the `once` lease / DLQ path                |
+| `deadLetter`  | `boolean`       | `true`   | Declared; broadcast does not use once DLQ                |
 
 `retention` is a type error on `signal.broadcast` — that option is live-only:
 
@@ -222,8 +222,8 @@ signal.broadcast("…"): retention is only valid with signal.live
 ## Fan-out Physics
 
 <Callout title="Detailed section">
-  If you only need one subscriber, jump to Emit. Fan-out is the distinctive physics: one emit,
-  N independent Flow runs, no competing claim.
+  If you only need one subscriber, jump to Emit. Fan-out is the distinctive physics: one emit, N
+  independent Flow runs, no competing claim.
 </Callout>
 
 Bind any number of Flows with `on(theSameSignal, flow(...))`. At dispatch, every matching
@@ -256,12 +256,12 @@ export const notifyOrderWatchers = on(
 await fx.emit(orderChanged, { orderId: "ord_42", kind: "placed" });
 ```
 
-| Concept | Meaning |
-| ------- | ------- |
-| Subscriber | An adopted Flow bound with `on(broadcastSignal, flow)` |
-| Copy | Each subscriber receives the payload independently |
-| Isolation | One handler's failure does not lease-lock siblings |
-| Offline | A process that was down at emit time does not get a replay |
+| Concept    | Meaning                                                    |
+| ---------- | ---------------------------------------------------------- |
+| Subscriber | An adopted Flow bound with `on(broadcastSignal, flow)`     |
+| Copy       | Each subscriber receives the payload independently         |
+| Isolation  | One handler's failure does not lease-lock siblings         |
+| Offline    | A process that was down at emit time does not get a replay |
 
 **Consequence:** treat broadcast handlers as best-effort side effects. If the work must run
 exactly once with retries and a DLQ, declare a separate `signal.once` for that job.
@@ -269,13 +269,13 @@ exactly once with retries and a DLQ, declare a separate `signal.once` for that j
 ## Emit and Effects
 
 <Callout title="Detailed section">
-  If you only need `fx.emit(signal, payload)`, jump to the example. Emit commits the outbox when
-  the call resolves. Subscribers run asynchronously afterward.
+  If you only need `fx.emit(signal, payload)`, jump to the example. Emit commits the outbox when the
+  call resolves. Subscribers run asynchronously afterward.
 </Callout>
 
-| Call | Records | Use |
-| ---- | ------- | --- |
-| `fx.emit(signal, payload?)` | `emits` | Publish to every active subscriber |
+| Call                                | Records | Use                                                         |
+| ----------------------------------- | ------- | ----------------------------------------------------------- |
+| `fx.emit(signal, payload?)`         | `emits` | Publish to every active subscriber                          |
 | `fx.emit(signal, payload, { key })` | `emits` | `key` is for `once` ordering — ignore for broadcast fan-out |
 
 ```typescript title="src/flows/catalog/create.ts"
@@ -400,16 +400,16 @@ export const onOrderChanged = on(
 ## Choosing Physics
 
 <Callout title="Detailed section">
-  Pick physics from the guarantee you need. Broadcast is the wrong tool when work must be
-  claimed once, or when a late client must catch up.
+  Pick physics from the guarantee you need. Broadcast is the wrong tool when work must be claimed
+  once, or when a late client must catch up.
 </Callout>
 
-| Need | Use instead |
-| ---- | ----------- |
-| Exactly one worker processes the job | [`once`](/docs/elements/signal/once) |
-| Browser / SSE resume after disconnect | [`live`](/docs/elements/signal/live) |
-| Durable multi-step work with journal | [Durable Workflows](/docs/elements/flow/workflows) |
-| HTTP SSE firehose on a path | [`http.live`](/docs/elements/flow/http#live-streams) |
+| Need                                  | Use instead                                          |
+| ------------------------------------- | ---------------------------------------------------- |
+| Exactly one worker processes the job  | [`once`](/docs/elements/signal/once)                 |
+| Browser / SSE resume after disconnect | [`live`](/docs/elements/signal/live)                 |
+| Durable multi-step work with journal  | [Durable Workflows](/docs/elements/flow/workflows)   |
+| HTTP SSE firehose on a path           | [`http.live`](/docs/elements/flow/http#live-streams) |
 
 Broadcast does **not** use the `once` visibility lease. There is no competing claim and no
 dead-letter queue for exhausted retries in the queue sense — see
@@ -427,20 +427,19 @@ dead-letter queue for exhausted retries in the queue sense — see
 </Accordion>
 
 <Accordion title="Missed while offline">
-  Expected. Restarted processes do not replay broadcast history. Emit again after boot if
-  the listener must refresh state, or switch to `live` for a retained tape.
+  Expected. Restarted processes do not replay broadcast history. Emit again after boot if the
+  listener must refresh state, or switch to `live` for a retained tape.
 </Accordion>
 
 <Accordion title="retries / deadLetter on the declaration">
-  Those fields exist on the shared options type (defaults `3` / `true`) so Console and Manifest
-  stay uniform. Broadcast delivery does not follow the once lease + DLQ path — do not expect
+  Those fields exist on the shared options type (defaults `3` / `true`) so Console and Manifest stay
+  uniform. Broadcast delivery does not follow the once lease + DLQ path — do not expect
   `fx.deadLetters(broadcastSignal)` to behave like a queue operator surface.
 </Accordion>
 
 <Accordion title="retention on broadcast">
-  Throws at declare:
-  `signal.broadcast("…"): retention is only valid with signal.live`.
-  Cap a client-visible tape with `signal.live({ retention })` instead.
+  Throws at declare: `signal.broadcast("…"): retention is only valid with signal.live`. Cap a
+  client-visible tape with `signal.live({retention})` instead.
 </Accordion>
 
 </Accordions>
@@ -450,9 +449,9 @@ dead-letter queue for exhausted retries in the queue sense — see
 <Accordions>
 
 <Accordion title="Only one of two subscribers runs">
-  Confirm both Flows import the same Signal handle / name and are adopted into the app.
-  Names must match the Manifest entry exactly. A second `signal.broadcast("catalog.changed")`
-  with a different spelling is a different signal.
+  Confirm both Flows import the same Signal handle / name and are adopted into the app. Names must
+  match the Manifest entry exactly. A second `signal.broadcast("catalog.changed")` with a different
+  spelling is a different signal.
 </Accordion>
 
 <Accordion title="Subscriber missed an event after restart">
@@ -475,8 +474,8 @@ dead-letter queue for exhausted retries in the queue sense — see
 </Accordion>
 
 <Accordion title="TypeError: retention is only valid with signal.live">
-  You passed `retention` to `signal.broadcast`. Drop it, or switch the helper to
-  `signal.live` if you need a retained SSE tape.
+  You passed `retention` to `signal.broadcast`. Drop it, or switch the helper to `signal.live` if
+  you need a retained SSE tape.
 </Accordion>
 
 <Accordion title="HTTP client never sees the event">

@@ -50,9 +50,11 @@ const drivers: Array<{
 for (const { label, driver, setup } of drivers) {
   describe(`signal schema emit · ${label}`, () => {
     test("invalid payload rejected at emit with OKE1250; valid succeeds", async () => {
-      const orderPlaced = signal.once("order-placed", { schema: z.object({
+      const orderPlaced = signal.once("order-placed", {
+        schema: z.object({
           orderId: z.string(),
-          total: z.number() }),
+          total: z.number(),
+        }),
         retries: 1,
         deadLetter: true,
       });

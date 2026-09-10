@@ -12,7 +12,12 @@ const WebhookIn = z.object({
 
 /** List outbound webhooks. */
 export const list = on(
-  http.get("/webhooks", { in: listIn({ mode: "offset" }), out: pageOut(z.object({ id: z.string(), url: z.string() })) }).gate(webhookAdminWrite),
+  http
+    .get("/webhooks", {
+      in: listIn({ mode: "offset" }),
+      out: pageOut(z.object({ id: z.string(), url: z.string() })),
+    })
+    .gate(webhookAdminWrite),
   flow("webhooks.list", {
     do: async (input, fx) => {
       await fx.vault.get(webhookSecret);

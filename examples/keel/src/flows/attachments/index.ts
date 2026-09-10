@@ -48,7 +48,12 @@ export const upload = on(
 
 /** List attachments for a task. */
 export const list = on(
-  http.get("/tasks/:id/attachments", { in: listIn({ mode: "offset" }, { id: z.string().min(1) }), out: pageOut(FileRef) }).gate(member),
+  http
+    .get("/tasks/:id/attachments", {
+      in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
+      out: pageOut(FileRef),
+    })
+    .gate(member),
   flow("attachments.list", {
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(fileObjects);

@@ -14,8 +14,8 @@ declare the bag, run with `fx.run`.
 
 <Callout title="The one rule">
   Pass Flow names (or handles) in `tools`, set `maxSteps` and `budget.maxCostPerRun`, then
-  `fx.run(agent, { message })`. There is no `instructions` / `in` / `out` on `ai.agent` — shape
-  the user message yourself.
+  `fx.run(agent, {message})`. There is no `instructions` / `in` / `out` on `ai.agent` — shape the
+  user message yourself.
 </Callout>
 
 ## Smallest Example
@@ -156,12 +156,12 @@ ai.agent("planner", {
 
 ## Options
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `model` | `AiModelDecl` \| `string` | first model | Logical binding for the loop |
-| `tools` | Flow / MCP refs | `[]` | Callable via `fx.call` |
-| `maxSteps` | `number` | `6` | Hard cap on tool rounds |
-| `budget` | `{ maxCostPerCall?, maxCostPerRun? }` | — | Cost contracts for the run |
+| Option     | Type                                  | Default     | Meaning                      |
+| ---------- | ------------------------------------- | ----------- | ---------------------------- |
+| `model`    | `AiModelDecl` \| `string`             | first model | Logical binding for the loop |
+| `tools`    | Flow / MCP refs                       | `[]`        | Callable via `fx.call`       |
+| `maxSteps` | `number`                              | `6`         | Hard cap on tool rounds      |
+| `budget`   | `{ maxCostPerCall?, maxCostPerRun? }` | —           | Cost contracts for the run   |
 
 ## `fx.run` input
 
@@ -175,10 +175,10 @@ await fx.run(supportAgent, { message: "Summarize open tickets" });
 
 ## Agents vs ask-with-tools
 
-| Surface | When |
-| ------- | ---- |
-| `ai.agent` + `fx.run` | Reusable tool bag, shared step/budget policy |
-| `fx.ask(prompt, …, { tools })` | One prompt, occasional tools |
+| Surface                        | When                                         |
+| ------------------------------ | -------------------------------------------- |
+| `ai.agent` + `fx.run`          | Reusable tool bag, shared step/budget policy |
+| `fx.ask(prompt, …, { tools })` | One prompt, occasional tools                 |
 
 Both default `maxSteps` to `6`. Denied or unknown tools surface as
 `ai: all tool calls denied for prompt "…"` / `ai: model requested unknown tool "…"`.
@@ -188,8 +188,8 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
 <Accordions>
 
 <Accordion title='ai: unknown agent "…"'>
-  `fx.run` named an agent that was never declared, or the declaring module was not imported
-  before `oke()`.
+  `fx.run` named an agent that was never declared, or the declaring module was not imported before
+  `oke()`.
 </Accordion>
 
 <Accordion title='ai: agent "…" exceeded maxCostPerRun'>
@@ -197,8 +197,8 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
 </Accordion>
 
 <Accordion title='ai: model requested unknown tool "…"'>
-  The model emitted a tool name outside the declared `tools` bag. Align names with Flow /
-  MCP refs, or tighten instructions in the user `message`.
+  The model emitted a tool name outside the declared `tools` bag. Align names with Flow / MCP refs,
+  or tighten instructions in the user `message`.
 </Accordion>
 
 <Accordion title="OKE1005 on agent runs">
@@ -218,7 +218,15 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
 ## Next
 
 <Cards>
-  <Card title="MCP" description="Expose and consume Model Context Protocol tools." href="/docs/elements/ai/mcp" />
-  <Card title="Prompts" description="Versioned fx.ask artifacts." href="/docs/elements/ai/prompts" />
+  <Card
+    title="MCP"
+    description="Expose and consume Model Context Protocol tools."
+    href="/docs/elements/ai/mcp"
+  />
+  <Card
+    title="Prompts"
+    description="Versioned fx.ask artifacts."
+    href="/docs/elements/ai/prompts"
+  />
   <Card title="AI" description="Element overview." href="/docs/elements/ai" />
 </Cards>

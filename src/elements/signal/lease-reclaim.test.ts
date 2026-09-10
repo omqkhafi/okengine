@@ -30,8 +30,7 @@ describe("signal lease reclaim", () => {
     const marker = join(dir, "claimed");
     try {
       let t = 5_000;
-      const once = signal.once("order-placed", { retries: 3,
-        deadLetter: true });
+      const once = signal.once("order-placed", { retries: 3, deadLetter: true });
       const r1 = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,

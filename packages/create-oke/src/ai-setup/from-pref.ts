@@ -14,11 +14,7 @@ import { cloudApplyDefaults } from "./catalog.ts";
 export function applyInputFromAiPref(pref: CreateAiPref): AiSetupApplyInput | null {
   if (!pref.enabled || !pref.driver) return null;
   const driver = pref.driver as AiSetupApplyInput["driver"];
-  if (
-    driver !== "anthropic" &&
-    driver !== "openai-compatible" &&
-    driver !== "mock"
-  ) {
+  if (driver !== "anthropic" && driver !== "openai-compatible" && driver !== "mock") {
     return null;
   }
   return {

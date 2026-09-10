@@ -15,10 +15,7 @@ import type { WaterfallBar } from "./waterfall-bars.ts";
  * @param bar - Positioned bar (layout + effect identity)
  */
 export function waterfallBarTooltip(
-  bar: Pick<
-    WaterfallBar,
-    "kind" | "resource" | "durationMs" | "startOffsetMs" | "external"
-  >,
+  bar: Pick<WaterfallBar, "kind" | "resource" | "durationMs" | "startOffsetMs" | "external">,
 ): string {
   const base = `${effectEventLabel(bar)} · ${bar.resource} · ${formatDuration(bar.durationMs)} · +${formatDuration(bar.startOffsetMs)}`;
   if (!bar.external) return base;

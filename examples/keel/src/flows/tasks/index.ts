@@ -81,7 +81,9 @@ async function writeActivity(fx: Fx, parentId: string, kind: string, body: strin
 
 /** Create a task, emit `task-created`. */
 export const create = on(
-  http.post("/tasks", { in: TaskCreateIn, out: TaskCreateOut, errors: { NotFound, Duplicate } }).gate(tasksWrite),
+  http
+    .post("/tasks", { in: TaskCreateIn, out: TaskCreateOut, errors: { NotFound, Duplicate } })
+    .gate(tasksWrite),
   flow("tasks.create", {
     do: async (input, fx) => {
       await fx.vault.get(keelWorkspace);
@@ -144,7 +146,9 @@ export const create = on(
 
 /** Patch task fields. */
 export const update = on(
-  http.patch("/tasks/:id", { in: TaskUpdateIn, out: TaskOut, errors: { NotFound } }).gate(tasksWrite),
+  http
+    .patch("/tasks/:id", { in: TaskUpdateIn, out: TaskOut, errors: { NotFound } })
+    .gate(tasksWrite),
   flow("tasks.update", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -207,7 +211,10 @@ export const list = on(
  * tables (e.g. `activity` written by writeActivity) never enter the stream.
  */
 export const live = on(
-  http.get("/tasks/live", { in: { unknown: true } }).gate(member).live(tasks),
+  http
+    .get("/tasks/live", { in: { unknown: true } })
+    .gate(member)
+    .live(tasks),
   flow("tasks.live", {
     do: async (input, fx) =>
       liveQuery(fx, tasks, input, {
@@ -232,7 +239,9 @@ export const get = on(
 
 /** Assign a task and notify. */
 export const assign = on(
-  http.post("/tasks/:id/assign", { in: AssignIn, out: TaskCreateOut, errors: { NotFound } }).gate(tasksWrite),
+  http
+    .post("/tasks/:id/assign", { in: AssignIn, out: TaskCreateOut, errors: { NotFound } })
+    .gate(tasksWrite),
   flow("tasks.assign", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -356,7 +365,9 @@ export const unfollow = on(
 
 /** Duplicate via `tasks.create`. */
 export const duplicate = on(
-  http.post("/tasks/:id/duplicate", { in: IdIn, out: TaskCreateOut, errors: { NotFound } }).gate(tasksWrite),
+  http
+    .post("/tasks/:id/duplicate", { in: IdIn, out: TaskCreateOut, errors: { NotFound } })
+    .gate(tasksWrite),
   flow("tasks.duplicate", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -377,7 +388,9 @@ export const duplicate = on(
 
 /** Move to another project / section / space. */
 export const move = on(
-  http.post("/tasks/:id/move", { in: MoveIn, out: TaskCreateOut, errors: { NotFound } }).gate(tasksWrite),
+  http
+    .post("/tasks/:id/move", { in: MoveIn, out: TaskCreateOut, errors: { NotFound } })
+    .gate(tasksWrite),
   flow("tasks.move", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -400,7 +413,9 @@ export const move = on(
 
 /** Record a blocks/blocked-by edge. */
 export const depend = on(
-  http.post("/tasks/:id/depend", { in: DependIn, out: Ok, errors: { NotFound, Duplicate } }).gate(tasksWrite),
+  http
+    .post("/tasks/:id/depend", { in: DependIn, out: Ok, errors: { NotFound, Duplicate } })
+    .gate(tasksWrite),
   flow("tasks.depend", {
     do: async (input, fx) => {
       if (input.id === input.blocksTaskId) return fail("Duplicate", { id: input.id });

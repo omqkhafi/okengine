@@ -64,9 +64,9 @@ const { data } = await api.auth.verifyMagicLink({ token });
 </Steps>
 
 <Callout type="info" title="Pre-account hijack defense">
-  Completing verify proves inbox ownership. An **unverified** email+password
-  account parked on that address is reclaimed (sessions revoked, hashes cleared,
-  `emailVerified` set). Verified owners re-auth only — no credential purge.
+  Completing verify proves inbox ownership. An **unverified** email+password account parked on that
+  address is reclaimed (sessions revoked, hashes cleared, `emailVerified` set). Verified owners
+  re-auth only — no credential purge.
 </Callout>
 
 ## Options

@@ -202,11 +202,11 @@ Fix: add `on(signal, …)` or mark `{ optional: true }`.
 
 ## Delivery Physics
 
-| Helper | Pattern | Consumer | Replay | Typical use |
-| ------ | ------- | -------- | ------ | ----------- |
-| `signal.once` | Work queue | Competing workers, lease lock | Retries + DLQ | Emails, fulfillment, sync |
-| `signal.broadcast` | Pub/sub | Every active subscriber | None (miss if offline) | Cache invalidation, fan-out |
-| `signal.live` | SSE tape | HTTP clients via `http.live` | `Last-Event-ID` resume | Status feeds, progress |
+| Helper             | Pattern    | Consumer                      | Replay                 | Typical use                 |
+| ------------------ | ---------- | ----------------------------- | ---------------------- | --------------------------- |
+| `signal.once`      | Work queue | Competing workers, lease lock | Retries + DLQ          | Emails, fulfillment, sync   |
+| `signal.broadcast` | Pub/sub    | Every active subscriber       | None (miss if offline) | Cache invalidation, fan-out |
+| `signal.live`      | SSE tape   | HTTP clients via `http.live`  | `Last-Event-ID` resume | Status feeds, progress      |
 
 ## The Capabilities of Signal
 
@@ -232,29 +232,29 @@ Fix: add `on(signal, …)` or mark `{ optional: true }`.
 
 Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. Delivery is the helper name — not an option.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `schema` | Standard Schema | omitted | **Emit** contract — enforced at `fx.emit` (**OKE1250** on mismatch). Workers inherit the payload; do not put `in` on `flow({ do })`. |
-| `retries` | `number` | `3` | Extra attempts after the first (`retries + 1` total) — `once` path |
-| `deadLetter` | `boolean` | `true` | Keep exhausted `once` messages; `false` marks them delivered |
-| `optional` | `boolean` | `false` | Allow emit with zero subscribers |
-| `retention` | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast` |
-| `description` | `string` | the name | Console / docs blurb |
+| Option        | Type                     | Default   | Meaning                                                                                                                              |
+| ------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema`      | Standard Schema          | omitted   | **Emit** contract — enforced at `fx.emit` (**OKE1250** on mismatch). Workers inherit the payload; do not put `in` on `flow({ do })`. |
+| `retries`     | `number`                 | `3`       | Extra attempts after the first (`retries + 1` total) — `once` path                                                                   |
+| `deadLetter`  | `boolean`                | `true`    | Keep exhausted `once` messages; `false` marks them delivered                                                                         |
+| `optional`    | `boolean`                | `false`   | Allow emit with zero subscribers                                                                                                     |
+| `retention`   | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast`                                                                          |
+| `description` | `string`                 | the name  | Console / docs blurb                                                                                                                 |
 
 **Consequence:** `deadLetter` is a boolean flag, not a queue name string.
 
 ## Emit through fx
 
 <Callout title="Detailed section">
-  If you only need `fx.emit(signal, payload)`, jump to the table. Emit commits the outbox when
-  the call resolves. The producer run id is stamped as `parentRunId` for Console trace chains.
+  If you only need `fx.emit(signal, payload)`, jump to the table. Emit commits the outbox when the
+  call resolves. The producer run id is stamped as `parentRunId` for Console trace chains.
 </Callout>
 
-| Call | Records | Use |
-| ---- | ------- | --- |
-| `fx.emit(signal, payload?, { key? })` | `emits` | Publish; `{ key }` serializes `once` per key |
-| `fx.deadLetters(signal)` | `reads` `signal:<name>` | Inspect exhausted `once` messages |
-| `fx.live(signal, { match? })` | `reads` `signal:<name>` | Server SSE body for a live tape |
+| Call                                  | Records                 | Use                                          |
+| ------------------------------------- | ----------------------- | -------------------------------------------- |
+| `fx.emit(signal, payload?, { key? })` | `emits`                 | Publish; `{ key }` serializes `once` per key |
+| `fx.deadLetters(signal)`              | `reads` `signal:<name>` | Inspect exhausted `once` messages            |
+| `fx.live(signal, { match? })`         | `reads` `signal:<name>` | Server SSE body for a live tape              |
 
 Invalid `schema` payloads fail at emit with **OKE1250** (`"{resource}": {detail}`) before any
 consumer runs. Cross-signal `fx.deadLetters` / `fx.live` without a declared read throws
@@ -271,11 +271,11 @@ Omit `key` for a pure competing pool with no ordering.
 Protocol ids: `memory` · `redis` · `postgres` · `nats`. Defaults (when `oke.config.ts` omits
 `drivers.signal`):
 
-| Env | Default | Boot today |
-| --- | ------- | ---------- |
-| `dev` | `redis` | Emit relays to Redis; consume / live / drain use a process-local outbox |
-| `test` | `memory` | In-process bus |
-| `prod` | `redis` | Same redis honesty as `dev` |
+| Env    | Default  | Boot today                                                              |
+| ------ | -------- | ----------------------------------------------------------------------- |
+| `dev`  | `redis`  | Emit relays to Redis; consume / live / drain use a process-local outbox |
+| `test` | `memory` | In-process bus                                                          |
+| `prod` | `redis`  | Same redis honesty as `dev`                                             |
 
 ```typescript title="oke.config.ts"
 export default defineConfig({
@@ -303,13 +303,13 @@ export default defineConfig({
 </Accordion>
 
 <Accordion title="OKE1250 — emit payload failed schema">
-  Cause: `"{resource}": {detail}` from the Standard Schema issues.
-  Fix the payload or the `schema` on the Signal. The consumer never ran.
+  Cause: `"{resource}": {detail}` from the Standard Schema issues. Fix the payload or the `schema`
+  on the Signal. The consumer never ran.
 </Accordion>
 
 <Accordion title='oke boot: signal driver "postgres" / "nats"'>
-  Those ids are reserved but not bound for production yet. Use `"memory"` or `"redis"`, or inject
-  a custom `elements.signal` runtime.
+  Those ids are reserved but not bound for production yet. Use `"memory"` or `"redis"`, or inject a
+  custom `elements.signal` runtime.
 </Accordion>
 
 <Accordion title="redis Signal — process-local consume">

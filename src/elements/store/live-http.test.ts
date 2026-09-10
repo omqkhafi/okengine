@@ -79,7 +79,10 @@ describe("manual live flow (.live(table) + liveQuery) — real boot", () => {
     const db = store.sql("app", { schema: { tasks, activity } });
 
     const tasksLive = on(
-      http.get("/tasks/live", { in: { unknown: true } }).public().live(tasks),
+      http
+        .get("/tasks/live", { in: { unknown: true } })
+        .public()
+        .live(tasks),
       flow("tasks.live", {
         effects: { reads: ["sql:app"] },
         do: async (input, fx) =>

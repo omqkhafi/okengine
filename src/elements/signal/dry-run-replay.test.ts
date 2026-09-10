@@ -23,10 +23,7 @@ describe("signal dry-run replay — external effects stubbed", () => {
     } as unknown as ChannelRuntime;
 
     const runtime = createSignalRuntime({ driver: memorySignalDriver });
-    runtime.register(
-      signal.once("order-placed", { retries: 0,
-        deadLetter: true }),
-    );
+    runtime.register(signal.once("order-placed", { retries: 0, deadLetter: true }));
     const bus = await runtime.start();
 
     // Seed DLQ with a failing consumer, then replace with a send consumer.

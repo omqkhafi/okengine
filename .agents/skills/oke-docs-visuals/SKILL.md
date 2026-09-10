@@ -20,15 +20,15 @@ Ambient demos that **prove** a claim. If removing the motion leaves the same und
 
 Canonical quality bar (read before inventing):
 
-| Page   | Component                                                                                | What motion proves                                                                      |
-| ------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Flow   | `FlowTriggers` + `FlowDurable`                                                           | Any trigger → one Flow species; kill→resume skips completed `fx.step`                   |
-| Vault  | `VaultResolution` + `VaultRedacted` + `VaultRotate`                                      | First-hit chain + fail-loud; Redacted until `.reveal()`; version DEK vs master KEK      |
-| Signal | `SignalDelivery` + `SignalOnceLease` / `SignalBroadcastFanout` / `SignalLiveReplay`      | once / broadcast / live packet physics; lease reclaim; fan-out + offline miss; late `bus.live()` history |
-| Store  | `StoreFacets` + `StoreKvTtl` / `StoreFilesVariants` / `StoreIndexModes` / `StoreSeeding` | Facet physics; TTL contrast; putImage fan-out; vector vs text; seed env→blocks + upsert |
-| Clock  | `ClockSchedules` + `ClockCatchUp` / `ClockSleep`                                         | two triggers → one Flow; catch-up `"one"`; durable sleep survives restart               |
-| Gate   | `GatePipeline`                                                                           | Left-to-right chain; first denial wins; typed Unauthorized / Forbidden / RateLimited    |
-| AI     | `AiBlocks` + `AiGuardrails` / `AiPiiEgress`                                              | Four decls with ambient physics; guardrail chain (first deny wins, footer holds); third-party vs local openai-compatible egress  |
+| Page   | Component                                                                                | What motion proves                                                                                                              |
+| ------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Flow   | `FlowTriggers` + `FlowDurable`                                                           | Any trigger → one Flow species; kill→resume skips completed `fx.step`                                                           |
+| Vault  | `VaultResolution` + `VaultRedacted` + `VaultRotate`                                      | First-hit chain + fail-loud; Redacted until `.reveal()`; version DEK vs master KEK                                              |
+| Signal | `SignalDelivery` + `SignalOnceLease` / `SignalBroadcastFanout` / `SignalLiveReplay`      | once / broadcast / live packet physics; lease reclaim; fan-out + offline miss; late `bus.live()` history                        |
+| Store  | `StoreFacets` + `StoreKvTtl` / `StoreFilesVariants` / `StoreIndexModes` / `StoreSeeding` | Facet physics; TTL contrast; putImage fan-out; vector vs text; seed env→blocks + upsert                                         |
+| Clock  | `ClockSchedules` + `ClockCatchUp` / `ClockSleep`                                         | two triggers → one Flow; catch-up `"one"`; durable sleep survives restart                                                       |
+| Gate   | `GatePipeline`                                                                           | Left-to-right chain; first denial wins; typed Unauthorized / Forbidden / RateLimited                                            |
+| AI     | `AiBlocks` + `AiGuardrails` / `AiPiiEgress`                                              | Four decls with ambient physics; guardrail chain (first deny wins, footer holds); third-party vs local openai-compatible egress |
 
 Shared primitives: [`site/components/docs/reveal.tsx`](../../../site/components/docs/reveal.tsx) (`RevealGroup`, `RevealItem`, `useTick`, `BeatPing`). Tone: `CHIP_TONE` + `--oke-el-*` from [`site/lib/element-tones.ts`](../../../site/lib/element-tones.ts).
 

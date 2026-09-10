@@ -253,10 +253,12 @@ describe("console runs ingest bridge", () => {
     resetFlowSeq();
     const publicGate = gate.public;
     on(
-      http.post("/bookings", {
-        in: z.object({ email: z.string(), id: z.string() }),
-        out: z.object({ ok: z.boolean() }),
-      }).gate(publicGate),
+      http
+        .post("/bookings", {
+          in: z.object({ email: z.string(), id: z.string() }),
+          out: z.object({ ok: z.boolean() }),
+        })
+        .gate(publicGate),
       flow("bookings.create", {
         plane: "user",
         do: (input, fx) => {

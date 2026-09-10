@@ -11,9 +11,9 @@ For developers writing backend work on okengine — put the invoke contract on t
 (`http.*` / `call` / `mcp.tool`), keep `do` on `fx`.
 
 <Callout title="The one rule">
-  All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside
-  `do` is a defect. Effects are inferred from what the Flow touches through `fx` — that inference
-  powers the Manifest, Console, cache, and durability.
+  All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside `do`
+  is a defect. Effects are inferred from what the Flow touches through `fx` — that inference powers
+  the Manifest, Console, cache, and durability.
 </Callout>
 
 <FlowShape />
@@ -179,14 +179,14 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
 
 <FlowTriggers />
 
-| Trigger | Bind | Starts when | `do` input |
-| ------- | ---- | ----------- | ---------- |
-| HTTP | `on(http.get(), flow)` | A request | Merged path / query / body |
-| Signal | `on(signalHandle, flow)` | `fx.emit` | Payload (`schema`) |
-| Clock | `on(clockDecl, flow)` | Scheduler tick | none (`_`) |
-| CDC | `on(db.table(t).changed(), flow)` | Committed SQL write | `{ before, after }` |
-| Call-only | `call("name", { in, out, do, … })` | `fx.call` | Callee `in` |
-| MCP | `on(mcp.tool("x", { in, out }).gate(…), flow)` | MCP `tools/call` | Tool args |
+| Trigger   | Bind                                           | Starts when         | `do` input                 |
+| --------- | ---------------------------------------------- | ------------------- | -------------------------- |
+| HTTP      | `on(http.get(), flow)`                         | A request           | Merged path / query / body |
+| Signal    | `on(signalHandle, flow)`                       | `fx.emit`           | Payload (`schema`)         |
+| Clock     | `on(clockDecl, flow)`                          | Scheduler tick      | none (`_`)                 |
+| CDC       | `on(db.table(t).changed(), flow)`              | Committed SQL write | `{ before, after }`        |
+| Call-only | `call("name", { in, out, do, … })`             | `fx.call`           | Callee `in`                |
+| MCP       | `on(mcp.tool("x", { in, out }).gate(…), flow)` | MCP `tools/call`    | Tool args                  |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
 
@@ -221,17 +221,17 @@ Second argument to `flow(name, options)` — or the only argument to a nameless 
 Invoke contracts (`in` / `out` / `errors` / `breaking`) belong on the exposure — see
 [Contracts](#contracts) below.
 
-| Option | Type | Default | Meaning |
-| ------ | ---- | ------- | ------- |
-| `do` | `(input, fx) => output \| FlowFailure` | *(required)* | Handler. Missing `do` throws `flow() expected an options bag with a do handler` |
-| `durable` | `boolean` | `false` | Journal `fx.step` / sleep / gated `fx` calls |
-| `retry` | `FxRetryOptions` | omitted | Whole-`do` retry on throw (same journal when durable) |
-| `cache` | `boolean \| string` | omitted (auto) | Read-only Flows cache automatically; `false` opts out; `"30s"` adds TTL |
-| `compensate` | `(ctx, fx) => unknown` | omitted | After LIFO `{ undo }`, before the run commits `failed` |
-| `plane` | `"user" \| "operator"` | `"user"` | Operator bypasses RLS; user must not `fx.call` operator |
-| `effects` | `Effects` | inferred | Capability token — write this only when inference cannot see the body |
-| `slo` | `{ availability?, latency? }` | omitted | Manifest metadata (Console / docs) |
-| `tenantScoped` | `boolean` | `true` when tenancy is on | `false` skips tenant-role scope union |
+| Option         | Type                                   | Default                   | Meaning                                                                         |
+| -------------- | -------------------------------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `do`           | `(input, fx) => output \| FlowFailure` | _(required)_              | Handler. Missing `do` throws `flow() expected an options bag with a do handler` |
+| `durable`      | `boolean`                              | `false`                   | Journal `fx.step` / sleep / gated `fx` calls                                    |
+| `retry`        | `FxRetryOptions`                       | omitted                   | Whole-`do` retry on throw (same journal when durable)                           |
+| `cache`        | `boolean \| string`                    | omitted (auto)            | Read-only Flows cache automatically; `false` opts out; `"30s"` adds TTL         |
+| `compensate`   | `(ctx, fx) => unknown`                 | omitted                   | After LIFO `{ undo }`, before the run commits `failed`                          |
+| `plane`        | `"user" \| "operator"`                 | `"user"`                  | Operator bypasses RLS; user must not `fx.call` operator                         |
+| `effects`      | `Effects`                              | inferred                  | Capability token — write this only when inference cannot see the body           |
+| `slo`          | `{ availability?, latency? }`          | omitted                   | Manifest metadata (Console / docs)                                              |
+| `tenantScoped` | `boolean`                              | `true` when tenancy is on | `false` skips tenant-role scope union                                           |
 
 **Consequence:** `durable: true` disables automatic read-cache for that Flow.
 
@@ -315,13 +315,13 @@ HTTP success from a returned value is `200` + `{ data, error: null }`. `undefine
 
 Status for `error.code`:
 
-| Code | Status |
-| ---- | ------ |
-| `ValidationError` | `422` |
-| `Unauthorized` | `401` |
-| `Forbidden` | `403` |
-| `RateLimited` | `429` |
-| Any other declared code (`NotFound`, `OutOfStock`, …) | `400` |
+| Code                                                  | Status |
+| ----------------------------------------------------- | ------ |
+| `ValidationError`                                     | `422`  |
+| `Unauthorized`                                        | `401`  |
+| `Forbidden`                                           | `403`  |
+| `RateLimited`                                         | `429`  |
+| Any other declared code (`NotFound`, `OutOfStock`, …) | `400`  |
 
 A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("NotFound")`.
 
@@ -339,8 +339,8 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 </Accordion>
 
 <Accordion title="ValidationError payload">
-  Failed `in` (or `out`) is `ValidationError` with `error.data.issues` — each issue has
-  `message` and `path`. HTTP status is **422**. The handler never ran.
+  Failed `in` (or `out`) is `ValidationError` with `error.data.issues` — each issue has `message`
+  and `path`. HTTP status is **422**. The handler never ran.
 </Accordion>
 
 <Accordion title="Name stamping">
@@ -354,22 +354,22 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 ## The fx door
 
 <Callout title="Detailed section">
-  If you only need store / emit, jump to the table. `fx` is the only I/O surface inside `do`.
-  The compiler records what you touch as `effects` on the Manifest.
+  If you only need store / emit, jump to the table. `fx` is the only I/O surface inside `do`. The
+  compiler records what you touch as `effects` on the Manifest.
 </Callout>
 
-| Call | Records | Use |
-| ---- | ------- | --- |
-| `fx.store(db)` | `reads` / `writes` `sql:…` | SQL (and other Store facets) |
-| `fx.emit(signal, payload)` | `emits` | Signal outbox |
-| `fx.send(template, opts)` | `sends` | Channel template |
-| `fx.ask(prompt, opts)` | `asks` | AI prompt |
-| `fx.vault.get(secret)` | `secrets` | Declared secret (never a raw value in source) |
-| `fx.call(flow, input?)` | `calls` | Another Flow — waits for return |
-| `fx.id()` | — | UUID |
-| `fx.clock.now()` | — | Deterministic time |
-| `fx.fail(code, data)` | — | Typed failure value |
-| `fx.step(name, fn)` | journal | Durable checkpoint |
+| Call                       | Records                    | Use                                           |
+| -------------------------- | -------------------------- | --------------------------------------------- |
+| `fx.store(db)`             | `reads` / `writes` `sql:…` | SQL (and other Store facets)                  |
+| `fx.emit(signal, payload)` | `emits`                    | Signal outbox                                 |
+| `fx.send(template, opts)`  | `sends`                    | Channel template                              |
+| `fx.ask(prompt, opts)`     | `asks`                     | AI prompt                                     |
+| `fx.vault.get(secret)`     | `secrets`                  | Declared secret (never a raw value in source) |
+| `fx.call(flow, input?)`    | `calls`                    | Another Flow — waits for return               |
+| `fx.id()`                  | —                          | UUID                                          |
+| `fx.clock.now()`           | —                          | Deterministic time                            |
+| `fx.fail(code, data)`      | —                          | Typed failure value                           |
+| `fx.step(name, fn)`        | journal                    | Durable checkpoint                            |
 
 <Accordions>
 
@@ -377,19 +377,19 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
   `Date.now()`, `new Date()`, `setTimeout`, global `fetch`, and `node:fs` skip the ledger.
   Tests cannot time-travel; durable replay cannot skip the work; cache cannot see the read.
 
-  **Fix:** `fx.clock.now()`, `fx.store`, `fx.send`, or wrap a provider in `fx.step`.
+**Fix:** `fx.clock.now()`, `fx.store`, `fx.send`, or wrap a provider in `fx.step`.
+
 </Accordion>
 
 <Accordion title="fx.call identity">
-  `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed). `fx.tenant.id`
-  propagates. For audit only, read `fx.principal` — gates never consult it. See
-  [fx](/docs/reference/fx).
+  `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed). `fx.tenant.id` propagates.
+  For audit only, read `fx.principal` — gates never consult it. See [fx](/docs/reference/fx).
 </Accordion>
 
 <Accordion title="Undeclared effects (OKE1001–1007)">
-  Explicit `effects` that drift from the body throw at runtime (`Flow "{flow}" writes
-  "{resource}" without declaring it.`). Most apps never write `effects` — inference
-  covers them. **OKE1020** is deploy-shaped boot with neither inference nor a block.
+  Explicit `effects` that drift from the body throw at runtime (`Flow "{flow}" writes "{resource}"
+  without declaring it.`). Most apps never write `effects` — inference covers them. **OKE1020** is
+  deploy-shaped boot with neither inference nor a block.
 </Accordion>
 
 </Accordions>
@@ -416,6 +416,7 @@ export const checkout = on(
   }),
 );
 ```
+
 Do **not** `fx.call` a Flow that parks on `fx.clock.sleep` — the caller receives
 `undefined` and continues; the child wakes later as its own run. Sleep on the root
 durable Flow, or split with `fx.emit`. See [Workflows](/docs/elements/flow/workflows).
@@ -457,13 +458,13 @@ flow({
 });
 ```
 
-| `retry` option | Default | Meaning |
-| -------------- | ------- | ------- |
-| `retries` | `0` | Extra attempts after the first |
-| `delay` | `50` (ms) | Initial wait (`"200ms"` allowed) |
-| `backoff` | `2` | Multiplier after each retry |
-| `jitter` | `true` | Full jitter |
-| `when` | thrown errors | Skips abort and durable-sleep park |
+| `retry` option | Default       | Meaning                            |
+| -------------- | ------------- | ---------------------------------- |
+| `retries`      | `0`           | Extra attempts after the first     |
+| `delay`        | `50` (ms)     | Initial wait (`"200ms"` allowed)   |
+| `backoff`      | `2`           | Multiplier after each retry        |
+| `jitter`       | `true`        | Full jitter                        |
+| `when`         | thrown errors | Skips abort and durable-sleep park |
 
 </Tab>
 
@@ -500,14 +501,15 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
   `breaking: true` on the exposure bag lets `oke doctor --diff` accept that Flow's contract
   break. It does not cover a different Flow.
 
-  `tenantScoped: false` skips tenant-role scope union even when `fx.tenant.id` is set.
-  Default is `true` once `gate.auth.tenant` is on.
+`tenantScoped: false` skips tenant-role scope union even when `fx.tenant.id` is set.
+Default is `true` once `gate.auth.tenant` is on.
+
 </Accordion>
 
 <Accordion title="Hooks and plugins">
-  `flowDef.hook(stage, fn)` registers a per-Flow hook (`onRequest` · `onParse` ·
-  `onAuth` · `beforeHandle` · `afterHandle` · `onError` · `onResponse`).
-  `flowDef.plug(plugin)` scopes a plugin to that Flow — see [Plugins](/docs/reference/plugins).
+  `flowDef.hook(stage, fn)` registers a per-Flow hook (`onRequest` · `onParse` · `onAuth` ·
+  `beforeHandle` · `afterHandle` · `onError` · `onResponse`). `flowDef.plug(plugin)` scopes a plugin
+  to that Flow — see [Plugins](/docs/reference/plugins).
 </Accordion>
 
 </Accordions>
@@ -536,44 +538,44 @@ A user-plane Flow that `fx.call`s an operator Flow fails compile:
 <Accordion title="Direct Date.now, fetch, or node: import inside do">
   Side channels skip effect tracking and durable replay.
 
-  **Fix:** `fx.clock.now()`, `fx.store`, `fx.send`, or `fx.step` around the provider.
+**Fix:** `fx.clock.now()`, `fx.store`, `fx.send`, or `fx.step` around the provider.
+
 </Accordion>
 
 <Accordion title="Thrown Error becomes a mystery 500 instead of a typed envelope">
-  Uncaught exceptions are defects. Declare the code in `errors` on the exposure and
-  `return fx.fail("OutOfStock", payload)` from `do`.
+  Uncaught exceptions are defects. Declare the code in `errors` on the exposure and `return
+  fx.fail("OutOfStock", payload)` from `do`.
 </Accordion>
 
 <Accordion title="422 ValidationError — path param missing from in">
-  `http.get("/users/:id")` merges `{ id }`. A schema that expects `userId` fails before
-  `do`. Align path keys with `in` object keys. See
-  [HTTP · Request Parsing](/docs/elements/flow/http#request-parsing).
+  `http.get("/users/:id")` merges `{id}`. A schema that expects `userId` fails before `do`. Align
+  path keys with `in` object keys. See [HTTP · Request
+  Parsing](/docs/elements/flow/http#request-parsing).
 </Accordion>
 
 <Accordion title="fx.fail('NotFound') is 400, not 404">
-  Custom domain codes map to **400**. A bare `404` `Not Found` means the router found
-  no method + path. Use `fx.fail` for domain misses; fix the route for missing bindings.
+  Custom domain codes map to **400**. A bare `404` `Not Found` means the router found no method +
+  path. Use `fx.fail` for domain misses; fix the route for missing bindings.
 </Accordion>
 
 <Accordion title="Read-only Flow never cache-hits">
-  Auto-cache needs Store `reads`, no `writes`, no `asks`, and `durable` off. Empty
-  effect sets stay uncached. Opt in with a duration (`cache: "30s"`) only after a real
-  read is inferred — or pass `cache: false` to disable.
+  Auto-cache needs Store `reads`, no `writes`, no `asks`, and `durable` off. Empty effect sets stay
+  uncached. Opt in with a duration (`cache: "30s"`) only after a real read is inferred — or pass
+  `cache: false` to disable.
 </Accordion>
 
 <Accordion title='cross-plane call: user flow "…" calls operator flow "…"'>
-  User-plane Flows cannot `fx.call` operator Flows. Keep operator work on `plane:
-  "operator"` and invoke it from Console, or split a user-safe callee.
+  User-plane Flows cannot `fx.call` operator Flows. Keep operator work on `plane: "operator"` and
+  invoke it from Console, or split a user-safe callee.
 </Accordion>
 
 <Accordion title="OKE1020 — no declared effects">
-  Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.`
-  Boot with `oke build` / `oke dev` so extract can infer. Framework / plugin Flows
-  outside the app tree get an empty least-privilege stamp automatically when a
-  Manifest is present — do not hand-write `effects: {}`. Real `fx` usage still
-  needs inference (app source) or an explicit non-empty `effects` block when
-  extract cannot see the body. If extract failed (`Manifest extract failed`),
-  install `oxc-parser` and retry.
+  Cause: `Flow "{flow}" has no declared effects and no Manifest to derive them from.` Boot with `oke
+  build` / `oke dev` so extract can infer. Framework / plugin Flows outside the app tree get an
+  empty least-privilege stamp automatically when a Manifest is present — do not hand-write `effects:{" "}
+  {}`. Real `fx` usage still needs inference (app source) or an explicit non-empty `effects` block
+  when extract cannot see the body. If extract failed (`Manifest extract failed`), install
+  `oxc-parser` and retry.
 </Accordion>
 
 </Accordions>

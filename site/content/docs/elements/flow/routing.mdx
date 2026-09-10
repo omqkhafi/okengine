@@ -17,10 +17,10 @@ Flow `notes.get`, and the client calls `api.notes.get({ id })`.
 
 ## When to omit · when to pass
 
-| | Omit (default) | Pass explicitly |
-| - | -------------- | --------------- |
+|               | Omit (default)                                                       | Pass explicitly                                                                                                  |
+| ------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | **HTTP path** | Tree file under `src/flows/<unit>/` — `http.get()`, `http.post()`, … | Barrel `index.ts`; a public URL that must not match the folder; `http.resource(path, ops)`; custom live SSE path |
-| **Flow name** | Same tree file — `flow({ do })` stamps `unit.export` | Barrel (optional — export still stamps); stable name across moves; call-only Flow you `fx.call` by name |
+| **Flow name** | Same tree file — `flow({ do })` stamps `unit.export`                 | Barrel (optional — export still stamps); stable name across moves; call-only Flow you `fx.call` by name          |
 
 **Consequence:** most app code looks like the create-oke template —
 `http.get().public()` + `flow({ … })` — with no string path and no string name.
@@ -88,9 +88,9 @@ Response:
 </Steps>
 
 <Callout title="Method is not the filename">
-  `list.ts` does not become `GET` by itself. Reserved leaves only omit a URL
-  segment. Bind `http.get()`, `http.post()`, `http.patch()`, or `http.delete()`
-  yourself — see [Reserved Leaves](#reserved-leaves).
+  `list.ts` does not become `GET` by itself. Reserved leaves only omit a URL segment. Bind
+  `http.get()`, `http.post()`, `http.patch()`, or `http.delete()` yourself — see [Reserved
+  Leaves](#reserved-leaves).
 </Callout>
 
 ## Progressive Patterns
@@ -198,15 +198,15 @@ curl -X GET http://localhost:6530/docs/getting-started/install \
 
 ## Convention Reference
 
-| Convention | File | Stamped route | Client |
-| ---------- | ---- | ------------- | ------ |
-| Dynamic param | `notes/[id]/get.ts` + `http.get()` | `GET /notes/:id` | `api.notes.get({ id })` |
-| Reserved leaf | `notes/list.ts` + `http.get()` | `GET /notes` | `api.notes.list()` |
-| Action leaf | `notes/[id]/archive.ts` + `http.post()` | `POST /notes/:id/archive` | `api.notes.archive({ id })` |
-| Catch-all | `docs/[...slug]/get.ts` + `http.get()` | `GET /docs/*` | `api.docs.get({ "*": "a/b" })` |
-| Route group | `notes/(ops)/archive.ts` | `/notes/archive` | `api.notes.archive` |
-| Root unit | `main/health.ts` + `http.get()` | `GET /health` | `api.main.health()` |
-| Folder root | `main/route.ts` + `http.get()` | `GET /` | `api.main.root()` |
+| Convention    | File                                    | Stamped route             | Client                         |
+| ------------- | --------------------------------------- | ------------------------- | ------------------------------ |
+| Dynamic param | `notes/[id]/get.ts` + `http.get()`      | `GET /notes/:id`          | `api.notes.get({ id })`        |
+| Reserved leaf | `notes/list.ts` + `http.get()`          | `GET /notes`              | `api.notes.list()`             |
+| Action leaf   | `notes/[id]/archive.ts` + `http.post()` | `POST /notes/:id/archive` | `api.notes.archive({ id })`    |
+| Catch-all     | `docs/[...slug]/get.ts` + `http.get()`  | `GET /docs/*`             | `api.docs.get({ "*": "a/b" })` |
+| Route group   | `notes/(ops)/archive.ts`                | `/notes/archive`          | `api.notes.archive`            |
+| Root unit     | `main/health.ts` + `http.get()`         | `GET /health`             | `api.main.health()`            |
+| Folder root   | `main/route.ts` + `http.get()`          | `GET /`                   | `api.main.root()`              |
 
 ## Units
 
@@ -299,23 +299,23 @@ src/flows/notes/(ops)/archive.ts  →  /notes/archive
 
 `main` is omitted from the URL prefix. Flow names still use `main.`:
 
-| File | URL | Flow name |
-| ---- | --- | --------- |
-| `main/health.ts` | `/health` | `main.health` |
-| `main/route.ts` | `/` | `main.root` (from `export const root`) |
-| `main/index.ts` | `/` (extract) | barrel — pass `http.get("/")` |
+| File             | URL           | Flow name                              |
+| ---------------- | ------------- | -------------------------------------- |
+| `main/health.ts` | `/health`     | `main.health`                          |
+| `main/route.ts`  | `/`           | `main.root` (from `export const root`) |
+| `main/index.ts`  | `/` (extract) | barrel — pass `http.get("/")`          |
 
 ### Skip list
 
 These files are never routes (walk skips them; path inference returns nothing):
 
-| Pattern | Why |
-| ------- | --- |
-| `generated.ts` | Adopt barrel (`oke dev` / `oke build` writes it) |
-| `shapes.ts` | Shared Zod / contracts |
-| `signals.ts` | Signal declarations |
-| `*.test.ts` / `*.test.tsx` | Tests |
-| `_` prefix (file or folder) | Private helpers (`notes/_lib/util.ts`) |
+| Pattern                     | Why                                              |
+| --------------------------- | ------------------------------------------------ |
+| `generated.ts`              | Adopt barrel (`oke dev` / `oke build` writes it) |
+| `shapes.ts`                 | Shared Zod / contracts                           |
+| `signals.ts`                | Signal declarations                              |
+| `*.test.ts` / `*.test.tsx`  | Tests                                            |
+| `_` prefix (file or folder) | Private helpers (`notes/_lib/util.ts`)           |
 
 Skip-list files may sit next to tree routes. They do **not** turn a tree into a
 barrel.
@@ -325,15 +325,15 @@ barrel.
 To avoid `/notes/get` and `/orders/list`, these filenames add **no** URL
 segment — the same five CRUD names as `http.resource`, plus folder roots:
 
-| Leaf | Typical trigger | Example file | Stamped path |
-| ---- | --------------- | ------------ | ------------ |
-| `list` | `http.get()` | `notes/list.ts` | `/notes` |
-| `create` | `http.post()` | `notes/create.ts` | `/notes` |
-| `get` | `http.get()` | `notes/[id]/get.ts` | `/notes/:id` |
-| `update` | `http.patch()` | `notes/[id]/update.ts` | `/notes/:id` |
-| `remove` | `http.delete()` | `notes/[id]/remove.ts` | `/notes/:id` |
-| `index` | *(barrel only)* | `notes/index.ts` | `/notes` |
-| `route` | any | `notes/route.ts` or `main/route.ts` | `/notes` or `/` |
+| Leaf     | Typical trigger | Example file                        | Stamped path    |
+| -------- | --------------- | ----------------------------------- | --------------- |
+| `list`   | `http.get()`    | `notes/list.ts`                     | `/notes`        |
+| `create` | `http.post()`   | `notes/create.ts`                   | `/notes`        |
+| `get`    | `http.get()`    | `notes/[id]/get.ts`                 | `/notes/:id`    |
+| `update` | `http.patch()`  | `notes/[id]/update.ts`              | `/notes/:id`    |
+| `remove` | `http.delete()` | `notes/[id]/remove.ts`              | `/notes/:id`    |
+| `index`  | _(barrel only)_ | `notes/index.ts`                    | `/notes`        |
+| `route`  | any             | `notes/route.ts` or `main/route.ts` | `/notes` or `/` |
 
 Any other leaf **is** a segment: `query.ts` → `/notes/query`.
 
@@ -408,8 +408,9 @@ leaves a stale barrel — **OKE1030** in prod / `oke dev` with Compose.
 Unit "notes" mixes a barrel index.ts with tree route files. Use only index.ts (barrel), or move the collection path to route.ts and keep [id]/ beside it.
 ```
 
-  Fix: delete `index.ts` and use `list.ts` / `route.ts`, or fold every route into
-  `index.ts` with explicit paths.
+Fix: delete `index.ts` and use `list.ts` / `route.ts`, or fold every route into
+`index.ts` with explicit paths.
+
 </Accordion>
 
 <Accordion title="Export collisions">
@@ -419,7 +420,8 @@ Unit "notes" mixes a barrel index.ts with tree route files. Use only index.ts (b
 Unit "notes" exports "get" from both list.ts and route.ts.
 ```
 
-  Rename one export. The client method is the export name, not the filename.
+Rename one export. The client method is the export name, not the filename.
+
 </Accordion>
 
 <Accordion title="Unit-prefix drift">
@@ -429,8 +431,9 @@ Unit "notes" exports "get" from both list.ts and route.ts.
 flow("tasks.…") in notes/get.ts does not match the folder "notes".
 ```
 
-  Use `flow("notes.get", {…})`, a nameless `flow({ do })` (stamped `notes.get`
-  from the export), or move the file.
+Use `flow("notes.get", {…})`, a nameless `flow({ do })` (stamped `notes.get`
+from the export), or move the file.
+
 </Accordion>
 
 </Accordions>
@@ -439,11 +442,11 @@ flow("tasks.…") in notes/get.ts does not match the folder "notes".
 
 Three names, one file:
 
-| Surface | Source | Example |
-| ------- | ------ | ------- |
-| HTTP path | File tree (default) or explicit `http.get("/x")` | `/notes/:id` |
-| Flow name | `unit.export` from `flow({ do })` (default), or `flow("notes.get")` | `notes.get` |
-| Client | Unit folder + `export const` | `api.notes.get({ id })` |
+| Surface   | Source                                                              | Example                 |
+| --------- | ------------------------------------------------------------------- | ----------------------- |
+| HTTP path | File tree (default) or explicit `http.get("/x")`                    | `/notes/:id`            |
+| Flow name | `unit.export` from `flow({ do })` (default), or `flow("notes.get")` | `notes.get`             |
+| Client    | Unit folder + `export const`                                        | `api.notes.get({ id })` |
 
 Nameless `flow({ do })` is the tree default — same rule as pathless HTTP. Pass
 `flow("notes.get")` only for control (stable name, barrel, or matching unit
@@ -459,10 +462,10 @@ HTTP flows that remain nameless after adopt fail **OKE1045**.
 All adopted HTTP bindings go into one matcher. Wrong method on a known path is
 **405** with `Allow`. No match is a bare **404** `Not Found`.
 
-| `oke({ router })` | Default | What it does |
-| ----------------- | ------- | ------------ |
-| `"default"` | yes | Compiled RegExp (O(1) static map + per-bucket regex for `:id`). Falls back to Trie when a path includes `*` |
-| `"edge"` | | Linear scan, then Trie. No RegExp compile — cold-start / isolates |
+| `oke({ router })` | Default | What it does                                                                                                |
+| ----------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `"default"`       | yes     | Compiled RegExp (O(1) static map + per-bucket regex for `:id`). Falls back to Trie when a path includes `*` |
+| `"edge"`          |         | Linear scan, then Trie. No RegExp compile — cold-start / isolates                                           |
 
 p99 match stays under **1 ms** on the compiled matcher. You do not pick buckets
 by hand — a catch-all in the table selects Trie for the whole app.
@@ -475,33 +478,32 @@ plus a handwritten `http.get("/notes")`.
 <Accordions>
 
 <Accordion title="404 Not Found — route missing">
-  No Flow is bound to that method + path. Check the explicit path, or for
-  pathless routes the file-tree stamp (`notes/[id]/get.ts` → `GET /notes/:id`).
-  A bare `404` with body `Not Found` means the router found no match.
+  No Flow is bound to that method + path. Check the explicit path, or for pathless routes the
+  file-tree stamp (`notes/[id]/get.ts` → `GET /notes/:id`). A bare `404` with body `Not Found` means
+  the router found no match.
 </Accordion>
 
 <Accordion title="405 Method Not Allowed on valid route">
-  The path exists but has not been bound to the requested verb. `Allow` lists
-  the methods that are. `list.ts` with `http.get()` is GET-only — POST that URL
-  is 405, not a missing file.
+  The path exists but has not been bound to the requested verb. `Allow` lists the methods that are.
+  `list.ts` with `http.get()` is GET-only — POST that URL is 405, not a missing file.
 </Accordion>
 
 <Accordion title="OKE1040 — pathless trigger never stamped">
-  Cause: `Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.`
-  Import `@/flows/generated`, run `oke dev` / `oke build`, or pass `http.get("/…")`.
-  Barrels do not stamp — they need the explicit path.
+  Cause: `Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.` Import
+  `@/flows/generated`, run `oke dev` / `oke build`, or pass `http.get("/…")`. Barrels do not stamp —
+  they need the explicit path.
 </Accordion>
 
 <Accordion title="OKE1030 — adopt barrel stale">
-  Cause: `src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.`
-  Run `oke dev` or `oke build` after adding a unit folder. Prod and Compose `oke
-  dev` refuse to boot this way.
+  Cause: `src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.` Run
+  `oke dev` or `oke build` after adding a unit folder. Prod and Compose `oke dev` refuse to boot
+  this way.
 </Accordion>
 
 <Accordion title="OKE1041 — method + path bound twice">
-  Cause: `{method} {path} is bound twice (flow "{flow}").`
-  Two tree files stamped the same verb + path (`list.ts` and `route.ts` both
-  `http.get()`), or a resource mount plus a handwritten route. Drop one binding.
+  Cause: `{method} {path} is bound twice (flow "{flow}").` Two tree files stamped the same verb +
+  path (`list.ts` and `route.ts` both `http.get()`), or a resource mount plus a handwritten route.
+  Drop one binding.
 </Accordion>
 
 <Accordion title="OKE1045 — HTTP flow unnamed">
@@ -511,8 +513,8 @@ plus a handwritten `http.get("/notes")`.
 </Accordion>
 
 <Accordion title="422 — path param missing from in">
-  `[id]` stamps `:id`. `in` must declare `id` (same key). A schema that expects
-  `userId` while the path is `:id` fails validation before `do`.
+  `[id]` stamps `:id`. `in` must declare `id` (same key). A schema that expects `userId` while the
+  path is `:id` fails validation before `do`.
 </Accordion>
 
 <Accordion title="Catch-all input is empty / wrong key">
@@ -522,9 +524,8 @@ plus a handwritten `http.get("/notes")`.
 </Accordion>
 
 <Accordion title="Unit mixes index.ts with tree files">
-  Generate: `Unit "…" mixes a barrel index.ts with tree route files.`
-  Use only `index.ts` (explicit paths), or move the collection path to
-  `route.ts` and keep `[id]/` beside it.
+  Generate: `Unit "…" mixes a barrel index.ts with tree route files.` Use only `index.ts` (explicit
+  paths), or move the collection path to `route.ts` and keep `[id]/` beside it.
 </Accordion>
 
 </Accordions>

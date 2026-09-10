@@ -12,8 +12,8 @@ optimistic `mutate`.
 For developers building React storefronts and ops consoles on top of `createClient`.
 
 <Callout title="The one rule">
-  Pass the same `api` you built with `createClient`. Hooks never open a second client factory —
-  they subscribe, call Flows, and clean up on unmount.
+  Pass the same `api` you built with `createClient`. Hooks never open a second client factory — they
+  subscribe, call Flows, and clean up on unmount.
 </Callout>
 
 ## Smallest Example
@@ -62,6 +62,7 @@ export function AccountMenu() {
 ```
 
 `Can` / `useAuthorize` are UI-only — Gate on Flows remains real authz.
+
 </Step>
 
 </Steps>
@@ -78,13 +79,13 @@ import { useSession } from "okengine/client-react";
 const { status, user, accessToken, refresh, signOut } = useSession(api.auth!);
 ```
 
-| Field         | Meaning                                              |
-| ------------- | ---------------------------------------------------- |
+| Field         | Meaning                                                 |
+| ------------- | ------------------------------------------------------- |
 | `status`      | `"loading"` \| `"authenticated"` \| `"unauthenticated"` |
-| `user`        | `auth.me` payload or `null`                          |
-| `accessToken` | Current Bearer from `memorySession` (or `null`)      |
-| `refresh()`   | Re-run `auth.me`                                     |
-| `signOut()`   | `session.clear()` + unauthenticated                  |
+| `user`        | `auth.me` payload or `null`                             |
+| `accessToken` | Current Bearer from `memorySession` (or `null`)         |
+| `refresh()`   | Re-run `auth.me`                                        |
+| `signOut()`   | `session.clear()` + unauthenticated                     |
 
 </Tab>
 
@@ -95,7 +96,7 @@ import { Can, useAuthorize } from "okengine/client-react";
 
 <Can auth={api.auth!} all={["orders:write"]} fallback={<Denied />}>
   <FulfillmentLink />
-</Can>
+</Can>;
 
 const { status, missing } = useAuthorize(api.auth!, { all: ["orders:write"] });
 ```
@@ -125,10 +126,10 @@ const { events, latest, error, isConnected } = useLive(
 
 Cleanup calls `stop()` on unmount. Changing `signal` / `input` / `via` resets `events`.
 
-| Option            | Meaning                                      |
-| ----------------- | -------------------------------------------- |
-| `autoResubscribe` | Reopen after drop (same as `api.live`)       |
-| `via`             | Disambiguate equal exposure matches          |
+| Option            | Meaning                                |
+| ----------------- | -------------------------------------- |
+| `autoResubscribe` | Reopen after drop (same as `api.live`) |
+| `via`             | Disambiguate equal exposure matches    |
 
 </Tab>
 
@@ -184,24 +185,24 @@ Server CDC / the successful response clear the override so the next upsert is au
 
 ## Package boundary
 
-| Export                                    | Package                 | Role                                            |
-| ----------------------------------------- | ----------------------- | ----------------------------------------------- |
-| `createClient` / `api.live`               | `okengine/client`       | Typed proxy + SSE subscribe                     |
-| `createAuthClient` / `memorySession`      | `okengine/client/auth`  | Secure session orchestration                    |
-| `vault` / `vault.env`                     | `okengine/vault`        | Env + config contracts (subpath — not root)     |
-| `useSession` / `useLive` / `useLiveQuery` | `okengine/client-react` | React hooks (`react` optional peer)             |
-| `subscribeLiveResource`                   | `okengine/client-react` | Non-hook live resource stream helper            |
+| Export                                    | Package                 | Role                                        |
+| ----------------------------------------- | ----------------------- | ------------------------------------------- |
+| `createClient` / `api.live`               | `okengine/client`       | Typed proxy + SSE subscribe                 |
+| `createAuthClient` / `memorySession`      | `okengine/client/auth`  | Secure session orchestration                |
+| `vault` / `vault.env`                     | `okengine/vault`        | Env + config contracts (subpath — not root) |
+| `useSession` / `useLive` / `useLiveQuery` | `okengine/client-react` | React hooks (`react` optional peer)         |
+| `subscribeLiveResource`                   | `okengine/client-react` | Non-hook live resource stream helper        |
 
 Prefer [`createAuthClient`](/docs/client/auth) for cookie/Bearer sessions and method helpers.
 `useLiveQuery` accepts `listPath` to derive `GET ${listPath}/live` when `live` is omitted.
 
 ## `useLiveQuery` options
 
-| Option          | Meaning                                                      |
-| --------------- | ------------------------------------------------------------ |
-| `enabled`       | Default `true` — idle when `false`                           |
-| `refreshKey`    | Identity change → full re-subscribe                          |
-| `onAuthRefresh` | After `auth.refresh()` → new snapshot + replay               |
+| Option          | Meaning                                        |
+| --------------- | ---------------------------------------------- |
+| `enabled`       | Default `true` — idle when `false`             |
+| `refreshKey`    | Identity change → full re-subscribe            |
+| `onAuthRefresh` | After `auth.refresh()` → new snapshot + replay |
 
 `refetch()` re-runs only the HTTP list read; reconnects always do a full subscribe-protocol cycle
 (new snapshot + replay). Event kinds and resume physics: [Live](/docs/client/live).
@@ -243,14 +244,6 @@ Prefer [`createAuthClient`](/docs/client/auth) for cookie/Bearer sessions and me
     description="SSE subscribe and live resource physics."
     href="/docs/client/live"
   />
-  <Card
-    title="Auth"
-    description="Bearer sessions behind the hooks."
-    href="/docs/client/auth"
-  />
-  <Card
-    title="Calling"
-    description="createClient forms and options."
-    href="/docs/client/calling"
-  />
+  <Card title="Auth" description="Bearer sessions behind the hooks." href="/docs/client/auth" />
+  <Card title="Calling" description="createClient forms and options." href="/docs/client/calling" />
 </Cards>

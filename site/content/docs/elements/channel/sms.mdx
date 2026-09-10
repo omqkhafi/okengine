@@ -12,9 +12,9 @@ vendor owns the code.
 For developers verifying phones — choose raw Channel OTP vs the [`otp`](/docs/plugins/otp) plugin.
 
 <Callout title="The one rule">
-  SMS is opt-in: set `drivers.channel.sms` (e.g. `"taqnyat"`) or boot has no SMS transport.
-  Provider OTP needs a Verify-capable driver (`taqnyat`); app-owned codes use templates +
-  `fx.deliverOtp` / the OTP plugin.
+  SMS is opt-in: set `drivers.channel.sms` (e.g. `"taqnyat"`) or boot has no SMS transport. Provider
+  OTP needs a Verify-capable driver (`taqnyat`); app-owned codes use templates + `fx.deliverOtp` /
+  the OTP plugin.
 </Callout>
 
 ## Smallest Example
@@ -113,13 +113,13 @@ await fx.send(alertSms, { to: phone, data: { message: "Disk 90%" } });
 
 Vendor owns the code (Taqnyat Verify). Options:
 
-| Option      | Type            | Meaning                          |
-| ----------- | --------------- | -------------------------------- |
-| `to`        | `string`        | E.164 recipient                  |
-| `requestId` | `string`        | Correlation id (required again on verify) |
-| `lang`      | `"en"` \| `"ar"` | Message language               |
-| `note`      | `string`        | Optional note appended to SMS    |
-| `from`      | `string`        | Sender override                  |
+| Option      | Type             | Meaning                                   |
+| ----------- | ---------------- | ----------------------------------------- |
+| `to`        | `string`         | E.164 recipient                           |
+| `requestId` | `string`         | Correlation id (required again on verify) |
+| `lang`      | `"en"` \| `"ar"` | Message language                          |
+| `note`      | `string`         | Optional note appended to SMS             |
+| `from`      | `string`         | Sender override                           |
 
 `verifyOtp` adds required `code`. Missing Channel →
 `fx.sendOtp needs a bound Channel — declare channel and set drivers.channel.sms (e.g. taqnyat)`.
@@ -166,12 +166,12 @@ Full routes and modes: [OTP plugin](/docs/plugins/otp).
 
 ## Drivers
 
-| Driver id   | OTP Verify | Env |
-| ----------- | ---------- | --- |
-| `taqnyat`   | yes        | `TAQNYAT_BEARER_TOKEN` / `TAQNYAT_TOKEN` + `TAQNYAT_SENDER` |
-| `msegat`    | no         | `MSEGAT_USERNAME` / `MSEGAT_API_KEY` / `MSEGAT_SENDER` |
-| `unifonic`  | no         | `UNIFONIC_APPSID` |
-| `console`   | —          | Config id that opens **no** SMS driver |
+| Driver id  | OTP Verify | Env                                                         |
+| ---------- | ---------- | ----------------------------------------------------------- |
+| `taqnyat`  | yes        | `TAQNYAT_BEARER_TOKEN` / `TAQNYAT_TOKEN` + `TAQNYAT_SENDER` |
+| `msegat`   | no         | `MSEGAT_USERNAME` / `MSEGAT_API_KEY` / `MSEGAT_SENDER`      |
+| `unifonic` | no         | `UNIFONIC_APPSID`                                           |
+| `console`  | —          | Config id that opens **no** SMS driver                      |
 
 Boot errors (verbatim):
 
@@ -214,8 +214,8 @@ Same medium options as email: `from` / `sender`.
 </Accordion>
 
 <Accordion title="channel: no SMS driver bound">
-  Config has no SMS id for this env (`CHANNEL_SMS_DEFAULTS` is empty). Pin `taqnyat` /
-  `msegat` / `unifonic`.
+  Config has no SMS id for this env (`CHANNEL_SMS_DEFAULTS` is empty). Pin `taqnyat` / `msegat` /
+  `unifonic`.
 </Accordion>
 
 <Accordion title="SMS driver does not support provider-managed OTP">
@@ -224,8 +224,8 @@ Same medium options as email: `from` / `sender`.
 </Accordion>
 
 <Accordion title="channel: otp delivery has no viable channel">
-  `fx.deliverOtp` had no matching address for a declared medium (need `phone` for SMS /
-  WhatsApp, `email` for email).
+  `fx.deliverOtp` had no matching address for a declared medium (need `phone` for SMS / WhatsApp,
+  `email` for email).
 </Accordion>
 
 <Accordion title="channel: otp delivery failed on all channels">

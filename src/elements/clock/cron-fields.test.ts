@@ -4,17 +4,8 @@
 
 import { describe, expect, test, beforeEach } from "bun:test";
 
-import {
-  buildCronExpression,
-  parseAtTime,
-  serializeCronField,
-} from "./cron-fields.ts";
-import {
-  applyClockTimezoneDefaults,
-  clock,
-  listClocks,
-  resetClocks,
-} from "./declare.ts";
+import { buildCronExpression, parseAtTime, serializeCronField } from "./cron-fields.ts";
+import { applyClockTimezoneDefaults, clock, listClocks, resetClocks } from "./declare.ts";
 
 describe("buildCronExpression", () => {
   test("at sugar sets minute and hour", () => {

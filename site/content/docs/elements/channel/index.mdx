@@ -170,31 +170,31 @@ succeeded — every attempt is kept on the receipt.
 
 ## Declaration Reference
 
-| Declaration         | Signature                                      | Purpose                          |
-| ------------------- | ---------------------------------------------- | -------------------------------- |
-| `channel.email`     | `channel.email(options?)`                      | Email medium binder              |
-| `channel.sms`       | `channel.sms(options?)`                        | SMS medium binder                |
-| `channel.whatsapp`  | `channel.whatsapp(options?)`                   | WhatsApp medium binder           |
-| `channel.push`      | `channel.push(options?)`                       | Push medium binder               |
-| `binder.template`   | `binder.template(name, options?)`              | Auto-registered template         |
-| `channel.template`  | `channel.template(name, options?)`             | Medium-agnostic — **not** auto-registered |
+| Declaration        | Signature                          | Purpose                                   |
+| ------------------ | ---------------------------------- | ----------------------------------------- |
+| `channel.email`    | `channel.email(options?)`          | Email medium binder                       |
+| `channel.sms`      | `channel.sms(options?)`            | SMS medium binder                         |
+| `channel.whatsapp` | `channel.whatsapp(options?)`       | WhatsApp medium binder                    |
+| `channel.push`     | `channel.push(options?)`           | Push medium binder                        |
+| `binder.template`  | `binder.template(name, options?)`  | Auto-registered template                  |
+| `channel.template` | `channel.template(name, options?)` | Medium-agnostic — **not** auto-registered |
 
 ### Medium options
 
-| Option   | Type     | Default | Meaning                                      |
-| -------- | -------- | ------- | -------------------------------------------- |
-| `from`   | `string` | —       | Default sender (email From / SMS sender id)  |
-| `sender` | `string` | —       | Alias stored as `from`                       |
+| Option   | Type     | Default | Meaning                                     |
+| -------- | -------- | ------- | ------------------------------------------- |
+| `from`   | `string` | —       | Default sender (email From / SMS sender id) |
+| `sender` | `string` | —       | Alias stored as `from`                      |
 
 ### Template options
 
-| Option        | Type       | Default   | Meaning                                      |
-| ------------- | ---------- | --------- | -------------------------------------------- |
-| `description` | `string`   | name      | Console / docs label                         |
-| `locales`     | `string[]` | —         | Declared locale tags for the template        |
-| `schema`      | Schema     | —         | Payload shape (Zod / Standard Schema)        |
+| Option        | Type       | Default   | Meaning                                             |
+| ------------- | ---------- | --------- | --------------------------------------------------- |
+| `description` | `string`   | name      | Console / docs label                                |
+| `locales`     | `string[]` | —         | Declared locale tags for the template               |
+| `schema`      | Schema     | —         | Payload shape (Zod / Standard Schema)               |
 | `from`        | `string`   | binder’s  | Override sender on agnostic `channel.template` only |
-| `medium`      | medium     | `"email"` | Only on `channel.template()`                 |
+| `medium`      | medium     | `"email"` | Only on `channel.template()`                        |
 
 Empty name throws `TypeError: channel.template: name is required`.
 
@@ -202,23 +202,23 @@ There is **no** `subject` / `body` / `html` on declare — those belong in the c
 
 ## `fx` surface
 
-| Method                         | Capability / `sends` | Meaning                                              |
-| ------------------------------ | -------------------- | ---------------------------------------------------- |
-| `fx.send(template, opts?)`     | template name        | Deliver through the medium’s driver chain             |
-| `fx.sendOtp(opts)`             | `"sms-otp"`          | Provider-managed SMS OTP (Taqnyat Verify)            |
-| `fx.verifyOtp(opts)`           | `"sms-otp"`          | Check a provider OTP code                            |
-| `fx.deliverOtp(opts)`          | `"auth-otp"`         | App-owned OTP across email / SMS / WhatsApp          |
+| Method                     | Capability / `sends` | Meaning                                     |
+| -------------------------- | -------------------- | ------------------------------------------- |
+| `fx.send(template, opts?)` | template name        | Deliver through the medium’s driver chain   |
+| `fx.sendOtp(opts)`         | `"sms-otp"`          | Provider-managed SMS OTP (Taqnyat Verify)   |
+| `fx.verifyOtp(opts)`       | `"sms-otp"`          | Check a provider OTP code                   |
+| `fx.deliverOtp(opts)`      | `"auth-otp"`         | App-owned OTP across email / SMS / WhatsApp |
 
 ### `fx.send` options
 
-| Option            | Type     | Meaning                                              |
-| ----------------- | -------- | ---------------------------------------------------- |
-| `to`              | `string` | Recipient (email / E.164 / FCM token / …)            |
-| `data`            | object   | Interpolated into `{{field}}` catalog bodies         |
-| `via`             | refs     | Same-medium driver order for failover                |
-| `locale`          | `string` | Explicit locale (wins)                               |
-| `profileLocale`   | `string` | Profile locale step                                  |
-| `acceptLanguage`  | `string` | Raw `Accept-Language` header                         |
+| Option           | Type     | Meaning                                      |
+| ---------------- | -------- | -------------------------------------------- |
+| `to`             | `string` | Recipient (email / E.164 / FCM token / …)    |
+| `data`           | object   | Interpolated into `{{field}}` catalog bodies |
+| `via`            | refs     | Same-medium driver order for failover        |
+| `locale`         | `string` | Explicit locale (wins)                       |
+| `profileLocale`  | `string` | Profile locale step                          |
+| `acceptLanguage` | `string` | Raw `Accept-Language` header                 |
 
 Dry-run records _would have fired_ and never contacts a provider. Undeclared send → **OKE1004**
 `UNDECLARED_SEND`.
@@ -244,11 +244,11 @@ export default defineConfig({
 });
 ```
 
-| Key                | Default (dev / test / prod) | Driver ids |
-| ------------------ | --------------------------- | ---------- |
-| `channel.email`    | `smtp` / `console` / `smtp` | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail` |
-| `channel.sms`      | none                        | `taqnyat` · `msegat` · `unifonic` (`console` opens nothing) |
-| `channel.whatsapp` | none                        | `wa-cloud` · `taqnyat-whatsapp` |
+| Key                | Default (dev / test / prod) | Driver ids                                                       |
+| ------------------ | --------------------------- | ---------------------------------------------------------------- |
+| `channel.email`    | `smtp` / `console` / `smtp` | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail`          |
+| `channel.sms`      | none                        | `taqnyat` · `msegat` · `unifonic` (`console` opens nothing)      |
+| `channel.whatsapp` | none                        | `wa-cloud` · `taqnyat-whatsapp`                                  |
 | `channel.push`     | none — **not auto-bound**   | Pass `oke({ channel: { drivers: […] } })` with `webpush` / `fcm` |
 
 Env knobs: [Environment variables](/docs/reference/environment-variables). Local SMTP catcher:
@@ -299,8 +299,8 @@ Env knobs: [Environment variables](/docs/reference/environment-variables). Local
 </Accordion>
 
 <Accordion title="channel: no email transport in driver chain">
-  No email-capable driver is bound (or `via` filtered them all out). Check
-  `drivers.channel.email` and `SMTP_URL` / provider API keys for the active env.
+  No email-capable driver is bound (or `via` filtered them all out). Check `drivers.channel.email`
+  and `SMTP_URL` / provider API keys for the active env.
 </Accordion>
 
 <Accordion title="oke boot: smtp driver needs SMTP_URL">
@@ -309,9 +309,9 @@ Env knobs: [Environment variables](/docs/reference/environment-variables). Local
 </Accordion>
 
 <Accordion title="Process-local suppression / receipts warning">
-  Boot warns: `Channel suppression/consent/receipts default to process-local memory…` Opt-out on
-  one instance is invisible to others until you inject shared stores or run a single Channel
-  consumer. See [Receipts](/docs/elements/channel/receipts).
+  Boot warns: `Channel suppression/consent/receipts default to process-local memory…` Opt-out on one
+  instance is invisible to others until you inject shared stores or run a single Channel consumer.
+  See [Receipts](/docs/elements/channel/receipts).
 </Accordion>
 
 </Accordions>
@@ -335,11 +335,7 @@ Env knobs: [Environment variables](/docs/reference/environment-variables). Local
     description="Declare email templates and pin SMTP / Resend drivers."
     href="/docs/elements/channel/email"
   />
-  <Card
-    title="AI Element"
-    description="Models, prompts, and agents."
-    href="/docs/elements/ai"
-  />
+  <Card title="AI Element" description="Models, prompts, and agents." href="/docs/elements/ai" />
   <Card
     title="The Model"
     description="Eight elements overview."

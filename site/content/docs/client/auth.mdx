@@ -11,9 +11,9 @@ Flows. Prefer that one call. `createAuthClient` + `bind` stays as a compose esca
 For storefronts and SPAs attaching identity to typed calls.
 
 <Callout title="The one rule">
-  Gate on Flows is real authorization. `authorize` / `hasScope` / `Can` are **UI-only**. Cookie
-  mode needs the `csrf` plugin (server soft-requires it when `gate.auth.cookies.enabled`); never
-  persist tokens to Storage when cookies own the session.
+  Gate on Flows is real authorization. `authorize` / `hasScope` / `Can` are **UI-only**. Cookie mode
+  needs the `csrf` plugin (server soft-requires it when `gate.auth.cookies.enabled`); never persist
+  tokens to Storage when cookies own the session.
 </Callout>
 
 ## Smallest Example
@@ -154,22 +154,22 @@ auth.bind(api);
 
 ## Helpers
 
-| Helper | Package | Role |
-| ------ | ------- | ---- |
-| `createClient({ auth })` | `okengine/client` | Happy path — attaches `api.auth` |
-| `createAuthClient` | `okengine/client/auth` | Compose / bind escape hatch |
-| `tokenFromRequestCookies` / `createServerClient` | same | SSR cookie → token |
-| `authorize` / `hasScope` / `can` | on `AuthClient` | UI-only chrome |
-| `isUnauthorized` / `isCsrf` / `forbiddenScopes` | same | Envelope narrowers |
-| `useSession` / `useAuthorize` / `Can` | `okengine/client-react` | React session + chrome |
+| Helper                                           | Package                 | Role                             |
+| ------------------------------------------------ | ----------------------- | -------------------------------- |
+| `createClient({ auth })`                         | `okengine/client`       | Happy path — attaches `api.auth` |
+| `createAuthClient`                               | `okengine/client/auth`  | Compose / bind escape hatch      |
+| `tokenFromRequestCookies` / `createServerClient` | same                    | SSR cookie → token               |
+| `authorize` / `hasScope` / `can`                 | on `AuthClient`         | UI-only chrome                   |
+| `isUnauthorized` / `isCsrf` / `forbiddenScopes`  | same                    | Envelope narrowers               |
+| `useSession` / `useAuthorize` / `Can`            | `okengine/client-react` | React session + chrome           |
 
 ## Denial codes
 
-| Code | HTTP | Typical fix |
-| ---- | ---- | ----------- |
-| `Unauthorized` | 401 | Sign in or refresh; re-login if still denied |
-| `Forbidden` | 403 | Wrong scopes / CSRF — read `error.data.reason` |
-| `RateLimited` | 429 | Wait `retryAfterMs` |
+| Code           | HTTP | Typical fix                                    |
+| -------------- | ---- | ---------------------------------------------- |
+| `Unauthorized` | 401  | Sign in or refresh; re-login if still denied   |
+| `Forbidden`    | 403  | Wrong scopes / CSRF — read `error.data.reason` |
+| `RateLimited`  | 429  | Wait `retryAfterMs`                            |
 
 Also see [CORS](/docs/plugins/cors) and [CSRF](/docs/plugins/csrf). Advanced create-oke starter
 demos cookie + passkey + `<Can>`.

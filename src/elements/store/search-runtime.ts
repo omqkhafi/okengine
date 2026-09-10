@@ -5,11 +5,7 @@
 
 import type { PromptRef } from "../../manifest/types.ts";
 import type { SqlConnection, SqlRow } from "../../drivers/types.ts";
-import {
-  parseListQuery,
-  resolveListScope,
-  type ListOptions,
-} from "./list-query.ts";
+import { parseListQuery, resolveListScope, type ListOptions } from "./list-query.ts";
 import { bm25fScore, termFrequencies, tokenize } from "./search-bm25.ts";
 import { SearchConfigError, LSH_DEFAULT_K } from "./search-errors.ts";
 import { fuseLists, type FuseOptions } from "./search-fusion.ts";
@@ -176,10 +172,9 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
   const N = Number(statsRows[0]?.["n"] ?? candidates.length) || candidates.length;
   const avgdl = Number(statsRows[0]?.["avgdl"] ?? 50) || 50;
 
-  const dfRows = await conn.query(
-    `SELECT term, df FROM ${OKE_SEARCH_DF} WHERE table_name = ?`,
-    [tableName],
-  );
+  const dfRows = await conn.query(`SELECT term, df FROM ${OKE_SEARCH_DF} WHERE table_name = ?`, [
+    tableName,
+  ]);
   const df = new Map<string, number>();
   for (const r of dfRows) {
     df.set(String(r["term"]), Number(r["df"] ?? 0));
@@ -267,9 +262,7 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
     const out = await deps.askRerank(rerank.model, { query, docs });
     if (out.rankedIds && out.rankedIds.length > 0) {
       const byId = new Map(data.map((r) => [String(r[pkSqlName] ?? r["id"]), r]));
-      data = out.rankedIds
-        .map((id) => byId.get(id))
-        .filter((r): r is SqlRow => r !== undefined);
+      data = out.rankedIds.map((id) => byId.get(id)).filter((r): r is SqlRow => r !== undefined);
     }
   }
 

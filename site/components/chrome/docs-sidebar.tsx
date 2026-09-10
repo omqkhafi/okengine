@@ -230,11 +230,7 @@ function GroupBody({
 }
 
 /** Pages that land under the `06 AI Resources` stage (not Try It / Overview). */
-const AI_RESOURCES_STAGE_URLS = new Set([
-  "/docs/ai/mcp",
-  "/docs/ai/skills",
-  "/docs/ai/llms-txt",
-]);
+const AI_RESOURCES_STAGE_URLS = new Set(["/docs/ai/mcp", "/docs/ai/skills", "/docs/ai/llms-txt"]);
 
 /**
  * Unwraps intermediate grouping folders:

@@ -326,7 +326,7 @@ async function askIncludeOthersPrompt(): Promise<boolean | null> {
     initialValue: false,
   });
   if (isCancel(value)) return null;
-  return value;
+  return Boolean(value);
 }
 
 /**
@@ -356,7 +356,7 @@ async function pickProjectKeys(options: {
     required: false,
   });
   if (isCancel(value)) return null;
-  return value;
+  return Array.isArray(value) ? value : null;
 }
 
 /**

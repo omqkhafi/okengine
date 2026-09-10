@@ -13,10 +13,7 @@ import {
   formatAiProviderTier2Warn,
   getAiProviderEntry,
 } from "../elements/ai/providers.ts";
-import {
-  buildCronExpression,
-  type CronField,
-} from "../elements/clock/cron-fields.ts";
+import { buildCronExpression, type CronField } from "../elements/clock/cron-fields.ts";
 import { SearchConfigError } from "../elements/store/search-errors.ts";
 
 import type {
@@ -1353,16 +1350,10 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         scope.ai.models = scope.ai.models ?? {};
         scope.ai.models[modelName] = model;
         // Limited OpenAI-compat caveat — same honesty as declare-time warn.
-        if (
-          provider &&
-          !baseUrl &&
-          !(driverId && AI_NATIVE_DRIVER_IDS.has(driverId))
-        ) {
+        if (provider && !baseUrl && !(driverId && AI_NATIVE_DRIVER_IDS.has(driverId))) {
           const entry = getAiProviderEntry(provider);
           if (entry?.tier === 2 && entry.caveat) {
-            console.warn(
-              formatAiProviderTier2Warn(provider, entry.caveat, "[oke extract] warn"),
-            );
+            console.warn(formatAiProviderTier2Warn(provider, entry.caveat, "[oke extract] warn"));
           }
         }
         const bindingName = enclosingConstName(call, program);
@@ -1482,10 +1473,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
     }
 
     // signal.once("name", opts?) / .broadcast / .live
-    if (
-      obj === "signal" &&
-      (prop === "once" || prop === "broadcast" || prop === "live")
-    ) {
+    if (obj === "signal" && (prop === "once" || prop === "broadcast" || prop === "live")) {
       const signalName = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
       if (signalName) {
@@ -1932,8 +1920,7 @@ function registerFlow(args: {
   if (outSchema !== undefined) flow.out = outSchema;
 
   const errors =
-    parseErrors(objectProp(opts, "errors")) ??
-    parseErrors(objectProp(trigger?.contract, "errors"));
+    parseErrors(objectProp(opts, "errors")) ?? parseErrors(objectProp(trigger?.contract, "errors"));
   if (errors) flow.errors = errors;
 
   if (effects) flow.effects = effects;

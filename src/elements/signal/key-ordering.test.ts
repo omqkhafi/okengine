@@ -31,8 +31,7 @@ afterEach(async () => {
 
 describe("signal key ordering · memory", () => {
   test("same key: never concurrent; complete in emission order", async () => {
-    const once = signal.once("order-events", { retries: 3,
-      deadLetter: true });
+    const once = signal.once("order-events", { retries: 3, deadLetter: true });
     const bus = await memorySignalDriver.open({
       signals: new Map([[once.name, once]]),
     });
@@ -72,8 +71,7 @@ describe("signal key ordering · memory", () => {
   });
 
   test("different keys: may process concurrently", async () => {
-    const once = signal.once("order-events", { retries: 3,
-      deadLetter: true });
+    const once = signal.once("order-events", { retries: 3, deadLetter: true });
     const bus = await memorySignalDriver.open({
       signals: new Map([[once.name, once]]),
     });
@@ -104,8 +102,7 @@ describe("signal key ordering · memory", () => {
   });
 
   test("no key: unchanged competing-consumer (both may run concurrent)", async () => {
-    const once = signal.once("order-events", { retries: 3,
-      deadLetter: true });
+    const once = signal.once("order-events", { retries: 3, deadLetter: true });
     const bus = await memorySignalDriver.open({
       signals: new Map([[once.name, once]]),
     });
@@ -204,8 +201,7 @@ describe("signal key ordering · postgres", () => {
   });
 
   test("emit with key then drain preserves emission order", async () => {
-    const once = signal.once("order-events", { retries: 3,
-      deadLetter: true });
+    const once = signal.once("order-events", { retries: 3, deadLetter: true });
     const bus = await postgresSignalDriver.open({
       signals: new Map([[once.name, once]]),
       sql: createPostgresSignalFake(),
@@ -234,8 +230,7 @@ describe("signal key ordering · lease reclaim", () => {
     const marker = join(dir, "claimed");
     try {
       let t = 5_000;
-      const once = signal.once("order-events", { retries: 3,
-        deadLetter: true });
+      const once = signal.once("order-events", { retries: 3, deadLetter: true });
       const r1 = createSignalRuntime({
         driver: memorySignalDriver,
         durablePath,
