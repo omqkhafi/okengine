@@ -117,11 +117,11 @@ export const ELEMENTS: ReadonlyArray<{
 ];
 
 /**
- * Short homepage tagline — §3 facts, rewritten for scannability
- * (not a new claim).
+ * Short homepage tagline — programming model first, then what OKE
+ * derives from one definition of behavior (not a new claim).
  */
 export const TAGLINE =
-  "Modern backends became a pile of disconnected systems. One law collapses them — client, Console, and infra derived from one contract. Yours to host.";
+  "A new programming model for backends. Define behavior once — OKE derives the runtime, client, Console, and infrastructure around it.";
 
 /** Full positioning sentence from unified-theory §3 (docs that need the long form). */
 export const POSITIONING =

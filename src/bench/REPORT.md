@@ -232,7 +232,7 @@ Fix: UNION of GIN lexical `LIMIT` and SimHash k-NN (`ORDER BY bit_count((lsh # q
 | ---- | ----------- | ----------- | --------------------- | --------------- |
 | 1k   | 0.167       | 0.117       | 0.6 / 0.41            | 1.25 / 1.3      |
 | 10k  | 0.100       | 0.017       | ~6                    | ~9              |
-| 100k | 0.017       | 0.008       | ~45                   | ~32            |
+| 100k | 0.017       | 0.008       | ~45                   | ~32             |
 | 1M   | 0.017       | 0.000       | ~535                  | ~363            |
 
 **Honest verdict after the fix:** the near-total collapse at 10k/100k is gone on the vector path (smooth 0.17 → 0.10 → 0.017). Remaining low precision@10 vs exact cosine is the real K=64 SimHash + 50-candidate oversample tradeoff on this near-duplicate hash-bag corpus — not a hashing mismatch. Still **not** a drop-in for HNSW/pgvector. Prefer BM25-only or an external `store.index` (`pgvector` / Meilisearch) when semantic recall matters.

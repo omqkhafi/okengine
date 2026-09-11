@@ -9,7 +9,8 @@ Four lines ship the signup flow. Eight months later it is six files that disagre
 This page shows that drift, the one rule that stops it, and the exact anatomy behind every Flow — in one sitting.
 
 <Callout title="The Law">
-  Every backend behavior is a Flow: `on(Trigger) → Effects`. One species; triggers are typed values. All world access goes through `fx`.
+  Every backend behavior is a Flow: `on(Trigger) → Effects`. One species; triggers are typed values.
+  All world access goes through `fx`.
 </Callout>
 
 ## The problem: three features, same wall
@@ -83,11 +84,11 @@ That's the whole model. Not a bigger toolbox — a smaller number of things that
 
 OKE is a backend programming model: behavior is expressed as Flows, effects are captured through `fx`, and the compiler turns that model into a versioned Manifest that powers the rest of the backend.
 
-| OKE is not … | OKE is … |
-| --- | --- |
-| Another queue, ORM, or mailer to wire up | One Flow species every trigger wakes up |
-| A toolbox of forty clients with forty configs | Eight elements with irreducible physics — nothing else gets added |
-| A platform you deploy into | TypeScript you host; Client, Console, and MCP derive from your Manifest |
+| OKE is not …                                  | OKE is …                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| Another queue, ORM, or mailer to wire up      | One Flow species every trigger wakes up                                 |
+| A toolbox of forty clients with forty configs | Eight elements with irreducible physics — nothing else gets added       |
+| A platform you deploy into                    | TypeScript you host; Client, Console, and MCP derive from your Manifest |
 
 One shape for every trigger, one door for every effect, a fixed vocabulary for what the door allows — that's what this project built. It's called **OKE**.
 
@@ -222,12 +223,12 @@ export const signup = on(
 
 Nothing about the code above looks more complicated than the four lines that started the drift — because it isn't. The difference only shows up when the same pressure from that timeline hits it. Every fork was really the same question — _is this safe to retry, safe to audit, safe to run twice?_ — and now it has one home:
 
-| Then: a new system per incident | Now: one door, fixed answer |
-| --- | --- |
-| **Week 2 spike** — hand-build a queue + worker to run the send later | Running later, safely, is asked of the trigger or the effect itself |
-| **Month 2 silence** — a retry count in a worker nobody remembers | Retries are a property of the `fx` boundary every effect passes through |
-| **Month 4 audit** — a `sent_emails` table written by hand from a job | What was sent is already known — nothing sends outside `fx` |
-| **Month 6 double-submit** — dedup split across a queue and a DB | One call through one door — no second path for a duplicate |
+| Then: a new system per incident                                      | Now: one door, fixed answer                                             |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Week 2 spike** — hand-build a queue + worker to run the send later | Running later, safely, is asked of the trigger or the effect itself     |
+| **Month 2 silence** — a retry count in a worker nobody remembers     | Retries are a property of the `fx` boundary every effect passes through |
+| **Month 4 audit** — a `sent_emails` table written by hand from a job | What was sent is already known — nothing sends outside `fx`             |
+| **Month 6 double-submit** — dedup split across a queue and a DB      | One call through one door — no second path for a duplicate              |
 
 None of that required new code beyond what's above. It required the four lines to already be the kind of thing where those questions have a fixed answer, instead of a new one invented per team, per incident.
 

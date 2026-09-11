@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.1 — 2026-09-11
+
 ### ✨ Added
 
 #### Docs
@@ -27,6 +29,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Homepage hero law chip is just `on(Trigger) → Effects` (drops the muted
+  "the one law" label beside the formula). The trailing arrow stays hidden
+  until hover, then fades and slides in.
+- Homepage hero CTA row matches heights: both actions are `h-10`, same
+  horizontal padding and `text-sm`, stretched on `sm+` instead of centered
+  at unequal intrinsic sizes.
 - Homepage hero is one composed surface instead of a bare headline: chip,
   two-count headline with a spring settle, the positioning line, and two ways
   in (**Read the architecture** plus a copyable `bunx create-oke@latest`).
@@ -64,6 +72,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   are removed from `/`. The hero copy is stripped to essentials: no kicker
   (the chip says it), no TypeScript/version pills, and the lattice caption
   is one centered line (element, what it replaces, docs link).
+- Homepage hero tagline leads with the programming model: define behavior
+  once, then OKE derives the runtime, client, Console, and infrastructure.
 
 ### 🐛 Fixed
 
@@ -79,6 +89,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Homepage hero CTAs share a fixed `h-10`, matched 1px borders
+  (transparent on the primary), and `leading-none` so **Read the
+  architecture** and the copyable `bunx create-oke@latest` sit at the
+  same height (was 40px vs 39px from `text-sm` / `text-xs` line boxes).
 - Homepage code stage keys each Shiki pane before passing the array to the
   client tabs — clears the React “unique key” warning on `/`.
 - Docs MCP tools and tests resolve `understand/the-architecture` after the

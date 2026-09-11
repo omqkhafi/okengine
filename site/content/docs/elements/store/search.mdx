@@ -805,7 +805,7 @@ Headline numbers from the live-Postgres G17 gate (`OKE_TEST_POSTGRES=1`, Bun 1.4
 | Corpus size | BM25 (text) p50 | LSH/hybrid p50 | LSH precision@10 vs exact cosine | Guidance                                                                                 |
 | ----------- | --------------- | -------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
 | ≤10k        | ~1–5 ms         | ~1–9 ms        | 0.10–0.17 vector                 | Built-in hybrid is fine for ranking UX; LSH is not HNSW                                  |
-| ~100k       | ~21 ms          | ~31–34 ms      | 0.017 vector                      | Expect tens of ms; re-`EXPLAIN` after `ANALYZE`                                          |
+| ~100k       | ~21 ms          | ~31–34 ms      | 0.017 vector                     | Expect tens of ms; re-`EXPLAIN` after `ANALYZE`                                          |
 | ~1M         | ~0.3 s          | ~0.4 s         | 0.017 vector / 0 hybrid          | Prefer external `store.index` (pgvector / Meilisearch) for semantic recall at this scale |
 
 **Honest LSH note:** after the Hamming-rank fix (2026-09-11), vector precision@10 vs exact cosine is 0.17 at 1k, 0.10 at 10k, ~0.02 at 100k–1M on the G17 hash-bag corpus — a smooth drop, not the v0.19.0 zero collapse. Still **not** HNSW. Prefer BM25-only or `store.index` when semantic recall matters.

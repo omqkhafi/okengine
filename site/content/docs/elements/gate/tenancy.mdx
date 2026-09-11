@@ -267,9 +267,11 @@ import { z } from "zod";
 import { member } from "@/core/gate";
 
 export const switchTenant = on(
-  http.post({
-    in: z.object({ tenantId: z.string() }),
-  }).gate(member),
+  http
+    .post({
+      in: z.object({ tenantId: z.string() }),
+    })
+    .gate(member),
   flow({
     do: async ({ tenantId }, fx) => fx.auth.switchTenant(tenantId),
   }),

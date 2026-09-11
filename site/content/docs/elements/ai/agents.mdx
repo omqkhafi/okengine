@@ -54,9 +54,11 @@ import { supportAgent } from "@/core/ai";
 import { member } from "@/core/gate";
 
 export const assist = on(
-  http.post({
-    in: z.object({ query: z.string().min(1) }),
-  }).gate(member),
+  http
+    .post({
+      in: z.object({ query: z.string().min(1) }),
+    })
+    .gate(member),
   flow({
     do: async ({ query }, fx) => {
       return await fx.run(supportAgent, {

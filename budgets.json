@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-09-10T14:49:50.348Z",
-  "version": "0.19.0",
+  "measuredAt": "2026-09-11T17:48:37.151Z",
+  "version": "0.19.1",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 354564,
+      "value": 354572,
       "limit": 716800,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 19.242,
+      "value": 19.571,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,7 +55,7 @@
     {
       "id": "httpPingGzipBytes",
       "label": "HTTP ping app (gzip, externals)",
-      "value": 45134,
+      "value": 45133,
       "limit": 46037,
       "unit": "bytes",
       "gate": "regression",
@@ -75,7 +75,7 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 100443,
+      "value": 100543,
       "limit": 102452,
       "unit": "bytes",
       "gate": "regression",
@@ -175,7 +175,7 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 169859,
+      "value": 169963,
       "limit": 173257,
       "unit": "bytes",
       "gate": "regression",
@@ -185,7 +185,7 @@
     {
       "id": "export:./full",
       "label": "full",
-      "value": 110952,
+      "value": 111051,
       "limit": 113172,
       "unit": "bytes",
       "gate": "regression",
@@ -235,7 +235,7 @@
     {
       "id": "export:./kernel",
       "label": "kernel",
-      "value": 52903,
+      "value": 52904,
       "limit": 53962,
       "unit": "bytes",
       "gate": "regression",
@@ -245,7 +245,7 @@
     {
       "id": "export:./mcp",
       "label": "mcp",
-      "value": 9809,
+      "value": 9811,
       "limit": 10065,
       "unit": "bytes",
       "gate": "regression",
@@ -295,7 +295,7 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 32100,
+      "value": 32271,
       "limit": 32742,
       "unit": "bytes",
       "gate": "regression",
