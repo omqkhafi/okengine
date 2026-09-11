@@ -12,7 +12,7 @@ import { join } from "node:path";
 export interface DocsPage {
   /** URL slug under `/docs` (`""` for the index page). */
   readonly slug: string;
-  /** Content-relative path (e.g. `understand/the-problem.mdx`). */
+  /** Content-relative path (e.g. `understand/the-architecture.mdx`). */
   readonly path: string;
   /** Frontmatter title. */
   readonly title: string;
@@ -39,7 +39,7 @@ export interface DocsIndex {
   /**
    * Look up a page by slug or content path.
    *
-   * @param id - Slug (`understand/the-problem`) or path (`…/the-problem.mdx`)
+   * @param id - Slug (`understand/the-architecture`) or path (`…/the-architecture.mdx`)
    */
   readonly get: (id: string) => DocsPage | null;
   /**
@@ -203,7 +203,7 @@ export async function loadDocsIndex(
 }
 
 /**
- * @param relativePath - e.g. `understand/the-problem.mdx`
+ * @param relativePath - e.g. `understand/the-architecture.mdx`
  */
 function pathToSlug(relativePath: string): string {
   const noExt = relativePath.replace(/\.mdx?$/i, "");

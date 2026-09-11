@@ -37,7 +37,7 @@ export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
   ["endpoint", "auth"],
   ["endpoint", "session"],
   ["endpoint", "rate limit"],
-  ["endpoint", "feature flag"],
+  ["endpoint", "scope"],
   ["endpoint", "timeout"],
   ["endpoint", "database"],
   ["endpoint", "cache"],
@@ -136,21 +136,21 @@ export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
 
   // cache — invalidation is the seam, and it is never local.
   ["cache", "KV"],
-  ["cache", "TTL"],
+  ["cache", "every"],
   ["cache", "ABAC"],
   ["cache", "rate limit"],
-  ["cache", "feature flag"],
+  ["cache", "scope"],
   ["cache", "model calls"],
 
   // KV — the same Redis, four mental models deep.
-  ["KV", "TTL"],
+  ["KV", "every"],
   ["KV", "session"],
-  ["KV", "quota"],
+  ["KV", "rate limit"],
   ["KV", "push"],
 
   // file storage — bytes that outlive the row that points at them.
   ["file storage", "search index"],
-  ["file storage", "TTL"],
+  ["file storage", "every"],
   ["file storage", "ABAC"],
   ["file storage", "secrets"],
   ["file storage", "RAG"],
@@ -162,10 +162,15 @@ export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
   ["search index", "RAG"],
 
   // cron — the schedule is upstream of the work it starts.
-  ["cron", "TTL"],
-  ["cron", "quota"],
+  ["cron", "every"],
+  ["cron", "rate limit"],
   ["cron", "environment"],
   ["cron", "email"],
+
+  // every — the interval helper that used to be five different schedulers.
+  ["every", "session"],
+  ["every", "rate limit"],
+  ["every", "push"],
 
   // delay — backoff, and who is allowed to decide it.
   ["delay", "rate limit"],
@@ -175,11 +180,6 @@ export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
 
   // durable sleep — waiting is state, and state has an owner.
   ["durable sleep", "agents"],
-
-  // TTL — expiry, spelled differently by every system that has it.
-  ["TTL", "session"],
-  ["TTL", "rate limit"],
-  ["TTL", "push"],
 
   // auth — identity is an input to permission, and to the mail about it.
   ["auth", "session"],
@@ -192,23 +192,23 @@ export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
   ["session", "environment"],
 
   // ABAC — the policy you write twice: once in code, once in the query.
-  ["ABAC", "feature flag"],
+  ["ABAC", "scope"],
   ["ABAC", "agents"],
 
   // rate limit — every budget in the system, on a different clock.
-  ["rate limit", "quota"],
+  ["rate limit", "scope"],
   ["rate limit", "model calls"],
   ["rate limit", "SMS"],
 
-  // quota — the meter, the reset, and the mail when it runs out.
-  ["quota", "feature flag"],
-  ["quota", "email"],
-  ["quota", "model calls"],
+  // scope — Module:Action strings that policy and identity must agree on.
+  ["scope", "config"],
+  ["scope", "environment"],
+  ["scope", "email"],
 
-  // feature flag — a second answer to "may this happen", on its own dashboard.
-  ["feature flag", "config"],
-  ["feature flag", "environment"],
-  ["feature flag", "prompts"],
+  // public — intentionally unauthenticated surfaces still need a declared posture.
+  ["public", "rate limit"],
+  ["public", "environment"],
+  ["public", "config"],
 
   // secrets — every credential belongs to something.
   ["secrets", "config"],
@@ -231,7 +231,7 @@ export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
   ["SMS", "WhatsApp"],
 
   // push — the notification you must not send twice.
-  // (Its seams are listed above, under websocket, KV, TTL, and email.)
+  // (Its seams are listed above, under websocket, KV, every, and email.)
 
   // model calls — non-determinism with a price per token.
   ["model calls", "prompts"],

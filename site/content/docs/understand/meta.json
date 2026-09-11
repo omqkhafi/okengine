@@ -1,5 +1,5 @@
 {
   "title": "Understand",
   "icon": "Compass",
-  "pages": ["the-problem", "the-model", "the-vocabulary", "the-anatomy"]
+  "pages": ["the-architecture", "try-it"]
 }

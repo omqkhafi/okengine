@@ -1,0 +1,263 @@
+---
+title: "The Architecture"
+description: "Why backends drift apart, the one rule that stops it, and the five pieces behind every Flow."
+icon: "Compass"
+---
+
+Four lines ship the signup flow. Eight months later it is six files that disagree about retries, audits, and who is allowed to do what.
+
+This page shows that drift, the one rule that stops it, and the exact anatomy behind every Flow — in one sitting.
+
+<Callout title="The Law">
+  Every backend behavior is a Flow: `on(Trigger) → Effects`. One species; triggers are typed values. All world access goes through `fx`.
+</Callout>
+
+## The problem: three features, same wall
+
+**A signup flow.** A user registers. Send them a welcome email:
+
+```typescript
+app.post("/signup", async (req, res) => {
+  const user = await db.users.create(req.body);
+  await sendMail(user.email, "Welcome!", welcomeTemplate(user));
+  res.json(user);
+});
+```
+
+It works. It ships. Then a traffic spike, a silent failure, a compliance question, and a double-submit turn those four lines into six files — endpoint, queue, worker, Redis connection, mail client, audit table — that never agreed with each other about anything.
+
+**A payment webhook.** A provider confirms a charge. Mark the order paid. Simple — until the provider retries the same webhook twice during a network hiccup, and "mark the order paid" needs to somehow know it already ran.
+
+**A nightly report.** Summarize yesterday's activity and email it to managers. Trivial — until a manager's access gets revoked at 11:58pm and the report that runs at midnight has no idea the permission it checked when the feature was built isn't the permission that holds right now.
+
+Three teams. Three domains. Nobody on any of them talked to the other two. And all three land on the identical fork: **something has to happen later, exactly once, provably — and nothing in the original four lines said what "provably" would end up costing.**
+
+### Follow one all the way through
+
+Two weeks later, a launch drives a traffic spike, the mail provider starts returning `429`, and signups start failing because an unrelated email is slow. You move the send off the request path:
+
+```typescript
+app.post("/signup", async (req, res) => {
+  const user = await db.users.create(req.body);
+  emailQueue.add("welcome", { userId: user.id });
+  res.json(user);
+});
+```
+
+The endpoint is fast again. It's also no longer one system — it's an endpoint, a queue, a worker, and a Redis connection nobody else on the team knew existed until a missing `REDIS_URL` broke staging.
+
+<SixSystemsDrift />
+
+From here the same pattern repeats on a longer clock. A support ticket reveals a job failed silently — nobody had configured retries, so you add them, and now a specific number (3? 5? with what backoff?) lives in a file that nobody will remember the reasoning for in six weeks. Compliance asks for proof of every email sent — you add a table written to from inside the worker, and now that worker has two jobs instead of one, quietly capable of disagreeing with itself if the second write fails. Someone double-clicks submit — two jobs enqueue, two emails send, and idempotency becomes a fact that has to live in two systems that were never introduced to each other.
+
+None of these were mistakes. Each one was the correct call, made by a competent engineer, in direct response to something that actually happened.
+
+### What's actually going on
+
+Look at what the six resulting files have in common: none of them agree with each other about the same three things. What counts as "done." What happens on failure. Who's allowed to do this at all.
+
+That's the real cost — not the number of tools, but what sits between them:
+
+- **Failure means something different in each one.** A queue retry, an HTTP 500, and a rejected promise from a mail SDK are three unrelated shapes that all happen to mean "this didn't work."
+- **Permission has no fixed address.** It lives wherever whoever wrote that file remembered to put it — which means a reviewer can't point at one place and ask "is this checked?"
+- **Two systems both think they own the same fact.** The database says an order is paid. The already-running webhook handler doesn't know that yet. Nothing keeps them honest with each other in the gap.
+- **Nobody can see the whole thing at once.** There is no file, diagram, or dashboard where "the signup flow" exists as one object — only as the sum of files that happen to call each other.
+
+What would have to be true on day one for month eight to never happen?
+
+## The model: one rule, in two parts
+
+Every seam above came from the same root cause: each system involved had its own idea of when it should run and what it was allowed to touch, and nothing forced those ideas to agree with each other.
+
+OKE removes the disagreement by removing the choice. It's one rule, in two parts.
+
+**First: every trigger reduces to the same shape.** An HTTP request, a scheduled tick, a queue message, a database change — whatever wakes the code up, what follows has one identical anatomy: `on(Trigger) → Effects`. Not four systems that happen to look similar. One system, with four ways to wake it up.
+
+**Second: every effect passes through one door.** Nothing is allowed to touch a database, send an email, check a permission, or read the clock on its own — all of it goes through a single surface. Not because that's tidier. Because it's the only way retries, auditing, idempotency, and permission checks stop being infrastructure every team reinvents at the exact moment they get burned by not having it.
+
+<FlowShape />
+
+That's the whole model. Not a bigger toolbox — a smaller number of things that are allowed to happen at all.
+
+### What OKE is — and isn't
+
+OKE is a backend programming model: behavior is expressed as Flows, effects are captured through `fx`, and the compiler turns that model into a versioned Manifest that powers the rest of the backend.
+
+| OKE is not … | OKE is … |
+| --- | --- |
+| Another queue, ORM, or mailer to wire up | One Flow species every trigger wakes up |
+| A toolbox of forty clients with forty configs | Eight elements with irreducible physics — nothing else gets added |
+| A platform you deploy into | TypeScript you host; Client, Console, and MCP derive from your Manifest |
+
+One shape for every trigger, one door for every effect, a fixed vocabulary for what the door allows — that's what this project built. It's called **OKE**.
+
+<sub>
+  *OKE isn't an acronym for anything in the code. It comes from Omq Khafi — the organization this
+  engine grew out of — with "Engine" appended: **O**mq **K**hafi **E**ngine.*
+</sub>
+
+## The vocabulary: eight elements, closed set
+
+The door from the last section isn't open-ended — it recognizes a fixed set of things it's willing to do. Each one made the cut because it has _irreducible physics_: behavior that breaks if you tried to fake it using one of the others.
+
+<Features />
+
+| Element     | What it is           | What it replaces                                                        |
+| ----------- | -------------------- | ----------------------------------------------------------------------- |
+| **Flow**    | Execution & behavior | endpoint, handler, consumer, job, workflow, webhook                     |
+| **Signal**  | Data in motion       | queue, pub/sub, stream, websocket, SSE, event bus                       |
+| **Store**   | Data at rest         | relational database, cache, key-value store, file storage, search index |
+| **Clock**   | Time & schedules     | cron, every, delay, durable sleep, timeout                              |
+| **Gate**    | Permission to act    | auth, session, tenancy, RBAC, scope, rate limit, public                 |
+| **Vault**   | Protected knowledge  | secrets, encryption keys, rotation, environment variables               |
+| **Channel** | Reaching a human     | transactional email, SMS, push notifications, receipts                  |
+| **AI**      | Machine intelligence | model calls, structured prompts, embeddings, agents, RAG                |
+
+Read the right column as the honest answer to "what would I have reached for before this?" Every item in it is a separate tool with its own configuration, its own failure modes, and its own place to go wrong.
+
+The left column is the same ground, covered by something with one shared door and one shared set of guarantees. Where that distinction is real, it gets a name. Where it isn't, it doesn't — which is why the list stops at eight instead of growing indefinitely.
+
+## The anatomy: five pieces behind every Flow
+
+Everything a Flow does reduces to one line:
+
+```typescript
+on(
+  trigger,
+  flow({
+    do: (input, fx) => {
+      /* ... */
+    },
+  }),
+);
+```
+
+If that line doesn't mean much yet, that's what this section is for. Five pieces make it up. We'll take them one at a time, then put them together using a complete signup example.
+
+### `on(...)` — wires a trigger to a flow
+
+`on` does exactly one thing: it connects "something that can happen" to "code that should run when it does." Nothing executes until this connection exists.
+
+```typescript
+on(someTrigger, someFlow);
+```
+
+That's the whole job. The interesting parts are what goes in each slot.
+
+### A trigger — the answer to "when"
+
+The first argument to `on` is the trigger: whatever wakes the code up. A trigger doesn't run any of your logic — it only answers one question: _when should this happen?_
+
+```typescript
+http.post(); // path from the file tree — e.g. src/flows/users/signup.ts → POST /users/signup
+```
+
+There are five kinds of trigger in total — the table at the end of this page lists them. For now: the trigger is the _when_, and it's the only thing that changes between an endpoint, a scheduled job, and everything else.
+
+<FlowTriggers />
+
+### `flow(...)` — the actual unit of work
+
+The second argument to `on` is a Flow — declared with the `flow()` function. It answers _what_: what work is this, and what does it promise about its inputs and outputs?
+
+```typescript
+flow({
+  do: /* the actual code — next */,
+});
+```
+
+Omit the name on tree files — the compiler stamps `unit.export` (e.g. `users.signup`).
+Pass `flow("users.signup", { … })` only for control: barrels, stable names across
+moves, or call-only Flows you `fx.call` by name.
+
+### `do` — the code that actually runs
+
+`do` is a function you write. It answers _how_. It receives two things: `input` (your data) and `fx` (next). Everything your Flow actually does lives here.
+
+```typescript
+do: async (input, fx) => {
+  return { ok: true };
+};
+```
+
+### `fx` — the only door to the outside world
+
+`fx` is the second argument to `do`, and it's the piece the other four exist to protect. The rule is simple and absolute: **your Flow is not allowed to read a database, send an email, check a clock, or touch anything outside itself except through `fx`.**
+
+```typescript
+do: async (input, fx) => {
+  const user = await fx.store(db).insert(users).values(input); // the database, through fx
+  await fx.send(welcomeEmail, { to: user.email }); // another system, through fx
+  return user;
+};
+```
+
+This one rule is what made the month-8 drift above avoidable: if `fx` is the only door, retries, auditing, and idempotency stop being separate systems teams build by hand, and become properties of the one boundary everything already passes through.
+
+### Putting the five pieces together
+
+Here is the complete signup flow, with every piece labeled where it sits:
+
+```typescript title="src/flows/users/signup.ts"
+export const signup = on(
+  http.post(), // ← trigger: when (stamped POST /users/signup)
+  flow({
+    // ↑ flow: what (stamped users.signup)
+    do: async (input, fx) => {
+      // ← do: how
+      const user = await fx.store(db).insert(users).values(input); // ← fx: the only way out
+      await fx.send(welcomeEmail, { to: user.email, data: { name: user.name } });
+      return user;
+    },
+  }),
+);
+```
+
+<Callout title="Call-only flows">
+  A `flow(...)` declared without `on(...)` around it is internal — nothing outside your code can
+  start it. Other flows invoke it directly with `fx.call(flowRef, input)`.
+</Callout>
+
+### Checking it against the timeline
+
+Nothing about the code above looks more complicated than the four lines that started the drift — because it isn't. The difference only shows up when the same pressure from that timeline hits it. Every fork was really the same question — _is this safe to retry, safe to audit, safe to run twice?_ — and now it has one home:
+
+| Then: a new system per incident | Now: one door, fixed answer |
+| --- | --- |
+| **Week 2 spike** — hand-build a queue + worker to run the send later | Running later, safely, is asked of the trigger or the effect itself |
+| **Month 2 silence** — a retry count in a worker nobody remembers | Retries are a property of the `fx` boundary every effect passes through |
+| **Month 4 audit** — a `sent_emails` table written by hand from a job | What was sent is already known — nothing sends outside `fx` |
+| **Month 6 double-submit** — dedup split across a queue and a DB | One call through one door — no second path for a duplicate |
+
+None of that required new code beyond what's above. It required the four lines to already be the kind of thing where those questions have a fixed answer, instead of a new one invented per team, per incident.
+
+### Five kinds of trigger
+
+`flow`, `do`, and `fx` never change shape. Only the trigger does — and there are exactly five kinds, one per element that can independently wake a Flow up:
+
+| Trigger                                             | Element | Starts When                      |
+| --------------------------------------------------- | ------- | -------------------------------- |
+| `http.post()` (path from file tree)                 | Flow    | A request arrives                |
+| `clock("name", { every: "10m" })`                   | Clock   | A time interval elapses          |
+| `signal.once("name", {…})` / `.broadcast` / `.live` | Signal  | Another flow announces something |
+| `db.table(users).changed("email")`                  | Store   | A database row changes           |
+| `mcp.tool("name")`                                  | AI      | An AI agent calls it             |
+
+The Elements section walks through each element in depth — this is just enough to recognize them when you see them.
+
+## Where this goes next
+
+You now hold the whole model: the drift, the rule, the eight elements, the five-piece anatomy. Don't read more — run it. From an empty folder to this exact signup Flow answering a real request, in one sitting:
+
+<Cards>
+  <Card
+    title="Try It"
+    description="From an empty folder to a Flow running in the Console — one sitting, minimal detour."
+    href="/docs/understand/try-it"
+  />
+  <Card
+    title="Elements"
+    description="When you're back: Flow, Signal, Store, Clock, Gate, Vault, Channel, AI — each in depth."
+    href="/docs/elements"
+  />
+</Cards>

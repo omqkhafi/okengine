@@ -12,6 +12,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+#### Docs
+
+- Features eight-element cards match shipped API kinds: **Flow**
+  `http · signal · cron · cdc`; **Clock** `cron · every · sleep · now` (TTL
+  is Store KV, not Clock); **Vault** drops aspirational `fp`; **AI**
+  `model · prompt · embed · agent` (not `noPii` / `RAG` kinds); **Channel**
+  `whatsapp` label; **Gate** `policy · scope · rate · public`. Descriptions
+  and zoo Clock concern `every` (was `TTL`) stay aligned.
+- **Understand is now one page: The Architecture** (`/docs/understand/the-architecture`). Merges The Problem, The Model, The Vocabulary, and The Anatomy into a single narrative — drift → one rule → eight elements → five-piece Flow anatomy — with the teaching figures placed where they prove the claim (`SixSystemsDrift`, `FlowShape`, `Features`, `FlowTriggers`). Pain-first hook, "what OKE is — and isn't" positioning block, then/now timeline table, single next step (Try It). Old URLs redirect. Try It stays separate.
+
 ### 🐛 Fixed
 
 #### Runtime
@@ -26,6 +38,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Docs MCP tools and tests resolve `understand/the-architecture` after the
+  Understand section consolidation (was stale `understand/the-problem`).
+- **Try It** lives at `/docs/understand/try-it` (after The Anatomy). The old
+  `/docs/ai/try-it` URL redirects. Sidebar no longer splices it out of AI
+  Resources.
 - Store Search G17 table and LSH retrieval copy match Hamming-rank query
   (was Hamming-1 / near-zero P@10).
 - Element pages still showed invoke contracts on `flow()` after the v0.19.0

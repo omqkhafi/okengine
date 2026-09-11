@@ -27,17 +27,42 @@ const config: NextConfig = {
       },
       {
         source: "/docs/reference/manifest",
-        destination: "/docs/understand/the-model",
+        destination: "/docs/understand/the-architecture",
         permanent: true,
       },
       {
         source: "/docs/reference/architecture",
-        destination: "/docs/understand/the-model",
+        destination: "/docs/understand/the-architecture",
+        permanent: true,
+      },
+      {
+        source: "/docs/understand/the-problem",
+        destination: "/docs/understand/the-architecture",
+        permanent: true,
+      },
+      {
+        source: "/docs/understand/the-model",
+        destination: "/docs/understand/the-architecture",
+        permanent: true,
+      },
+      {
+        source: "/docs/understand/the-vocabulary",
+        destination: "/docs/understand/the-architecture",
+        permanent: true,
+      },
+      {
+        source: "/docs/understand/the-anatomy",
+        destination: "/docs/understand/the-architecture",
         permanent: true,
       },
       {
         source: "/docs/recipes/local-ai",
         destination: "/docs/recipes/openrouter",
+        permanent: true,
+      },
+      {
+        source: "/docs/ai/try-it",
+        destination: "/docs/understand/try-it",
         permanent: true,
       },
     ];

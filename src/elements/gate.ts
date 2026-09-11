@@ -1,7 +1,7 @@
 /**
  * Gate element — permission to act.
  *
- * Physics: auth · session · ABAC · rate limit · quota · feature flag.
+ * Physics: auth · session · ABAC · scope · rate limit · public.
  * Rate strategies are atomic Lua on the kv driver.
  *
  * Drivers: inherits `store.kv` (`memory` · `redis`).

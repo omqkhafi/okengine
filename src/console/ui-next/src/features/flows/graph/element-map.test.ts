@@ -169,7 +169,7 @@ describe("typesOfElement", () => {
       "policy",
       "scope",
       "rate",
-      "flag",
+      "public",
     ]);
     expect(typesOfElement(FLOWS_TEST_MANIFEST, "channel").map((t) => t.label)).toEqual([
       "email",

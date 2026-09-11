@@ -25,12 +25,7 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
 }[] = [
   {
     heading: "Understand",
-    slugs: [
-      "understand/the-problem",
-      "understand/the-model",
-      "understand/the-vocabulary",
-      "understand/the-anatomy",
-    ],
+    slugs: ["understand/the-architecture", "understand/try-it"],
   },
   {
     heading: "Elements",
@@ -206,8 +201,7 @@ export function buildLlmsTxt(
     "",
   ];
   const whenToUse = [
-    pageLinkFromSlug(bySlug, "understand/the-problem", origin),
-    pageLinkFromSlug(bySlug, "understand/the-model", origin),
+    pageLinkFromSlug(bySlug, "understand/the-architecture", origin),
     linkLine("AGENTS.md", absoluteDocsUrl("/llms/agents", origin), extraNote("AGENTS.md")),
     pageLinkFromSlug(bySlug, "ai/mcp", origin),
     pageLinkFromSlug(bySlug, "reference/cli", origin),
@@ -293,7 +287,7 @@ export function buildLlmsCatalog(
 
 /**
  * @param bySlug - Pages keyed by joined slug
- * @param slug - Handbook slug such as `understand/the-problem`
+ * @param slug - Handbook slug such as `understand/the-architecture`
  * @param origin - Absolute origin
  */
 function pageLinkFromSlug(bySlug: Map<string, LlmsPageRef>, slug: string, origin: string): string {

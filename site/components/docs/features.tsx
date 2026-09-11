@@ -9,36 +9,31 @@
 
 import {
   Activity,
-  AlarmClock,
   ArrowRight,
+  BadgeCheck,
   Bell,
-  BookOpen,
   Bot,
   Braces,
   CircleDot,
   Database,
-  Fingerprint,
-  Flag,
   FolderOpen,
   Gauge,
-  Hourglass,
-  Inbox,
   KeyRound,
-  ListOrdered,
   Mail,
   MessageSquare,
   MessagesSquare,
   Moon,
   Quote,
+  Radio,
+  Repeat,
   Search,
   Server,
   Settings2,
   Share2,
-  ShieldBan,
   ShieldCheck,
+  Sparkles,
   Timer,
-  Webhook,
-  Workflow,
+  Unlock,
   type LucideIcon,
 } from "lucide-react";
 import { MotionConfig, motion, type Transition, type Variants } from "framer-motion";
@@ -186,9 +181,9 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
           active={active}
           items={[
             { label: "http", icon: ArrowRight, tone: primary },
-            { label: "webhook", icon: Webhook, tone: "amber" },
-            { label: "consumer", icon: Inbox, tone: "teal" },
-            { label: "durable", icon: Workflow, tone: "orange" },
+            { label: "signal", icon: Radio, tone: "amber" },
+            { label: "cron", icon: Timer, tone: "teal" },
+            { label: "cdc", icon: Repeat, tone: "orange" },
           ]}
         />
       );
@@ -220,10 +215,10 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: "clock", icon: Timer, tone: primary },
-            { label: "delay", icon: Hourglass, tone: "amber" },
+            { label: "cron", icon: Timer, tone: primary },
+            { label: "every", icon: Repeat, tone: "amber" },
             { label: "sleep", icon: Moon, tone: "teal" },
-            { label: "ttl", icon: AlarmClock, tone: "cyan" },
+            { label: "now", icon: Activity, tone: "cyan" },
           ]}
         />
       );
@@ -232,10 +227,10 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: "gate", icon: ShieldCheck, tone: primary },
-            { label: "rate", icon: Gauge, tone: "amber" },
-            { label: "quota", icon: ListOrdered, tone: "teal" },
-            { label: "flag", icon: Flag, tone: "orange" },
+            { label: "policy", icon: ShieldCheck, tone: primary },
+            { label: "scope", icon: BadgeCheck, tone: "amber" },
+            { label: "rate", icon: Gauge, tone: "teal" },
+            { label: "public", icon: Unlock, tone: "orange" },
           ]}
         />
       );
@@ -244,10 +239,9 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: "fp", icon: Fingerprint, tone: primary },
-            { label: "secret", icon: KeyRound, tone: "amber" },
-            { label: "config", icon: Settings2, tone: "teal" },
-            { label: "env", icon: Server, tone: "orange" },
+            { label: "secret", icon: KeyRound, tone: primary },
+            { label: "config", icon: Settings2, tone: "amber" },
+            { label: "env", icon: Server, tone: "teal" },
           ]}
         />
       );
@@ -258,7 +252,7 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
           items={[
             { label: "email", icon: Mail, tone: primary },
             { label: "SMS", icon: MessageSquare, tone: "teal" },
-            { label: "wa", icon: MessagesSquare, tone: "orange" },
+            { label: "whatsapp", icon: MessagesSquare, tone: "orange" },
             { label: "push", icon: Bell, tone: "amber" },
           ]}
         />
@@ -268,10 +262,10 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: "noPii", icon: ShieldBan, tone: primary },
+            { label: "model", icon: Sparkles, tone: primary },
             { label: "prompt", icon: Quote, tone: "amber" },
-            { label: "agent", icon: Bot, tone: "teal" },
-            { label: "RAG", icon: BookOpen, tone: "orange" },
+            { label: "embed", icon: Braces, tone: "teal" },
+            { label: "agent", icon: Bot, tone: "orange" },
           ]}
         />
       );

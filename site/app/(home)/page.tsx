@@ -36,19 +36,9 @@ const START_HERE: ReadonlyArray<{
   readonly body: string;
 }> = [
   {
-    href: "/docs/understand/the-problem",
-    title: "The Problem",
-    body: "Why backends become fragmented across forty tools.",
-  },
-  {
-    href: "/docs/understand/the-model",
-    title: "The Model",
-    body: "One law, eight elements, one contract.",
-  },
-  {
-    href: "/docs/understand/the-anatomy",
-    title: "The Anatomy",
-    body: "First flow, live execution, and typed verification.",
+    href: "/docs/understand/the-architecture",
+    title: "The Architecture",
+    body: "Why backends drift, the one rule, and the five pieces behind every Flow.",
   },
 ];
 
@@ -330,7 +320,7 @@ export default function HomePage() {
               </p>
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Link
-                  href="/docs/understand/the-anatomy"
+                  href="/docs/understand/the-architecture"
                   className="group inline-flex items-center bg-fd-foreground px-5 py-2.5 text-sm font-medium text-fd-background transition-opacity hover:opacity-90"
                 >
                   Get started

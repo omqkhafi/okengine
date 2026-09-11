@@ -4,7 +4,6 @@
 
 import {
   DashboardSpeed01Icon,
-  Flag01Icon,
   Key01Icon,
   SecurityCheckIcon,
   UserIcon,
@@ -12,8 +11,8 @@ import {
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 
-/** Chip label — graph vocabulary: policy · scope · rate · flag · public. */
-export type GateChipKind = "policy" | "scope" | "rate" | "flag" | "public";
+/** Chip label — graph vocabulary: policy · scope · rate · public. */
+export type GateChipKind = "policy" | "scope" | "rate" | "public";
 
 /** One gate evaluated on a run, enriched from Manifest when present. */
 export type TraceGateInfo = {
@@ -32,12 +31,11 @@ export const GATE_CHIP_ICONS: Readonly<Record<GateChipKind, ElementHugeIcon>> = 
   policy: SecurityCheckIcon,
   scope: Key01Icon,
   rate: DashboardSpeed01Icon,
-  flag: Flag01Icon,
   public: UserIcon,
 };
 
 /**
- * Chip kind: rate / flag / public by name; policy with scopes is `scope`.
+ * Chip kind: rate / public by name; policy with scopes is `scope`.
  *
  * @param name - Gate name
  * @param kind - Manifest `kind`
@@ -49,7 +47,6 @@ export function gateChipKind(
   scopes: readonly string[] | undefined,
 ): GateChipKind | null {
   if (kind === "rate" || name.startsWith("rate:")) return "rate";
-  if (name.startsWith("flag:")) return "flag";
   if (name === "public") return "public";
   if ((scopes?.length ?? 0) > 0) return "scope";
   if (kind === "policy" || kind === "all") return "policy";

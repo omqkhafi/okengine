@@ -290,9 +290,9 @@ describe("traceGateInfos", () => {
     expect(rows.map((r) => r.variant)).toEqual(["scope", "rate"]);
   });
 
-  test("labels flag: and public by name", () => {
-    expect(traceGateInfos(["flag:maintenance", "public"], null).map((r) => r.variant)).toEqual([
-      "flag",
+  test("labels public by name; undeclared names stay null", () => {
+    expect(traceGateInfos(["unknown-gate", "public"], null).map((r) => r.variant)).toEqual([
+      null,
       "public",
     ]);
   });
@@ -302,10 +302,9 @@ describe("traceGateInfos", () => {
       gateChipIcon("policy"),
       gateChipIcon("scope"),
       gateChipIcon("rate"),
-      gateChipIcon("flag"),
       gateChipIcon("public"),
     ];
-    expect(new Set(icons).size).toBe(5);
+    expect(new Set(icons).size).toBe(4);
     expect(gateChipIcon("scope")).toBe(GATE_CHIP_ICONS.scope);
     expect(gateChipIcon(null)).toBe(ELEMENT_ICONS.gate.icon);
   });

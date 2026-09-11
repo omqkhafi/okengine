@@ -3,7 +3,7 @@
  *
  * Center is the law (OKE). Eight element discs sit on the inner orbit.
  * Each element's kinds cluster on that element's spoke (Store
- * SQL/KV/Files/Index, Gate policy/scope/rate/flag, …) — not a shared
+ * SQL/KV/Files/Index, Gate policy/scope/rate/public, …) — not a shared
  * second ring. Units sit on the outer ring. Couplings run unit → type
  * → element → law. Live heat comes from the Traces ledger.
  */
@@ -386,7 +386,7 @@ export const ELEMENT_TYPE_KINDS: Record<OkeElement, readonly ElementTypeKind[]> 
     { kind: "policy", label: "policy" },
     { kind: "scope", label: "scope" },
     { kind: "rate", label: "rate" },
-    { kind: "flag", label: "flag" },
+    { kind: "public", label: "public" },
   ],
   vault: [
     { kind: "secret", label: "secret" },
@@ -430,7 +430,7 @@ export function typesOfElement(
 
 function gateTypeKind(name: string, gate: Gate | undefined): string {
   if (gate?.kind === "rate" || name.startsWith("rate:")) return "rate";
-  if (name.startsWith("flag:")) return "flag";
+  if (name === "public") return "public";
   if ((gate?.scopes?.length ?? 0) > 0) return "scope";
   return "policy";
 }

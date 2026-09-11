@@ -1,7 +1,7 @@
 /**
  * Gate declaration — policy · rate · all.
  *
- * Physics: auth · session · ABAC · rate limit · quota · feature flag.
+ * Physics: auth · session · ABAC · scope · rate limit · public.
  */
 
 import type { RateStrategy } from "../../manifest/types.ts";

@@ -14,11 +14,8 @@ import { BRAND_MARKS, type BrandMarkId } from "@/components/chrome/brand-marks";
 const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs": "BookOpen",
   "/docs/understand": "Compass",
-  "/docs/understand/the-problem": "TriangleAlert",
-  "/docs/understand/the-model": "Compass",
-  "/docs/understand/the-vocabulary": "Boxes",
-  "/docs/understand/the-anatomy": "PenTool",
-  "/docs/ai/try-it": "Terminal",
+  "/docs/understand/the-architecture": "Compass",
+  "/docs/understand/try-it": "Terminal",
   "/docs/elements": "Boxes",
   "/docs/elements/flow": "Workflow",
   "/docs/elements/flow/http": "Globe",

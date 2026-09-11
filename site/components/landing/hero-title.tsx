@@ -163,7 +163,7 @@ export function HeroTitle() {
       >
         <motion.div variants={settleVariants} data-hero-interactive>
           <Link
-            href="/docs/understand/the-model"
+            href="/docs/understand/the-architecture"
             className="group inline-flex w-fit items-center gap-2 rounded-full border border-fd-border bg-fd-card px-3 py-1 text-[11px] text-fd-muted-foreground transition-colors hover:bg-fd-secondary/60"
           >
             <span className="font-mono text-fd-foreground">on(Trigger) → Effects</span>
@@ -275,7 +275,7 @@ export function HeroTitle() {
           data-hero-interactive
         >
           <Link
-            href="/docs/understand/the-anatomy"
+            href="/docs/understand/the-architecture"
             className="inline-flex items-center gap-1.5 bg-fd-primary px-5 py-2.5 text-xs font-medium text-fd-primary-foreground transition-opacity hover:opacity-90 sm:text-sm"
           >
             Get started

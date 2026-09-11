@@ -229,25 +229,19 @@ function GroupBody({
   );
 }
 
-/** Pages that land under the `06 AI Resources` stage (not Try It / Overview). */
-const AI_RESOURCES_STAGE_URLS = new Set(["/docs/ai/mcp", "/docs/ai/skills", "/docs/ai/llms-txt"]);
-
 /**
  * Unwraps intermediate grouping folders:
  * - `Start`: renders flat as top-level links at the head of the sidebar.
- * - `Understand`: renders flat under `01 UNDERSTAND`; Try It is appended after
- *   The Anatomy.
+ * - `Understand`: renders flat under `01 UNDERSTAND` (The Problem through Try It).
  * - `Elements`: each element (`Flow`, `Signal`, `Store`, etc.) becomes an accordion
  *   under `02 ELEMENTS`, omitting the redundant /docs/elements landing page.
  * - `Client`: renders flat under `04 CLIENT` (Overview, Calling, Auth, Live, React).
- * - `AI Resources`: MCP / Skills / llms.txt under `06 AI Resources`; Try It moves
- *   under Understand; the `/docs/ai` Overview landing is hidden from the nav.
+ * - `AI Resources`: MCP / Skills / llms.txt under `06 AI Resources`; the `/docs/ai`
+ *   Overview landing is hidden from the nav.
  * - `Reference`: renders flat under `05 REFERENCE`, omitting the Overview landing.
  */
 function normalizeSidebarTree(tree: PageTree.Root): PageTree.Root {
   const children: PageTree.Node[] = [];
-  const aiResourcesStage: PageTree.Node[] = [];
-  let tryItPage: PageTree.Item | null = null;
 
   for (const node of tree.children) {
     if (isFolder(node) && (node.name === "Understand" || node.$id === "understand")) {
@@ -276,16 +270,8 @@ function normalizeSidebarTree(tree: PageTree.Root): PageTree.Root {
           children.push(child);
           continue;
         }
-        if (child.url === "/docs/ai/try-it") {
-          tryItPage = child;
-          continue;
-        }
         // Skip the /docs/ai Overview landing page in the sidebar list
         if (child.url === node.index?.url || child.url === "/docs/ai") {
-          continue;
-        }
-        if (AI_RESOURCES_STAGE_URLS.has(child.url)) {
-          aiResourcesStage.push(child);
           continue;
         }
         children.push(child);
@@ -306,39 +292,7 @@ function normalizeSidebarTree(tree: PageTree.Root): PageTree.Root {
     }
   }
 
-  const ordered: PageTree.Node[] = [];
-  let tryItInserted = false;
-  let aiStageInserted = false;
-
-  for (const node of children) {
-    ordered.push(node);
-    if (
-      !tryItInserted &&
-      tryItPage &&
-      node.type === "page" &&
-      node.url === "/docs/understand/the-anatomy"
-    ) {
-      ordered.push(tryItPage);
-      tryItInserted = true;
-    }
-    if (
-      node.type === "separator" &&
-      typeof node.name === "string" &&
-      node.name.includes("06 AI Resources")
-    ) {
-      ordered.push(...aiResourcesStage);
-      aiStageInserted = true;
-    }
-  }
-
-  if (!tryItInserted && tryItPage) {
-    ordered.push(tryItPage);
-  }
-  if (!aiStageInserted && aiResourcesStage.length > 0) {
-    ordered.push(...aiResourcesStage);
-  }
-
-  return { ...tree, children: ordered };
+  return { ...tree, children };
 }
 
 /**
