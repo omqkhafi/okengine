@@ -807,8 +807,8 @@ Default is insert-once; pass `{ onExisting: "update" }` to overwrite.
 </Callout>
 
 `db.table(orders).changed(column?)` builds a CDC trigger for `on(…)`. Input is
-always `{ before, after }`. `changed("status")` stamps a **column** name on the
-Manifest — it is not an op filter.
+`{ before, after }` plus `table` / `action` / `id`. `changed("status")` stamps a
+**column** name on the Manifest — it is not an op filter.
 
 ```typescript title="src/flows/orders/on-status.ts"
 import { on, flow } from "okengine";

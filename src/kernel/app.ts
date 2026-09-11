@@ -144,6 +144,14 @@ import { recordObservedEffect } from "./effects.ts";
 import { cacheDimensionOf, createRunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
 import type { Effects, ResourceRef } from "../manifest/types.ts";
+import {
+  enrichCdcPayload,
+  pkColumnByTableFromManifest,
+  type CdcPayloadInput,
+  type DeclaredPk,
+} from "./cdc-payload.ts";
+
+export type { CdcAction, CdcPayload, CdcPayloadInput } from "./cdc-payload.ts";
 
 /**
  * Auto-cache helpers — loaded only when a Store runtime is bound.
@@ -334,12 +342,6 @@ export interface OkeOptions {
 
 /** Readiness probe state — see `GET /_/ready`. */
 export type ReadyState = "booting" | "orphan_scan" | "ready";
-
-/** Payload for a CDC invocation. */
-export interface CdcPayload {
-  readonly before: Record<string, unknown> | null;
-  readonly after: Record<string, unknown> | null;
-}
 
 /** Result of executing a flow. */
 export interface ExecuteResult {
@@ -583,10 +585,14 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
    * Invoke all flows bound to a CDC table change.
    *
    * @param tableName - Table name
-   * @param payload - before/after
+   * @param payload - `{ before, after }` (and optional `table` / `action` / `id`)
    * @param column - Optional column filter
    */
-  dispatchCdc(tableName: string, payload: CdcPayload, column?: string): Promise<ExecuteResult[]>;
+  dispatchCdc(
+    tableName: string,
+    payload: CdcPayloadInput,
+    column?: string,
+  ): Promise<ExecuteResult[]>;
   /**
    * Call a flow by name/handle (same path as `fx.call`).
    *
@@ -938,6 +944,7 @@ export function oke(options: OkeOptions): OkeApp {
   const flushedPlugins = new WeakMap<AnyFlowDef, Set<PluginDef>>();
   /** Runtime route table — types accumulate on the returned {@link OkeApp}. */
   const routes: RuntimeRouteMap = {};
+  let cdcPkByTable: ReadonlyMap<string, DeclaredPk> = pkColumnByTableFromManifest(options.manifest);
 
   let authMaterialization: AuthHttpMaterialization | undefined;
   let wiredAuth: WiredGateAuth | undefined;
@@ -1352,6 +1359,8 @@ export function oke(options: OkeOptions): OkeApp {
     const baseClocks = overrides?.clocks ?? effectiveClocks;
     const baseChannel = overrides?.channel ?? effectiveChannel;
     const mergedCatalog = mergeTemplateCatalogs(baseChannel?.catalog, ...pluginChannelCatalogs);
+
+    cdcPkByTable = pkColumnByTableFromManifest(overrides?.manifest ?? options.manifest);
 
     const merged: BootOptions = {
       env: bootEnv,
@@ -2410,6 +2419,12 @@ export function oke(options: OkeOptions): OkeApp {
       return results;
     },
     async dispatchCdc(tableName, payload, column) {
+      const enriched = enrichCdcPayload(
+        tableName,
+        payload.before ?? null,
+        payload.after ?? null,
+        cdcPkByTable.get(tableName),
+      );
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
         if (b.trigger.kind !== "cdc") continue;
@@ -2418,7 +2433,7 @@ export function oke(options: OkeOptions): OkeApp {
         if (column !== undefined && t.column !== undefined && t.column !== column) {
           continue;
         }
-        results.push(await execute(b.flow, payload, t));
+        results.push(await execute(b.flow, enriched, t));
       }
       return results;
     },

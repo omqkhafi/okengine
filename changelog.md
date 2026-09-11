@@ -25,6 +25,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   applies).
 - Duplicate Flow names fail **OKE1070** at construction (and extract), matching
   HTTP / live / MCP duplicate-registration posture.
+- CDC `do` input (`CdcPayload`) always includes `table`, `action`
+  (`"created"` / `"updated"` / `"deleted"` from before/after presence), and
+  `id` (the table's declared primary-key value). Destructure only
+  `{ before, after }` when that's all you need.
 
 ### 💥 Breaking Changes
 
@@ -43,6 +47,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Clock examples across docs, Keel, and create-oke advanced prefer named helpers
   (`clock.every` / `daily` / `weekly`); bare `clock(name, opts)` stays valid and is
   called out where the generic form is deliberate.
+- CDC consumers docs show both `{ before, after }` and the enriched
+  `{ table, action, id }` form; the audit-log example uses the enriched fields.
 - Scaffold `AGENTS.md` and the oke-docs skeleton link to The Architecture.
 - Dropped all permanent redirects from `site/next.config.ts`.
 - Site `headerGeometry` home assertion matches the centered full-bleed hero (no

@@ -179,14 +179,14 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
 
 <FlowTriggers />
 
-| Trigger   | Bind                                           | Starts when         | `do` input                 |
-| --------- | ---------------------------------------------- | ------------------- | -------------------------- |
-| HTTP      | `on(http.get(), flow)`                         | A request           | Merged path / query / body |
-| Signal    | `on(signalHandle, flow)`                       | `fx.emit`           | Payload (`schema`)         |
-| Clock     | `on(clockDecl, flow)`                          | Scheduler tick      | none (`_`)                 |
-| CDC       | `on(db.table(t).changed(), flow)`              | Committed SQL write | `{ before, after }`        |
-| Call-only | `call("name", { in, out, do, … })`             | `fx.call`           | Callee `in`                |
-| MCP       | `on(mcp.tool("x", { in, out }).gate(…), flow)` | MCP `tools/call`    | Tool args                  |
+| Trigger   | Bind                                           | Starts when         | `do` input                             |
+| --------- | ---------------------------------------------- | ------------------- | -------------------------------------- |
+| HTTP      | `on(http.get(), flow)`                         | A request           | Merged path / query / body             |
+| Signal    | `on(signalHandle, flow)`                       | `fx.emit`           | Payload (`schema`)                     |
+| Clock     | `on(clockDecl, flow)`                          | Scheduler tick      | none (`_`)                             |
+| CDC       | `on(db.table(t).changed(), flow)`              | Committed SQL write | `{ before, after, table, action, id }` |
+| Call-only | `call("name", { in, out, do, … })`             | `fx.call`           | Callee `in`                            |
+| MCP       | `on(mcp.tool("x", { in, out }).gate(…), flow)` | MCP `tools/call`    | Tool args                              |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams), not as a worker.
 

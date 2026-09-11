@@ -4,7 +4,9 @@
 
 export {
   oke,
+  type CdcAction,
   type CdcPayload,
+  type CdcPayloadInput,
   type ExecuteResult,
   type OkeApp,
   type OkeOptions,

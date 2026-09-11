@@ -29,7 +29,6 @@ export const create = on(
 );
 `;
     const manifest = await extractFromSources({
-      "src/schema.decl.ts": source,
       "src/flows/articles.ts": source,
     });
     const effects = manifest.flows?.["articles.create"]?.effects;

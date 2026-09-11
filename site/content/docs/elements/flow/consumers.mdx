@@ -11,8 +11,8 @@ For developers wiring background work on okengine — bind the trigger, keep `do
 
 <Callout title="The one rule">
   Bind with `on(signal)`, `on(clockDecl)`, or `on(db.table(…).changed())`. Delivery physics live on
-  the Signal; `cron` / `every` live on the Clock; CDC input is always `{ before, after }`. World
-  access still goes through `fx`.
+  the Signal; `cron` / `every` live on the Clock; CDC input is `{ before, after }` plus `table` /
+  `action` / `id`. World access still goes through `fx`.
 </Callout>
 
 ## Smallest Example
@@ -127,7 +127,8 @@ export const cleanupMetrics = on(
 
 <Tab value="CDC">
 
-`db.table(handle).changed()` fires on insert, update, and delete. Input is `{ before, after }`:
+`db.table(handle).changed()` fires on insert, update, and delete. Input is `{ before, after }`
+plus `table`, `action`, and `id`:
 
 ```typescript title="src/flows/audit/users.ts"
 import { on, flow } from "okengine";
@@ -137,14 +138,15 @@ import { users, auditLogs } from "@/schema";
 export const onUserWrite = on(
   db.table(users).changed(),
   flow("audit.users", {
-    do: async ({ before, after }, fx) => {
-      const action = !before ? "created" : !after ? "deleted" : "updated";
-      const recordId = String(after?.id ?? before?.id ?? "");
-      await fx.store(db).insert(auditLogs).values({
-        table: "users",
-        recordId,
-        action,
-      });
+    do: async ({ table, action, id }, fx) => {
+      await fx
+        .store(db)
+        .insert(auditLogs)
+        .values({
+          table,
+          recordId: String(id),
+          action,
+        });
     },
   }),
 );
@@ -183,12 +185,12 @@ Omit `key` for competing consumers with no ordering.
 
 ## Trigger Reference
 
-| Trigger    | Signature                              | Purpose                                     | `do` input          |
-| ---------- | -------------------------------------- | ------------------------------------------- | ------------------- |
-| Signal     | `on(signalHandle, flow)` or inline `signal.once(…)` | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)  |
-| Clock      | `on(clockDecl, flow)` or inline `clock.every(…)` | Interval or cron tick                       | none (`_`)          |
-| CDC any    | `on(db.table(t).changed(), flow)`      | Every insert / update / delete              | `{ before, after }` |
-| CDC column | `on(db.table(t).changed("col"), flow)` | Same writes; column stamped on the Manifest | `{ before, after }` |
+| Trigger    | Signature                                           | Purpose                                     | `do` input                             |
+| ---------- | --------------------------------------------------- | ------------------------------------------- | -------------------------------------- |
+| Signal     | `on(signalHandle, flow)` or inline `signal.once(…)` | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)                     |
+| Clock      | `on(clockDecl, flow)` or inline `clock.every(…)`    | Interval or cron tick                       | none (`_`)                             |
+| CDC any    | `on(db.table(t).changed(), flow)`                   | Every insert / update / delete              | `{ before, after, table, action, id }` |
+| CDC column | `on(db.table(t).changed("col"), flow)`              | Same writes; column stamped on the Manifest | `{ before, after, table, action, id }` |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
@@ -493,13 +495,43 @@ do not fire.
 </Callout>
 
 SQL writes through `fx.store` notify CDC after commit. The Flow input is always
-`{ before, after }` (`CdcPayload`).
+`{ before, after }` plus `table`, `action`, and `id` (`CdcPayload`). Destructure
+only `{ before, after }` when that's all you need.
 
-<Tabs items={["Any write", "Column", "Images"]}>
+<Tabs items={["Audit log", "Bare", "Images"]}>
 
-<Tab value="Any write">
+<Tab value="Audit log">
 
-Omit the argument to react to every insert, update, and delete on the table:
+`table` is the real table name. `action` is `"created"` / `"updated"` / `"deleted"`.
+`id` is the declared primary-key value — not a hardcoded `"id"` column:
+
+```typescript title="src/flows/audit/users.ts"
+import { on, flow } from "okengine";
+import { db } from "@/core";
+import { users, auditLogs } from "@/schema";
+
+export const onUserWrite = on(
+  db.table(users).changed(),
+  flow("audit.users", {
+    do: async ({ table, action, id, before, after }, fx) => {
+      await fx
+        .store(db)
+        .insert(auditLogs)
+        .values({
+          table,
+          recordId: String(id),
+          action,
+        });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Bare">
+
+Omit `table` / `action` / `id` when you only need the row images:
 
 ```typescript title="src/flows/search/reindex.ts"
 import { on, flow } from "okengine";
@@ -511,24 +543,18 @@ export const reindexNotes = on(
   flow("search.reindexNotes", {
     plane: "operator",
     do: async ({ before, after }, fx) => {
-      const id = String(after?.id ?? before?.id ?? "");
-      if (!id) return;
       if (!after) {
-        await fx.call(dropNoteIndex, { id });
+        await fx.call(dropNoteIndex, { id: String(before?.id ?? "") });
         return;
       }
-      await fx.call(upsertNoteIndex, { id });
+      await fx.call(upsertNoteIndex, { id: String(after.id) });
     },
   }),
 );
 ```
 
-</Tab>
-
-<Tab value="Column">
-
-`changed("status")` stamps `trigger.cdc.column` on the Manifest (Console, extract). Still
-receive `{ before, after }` — filter in `do` when you only care about that field:
+`changed("status")` stamps `trigger.cdc.column` on the Manifest. Still receive the
+same payload — filter in `do` when you only care about that field:
 
 ```typescript title="src/flows/tasks/on-status.ts"
 import { on, flow } from "okengine";
@@ -539,10 +565,8 @@ export const onStatus = on(
   db.table(tasks).changed("status"),
   flow("tasks.onStatus", {
     plane: "operator",
-    do: async ({ before, after }, fx) => {
+    do: async ({ before, after, id }, fx) => {
       if (before?.status === after?.status) return;
-      const id = String(after?.id ?? before?.id ?? "");
-      if (!id) return;
       await fx.emit(taskStatusChanged, {
         id,
         from: before?.status ?? null,
@@ -557,21 +581,21 @@ export const onStatus = on(
 
 <Tab value="Images">
 
-Op is inferred from which image is null:
+Op is inferred from which image is null — the same derivation as `action`:
 
-| Write  | `before`     | `after` |
-| ------ | ------------ | ------- |
-| Insert | `null`       | new row |
-| Update | previous row | new row |
-| Delete | previous row | `null`  |
+| Write  | `before`     | `after` | `action`    |
+| ------ | ------------ | ------- | ----------- |
+| Insert | `null`       | new row | `"created"` |
+| Update | previous row | new row | `"updated"` |
+| Delete | previous row | `null`  | `"deleted"` |
 
 ```typescript
-do: async ({ before, after }, fx) => {
-  if (!before && after) {
+do: async ({ before, after, action }, fx) => {
+  if (action === "created") {
     /* insert */
-  } else if (before && after) {
+  } else if (action === "updated") {
     /* update */
-  } else if (before && !after) {
+  } else {
     /* delete */
   }
 };
@@ -584,8 +608,9 @@ do: async ({ before, after }, fx) => {
 <Accordions>
 
 <Accordion title="CDC payload">
-  Kernel input is `{ before, after }` — not `{ record }`, not `{ op }`. Read the primary key from
-  `after?.id ?? before?.id`.
+  `{ before, after }` are always present. `{ table, action, id }` are always populated — `id` is
+  the table's declared primary-key value, not a column assumed to be named `"id"`. There is no
+  `record` field and no `{ op }` (that stays on the live-query / outbox path).
 
 Writes must go through `fx.store`. A raw SQL client bypasses the sink, so no consumer runs.
 
@@ -656,8 +681,9 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="CDC do never sees record / op">
-  Input is `{ before, after }`. There is no `record` field. Infer insert / update / delete from
-  which image is null.
+  Input is `{ before, after, table, action, id }`. There is no `record` field. `action` is
+  `"created"` / `"updated"` / `"deleted"` from which image is null. `{ op }` is live-query /
+  outbox only.
 </Accordion>
 
 <Accordion title="Cron fired 24 times after overnight downtime">

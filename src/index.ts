@@ -16,6 +16,9 @@
 
 export {
   oke,
+  type CdcAction,
+  type CdcPayload,
+  type CdcPayloadInput,
   type OkeApp,
   type OkeOptions,
   type ReadyState,

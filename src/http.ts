@@ -28,6 +28,9 @@ export { isFlowFailure } from "./kernel/hooks.ts";
 export { plugin, isPlugin, type PluginDef } from "./kernel/plugin.ts";
 export { createBunRuntime, APP_PORT, type Runtime, type ServeOptions } from "./runtime/index.ts";
 export type {
+  CdcAction,
+  CdcPayload,
+  CdcPayloadInput,
   OkeApp,
   OkeOptions,
   ReadyState,

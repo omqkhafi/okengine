@@ -5,6 +5,7 @@
 
 import type { DeclaredColumn, Manifest } from "../../manifest/types.ts";
 import type { Fx } from "../../kernel/fx.ts";
+import { declaredPkColumn } from "../../kernel/cdc-payload.ts";
 import { LSH_DEFAULT_K, SearchConfigError } from "./search-errors.ts";
 import { embColumn, lshColumn, OKE_SEARCH_PLANES } from "./search-ddl.ts";
 import { deserializePlanes, lshBucket, lshBucketToSql } from "./search-lsh.ts";
@@ -45,11 +46,10 @@ export function tablesNeedingSearchEmbed(manifest: Manifest): Array<{
     if (store.facet !== "sql" || !store.tables) continue;
     for (const [tableName, table] of Object.entries(store.tables)) {
       const embedCols: Array<{ sqlName: string; dims: number; model?: string }> = [];
-      let pk = "id";
+      const pk = declaredPkColumn(table.columns);
       for (const [key, col] of Object.entries(table.columns ?? {})) {
         if (!col || typeof col !== "object") continue;
         const c = col as DeclaredColumn;
-        if (c.primaryKey) pk = c.sqlName ?? key;
         if (c.embed) {
           embedCols.push({
             sqlName: c.sqlName ?? key,

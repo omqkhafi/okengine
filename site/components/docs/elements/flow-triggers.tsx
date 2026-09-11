@@ -101,12 +101,12 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     binding: 'on(db.table(orders).changed("status"), onStatusChange)',
     flowName: "orders.onStatusChange",
     contracts: {
-      in: '{ before: { status: "pending" }, after: { status: "paid" } }',
+      in: "{ table, action, id, before, after }",
       out: "{ acknowledged: true }",
       errors: '{ LockContention: { table: "orders" } }',
-      do: "async ({ before, after }, fx) => { ... }",
+      do: "async ({ table, action, id, before, after }, fx) => { ... }",
     },
-    description: "Database change-data-capture triggers pass row mutations directly to in.",
+    description: "Committed SQL writes pass `{ before, after }` plus `table`, `action`, and `id`.",
   },
   {
     id: "mcp",

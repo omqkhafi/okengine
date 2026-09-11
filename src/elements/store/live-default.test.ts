@@ -42,6 +42,12 @@ const archive = store.schema.table(
   [store.schema.policy.owner("owner"), store.schema.live(false)],
 );
 
+function uniquifyResourceFlows(prefix: string, bag: ReturnType<typeof store.resource>): void {
+  for (const key of ["list", "create", "get", "update", "remove"] as const) {
+    (bag[key] as { name: string }).name = `${prefix}.${key}`;
+  }
+}
+
 /**
  * Mount the two CRUD resources. The `/tasks` resource's own `POST /tasks`
  * create verb is used for the live-window write.
@@ -55,6 +61,8 @@ function mountResource(db: ReturnType<typeof store.sql>) {
     in: z.object({ label: z.string() }),
     out: z.object({ id: z.string(), label: z.string() }),
   });
+  uniquifyResourceFlows("tasks", tasksR);
+  uniquifyResourceFlows("archive", archiveR);
   on(http.resource("/tasks", tasksR.all()).gate(gate.public));
   on(http.resource("/archive", archiveR.all()).gate(gate.public));
 }
