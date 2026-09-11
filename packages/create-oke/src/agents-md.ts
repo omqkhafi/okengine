@@ -98,7 +98,6 @@ App \`:6530\` · Console \`:6533\` · App MCP \`:6535\` · Docs MCP \`:6536\`. V
 ## Learn more
 
 - Handbook: ${handbook}
-- Understand: ${docsUrl("/docs/understand/the-problem")}
-- See it work: ${docsUrl("/docs/understand/the-anatomy")}
+- The Architecture: ${docsUrl("/docs/understand/the-architecture")}
 `;
 }

@@ -5,7 +5,7 @@ import { db } from "@/core";
 import { notes } from "@/db/schema.decl";
 import { toIsoInstant } from "./shapes";
 
-export const digestClock = clock("notes.digest", { every: "1d" });
+export const digestClock = clock.every("notes.digest", "1d");
 
 /** Daily count of active notes (frozen under test drivers). */
 export const digest = on(

@@ -18,55 +18,6 @@ const config: NextConfig = {
   // Do not set `output: "export"`: `proxy.ts` negotiates `Accept: text/markdown`,
   // and that file convention does not run on a static export (Next.js).
   reactStrictMode: true,
-  async redirects() {
-    return [
-      {
-        source: "/docs/reference/client",
-        destination: "/docs/client",
-        permanent: true,
-      },
-      {
-        source: "/docs/reference/manifest",
-        destination: "/docs/understand/the-architecture",
-        permanent: true,
-      },
-      {
-        source: "/docs/reference/architecture",
-        destination: "/docs/understand/the-architecture",
-        permanent: true,
-      },
-      {
-        source: "/docs/understand/the-problem",
-        destination: "/docs/understand/the-architecture",
-        permanent: true,
-      },
-      {
-        source: "/docs/understand/the-model",
-        destination: "/docs/understand/the-architecture",
-        permanent: true,
-      },
-      {
-        source: "/docs/understand/the-vocabulary",
-        destination: "/docs/understand/the-architecture",
-        permanent: true,
-      },
-      {
-        source: "/docs/understand/the-anatomy",
-        destination: "/docs/understand/the-architecture",
-        permanent: true,
-      },
-      {
-        source: "/docs/recipes/local-ai",
-        destination: "/docs/recipes/openrouter",
-        permanent: true,
-      },
-      {
-        source: "/docs/ai/try-it",
-        destination: "/docs/understand/try-it",
-        permanent: true,
-      },
-    ];
-  },
   // Dev binds as `localhost`; browsing via `http://127.0.0.1` is a different
   // origin, so Next blocks `/_next/*` unless this host is allowlisted.
   allowedDevOrigins: ["127.0.0.1"],

@@ -26,7 +26,7 @@ For developers scheduling work on okengine — one handle shape; drivers swap by
 ```typescript title="src/clocks/digest.ts"
 import { clock } from "okengine";
 
-export const digestClock = clock("notes.digest", { every: "1d" });
+export const digestClock = clock.every("notes.digest", "1d");
 ```
 
 </Step>
@@ -114,7 +114,7 @@ Human durations — integer + unit, no weeks: `"200ms"` · `"30s"` · `"5m"` · 
 ```typescript title="src/flows/health/ping.ts"
 import { on, flow, clock } from "okengine";
 
-export const pingClock = clock("health.pingExternal", { every: "30s" });
+export const pingClock = clock.every("health.pingExternal", "30s");
 
 export const pingExternal = on(
   pingClock,
@@ -185,10 +185,10 @@ calendar day. Unknown strings parse as `0`.
 
 | Surface       | Signature                                                | Purpose                         | `do` input |
 | ------------- | -------------------------------------------------------- | ------------------------------- | ---------- |
-| Cron schedule | `clock(name, { cron, timezone? })`                       | Calendar fires in an IANA zone  | none (`_`) |
-| Helpers       | `clock.daily` · `hourly` · `weekly` · `monthly` · `cron` | Same decl; presets + field bags | none (`_`) |
-| Interval      | `clock(name, { every })` / `clock.every`                 | Fixed duration loop             | none (`_`) |
+| Helpers       | `clock.daily` · `hourly` · `weekly` · `monthly` · `cron` | Calendar presets + field bags   | none (`_`) |
+| Interval      | `clock.every(name, duration, opts?)`                     | Fixed duration loop             | none (`_`) |
 | Per-tenant    | `clock.perTenant(name, opts)`                            | One Store row per tenant        | none (`_`) |
+| Bare callable | `clock(name, { cron? \| every?, … })`                    | Same decl; lower-level form     | none (`_`) |
 | Now / offsets | `fx.clock.now` · `ago` · `fromNow` · `duration`          | Injectable time math            | —          |
 | Durable sleep | `fx.clock.sleep(label, duration)`                        | Park a durable Flow until wake  | —          |
 

@@ -194,7 +194,7 @@ export interface BootOptions {
   };
   /**
    * Process instance id for Clock / Journal / fleet registry.
-   * When unset, boot mints one `inst-<uuid>` and passes it to every binder.
+   * When unset, boot mints one `inst-<okid>` and passes it to every binder.
    */
   readonly instanceId?: string;
   /** Injected fleet store (chaos / tests — activates the registry in `test`). */

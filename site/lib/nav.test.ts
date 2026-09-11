@@ -55,15 +55,19 @@ describe("NAV_TABS", () => {
 });
 
 /*
- * The header's brand cell must end exactly on the first vertical rule of the
- * surface below it, so its width is asserted against the width that surface
- * actually uses. Every surface is full-bleed, which is what lets one value do for
- * both — the assertions below are also the gate on that staying true.
+ * Docs and changelog surfaces share a left pane with the header brand cell —
+ * those widths are asserted against the page shell below. Home is a centered
+ * full-bleed hero, so the brand-cell width is header-only.
  */
 describe("headerGeometry", () => {
-  test("the home cell matches the hero's column split", async () => {
+  test("the home brand cell keeps a fixed pane width (header-only)", () => {
+    expect(headerGeometry("/").paneWidth).toBe("44%");
+  });
+
+  test("the home hero is a centered stage without a left-pane width class", async () => {
     const page = await Bun.file(join(APP, "(home)", "page.tsx")).text();
-    expect(page).toContain(`lg:w-[${headerGeometry("/").paneWidth}]`);
+    expect(page).toContain("max-w-7xl");
+    expect(page).not.toContain("lg:w-[44%]");
   });
 
   test("the changelog cell matches the release rail's split", async () => {

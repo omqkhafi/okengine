@@ -99,8 +99,10 @@ export const close = clock.monthly("billing.close", { on: [1, 15], at: "00:00" }
 export const ping = clock.every("health.ping", "30s");
 ```
 
-Raw strings still work: `clock("x", { cron: "0 6 * * *" })`, Bun nicknames (`@hourly`),
-and `clock("x", { every: "30s" })`.
+Prefer the named helpers above for fixed schedules. The bare callable remains fully
+supported for the same `ClockDecl` shape when you need a raw string or a schedule
+chosen programmatically: `clock("x", { cron: "0 6 * * *" })`, Bun nicknames
+(`@hourly`), and `clock("x", { every: "30s" })`.
 
 **Consequence:** Manifest / Store still see `cron: "0 6 * * *"` — helpers are declare-time sugar.
 
@@ -159,7 +161,8 @@ export const runInvoices = on(
 );
 ```
 
-Equivalent: `clock("invoices", { every: "1h", perTenant: true })`.
+Equivalent bare form (same decl; prefer `clock.perTenant` above):
+`clock("invoices", { every: "1h", perTenant: true })`.
 
 **Consequence:** ten tenants → ten leader-elected rows. Catch-up still fires **once per
 row** after downtime — not a burst of missed hours per tenant.

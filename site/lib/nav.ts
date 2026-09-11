@@ -74,6 +74,7 @@ export function headerGeometry(pathname: string): HeaderGeometry {
   if (pathname === "/changelog" || pathname.startsWith("/changelog/")) {
     return { paneWidth: "30%", rule: "border-fd-border" };
   }
-  // Home: the hero's 44/56 column split.
+  // Home: topbar brand-cell width. The hero is a centered full-bleed stage
+  // (no left-pane column on the page), so this value is header-only.
   return { paneWidth: "44%", rule: "border-fd-border" };
 }

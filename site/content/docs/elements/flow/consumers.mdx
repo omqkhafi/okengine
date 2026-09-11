@@ -108,7 +108,7 @@ import { on, flow, clock } from "okengine";
 import { lt } from "drizzle-orm";
 import { db, metricLogs } from "@/schema";
 
-export const cleanupClock = clock("metrics.cleanup", { every: "1h" });
+export const cleanupClock = clock.every("metrics.cleanup", "1h");
 
 export const cleanupMetrics = on(
   cleanupClock,
@@ -342,9 +342,11 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 ## Clock Jobs
 
 <Callout title="Detailed section">
-  If you only need an interval, jump to the example below. `clock(name)` requires `cron` or `every`
-  — missing both throws `clock("name"): require cron or every`. Bind the returned handle with
-  `on(clockDecl, flow)`.
+  Prefer `clock.every` / `clock.daily` / `clock.cron` (and the other named helpers) for
+  fixed schedules — they compile to the same decl as the bare callable. The lower-level
+  `clock(name, { cron | every })` form still works when you need a raw expression or a
+  schedule chosen programmatically; missing both throws
+  `clock("name"): require cron or every`. Bind the returned handle with `on(clockDecl, flow)`.
 </Callout>
 
 Named clocks reconcile into the Store at boot. The scheduler leader-elects so N instances do not
@@ -359,7 +361,7 @@ Human durations: `"200ms"` · `"30s"` · `"5m"` · `"1h"` · `"7d"` (integer + u
 ```typescript title="src/flows/health/ping.ts"
 import { on, flow, clock } from "okengine";
 
-export const pingClock = clock("health.pingExternal", { every: "30s" });
+export const pingClock = clock.every("health.pingExternal", "30s");
 
 export const pingExternal = on(
   pingClock,
@@ -381,8 +383,8 @@ Five-field cron (`m h dom mon dow`) plus an IANA `timezone` (default `"UTC"`):
 ```typescript title="src/flows/reports/daily.ts"
 import { on, flow, clock } from "okengine";
 
-export const dailyReportClock = clock("reports.daily", {
-  cron: "0 6 * * *",
+export const dailyReportClock = clock.daily("reports.daily", {
+  at: "06:00",
   timezone: "Asia/Riyadh",
 });
 
@@ -423,7 +425,8 @@ export const runInvoices = on(
 );
 ```
 
-Equivalent: `clock("invoices", { every: "1h", perTenant: true })`.
+Equivalent bare form (same decl; prefer `clock.perTenant` above):
+`clock("invoices", { every: "1h", perTenant: true })`.
 
 </Tab>
 
@@ -625,7 +628,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 <Accordion title="TypeError: on() expected a trigger or signal handle">
   The first argument must be a Signal handle, a Clock handle, `db.table(…).changed()`, an HTTP
   trigger, `internal`, or `mcp.tool(…)`. A bare interval string is not a trigger — wrap it in
-  `clock("name", { every: "1h" })`.
+  `clock.every("name", "1h")`.
 </Accordion>
 
 <Accordion title="OKE1240 — emit with no subscriber">

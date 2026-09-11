@@ -12,6 +12,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+#### Docs
+
+- `fx.id()` docs and JSDoc now say **OKID**, aligned with `okengine/okid` and the
+  fx / OKID reference cross-links.
+- Clock examples across docs, Keel, and create-oke advanced prefer named helpers
+  (`clock.every` / `daily` / `weekly`); bare `clock(name, opts)` stays valid and is
+  called out where the generic form is deliberate.
+- Scaffold `AGENTS.md` and the oke-docs skeleton link to The Architecture.
+- Dropped all permanent redirects from `site/next.config.ts`.
+- Site `headerGeometry` home assertion matches the centered full-bleed hero (no
+  left-pane `lg:w-[44%]` on the homepage).
+
 ## v0.19.1 — 2026-09-11
 
 ### ✨ Added

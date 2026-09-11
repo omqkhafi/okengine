@@ -103,7 +103,7 @@ const headerConfig = configSource({
   db: { store: db },
   kv: cache,
 });
-const headerSyncClock = clock("headers.sync", { every: "30s" });
+const headerSyncClock = clock.every("headers.sync", "30s");
 on(headerSyncClock, headerConfig.sync());
 export const app = oke({ name: "shop", env: "dev" }).plug(headers(headerConfig));
 ```

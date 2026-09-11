@@ -366,7 +366,7 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 | `fx.ask(prompt, opts)`     | `asks`                     | AI prompt                                     |
 | `fx.vault.get(secret)`     | `secrets`                  | Declared secret (never a raw value in source) |
 | `fx.call(flow, input?)`    | `calls`                    | Another Flow — waits for return               |
-| `fx.id()`                  | —                          | UUID                                          |
+| `fx.id()`                  | —                          | OKID — 21-char native id from `okengine/okid` |
 | `fx.clock.now()`           | —                          | Deterministic time                            |
 | `fx.fail(code, data)`      | —                          | Typed failure value                           |
 | `fx.step(name, fn)`        | journal                    | Durable checkpoint                            |
@@ -526,7 +526,7 @@ Default is `true` once `gate.auth.tenant` is on.
 <Accordion title="TypeError: on() expected a trigger or signal handle">
   First argument must be an HTTP trigger, Signal handle, Clock handle,
   `db.table(…).changed()`, `internal`, or `mcp.tool(…)`. A bare interval string is not
-  a trigger — wrap it in `clock("name", { every: "1h" })`.
+  a trigger — wrap it in `clock.every("name", "1h")`.
 </Accordion>
 
 <Accordion title="TypeError: on() expected a flow() definition as the second argument">

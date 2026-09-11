@@ -86,9 +86,9 @@ Consequences stated: "**Consequence:** …" for non-obvious choices.⟩
 <Cards>
   <Card title="⟨Next element⟩" description="Continue to ⟨Next element⟩." href="/docs/elements/⟨x⟩" />
   <Card
-    title="The Model"
-    description="Eight elements overview."
-    href="/docs/understand/the-model"
+    title="The Architecture"
+    description="One rule, eight elements, Flow anatomy."
+    href="/docs/understand/the-architecture"
   />
   <Card
     title="Console"

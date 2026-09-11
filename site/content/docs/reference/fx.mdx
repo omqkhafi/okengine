@@ -108,7 +108,7 @@ Declare `effects: { reads: ["runs"] }`. Powers native SLO checkers (Clock + Chan
 | `fx.runs.checkSlo(flow, slo, windowMs?)` | `read` `runs` | Availability / latency breaches                                                          |
 
 ```typescript
-const sloCheckClock = clock("ops.slo-check", { every: "5m" });
+const sloCheckClock = clock.every("ops.slo-check", "5m");
 
 on(
   sloCheckClock,

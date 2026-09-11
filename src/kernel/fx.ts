@@ -847,7 +847,7 @@ export interface Fx {
   t(key: AppMessageKey, values?: MessageValues): string;
   /** Active locale for {@link Fx.t} and default channel sends. */
   readonly locale: string;
-  /** Generate a unique id (UUID). */
+  /** Generate a unique id (OKID). */
   id(): string;
   /** User-plane auth principal. */
   readonly auth: FxAuth;

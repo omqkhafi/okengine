@@ -77,7 +77,7 @@ const TRIGGERS: ReadonlyArray<TriggerSpec> = [
     element: "Clock",
     toneKey: "orange",
     icon: Timer,
-    syntax: 'clock("hourly", { every: "1h" })',
+    syntax: 'clock.every("hourly", "1h")',
     starts: "time passes",
     replaces: "cron job",
     binding: "on(hourlyClock, syncInventory)",
