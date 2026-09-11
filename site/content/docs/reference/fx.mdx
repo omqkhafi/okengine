@@ -28,9 +28,10 @@ import { z } from "zod";
 import { db, notes } from "@/schema";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ title: z.string().min(1) }),
+  }),
+  flow({
     do: async ({ title }, fx) => {
       const id = fx.id();
       await fx.store(db).insert(notes).values({ id, title });

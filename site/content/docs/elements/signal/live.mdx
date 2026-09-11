@@ -342,9 +342,10 @@ import { z } from "zod";
 import { orderStatus } from "@/signals/orders";
 
 export const ship = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ id: z.string() }),
+  }),
+  flow({
     do: async ({ id }, fx) => {
       await fx.emit(orderStatus, { orderId: id, status: "shipped" });
       return { id, status: "shipped" };

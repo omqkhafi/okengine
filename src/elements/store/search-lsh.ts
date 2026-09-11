@@ -125,7 +125,31 @@ export function cosineSimilarity(a: readonly number[], b: readonly number[]): nu
 }
 
 /**
+ * Hamming distance between two K-bit LSH packs (K ≤ 64).
+ *
+ * Random-hyperplane (Charikar) SimHash ranks neighbors by this distance.
+ * Hamming-1 equality is not a viable candidate set at {@link LSH_DEFAULT_K}:
+ * true near-neighbors typically sit at distance ~5–16, not 0–1.
+ *
+ * @param a - Bucket a
+ * @param b - Bucket b
+ */
+export function hammingDistance(a: bigint, b: bigint): number {
+  let x = (a ^ b) & 0xffff_ffff_ffff_ffffn;
+  let count = 0;
+  while (x) {
+    x &= x - 1n;
+    count++;
+  }
+  return count;
+}
+
+/**
  * Candidate buckets: exact match plus Hamming distance 1 flips.
+ *
+ * Kept for tight-collision tests and callers that want a 65-wide equality
+ * probe. Query-time retrieval uses {@link lshHammingSql} ranking instead —
+ * Hamming-1 alone misses almost all true neighbors at K=64.
  *
  * @param bucket - Query bucket
  * @param k - Bit width
@@ -136,6 +160,17 @@ export function neighborBuckets(bucket: bigint, k: number): bigint[] {
     out.push(bucket ^ (1n << BigInt(i)));
   }
   return out;
+}
+
+/**
+ * Postgres 14+ Hamming distance between a stored signed-int64 LSH column
+ * and a bound query bucket (`?::bigint`). Used as `ORDER BY … LIMIT k`.
+ *
+ * @param columnSql - Quoted LSH column identifier
+ * @param bucketPlaceholder - Bound-parameter placeholder (`?` before `$n` rewrite)
+ */
+export function lshHammingSql(columnSql: string, bucketPlaceholder: string = "?"): string {
+  return `bit_count((${columnSql} # ${bucketPlaceholder}::bigint)::bit(64))`;
 }
 
 /**

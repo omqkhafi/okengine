@@ -30,10 +30,11 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const start = on(
-  http.post(),
+  http.post({
+    in: z.object({ email: z.string().email() }),
+  }),
   flow({
     durable: true,
-    in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {
       await fx.step("mark-trial", async () => {
         await fx.call(startTrial, { email });
@@ -101,10 +102,11 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const create = on(
-  http.post(),
+  http.post({
+    in: z.object({ email: z.string().email() }),
+  }),
   flow({
     durable: true,
-    in: z.object({ email: z.string().email() }),
     do: async ({ email }, fx) => {
       await fx.step("create", async () => {
         await fx.call(createWorkspace, { email });
@@ -256,11 +258,12 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const create = on(
-  http.post(),
-  flow({
-    durable: true,
+  http.post({
     in: z.object({ email: z.string().email() }),
     out: z.object({ trialId: z.string() }),
+  }),
+  flow({
+    durable: true,
     do: async ({ email }, fx) => {
       const trialId = await fx.step("create", async () => {
         return await fx.call(createTrial, { email });

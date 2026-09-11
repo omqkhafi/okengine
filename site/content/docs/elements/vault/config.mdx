@@ -48,9 +48,10 @@ import { member } from "@/core/gate";
 import { publicAppUrl, noteCreatedMail } from "@/core";
 
 export const create = on(
-  http.post().gate(member),
-  flow({
+  http.post({
     in: z.object({ email: z.string().email() }),
+  }).gate(member),
+  flow({
     do: async ({ email }, fx) => {
       const origin = await fx.vault.get(publicAppUrl);
       await fx.send(noteCreatedMail, {

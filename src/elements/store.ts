@@ -197,7 +197,9 @@ export {
   lshBucketToSql,
   lshBucketFromSql,
   cosineSimilarity,
+  hammingDistance,
   neighborBuckets,
+  lshHammingSql,
   serializePlanes,
   deserializePlanes,
 } from "./store/search-lsh.ts";

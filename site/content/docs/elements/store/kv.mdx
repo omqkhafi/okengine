@@ -39,9 +39,10 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ token: z.string(), userId: z.string() }),
+  }),
+  flow({
     do: async ({ token, userId }, fx) => {
       await fx.store(sessions).set(`session:${token}`, userId, "1h");
       const cached = await fx.store(sessions).get(`session:${token}`);
@@ -97,9 +98,10 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const get = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ userId: z.string() }),
+  }),
+  flow({
     do: async ({ userId }, fx) => {
       const prefs = await fx.store(sessions).get(`user:${userId}:prefs`);
       return { prefs: prefs ?? null };
@@ -122,9 +124,10 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ userId: z.string() }),
+  }),
+  flow({
     do: async ({ userId }, fx) => {
       const code = "482193";
       await fx.store(sessions).set(`otp:${userId}`, code, "5m");
@@ -251,10 +254,11 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const get = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ token: z.string() }),
     errors: { NotFound: z.object({ token: z.string() }) },
+  }),
+  flow({
     do: async ({ token }, fx) => {
       const userId = await fx.store(sessions).get(`session:${token}`);
       if (userId === undefined || userId === null) {
@@ -278,9 +282,10 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ token: z.string(), userId: z.string() }),
+  }),
+  flow({
     do: async ({ token, userId }, fx) => {
       await fx.store(sessions).set(`session:${token}`, userId, "1h");
       return { ok: true as const };
@@ -304,9 +309,10 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const remove = on(
-  http.delete(),
-  flow({
+  http.delete({
     in: z.object({ token: z.string() }),
+  }),
+  flow({
     do: async ({ token }, fx) => {
       const removed = await fx.store(sessions).delete(`session:${token}`);
       return { removed };
@@ -358,9 +364,10 @@ import { z } from "zod";
 import { sessions } from "@/core";
 
 export const ttl = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ userId: z.string() }),
+  }),
+  flow({
     do: async ({ userId }, fx) => {
       const ttlMs = await fx.store(sessions).ttlMs(`otp:${userId}`);
       return { ttlMs };
@@ -409,13 +416,14 @@ import { z } from "zod";
 import { drafts } from "@/core";
 
 export const save = on(
-  http.put("/drafts/:id"),
-  flow({
+  http.put("/drafts/:id", {
     in: z.object({
       id: z.string().min(1),
       title: z.string().min(1),
       body: z.string().optional(),
     }),
+  }),
+  flow({
     do: async ({ id, title, body }, fx) => {
       await fx.store(drafts).set(id, { title, body: body ?? "" }, "7d");
       return { id };

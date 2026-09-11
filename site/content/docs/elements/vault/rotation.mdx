@@ -93,10 +93,11 @@ import { gate } from "okengine";
 const operator = gate.policy("operator", ({ operator: op }) => !!op);
 
 export const rotateStripe = on(
-  http.post().gate(operator),
+  http.post({
+    in: z.object({ value: z.string().min(1) }),
+  }).gate(operator),
   flow({
     plane: "operator",
-    in: z.object({ value: z.string().min(1) }),
     effects: { secrets: ["STRIPE_KEY"] },
     do: async ({ value }, fx) => {
       const result = await fx.vault.rotate("STRIPE_KEY", value);

@@ -311,9 +311,10 @@ import { z } from "zod";
 import { orderPlaced } from "@/signals/orders";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ userId: z.string(), amount: z.number() }),
+  }),
+  flow({
     do: async ({ userId, amount }, fx) => {
       const orderId = fx.id();
       await fx.emit(orderPlaced, { orderId, amount, userId }, { key: userId });

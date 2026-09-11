@@ -12,6 +12,26 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### 🐛 Fixed
+
+#### Runtime
+
+- Hybrid search LSH recall: query-time candidate retrieval ranked stored
+  K=64 SimHash packs by Hamming distance (`bit_count` of XOR, `ORDER BY`
+  then oversample `LIMIT`) instead of equality against the exact bucket plus
+  Hamming-1 neighbors. Write/query hashing was already identical; the probe
+  never reached true neighbors (typical distance ~5–16 bits), which is why
+  G17 precision@10 collapsed to ~0. Hamming-1 equality is no longer the
+  candidate set. See `src/bench/REPORT.md` G17 for before/after numbers.
+
+#### Docs
+
+- Store Search G17 table and LSH retrieval copy match Hamming-rank query
+  (was Hamming-1 / near-zero P@10).
+- Element pages still showed invoke contracts on `flow()` after the v0.19.0
+  move. Examples now put `in` / `out` / `errors` on `http.*` / `call()`.
+- Removed unpublished `site/content/_archive/get-started-legacy`.
+
 ## v0.19.0 — 2026-09-10
 
 Pre-1.0 minor for deliberate breakages since v0.18.5: exposure-owned invoke

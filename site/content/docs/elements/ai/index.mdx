@@ -60,9 +60,10 @@ import { z } from "zod";
 import { triage } from "@/core/ai";
 
 export const classify = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ message: z.string().min(1) }),
+  }),
+  flow({
     do: async ({ message }, fx) => {
       return await fx.ask(triage, { message });
     },

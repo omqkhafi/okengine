@@ -65,9 +65,10 @@ import { z } from "zod";
 import { cacheInvalidated } from "@/signals/cache";
 
 export const update = on(
-  http.patch(),
-  flow({
+  http.patch({
     in: z.object({ sku: z.string(), title: z.string().min(1) }),
+  }),
+  flow({
     do: async ({ sku, title }, fx) => {
       // … persist the change …
       await fx.emit(cacheInvalidated, { key: `sku:${sku}` });
@@ -284,9 +285,10 @@ import { z } from "zod";
 import { catalogChanged } from "@/signals/catalog";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ sku: z.string(), title: z.string().min(1) }),
+  }),
+  flow({
     do: async ({ sku, title }, fx) => {
       // … write …
       await fx.emit(catalogChanged, { sku });

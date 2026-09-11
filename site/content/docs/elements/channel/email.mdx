@@ -66,9 +66,10 @@ import { z } from "zod";
 import { passwordReset } from "@/core/channel";
 
 export const reset = on(
-  http.post().public(),
-  flow({
+  http.post({
     in: z.object({ email: z.string().email() }),
+  }).public(),
+  flow({
     do: async ({ email }, fx) => {
       await fx.send(passwordReset, {
         to: email,

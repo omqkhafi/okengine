@@ -38,13 +38,14 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({
       name: z.string().min(1),
       bytes: z.string(), // base64 for the demo
     }),
     out: z.object({ key: z.string() }),
+  }),
+  flow({
     do: async ({ name, bytes }, fx) => {
       const key = `uploads/${fx.id()}-${name}`;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
@@ -123,9 +124,10 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const cleanup = on(
-  http.delete(),
-  flow({
+  http.delete({
     in: z.object({ prefix: z.string().default("avatars/") }),
+  }),
+  flow({
     do: async ({ prefix }, fx) => {
       const keys = await fx.store(uploads).list(prefix);
       let removed = 0;
@@ -154,9 +156,10 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ bytes: z.string() }),
+  }),
+  flow({
     do: async ({ bytes }, fx) => {
       const key = `photos/${fx.id()}.jpg`;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
@@ -195,9 +198,10 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const card = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ sourceKey: z.string() }),
+  }),
+  flow({
     do: async ({ sourceKey }, fx) => {
       const outKey = sourceKey.replace(/\.[^.]+$/, ".card.webp");
       await fx
@@ -282,13 +286,14 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({
       id: z.string(),
       name: z.string().min(1),
       bytes: z.string(),
     }),
+  }),
+  flow({
     do: async ({ id, name, bytes }, fx) => {
       const key = `notes/${id}/${name}`;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
@@ -311,10 +316,11 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const get = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ id: z.string(), name: z.string() }),
     errors: { NotFound: z.object({ key: z.string() }) },
+  }),
+  flow({
     do: async ({ id, name }, fx) => {
       const key = `notes/${id}/${name}`;
       const bytes = await fx.store(uploads).get(key);
@@ -337,9 +343,10 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const remove = on(
-  http.delete(),
-  flow({
+  http.delete({
     in: z.object({ id: z.string(), name: z.string() }),
+  }),
+  flow({
     do: async ({ id, name }, fx) => {
       const key = `notes/${id}/${name}`;
       const removed = await fx.store(uploads).delete(key);
@@ -362,9 +369,10 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const attachments = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ id: z.string() }),
+  }),
+  flow({
     do: async ({ id }, fx) => {
       const keys = await fx.store(uploads).list(`notes/${id}/`);
       return { keys };

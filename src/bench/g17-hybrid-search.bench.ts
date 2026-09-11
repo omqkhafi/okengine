@@ -31,7 +31,6 @@ import {
   deserializePlanes,
   lshBucket,
   lshBucketToSql,
-  neighborBuckets,
 } from "../elements/store/search-lsh.ts";
 import { runSqlSearch, type SearchColumnMeta } from "../elements/store/search-runtime.ts";
 import { resolveLivePg } from "./lib/infra.ts";
@@ -404,24 +403,25 @@ describe.skipIf(!ENABLED)("G17 hybrid search", () => {
           const kPlanes = Number(prow["k"] ?? LSH_DEFAULT_K);
           const planes = deserializePlanes(Buffer.from(prow["planes"] as Buffer), kPlanes);
           const bucket = lshBucket(qVec, planes);
-          const buckets = neighborBuckets(bucket, kPlanes).map((b) => lshBucketToSql(b));
-          const explainSql = `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-            SELECT id FROM ${TABLE}
-            WHERE ${OKE_TSV_COL} @@ plainto_tsquery('english', $1)
-               OR ${lshColumn("body")} = ANY($2::bigint[])
-            LIMIT 50`;
+          const bucketSql = lshBucketToSql(bucket);
           // Bun.SQL uses ? placeholders — fall back to interpolated literals for EXPLAIN only.
           const safeQ = TOPICS[0]!.replaceAll("'", "''");
-          const bucketList = buckets.join(",");
           const explainRows = await conn.query(
             `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-             SELECT id FROM ${TABLE}
-             WHERE ${OKE_TSV_COL} @@ plainto_tsquery('english', '${safeQ}')
-                OR ${lshColumn("body")} = ANY(ARRAY[${bucketList}]::bigint[])
-             LIMIT 50`,
+             (
+               SELECT id FROM ${TABLE}
+               WHERE ${OKE_TSV_COL} @@ plainto_tsquery('english', '${safeQ}')
+               LIMIT 50
+             )
+             UNION
+             (
+               SELECT id FROM ${TABLE}
+               WHERE ${lshColumn("body")} IS NOT NULL
+               ORDER BY bit_count((${lshColumn("body")} # ${bucketSql}::bigint)::bit(64)) ASC NULLS LAST
+               LIMIT 50
+             )`,
           );
           explainText = explainRows.map((r) => String(Object.values(r)[0] ?? "")).join("\n");
-          void explainSql;
           console.log("G17 EXPLAIN (ANALYZE, BUFFERS):\n" + explainText);
           if (!/Bitmap|Index|Seq Scan|BitmapOr|Bitmap Heap/i.test(explainText)) {
             issues.push("EXPLAIN text lacked recognizable Postgres plan nodes");

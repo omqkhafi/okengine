@@ -14,7 +14,7 @@ import {
   deserializePlanes,
   lshBucket,
   lshBucketToSql,
-  neighborBuckets,
+  lshHammingSql,
 } from "./search-lsh.ts";
 import {
   embColumn,
@@ -74,8 +74,9 @@ export interface RunSqlSearchDeps {
 }
 
 /**
- * Execute hybrid search against PostgreSQL using GIN + LSH B-tree candidates,
- * then BM25F / cosine / fusion in-process (correct, testable math).
+ * Execute hybrid search against PostgreSQL using GIN lexical candidates UNION
+ * SimHash Hamming-rank (K=64 `bit_count` ORDER BY LIMIT), then BM25F / cosine
+ * / fusion in-process (correct, testable math).
  *
  * @param deps - Connection, table meta, options
  */
@@ -103,11 +104,9 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
   const embedFields = searchable.filter((c) => c.embed);
   if (embedFields.length > 0) engines.push("lsh");
 
-  // Candidate retrieval: GIN tsvector match OR LSH buckets.
-  const params: unknown[] = [query];
-  let whereSql = `${OKE_TSV_COL} @@ plainto_tsquery('english', ?)`;
   let queryVec: readonly number[] | undefined;
-  const bucketParams: bigint[] = [];
+  const hamExprs: string[] = [];
+  const hamParams: unknown[] = [];
 
   if (embedFields.length > 0 && deps.embedQuery) {
     const model = embedFields[0]?.embed?.model;
@@ -137,20 +136,18 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
       const planesBuf = row["planes"] as Buffer;
       const planes = deserializePlanes(Buffer.from(planesBuf), k);
       const bucket = lshBucket(queryVec, planes);
-      for (const b of neighborBuckets(bucket, k)) {
-        bucketParams.push(b);
-      }
-      whereSql += ` OR ${lshColumn(field.sqlName)} = ANY(?::bigint[])`;
-      params.push(`{${bucketParams.map((b) => lshBucketToSql(b)).join(",")}}`);
+      hamExprs.push(lshHammingSql(lshColumn(field.sqlName), "?"));
+      hamParams.push(lshBucketToSql(bucket));
     }
   }
 
-  // Compose list-grammar filters.
+  let filterClause = "";
+  const filterParams: unknown[] = [];
   if (parsed.page.where) {
     const compiled = compileWhere(parsed.page.where);
     if (compiled.clause) {
-      whereSql = `(${whereSql}) AND (${compiled.clause})`;
-      params.push(...compiled.params);
+      filterClause = ` AND (${compiled.clause})`;
+      filterParams.push(...compiled.params);
     }
   }
 
@@ -159,10 +156,27 @@ export async function runSqlSearch(deps: RunSqlSearchDeps): Promise<SqlSearchRes
     ...searchable.map((c) => quoteIdent(c.sqlName)),
     ...embedFields.map((c) => quoteIdent(embColumn(c.sqlName))),
   ].join(", ");
+  const tableIdent = quoteIdent(tableName);
 
   // Oversample candidates for fusion then truncate.
   const fetchLimit = Math.min(Math.max(limit * 5, 50), 500);
-  const candidateSql = `SELECT ${selectCols} FROM ${quoteIdent(tableName)} WHERE ${whereSql} LIMIT ${fetchLimit}`;
+  const lexicalSql = `SELECT ${selectCols} FROM ${tableIdent} WHERE ${OKE_TSV_COL} @@ plainto_tsquery('english', ?)${filterClause} LIMIT ${fetchLimit}`;
+
+  // SimHash k-NN: rank by Hamming over the K=64 bit pack, then LIMIT.
+  // Hamming-1 equality (`= ANY(65 buckets)`) is not a candidate set — true
+  // near-neighbors sit at distance ~5–16, so that probe recovered ~0 rows.
+  let candidateSql: string;
+  const params: unknown[] = [];
+  if (hamExprs.length > 0) {
+    const lshPred = embedFields.map((f) => `${lshColumn(f.sqlName)} IS NOT NULL`).join(" OR ");
+    const orderExpr = hamExprs.length === 1 ? hamExprs[0]! : `LEAST(${hamExprs.join(", ")})`;
+    const lshSql = `SELECT ${selectCols} FROM ${tableIdent} WHERE (${lshPred})${filterClause} ORDER BY ${orderExpr} ASC NULLS LAST LIMIT ${fetchLimit}`;
+    candidateSql = `(${lexicalSql}) UNION (${lshSql})`;
+    params.push(query, ...filterParams, ...hamParams, ...filterParams);
+  } else {
+    candidateSql = lexicalSql;
+    params.push(query, ...filterParams);
+  }
   const candidates = await conn.query(candidateSql, params);
 
   const statsRows = await conn.query(

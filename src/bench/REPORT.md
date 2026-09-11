@@ -180,13 +180,16 @@ Artifact: `G15-postgres-degradation-…json` (+ extra stress-level artifacts)
 ## G17 — Hybrid SQL search (BM25 / LSH / fusion)
 
 **Command:** `OKE_BENCH=1 OKE_TEST_POSTGRES=1 DATABASE_URL=$DATABASE_URL bun test ./src/bench/g17-hybrid-search.bench.ts --timeout 3600000`  
-**Date:** 2026-09-10 · **Engine:** Bun 1.4.2 · **Postgres:** 16.15 (dedicated live instance, not PGlite)  
-**Hardware:** Apple M4, 24 GB · trend-analysis only (not SLA; macOS ≠ Linux prod)  
-**Artifact:** `g17-hybrid-search-1789039639500.json`
+**Hardware:** Apple M4, 24 GB · trend-analysis only (not SLA; macOS ≠ Linux prod)
 
-Synthetic 32-dim embeddings (deterministic hash bag — not a production model). Modes: text-only (BM25/GIN), vector-only (LSH buckets + cosine), hybrid (RRF k=60). Recall = precision@10 of the LSH/hybrid path vs **exact brute-force cosine** on the same in-memory vectors.
+Synthetic 32-dim embeddings (deterministic hash bag — not a production model). Modes: text-only (BM25/GIN), vector-only (LSH + cosine), hybrid (RRF k=60). Recall = precision@10 of the LSH/hybrid path vs **exact brute-force cosine** on the same in-memory vectors.
 
-### Latency (p50 / p99 ms)
+### Before — v0.19.0 (2026-09-10)
+
+**Postgres:** 16.15 · **Artifact:** `g17-hybrid-search-1789039639500.json`  
+Query path: K=64 bucket equality plus Hamming-1 (`= ANY(65 buckets)`), oversample ≤50.
+
+#### Latency (p50 / p99 ms)
 
 | N    | text p50 | text p99 | vector p50 | vector p99 | hybrid p50 | hybrid p99 |
 | ---- | -------- | -------- | ---------- | ---------- | ---------- | ---------- |
@@ -195,7 +198,7 @@ Synthetic 32-dim embeddings (deterministic hash bag — not a production model).
 | 100k | 39.86    | 59.73    | 57.05      | 126.14     | 52.08      | 288.09     |
 | 1M   | 877.57   | 2243.68  | 1165.5     | 3370.19    | 649.14     | 1861.91    |
 
-### Recall — LSH approx vs exact cosine (precision@10)
+#### Recall — LSH approx vs exact cosine (precision@10)
 
 | N    | vector P@10 | hybrid P@10 | exact cosine p50 (ms) | approx p50 (ms) |
 | ---- | ----------- | ----------- | --------------------- | --------------- |
@@ -204,22 +207,50 @@ Synthetic 32-dim embeddings (deterministic hash bag — not a production model).
 | 100k | **0.000**   | **0.000**   | ~36                   | ~54             |
 | 1M   | 0.008       | **0.000**   | ~445                  | ~600            |
 
-**Honest verdict:** on this corpus the random-hyperplane LSH path (K=64, Hamming-1 neighbors, candidate oversample ≤50) does **not** recover the exact cosine top-10. Treat built-in LSH as a cheap candidate generator for hybrid fusion — **not** a drop-in for HNSW/pgvector recall. Prefer BM25-only or an external `store.index` (`pgvector` / Meilisearch) when semantic recall matters.
+**Root cause (not an LSH-vs-HNSW tradeoff):** write-time and query-time buckets were byte-identical; `neighborBuckets` did emit 65 probes; `= ANY(?::bigint[])` matched stored rows. Hamming-1 at K=64 cannot see true neighbors. On this generator, same-topic docs sit at cosine ≈0.96 / Hamming ~5; a topic-string query vs those docs is cosine ≈0.82 / expected Hamming ~12. P(Hamming ≤ 1) at K=64 is ~10⁻⁵. A 40-row hand case recovered **0/10** exact neighbors via Hamming-1 and **10/10** via Hamming-rank + cosine. The hash-bag embedding is clustered (8 topics, near-duplicate bodies) — that makes exact top-10 at large N a lottery among the cluster, but it does **not** explain the zero collapse at N=40.
 
-### EXPLAIN (ANALYZE, BUFFERS) at N=100k
+The 2026-09-10 EXPLAIN (Seq Scan, `tsv @@ q OR lsh = ANY(…)`) was a separate planner finding on that query shape.
 
-Postgres 16 chose a **Seq Scan** with a Filter on `__oke_tsv @@ plainto_tsquery(…) OR __oke_lsh_body = ANY(…)` (Limit 50; execution ~0.27 ms; shared hit=27). GIN + LSH B-tree indexes exist; the planner did **not** emit BitmapOr on this hardware/stats for the measured query. Do not claim BitmapOr from design alone — re-check `EXPLAIN` on production data volumes and `ANALYZE`d tables.
+### After — Hamming-rank candidate path (2026-09-11)
+
+**Date:** 2026-09-11 · **Engine:** Bun 1.4.2 · **Postgres:** 16 (dedicated live instance, not PGlite)  
+**Artifact:** `g17-hybrid-search-1789135622349.json`  
+Fix: UNION of GIN lexical `LIMIT` and SimHash k-NN (`ORDER BY bit_count((lsh # query)::bit(64)) LIMIT oversample`). Same K=64, same oversample formula `max(limit×5, 50)` capped at 500. Not a K/oversample paper-over.
+
+#### Latency (p50 / p99 ms)
+
+| N    | text p50 | text p99 | vector p50 | vector p99 | hybrid p50 | hybrid p99 |
+| ---- | -------- | -------- | ---------- | ---------- | ---------- | ---------- |
+| 1k   | 0.88     | 2.8      | 1.27       | 2.37       | 1.28       | 1.54       |
+| 10k  | 4.5      | 17.21    | 9.36       | 29.03      | 6.88       | 32.48      |
+| 100k | 21.03    | 27.61    | 30.61      | 49.8       | 34.08      | 89.99      |
+| 1M   | 305.61   | 377.7    | 388.98     | 548.36     | 391.96     | 469.76     |
+
+#### Recall — LSH approx vs exact cosine (precision@10)
+
+| N    | vector P@10 | hybrid P@10 | exact cosine p50 (ms) | approx p50 (ms) |
+| ---- | ----------- | ----------- | --------------------- | --------------- |
+| 1k   | 0.167       | 0.117       | 0.6 / 0.41            | 1.25 / 1.3      |
+| 10k  | 0.100       | 0.017       | ~6                    | ~9              |
+| 100k | 0.017       | 0.008       | ~45                   | ~32            |
+| 1M   | 0.017       | 0.000       | ~535                  | ~363            |
+
+**Honest verdict after the fix:** the near-total collapse at 10k/100k is gone on the vector path (smooth 0.17 → 0.10 → 0.017). Remaining low precision@10 vs exact cosine is the real K=64 SimHash + 50-candidate oversample tradeoff on this near-duplicate hash-bag corpus — not a hashing mismatch. Still **not** a drop-in for HNSW/pgvector. Prefer BM25-only or an external `store.index` (`pgvector` / Meilisearch) when semantic recall matters.
+
+### EXPLAIN (ANALYZE, BUFFERS) at N=100k (after)
+
+UNION Append (~14.7 ms): **Bitmap Index Scan** on the GIN tsvector (50 lexical rows) plus **Parallel Seq Scan** + top-N heapsort on `bit_count((lsh # query)::bit(64))` (50 SimHash-nearest). Hamming-rank cannot use the LSH B-tree (equality index). Do not claim BitmapOr from design alone — re-check `EXPLAIN` on production data volumes and `ANALYZE`d tables.
 
 ### Backfill kill / resume (50k pre-populated rows)
 
-| Metric                             | Value  |
-| ---------------------------------- | ------ |
-| Kill after embeds                  | 2,000  |
-| Embeds at kill                     | 2,000  |
-| Kill wall                          | 726 ms |
-| Resume wall (re-run to completion) | 29.3 s |
-| Final embedded rows                | 50,000 |
+| Metric                             | Before (2026-09-10) | After (2026-09-11) |
+| ---------------------------------- | ------------------- | ------------------ |
+| Kill after embeds                  | 2,000               | 2,000              |
+| Embeds at kill                     | 2,000               | 2,000              |
+| Kill wall                          | 726 ms              | 732 ms             |
+| Resume wall (re-run to completion) | 29.3 s              | 28.3 s             |
+| Final embedded rows                | 50,000              | 50,000             |
 
 Re-running `oke db search-backfill` after interrupt completed idempotently (safe re-entry; DF/stats rebuilt).
 
-**Issues recorded in artifact:** eight low-recall notes (all sizes). No product fix applied mid-bench — numbers stand as measured.
+**Issues recorded in after artifact:** eight low-recall notes (P@10 still < 0.3 at every size — honest SimHash-vs-exact remainder, not the Hamming-1 zero collapse).

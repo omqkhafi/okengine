@@ -47,9 +47,10 @@ import { z } from "zod";
 import { db, notes } from "@/schema";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ title: z.string().min(1) }),
+  }),
+  flow({
     do: async ({ title }, fx) => {
       const id = fx.id();
       await fx.store(db).insert(notes).values({ id, title });
@@ -106,10 +107,11 @@ import { eq } from "drizzle-orm";
 import { db, notes } from "@/schema";
 
 export const get = on(
-  http.get(),
-  flow({
+  http.get({
     in: z.object({ id: z.string() }),
     errors: { NotFound: z.object({ id: z.string() }) },
+  }),
+  flow({
     do: async ({ id }, fx) => {
       const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
       if (!note) return fx.fail("NotFound", { id });
@@ -128,11 +130,11 @@ Prefer [`store.resource`](/docs/elements/store/sql#resources) when you want five
 Pass the **declaration** into `fx.store` — there is no `fx.store.kv` namespace. TTL is a duration string:
 
 ```typescript title="src/flows/sessions/put.ts"
-import { flow } from "okengine";
+import { call } from "okengine";
 import { z } from "zod";
 import { sessions } from "@/core";
 
-export const putSession = flow("sessions.put", {
+export const putSession = call("sessions.put", {
   in: z.object({ token: z.string(), userId: z.string() }),
   do: async ({ token, userId }, fx) => {
     await fx.store(sessions).set(`session:${token}`, userId, "1h");
@@ -159,9 +161,10 @@ import { z } from "zod";
 import { uploads } from "@/core";
 
 export const create = on(
-  http.post(),
-  flow({
+  http.post({
     in: z.object({ bytes: z.string() }),
+  }),
+  flow({
     do: async ({ bytes }, fx) => {
       const key = `avatars/${fx.id()}.png`;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
