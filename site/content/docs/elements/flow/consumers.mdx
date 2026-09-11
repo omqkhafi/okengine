@@ -343,10 +343,10 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 
 <Callout title="Detailed section">
   Prefer `clock.every` / `clock.daily` / `clock.cron` (and the other named helpers) for fixed
-  schedules — they compile to the same decl as the bare callable. The lower-level bare
-  `clock(name, options)` form still works when you need a raw expression or a schedule chosen
-  programmatically; missing both `cron` and `every` throws
-  `clock("name"): require cron or every`. Bind the returned handle with `on(clockDecl, flow)`.
+  schedules — they compile to the same decl as the bare callable. The lower-level bare `clock(name,
+  options)` form still works when you need a raw expression or a schedule chosen programmatically;
+  missing both `cron` and `every` throws `clock("name"): require cron or every`. Bind the returned
+  handle with `on(clockDecl, flow)`.
 </Callout>
 
 Named clocks reconcile into the Store at boot. The scheduler leader-elects so N instances do not
