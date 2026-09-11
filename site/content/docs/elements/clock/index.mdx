@@ -75,10 +75,10 @@ Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting 
 
 ## Inline or named export
 
-| Style | When |
-| ----- | ---- |
-| `on(clock.every("name", "1h"), flow({ do }))` | Self-contained — nothing else needs the Clock handle |
-| `export const x = clock.every("name", "1h")` | Another file (or a second `on()`) must reuse the same declaration |
+| Style                                         | When                                                              |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| `on(clock.every("name", "1h"), flow({ do }))` | Self-contained — nothing else needs the Clock handle              |
+| `export const x = clock.every("name", "1h")`  | Another file (or a second `on()`) must reuse the same declaration |
 
 Nameless `flow({ do })` inherits the Clock's declared name. File-tree `unit.export` and explicit
 `flow("…")` win. Two nameless Flows inheriting the same name fail **OKE1070**.

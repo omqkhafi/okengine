@@ -82,10 +82,10 @@ for the worker.
 
 ## Inline or named export
 
-| Style | When |
-| ----- | ---- |
-| `on(signal.once("name", opts), flow({ do }))` | Self-contained — nothing else emits to this Signal |
-| `export const x = signal.once<Payload>(…)` | Another file needs `fx.emit(x, payload)` with compile-time payload checking |
+| Style                                         | When                                                                        |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| `on(signal.once("name", opts), flow({ do }))` | Self-contained — nothing else emits to this Signal                          |
+| `export const x = signal.once<Payload>(…)`    | Another file needs `fx.emit(x, payload)` with compile-time payload checking |
 
 A string `fx.emit("name", payload)` still runs (runtime `schema` still applies) but does not
 type-check the payload.

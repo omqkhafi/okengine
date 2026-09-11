@@ -90,11 +90,11 @@ See [Store](/docs/elements/store) for the query-builder surface.
 
 ## Signals
 
-| Signature                             | Records                | Notes                                                                                                                                                                                                     |
-| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signature                             | Records                | Notes                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fx.emit(signal, payload?, { key? })` | `emit`                 | Pass a `SignalDecl<T>` handle to type-check `payload`; a string name stays `unknown` (runtime `schema` still applies). Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1240** (orphan) or **OKE1250** (schema) |
-| `fx.deadLetters(signal)`              | `read` `signal:<name>` | Dead-lettered messages for that signal. Payload typed from `SignalDecl<T>`. Page with `fx.json.withQuery`. Cross-signal throws **OKE1001**.                                                               |
-| `fx.live(signal, { match? })`         | `read` `signal:<name>` | Live tape as SSE. Returns `JsonStreamResult` (object chunks, `id:` on the wire). Cross-signal throws **OKE1001**. Do not wrap with `fx.json.stream`.                                                      |
+| `fx.deadLetters(signal)`              | `read` `signal:<name>` | Dead-lettered messages for that signal. Payload typed from `SignalDecl<T>`. Page with `fx.json.withQuery`. Cross-signal throws **OKE1001**.                                                                                                                                                                                      |
+| `fx.live(signal, { match? })`         | `read` `signal:<name>` | Live tape as SSE. Returns `JsonStreamResult` (object chunks, `id:` on the wire). Cross-signal throws **OKE1001**. Do not wrap with `fx.json.stream`.                                                                                                                                                                             |
 
 ## Runs (observability read)
 
