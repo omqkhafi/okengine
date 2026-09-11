@@ -12,6 +12,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+#### Docs
+
+- CDC consumers docs add **Bare or enriched** (Style / When table, Bare vs
+  Enriched worked examples, same-object honesty) to match Signal / Clock
+  **Inline or named export**.
+- Signal and Clock **Inline or named export** now include complete Inline vs
+  Named worked examples — one-file `on(signal.once / clock.every, flow({ do }))`
+  versus an exported handle — matching CDC **Bare or enriched**.
+- Signal and Clock **Flow name** documents inherit vs explicit vs tree
+  (`flow({ do })` takes the trigger name only with no unit folder; `flow("…")`
+  and `src/flows/<unit>/` `unit.export` overwrite; collision is **OKE1070**).
+
 ## v0.19.2 — 2026-09-12
 
 ### ✨ Added

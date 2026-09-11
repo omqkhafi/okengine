@@ -195,8 +195,9 @@ Omit `key` for competing consumers with no ordering.
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
 
-Inline `on(signal.once("…"), flow({ do }))` is supported; export the handle for typed `fx.emit`.
-Nameless `flow({ do })` inherits the trigger name; a second nameless inherit fails **OKE1070**.
+One-file inline vs exported handle: [Signal](/docs/elements/signal#inline-or-named-export) ·
+[Clock](/docs/elements/clock#inline-or-named-export). Flow name (inherit / explicit / tree):
+[Signal](/docs/elements/signal#flow-name) · [Clock](/docs/elements/clock#flow-name). Collision is **OKE1070**.
 
 ## Signal Consumers
 
@@ -489,49 +490,34 @@ do not fire.
 ## CDC
 
 <Callout title="Detailed section">
-  If you only need any-write, jump to the example below. The handle is
+  If you only need any-write, jump to Bare or enriched below. The handle is
   `db.table(table).changed(column?)` — `db` is a `store.sql` declaration, `table` is a schema
   handle. `changed("insert")` is **not** an op filter; it stamps a column named `insert`.
 </Callout>
 
 SQL writes through `fx.store` notify CDC after commit. The Flow input is always
-`{ before, after }` plus `table`, `action`, and `id` (`CdcPayload`). Destructure
-only `{ before, after }` when that's all you need.
+`{ before, after, table, action, id }` (`CdcPayload`).
 
-<Tabs items={["Audit log", "Bare", "Images"]}>
+### Bare or enriched
 
-<Tab value="Audit log">
+| Style                     | When                                                                   |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `({ before, after })`     | Bound to one table — images are enough (search reindex, listing cache) |
+| `({ table, action, id })` | Log, route, or branch — kind of change and which record (audit log)    |
 
-`table` is the real table name. `action` is `"created"` / `"updated"` / `"deleted"`.
-`id` is the declared primary-key value — not a hardcoded `"id"` column:
+Both styles receive the same object. There is no second dispatch path, no
+performance difference, and no correctness difference — the choice is which
+fields this handler destructures.
 
-```typescript title="src/flows/audit/users.ts"
-import { on, flow } from "okengine";
-import { db } from "@/core";
-import { users, auditLogs } from "@/schema";
+`{ table, action, id }` are always populated; omitting them from `do` does not
+drop them from the payload.
 
-export const onUserWrite = on(
-  db.table(users).changed(),
-  flow("audit.users", {
-    do: async ({ table, action, id, before, after }, fx) => {
-      await fx
-        .store(db)
-        .insert(auditLogs)
-        .values({
-          table,
-          recordId: String(id),
-          action,
-        });
-    },
-  }),
-);
-```
-
-</Tab>
+<Tabs items={["Bare", "Enriched", "Images"]}>
 
 <Tab value="Bare">
 
-Omit `table` / `action` / `id` when you only need the row images:
+Bound to `notes` — the table is already in the trigger. Images decide upsert vs
+drop; the row's `id` is on the surviving image:
 
 ```typescript title="src/flows/search/reindex.ts"
 import { on, flow } from "okengine";
@@ -553,25 +539,30 @@ export const reindexNotes = on(
 );
 ```
 
-`changed("status")` stamps `trigger.cdc.column` on the Manifest. Still receive the
-same payload — filter in `do` when you only care about that field:
+</Tab>
 
-```typescript title="src/flows/tasks/on-status.ts"
+<Tab value="Enriched">
+
+`table` is the real table name. `action` is `"created"` / `"updated"` / `"deleted"`.
+`id` is the declared primary-key value — not a hardcoded `"id"` column:
+
+```typescript title="src/flows/audit/users.ts"
 import { on, flow } from "okengine";
 import { db } from "@/core";
-import { tasks } from "@/schema";
+import { users, auditLogs } from "@/schema";
 
-export const onStatus = on(
-  db.table(tasks).changed("status"),
-  flow("tasks.onStatus", {
-    plane: "operator",
-    do: async ({ before, after, id }, fx) => {
-      if (before?.status === after?.status) return;
-      await fx.emit(taskStatusChanged, {
-        id,
-        from: before?.status ?? null,
-        to: after?.status ?? null,
-      });
+export const onUserWrite = on(
+  db.table(users).changed(),
+  flow("audit.users", {
+    do: async ({ table, action, id }, fx) => {
+      await fx
+        .store(db)
+        .insert(auditLogs)
+        .values({
+          table,
+          recordId: String(id),
+          action,
+        });
     },
   }),
 );
@@ -604,6 +595,30 @@ do: async ({ before, after, action }, fx) => {
 </Tab>
 
 </Tabs>
+
+`changed("status")` stamps `trigger.cdc.column` on the Manifest. Still the same
+payload — filter in `do` when you only care about that field:
+
+```typescript title="src/flows/tasks/on-status.ts"
+import { on, flow } from "okengine";
+import { db } from "@/core";
+import { tasks } from "@/schema";
+
+export const onStatus = on(
+  db.table(tasks).changed("status"),
+  flow("tasks.onStatus", {
+    plane: "operator",
+    do: async ({ before, after, id }, fx) => {
+      if (before?.status === after?.status) return;
+      await fx.emit(taskStatusChanged, {
+        id,
+        from: before?.status ?? null,
+        to: after?.status ?? null,
+      });
+    },
+  }),
+);
+```
 
 <Accordions>
 

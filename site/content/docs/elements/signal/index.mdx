@@ -84,14 +84,163 @@ for the worker.
 
 | Style                                         | When                                                                        |
 | --------------------------------------------- | --------------------------------------------------------------------------- |
-| `on(signal.once("name", opts), flow({ do }))` | Self-contained — nothing else emits to this Signal                          |
+| `on(signal.once("name", opts), flow({ do }))` | Self-contained — nothing else needs the Signal handle                       |
 | `export const x = signal.once<Payload>(…)`    | Another file needs `fx.emit(x, payload)` with compile-time payload checking |
 
-A string `fx.emit("name", payload)` still runs (runtime `schema` still applies) but does not
-type-check the payload.
+Both styles stamp the same Manifest `flow.trigger`. The choice is where the
+declaration lives, not two runtimes.
 
-Nameless `flow({ do })` inherits the Signal name; file-tree `unit.export` and explicit
-`flow("…")` win. Two nameless inheritances of the same name fail **OKE1070**.
+A string `fx.emit("name", payload)` still runs (runtime `schema` still applies) but does not
+type-check. What the Flow is called is a separate choice — [Flow name](#flow-name).
+
+<Tabs items={["Inline", "Named"]}>
+
+<Tab value="Inline">
+
+One file — declare and bind together. Producers emit with the string name:
+
+```typescript title="src/flows/hooks/inbound.ts"
+import { on, flow, signal } from "okengine";
+import { z } from "zod";
+
+export const ingestWebhook = on(
+  signal.once("hooks.inbound", {
+    schema: z.object({ id: z.string() }),
+    retries: 3,
+    deadLetter: true,
+  }),
+  flow({
+    do: async ({ id }, fx) => {
+      await fx.call(persistHook, { id });
+    },
+  }),
+);
+```
+
+```typescript
+await fx.emit("hooks.inbound", { id: "h_1" });
+```
+
+</Tab>
+
+<Tab value="Named">
+
+Export the handle when another file must `fx.emit` with compile-time payload checking:
+
+```typescript title="src/signals/orders.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderPlaced = signal.once("orders.placed", {
+  schema: z.object({ orderId: z.string() }),
+});
+```
+
+```typescript title="src/flows/orders/fulfill.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const fulfill = on(
+  orderPlaced,
+  flow("orders.fulfill", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeAndShip, { orderId });
+    },
+  }),
+);
+```
+
+```typescript
+await fx.emit(orderPlaced, { orderId: "ord_99" });
+```
+
+</Tab>
+
+</Tabs>
+
+## Flow name
+
+| Style                         | When                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| `flow({ do })`                | No unit folder — Flow name is the Signal name (`hooks.inbound`)               |
+| `flow("orders.fulfill")`      | Manifest / `fx.call` name must differ from the Signal                         |
+| Tree `export const onCreated` | `src/flows/notes/on-created.ts` stamps `notes.onCreated` — overwrites inherit |
+
+Explicit `flow("…")` and the file tree overwrite inherit. HTTP does not inherit a
+name from the path — nameless HTTP stays for the tree or fails **OKE1045**. Two
+Flows that land on the same name fail **OKE1070** (`Flow "{flow}" is defined twice.`).
+
+<Tabs items={["Inherit", "Explicit", "Tree"]}>
+
+<Tab value="Inherit">
+
+A file directly in `src/flows/` (no unit folder) has nothing to stamp. The Flow
+is named `hooks.inbound` — same as the Signal:
+
+```typescript title="src/flows/hooks.ts"
+import { on, flow, signal } from "okengine";
+import { z } from "zod";
+
+export const ingestWebhook = on(
+  signal.once("hooks.inbound", {
+    schema: z.object({ id: z.string() }),
+    retries: 3,
+    deadLetter: true,
+  }),
+  flow({
+    do: async ({ id }, fx) => {
+      await fx.call(persistHook, { id });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Explicit">
+
+The Signal stays `orders.placed`. The Flow is `orders.fulfill` — that is the
+Manifest / `fx.call` name:
+
+```typescript title="src/flows/fulfill.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const fulfill = on(
+  orderPlaced,
+  flow("orders.fulfill", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeAndShip, { orderId });
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Tree">
+
+Unit folder + `export const` stamps `unit.export`. The Flow is `notes.onCreated`,
+not `note-created`:
+
+```typescript title="src/flows/notes/on-created.ts"
+import { on, flow } from "okengine";
+import { noteCreatedMail } from "@/core";
+import { noteCreated } from "./signals";
+
+export const onCreated = on(
+  noteCreated,
+  flow({
+    do: async ({ id }, fx) => {
+      await fx.send(noteCreatedMail, { to: "you@localhost", data: { id } });
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
 
 ## Progressive Patterns
 
@@ -320,6 +469,12 @@ export default defineConfig({
   on the Signal. The consumer never ran.
 </Accordion>
 
+<Accordion title="OKE1070 — flow name defined twice">
+  Cause: `Flow "{flow}" is defined twice.` Two nameless consumers inherited the same Signal name, or
+  two explicit `flow("…")` calls collide. Give at least one a distinct `flow("…")` or tree export —
+  [Flow name](#flow-name).
+</Accordion>
+
 <Accordion title='oke boot: signal driver "postgres" / "nats"'>
   Those ids are reserved but not bound for production yet. Use `"memory"` or `"redis"`, or inject a
   custom `elements.signal` runtime.
@@ -339,10 +494,11 @@ export default defineConfig({
 - [Broadcast](/docs/elements/signal/broadcast) — ephemeral fan-out
 - [Live](/docs/elements/signal/live) — SSE tapes and retention
 - [Consumers](/docs/elements/flow/consumers) — `on(signal)` workers next to Clock / CDC
+- [Routing](/docs/elements/flow/routing#names) — tree `unit.export` vs inherit
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `http.live` exposure
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.live`
 - [Client](/docs/client/live) — `api.live` for browsers
-- [Errors](/docs/reference/errors) — OKE1240 · OKE1250 · OKE1210
+- [Errors](/docs/reference/errors) — OKE1070 · OKE1240 · OKE1250 · OKE1210
 
 ## Next
 

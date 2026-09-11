@@ -455,11 +455,18 @@ prefix). Wrong-unit prefixes fail generate.
 Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
 
-Outside the tree, nameless `flow({ do })` inherits a named Signal or Clock trigger.
-File-tree `unit.export` still wins. Two nameless inheritances fail **OKE1070**. HTTP has no
-inherent trigger name — those Flows stay on the tree stamp or **OKE1045**.
+Nameless Signal / Clock consumers take the trigger name only when the tree does
+not stamp `unit.export`:
 
-HTTP flows that remain nameless after adopt fail **OKE1045**.
+| Style                           | Flow name               |
+| ------------------------------- | ----------------------- |
+| `flow({ do })` (no unit folder) | the Signal / Clock name |
+| `flow("orders.fulfill")`        | the string you passed   |
+| `src/flows/notes/on-created.ts` | `notes.onCreated`       |
+
+Worked examples: [Signal · Flow name](/docs/elements/signal#flow-name) ·
+[Clock · Flow name](/docs/elements/clock#flow-name). Collision fails **OKE1070**.
+HTTP has no trigger name of this kind — nameless HTTP stays for the tree or **OKE1045**.
 
 ## Runtime Matching
 

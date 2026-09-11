@@ -80,8 +80,142 @@ Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting 
 | `on(clock.every("name", "1h"), flow({ do }))` | Self-contained — nothing else needs the Clock handle              |
 | `export const x = clock.every("name", "1h")`  | Another file (or a second `on()`) must reuse the same declaration |
 
-Nameless `flow({ do })` inherits the Clock's declared name. File-tree `unit.export` and explicit
-`flow("…")` win. Two nameless Flows inheriting the same name fail **OKE1070**.
+Both styles stamp the same Manifest `flow.trigger`. The choice is where the
+declaration lives, not two runtimes.
+
+What the Flow is called is a separate choice — [Flow name](#flow-name).
+
+<Tabs items={["Inline", "Named"]}>
+
+<Tab value="Inline">
+
+One file — declare and bind together. The scheduler fires it; no other file
+imports the handle:
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow, clock } from "okengine";
+
+export const pingExternal = on(
+  clock.every("health.pingExternal", "30s"),
+  flow({
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(pingUpstream);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Named">
+
+Export the handle when another file (or a second `on()`) must reuse the same
+declaration:
+
+```typescript title="src/clocks/digest.ts"
+import { clock } from "okengine";
+
+export const digestClock = clock.every("notes.digest", "1d");
+```
+
+```typescript title="src/flows/notes/digest.ts"
+import { on, flow } from "okengine";
+import { digestClock } from "@/clocks/digest";
+
+export const digest = on(
+  digestClock,
+  flow("notes.digest", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(buildDigest, { at: fx.clock.now() });
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
+
+## Flow name
+
+| Style                     | When                                                             |
+| ------------------------- | ---------------------------------------------------------------- |
+| `flow({ do })`            | No unit folder — Flow name is the Clock name (`metrics.cleanup`) |
+| `flow("ops.sweep")`       | Manifest / `fx.call` name must differ from the Clock             |
+| Tree `export const sweep` | `src/flows/ops/sweep.ts` stamps `ops.sweep` — overwrites inherit |
+
+Explicit `flow("…")` and the file tree overwrite inherit. HTTP does not inherit a
+name from the path — nameless HTTP stays for the tree or fails **OKE1045**. Two
+Flows that land on the same name fail **OKE1070** (`Flow "{flow}" is defined twice.`).
+
+<Tabs items={["Inherit", "Explicit", "Tree"]}>
+
+<Tab value="Inherit">
+
+A file directly in `src/flows/` (no unit folder) has nothing to stamp. The Flow
+is named `metrics.cleanup` — same as the Clock:
+
+```typescript title="src/flows/cleanup.ts"
+import { on, flow, clock } from "okengine";
+
+export const cleanupMetrics = on(
+  clock.every("metrics.cleanup", "1h"),
+  flow({
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(sweepMetrics);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Explicit">
+
+The Clock stays `metrics.cleanup`. The Flow is `ops.sweep` — that is the
+Manifest / `fx.call` name:
+
+```typescript title="src/flows/sweep.ts"
+import { on, flow, clock } from "okengine";
+
+export const sweep = on(
+  clock.every("metrics.cleanup", "1h"),
+  flow("ops.sweep", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(sweepMetrics);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Tree">
+
+Unit folder + `export const` stamps `unit.export`. The Flow is `ops.sweep`, not
+the Clock name `cleanup`:
+
+```typescript title="src/flows/ops/sweep.ts"
+import { on, flow, clock } from "okengine";
+
+export const sweep = on(
+  clock.every("cleanup", "10m"),
+  flow({
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(sweepMetrics);
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
 
 ## Progressive Patterns
 
@@ -279,6 +413,12 @@ export default defineConfig({
   declaration in source.
 </Accordion>
 
+<Accordion title="OKE1070 — flow name defined twice">
+  Cause: `Flow "{flow}" is defined twice.` Two nameless consumers inherited the same Clock name, or
+  two explicit `flow("…")` calls collide. Give at least one a distinct `flow("…")` or tree export —
+  [Flow name](#flow-name).
+</Accordion>
+
 </Accordions>
 
 ## Learn more
@@ -288,7 +428,8 @@ export default defineConfig({
 - [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs) — bind with `on(clockDecl, flow)`
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` around sleeps
 - [fx](/docs/reference/fx) — full `fx.clock` table
-- [Errors](/docs/reference/errors) — `ScheduleNotOverridableError` · `ClockResourceNotFoundError`
+- [Routing](/docs/elements/flow/routing#names) — tree `unit.export` vs inherit
+- [Errors](/docs/reference/errors) — `ScheduleNotOverridableError` · `ClockResourceNotFoundError` · OKE1070
 
 ## Next
 
