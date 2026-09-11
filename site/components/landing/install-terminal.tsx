@@ -8,8 +8,8 @@
 
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
-import { PORTS } from "@/lib/elements";
 import { cn } from "@/lib/cn";
+import { PORTS } from "@/lib/elements";
 
 type TerminalTab = {
   readonly id: string;
@@ -51,8 +51,10 @@ const TABS: ReadonlyArray<TerminalTab> = [
 /**
  * Terminal-styled tab strip with copyable commands and the surfaces each one
  * brings up.
+ *
+ * @param className - Extra classes on the outer frame
  */
-export function InstallTerminal() {
+export function InstallTerminal({ className }: { readonly className?: string }) {
   const [activeId, setActiveId] = useState<string>(TABS[0]!.id);
   const [copied, setCopied] = useState(false);
   const active = TABS.find((tab) => tab.id === activeId) ?? TABS[0]!;
@@ -68,7 +70,12 @@ export function InstallTerminal() {
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-fd-border bg-fd-card">
+    <div
+      className={cn(
+        "flex h-full w-full flex-col overflow-hidden rounded-xl border border-fd-border bg-fd-card",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-2 border-b border-fd-border pl-2">
         <div role="tablist" aria-label="Install commands" className="flex items-center">
           {TABS.map((tab) => (
@@ -102,7 +109,7 @@ export function InstallTerminal() {
         </button>
       </div>
 
-      <div className="px-4 py-4 font-mono text-xs leading-relaxed">
+      <div className="flex-1 px-4 py-4 font-mono text-xs leading-relaxed">
         {active.commands.map((command, index) => (
           <p key={command} className="flex gap-2 wrap-anywhere">
             <span aria-hidden className="text-fd-muted-foreground/60 select-none">

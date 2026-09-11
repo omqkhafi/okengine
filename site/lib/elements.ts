@@ -135,11 +135,10 @@ export const OKE_VERSION = process.env.NEXT_PUBLIC_OKE_VERSION ?? "0.0.0";
  * Presentation (brand marks / ink) lives in the hero; this is just the labels.
  */
 export const REAL_TODAY: ReadonlyArray<{
-  readonly id: "backend" | "typescript" | "version";
+  readonly id: "typescript" | "version";
   readonly label: string;
 }> = [
   { id: "typescript", label: "TypeScript" },
-  { id: "backend", label: "Backend" },
   { id: "version", label: `v${OKE_VERSION}` },
 ];
 

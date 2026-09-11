@@ -106,13 +106,14 @@ export function FlowSimulator(): ReactNode {
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { margin: "-12% 0px" });
   const [run, setRun] = useState(0);
+  const [pinned, setPinned] = useState<TriggerKind | null>(null);
   const [state, setState] = useState<SimState>(reduced ? DONE : IDLE);
 
   useEffect(() => {
     if (reduced || !inView) return;
     let cancelled = false;
     const ids: Array<number> = [];
-    const kind = TRIGGERS[run % TRIGGERS.length]!.kind;
+    const kind = pinned ?? TRIGGERS[run % TRIGGERS.length]!.kind;
     for (const entry of timeline(kind)) {
       ids.push(
         window.setTimeout(() => {
@@ -129,10 +130,11 @@ export function FlowSimulator(): ReactNode {
       cancelled = true;
       for (const id of ids) window.clearTimeout(id);
     };
-  }, [run, inView, reduced]);
+  }, [run, inView, reduced, pinned]);
 
   const sim = reduced ? DONE : state;
-  const activeTrigger = TRIGGERS.find((t) => t.kind === sim.trigger) ?? TRIGGERS[0]!;
+  const shownKind = pinned ?? sim.trigger;
+  const activeTrigger = TRIGGERS.find((t) => t.kind === shownKind) ?? TRIGGERS[0]!;
 
   return (
     <MotionConfig reducedMotion="never">
@@ -145,26 +147,53 @@ export function FlowSimulator(): ReactNode {
           species: each binds with on(), runs one Flow, and produces Effects through fx.
         </p>
 
-        <figcaption className="flex items-center justify-between gap-3 border-b border-fd-border px-4 py-2.5">
-          <span className="flex items-center gap-2 font-mono text-[11px] text-fd-muted-foreground">
-            <span
-              aria-hidden
-              className="sently-dot-pulse size-1 rounded-full bg-fd-foreground/60"
-            />
-            live · one law
-          </span>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={activeTrigger.zoo}
-              initial={reduced ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={reduced ? undefined : { opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="font-mono text-[11px] text-fd-muted-foreground"
-            >
-              {activeTrigger.zoo}
-            </motion.span>
-          </AnimatePresence>
+        <figcaption className="flex flex-col gap-2 border-b border-fd-border px-4 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 font-mono text-[11px] text-fd-muted-foreground">
+              <span
+                aria-hidden
+                className="sently-dot-pulse size-1 rounded-full bg-fd-foreground/60"
+              />
+              live · one law
+            </span>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={activeTrigger.zoo}
+                initial={reduced ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={reduced ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="font-mono text-[11px] text-fd-muted-foreground"
+              >
+                {activeTrigger.zoo}
+              </motion.span>
+            </AnimatePresence>
+          </div>
+          <div role="tablist" aria-label="Trigger kind" className="flex flex-wrap gap-1">
+            {TRIGGERS.map((row) => {
+              const selected = shownKind === row.kind;
+              return (
+                <button
+                  key={row.kind}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setPinned((prev) => (prev === row.kind ? null : row.kind));
+                    setRun((current) => current + 1);
+                  }}
+                  className={cn(
+                    "rounded-md border px-2 py-1 font-mono text-[10px] leading-none transition-colors",
+                    selected
+                      ? "border-fd-foreground/40 bg-fd-foreground text-fd-background"
+                      : "border-fd-border text-fd-muted-foreground hover:text-fd-foreground",
+                  )}
+                >
+                  {row.kind}
+                </button>
+              );
+            })}
+          </div>
         </figcaption>
 
         <ol className="flex flex-1 flex-col px-4 py-5 sm:px-5">

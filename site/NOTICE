@@ -36,6 +36,26 @@ truth; and the changelog is parsed from the committed root changelog.md rather
 than fetched from the GitHub releases API, so the site build is
 deterministic and builds with no network.
 
+React Bits (hero prism backdrop)
+-------------------------------
+`site/components/landing/prism-backdrop.tsx` adapts the `Prism` WebGL
+background — the ray-marched prism SDF, its grade, and the ogl mount — from
+React Bits:
+
+  https://github.com/DavidHDev/react-bits
+
+Upstream path:
+  src/content/Backgrounds/Prism/Prism.tsx
+
+Licence: MIT License (LICENSE in that repository)
+Copyright (c) 2025 David Haz
+
+Adapted, not copied verbatim: the prop surface is replaced by fixed okengine
+tuning (desaturated, no hue shift — the YIQ hue matrix tints near-grey ink
+green), the `lightMode` flag follows the live `dark` class, the render loop
+re-measures its percentage-sized host, device pixel ratio is capped, and the
+loop obeys `prefers-reduced-motion` by painting one frame with time frozen.
+
 Problem-space diagram (concept only)
 ------------------------------------
 The idea of arguing the problem with a tabbed panel whose first view is a

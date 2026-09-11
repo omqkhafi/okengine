@@ -56,22 +56,44 @@ function useFinePointer(): boolean {
   return fine;
 }
 
+/** Optional host control — the homepage fx walk drives which cap is lit. */
+export type ElementLatticeProps = {
+  /**
+   * When set, the parent drives which cap is lit and the idle walk stops.
+   * `null` means nothing lit unless the pointer is over a cap.
+   */
+  readonly guidedIndex?: number | null;
+  /**
+   * Pointer/keyboard hover index only — not the composed guided/idle focus.
+   *
+   * @param index - Hovered cap, or `null` when the pointer leaves
+   */
+  readonly onHoverIndex?: (index: number | null) => void;
+};
+
 /**
  * Hero-column field of the eight elements — one isometric slab per export,
  * each linking to its reference page. The caption under the canvas is the
  * reading: name, what it replaces, and the docs path.
+ *
+ * @param guidedIndex - Parent-driven lit cap; omit for the idle walk
+ * @param onHoverIndex - Hover reporter for a parent code walk
  */
-export function ElementLattice() {
+export function ElementLattice({ guidedIndex, onHoverIndex }: ElementLatticeProps = {}) {
   const reduced = useClientReducedMotion();
   const finePointer = useFinePointer();
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<IsoHandle | null>(null);
+  const onHoverIndexRef = useRef(onHoverIndex);
+  onHoverIndexRef.current = onHoverIndex;
   const [active, setActive] = useState<number | null>(null);
   const [beat, setBeat] = useState<number | null>(null);
 
-  const walking = !reduced && active === null;
-  const focus = active ?? (walking && beat !== null ? beat % ELEMENTS.length : null);
+  const guided = guidedIndex !== undefined;
+  const walking = !reduced && active === null && !guided;
+  const focus =
+    active ?? (guided ? guidedIndex : walking && beat !== null ? beat % ELEMENTS.length : null);
   const focused = focus === null ? null : ELEMENTS[focus];
 
   useEffect(() => {
@@ -98,6 +120,7 @@ export function ElementLattice() {
         onHover: (index) => {
           if (!finePointer && index === null) return;
           setActive(index);
+          onHoverIndexRef.current?.(index);
         },
         onSelect: (index, event) => {
           const href = ELEMENTS[index]?.href;
@@ -126,7 +149,7 @@ export function ElementLattice() {
 
   return (
     <MotionConfig reducedMotion="never" transition={SPRING}>
-      <div className="relative w-full max-w-[42rem]">
+      <div className="relative mx-auto w-full max-w-[52rem]">
         <div className="oke-iso-stage touch-none select-none">
           <canvas ref={canvasRef} aria-hidden className="oke-iso-canvas font-mono" />
         </div>
@@ -136,70 +159,47 @@ export function ElementLattice() {
             <Link
               key={element.name}
               href={element.href}
-              onFocus={() => setActive(i)}
-              onBlur={() => setActive(null)}
+              onFocus={() => {
+                setActive(i);
+                onHoverIndexRef.current?.(i);
+              }}
+              onBlur={() => {
+                setActive(null);
+                onHoverIndexRef.current?.(null);
+              }}
             >
               {element.name} — {element.essence}
             </Link>
           ))}
         </nav>
 
-        <div className="mt-1 flex items-center justify-between gap-3 sm:mt-2">
-          <p className="shrink-0 font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
-            eight elements
-          </p>
-          <div className="relative h-4 min-w-0 flex-1">
-            <AnimatePresence initial={false}>
-              <motion.p
-                key={focused?.name ?? "law"}
-                initial={reduced ? false : { opacity: 0, y: 5 }}
-                animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
-                transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-                className="absolute inset-0 truncate text-right text-[11px] leading-none text-fd-muted-foreground"
-              >
-                {focused ? (
-                  <>
-                    <span className="text-fd-foreground">{focused.name}</span> replaces{" "}
-                    {focused.replaces}
-                  </>
-                ) : (
-                  "irreducible physics only"
-                )}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-        </div>
-
-        <div className="relative mt-2 h-5">
+        <div className="relative mt-3 h-5 sm:mt-4">
           <AnimatePresence initial={false}>
-            <motion.div
+            <motion.p
               key={focused?.name ?? "idle"}
               initial={reduced ? false : { opacity: 0, y: 5 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
               transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-              className="absolute inset-0 flex items-center justify-between gap-3"
+              className="absolute inset-0 truncate text-center text-xs leading-5 text-fd-muted-foreground"
             >
               {focused ? (
                 <>
+                  <span className="font-medium" style={{ color: elementToneVar(focused.preview) }}>
+                    {focused.name}
+                  </span>{" "}
+                  replaces {focused.replaces} ·{" "}
                   <Link
                     href={focused.href}
-                    className="shrink-0 font-mono text-[13px] leading-none underline-offset-2 hover:underline"
-                    style={{ color: elementToneVar(focused.preview) }}
+                    className="font-mono text-[11px] underline-offset-2 hover:underline"
                   >
                     docs/elements/{focused.preview}
                   </Link>
-                  <p className="min-w-0 truncate text-right text-xs leading-none text-fd-muted-foreground">
-                    {focused.description}
-                  </p>
                 </>
               ) : (
-                <p className="text-xs leading-none text-fd-muted-foreground">
-                  New infrastructure is a driver — never a ninth element.
-                </p>
+                "Eight elements — irreducible physics only."
               )}
-            </motion.div>
+            </motion.p>
           </AnimatePresence>
         </div>
       </div>

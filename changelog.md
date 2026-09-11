@@ -12,9 +12,36 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Docs
+
+- Homepage hero gains a prism backdrop (`PrismBackdrop`, ogl WebGL, adapted
+  from React Bits — see `site/NOTICE`): a desaturated light cone masked away
+  from the copy, capped at 1.25× device pixel ratio, suspended offscreen, and
+  frozen on one frame under `prefers-reduced-motion`. The cone is tinted by the
+  element the walk is on — `--oke-el-*` resolved to sRGB and eased into the
+  shader — so pinning the `.gate(…)` line turns the whole hero Gate emerald.
+
 ### ♻️ Changed
 
 #### Docs
+
+- Homepage hero is one composed surface instead of a bare headline: chip,
+  two-count headline with a spring settle, the positioning line, and two ways
+  in (**Read the architecture** plus a copyable `bunx create-oke@latest`).
+  Below it, one merged stage frame joins the live `create.ts` fx walk to the
+  eight-element lattice — same beat, hover a line or a slab to pin it — over a
+  shared foot rail carrying the lit effect on the left and the CI-measured
+  `budgets.json` facts (cold start, client runtime, routing p99) plus
+  `Bun ≥ 1.4.2 · MIT · v…` on the right. The walk is `hidden lg:flex`; below
+  `lg` the lattice carries the stage.
+- Homepage hero walk is real TypeScript: one create Flow through all eight
+  elements (`fx.ask` / `fx.send` join the starter `create.ts` calls), tokenised
+  at build time by the same Shiki themes as the handbook code blocks
+  (`loadHeroCodeLines`, `site/lib/hero-code.ts`), keeps its indentation, and
+  dims by opacity so the lit beat still reads in syntax colour. The stage frame
+  grows with it — `max-w-7xl`, a 26 rem walk column, and 13 px code.
 
 - Features eight-element cards match shipped API kinds: **Flow**
   `http · signal · cron · cdc`; **Clock** `cron · every · sleep · now` (TTL
@@ -23,6 +50,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `whatsapp` label; **Gate** `policy · scope · rate · public`. Descriptions
   and zoo Clock concern `every` (was `TTL`) stay aligned.
 - **Understand is now one page: The Architecture** (`/docs/understand/the-architecture`). Merges The Problem, The Model, The Vocabulary, and The Anatomy into a single narrative — drift → one rule → eight elements → five-piece Flow anatomy — with the teaching figures placed where they prove the claim (`SixSystemsDrift`, `FlowShape`, `Features`, `FlowTriggers`). Pain-first hook, "what OKE is — and isn't" positioning block, then/now timeline table, single next step (Try It). Old URLs redirect. Try It stays separate.
+- Homepage restacks around a Farm-style 2×2 deck (Flow simulator, live `fx` walk, typed `createClient`, `oke dev` terminal) plus a Cloudflare-style measured claim strip from `budgets.json` and a tabbed starter stage (`create.ts` / `on-created.ts` / client). Hero stays the 44/56 split with the lattice; Install lives in the deck instead of a late ship band.
+- Homepage drops the late “Measured, not marketed” budgets band
+  (`BudgetsGraph`, proof strip, built-with / works-with). Four hard caps
+  stay in the hero claim strip from `budgets.json`.
+- Homepage hero removes the redundant "Backend" pill from the hero trust strip, keeping TypeScript and the release version badge.
+- Homepage is hero-only: a single centered column — copy first, lattice below
+  (law chip, two-count headline, then the eight slabs); the headline is set
+  large (`5xl → 7xl`) with a wider measure so it reads as the page's single
+  statement. The hero fills the viewport (`100svh` minus the nav) with the
+  column vertically centered. claim strip,
+  deck bands, code stage, collapse diagram, surfaces, elements, and ship CTA
+  are removed from `/`. The hero copy is stripped to essentials: no kicker
+  (the chip says it), no TypeScript/version pills, and the lattice caption
+  is one centered line (element, what it replaces, docs link).
 
 ### 🐛 Fixed
 
@@ -38,6 +79,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Homepage code stage keys each Shiki pane before passing the array to the
+  client tabs — clears the React “unique key” warning on `/`.
 - Docs MCP tools and tests resolve `understand/the-architecture` after the
   Understand section consolidation (was stale `understand/the-problem`).
 - **Try It** lives at `/docs/understand/try-it` (after The Anatomy). The old
