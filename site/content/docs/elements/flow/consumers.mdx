@@ -185,13 +185,16 @@ Omit `key` for competing consumers with no ordering.
 
 | Trigger    | Signature                              | Purpose                                     | `do` input          |
 | ---------- | -------------------------------------- | ------------------------------------------- | ------------------- |
-| Signal     | `on(signalHandle, flow)`               | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)  |
-| Clock      | `on(clockDecl, flow)`                  | Interval or cron tick                       | none (`_`)          |
+| Signal     | `on(signalHandle, flow)` or inline `signal.once(…)` | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)  |
+| Clock      | `on(clockDecl, flow)` or inline `clock.every(…)` | Interval or cron tick                       | none (`_`)          |
 | CDC any    | `on(db.table(t).changed(), flow)`      | Every insert / update / delete              | `{ before, after }` |
 | CDC column | `on(db.table(t).changed("col"), flow)` | Same writes; column stamped on the Manifest | `{ before, after }` |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
+
+Inline `on(signal.once("…"), flow({ do }))` is supported; export the handle for typed `fx.emit`.
+Nameless `flow({ do })` inherits the trigger name; a second nameless inherit fails **OKE1070**.
 
 ## Signal Consumers
 
@@ -631,6 +634,12 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
   `clock.every("name", "1h")`.
 </Accordion>
 
+<Accordion title="OKE1070 — flow name defined twice">
+  Cause: `Flow "{flow}" is defined twice.` Two nameless `flow({ do })` bindings inherited the same
+  Signal or Clock name, or two explicit `flow("…")` calls share a name. Give at least one an
+  explicit `flow("…")` or a distinct tree export.
+</Accordion>
+
 <Accordion title="OKE1240 — emit with no subscriber">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.` Add `on(signal, flow)` or
   set `{ optional: true }` on the Signal (live firehoses, unused hooks).
@@ -681,7 +690,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 - [Store · SQL](/docs/elements/store/sql) — tables CDC watches
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `signal.live` SSE
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.clock`
-- [Errors](/docs/reference/errors) — OKE1240 · OKE1250
+- [Errors](/docs/reference/errors) — OKE1070 · OKE1240 · OKE1250
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` on a consumer
 
 ## Next

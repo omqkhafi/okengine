@@ -530,7 +530,6 @@ export const live = on(
 );
 `;
     const manifest = await extractFromSources({
-      "src/schema.decl.ts": source,
       "src/flows/live.ts": source,
     });
     expect(manifest.flows?.["tasks.live"]).toBeDefined();
@@ -2066,6 +2065,82 @@ export const app = oke({
 `;
     await expect(extractFromSources({ "src/app.ts": source })).rejects.toThrow(
       /requires a primary key/,
+    );
+  });
+});
+
+describe("extractManifest — inline Signal/Clock + name inheritance", () => {
+  test("inline signal.once / clock.every stamp element maps and flow.trigger", async () => {
+    const source = `
+import { on, flow, signal, clock } from "okengine";
+
+on(
+  signal.once("link-clicked", { retries: 3, deadLetter: true }),
+  flow({ do: async (input, fx) => {
+    await fx.store("sql:links").set("x", input);
+  } }),
+);
+
+on(
+  clock.every("cleanup", "10m"),
+  flow({ do: async (_input, fx) => {
+    await fx.store("sql:links").set("y", 1);
+  } }),
+);
+`;
+    const manifest = await extractFromSources({ "inline.ts": source });
+    expect(manifest.signals?.["link-clicked"]).toMatchObject({
+      delivery: "once",
+      retries: 3,
+      deadLetter: true,
+    });
+    expect(manifest.clocks?.cleanup).toMatchObject({ every: "10m" });
+    expect(manifest.flows?.["link-clicked"]?.trigger).toEqual({ signal: "link-clicked" });
+    expect(manifest.flows?.cleanup?.trigger).toEqual({ every: "10m" });
+  });
+
+  test("nameless flow inherits the named trigger; explicit flow name wins", async () => {
+    const source = `
+import { on, flow, signal, clock } from "okengine";
+
+export const orderPlaced = signal.once("order-placed");
+on(orderPlaced, flow({ do: () => ({ ok: true }) }));
+
+on(
+  clock.every("metrics.cleanup", "1h"),
+  flow("ops.sweep", { do: () => ({ ok: true }) }),
+);
+`;
+    const manifest = await extractFromSources({ "workers.ts": source });
+    expect(manifest.flows?.["order-placed"]?.trigger).toEqual({ signal: "order-placed" });
+    expect(manifest.flows?.["ops.sweep"]?.trigger).toEqual({ every: "1h" });
+    expect(manifest.flows?.["metrics.cleanup"]).toBeUndefined();
+  });
+
+  test("file-tree unit.export wins over trigger-name inheritance", async () => {
+    const source = `
+import { on, flow, signal } from "okengine";
+export const onCreated = on(
+  signal.once("note-created"),
+  flow({ do: () => ({ ok: true }) }),
+);
+`;
+    const manifest = await extractFromSources({
+      "src/flows/notes/on-created.ts": source,
+    });
+    expect(manifest.flows?.["notes.onCreated"]?.trigger).toEqual({ signal: "note-created" });
+    expect(manifest.flows?.["note-created"]).toBeUndefined();
+  });
+
+  test("two nameless inheritances of the same trigger name fail extract", async () => {
+    const source = `
+import { on, flow, signal } from "okengine";
+const ping = signal.once("health.ping");
+on(ping, flow({ do: () => ({ a: true }) }));
+on(ping, flow({ do: () => ({ b: true }) }));
+`;
+    await expect(extractFromSources({ "dup.ts": source })).rejects.toThrow(
+      /duplicate flow name "health.ping"/,
     );
   });
 });

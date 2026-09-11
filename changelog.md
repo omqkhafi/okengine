@@ -12,12 +12,34 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Runtime
+
+- Inline `on(signal.once(…), flow)` / `on(clock.every(…), flow)` now stamp
+  Manifest `flow.trigger` the same as a named const binding.
+- Nameless `flow({ do })` inherits a named Signal or Clock trigger name.
+  Explicit `flow("…")` and file-tree `unit.export` still win.
+- `fx.emit(handle, payload)` type-checks `payload` when `handle` is
+  `SignalDecl<T>`. A string name stays `unknown` (runtime `schema` still
+  applies).
+- Duplicate Flow names fail **OKE1070** at construction (and extract), matching
+  HTTP / live / MCP duplicate-registration posture.
+
+### 💥 Breaking Changes
+
+- Two Flows that share a name no longer last-write-wins. `oke()` throws
+  **OKE1070**; extract hard-fails the same collision.
+
 ### ♻️ Changed
 
 #### Docs
 
 - `fx.id()` docs and JSDoc now say **OKID**, aligned with `okengine/okid` and the
   fx / OKID reference cross-links.
+- Signal, Clock, Consumers, Routing, Errors, and fx docs cover inline
+  `on(signal.* / clock.*, flow)`, name inheritance, typed `fx.emit(handle)`,
+  and **OKE1070**.
 - Clock examples across docs, Keel, and create-oke advanced prefer named helpers
   (`clock.every` / `daily` / `weekly`); bare `clock(name, opts)` stays valid and is
   called out where the generic form is deliberate.

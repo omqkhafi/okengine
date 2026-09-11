@@ -67,7 +67,8 @@ import {
 import { GATE_PUBLIC_NAME } from "../elements/gate/flatten.ts";
 import type { JsonCodeAuth } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
-import { fail, throwOke } from "./errors.ts";
+import { fail, throwOke, OkeError } from "./errors.ts";
+import { FLOW_NAME_DUPLICATE } from "./errors-flow-name.ts";
 import { consumeRegisteredFlowUnits, type FlowUnitBag } from "./flow-units.ts";
 import {
   isFlowFailure,
@@ -1081,6 +1082,10 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   function registerFlow(flowDef: AnyFlowDef): void {
+    const existing = flowsByName.get(flowDef.name);
+    if (existing && existing !== flowDef && flowDef.name) {
+      throw new OkeError(FLOW_NAME_DUPLICATE, { flow: flowDef.name });
+    }
     flowsByName.set(flowDef.name, flowDef);
     flushFlowPlugins(flowDef);
   }

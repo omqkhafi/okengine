@@ -8,6 +8,7 @@ import {
   jsonResultBrand,
   type Fx,
   type FxStubStoreHandle,
+  type NamedRef,
 } from "./fx.ts";
 import { Redacted } from "./redacted.ts";
 
@@ -426,7 +427,7 @@ describe("fx — wholesale swap", () => {
           throw new Error("runs must not be used");
         },
       },
-      async emit(signal) {
+      async emit(signal: NamedRef) {
         calls.push(`emit:${typeof signal === "string" ? signal : signal.name}`);
       },
       async deadLetters() {

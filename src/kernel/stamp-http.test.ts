@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test, beforeEach } from "bun:test";
+import { resetSignals, signal } from "../elements/signal/declare.ts";
 import type { RuntimeRouteMap } from "./adopt-routes.ts";
 import { oke } from "./app.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
@@ -16,6 +17,7 @@ beforeEach(() => {
   resetBindings();
   resetFlowSeq();
   resetRegisteredFlowUnits();
+  resetSignals();
 });
 
 describe("stampHttpPath", () => {
@@ -48,6 +50,17 @@ describe("stampFlowName", () => {
     const f = flow("notes.get", { do: () => 1 });
     stampFlowName(f, "notes.list");
     expect(f.name).toBe("notes.get");
+  });
+
+  test("file-tree stamp overwrites a trigger-inherited name", () => {
+    const bound = on(
+      signal.once("note-created"),
+      flow({
+        do: () => ({ ok: true }),
+      }),
+    );
+    stampFlowName(bound, "notes.onCreated");
+    expect(bound.name).toBe("notes.onCreated");
   });
 });
 

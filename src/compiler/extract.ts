@@ -1845,10 +1845,16 @@ function registerFlow(args: {
   // call site (`bindNamedTableCrud`). Do not register as `list` / `create`.
   if (isInterpolatedTemplate(args.flowCall.arguments[0])) return;
 
+  const trigger = args.triggerNode
+    ? parseTrigger(args.triggerNode, args.scope, args.file.path)
+    : undefined;
+  const inherited = elementTriggerName(args.triggerNode, args.scope);
+
   const name =
     stringArg(args.flowCall.arguments[0]) ??
     nameFromFlowFile(args.file.path, args.exportName) ??
     args.exportName ??
+    inherited ??
     `flow_${Object.keys(args.scope.flows).length + 1}`;
 
   if (args.exportName) {
@@ -1894,10 +1900,6 @@ function registerFlow(args: {
       effects = { ...effects, secrets: [] };
     }
   }
-
-  const trigger = args.triggerNode
-    ? parseTrigger(args.triggerNode, args.scope, args.file.path)
-    : undefined;
 
   const gates = trigger?.gates;
   const liveFromTrigger = trigger?.live;
@@ -2018,7 +2020,7 @@ function registerFlow(args: {
     flow.cacheKeys = `computed:${effects.reads[0]}/userId`;
   }
 
-  args.scope.flows[name] = flow;
+  putFlow(args.scope, name, flow);
 }
 
 /**
@@ -2060,7 +2062,7 @@ function registerLiveHttpMount(
     source: `${file.path}:${line}`,
   };
   if (parsed.gates && parsed.gates.length > 0) flow.gates = parsed.gates;
-  scope.flows[name] = flow;
+  putFlow(scope, name, flow);
   return true;
 }
 
@@ -2356,6 +2358,102 @@ interface ParsedTrigger {
   contract?: AstNode;
 }
 
+const CLOCK_HELPER_PROPS = new Set([
+  "every",
+  "cron",
+  "daily",
+  "hourly",
+  "weekly",
+  "monthly",
+  "perTenant",
+]);
+
+const SIGNAL_HELPER_PROPS = new Set(["once", "broadcast", "live"]);
+
+/**
+ * Record a Flow into the extract scope, failing on a duplicate Manifest key.
+ *
+ * @param scope - Project scope
+ * @param name - Manifest flow id
+ * @param flow - Flow entry
+ */
+function putFlow(scope: ProjectScope, name: string, flow: Flow): void {
+  if (scope.flows[name]) {
+    throw new Error(
+      `extract: duplicate flow name "${name}". Give at least one Flow an explicit flow("…") or a distinct tree export.`,
+    );
+  }
+  scope.flows[name] = flow;
+}
+
+/**
+ * Stable Signal / Clock name on `on()`'s first argument, when one exists.
+ * HTTP has no inherent name of this kind — returns undefined.
+ *
+ * @param node - Trigger AST
+ * @param scope - Project scope
+ */
+function elementTriggerName(node: AstNode | undefined, scope: ProjectScope): string | undefined {
+  if (!node) return undefined;
+  if (node.type === "Identifier") {
+    const id = (node as Identifier).name;
+    const binding = scope.bindings.get(id);
+    if (binding?.kind === "signal" || binding?.kind === "clock") return binding.ref;
+    if (scope.signals[id] || scope.clocks[id]) return id;
+    return undefined;
+  }
+  if (node.type !== "CallExpression") return undefined;
+  const call = node as CallExpression;
+  const callee = call.callee;
+  if (identifierName(callee) === "clock") {
+    return stringArg(call.arguments[0]);
+  }
+  if (callee.type !== "MemberExpression") return undefined;
+  const member = callee as AstNode & { object: AstNode; property: AstNode };
+  const obj = identifierName(member.object);
+  const prop = identifierName(member.property);
+  if (!obj || !prop) return undefined;
+  if (obj === "signal" && SIGNAL_HELPER_PROPS.has(prop)) {
+    return stringArg(call.arguments[0]);
+  }
+  if (obj === "clock" && CLOCK_HELPER_PROPS.has(prop)) {
+    return stringArg(call.arguments[0]);
+  }
+  return undefined;
+}
+
+/**
+ * Inline `signal.once(…)` / `clock.every(…)` as `on()`'s first argument.
+ *
+ * @param call - Call expression
+ * @param scope - Project scope
+ */
+function parseInlineSignalOrClockTrigger(
+  call: CallExpression,
+  scope: ProjectScope,
+): ParsedTrigger | undefined {
+  const callee = call.callee;
+  if (callee.type !== "MemberExpression") return undefined;
+  const member = callee as AstNode & { object: AstNode; property: AstNode };
+  const obj = identifierName(member.object);
+  const prop = identifierName(member.property);
+  if (!obj || !prop) return undefined;
+  if (obj === "signal" && SIGNAL_HELPER_PROPS.has(prop)) {
+    const signalName = stringArg(call.arguments[0]);
+    if (signalName) return { trigger: { signal: signalName } };
+    return undefined;
+  }
+  if (obj === "clock" && CLOCK_HELPER_PROPS.has(prop)) {
+    const clockName = stringArg(call.arguments[0]);
+    if (!clockName) return undefined;
+    const clockDef = scope.clocks[clockName];
+    if (clockDef?.cron) return { trigger: { cron: clockDef.cron } };
+    if (clockDef?.every) return { trigger: { every: clockDef.every } };
+    return { trigger: { cron: clockName } };
+  }
+  return undefined;
+}
+
 function parseTrigger(
   node: AstNode,
   scope: ProjectScope,
@@ -2394,7 +2492,8 @@ function parseTrigger(
     const cdc = parseCdcTrigger(call, scope);
     if (cdc) return { trigger: { cdc } };
 
-    // on(signalHandle, …) — Identifier referring to a signal binding
+    const inline = parseInlineSignalOrClockTrigger(call, scope);
+    if (inline) return inline;
   }
 
   if (node.type === "MemberExpression") {

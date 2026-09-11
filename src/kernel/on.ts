@@ -203,6 +203,11 @@ export function on(
   list.push(normalized);
   // Stamp runtime carrier for the first bound trigger (type follows BoundTriggerOf).
   (flowDef as { $trigger: Trigger }).$trigger = normalized;
+  // `$n` = name inherited from this Signal/Clock (file-tree / unit() may overwrite).
+  if ((normalized.kind === "signal" || normalized.kind === "clock") && !flowDef.name) {
+    (flowDef as { name: string; $n?: boolean }).name = normalized.name;
+    (flowDef as { $n?: boolean }).$n = true;
+  }
   stampExposureContract(flowDef as AnyFlowDef, normalized, triggerOrMount);
   bindings.push({ trigger: normalized, flow: flowDef as AnyFlowDef });
   return flowDef;

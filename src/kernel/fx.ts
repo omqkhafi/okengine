@@ -686,11 +686,21 @@ export interface Fx {
   /**
    * Emit a signal (records `emit`).
    *
+   * Pass a {@link SignalDecl} handle for compile-time payload checking.
+   * A string name accepts `unknown` (runtime `schema` still applies).
+   *
    * @param signal - Signal name or handle
    * @param payload - Payload
    * @param options - Optional emit options (`key` for per-key once ordering)
    */
-  emit(signal: NamedRef, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
+  emit<T>(signal: SignalDecl<T>, payload?: T, options?: SignalEmitOptions): Promise<void>;
+  emit(
+    signal:
+      | string
+      | { readonly name: string; readonly version?: number; readonly delivery?: never },
+    payload?: unknown,
+    options?: SignalEmitOptions,
+  ): Promise<void>;
   /**
    * Query dead-lettered messages for one signal (records `read` on `signal:<name>`).
    *
@@ -1928,7 +1938,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   const fx: Fx = {
     store: storeHandle,
     runs: runsSurface,
-    emit(signal, payload, emitOptions) {
+    emit(signal: NamedRef, payload?: unknown, emitOptions?: SignalEmitOptions) {
       const name = resolveName(signal);
       return gated("emit", name, async () => {
         if (options.signalRuntime) {

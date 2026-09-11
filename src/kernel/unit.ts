@@ -5,6 +5,7 @@
  * unit. Plugins queue until an app flushes them at boot / adopt time.
  */
 
+import { isUnsetFlowName } from "./stamp-http.ts";
 import type { AnyFlowDef, FlowDef } from "./flow.ts";
 import type { PluginDef } from "./plugin.ts";
 
@@ -40,8 +41,9 @@ export function unit<const T extends Record<string, AnyFlowDef>>(
   const pending: PluginDef[] = [];
   for (const [exportName, flowDef] of Object.entries(flows)) {
     const f = flowDef as FlowDef;
-    if (!f.name || f.name.startsWith("flow_")) {
-      (f as { name: string }).name = `${name}.${exportName}`;
+    if (isUnsetFlowName(f)) {
+      (f as { name: string; $n?: boolean }).name = `${name}.${exportName}`;
+      (f as { $n?: boolean }).$n = false;
     }
     if (!f.unit) {
       (f as { unit: string }).unit = name;

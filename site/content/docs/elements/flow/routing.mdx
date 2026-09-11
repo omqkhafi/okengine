@@ -455,6 +455,10 @@ prefix). Wrong-unit prefixes fail generate.
 Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
 
+Outside the tree, nameless `flow({ do })` inherits a named Signal or Clock trigger.
+File-tree `unit.export` still wins. Two nameless inheritances fail **OKE1070**. HTTP has no
+inherent trigger name — those Flows stay on the tree stamp or **OKE1045**.
+
 HTTP flows that remain nameless after adopt fail **OKE1045**.
 
 ## Runtime Matching
@@ -512,6 +516,11 @@ plus a handwritten `http.get("/notes")`.
   file so the tree can stamp `unit.export`. `export default` is not picked up.
 </Accordion>
 
+<Accordion title="OKE1070 — flow name defined twice">
+  Cause: `Flow "{flow}" is defined twice.` Two nameless Signal/Clock consumers inherited the same
+  name, or two explicit `flow("…")` calls collide. Give at least one a distinct name or tree export.
+</Accordion>
+
 <Accordion title="422 — path param missing from in">
   `[id]` stamps `:id`. `in` must declare `id` (same key). A schema that expects `userId` while the
   path is `:id` fails validation before `do`.
@@ -534,7 +543,7 @@ plus a handwritten `http.get("/notes")`.
 
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, `http.resource`, live SSE
 - [Client](/docs/client/calling) — `api.notes.get`, REST vs RPC, `$routes`
-- [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045
+- [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045 · OKE1070
 - [The Architecture](/docs/understand/the-architecture) — derived routes, no hand-written table
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the same trigger
 

@@ -35,8 +35,25 @@ export function stampHttpPath<F extends AnyFlowDef, P extends string>(
   return flow as StampHttpPath<F, P>;
 }
 
+/** Mutable name fields used by {@link stampFlowName} / {@link on}. */
+type FlowNameCarrier = {
+  name: string;
+  unit: string | undefined;
+  $n?: boolean;
+};
+
 /**
- * Stamp `unit.export` onto a nameless (or `flow_*`) Flow.
+ * True when a Flow name is still a placeholder: empty, synthetic `flow_*`,
+ * or inherited from a Signal/Clock trigger (`$n`). File-tree / `unit()` may overwrite.
+ *
+ * @param flow - Flow name carrier
+ */
+export function isUnsetFlowName(flow: { readonly name: string; readonly $n?: boolean }): boolean {
+  return !flow.name || flow.name.startsWith("flow_") || flow.$n === true;
+}
+
+/**
+ * Stamp `unit.export` onto a nameless (or `flow_*` / trigger-inherited) Flow.
  *
  * Explicit `flow("notes.get")` wins. Fills `unit` when missing.
  *
@@ -45,9 +62,10 @@ export function stampHttpPath<F extends AnyFlowDef, P extends string>(
  */
 export function stampFlowName<F extends AnyFlowDef>(flow: F, name: string): F {
   if (!isFlow(flow)) return flow;
-  const f = flow as { name: string; unit: string | undefined };
-  if (!f.name || f.name.startsWith("flow_")) {
+  const f = flow as FlowNameCarrier;
+  if (isUnsetFlowName(f)) {
     f.name = name;
+    f.$n = false;
   }
   if (!f.unit) {
     const resolved = f.name || name;

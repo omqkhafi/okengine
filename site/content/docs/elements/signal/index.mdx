@@ -80,6 +80,19 @@ for the worker.
   competing consumer.
 </Callout>
 
+## Inline or named export
+
+| Style | When |
+| ----- | ---- |
+| `on(signal.once("name", opts), flow({ do }))` | Self-contained — nothing else emits to this Signal |
+| `export const x = signal.once<Payload>(…)` | Another file needs `fx.emit(x, payload)` with compile-time payload checking |
+
+A string `fx.emit("name", payload)` still runs (runtime `schema` still applies) but does not
+type-check the payload.
+
+Nameless `flow({ do })` inherits the Signal name; file-tree `unit.export` and explicit
+`flow("…")` win. Two nameless inheritances of the same name fail **OKE1070**.
+
 ## Progressive Patterns
 
 Same helpers + `fx.emit` from a queue job to a fan-out and a browser feed:

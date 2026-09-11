@@ -73,6 +73,16 @@ Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting 
   separate job runner — see [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs).
 </Callout>
 
+## Inline or named export
+
+| Style | When |
+| ----- | ---- |
+| `on(clock.every("name", "1h"), flow({ do }))` | Self-contained — nothing else needs the Clock handle |
+| `export const x = clock.every("name", "1h")` | Another file (or a second `on()`) must reuse the same declaration |
+
+Nameless `flow({ do })` inherits the Clock's declared name. File-tree `unit.export` and explicit
+`flow("…")` win. Two nameless Flows inheriting the same name fail **OKE1070**.
+
 ## Progressive Patterns
 
 Same `clock` + `fx.clock` from a calendar cron to an interval, a durable pause, and typed offsets:
