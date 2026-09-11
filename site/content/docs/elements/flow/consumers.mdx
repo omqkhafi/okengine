@@ -342,10 +342,10 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 ## Clock Jobs
 
 <Callout title="Detailed section">
-  Prefer `clock.every` / `clock.daily` / `clock.cron` (and the other named helpers) for
-  fixed schedules — they compile to the same decl as the bare callable. The lower-level
-  `clock(name, { cron | every })` form still works when you need a raw expression or a
-  schedule chosen programmatically; missing both throws
+  Prefer `clock.every` / `clock.daily` / `clock.cron` (and the other named helpers) for fixed
+  schedules — they compile to the same decl as the bare callable. The lower-level bare
+  `clock(name, options)` form still works when you need a raw expression or a schedule chosen
+  programmatically; missing both `cron` and `every` throws
   `clock("name"): require cron or every`. Bind the returned handle with `on(clockDecl, flow)`.
 </Callout>
 

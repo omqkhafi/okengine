@@ -183,14 +183,14 @@ calendar day. Unknown strings parse as `0`.
 
 ## Capability Reference
 
-| Surface       | Signature                                                | Purpose                         | `do` input |
-| ------------- | -------------------------------------------------------- | ------------------------------- | ---------- |
-| Helpers       | `clock.daily` · `hourly` · `weekly` · `monthly` · `cron` | Calendar presets + field bags   | none (`_`) |
-| Interval      | `clock.every(name, duration, opts?)`                     | Fixed duration loop             | none (`_`) |
-| Per-tenant    | `clock.perTenant(name, opts)`                            | One Store row per tenant        | none (`_`) |
-| Bare callable | `clock(name, { cron? \| every?, … })`                    | Same decl; lower-level form     | none (`_`) |
-| Now / offsets | `fx.clock.now` · `ago` · `fromNow` · `duration`          | Injectable time math            | —          |
-| Durable sleep | `fx.clock.sleep(label, duration)`                        | Park a durable Flow until wake  | —          |
+| Surface       | Signature                                                | Purpose                        | `do` input |
+| ------------- | -------------------------------------------------------- | ------------------------------ | ---------- |
+| Helpers       | `clock.daily` · `hourly` · `weekly` · `monthly` · `cron` | Calendar presets + field bags  | none (`_`) |
+| Interval      | `clock.every(name, duration, opts?)`                     | Fixed duration loop            | none (`_`) |
+| Per-tenant    | `clock.perTenant(name, opts)`                            | One Store row per tenant       | none (`_`) |
+| Bare callable | `clock(name, { cron? \| every?, … })`                    | Same decl; lower-level form    | none (`_`) |
+| Now / offsets | `fx.clock.now` · `ago` · `fromNow` · `duration`          | Injectable time math           | —          |
+| Durable sleep | `fx.clock.sleep(label, duration)`                        | Park a durable Flow until wake | —          |
 
 At least one of `cron` or `every` is required on every declaration.
 

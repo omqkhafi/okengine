@@ -239,7 +239,7 @@ None of that required new code beyond what's above. It required the four lines t
 | Trigger                                             | Element | Starts When                      |
 | --------------------------------------------------- | ------- | -------------------------------- |
 | `http.post()` (path from file tree)                 | Flow    | A request arrives                |
-| `clock.every("name", "10m")`                            | Clock   | A time interval elapses          |
+| `clock.every("name", "10m")`                        | Clock   | A time interval elapses          |
 | `signal.once("name", {…})` / `.broadcast` / `.live` | Signal  | Another flow announces something |
 | `db.table(users).changed("email")`                  | Store   | A database row changes           |
 | `mcp.tool("name")`                                  | AI      | An AI agent calls it             |
