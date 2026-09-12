@@ -12,14 +12,6 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
-### 🐛 Fixed
-
-#### Runtime
-
-- Extract **OKE1071** throws a plain `Error` (code plus `signal.broadcast` fix)
-  instead of `OkeError`, so `okengine/compiler` stays off the kernel error
-  and i18n graph. `oke()` still throws the full `OkeError`.
-
 ## v0.19.3 — 2026-09-12
 
 ### ✨ Added
@@ -58,6 +50,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
   three differently-named Flows, one emit, exactly one race winner — and
   names `signal.broadcast` as the fix when every Flow should get a copy.
   Two different Flows on one `once` signal fail **OKE1071**.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Extract **OKE1071** throws a plain `Error` (code plus `signal.broadcast` fix)
+  instead of `OkeError`, so `okengine/compiler` stays off the kernel error
+  and i18n graph. `oke()` still throws the full `OkeError`.
 
 ## v0.19.2 — 2026-09-12
 
