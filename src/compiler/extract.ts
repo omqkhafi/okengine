@@ -8,6 +8,8 @@
 
 import { parseSync } from "oxc-parser";
 
+import { OkeError } from "../kernel/errors.ts";
+import { ONCE_SIGNAL_MULTI_FLOW } from "../kernel/errors-once-signal.ts";
 import {
   AI_NATIVE_DRIVER_IDS,
   formatAiProviderTier2Warn,
@@ -203,6 +205,10 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
 
   // Pass 3 — resolve deferred refs (agent tools, journey paths).
   finalizeRefs(scope);
+
+  // Pass 4 — once-signal uniqueness (every flow.trigger.signal + delivery
+  // is known). HTTP / live uniqueness is construction-time in `oke()`.
+  assertOnceSignalSingleFlow(scope);
 
   // Stable ordering for golden files.
   const flows = sortRecord(scope.flows);
@@ -2384,6 +2390,35 @@ function putFlow(scope: ProjectScope, name: string, flow: Flow): void {
     );
   }
   scope.flows[name] = flow;
+}
+
+/**
+ * Refuse two different Flow names bound to the same `signal.once`.
+ *
+ * Horizontal replicas of one Flow are a single `on()` in source — this only
+ * fires when the Manifest itself lists two or more Flow names on that signal.
+ * `signal.broadcast` / `signal.live` bindings are unrestricted.
+ *
+ * @param scope - Project scope after flow collection
+ */
+function assertOnceSignalSingleFlow(scope: ProjectScope): void {
+  const bySignal = new Map<string, string[]>();
+  for (const [flowName, flow] of Object.entries(scope.flows)) {
+    const signalName = flow.trigger?.signal;
+    if (!signalName) continue;
+    if (scope.signals[signalName]?.delivery !== "once") continue;
+    const list = bySignal.get(signalName) ?? [];
+    if (!list.includes(flowName)) list.push(flowName);
+    bySignal.set(signalName, list);
+  }
+  for (const [signalName, flows] of bySignal) {
+    if (flows.length < 2) continue;
+    const named = [...flows].sort();
+    throw new OkeError(ONCE_SIGNAL_MULTI_FLOW, {
+      signal: signalName,
+      flows: named.map((n) => `"${n}"`).join(", "),
+    });
+  }
 }
 
 /**

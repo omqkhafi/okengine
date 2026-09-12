@@ -18,6 +18,7 @@ import {
 import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
 import { CHANNEL_SCHEMA } from "./errors-channel.ts";
 import { FLOW_NAME_DUPLICATE } from "./errors-flow-name.ts";
+import { ONCE_SIGNAL_MULTI_FLOW } from "./errors-once-signal.ts";
 import { TENANT_NOT_MEMBER, TENANT_REQUIRED, TENANT_UNKNOWN_SCOPE } from "./errors-tenant.ts";
 import {
   assertCodesInDomainRanges,
@@ -170,6 +171,13 @@ describe("OKE error-code registry", () => {
     expect(files).toContain("errors-flow-name.ts");
     expect(defs.some((d) => d.code === 1070)).toBe(true);
     expect(FLOW_NAME_DUPLICATE.code).toBe(1070);
+  });
+
+  test("lazy discovery finds ONCE_SIGNAL_MULTI_FLOW at 1071", async () => {
+    const { files, defs } = await discoverLazyErrorDefs(KERNEL_DIR);
+    expect(files).toContain("errors-once-signal.ts");
+    expect(defs.some((d) => d.code === 1071)).toBe(true);
+    expect(ONCE_SIGNAL_MULTI_FLOW.code).toBe(1071);
   });
 
   test("NO_EFFECTS_DECLARED owns 1020 after renumber (was UNDECLARED_EMBED)", () => {

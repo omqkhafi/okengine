@@ -12,6 +12,22 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Runtime
+
+- Duplicate `signal.once` consumers fail **OKE1071** at `oke()` construction
+  and extract when two or more **different** Flow names bind the same once
+  signal. `signal.broadcast` / `signal.live` stay unrestricted. Cause names
+  both Flows and the signal; the fix points at `signal.broadcast` vs a
+  single Flow (replicas of one Flow are still one `on()` in source).
+
+### 💥 Breaking Changes
+
+- Two different Flows bound to the same `signal.once` no longer race
+  silently. `oke()` / extract throw **OKE1071**. Use `signal.broadcast` when
+  every Flow should receive a copy, or bind a single Flow.
+
 ### ♻️ Changed
 
 #### Docs
@@ -25,6 +41,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Signal and Clock **Flow name** documents inherit vs explicit vs tree
   (`flow({ do })` takes the trigger name only with no unit folder; `flow("…")`
   and `src/flows/<unit>/` `unit.export` overwrite; collision is **OKE1070**).
+- Signal **Smallest Example** presents declare / bind / emit as independent
+  uses of one shared handle — not a numbered sequence. Same framing on
+  Once, Broadcast, Live, and Consumers.
+- Signal **Competing consumers** documents `signal.once` as a work queue:
+  three differently-named Flows, one emit, exactly one race winner — and
+  names `signal.broadcast` as the fix when every Flow should get a copy.
+  Two different Flows on one `once` signal fail **OKE1071**.
 
 ## v0.19.2 — 2026-09-12
 

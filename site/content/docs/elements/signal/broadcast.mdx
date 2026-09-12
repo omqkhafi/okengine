@@ -21,10 +21,12 @@ more `on(signal, flow)` subscribers, emit with `fx.emit`.
 
 ## Smallest Example
 
-<Steps>
+<Callout title="One handle, three independent uses">
+  `cacheInvalidated` is a shared const. Declare it, bind any number of subscribers, and emit —
+  different files, any order. Bind and emit do not have a required sequence.
+</Callout>
 
-<Step>
-### Define the broadcast signal
+### Declare
 
 ```typescript title="src/signals/cache.ts"
 import { signal } from "okengine";
@@ -35,9 +37,6 @@ export const cacheInvalidated = signal.broadcast("cache.invalidated", {
 });
 ```
 
-</Step>
-
-<Step>
 ### Bind a subscriber
 
 ```typescript title="src/flows/cache/purge.ts"
@@ -54,10 +53,11 @@ export const purgeLocalCache = on(
 );
 ```
 
-</Step>
+Multiple Flows may bind the same handle — every one gets a copy. That is fan-out, not a race.
+See [Once · Competing consumers](/docs/elements/signal/once#competing-consumers-once-vs-broadcast)
+when you meant a work queue instead.
 
-<Step>
-### Emit from any Flow
+### Emit
 
 ```typescript title="src/flows/skus/[sku]/update.ts"
 import { on, flow, http } from "okengine";
@@ -80,10 +80,6 @@ export const update = on(
 
 The compiler records `emits: ["cache.invalidated"]` on the producer. Emit resolves when the
 outbox commits — the HTTP request does not wait for every subscriber to finish.
-
-</Step>
-
-</Steps>
 
 <Callout title="Same handle everywhere">
   Import the declared Signal handle (or the same name) in every subscriber and producer. A typo in

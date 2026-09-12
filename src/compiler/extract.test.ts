@@ -2144,3 +2144,50 @@ on(ping, flow({ do: () => ({ b: true }) }));
     );
   });
 });
+
+describe("extractManifest — once-signal uniqueness OKE1071", () => {
+  test("two differently-named flows on the same once signal fail OKE1071", async () => {
+    const source = `
+import { on, flow, signal } from "okengine";
+export const orderPlaced = signal.once("orders.placed");
+on(orderPlaced, flow("orders.charge", { do: () => ({ a: true }) }));
+on(orderPlaced, flow("orders.ship", { do: () => ({ b: true }) }));
+`;
+    try {
+      await extractFromSources({ "dup-once.ts": source });
+      expect.unreachable("extract should throw OKE1071");
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      const message = (err as Error).message;
+      expect(message).toMatch(/OKE1071/);
+      expect(message).toContain("orders.placed");
+      expect(message).toContain("orders.charge");
+      expect(message).toContain("orders.ship");
+      expect(message).toMatch(/signal\.broadcast/);
+    }
+  });
+
+  test("the same scenario with signal.broadcast does not fail", async () => {
+    const source = `
+import { on, flow, signal } from "okengine";
+export const catalogChanged = signal.broadcast("catalog.changed");
+on(catalogChanged, flow("cache.invalidate", { do: () => ({ a: true }) }));
+on(catalogChanged, flow("search.reindex", { do: () => ({ b: true }) }));
+`;
+    const manifest = await extractFromSources({ "fanout.ts": source });
+    expect(manifest.signals?.["catalog.changed"]?.delivery).toBe("broadcast");
+    expect(manifest.flows?.["cache.invalidate"]?.trigger).toEqual({ signal: "catalog.changed" });
+    expect(manifest.flows?.["search.reindex"]?.trigger).toEqual({ signal: "catalog.changed" });
+  });
+
+  test("a single flow bound to once extracts cleanly", async () => {
+    const source = `
+import { on, flow, signal } from "okengine";
+export const emailTask = signal.once("tasks.email");
+on(emailTask, flow("workers.email", { do: () => ({ ok: true }) }));
+`;
+    const manifest = await extractFromSources({ "once.ts": source });
+    expect(manifest.signals?.["tasks.email"]?.delivery).toBe("once");
+    expect(manifest.flows?.["workers.email"]?.trigger).toEqual({ signal: "tasks.email" });
+  });
+});

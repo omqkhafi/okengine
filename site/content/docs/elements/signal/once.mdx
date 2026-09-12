@@ -21,10 +21,12 @@ For developers shipping jobs on okengine — declare the Signal, bind `on(signal
 
 ## Smallest Example
 
-<Steps>
+<Callout title="One handle, three independent uses">
+  `emailTask` is a shared const. Declare it, bind a worker, and emit — different
+  files, any order. Binding is not "step 2" after declare; emit is not "step 3".
+</Callout>
 
-<Step>
-### Define the once signal
+### Declare
 
 ```typescript title="src/signals/email.ts"
 import { signal } from "okengine";
@@ -37,10 +39,7 @@ export const emailTask = signal.once("tasks.email", {
 });
 ```
 
-</Step>
-
-<Step>
-### Attach a worker and emit
+### Bind a worker
 
 ```typescript title="src/flows/workers/email.ts"
 import { on, flow } from "okengine";
@@ -57,6 +56,8 @@ export const processEmail = on(
 );
 ```
 
+### Emit
+
 ```typescript
 await fx.emit(emailTask, { to: "alice@example.com", body: "Welcome" });
 ```
@@ -64,14 +65,67 @@ await fx.emit(emailTask, { to: "alice@example.com", body: "Welcome" });
 The emit resolves when the outbox commits. The worker runs asynchronously — the producer does not
 wait for `fx.send` to finish.
 
-</Step>
+## Competing consumers (once vs broadcast)
 
-</Steps>
+This is the most common mix-up. `signal.once` is a competing-consumer work queue: **exactly one**
+worker claims each message. It is not fan-out.
 
-<Callout title="Competing, not fan-out">
-  Two Flows bound to the same `once` Signal compete — exactly one claims each message. For every
-  subscriber to run, use [`broadcast`](/docs/elements/signal/broadcast).
-</Callout>
+Three differently-named Flows bound to the same `once` signal:
+
+```typescript title="src/flows/orders/side-effects.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const charge = on(
+  orderPlaced,
+  flow("orders.charge", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeOrder, { orderId });
+    },
+  }),
+);
+
+export const ship = on(
+  orderPlaced,
+  flow("orders.ship", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(shipOrder, { orderId });
+    },
+  }),
+);
+
+export const notify = on(
+  orderPlaced,
+  flow("orders.notify", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(notifyOrder, { orderId });
+    },
+  }),
+);
+```
+
+```typescript
+await fx.emit(orderPlaced, { orderId: "ord_99", amount: 150, userId: "usr_1" });
+```
+
+| Expectation                         | Real result                                                          |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| All three Flows run                 | **No.** Exactly one of the three runs                                  |
+| Always `orders.charge` (first `on`) | **No.** The winner is whichever claim lands first — not a fixed Flow |
+| A sticky assignment to one Flow     | **No.** There is no owner — only an exclusive claim per message        |
+
+**Consequence:** if every bound Flow should independently receive its own copy, use
+[`signal.broadcast`](/docs/elements/signal/broadcast). That is the correct fix for this exact
+mistake.
+
+Two or more **different** Flow definitions on the same `once` signal fail **OKE1071**.
+
+Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
+
+Fix: `Use signal.broadcast if each flow should independently receive this event, or bind only one flow if these should compete for the same work.`
+
+Load-balancing competing consumers is the **same** Flow on many process replicas — still one
+`on()` in source. That case is not a second Flow definition.
 
 ## Progressive Patterns
 
@@ -251,12 +305,11 @@ The compiler records `emits: ["tasks.email"]` on producers that call `fx.emit(em
 
 <Tab value="Competing">
 
-Two Flows on the same `once` Signal share the pool — exactly one claims each message:
+Two different Flows on the same `once` Signal is the once-vs-broadcast mix-up — see
+[Competing consumers](#competing-consumers-once-vs-broadcast). The bus would let only one claim
+each message (race winner, not both, not a fixed Flow). The Manifest now fails **OKE1071**:
 
-```typescript title="src/flows/orders/fulfill-a.ts"
-import { on, flow } from "okengine";
-import { orderPlaced } from "@/signals/orders";
-
+```typescript
 export const fulfillA = on(
   orderPlaced,
   flow("orders.fulfillA", {
@@ -265,11 +318,6 @@ export const fulfillA = on(
     },
   }),
 );
-```
-
-```typescript title="src/flows/orders/fulfill-b.ts"
-import { on, flow } from "okengine";
-import { orderPlaced } from "@/signals/orders";
 
 export const fulfillB = on(
   orderPlaced,
@@ -281,7 +329,8 @@ export const fulfillB = on(
 );
 ```
 
-**Consequence:** this is not fan-out. For every Flow to run, use `signal.broadcast`.
+**Consequence:** bind one Flow (replicas of that process still compete for claims), or switch the
+declaration to [`signal.broadcast`](/docs/elements/signal/broadcast) so every Flow gets a copy.
 
 </Tab>
 
@@ -531,9 +580,15 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 </Accordion>
 
 <Accordion title="Both of two Flows ran on one once message">
-  That is broadcast physics, not once. Confirm both files import the same `signal.once` handle —
-  competing workers share one claim. If you need fan-out, switch the declaration to
-  `signal.broadcast`.
+  That is broadcast physics, not once. Two different Flow definitions on one `once` signal now
+  fail **OKE1071** at boot. If you need every Flow to run, switch the declaration to
+  [`signal.broadcast`](/docs/elements/signal/broadcast).
+</Accordion>
+
+<Accordion title="OKE1071 — once signal bound to more than one Flow">
+  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
+  Use `signal.broadcast` if each Flow should independently receive this event, or bind only one
+  Flow. Replicas of one Flow are still one `on()` in source.
 </Accordion>
 
 <Accordion title="Messages stuck inflight">
@@ -574,7 +629,7 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 - [Consumers](/docs/elements/flow/consumers) — `on(signal)` next to Clock / CDC
 - [Workflows](/docs/elements/flow/workflows) — `durable` + `fx.step` for idempotent side effects
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`
-- [Errors](/docs/reference/errors) — OKE1240 · OKE1250 · OKE1001
+- [Errors](/docs/reference/errors) — OKE1071 · OKE1240 · OKE1250 · OKE1001
 
 ## Next
 

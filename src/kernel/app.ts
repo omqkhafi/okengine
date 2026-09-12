@@ -69,6 +69,7 @@ import type { JsonCodeAuth } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
 import { fail, throwOke, OkeError } from "./errors.ts";
 import { FLOW_NAME_DUPLICATE } from "./errors-flow-name.ts";
+import { ONCE_SIGNAL_MULTI_FLOW } from "./errors-once-signal.ts";
 import { consumeRegisteredFlowUnits, type FlowUnitBag } from "./flow-units.ts";
 import {
   isFlowFailure,
@@ -784,6 +785,58 @@ function registerMcpTool(
 }
 
 /**
+ * Delivery physics for a signal-as-trigger binding.
+ *
+ * Prefers the original handle (`on(signal.once(…), flow)`), then the
+ * declared `signal()` registry. Unknown delivery is not treated as `once`.
+ *
+ * @param trigger - Signal trigger
+ * @param deliveryByName - Declared signal name → delivery
+ */
+function signalTriggerDelivery(
+  trigger: SignalAsTrigger,
+  deliveryByName: ReadonlyMap<string, string>,
+): string | undefined {
+  const handle = trigger.signal;
+  if (handle && typeof handle === "object" && "delivery" in handle) {
+    const d = (handle as { delivery?: unknown }).delivery;
+    if (typeof d === "string") return d;
+  }
+  return deliveryByName.get(trigger.name);
+}
+
+/**
+ * Register one signal-as-trigger binding: a `signal.once` name may bind
+ * exactly one Flow definition in this Manifest.
+ *
+ * Horizontal replicas of the same Flow are one `on()` in source — this only
+ * fires when two different Flow names share the once-signal.
+ *
+ * @param binding - Adopted binding
+ * @param onceBySignal - once-signal name → first Flow name
+ * @param deliveryByName - declared signal name → delivery
+ */
+function registerOnceSignalBinding(
+  binding: Binding,
+  onceBySignal: Map<string, string>,
+  deliveryByName: ReadonlyMap<string, string>,
+): void {
+  const trigger = binding.trigger;
+  if (trigger.kind !== "signal") return;
+  if (signalTriggerDelivery(trigger, deliveryByName) !== "once") return;
+  const flowName = binding.flow.name || "(unnamed)";
+  const existing = onceBySignal.get(trigger.name);
+  if (existing !== undefined && existing !== flowName) {
+    const flows = [existing, flowName].sort();
+    throw new OkeError(ONCE_SIGNAL_MULTI_FLOW, {
+      signal: trigger.name,
+      flows: flows.map((n) => `"${n}"`).join(", "),
+    });
+  }
+  if (existing === undefined) onceBySignal.set(trigger.name, flowName);
+}
+
+/**
  * Fold `generated.ts` units into `$routes` and `flowsByName`.
  *
  * @param units - Drained {@link registerFlowUnits} bag
@@ -973,6 +1026,11 @@ export function oke(options: OkeOptions): OkeApp {
   const seenLiveExposures = new Map<string, string>();
   const seenMcpTools = new Set<string>();
   const mcpToolsByName = new Map<string, Binding>();
+  const onceBySignal = new Map<string, string>();
+  const signalDeliveryByName = new Map<string, string>();
+  for (const decl of effectiveSignals) {
+    signalDeliveryByName.set(decl.name, decl.delivery);
+  }
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
@@ -980,6 +1038,9 @@ export function oke(options: OkeOptions): OkeApp {
     }
     if (b.trigger.kind === "mcp") {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
+    }
+    if (b.trigger.kind === "signal") {
+      registerOnceSignalBinding(b, onceBySignal, signalDeliveryByName);
     }
   }
   // Defer SmartRouter selection until first match so `.plug()` can still
@@ -995,6 +1056,9 @@ export function oke(options: OkeOptions): OkeApp {
     }
     if (b.trigger.kind === "mcp") {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
+    }
+    if (b.trigger.kind === "signal") {
+      registerOnceSignalBinding(b, onceBySignal, signalDeliveryByName);
     }
   }
 

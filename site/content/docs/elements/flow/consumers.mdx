@@ -17,9 +17,11 @@ For developers wiring background work on okengine — bind the trigger, keep `do
 
 ## Smallest Example
 
-<Steps>
+<Callout title="Bind and emit are independent">
+  The consumer and the producer share one Signal handle. They can live in
+  different files, written in any order — emit is not "step 2" after bind.
+</Callout>
 
-<Step>
 ### Bind a Signal consumer
 
 ```typescript title="src/flows/notifications/welcome.ts"
@@ -40,9 +42,6 @@ export const sendWelcome = on(
 );
 ```
 
-</Step>
-
-<Step>
 ### Emit from any Flow
 
 ```typescript
@@ -51,10 +50,6 @@ await fx.emit(userSignedUp, { userId: "usr_123", email: "alice@example.com" });
 
 The compiler records `emits: ["users.signed-up"]` on the producer. The consumer runs after the
 emit commits — the HTTP request does not wait for the welcome mail.
-
-</Step>
-
-</Steps>
 
 <Callout title="Jobs are consumers">
   A named Clock bound with `on(clockDecl, flow)` is the same species — an asynchronous Flow. There
@@ -213,8 +208,12 @@ Each emit is handled according to the Signal helper you declared. The Flow is th
 
 <Tab value="Once">
 
-Competing workers — exactly one consumer processes each message. Failed attempts retry, then
-dead-letter when `deadLetter` is true (default):
+Competing workers — exactly one consumer claims each message. Failed attempts retry, then
+dead-letter when `deadLetter` is true (default).
+
+Two different Flows on one `once` signal fail **OKE1071** — see
+[Once · Competing consumers](/docs/elements/signal/once#competing-consumers-once-vs-broadcast).
+For every bound Flow to run, use [`signal.broadcast`](/docs/elements/signal/broadcast).
 
 ```typescript title="src/signals/orders.ts"
 import { signal } from "okengine";
@@ -680,6 +679,12 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
   explicit `flow("…")` or a distinct tree export.
 </Accordion>
 
+<Accordion title="OKE1071 — once signal bound to more than one Flow">
+  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
+  Use `signal.broadcast` if each Flow should independently receive this event, or bind only one
+  Flow. See [Once · Competing consumers](/docs/elements/signal/once#competing-consumers-once-vs-broadcast).
+</Accordion>
+
 <Accordion title="OKE1240 — emit with no subscriber">
   Cause: `Flow "{flow}" emits signal "{resource}" with no subscriber.` Add `on(signal, flow)` or
   set `{ optional: true }` on the Signal (live firehoses, unused hooks).
@@ -731,7 +736,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 - [Store · SQL](/docs/elements/store/sql) — tables CDC watches
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `signal.live` SSE
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.clock`
-- [Errors](/docs/reference/errors) — OKE1070 · OKE1240 · OKE1250
+- [Errors](/docs/reference/errors) — OKE1070 · OKE1071 · OKE1240 · OKE1250
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` on a consumer
 
 ## Next

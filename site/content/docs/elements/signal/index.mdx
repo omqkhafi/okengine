@@ -19,10 +19,13 @@ For developers wiring async work on okengine — declare the physics, emit with 
 
 ## Smallest Example
 
-<Steps>
+<Callout title="One handle, three independent uses">
+  `orderPlaced` is a shared const. Declare it, bind a worker, and emit from a
+  producer — different files, different people, any order. None of these is a
+  prerequisite step for the others.
+</Callout>
 
-<Step>
-### Declare the signal
+### Declare
 
 ```typescript title="src/signals/orders.ts"
 import { signal } from "okengine";
@@ -39,10 +42,7 @@ export const orderPlaced = signal.once("orders.placed", {
 });
 ```
 
-</Step>
-
-<Step>
-### Bind a worker and emit
+### Bind a worker
 
 ```typescript title="src/flows/orders/fulfill.ts"
 import { on, flow } from "okengine";
@@ -58,8 +58,10 @@ export const fulfill = on(
 );
 ```
 
+### Emit
+
 ```typescript
-// Inside any Flow:
+// Inside any Flow — need not live next to the worker:
 await fx.emit(orderPlaced, {
   orderId: "ord_99",
   amount: 150,
@@ -69,10 +71,6 @@ await fx.emit(orderPlaced, {
 
 The compiler records `emits: ["orders.placed"]` on the producer. The HTTP request does not wait
 for the worker.
-
-</Step>
-
-</Steps>
 
 <Callout title="Live is not a worker">
   `signal.live` is an HTTP SSE tape. Expose it with
@@ -370,6 +368,66 @@ Fix: add `on(signal, …)` or mark `{ optional: true }`.
 | `signal.broadcast` | Pub/sub    | Every active subscriber       | None (miss if offline) | Cache invalidation, fan-out |
 | `signal.live`      | SSE tape   | HTTP clients via `http.live`  | `Last-Event-ID` resume | Status feeds, progress      |
 
+## Competing consumers (once vs broadcast)
+
+This is the most common mix-up. `signal.once` is a work queue: **exactly one** worker claims each
+message. It is not fan-out.
+
+Three differently-named Flows bound to the same `once` signal, then one emit:
+
+```typescript title="src/flows/orders/side-effects.ts"
+import { on, flow } from "okengine";
+import { orderPlaced } from "@/signals/orders";
+
+export const charge = on(
+  orderPlaced,
+  flow("orders.charge", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(chargeOrder, { orderId });
+    },
+  }),
+);
+export const ship = on(
+  orderPlaced,
+  flow("orders.ship", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(shipOrder, { orderId });
+    },
+  }),
+);
+export const notify = on(
+  orderPlaced,
+  flow("orders.notify", {
+    do: async ({ orderId }, fx) => {
+      await fx.call(notifyOrder, { orderId });
+    },
+  }),
+);
+```
+
+```typescript
+await fx.emit(orderPlaced, { orderId: "ord_99", amount: 150, userId: "usr_1" });
+```
+
+| Expectation                         | Real result                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| All three Flows run                 | **No.** Exactly one of the three runs                                     |
+| Always `orders.charge` (first `on`) | **No.** The winner is whichever claim lands first — not a fixed Flow    |
+| A sticky assignment to one Flow     | **No.** There is no owner — only an exclusive claim per message             |
+
+**Consequence:** if every bound Flow should independently receive its own copy, that is
+[`signal.broadcast`](/docs/elements/signal/broadcast) — switch the declaration. That is the correct
+fix for this exact mistake.
+
+Two or more **different** Flow definitions on the same `once` signal fail **OKE1071**.
+
+Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
+
+Load-balancing competing consumers is the **same** Flow on many process replicas — still one
+`on()` in source.
+
+Fix: `Use signal.broadcast if each flow should independently receive this event, or bind only one flow if these should compete for the same work.`
+
 ## The Capabilities of Signal
 
 <Cards>
@@ -475,6 +533,12 @@ export default defineConfig({
   [Flow name](#flow-name).
 </Accordion>
 
+<Accordion title="OKE1071 — once signal bound to more than one Flow">
+  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
+  Use `signal.broadcast` if each Flow should independently receive this event, or bind only one
+  Flow. See [Competing consumers](#competing-consumers-once-vs-broadcast).
+</Accordion>
+
 <Accordion title='oke boot: signal driver "postgres" / "nats"'>
   Those ids are reserved but not bound for production yet. Use `"memory"` or `"redis"`, or inject a
   custom `elements.signal` runtime.
@@ -498,7 +562,7 @@ export default defineConfig({
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `http.live` exposure
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.live`
 - [Client](/docs/client/live) — `api.live` for browsers
-- [Errors](/docs/reference/errors) — OKE1070 · OKE1240 · OKE1250 · OKE1210
+- [Errors](/docs/reference/errors) — OKE1070 · OKE1071 · OKE1240 · OKE1250 · OKE1210
 
 ## Next
 

@@ -21,10 +21,12 @@ from the typed client.
 
 ## Smallest Example
 
-<Steps>
+<Callout title="One handle, three independent uses">
+  `orderStatus` is a shared const. Declare it, expose SSE, and emit — different
+  files, any order. The firehose is not "step 2"; emit is not "step 3".
+</Callout>
 
-<Step>
-### Declare the live signal
+### Declare
 
 ```typescript title="src/signals/orders.ts"
 import { signal } from "okengine";
@@ -39,9 +41,6 @@ export const orderStatus = signal.live("order-status", {
 });
 ```
 
-</Step>
-
-<Step>
 ### Expose SSE
 
 ```typescript title="src/flows/orders/firehose.ts"
@@ -52,9 +51,6 @@ import { orderStatus } from "@/signals/orders";
 export const firehose = on(http.live(orderStatus).gate(member));
 ```
 
-</Step>
-
-<Step>
 ### Emit and subscribe
 
 ```typescript
@@ -70,10 +66,6 @@ curl -N http://localhost:6530/_oke/live/order-status \
 
 Response `Content-Type` is `text/event-stream`. Frames are JSON `data:` lines
 (optional `id:` for resume), then `data: [DONE]`.
-
-</Step>
-
-</Steps>
 
 <Callout title="Pathless firehose">
   `on(http.live(signal))` always mounts `GET /_oke/live/{name}` — there is no pathless file-tree
