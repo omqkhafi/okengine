@@ -29,5 +29,5 @@ export const FLOW_UNNAMED: OkeErrorDefinition = {
   code: 1072,
   domain: "kernel",
   cause: 'A {kind} flow on "{trigger}" has no name.',
-  fix: 'Use flow("unit.export", {…}) or export it from a src/flows/<unit>/ file so the tree can stamp unit.export.',
+  fix: 'Use flow("unit.export", {…}) or export it from a src/flows/<unit>/ file so the tree can stamp unit.export. A nameless flow({ do }) outside that folder fails even with export const.',
 };

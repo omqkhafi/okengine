@@ -175,9 +175,11 @@ Thrown by specific subsystems — each names its own cause:
 </Accordion>
 
 <Accordion title="OKE1072 Signal or Clock flow unnamed">
-  Cause: `A {kind} flow on "{trigger}" has no name.` Nameless `flow({ do })` is the tree default.
-  Outside a unit folder, pass `flow("unit.export", {…})`. See [Signal · Flow
-  name](/docs/elements/signal#flow-name) · [Clock · Flow name](/docs/elements/clock#flow-name).
+  Cause: `A {kind} flow on "{trigger}" has no name.`
+
+  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
+  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
+  `src/flows/<unit>/` fails — [Signal](/docs/elements/signal#flow-name) · [Clock](/docs/elements/clock#flow-name).
 </Accordion>
 
 <Accordion title="OKE1071 once signal bound to more than one Flow">

@@ -680,8 +680,11 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="OKE1072 — Signal or Clock flow unnamed">
-  Cause: `A {kind} flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
-  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export.
+  Cause: `A {kind} flow on "{trigger}" has no name.`
+
+  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
+  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
+  `src/flows/<unit>/` fails.
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">

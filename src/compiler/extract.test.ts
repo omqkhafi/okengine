@@ -2179,6 +2179,84 @@ on(clock.every("cleanup", "10m"), flow({ do: () => ({ ok: true }) }));
 `;
     await expect(extractFromSources({ "clock.ts": source })).rejects.toThrow(/OKE1072/);
   });
+
+  // Exact Signal docs Inline sample — tree path vs anywhere else.
+  const signalInlineDocsSample = `
+import { on, flow, signal } from "okengine";
+import { z } from "zod";
+
+export const ingestWebhook = on(
+  signal.once("hooks.inbound", {
+    schema: z.object({ id: z.string() }),
+    retries: 3,
+    deadLetter: true,
+  }),
+  flow({
+    do: async ({ id }, fx) => {
+      await fx.call(persistHook, { id });
+    },
+  }),
+);
+`;
+
+  test("docs Inline sample at src/flows/hooks/inbound.ts stamps hooks.ingestWebhook", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/hooks/inbound.ts": signalInlineDocsSample,
+    });
+    expect(manifest.flows?.["hooks.ingestWebhook"]?.trigger).toEqual({ signal: "hooks.inbound" });
+    expect(manifest.signals?.["hooks.inbound"]?.delivery).toBe("once");
+    expect(manifest.flows?.["ingestWebhook"]).toBeUndefined();
+    expect(manifest.flows?.["hooks.inbound"]).toBeUndefined();
+  });
+
+  test("docs Inline sample outside src/flows/<unit>/ fails OKE1072", async () => {
+    try {
+      await extractFromSources({ "inbound.ts": signalInlineDocsSample });
+      expect.unreachable("extract should throw OKE1072");
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      const message = (err as Error).message;
+      expect(message).toMatch(/OKE1072/);
+      expect(message).toContain("hooks.inbound");
+      expect(message).toContain('flow("unit.export"');
+      expect(message).toContain("src/flows/<unit>/");
+    }
+  });
+
+  test("docs Inline sample under src/signals/ fails OKE1072", async () => {
+    await expect(
+      extractFromSources({ "src/signals/inbound.ts": signalInlineDocsSample }),
+    ).rejects.toThrow(/OKE1072/);
+  });
+
+  const clockInlineDocsSample = `
+import { on, flow, clock } from "okengine";
+
+export const pingExternal = on(
+  clock.every("health.pingExternal", "30s"),
+  flow({
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(pingUpstream);
+    },
+  }),
+);
+`;
+
+  test("docs Clock Inline sample at src/flows/health/ping.ts stamps health.pingExternal", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/health/ping.ts": clockInlineDocsSample,
+    });
+    expect(manifest.flows?.["health.pingExternal"]?.trigger).toEqual({ every: "30s" });
+    expect(manifest.clocks?.["health.pingExternal"]?.every).toBe("30s");
+    expect(manifest.flows?.["pingExternal"]).toBeUndefined();
+  });
+
+  test("docs Clock Inline sample outside src/flows/<unit>/ fails OKE1072", async () => {
+    await expect(extractFromSources({ "ping.ts": clockInlineDocsSample })).rejects.toThrow(
+      /OKE1072/,
+    );
+  });
 });
 
 describe("extractManifest — once-signal uniqueness OKE1071", () => {

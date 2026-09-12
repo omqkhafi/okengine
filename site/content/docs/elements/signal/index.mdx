@@ -79,10 +79,10 @@ for the worker.
 
 ## Inline or named export
 
-| Style                                         | When                                                                        |
-| --------------------------------------------- | --------------------------------------------------------------------------- |
-| `on(signal.once("name", opts), flow({ do }))` | Self-contained — nothing else needs the Signal handle                       |
-| `export const x = signal.once<Payload>(…)`    | Another file needs `fx.emit(x, payload)` with compile-time payload checking |
+| Style                                         | When                                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `on(signal.once("name", opts), flow({ do }))` | One file. Nameless `flow({ do })` only under `src/flows/<unit>/` — [Flow name](#flow-name)    |
+| `export const x = signal.once<Payload>(…)` | Another file needs `fx.emit(x, payload)` with compile-time payload checking                       |
 
 Both styles stamp the same Manifest `flow.trigger`. The choice is where the
 declaration lives, not two runtimes.
@@ -117,6 +117,12 @@ export const ingestWebhook = on(
 ```typescript
 await fx.emit("hooks.inbound", { id: "h_1" });
 ```
+
+<Callout title="Why this nameless flow({ do }) is legal">
+  No `flow("name", …)` string — the Flow is **`hooks.ingestWebhook`** from
+  `src/flows/hooks/inbound.ts` + `export const ingestWebhook` ([Flow name](#flow-name)).
+  The same `flow({ do })` anywhere not under `src/flows/<unit>/` fails **OKE1072**.
+</Callout>
 
 </Tab>
 
@@ -162,9 +168,9 @@ await fx.emit(orderPlaced, { orderId: "ord_99" });
 | `flow("orders.fulfill")`      | Manifest / `fx.call` name — required outside a unit folder    |
 | Tree `export const onCreated` | `src/flows/notes/on-created.ts` stamps `notes.onCreated`     |
 
-Nameless `flow({ do })` is the tree default. Outside a unit folder it fails **OKE1072**
-(`A signal flow on "{trigger}" has no name.`). HTTP nameless after adopt fails **OKE1045**.
-Two Flows that land on the same name fail **OKE1070**.
+Nameless `flow({ do })` is the tree default — Inline `ingestWebhook` is `hooks.ingestWebhook`
+with no `flow("…")` string. Outside a unit folder it fails **OKE1072** (`A signal flow on
+"{trigger}" has no name.`). HTTP nameless after adopt fails **OKE1045**; collision is **OKE1070**.
 
 <Tabs items={["Explicit", "Tree"]}>
 
@@ -192,7 +198,7 @@ export const fulfill = on(
 <Tab value="Tree">
 
 Unit folder + `export const` stamps `unit.export`. The Flow is `notes.onCreated`,
-not `note-created`:
+not `note-created` — same tree rule as the Inline tab:
 
 ```typescript title="src/flows/notes/on-created.ts"
 import { on, flow } from "okengine";
@@ -507,8 +513,11 @@ export default defineConfig({
 </Accordion>
 
 <Accordion title="OKE1072 — Signal flow unnamed">
-  Cause: `A signal flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
-  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export.
+  Cause: `A signal flow on "{trigger}" has no name.`
+
+  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
+  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
+  `src/flows/<unit>/` fails — [Flow name](#flow-name).
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">

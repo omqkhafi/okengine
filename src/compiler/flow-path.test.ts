@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   importSpecifierFromWalked,
+  isFlowsTreeFile,
   nameFromFlowFile,
   pathFromFlowFile,
   toPosixPath,
@@ -92,5 +93,27 @@ describe("nameFromFlowFile / unitFromFlowFile", () => {
   test("main unit keeps the main. prefix on the Flow name", () => {
     expect(nameFromFlowFile("main/health.ts", "health")).toBe("main.health");
     expect(nameFromFlowFile("main/route.ts", "root")).toBe("main.root");
+  });
+
+  test("Signal Inline docs path stamps hooks.ingestWebhook; a bare file does not", () => {
+    expect(nameFromFlowFile("src/flows/hooks/inbound.ts", "ingestWebhook")).toBe(
+      "hooks.ingestWebhook",
+    );
+    expect(unitFromFlowFile("src/flows/hooks/inbound.ts")).toBe("hooks");
+    expect(nameFromFlowFile("inbound.ts", "ingestWebhook")).toBeUndefined();
+    expect(unitFromFlowFile("inbound.ts")).toBeUndefined();
+  });
+});
+
+describe("isFlowsTreeFile", () => {
+  test("src/flows/<unit>/ and /flows/ mark a tree file; other folders do not", () => {
+    expect(isFlowsTreeFile("src/flows/hooks/inbound.ts")).toBe(true);
+    expect(isFlowsTreeFile("src/flows/health/ping.ts")).toBe(true);
+    expect(isFlowsTreeFile("app/src/flows/notes/on-created.ts")).toBe(true);
+    expect(isFlowsTreeFile("flows/hooks/inbound.ts")).toBe(true);
+    expect(isFlowsTreeFile("inbound.ts")).toBe(false);
+    expect(isFlowsTreeFile("src/signals/inbound.ts")).toBe(false);
+    expect(isFlowsTreeFile("src/clocks/digest.ts")).toBe(false);
+    expect(isFlowsTreeFile("lib/inbound.ts")).toBe(false);
   });
 });

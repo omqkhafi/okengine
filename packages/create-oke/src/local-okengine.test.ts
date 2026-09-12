@@ -48,6 +48,7 @@ describe("materializeLocalOkengineDependency", () => {
       expect(existsSync(src)).toBe(true);
       expect(lstatSync(src).isSymbolicLink()).toBe(false);
       expect(existsSync(join(stage, "src/config/index.ts"))).toBe(true);
+      expect(existsSync(join(stage, "src/console/ui-next/dist/index.html"))).toBe(true);
       expect(existsSync(join(stage, "node_modules", "zod"))).toBe(true);
       expect(existsSync(join(stage, "node_modules", "drizzle-kit", "cli.mjs"))).toBe(true);
     },

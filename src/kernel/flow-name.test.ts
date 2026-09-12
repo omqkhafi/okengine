@@ -91,6 +91,8 @@ describe("oke — FLOW_UNNAMED OKE1072", () => {
       expect(okeErr.message).toMatch(/OKE1072/);
       expect(okeErr.causeText).toContain("signal");
       expect(okeErr.causeText).toContain("link-clicked");
+      expect(okeErr.message).toContain("src/flows/<unit>/");
+      expect(okeErr.message).toContain("export const");
     }
   });
 

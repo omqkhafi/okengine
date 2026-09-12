@@ -55,7 +55,7 @@ import {
   type InferBinding,
   type Literal,
 } from "./effects-infer.ts";
-import { nameFromFlowFile, pathFromFlowFile } from "./flow-path.ts";
+import { isFlowsTreeFile, nameFromFlowFile, pathFromFlowFile } from "./flow-path.ts";
 import {
   defaultListInSchema,
   jsonSchemaFromAst,
@@ -1853,11 +1853,22 @@ function registerFlow(args: {
     ? parseTrigger(args.triggerNode, args.scope, args.file.path)
     : undefined;
 
+  const signalOrClock = isSignalOrClockTrigger(trigger);
+  const treeName =
+    !signalOrClock || isFlowsTreeFile(args.file.path)
+      ? nameFromFlowFile(args.file.path, args.exportName)
+      : undefined;
+
+  // Signal / Clock: explicit `flow("name")` or a real `src/flows/<unit>/`
+  // tree stamp. A bare `export const` outside that folder is not a name —
+  // **OKE1072**, same as `oke()`. HTTP still falls through to exportName.
   const name =
     stringArg(args.flowCall.arguments[0]) ??
-    nameFromFlowFile(args.file.path, args.exportName) ??
+    treeName ??
+    (signalOrClock
+      ? unnamedElementFlowName(args.triggerNode, args.scope, trigger)
+      : undefined) ??
     args.exportName ??
-    unnamedElementFlowName(args.triggerNode, args.scope, trigger) ??
     `flow_${Object.keys(args.scope.flows).length + 1}`;
 
   if (args.exportName) {
@@ -2480,7 +2491,7 @@ function unnamedElementFlowName(
   const kind = parsed?.trigger?.signal ? "signal" : "clock";
   const target = triggerName ? `${kind} "${triggerName}"` : kind;
   throw new Error(
-    `OKE1072: nameless flow({ do }) bound to ${target}. Use flow("name", { do }) or a src/flows/<unit>/ tree export.`,
+    `OKE1072: nameless flow({ do }) bound to ${target}. Use flow("unit.export", { do }) or export it from a src/flows/<unit>/ file so the tree can stamp unit.export.`,
   );
 }
 

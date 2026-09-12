@@ -131,7 +131,9 @@ export function pathFromFlowFile(relFromFlowsDirOrSource: string): string | unde
 /**
  * Infer `unit.export` from a flow file + export name.
  *
- * `[id]` / `(group)` never enter the name.
+ * `[id]` / `(group)` never enter the name. A path that is not under a unit
+ * folder (bare `inbound.ts`, or `src/flows/inbound.ts` with no unit) returns
+ * `undefined` — Signal / Clock extract then fails **OKE1072**.
  *
  * @param filePath - Source path under `flows/`
  * @param exportName - `export const` binding
@@ -144,6 +146,20 @@ export function nameFromFlowFile(
   const unit = unitFromFlowFile(filePath);
   if (!unit) return undefined;
   return `${unit}.${exportName}`;
+}
+
+/**
+ * True when the path is under a flows tree (`src/flows/…` or `…/flows/…`).
+ *
+ * Adopt-relative `unit/file.ts` (no prefix) is not a tree path — generate-adopt
+ * prefixes the unit before {@link nameFromFlowFile}. Without this gate, a
+ * nameless Signal worker in `src/signals/inbound.ts` would stamp `src.ingestWebhook`.
+ *
+ * @param filePath - Source path
+ */
+export function isFlowsTreeFile(filePath: string): boolean {
+  const posix = toPosixPath(filePath);
+  return posix.includes("/flows/") || posix.startsWith("src/flows/") || posix.startsWith("flows/");
 }
 
 /**

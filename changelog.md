@@ -31,6 +31,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Dev, Keel & create-oke
+
+- Stop tracking `src/console/ui-next/dist/` in git. The Console SPA still
+  ships in the npm/JSR tarball via `prepack` / `scripts/publish.ts`. Local
+  create-oke `file:` staging builds the SPA when the folder is missing.
+
 #### Runtime
 
 - **OKE1070** now only fires for genuinely colliding names (two explicit
@@ -45,6 +51,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
   consumers on one schedule are a supported fan-out — each Flow needs its own
   name. Once, Broadcast, and Clock schedules troubleshooting now include
   **OKE1072**.
+- Signal / Clock **Inline or named export** now states that nameless `flow({ do })`
+  is tree-named from `src/flows/<unit>/` + export (`hooks.ingestWebhook` /
+  `health.pingExternal`). The same code outside that folder fails **OKE1072**.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Extract no longer stamps a nameless Signal / Clock consumer from a bare
+  `export const` outside `src/flows/<unit>/` (e.g. `inbound.ts` or
+  `src/signals/inbound.ts`). That path now fails **OKE1072**, matching `oke()`
+  and the documented tree-stamp contract.
 
 ## v0.19.3 — 2026-09-12
 

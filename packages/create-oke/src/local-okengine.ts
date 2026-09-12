@@ -110,6 +110,8 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
     writeFileSync(stagePkgPath, pkgBody, "utf8");
   }
 
+  ensureConsoleSpa(root);
+
   const entries =
     consumer.files && consumer.files.length > 0
       ? consumer.files
@@ -141,6 +143,27 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
   }
 
   return `file:${stage}`;
+}
+
+/**
+ * Console SPA is gitignored; a source checkout only has `ui-next/dist` after
+ * `bun run build`. The file: stage serves that folder like a published install.
+ *
+ * @param root - okengine package root
+ */
+function ensureConsoleSpa(root: string): void {
+  const indexHtml = join(root, "src/console/ui-next/dist/index.html");
+  if (existsSync(indexHtml)) return;
+  const build = Bun.spawnSync({
+    cmd: ["bun", "run", "build"],
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (build.exitCode !== 0 || !existsSync(indexHtml)) {
+    const err = new TextDecoder().decode(build.stderr).trim();
+    throw new Error(`create-oke: Console SPA build failed${err ? `\n${err}` : ""}`);
+  }
 }
 
 /**

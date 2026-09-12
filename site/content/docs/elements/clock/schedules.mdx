@@ -471,9 +471,11 @@ forms; on overlap days crontab fires **once** (first occurrence).
 </Accordion>
 
 <Accordion title="OKE1072 — Clock flow unnamed">
-  Cause: `A clock flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
-  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export — see
-  [Clock · Flow name](/docs/elements/clock#flow-name).
+  Cause: `A clock flow on "{trigger}" has no name.`
+
+  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/health/ping.ts`
+  + `export const pingExternal` stamps `health.pingExternal`). Same code outside
+  `src/flows/<unit>/` fails — see [Clock · Flow name](/docs/elements/clock#flow-name).
 </Accordion>
 
 <Accordion title="DST gap / overlap warning on the row">
