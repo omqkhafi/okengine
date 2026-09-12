@@ -57,7 +57,7 @@ import { noteCreated } from "./signals";
 
 export const onCreated = on(
   noteCreated,
-  flow({
+  flow("notes.onCreated", {
     do: async (payload, fx) => {
       await fx.send(noteCreatedMail, {
         to: "you@localhost",

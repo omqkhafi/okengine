@@ -36,6 +36,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Stop tracking `src/console/ui-next/dist/` in git. The Console SPA still
   ships in the npm/JSR tarball via `prepack` / `scripts/publish.ts`. Local
   create-oke `file:` staging builds the SPA when the folder is missing.
+- create-oke Signal / Clock consumers pass an explicit Flow name:
+  `on(noteCreated, flow("notes.onCreated", { do }))` and
+  `on(digestClock, flow("notes.digest", { do }))`. HTTP tree files stay
+  nameless `flow({ do })`.
 
 #### Runtime
 
