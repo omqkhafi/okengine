@@ -292,14 +292,14 @@ Fix: `Use signal.broadcast if each flow should independently receive this event,
 
 Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. Delivery is the helper name — not an option.
 
-| Option        | Type                     | Default   | Meaning                                                                                                                              |
-| ------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Option        | Type                     | Default   | Meaning                                                                                                                        |
+| ------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `schema`      | Standard Schema          | omitted   | **Emit** contract — enforced at `fx.emit` (**OKE1250** on mismatch). Workers inherit the payload; do not put `in` on `flow()`. |
-| `retries`     | `number`                 | `3`       | Extra attempts after the first (`retries + 1` total) — `once` path                                                                   |
-| `deadLetter`  | `boolean`                | `true`    | Keep exhausted `once` messages; `false` marks them delivered                                                                         |
-| `optional`    | `boolean`                | `false`   | Allow emit with zero subscribers                                                                                                     |
-| `retention`   | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast`                                                                          |
-| `description` | `string`                 | the name  | Console / docs blurb                                                                                                                 |
+| `retries`     | `number`                 | `3`       | Extra attempts after the first (`retries + 1` total) — `once` path                                                             |
+| `deadLetter`  | `boolean`                | `true`    | Keep exhausted `once` messages; `false` marks them delivered                                                                   |
+| `optional`    | `boolean`                | `false`   | Allow emit with zero subscribers                                                                                               |
+| `retention`   | `{ maxAge?, maxCount? }` | unbounded | **`signal.live` only** — type error on `once` / `broadcast`                                                                    |
+| `description` | `string`                 | the name  | Console / docs blurb                                                                                                           |
 
 **Consequence:** `deadLetter` is a boolean flag, not a queue name string.
 

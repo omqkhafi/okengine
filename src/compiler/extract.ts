@@ -1865,9 +1865,7 @@ function registerFlow(args: {
   const name =
     stringArg(args.flowCall.arguments[0]) ??
     treeName ??
-    (signalOrClock
-      ? unnamedElementFlowName(args.triggerNode, args.scope, trigger)
-      : undefined) ??
+    (signalOrClock ? unnamedElementFlowName(args.triggerNode, args.scope, trigger) : undefined) ??
     args.exportName ??
     `flow_${Object.keys(args.scope.flows).length + 1}`;
 

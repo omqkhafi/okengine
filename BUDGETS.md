@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.19.1 · measured 2026-09-11T21:46:27.658Z_
+_okengine v0.19.4 · measured 2026-09-12T15:21:31.088Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
@@ -12,17 +12,17 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 | ------------------------------- | --------- | --------- |
 | Kernel (edge profile)           | 16.98 kB  | 17.00 kB  |
 | Client runtime                  | 4.96 kB   | 5.00 kB   |
-| Console initial load            | 346.26 kB | 700.00 kB |
-| Cold start on Bun               | 19.135 ms | 75.000 ms |
-| p99 routing overhead            | 0.000 ms  | 1.000 ms  |
-| HTTP ping app (gzip, externals) | 44.08 kB  | 44.96 kB  |
-| HTTP ping app (raw, externals)  | 127.05 kB | 129.59 kB |
+| Console initial load            | 345.33 kB | 700.00 kB |
+| Cold start on Bun               | 19.048 ms | 75.000 ms |
+| p99 routing overhead            | 0.001 ms  | 1.000 ms  |
+| HTTP ping app (gzip, externals) | 45.05 kB  | 45.95 kB  |
+| HTTP ping app (raw, externals)  | 129.73 kB | 132.32 kB |
 
 ## Exports
 
 |              | Measured  | Ceiling   |
 | ------------ | --------- | --------- |
-| okengine     | 98.19 kB  | 100.15 kB |
+| okengine     | 99.09 kB  | 101.07 kB |
 | ai           | 13.23 kB  | 13.49 kB  |
 | auth         | 18.84 kB  | 19.22 kB  |
 | channel      | 7.61 kB   | 7.86 kB   |
@@ -30,21 +30,21 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 | client-react | 11.95 kB  | 12.20 kB  |
 | client/auth  | 8.57 kB   | 8.82 kB   |
 | clock        | 18.29 kB  | 18.66 kB  |
-| compiler     | 21.95 kB  | 22.39 kB  |
+| compiler     | 22.54 kB  | 22.99 kB  |
 | config       | 1.21 kB   | 1.46 kB   |
-| console      | 165.98 kB | 169.30 kB |
-| full         | 108.45 kB | 110.62 kB |
+| console      | 166.92 kB | 170.25 kB |
+| full         | 109.37 kB | 111.56 kB |
 | gate         | 4.53 kB   | 4.78 kB   |
-| http         | 45.40 kB  | 46.31 kB  |
+| http         | 46.37 kB  | 47.30 kB  |
 | i18n         | 4.38 kB   | 4.63 kB   |
 | journal      | 3.02 kB   | 3.27 kB   |
-| kernel       | 51.66 kB  | 52.70 kB  |
+| kernel       | 52.57 kB  | 53.62 kB  |
 | mcp          | 9.58 kB   | 9.83 kB   |
 | okid         | 1.24 kB   | 1.49 kB   |
 | plugins      | 35.27 kB  | 35.98 kB  |
 | runs         | 9.79 kB   | 10.04 kB  |
 | signal       | 1.26 kB   | 1.51 kB   |
-| store        | 31.51 kB  | 32.15 kB  |
+| store        | 31.58 kB  | 32.21 kB  |
 | test         | 22.07 kB  | 22.51 kB  |
 | testing      | 22.07 kB  | 22.51 kB  |
 | vault        | 12.75 kB  | 13.01 kB  |

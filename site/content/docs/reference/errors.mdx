@@ -98,7 +98,7 @@ string. Custom app codes stay message-less until registered. Full catalogs:
 | `1060` | MCP tool duplicate     | Two MCP tool bindings share the same tool name         | Give each MCP tool exposure a unique name                 |
 | `1070` | flow name duplicate    | Two Flows share the same Manifest / `fx.call` name     | Give at least one an explicit `flow("…")` or tree export  |
 | `1071` | once-signal multi-flow | Two different Flows bound to the same `signal.once`    | Use `signal.broadcast`, or bind only one Flow             |
-| `1072` | flow unnamed            | Signal / Clock consumer still has no `unit.export`       | Export from `flows/<unit>/` or pass a named `flow`        |
+| `1072` | flow unnamed           | Signal / Clock consumer still has no `unit.export`     | Export from `flows/<unit>/` or pass a named `flow`        |
 | `1110` | schema missing         | Domain table absent in `prod` — no auto-DDL            | Run `oke db migrate` against this environment             |
 | `1210` | live resume gap        | `Last-Event-ID` is not on the retained tape            | Reconnect without the cursor; remaining tape replays      |
 | `1240` | orphan emit            | Emit with zero subscribers and `optional` false        | Add `on(signal, …)` or declare `optional: true`           |

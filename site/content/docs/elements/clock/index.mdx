@@ -68,10 +68,88 @@ Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting 
 </Steps>
 
 <Callout title="Jobs are Flows">
-  Export the Clock, then bind `on(digestClock, flow("notes.digest", { do }))`. Always an
-  explicit Flow name; several Flows may share one Clock. See
+  Write the schedule inline or export it — [Inline or named export](#inline-or-named-export).
+  Every consumer still uses `flow("name", { do })`. See
   [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs).
 </Callout>
+
+## Inline or named export
+
+| Style                                                     | When                              |
+| --------------------------------------------------------- | --------------------------------- |
+| `on(clock.every("name", "1h"), flow("ops.ping", { do }))` | One Flow owns this schedule       |
+| `export const x = clock.every("name", "1h")`              | Several Flows share this schedule |
+
+<Callout title="Why Clock can be inline">
+  `fx.clock` is now / sleep / offsets — not an emit. Signal stays an exported const so producers can
+  `fx.emit(handle, payload)`. Export a Clock const only to share one schedule across named Flows.
+</Callout>
+
+Both styles pass a real `flow("name", { do })`. Nameless `flow({ do })` fails
+**OKE1072** — the trigger's name is never the Flow's name.
+
+<Tabs items={["Inline", "Named"]}>
+
+<Tab value="Inline">
+
+One file — declare and bind together. The scheduler fires it; no other Flow
+binds this cadence:
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow, clock } from "okengine";
+
+export const pingExternal = on(
+  clock.every("health.pingExternal", "30s"),
+  flow("health.pingExternal", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(pingUpstream);
+    },
+  }),
+);
+```
+
+</Tab>
+
+<Tab value="Named">
+
+Export the handle when a second `on()` must reuse the same schedule. Each Flow
+keeps its own explicit name — **OKE1070** if they collide:
+
+```typescript title="src/clocks/metrics.ts"
+import { clock } from "okengine";
+
+export const tickClock = clock.every("metrics.tick", "1h");
+```
+
+```typescript title="src/flows/ops/metrics.ts"
+import { on, flow } from "okengine";
+import { tickClock } from "@/clocks/metrics";
+
+export const sweep = on(
+  tickClock,
+  flow("ops.sweep", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(sweepMetrics);
+    },
+  }),
+);
+
+export const report = on(
+  tickClock,
+  flow("ops.report", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(reportMetrics);
+    },
+  }),
+);
+```
+
+</Tab>
+
+</Tabs>
 
 ## Progressive Patterns
 
@@ -287,6 +365,7 @@ export default defineConfig({
 <Accordion title="OKE1072 — Clock flow unnamed">
   Cause: `A clock flow on "{trigger}" has no name.`
   Fix: pass an explicit name — `on(clockDecl, flow("notes.digest", { do }))`.
+  Inline `clock.every` still needs `flow("…")` — [Inline or named export](#inline-or-named-export).
 </Accordion>
 
 </Accordions>

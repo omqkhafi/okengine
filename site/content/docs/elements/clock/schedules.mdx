@@ -290,8 +290,9 @@ do not consult the zone for tick spacing; the zone still lands on the Store row.
 
 ## Binding & Input
 
-Bind the returned handle with `on(clockDecl, flow("name", { do }))`. The scheduler invokes
-`do` with **no payload** — destructure `_` and read time through `fx.clock`:
+Bind with `on(clockDecl, flow("name", { do }))`. One Flow can write `clock.every`
+inside `on()` — [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export).
+`do` has no payload; read time through `fx.clock`:
 
 ```typescript title="src/clocks/metrics.ts"
 import { clock } from "okengine";
@@ -493,6 +494,7 @@ forms; on overlap days crontab fires **once** (first occurrence).
 <Accordion title="OKE1072 — Clock flow unnamed">
   Cause: `A clock flow on "{trigger}" has no name.`
   Fix: pass an explicit name — `on(clockDecl, flow("reports.runDaily", { do }))`.
+  Inline `clock.every` still needs `flow("…")` — [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export).
 </Accordion>
 
 <Accordion title="DST gap / overlap warning on the row">
@@ -510,6 +512,7 @@ forms; on overlap days crontab fires **once** (first occurrence).
 ## Learn more
 
 - [Clock overview](/docs/elements/clock) — `fx.clock` helpers and drivers
+- [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export) — one Flow vs shared schedule
 - [Durable Sleep](/docs/elements/clock/sleep) — `fx.clock.sleep(label, duration)`
 - [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs) — bind with `on(clockDecl, flow)`
 - [fx](/docs/reference/fx) — `fx.clock.now` / `ago` / `fromNow` / `duration`

@@ -456,8 +456,8 @@ Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
 
 Signal / Clock consumers pass an explicit `flow("…")` name (**OKE1072** if nameless
-outside `src/flows/<unit>/`). Collision is **OKE1070**. HTTP nameless stays the tree
-default (or **OKE1045** after adopt).
+outside `src/flows/<unit>/`; **OKE1070** on collision). Clock may write `clock.every(…)`
+inside `on()` — [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export).
 
 ## Runtime Matching
 

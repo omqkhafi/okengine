@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-09-11T21:46:27.658Z",
-  "version": "0.19.1",
+  "measuredAt": "2026-09-12T15:21:31.088Z",
+  "version": "0.19.4",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 354572,
+      "value": 353615,
       "limit": 716800,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 19.135,
+      "value": 19.048,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -45,7 +45,7 @@
     {
       "id": "routingP99Ms",
       "label": "p99 routing overhead",
-      "value": 0,
+      "value": 0.001,
       "limit": 1,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "httpPingGzipBytes",
       "label": "HTTP ping app (gzip, externals)",
-      "value": 45133,
-      "limit": 46036,
+      "value": 46129,
+      "limit": 47052,
       "unit": "bytes",
       "gate": "regression",
       "group": "core",
@@ -65,8 +65,8 @@
     {
       "id": "httpPingRawBytes",
       "label": "HTTP ping app (raw, externals)",
-      "value": 130096,
-      "limit": 132698,
+      "value": 132841,
+      "limit": 135498,
       "unit": "bytes",
       "gate": "regression",
       "group": "core",
@@ -75,8 +75,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 100543,
-      "limit": 102554,
+      "value": 101467,
+      "limit": 103497,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -155,8 +155,8 @@
     {
       "id": "export:./compiler",
       "label": "compiler",
-      "value": 22474,
-      "limit": 22924,
+      "value": 23084,
+      "limit": 23546,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 169963,
-      "limit": 173363,
+      "value": 170921,
+      "limit": 174340,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -185,8 +185,8 @@
     {
       "id": "export:./full",
       "label": "full",
-      "value": 111051,
-      "limit": 113273,
+      "value": 111998,
+      "limit": 114238,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -205,8 +205,8 @@
     {
       "id": "export:./http",
       "label": "http",
-      "value": 46487,
-      "limit": 47417,
+      "value": 47484,
+      "limit": 48434,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -235,8 +235,8 @@
     {
       "id": "export:./kernel",
       "label": "kernel",
-      "value": 52904,
-      "limit": 53963,
+      "value": 53831,
+      "limit": 54908,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -295,8 +295,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 32271,
-      "limit": 32917,
+      "value": 32338,
+      "limit": 32985,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

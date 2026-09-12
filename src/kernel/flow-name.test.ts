@@ -156,4 +156,34 @@ describe("oke — FLOW_NAME_DUPLICATE OKE1070", () => {
     on(tick, flow("ops.report", { do: () => 2 }));
     expect(() => oke({ name: "t", autoBoot: false })).not.toThrow();
   });
+
+  test("docs Clock Inline (explicit name) boots", () => {
+    on(
+      clock.every("health.pingExternal", "30s"),
+      flow("health.pingExternal", {
+        plane: "operator",
+        do: async () => ({ ok: true }),
+      }),
+    );
+    expect(() => oke({ name: "t", autoBoot: false })).not.toThrow();
+  });
+
+  test("docs Clock named-export (shared schedule) boots", () => {
+    const tickClock = clock.every("metrics.tick", "1h");
+    on(
+      tickClock,
+      flow("ops.sweep", {
+        plane: "operator",
+        do: async () => ({ ok: true }),
+      }),
+    );
+    on(
+      tickClock,
+      flow("ops.report", {
+        plane: "operator",
+        do: async () => ({ ok: true }),
+      }),
+    );
+    expect(() => oke({ name: "t", autoBoot: false })).not.toThrow();
+  });
 });

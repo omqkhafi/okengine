@@ -96,7 +96,8 @@ export const processEmail = on(
 
 <Tab value="Clock">
 
-Name the schedule, then bind it. Omit `timezone` for `"UTC"`:
+Name the schedule, then bind it. One Flow can write `clock.every` inside `on()` —
+[Clock · Inline or named export](/docs/elements/clock#inline-or-named-export).
 
 ```typescript title="src/clocks/metrics.ts"
 import { clock } from "okengine";
@@ -185,18 +186,19 @@ Omit `key` for competing consumers with no ordering.
 
 ## Trigger Reference
 
-| Trigger    | Signature                                   | Purpose                                     | `do` input                             |
-| ---------- | ------------------------------------------- | ------------------------------------------- | -------------------------------------- |
-| Signal     | `on(handle, flow("name", { do }))`         | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)                     |
-| Clock      | `on(clockDecl, flow("name", { do }))`     | Interval or cron tick                       | none (`_`)                             |
-| CDC any    | `on(db.table(t).changed(), flow)`              | Every insert / update / delete              | `{ before, after, table, action, id }` |
-| CDC column | `on(db.table(t).changed("col"), flow)`         | Same writes; column stamped on the Manifest | `{ before, after, table, action, id }` |
+| Trigger    | Signature                                                        | Purpose                                     | `do` input                             |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------- | -------------------------------------- |
+| Signal     | `on(handle, flow("name", { do }))`                               | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)                     |
+| Clock      | `on(clockDecl, flow("name", { do }))` or inline `clock.every(…)` | Interval or cron tick                       | none (`_`)                             |
+| CDC any    | `on(db.table(t).changed(), flow)`                                | Every insert / update / delete              | `{ before, after, table, action, id }` |
+| CDC column | `on(db.table(t).changed("col"), flow)`                           | Same writes; column stamped on the Manifest | `{ before, after, table, action, id }` |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
 
-Declare the Signal or Clock as an exported const, then bind
-`on(handle, flow("name", { do }))`. Missing name is **OKE1072**; collision is **OKE1070**.
+Signal is always an exported const (`fx.emit` needs the handle). Clock may write
+`clock.every(…)` inside `on()` — [Clock · Inline or named
+export](/docs/elements/clock#inline-or-named-export). **OKE1072** if nameless.
 
 ## Signal Consumers
 
@@ -340,9 +342,9 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 </Accordion>
 
 <Accordion title="Schema at emit">
-  Invalid payloads fail at `fx.emit` with **OKE1250** (`"{resource}": {detail}`) before any
-  consumer runs. This is an **emit** contract — workers inherit the payload from the Signal;
-  they do not declare `in` on `flow()`.
+  Invalid payloads fail at `fx.emit` with **OKE1250** (`"{resource}": {detail}`) before any consumer
+  runs. This is an **emit** contract — workers inherit the payload from the Signal; they do not
+  declare `in` on `flow()`.
 </Accordion>
 
 </Accordions>
@@ -350,11 +352,9 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 ## Clock Jobs
 
 <Callout title="Detailed section">
-  Prefer `clock.every` / `clock.daily` / `clock.cron` (and the other named helpers) for fixed
-  schedules — they compile to the same decl as the bare callable. The lower-level bare `clock(name,
-  options)` form still works when you need a raw expression or a schedule chosen programmatically;
-  missing both `cron` and `every` throws `clock("name"): require cron or every`. Bind the returned
-  handle with `on(clockDecl, flow("name", { do }))`.
+  Prefer named helpers (`clock.every` / `daily` / `cron`). Bind with
+  `on(clockDecl, flow("name", { do }))`, or write `clock.every` inside `on()` —
+  [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export).
 </Callout>
 
 Named clocks reconcile into the Store at boot. The scheduler leader-elects so N instances do not
@@ -692,8 +692,8 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two `flow("…")` strings share a name. Give at least
-  one a distinct name.
+  Cause: `Flow "{flow}" is defined twice.` Two `flow("…")` strings share a name. Give at least one a
+  distinct name.
 </Accordion>
 
 <Accordion title="OKE1072 — Signal or Clock flow unnamed">
@@ -755,6 +755,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 - [Signal](/docs/elements/signal) — `once` / `broadcast` / `live` physics
 - [Signal · Once](/docs/elements/signal/once) — leases, retries, partition keys
 - [Clock](/docs/elements/clock) — schedules, `fx.clock.sleep`
+- [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export) — one Flow vs shared schedule
 - [Store · SQL](/docs/elements/store/sql) — tables CDC watches
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `signal.live` SSE
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.clock`

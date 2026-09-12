@@ -2145,6 +2145,67 @@ on(tick, flow("ops.report", { do: () => ({ b: true }) }));
     expect(manifest.flows?.["ops.sweep"]?.trigger).toEqual({ every: "1h" });
     expect(manifest.flows?.["ops.report"]?.trigger).toEqual({ every: "1h" });
   });
+
+  // Exact Clock docs Inline sample — explicit flow name, trigger written inline.
+  const clockInlineExplicitDocsSample = `
+import { on, flow, clock } from "okengine";
+
+export const pingExternal = on(
+  clock.every("health.pingExternal", "30s"),
+  flow("health.pingExternal", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(pingUpstream);
+    },
+  }),
+);
+`;
+
+  test("docs Clock Inline (explicit name) extracts outside src/flows/<unit>/", async () => {
+    const manifest = await extractFromSources({ "ping.ts": clockInlineExplicitDocsSample });
+    expect(manifest.clocks?.["health.pingExternal"]?.every).toBe("30s");
+    expect(manifest.flows?.["health.pingExternal"]?.trigger).toEqual({ every: "30s" });
+    expect(manifest.flows?.["pingExternal"]).toBeUndefined();
+  });
+
+  test("docs Clock named-export (shared schedule) extracts two explicit flows", async () => {
+    const clockSource = `
+import { clock } from "okengine";
+
+export const tickClock = clock.every("metrics.tick", "1h");
+`;
+    const flowsSource = `
+import { on, flow } from "okengine";
+import { tickClock } from "@/clocks/metrics";
+
+export const sweep = on(
+  tickClock,
+  flow("ops.sweep", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(sweepMetrics);
+    },
+  }),
+);
+
+export const report = on(
+  tickClock,
+  flow("ops.report", {
+    plane: "operator",
+    do: async (_, fx) => {
+      await fx.call(reportMetrics);
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({
+      "src/clocks/metrics.ts": clockSource,
+      "src/flows/ops/metrics.ts": flowsSource,
+    });
+    expect(manifest.clocks?.["metrics.tick"]).toMatchObject({ every: "1h" });
+    expect(manifest.flows?.["ops.sweep"]?.trigger).toEqual({ every: "1h" });
+    expect(manifest.flows?.["ops.report"]?.trigger).toEqual({ every: "1h" });
+  });
 });
 
 describe("extractManifest — nameless Signal/Clock consumers fail OKE1072", () => {

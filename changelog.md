@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.4 — 2026-09-12
+
 ### ✨ Added
 
 #### Runtime
@@ -43,6 +45,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Export gzip regression baselines refreshed in `budgets.json` after
+  OKE1072 / explicit Signal-Clock names (kernel edge 16.98 kB and client
+  4.96 kB still under the 17 kB / 5 kB absolute caps).
 - **OKE1070** now only fires for genuinely colliding names (two explicit
   `flow("…")` strings or two tree exports that stamp the same `unit.export`).
   Two nameless consumers no longer collide by inheriting the same trigger name
@@ -50,11 +55,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
-- Signal / Clock **Inline or named export** and **Flow name** (explicit vs tree)
-  are gone. Docs teach one pattern: export `signal.*` / `clock(...)` as a named
-  const, bind with `on(handle, flow("explicit.name", { do }))`. Tree
-  `unit.export` stays on Routing for HTTP. OKE1070 / OKE1072 troubleshooting
-  remains; Clock still allows several named consumers on one schedule.
+- Signal **Inline or named export** and **Flow name** (explicit vs tree) are
+  gone. Signal stays named-export only: export the const, bind with
+  `on(handle, flow("explicit.name", { do }))`. Clock **Inline or named export**
+  is back: write `clock.every(…)` inside `on()` for a single consumer, or export
+  the const when several Flows share one schedule. Both Clock styles still
+  require `flow("name", { do })` (**OKE1072**). Tree `unit.export` stays on
+  Routing for HTTP. OKE1070 / OKE1072 troubleshooting remains.
 
 ### 🐛 Fixed
 
