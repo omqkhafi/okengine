@@ -157,42 +157,16 @@ await fx.emit(orderPlaced, { orderId: "ord_99" });
 
 ## Flow name
 
-| Style                         | When                                                                          |
-| ----------------------------- | ----------------------------------------------------------------------------- |
-| `flow({ do })`                | No unit folder — Flow name is the Signal name (`hooks.inbound`)               |
-| `flow("orders.fulfill")`      | Manifest / `fx.call` name must differ from the Signal                         |
-| Tree `export const onCreated` | `src/flows/notes/on-created.ts` stamps `notes.onCreated` — overwrites inherit |
+| Style                         | When                                                         |
+| ----------------------------- | ------------------------------------------------------------ |
+| `flow("orders.fulfill")`      | Manifest / `fx.call` name — required outside a unit folder    |
+| Tree `export const onCreated` | `src/flows/notes/on-created.ts` stamps `notes.onCreated`     |
 
-Explicit `flow("…")` and the file tree overwrite inherit. HTTP does not inherit a
-name from the path — nameless HTTP stays for the tree or fails **OKE1045**. Two
-Flows that land on the same name fail **OKE1070** (`Flow "{flow}" is defined twice.`).
+Nameless `flow({ do })` is the tree default. Outside a unit folder it fails **OKE1072**
+(`A signal flow on "{trigger}" has no name.`). HTTP nameless after adopt fails **OKE1045**.
+Two Flows that land on the same name fail **OKE1070**.
 
-<Tabs items={["Inherit", "Explicit", "Tree"]}>
-
-<Tab value="Inherit">
-
-A file directly in `src/flows/` (no unit folder) has nothing to stamp. The Flow
-is named `hooks.inbound` — same as the Signal:
-
-```typescript title="src/flows/hooks.ts"
-import { on, flow, signal } from "okengine";
-import { z } from "zod";
-
-export const ingestWebhook = on(
-  signal.once("hooks.inbound", {
-    schema: z.object({ id: z.string() }),
-    retries: 3,
-    deadLetter: true,
-  }),
-  flow({
-    do: async ({ id }, fx) => {
-      await fx.call(persistHook, { id });
-    },
-  }),
-);
-```
-
-</Tab>
+<Tabs items={["Explicit", "Tree"]}>
 
 <Tab value="Explicit">
 
@@ -527,9 +501,14 @@ export default defineConfig({
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two nameless consumers inherited the same Signal name, or
-  two explicit `flow("…")` calls collide. Give at least one a distinct `flow("…")` or tree export —
+  Cause: `Flow "{flow}" is defined twice.` Two explicit `flow("…")` calls collide, or two tree
+  exports stamp the same `unit.export`. Give at least one a distinct `flow("…")` or tree export —
   [Flow name](#flow-name).
+</Accordion>
+
+<Accordion title="OKE1072 — Signal flow unnamed">
+  Cause: `A signal flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
+  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export.
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">
@@ -557,11 +536,11 @@ export default defineConfig({
 - [Broadcast](/docs/elements/signal/broadcast) — ephemeral fan-out
 - [Live](/docs/elements/signal/live) — SSE tapes and retention
 - [Consumers](/docs/elements/flow/consumers) — `on(signal)` workers next to Clock / CDC
-- [Routing](/docs/elements/flow/routing#names) — tree `unit.export` vs inherit
+- [Routing](/docs/elements/flow/routing#names) — tree `unit.export` vs explicit `flow("…")`
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `http.live` exposure
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.live`
 - [Client](/docs/client/live) — `api.live` for browsers
-- [Errors](/docs/reference/errors) — OKE1070 · OKE1071 · OKE1240 · OKE1250 · OKE1210
+- [Errors](/docs/reference/errors) — OKE1070 · OKE1071 · OKE1072 · OKE1240 · OKE1250 · OKE1210
 
 ## Next
 

@@ -591,6 +591,12 @@ See [Durable Workflows](/docs/elements/flow/workflows).
   are still one `on()` in source.
 </Accordion>
 
+<Accordion title="OKE1072 — Signal flow unnamed">
+  Cause: `A signal flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
+  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export — see
+  [Signal · Flow name](/docs/elements/signal#flow-name).
+</Accordion>
+
 <Accordion title="Messages stuck inflight">
   Wait for the 30s lease and the next drain/claim. There is no separate timeout daemon. A handler
   still running past the lease can overlap with a reclaim — shorten the work or journal it.
@@ -629,7 +635,7 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 - [Consumers](/docs/elements/flow/consumers) — `on(signal)` next to Clock / CDC
 - [Workflows](/docs/elements/flow/workflows) — `durable` + `fx.step` for idempotent side effects
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`
-- [Errors](/docs/reference/errors) — OKE1071 · OKE1240 · OKE1250 · OKE1001
+- [Errors](/docs/reference/errors) — OKE1071 · OKE1072 · OKE1240 · OKE1250 · OKE1001
 
 ## Next
 

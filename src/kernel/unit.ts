@@ -42,8 +42,7 @@ export function unit<const T extends Record<string, AnyFlowDef>>(
   for (const [exportName, flowDef] of Object.entries(flows)) {
     const f = flowDef as FlowDef;
     if (isUnsetFlowName(f)) {
-      (f as { name: string; $n?: boolean }).name = `${name}.${exportName}`;
-      (f as { $n?: boolean }).$n = false;
+      (f as { name: string }).name = `${name}.${exportName}`;
     }
     if (!f.unit) {
       (f as { unit: string }).unit = name;

@@ -466,6 +466,12 @@ dead-letter queue for exhausted retries in the queue sense — see
   Cause: `"{resource}": {detail}`. Align the payload with `schema` — no subscriber started.
 </Accordion>
 
+<Accordion title="OKE1072 — Signal flow unnamed">
+  Cause: `A signal flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
+  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export — see
+  [Signal · Flow name](/docs/elements/signal#flow-name).
+</Accordion>
+
 <Accordion title="Expecting retries / DLQ like a queue">
   Use `signal.once`. Broadcast fan-out is not the lease + DLQ path documented under
   [Once](/docs/elements/signal/once).
@@ -492,7 +498,7 @@ dead-letter queue for exhausted retries in the queue sense — see
 - [Consumers](/docs/elements/flow/consumers) — binding `on(signal)`
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — when the consumer is a browser
 - [fx](/docs/reference/fx) — `fx.emit`
-- [Errors](/docs/reference/errors) — OKE1240 · OKE1250
+- [Errors](/docs/reference/errors) — OKE1072 · OKE1240 · OKE1250
 
 ## Next
 

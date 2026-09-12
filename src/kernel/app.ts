@@ -68,7 +68,7 @@ import { GATE_PUBLIC_NAME } from "../elements/gate/flatten.ts";
 import type { JsonCodeAuth } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
 import { fail, throwOke, OkeError } from "./errors.ts";
-import { FLOW_NAME_DUPLICATE } from "./errors-flow-name.ts";
+import { FLOW_NAME_DUPLICATE, FLOW_UNNAMED } from "./errors-flow-name.ts";
 import { ONCE_SIGNAL_MULTI_FLOW } from "./errors-once-signal.ts";
 import { consumeRegisteredFlowUnits, type FlowUnitBag } from "./flow-units.ts";
 import {
@@ -705,6 +705,22 @@ function assertHttpBindingReady(binding: Binding): void {
 }
 
 /**
+ * Refuse a nameless Signal / Clock consumer — same posture as {@link assertHttpBindingReady}.
+ *
+ * @param binding - Adopted binding
+ */
+function assertElementFlowNamed(binding: Binding): void {
+  const trigger = binding.trigger;
+  if (trigger.kind !== "signal" && trigger.kind !== "clock" && trigger.kind !== "every") {
+    return;
+  }
+  if (binding.flow.name && !binding.flow.name.startsWith("flow_")) return;
+  const kind = trigger.kind === "signal" ? "signal" : "clock";
+  const triggerName = trigger.kind === "every" ? trigger.interval : trigger.name;
+  throw new OkeError(FLOW_UNNAMED, { kind, trigger: triggerName });
+}
+
+/**
  * Register one HTTP binding: unique method+path, unique live exposure key.
  *
  * @param binding - HTTP binding
@@ -1039,6 +1055,9 @@ export function oke(options: OkeOptions): OkeApp {
     if (b.trigger.kind === "mcp") {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
     }
+    if (b.trigger.kind === "signal" || b.trigger.kind === "clock" || b.trigger.kind === "every") {
+      assertElementFlowNamed(b);
+    }
     if (b.trigger.kind === "signal") {
       registerOnceSignalBinding(b, onceBySignal, signalDeliveryByName);
     }
@@ -1056,6 +1075,9 @@ export function oke(options: OkeOptions): OkeApp {
     }
     if (b.trigger.kind === "mcp") {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
+    }
+    if (b.trigger.kind === "signal" || b.trigger.kind === "clock" || b.trigger.kind === "every") {
+      assertElementFlowNamed(b);
     }
     if (b.trigger.kind === "signal") {
       registerOnceSignalBinding(b, onceBySignal, signalDeliveryByName);

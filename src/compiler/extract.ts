@@ -1852,13 +1852,12 @@ function registerFlow(args: {
   const trigger = args.triggerNode
     ? parseTrigger(args.triggerNode, args.scope, args.file.path)
     : undefined;
-  const inherited = elementTriggerName(args.triggerNode, args.scope);
 
   const name =
     stringArg(args.flowCall.arguments[0]) ??
     nameFromFlowFile(args.file.path, args.exportName) ??
     args.exportName ??
-    inherited ??
+    unnamedElementFlowName(args.triggerNode, args.scope, trigger) ??
     `flow_${Object.keys(args.scope.flows).length + 1}`;
 
   if (args.exportName) {
@@ -2415,8 +2414,20 @@ function assertOnceSignalSingleFlow(scope: ProjectScope): void {
 }
 
 /**
+ * True when the parsed trigger is a Signal or Clock (cron / every).
+ *
+ * @param parsed - Parsed `on()` trigger
+ */
+function isSignalOrClockTrigger(parsed: ParsedTrigger | undefined): boolean {
+  const t = parsed?.trigger;
+  return Boolean(t && (t.signal || t.cron || t.every));
+}
+
+/**
  * Stable Signal / Clock name on `on()`'s first argument, when one exists.
  * HTTP has no inherent name of this kind — returns undefined.
+ *
+ * Used only for **OKE1072** diagnostics — never as a Flow name.
  *
  * @param node - Trigger AST
  * @param scope - Project scope
@@ -2448,6 +2459,29 @@ function elementTriggerName(node: AstNode | undefined, scope: ProjectScope): str
     return stringArg(call.arguments[0]);
   }
   return undefined;
+}
+
+/**
+ * Fail loud when a Signal / Clock consumer has no explicit or tree-derived name.
+ * HTTP still falls through to the generic `flow_*` placeholder (OKE1045 at boot).
+ *
+ * @param triggerNode - Trigger AST
+ * @param scope - Project scope
+ * @param parsed - Parsed trigger
+ * @returns Never for Signal / Clock; `undefined` otherwise
+ */
+function unnamedElementFlowName(
+  triggerNode: AstNode | undefined,
+  scope: ProjectScope,
+  parsed: ParsedTrigger | undefined,
+): undefined {
+  if (!isSignalOrClockTrigger(parsed)) return undefined;
+  const triggerName = elementTriggerName(triggerNode, scope);
+  const kind = parsed?.trigger?.signal ? "signal" : "clock";
+  const target = triggerName ? `${kind} "${triggerName}"` : kind;
+  throw new Error(
+    `OKE1072: nameless flow({ do }) bound to ${target}. Use flow("name", { do }) or a src/flows/<unit>/ tree export.`,
+  );
 }
 
 /**

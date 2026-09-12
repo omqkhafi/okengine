@@ -17,7 +17,7 @@ import {
 } from "./errors.ts";
 import { LIVE_RESUME_GAP } from "./errors-live-resume.ts";
 import { CHANNEL_SCHEMA } from "./errors-channel.ts";
-import { FLOW_NAME_DUPLICATE } from "./errors-flow-name.ts";
+import { FLOW_NAME_DUPLICATE, FLOW_UNNAMED } from "./errors-flow-name.ts";
 import { ONCE_SIGNAL_MULTI_FLOW } from "./errors-once-signal.ts";
 import { TENANT_NOT_MEMBER, TENANT_REQUIRED, TENANT_UNKNOWN_SCOPE } from "./errors-tenant.ts";
 import {
@@ -166,11 +166,13 @@ describe("OKE error-code registry", () => {
     expect(lookupOkeError(1830)).toEqual(TENANT_UNKNOWN_SCOPE);
   });
 
-  test("lazy discovery finds FLOW_NAME_DUPLICATE at 1070", async () => {
+  test("lazy discovery finds FLOW_NAME_DUPLICATE at 1070 and FLOW_UNNAMED at 1072", async () => {
     const { files, defs } = await discoverLazyErrorDefs(KERNEL_DIR);
     expect(files).toContain("errors-flow-name.ts");
     expect(defs.some((d) => d.code === 1070)).toBe(true);
+    expect(defs.some((d) => d.code === 1072)).toBe(true);
     expect(FLOW_NAME_DUPLICATE.code).toBe(1070);
+    expect(FLOW_UNNAMED.code).toBe(1072);
   });
 
   test("lazy discovery finds ONCE_SIGNAL_MULTI_FLOW at 1071", async () => {

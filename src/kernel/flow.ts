@@ -240,9 +240,9 @@ export const flowBrand: unique symbol = Symbol("oke.flow");
  * {@link call} / `mcp.tool`, not here.
  *
  * A nameless `flow({ do })` is stamped `unit.export` by the file-tree
- * generator, {@link unit}, or `.adopt()`. Bound to a named Signal or Clock
- * with no explicit / tree / export name, it inherits the trigger's name.
- * Explicit `flow("notes.get", {…})` still wins.
+ * generator, {@link unit}, or `.adopt()`. Explicit `flow("notes.get", {…})`
+ * still wins. Signal / Clock consumers with no explicit or tree-derived name
+ * fail **OKE1072** at `oke()` / extract — they do not inherit the trigger name.
  *
  * @param options - Runtime options and handler (name stamped later)
  */

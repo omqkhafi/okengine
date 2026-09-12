@@ -455,17 +455,8 @@ prefix). Wrong-unit prefixes fail generate.
 Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
 
-Nameless Signal / Clock consumers take the trigger name only when the tree does
-not stamp `unit.export`:
-
-| Style                           | Flow name               |
-| ------------------------------- | ----------------------- |
-| `flow({ do })` (no unit folder) | the Signal / Clock name |
-| `flow("orders.fulfill")`        | the string you passed   |
-| `src/flows/notes/on-created.ts` | `notes.onCreated`       |
-
-Worked examples: [Signal · Flow name](/docs/elements/signal#flow-name) ·
-[Clock · Flow name](/docs/elements/clock#flow-name). Collision fails **OKE1070**.
+Signal / Clock consumers need an explicit `flow("…")` or a tree stamp. Nameless
+outside a unit folder fails **OKE1072**. Collision of two names fails **OKE1070**.
 HTTP has no trigger name of this kind — nameless HTTP stays for the tree or **OKE1045**.
 
 ## Runtime Matching
@@ -524,8 +515,13 @@ plus a handwritten `http.get("/notes")`.
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two nameless Signal/Clock consumers inherited the same
-  name, or two explicit `flow("…")` calls collide. Give at least one a distinct name or tree export.
+  Cause: `Flow "{flow}" is defined twice.` Two explicit `flow("…")` calls collide, or two tree
+  exports stamp the same `unit.export`. Give at least one a distinct name or tree export.
+</Accordion>
+
+<Accordion title="OKE1072 — Signal or Clock flow unnamed">
+  Cause: `A {kind} flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
+  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export.
 </Accordion>
 
 <Accordion title="422 — path param missing from in">
@@ -550,7 +546,7 @@ plus a handwritten `http.get("/notes")`.
 
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, `http.resource`, live SSE
 - [Client](/docs/client/calling) — `api.notes.get`, REST vs RPC, `$routes`
-- [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045 · OKE1070
+- [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045 · OKE1070 · OKE1072
 - [The Architecture](/docs/understand/the-architecture) — derived routes, no hand-written table
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the same trigger
 

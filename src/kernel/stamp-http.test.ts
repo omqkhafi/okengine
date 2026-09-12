@@ -52,13 +52,14 @@ describe("stampFlowName", () => {
     expect(f.name).toBe("notes.get");
   });
 
-  test("file-tree stamp overwrites a trigger-inherited name", () => {
+  test("file-tree stamp fills a nameless Signal consumer", () => {
     const bound = on(
       signal.once("note-created"),
       flow({
         do: () => ({ ok: true }),
       }),
     );
+    expect(bound.name).toBe("");
     stampFlowName(bound, "notes.onCreated");
     expect(bound.name).toBe("notes.onCreated");
   });

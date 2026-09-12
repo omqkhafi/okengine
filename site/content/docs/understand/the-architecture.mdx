@@ -168,8 +168,8 @@ flow({
 ```
 
 Omit the name on tree files — the compiler stamps `unit.export` (e.g. `users.signup`).
-Pass `flow("users.signup", { … })` only for control: barrels, stable names across
-moves, or call-only Flows you `fx.call` by name.
+Pass `flow("users.signup", { … })` outside a unit folder, or for barrels / `fx.call`.
+Nameless Signal / Clock consumers outside a unit fail **OKE1072**.
 
 ### `do` — the code that actually runs
 

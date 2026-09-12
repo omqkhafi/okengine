@@ -470,6 +470,12 @@ forms; on overlap days crontab fires **once** (first occurrence).
   that is not in the reconciled Store — check spelling against your `clock()` declarations.
 </Accordion>
 
+<Accordion title="OKE1072 — Clock flow unnamed">
+  Cause: `A clock flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
+  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export — see
+  [Clock · Flow name](/docs/elements/clock#flow-name).
+</Accordion>
+
 <Accordion title="DST gap / overlap warning on the row">
   Informational. Pick a UTC cron, a non-ambiguous local hour, or accept the warning. The job still
   schedules.
@@ -488,7 +494,7 @@ forms; on overlap days crontab fires **once** (first occurrence).
 - [Durable Sleep](/docs/elements/clock/sleep) — `fx.clock.sleep(label, duration)`
 - [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs) — bind with `on(clockDecl, flow)`
 - [fx](/docs/reference/fx) — `fx.clock.now` / `ago` / `fromNow` / `duration`
-- [Errors](/docs/reference/errors) — `ScheduleNotOverridableError` · `ClockResourceNotFoundError`
+- [Errors](/docs/reference/errors) — `ScheduleNotOverridableError` · `ClockResourceNotFoundError` · OKE1072
 
 ## Next
 

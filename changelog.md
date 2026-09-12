@@ -12,6 +12,40 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Runtime
+
+- Nameless Signal / Clock consumers fail **OKE1072** at `oke()` construction
+  and extract (`A {kind} flow on "{trigger}" has no name.`). Same posture as
+  **OKE1045** for HTTP: nameless `flow({ do })` is allowed until the file-tree
+  stamp, then construction fails. Cause names the trigger; the fix points at
+  `flow("…")` or a `src/flows/<unit>/` export.
+
+### 💥 Breaking Changes
+
+- Nameless `flow({ do })` no longer inherits a Signal or Clock trigger name.
+  Flow names must be explicit `flow("…")` or tree-derived `unit.export`.
+  `oke()` / extract throw **OKE1072**. Payload type inheritance from the Signal
+  schema is unchanged.
+
+### ♻️ Changed
+
+#### Runtime
+
+- **OKE1070** now only fires for genuinely colliding names (two explicit
+  `flow("…")` strings or two tree exports that stamp the same `unit.export`).
+  Two nameless consumers no longer collide by inheriting the same trigger name
+  — they fail **OKE1072** first.
+
+#### Docs
+
+- Signal / Clock **Flow name** documents explicit vs tree only. Nameless
+  outside a unit folder is **OKE1072**. Clock docs note that multiple independent
+  consumers on one schedule are a supported fan-out — each Flow needs its own
+  name. Once, Broadcast, and Clock schedules troubleshooting now include
+  **OKE1072**.
+
 ## v0.19.3 — 2026-09-12
 
 ### ✨ Added

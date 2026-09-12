@@ -191,8 +191,8 @@ Omit `key` for competing consumers with no ordering.
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
 
 One-file inline vs exported handle: [Signal](/docs/elements/signal#inline-or-named-export) ·
-[Clock](/docs/elements/clock#inline-or-named-export). Flow name (inherit / explicit / tree):
-[Signal](/docs/elements/signal#flow-name) · [Clock](/docs/elements/clock#flow-name). Collision is **OKE1070**.
+[Clock](/docs/elements/clock#inline-or-named-export). Flow name (explicit / tree):
+[Signal](/docs/elements/signal#flow-name) · [Clock](/docs/elements/clock#flow-name) — **OKE1070** / **OKE1072**.
 
 ## Signal Consumers
 
@@ -674,9 +674,14 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two nameless `flow({ do })` bindings inherited the same
-  Signal or Clock name, or two explicit `flow("…")` calls share a name. Give at least one an
-  explicit `flow("…")` or a distinct tree export.
+  Cause: `Flow "{flow}" is defined twice.` Two explicit `flow("…")` calls share a name, or two tree
+  exports stamp the same `unit.export`. Give at least one an explicit `flow("…")` or a distinct
+  tree export.
+</Accordion>
+
+<Accordion title="OKE1072 — Signal or Clock flow unnamed">
+  Cause: `A {kind} flow on "{trigger}" has no name.` Nameless `flow({ do })` is only for
+  `src/flows/<unit>/` files. Use `flow("unit.export", {…})` or a tree export.
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">
@@ -736,7 +741,7 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 - [Store · SQL](/docs/elements/store/sql) — tables CDC watches
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `signal.live` SSE
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.clock`
-- [Errors](/docs/reference/errors) — OKE1070 · OKE1071 · OKE1240 · OKE1250
+- [Errors](/docs/reference/errors) — OKE1070 · OKE1071 · OKE1072 · OKE1240 · OKE1250
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` on a consumer
 
 ## Next
