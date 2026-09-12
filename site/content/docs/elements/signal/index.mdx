@@ -7,12 +7,12 @@ source: "docs/spec/unified-theory.md"
 
 Signal is how your backend **moves data when the producer should not wait**. An email job, a cache bust across instances, and a browser status feed share one handle shape — only the helper changes: `signal.once`, `signal.broadcast`, or `signal.live`.
 
-For developers wiring async work on okengine — declare the physics, emit with `fx.emit`, bind workers with `on(signal, flow)`.
+For developers wiring async work on okengine — declare the physics, emit with `fx.emit`, bind workers with `on(handle, flow("name", { do }))`.
 
 <Callout title="The one rule">
-  Declare every signal with `signal.once`, `signal.broadcast`, or `signal.live` — same idea as
-  `http.get` / `http.post`. Physics and the **emit** `schema` live on the Signal; the Flow
-  worker is only `flow({ do })` — it inherits the payload type from the Signal, not `flow.in`.
+  Declare every signal with `signal.once`, `signal.broadcast`, or `signal.live` as an
+  exported const. Bind with `on(handle, flow("name", { do }))`. Physics and the **emit**
+  `schema` live on the Signal; the worker inherits the payload type, not `flow.in`.
 </Callout>
 
 <SignalDelivery />
@@ -77,147 +77,8 @@ for the worker.
   competing consumer.
 </Callout>
 
-## Inline or named export
-
-| Style                                         | When                                                                                          |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `on(signal.once("name", opts), flow({ do }))` | One file. Nameless `flow({ do })` only under `src/flows/<unit>/` — [Flow name](#flow-name)    |
-| `export const x = signal.once<Payload>(…)` | Another file needs `fx.emit(x, payload)` with compile-time payload checking                       |
-
-Both styles stamp the same Manifest `flow.trigger`. The choice is where the
-declaration lives, not two runtimes.
-
 A string `fx.emit("name", payload)` still runs (runtime `schema` still applies) but does not
-type-check. What the Flow is called is a separate choice — [Flow name](#flow-name).
-
-<Tabs items={["Inline", "Named"]}>
-
-<Tab value="Inline">
-
-One file — declare and bind together. Producers emit with the string name:
-
-```typescript title="src/flows/hooks/inbound.ts"
-import { on, flow, signal } from "okengine";
-import { z } from "zod";
-
-export const ingestWebhook = on(
-  signal.once("hooks.inbound", {
-    schema: z.object({ id: z.string() }),
-    retries: 3,
-    deadLetter: true,
-  }),
-  flow({
-    do: async ({ id }, fx) => {
-      await fx.call(persistHook, { id });
-    },
-  }),
-);
-```
-
-```typescript
-await fx.emit("hooks.inbound", { id: "h_1" });
-```
-
-<Callout title="Why this nameless flow({ do }) is legal">
-  No `flow("name", …)` string — the Flow is **`hooks.ingestWebhook`** from
-  `src/flows/hooks/inbound.ts` + `export const ingestWebhook` ([Flow name](#flow-name)).
-  The same `flow({ do })` anywhere not under `src/flows/<unit>/` fails **OKE1072**.
-</Callout>
-
-</Tab>
-
-<Tab value="Named">
-
-Export the handle when another file must `fx.emit` with compile-time payload checking:
-
-```typescript title="src/signals/orders.ts"
-import { signal } from "okengine";
-import { z } from "zod";
-
-export const orderPlaced = signal.once("orders.placed", {
-  schema: z.object({ orderId: z.string() }),
-});
-```
-
-```typescript title="src/flows/orders/fulfill.ts"
-import { on, flow } from "okengine";
-import { orderPlaced } from "@/signals/orders";
-
-export const fulfill = on(
-  orderPlaced,
-  flow("orders.fulfill", {
-    do: async ({ orderId }, fx) => {
-      await fx.call(chargeAndShip, { orderId });
-    },
-  }),
-);
-```
-
-```typescript
-await fx.emit(orderPlaced, { orderId: "ord_99" });
-```
-
-</Tab>
-
-</Tabs>
-
-## Flow name
-
-| Style                         | When                                                         |
-| ----------------------------- | ------------------------------------------------------------ |
-| `flow("orders.fulfill")`      | Manifest / `fx.call` name — required outside a unit folder    |
-| Tree `export const onCreated` | `src/flows/notes/on-created.ts` stamps `notes.onCreated`     |
-
-Nameless `flow({ do })` is the tree default — Inline `ingestWebhook` is `hooks.ingestWebhook`
-with no `flow("…")` string. Outside a unit folder it fails **OKE1072** (`A signal flow on
-"{trigger}" has no name.`). HTTP nameless after adopt fails **OKE1045**; collision is **OKE1070**.
-
-<Tabs items={["Explicit", "Tree"]}>
-
-<Tab value="Explicit">
-
-The Signal stays `orders.placed`. The Flow is `orders.fulfill` — that is the
-Manifest / `fx.call` name:
-
-```typescript title="src/flows/fulfill.ts"
-import { on, flow } from "okengine";
-import { orderPlaced } from "@/signals/orders";
-
-export const fulfill = on(
-  orderPlaced,
-  flow("orders.fulfill", {
-    do: async ({ orderId }, fx) => {
-      await fx.call(chargeAndShip, { orderId });
-    },
-  }),
-);
-```
-
-</Tab>
-
-<Tab value="Tree">
-
-Unit folder + `export const` stamps `unit.export`. The Flow is `notes.onCreated`,
-not `note-created` — same tree rule as the Inline tab:
-
-```typescript title="src/flows/notes/on-created.ts"
-import { on, flow } from "okengine";
-import { noteCreatedMail } from "@/core";
-import { noteCreated } from "./signals";
-
-export const onCreated = on(
-  noteCreated,
-  flow({
-    do: async ({ id }, fx) => {
-      await fx.send(noteCreatedMail, { to: "you@localhost", data: { id } });
-    },
-  }),
-);
-```
-
-</Tab>
-
-</Tabs>
+type-check. Import the exported const.
 
 ## Progressive Patterns
 
@@ -433,7 +294,7 @@ Optional second argument to `signal.once` / `signal.broadcast` / `signal.live`. 
 
 | Option        | Type                     | Default   | Meaning                                                                                                                              |
 | ------------- | ------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `schema`      | Standard Schema          | omitted   | **Emit** contract — enforced at `fx.emit` (**OKE1250** on mismatch). Workers inherit the payload; do not put `in` on `flow({ do })`. |
+| `schema`      | Standard Schema          | omitted   | **Emit** contract — enforced at `fx.emit` (**OKE1250** on mismatch). Workers inherit the payload; do not put `in` on `flow()`. |
 | `retries`     | `number`                 | `3`       | Extra attempts after the first (`retries + 1` total) — `once` path                                                                   |
 | `deadLetter`  | `boolean`                | `true`    | Keep exhausted `once` messages; `false` marks them delivered                                                                         |
 | `optional`    | `boolean`                | `false`   | Allow emit with zero subscribers                                                                                                     |
@@ -507,17 +368,13 @@ export default defineConfig({
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two explicit `flow("…")` calls collide, or two tree
-  exports stamp the same `unit.export`. Give at least one a distinct `flow("…")` or tree export —
-  [Flow name](#flow-name).
+  Cause: `Flow "{flow}" is defined twice.` Two `flow("…")` strings collide. Give at least one a
+  distinct name.
 </Accordion>
 
 <Accordion title="OKE1072 — Signal flow unnamed">
   Cause: `A signal flow on "{trigger}" has no name.`
-
-  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
-  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
-  `src/flows/<unit>/` fails — [Flow name](#flow-name).
+  Fix: pass an explicit name — `on(handle, flow("orders.fulfill", { do }))`.
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">
@@ -545,7 +402,6 @@ export default defineConfig({
 - [Broadcast](/docs/elements/signal/broadcast) — ephemeral fan-out
 - [Live](/docs/elements/signal/live) — SSE tapes and retention
 - [Consumers](/docs/elements/flow/consumers) — `on(signal)` workers next to Clock / CDC
-- [Routing](/docs/elements/flow/routing#names) — tree `unit.export` vs explicit `flow("…")`
 - [HTTP · Live Streams](/docs/elements/flow/http#live-streams) — `http.live` exposure
 - [fx](/docs/reference/fx) — `fx.emit`, `fx.deadLetters`, `fx.live`
 - [Client](/docs/client/live) — `api.live` for browsers

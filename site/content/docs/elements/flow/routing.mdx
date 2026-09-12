@@ -455,9 +455,9 @@ prefix). Wrong-unit prefixes fail generate.
 Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
 is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
 
-Signal / Clock consumers need an explicit `flow("…")` or a tree stamp. Nameless
-`flow({ do })` outside `src/flows/<unit>/` fails **OKE1072** even with `export const`.
-Collision is **OKE1070**. HTTP nameless stays for the tree or **OKE1045**.
+Signal / Clock consumers pass an explicit `flow("…")` name (**OKE1072** if nameless
+outside `src/flows/<unit>/`). Collision is **OKE1070**. HTTP nameless stays the tree
+default (or **OKE1045** after adopt).
 
 ## Runtime Matching
 
@@ -521,10 +521,7 @@ plus a handwritten `http.get("/notes")`.
 
 <Accordion title="OKE1072 — Signal or Clock flow unnamed">
   Cause: `A {kind} flow on "{trigger}" has no name.`
-
-  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
-  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
-  `src/flows/<unit>/` fails.
+  Fix: pass an explicit name — `on(handle, flow("unit.export", { do }))`.
 </Accordion>
 
 <Accordion title="422 — path param missing from in">

@@ -25,10 +25,15 @@ For developers running daily digests, health pings, and per-tenant billing loops
 <Step>
 ### Declare a schedule and bind a Flow
 
-```typescript title="src/flows/reports/daily.ts"
-import { on, flow, clock } from "okengine";
+```typescript title="src/clocks/reports.ts"
+import { clock } from "okengine";
 
 export const dailyReportClock = clock.daily("reports.daily", { at: "06:00" });
+```
+
+```typescript title="src/flows/reports/daily.ts"
+import { on, flow } from "okengine";
+import { dailyReportClock } from "@/clocks/reports";
 
 export const runDailyReport = on(
   dailyReportClock,
@@ -112,10 +117,15 @@ chosen programmatically: `clock("x", { cron: "0 6 * * *" })`, Bun nicknames
 
 Fixed duration loops — `"200ms"` · `"30s"` · `"5m"` · `"1h"` · `"7d"`:
 
-```typescript title="src/flows/health/ping.ts"
-import { on, flow, clock } from "okengine";
+```typescript title="src/clocks/health.ts"
+import { clock } from "okengine";
 
 export const pingClock = clock.every("health.pingExternal", "30s");
+```
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow } from "okengine";
+import { pingClock } from "@/clocks/health";
 
 export const pingExternal = on(
   pingClock,
@@ -146,9 +156,14 @@ Unknown duration strings parse as `0` ms and never become due. A `"d"` is exactl
 template name is never ticked:
 
 ```typescript title="src/clocks/invoices.ts"
-import { on, flow, clock } from "okengine";
+import { clock } from "okengine";
 
 export const invoicesClock = clock.perTenant("invoices", { every: "1h" });
+```
+
+```typescript title="src/flows/billing/invoices.ts"
+import { on, flow } from "okengine";
+import { invoicesClock } from "@/clocks/invoices";
 
 export const runInvoices = on(
   invoicesClock,
@@ -275,15 +290,20 @@ do not consult the zone for tick spacing; the zone still lands on the Store row.
 
 ## Binding & Input
 
-Bind the returned handle with `on(clockDecl, flow)`. The scheduler invokes `do` with **no
-payload** — destructure `_` and read time through `fx.clock`:
+Bind the returned handle with `on(clockDecl, flow("name", { do }))`. The scheduler invokes
+`do` with **no payload** — destructure `_` and read time through `fx.clock`:
 
-```typescript title="src/flows/metrics/cleanup.ts"
-import { on, flow, clock } from "okengine";
-import { lt } from "drizzle-orm";
-import { db, metricLogs } from "@/schema";
+```typescript title="src/clocks/metrics.ts"
+import { clock } from "okengine";
 
 export const cleanupClock = clock.every("metrics.cleanup", "1h");
+```
+
+```typescript title="src/flows/metrics/cleanup.ts"
+import { on, flow } from "okengine";
+import { lt } from "drizzle-orm";
+import { cleanupClock } from "@/clocks/metrics";
+import { db, metricLogs } from "@/schema";
 
 export const cleanup = on(
   cleanupClock,
@@ -472,10 +492,7 @@ forms; on overlap days crontab fires **once** (first occurrence).
 
 <Accordion title="OKE1072 — Clock flow unnamed">
   Cause: `A clock flow on "{trigger}" has no name.`
-
-  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/health/ping.ts`
-  + `export const pingExternal` stamps `health.pingExternal`). Same code outside
-  `src/flows/<unit>/` fails — see [Clock · Flow name](/docs/elements/clock#flow-name).
+  Fix: pass an explicit name — `on(clockDecl, flow("reports.runDaily", { do }))`.
 </Accordion>
 
 <Accordion title="DST gap / overlap warning on the row">

@@ -468,10 +468,7 @@ dead-letter queue for exhausted retries in the queue sense — see
 
 <Accordion title="OKE1072 — Signal flow unnamed">
   Cause: `A signal flow on "{trigger}" has no name.`
-
-  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
-  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
-  `src/flows/<unit>/` fails — see [Signal · Flow name](/docs/elements/signal#flow-name).
+  Fix: pass an explicit name — `on(handle, flow("cache.purgeLocal", { do }))`.
 </Accordion>
 
 <Accordion title="Expecting retries / DLQ like a queue">

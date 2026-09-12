@@ -46,14 +46,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
-- Signal / Clock **Flow name** documents explicit vs tree only. Nameless
-  outside a unit folder is **OKE1072**. Clock docs note that multiple independent
-  consumers on one schedule are a supported fan-out — each Flow needs its own
-  name. Once, Broadcast, and Clock schedules troubleshooting now include
-  **OKE1072**.
-- Signal / Clock **Inline or named export** now states that nameless `flow({ do })`
-  is tree-named from `src/flows/<unit>/` + export (`hooks.ingestWebhook` /
-  `health.pingExternal`). The same code outside that folder fails **OKE1072**.
+- Signal / Clock **Inline or named export** and **Flow name** (explicit vs tree)
+  are gone. Docs teach one pattern: export `signal.*` / `clock(...)` as a named
+  const, bind with `on(handle, flow("explicit.name", { do }))`. Tree
+  `unit.export` stays on Routing for HTTP. OKE1070 / OKE1072 troubleshooting
+  remains; Clock still allows several named consumers on one schedule.
 
 ### 🐛 Fixed
 

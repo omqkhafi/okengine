@@ -98,12 +98,17 @@ export const processEmail = on(
 
 Name the schedule, then bind it. Omit `timezone` for `"UTC"`:
 
-```typescript title="src/flows/metrics/cleanup.ts"
-import { on, flow, clock } from "okengine";
-import { lt } from "drizzle-orm";
-import { db, metricLogs } from "@/schema";
+```typescript title="src/clocks/metrics.ts"
+import { clock } from "okengine";
 
 export const cleanupClock = clock.every("metrics.cleanup", "1h");
+```
+
+```typescript title="src/flows/metrics/cleanup.ts"
+import { on, flow } from "okengine";
+import { lt } from "drizzle-orm";
+import { cleanupClock } from "@/clocks/metrics";
+import { db, metricLogs } from "@/schema";
 
 export const cleanupMetrics = on(
   cleanupClock,
@@ -180,19 +185,18 @@ Omit `key` for competing consumers with no ordering.
 
 ## Trigger Reference
 
-| Trigger    | Signature                                           | Purpose                                     | `do` input                             |
-| ---------- | --------------------------------------------------- | ------------------------------------------- | -------------------------------------- |
-| Signal     | `on(signalHandle, flow)` or inline `signal.once(…)` | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)                     |
-| Clock      | `on(clockDecl, flow)` or inline `clock.every(…)`    | Interval or cron tick                       | none (`_`)                             |
-| CDC any    | `on(db.table(t).changed(), flow)`                   | Every insert / update / delete              | `{ before, after, table, action, id }` |
-| CDC column | `on(db.table(t).changed("col"), flow)`              | Same writes; column stamped on the Manifest | `{ before, after, table, action, id }` |
+| Trigger    | Signature                                   | Purpose                                     | `do` input                             |
+| ---------- | ------------------------------------------- | ------------------------------------------- | -------------------------------------- |
+| Signal     | `on(handle, flow("name", { do }))`         | Queue (`once`) or fan-out (`broadcast`)     | Payload (`schema`)                     |
+| Clock      | `on(clockDecl, flow("name", { do }))`     | Interval or cron tick                       | none (`_`)                             |
+| CDC any    | `on(db.table(t).changed(), flow)`              | Every insert / update / delete              | `{ before, after, table, action, id }` |
+| CDC column | `on(db.table(t).changed("col"), flow)`         | Same writes; column stamped on the Manifest | `{ before, after, table, action, id }` |
 
 `signal.live` is an HTTP SSE tape — bind it with [`http.live`](/docs/elements/flow/http#live-streams),
 not as a worker. A Flow with no trigger is [call-only](/docs/elements/flow).
 
-One-file inline vs exported handle: [Signal](/docs/elements/signal#inline-or-named-export) ·
-[Clock](/docs/elements/clock#inline-or-named-export). Flow name (explicit / tree):
-[Signal](/docs/elements/signal#flow-name) · [Clock](/docs/elements/clock#flow-name) — **OKE1070** / **OKE1072**.
+Declare the Signal or Clock as an exported const, then bind
+`on(handle, flow("name", { do }))`. Missing name is **OKE1072**; collision is **OKE1070**.
 
 ## Signal Consumers
 
@@ -337,9 +341,8 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
 
 <Accordion title="Schema at emit">
   Invalid payloads fail at `fx.emit` with **OKE1250** (`"{resource}": {detail}`) before any
-  consumer runs. Fix the payload or the Signal's `schema`. This is an **emit** contract — not
-  an HTTP invoke contract on `flow()`. Workers inherit the typed payload from the Signal
-  declaration; they do not declare `in` on `flow({ do })`.
+  consumer runs. This is an **emit** contract — workers inherit the payload from the Signal;
+  they do not declare `in` on `flow()`.
 </Accordion>
 
 </Accordions>
@@ -351,7 +354,7 @@ Broadcast does not use the `once` lease / DLQ path. Live uses the retained tape,
   schedules — they compile to the same decl as the bare callable. The lower-level bare `clock(name,
   options)` form still works when you need a raw expression or a schedule chosen programmatically;
   missing both `cron` and `every` throws `clock("name"): require cron or every`. Bind the returned
-  handle with `on(clockDecl, flow)`.
+  handle with `on(clockDecl, flow("name", { do }))`.
 </Callout>
 
 Named clocks reconcile into the Store at boot. The scheduler leader-elects so N instances do not
@@ -363,10 +366,15 @@ double-fire. `do` receives no payload — read time through `fx.clock`.
 
 Human durations: `"200ms"` · `"30s"` · `"5m"` · `"1h"` · `"7d"` (integer + unit, no weeks):
 
-```typescript title="src/flows/health/ping.ts"
-import { on, flow, clock } from "okengine";
+```typescript title="src/clocks/health.ts"
+import { clock } from "okengine";
 
 export const pingClock = clock.every("health.pingExternal", "30s");
+```
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow } from "okengine";
+import { pingClock } from "@/clocks/health";
 
 export const pingExternal = on(
   pingClock,
@@ -385,13 +393,18 @@ export const pingExternal = on(
 
 Five-field cron (`m h dom mon dow`) plus an IANA `timezone` (default `"UTC"`):
 
-```typescript title="src/flows/reports/daily.ts"
-import { on, flow, clock } from "okengine";
+```typescript title="src/clocks/reports.ts"
+import { clock } from "okengine";
 
 export const dailyReportClock = clock.daily("reports.daily", {
   at: "06:00",
   timezone: "Asia/Riyadh",
 });
+```
+
+```typescript title="src/flows/reports/daily.ts"
+import { on, flow } from "okengine";
+import { dailyReportClock } from "@/clocks/reports";
 
 export const runDailyReport = on(
   dailyReportClock,
@@ -415,9 +428,14 @@ trigger when both are present.
 is never ticked:
 
 ```typescript title="src/clocks/invoices.ts"
-import { on, flow, clock } from "okengine";
+import { clock } from "okengine";
 
 export const invoicesClock = clock.perTenant("invoices", { every: "1h" });
+```
+
+```typescript title="src/flows/billing/invoices.ts"
+import { on, flow } from "okengine";
+import { invoicesClock } from "@/clocks/invoices";
 
 export const runInvoices = on(
   invoicesClock,
@@ -674,17 +692,13 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two explicit `flow("…")` calls share a name, or two tree
-  exports stamp the same `unit.export`. Give at least one an explicit `flow("…")` or a distinct
-  tree export.
+  Cause: `Flow "{flow}" is defined twice.` Two `flow("…")` strings share a name. Give at least
+  one a distinct name.
 </Accordion>
 
 <Accordion title="OKE1072 — Signal or Clock flow unnamed">
   Cause: `A {kind} flow on "{trigger}" has no name.`
-
-  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/hooks/inbound.ts`
-  + `export const ingestWebhook` stamps `hooks.ingestWebhook`). Same code outside
-  `src/flows/<unit>/` fails.
+  Fix: pass an explicit name — `on(handle, flow("unit.export", { do }))`.
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">

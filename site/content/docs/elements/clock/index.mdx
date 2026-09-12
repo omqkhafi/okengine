@@ -5,7 +5,7 @@ icon: "Clock"
 source: "docs/spec/unified-theory.md"
 ---
 
-Clock is how your backend **knows what time it is and when to run again**. A monthly invoice job, a 30s health ping, and a three-day trial reminder share one vocabulary: declare a named schedule, bind it with `on(clockDecl, flow)`, and read time only through `fx.clock`.
+Clock is how your backend **knows what time it is and when to run again**. A monthly invoice job, a 30s health ping, and a three-day trial reminder share one vocabulary: declare a named schedule, bind it with `on(clockDecl, flow("name", { do }))`, and read time only through `fx.clock`.
 
 For developers scheduling work on okengine — one handle shape; drivers swap by environment.
 
@@ -58,9 +58,8 @@ export const digest = on(
 ### See it tick
 
 With `oke dev`, the scheduler reconciles `notes.digest` into the Store and leader-elects
-before each fire. `do` receives no payload — read time with `fx.clock.now()` (epoch-ms for
-math). Map to ISO on the wire when the Flow returns a human-facing instant
-(`new Date(fx.clock.now()).toISOString()`).
+before each fire. `do` receives no payload — read time with `fx.clock.now()` (epoch-ms).
+Map to ISO on the wire with `new Date(fx.clock.now()).toISOString()`.
 
 Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting a day.
 
@@ -69,137 +68,10 @@ Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting 
 </Steps>
 
 <Callout title="Jobs are Flows">
-  `on(clockDecl, flow)` is the same species as Signal consumers and HTTP handlers. There is no
-  separate job runner — see [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs).
+  Export the Clock, then bind `on(digestClock, flow("notes.digest", { do }))`. Always an
+  explicit Flow name; several Flows may share one Clock. See
+  [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs).
 </Callout>
-
-## Inline or named export
-
-| Style                                         | When                                                                                       |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `on(clock.every("name", "1h"), flow({ do }))` | One file. Nameless `flow({ do })` only under `src/flows/<unit>/` — [Flow name](#flow-name) |
-| `export const x = clock.every("name", "1h")`  | Another file (or a second `on()`) must reuse the same declaration                            |
-
-Both styles stamp the same Manifest `flow.trigger`. The choice is where the
-declaration lives, not two runtimes.
-
-What the Flow is called is a separate choice — [Flow name](#flow-name).
-
-<Tabs items={["Inline", "Named"]}>
-
-<Tab value="Inline">
-
-One file — declare and bind together. The scheduler fires it; no other file
-imports the handle:
-
-```typescript title="src/flows/health/ping.ts"
-import { on, flow, clock } from "okengine";
-
-export const pingExternal = on(
-  clock.every("health.pingExternal", "30s"),
-  flow({
-    plane: "operator",
-    do: async (_, fx) => {
-      await fx.call(pingUpstream);
-    },
-  }),
-);
-```
-
-<Callout title="Why this nameless flow({ do }) is legal">
-  No `flow("name", …)` string — the Flow is **`health.pingExternal`** from
-  `src/flows/health/ping.ts` + `export const pingExternal` ([Flow name](#flow-name)).
-  The same `flow({ do })` anywhere not under `src/flows/<unit>/` fails **OKE1072**.
-</Callout>
-
-</Tab>
-
-<Tab value="Named">
-
-Export the handle when another file (or a second `on()`) must reuse the same
-declaration:
-
-```typescript title="src/clocks/digest.ts"
-import { clock } from "okengine";
-
-export const digestClock = clock.every("notes.digest", "1d");
-```
-
-```typescript title="src/flows/notes/digest.ts"
-import { on, flow } from "okengine";
-import { digestClock } from "@/clocks/digest";
-
-export const digest = on(
-  digestClock,
-  flow("notes.digest", {
-    plane: "operator",
-    do: async (_, fx) => {
-      await fx.call(buildDigest, { at: fx.clock.now() });
-    },
-  }),
-);
-```
-
-</Tab>
-
-</Tabs>
-
-## Flow name
-
-| Style                     | When                                                      |
-| --------------------------- | --------------------------------------------------------- |
-| `flow("ops.sweep")`       | Manifest / `fx.call` name — required outside a unit folder  |
-| Tree `export const sweep` | `src/flows/ops/sweep.ts` stamps `ops.sweep`               |
-
-Nameless `flow({ do })` is the tree default — Inline `pingExternal` is `health.pingExternal`
-with no `flow("…")` string. Outside a unit folder it fails **OKE1072** (HTTP: **OKE1045**;
-collision **OKE1070**). Multiple Clock consumers are allowed — each needs its own name.
-
-<Tabs items={["Explicit", "Tree"]}>
-
-<Tab value="Explicit">
-
-The Clock stays `metrics.cleanup`. The Flow is `ops.sweep` — that is the
-Manifest / `fx.call` name:
-
-```typescript title="src/flows/sweep.ts"
-import { on, flow, clock } from "okengine";
-
-export const sweep = on(
-  clock.every("metrics.cleanup", "1h"),
-  flow("ops.sweep", {
-    plane: "operator",
-    do: async (_, fx) => {
-      await fx.call(sweepMetrics);
-    },
-  }),
-);
-```
-
-</Tab>
-
-<Tab value="Tree">
-
-Unit folder + `export const` stamps `unit.export`. The Flow is `ops.sweep`, not
-the Clock name `cleanup` — same tree rule as the Inline tab:
-
-```typescript title="src/flows/ops/sweep.ts"
-import { on, flow, clock } from "okengine";
-
-export const sweep = on(
-  clock.every("cleanup", "10m"),
-  flow({
-    plane: "operator",
-    do: async (_, fx) => {
-      await fx.call(sweepMetrics);
-    },
-  }),
-);
-```
-
-</Tab>
-
-</Tabs>
 
 ## Progressive Patterns
 
@@ -211,12 +83,17 @@ Same `clock` + `fx.clock` from a calendar cron to an interval, a durable pause, 
 
 Five-field cron plus helpers. Prefer an app-wide zone so schedules stay short:
 
-```typescript title="src/flows/reports/daily.ts"
-import { on, flow, clock } from "okengine";
+```typescript title="src/clocks/reports.ts"
+import { clock } from "okengine";
 
 export const dailyReportClock = clock.daily("reports.daily", {
   at: "06:00",
 });
+```
+
+```typescript title="src/flows/reports/daily.ts"
+import { on, flow } from "okengine";
+import { dailyReportClock } from "@/clocks/reports";
 
 export const runDailyReport = on(
   dailyReportClock,
@@ -239,10 +116,15 @@ see [Schedules](/docs/elements/clock/schedules).
 
 Human durations — integer + unit, no weeks: `"200ms"` · `"30s"` · `"5m"` · `"1h"` · `"7d"`:
 
-```typescript title="src/flows/health/ping.ts"
-import { on, flow, clock } from "okengine";
+```typescript title="src/clocks/health.ts"
+import { clock } from "okengine";
 
 export const pingClock = clock.every("health.pingExternal", "30s");
+```
+
+```typescript title="src/flows/health/ping.ts"
+import { on, flow } from "okengine";
+import { pingClock } from "@/clocks/health";
 
 export const pingExternal = on(
   pingClock,
@@ -398,17 +280,13 @@ export default defineConfig({
 </Accordion>
 
 <Accordion title="OKE1070 — flow name defined twice">
-  Cause: `Flow "{flow}" is defined twice.` Two explicit `flow("…")` calls collide, or two tree
-  exports stamp the same `unit.export`. Give at least one a distinct `flow("…")` or tree export —
-  [Flow name](#flow-name).
+  Cause: `Flow "{flow}" is defined twice.` Two `flow("…")` strings collide. Give at least one a
+  distinct name. Clock allows several consumers on one schedule — each needs its own name.
 </Accordion>
 
 <Accordion title="OKE1072 — Clock flow unnamed">
   Cause: `A clock flow on "{trigger}" has no name.`
-
-  Two valid names: `flow("unit.export", {…})`, or a tree export (`src/flows/health/ping.ts`
-  + `export const pingExternal` stamps `health.pingExternal`). Same code outside
-  `src/flows/<unit>/` fails — [Flow name](#flow-name).
+  Fix: pass an explicit name — `on(clockDecl, flow("notes.digest", { do }))`.
 </Accordion>
 
 </Accordions>
@@ -420,7 +298,6 @@ export default defineConfig({
 - [Consumers · Clock Jobs](/docs/elements/flow/consumers#clock-jobs) — bind with `on(clockDecl, flow)`
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step` around sleeps
 - [fx](/docs/reference/fx) — full `fx.clock` table
-- [Routing](/docs/elements/flow/routing#names) — tree `unit.export` vs explicit `flow("…")`
 - [Errors](/docs/reference/errors) — `ScheduleNotOverridableError` · `ClockResourceNotFoundError` · OKE1070 · OKE1072
 
 ## Next
