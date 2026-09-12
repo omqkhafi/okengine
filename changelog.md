@@ -12,6 +12,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### 🐛 Fixed
+
+#### Runtime
+
+- Extract **OKE1071** throws a plain `Error` (code plus `signal.broadcast` fix)
+  instead of `OkeError`, so `okengine/compiler` stays off the kernel error
+  and i18n graph. `oke()` still throws the full `OkeError`.
+
+## v0.19.3 — 2026-09-12
+
 ### ✨ Added
 
 #### Runtime

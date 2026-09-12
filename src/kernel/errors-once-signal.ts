@@ -2,9 +2,11 @@
  * OKE1071 — kept off the kernel edge profile.
  *
  * Two different Flows bound to the same `signal.once` throw this at `oke()`
- * construction and extract. `oke()` / extract import it directly (those graphs
- * are not in `budget-entry`). Registry discovery includes this file; the edge
- * `lookupOkeError` path stays off this def.
+ * construction. Extract fails the same collision with a plain `Error`
+ * (`OKE1071` in the message) so `okengine/compiler` stays off this module.
+ * `oke()` imports it directly (that graph is not in `budget-entry`).
+ * Registry discovery includes this file; the edge `lookupOkeError` path
+ * stays off this def.
  */
 
 import type { OkeErrorDefinition } from "./errors.ts";

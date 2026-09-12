@@ -18,8 +18,8 @@ For developers wiring background work on okengine — bind the trigger, keep `do
 ## Smallest Example
 
 <Callout title="Bind and emit are independent">
-  The consumer and the producer share one Signal handle. They can live in
-  different files, written in any order — emit is not "step 2" after bind.
+  The consumer and the producer share one Signal handle. They can live in different files, written
+  in any order — emit is not "step 2" after bind.
 </Callout>
 
 ### Bind a Signal consumer
@@ -680,9 +680,9 @@ Clock drivers: **postgres** in `dev`/`prod`, **frozen** in `test`. Signal driver
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">
-  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
-  Use `signal.broadcast` if each Flow should independently receive this event, or bind only one
-  Flow. See [Once · Competing consumers](/docs/elements/signal/once#competing-consumers-once-vs-broadcast).
+  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).` Use `signal.broadcast`
+  if each Flow should independently receive this event, or bind only one Flow. See [Once · Competing
+  consumers](/docs/elements/signal/once#competing-consumers-once-vs-broadcast).
 </Accordion>
 
 <Accordion title="OKE1240 — emit with no subscriber">

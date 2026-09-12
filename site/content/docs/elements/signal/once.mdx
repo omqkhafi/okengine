@@ -22,8 +22,8 @@ For developers shipping jobs on okengine — declare the Signal, bind `on(signal
 ## Smallest Example
 
 <Callout title="One handle, three independent uses">
-  `emailTask` is a shared const. Declare it, bind a worker, and emit — different
-  files, any order. Binding is not "step 2" after declare; emit is not "step 3".
+  `emailTask` is a shared const. Declare it, bind a worker, and emit — different files, any order.
+  Binding is not "step 2" after declare; emit is not "step 3".
 </Callout>
 
 ### Declare
@@ -110,9 +110,9 @@ await fx.emit(orderPlaced, { orderId: "ord_99", amount: 150, userId: "usr_1" });
 
 | Expectation                         | Real result                                                          |
 | ----------------------------------- | -------------------------------------------------------------------- |
-| All three Flows run                 | **No.** Exactly one of the three runs                                  |
+| All three Flows run                 | **No.** Exactly one of the three runs                                |
 | Always `orders.charge` (first `on`) | **No.** The winner is whichever claim lands first — not a fixed Flow |
-| A sticky assignment to one Flow     | **No.** There is no owner — only an exclusive claim per message        |
+| A sticky assignment to one Flow     | **No.** There is no owner — only an exclusive claim per message      |
 
 **Consequence:** if every bound Flow should independently receive its own copy, use
 [`signal.broadcast`](/docs/elements/signal/broadcast). That is the correct fix for this exact
@@ -580,15 +580,15 @@ See [Durable Workflows](/docs/elements/flow/workflows).
 </Accordion>
 
 <Accordion title="Both of two Flows ran on one once message">
-  That is broadcast physics, not once. Two different Flow definitions on one `once` signal now
-  fail **OKE1071** at boot. If you need every Flow to run, switch the declaration to
+  That is broadcast physics, not once. Two different Flow definitions on one `once` signal now fail
+  **OKE1071** at boot. If you need every Flow to run, switch the declaration to
   [`signal.broadcast`](/docs/elements/signal/broadcast).
 </Accordion>
 
 <Accordion title="OKE1071 — once signal bound to more than one Flow">
-  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).`
-  Use `signal.broadcast` if each Flow should independently receive this event, or bind only one
-  Flow. Replicas of one Flow are still one `on()` in source.
+  Cause: `Once signal "{signal}" is bound to more than one Flow ({flows}).` Use `signal.broadcast`
+  if each Flow should independently receive this event, or bind only one Flow. Replicas of one Flow
+  are still one `on()` in source.
 </Accordion>
 
 <Accordion title="Messages stuck inflight">

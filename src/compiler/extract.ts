@@ -8,8 +8,6 @@
 
 import { parseSync } from "oxc-parser";
 
-import { OkeError } from "../kernel/errors.ts";
-import { ONCE_SIGNAL_MULTI_FLOW } from "../kernel/errors-once-signal.ts";
 import {
   AI_NATIVE_DRIVER_IDS,
   formatAiProviderTier2Warn,
@@ -2402,22 +2400,17 @@ function putFlow(scope: ProjectScope, name: string, flow: Flow): void {
  * @param scope - Project scope after flow collection
  */
 function assertOnceSignalSingleFlow(scope: ProjectScope): void {
-  const bySignal = new Map<string, string[]>();
-  for (const [flowName, flow] of Object.entries(scope.flows)) {
-    const signalName = flow.trigger?.signal;
-    if (!signalName) continue;
-    if (scope.signals[signalName]?.delivery !== "once") continue;
-    const list = bySignal.get(signalName) ?? [];
-    if (!list.includes(flowName)) list.push(flowName);
-    bySignal.set(signalName, list);
-  }
-  for (const [signalName, flows] of bySignal) {
-    if (flows.length < 2) continue;
-    const named = [...flows].sort();
-    throw new OkeError(ONCE_SIGNAL_MULTI_FLOW, {
-      signal: signalName,
-      flows: named.map((n) => `"${n}"`).join(", "),
-    });
+  const once = new Map<string, string>();
+  for (const [name, flow] of Object.entries(scope.flows)) {
+    const s = flow.trigger?.signal;
+    if (!s || scope.signals[s]?.delivery !== "once") continue;
+    const prev = once.get(s);
+    if (prev) {
+      throw new Error(
+        `OKE1071: once signal "${s}" bound to ${prev}, ${name}. Use signal.broadcast.`,
+      );
+    }
+    once.set(s, name);
   }
 }
 
