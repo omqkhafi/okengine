@@ -12,6 +12,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.6 — 2026-09-14
+
+### 🐛 Fixed
+
+- Console on Windows served the "Shell assets not built" fallback at `:6533`
+  even when `ui-next/dist` was present. SPA lookup used `file://` URL
+  `.pathname` (`/C:/…`) instead of a filesystem path.
+
+### ♻️ Changed
+
+#### Docs
+
+- CLI troubleshooting covers Console "Shell assets not built" on Windows.
+
 ## v0.19.5 — 2026-09-14
 
 ### ♻️ Changed

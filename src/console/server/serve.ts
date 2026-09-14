@@ -5,6 +5,7 @@
  * SameSite=Strict cookies are applied from the first response.
  */
 
+import { join } from "node:path";
 import {
   checkRequestSecurity,
   forbiddenResponse,
@@ -63,6 +64,19 @@ export function isConsoleSpaPath(pathname: string): boolean {
  */
 export function isConsoleKernelPath(pathname: string): boolean {
   return pathname.startsWith("/console/") || pathname.startsWith("/plugin-frame/");
+}
+
+/**
+ * Filesystem directory of the prebuilt Console SPA (`ui-next/dist`).
+ *
+ * Must be a real OS path. `new URL(...).pathname` on Windows is `/C:/…`, which
+ * `Bun.file` cannot open — the kernel then serves the "Shell assets not built"
+ * fallback even when the SPA is on disk.
+ *
+ * @param override - Explicit directory from {@link ServeConsoleOptions.staticDir}
+ */
+export function resolveConsoleStaticDir(override?: string): string {
+  return override ?? join(import.meta.dir, "../ui-next/dist");
 }
 
 /**
@@ -166,7 +180,7 @@ export async function serveConsole(
   await bindManifestStoreRuntime(handle.state);
   await bindManifestVaultRuntime(handle.state);
 
-  const staticDir = options.staticDir ?? new URL("../ui-next/dist/", import.meta.url).pathname;
+  const staticDir = resolveConsoleStaticDir(options.staticDir);
 
   const live = createLiveWebsocket(handle.state);
   const allowed = resolveAllowedHosts(hostname, options.allowedHosts);
@@ -210,7 +224,7 @@ export async function serveConsole(
     }
 
     const spa = isConsoleSpaPath(url.pathname);
-    const index = Bun.file(`${staticDir}index.html`);
+    const index = Bun.file(join(staticDir, "index.html"));
     if (await index.exists()) {
       return withConsoleSecurityHeaders(
         new Response(index, {
@@ -430,7 +444,7 @@ export async function proxySpa(origin: string, request: Request): Promise<Respon
 async function serveStatic(staticDir: string, pathname: string): Promise<Response | null> {
   if (pathname.includes("..")) return null;
   const path = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const file = Bun.file(`${staticDir}${path}`);
+  const file = Bun.file(join(staticDir, path));
   if (!(await file.exists())) return null;
   return new Response(file);
 }

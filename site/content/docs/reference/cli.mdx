@@ -185,6 +185,12 @@ oke db search-backfill notes --batch 500
   okengine`.
 </Accordion>
 
+<Accordion title="Console shows Shell assets not built">
+  `:6533` is up but the SPA files were not found. Published `okengine` ships them. Upgrade past the
+  Windows path bug (`file://` `/C:/…` lookup), then restart `bun run dev`. From a framework
+  checkout, run `bun run build` or keep `oke dev` so Vite HMR attaches.
+</Accordion>
+
 <Accordion title="OKE1020 on oke dev (Compose)">
   The app child had no Manifest to stamp effects (`main.health`). `oke dev` now hands the parent
   extract to the child. A failed extract appends `Manifest extract failed — …` (`oxc-parser`).
