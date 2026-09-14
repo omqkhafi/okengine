@@ -327,7 +327,7 @@ export const app = oke({ name: "plugin-only" }).plug(
     const emitted = await emitAbstractSchemaPrestep(dir, loaded.config, () => {}, "test");
     expect(emitted).toBe(true);
 
-    const generated = await readFile(join(dir, "src", "db", "schema.drizzle.ts"), "utf8");
+    const generated = await readFile(join(dir, "src", "db", "drizzle", "metrics_daily.ts"), "utf8");
     expect(generated).toContain('pgTable("metrics_daily"');
     // Postgres dialect maps abstract integer → bigint (32-bit INTEGER is too narrow).
     expect(generated).toContain('bigint("hits", { mode: "number" })');

@@ -51,14 +51,23 @@ const CATCHALL_COMMENT =
   '// Catch-all param is "*" — call api.docs.get({ "*": "a/b/c" }), not { slug }.\n';
 
 /** Filename of the on-disk `.adopt()` barrel under the flows directory. */
-export const ADOPT_BARREL_FILE = "generated.ts";
+export const ADOPT_BARREL_FILE = "index.ts";
+
+/** Previous barrel filename — unlinked after writing {@link ADOPT_BARREL_FILE}. */
+export const PREV_ADOPT_BARREL_FILE = "generated.ts";
 
 /** A folder name usable as an `export * as <name>` binding. */
 const VALID_UNIT_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 const EXPORT_CONST = /^export const ([A-Za-z_$][A-Za-z0-9_$]*)\b/gm;
 
+/** `export const onCreated = on(` — consumers colocated with `signal.once` in `signals.ts`. */
+const EXPORT_ON = /^export const ([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*on\s*\(/gm;
+
 const EXPLICIT_FLOW_UNIT = /flow\(\s*["']([A-Za-z_$][A-Za-z0-9_$]*)\./g;
+
+/** Skip-list file that may still export `on()` consumers (not `signal.once` decls). */
+const SIGNALS_FILE = "signals.ts";
 
 /**
  * Generate-time failure (mixed barrel + tree, export collision, unit drift).
@@ -86,9 +95,28 @@ interface WalkedFlowFile {
 }
 
 /**
- * Write the adopt barrel atomically: `generated.ts.tmp` → rename to
- * `generated.ts`. Skips the write when bytes are unchanged so the `src/`
- * watcher + bun `--hot` do not loop.
+ * True when `rel` is the adopt barrel (or its `.tmp`) at the flows root —
+ * not a unit `index.ts`.
+ *
+ * @param rel - Watcher or source path (POSIX or Windows)
+ */
+export function isAdoptBarrelRelPath(rel: string): boolean {
+  const posix = toPosixPath(rel);
+  const marker = "flows/";
+  const idx = posix.lastIndexOf(marker);
+  const after = idx >= 0 ? posix.slice(idx + marker.length) : posix;
+  return (
+    after === ADOPT_BARREL_FILE ||
+    after === `${ADOPT_BARREL_FILE}.tmp` ||
+    after === PREV_ADOPT_BARREL_FILE ||
+    after === `${PREV_ADOPT_BARREL_FILE}.tmp`
+  );
+}
+
+/**
+ * Write the adopt barrel atomically: `index.ts.tmp` → rename to
+ * `index.ts`. Skips the write when bytes are unchanged so the `src/`
+ * watcher + bun `--hot` do not loop. Unlinks leftover `generated.ts`.
  *
  * @param rootDir - Project root
  * @param source - Full barrel source from {@link generateAdoptBarrel}
@@ -103,25 +131,44 @@ export async function writeAdoptBarrel(
   const target = join(dir, ADOPT_BARREL_FILE);
   const tmp = `${target}.tmp`;
   await mkdir(dir, { recursive: true });
+  let written = true;
   try {
     const existing = await readFile(target, "utf8");
-    if (existing === source) return { written: false };
+    if (existing === source) written = false;
   } catch {
     // missing — write
   }
-  await writeFile(tmp, source);
-  try {
-    await rename(tmp, target);
-  } catch {
-    // Windows cannot rename onto an existing path (EEXIST / EPERM).
-    await writeFile(target, source);
+  if (written) {
+    await writeFile(tmp, source);
     try {
-      await unlink(tmp);
+      await rename(tmp, target);
     } catch {
-      // tmp already replaced or removed
+      // Windows cannot rename onto an existing path (EEXIST / EPERM).
+      await writeFile(target, source);
+      try {
+        await unlink(tmp);
+      } catch {
+        // tmp already replaced or removed
+      }
     }
   }
-  return { written: true };
+  await unlinkPrevAdoptBarrel(dir);
+  return { written };
+}
+
+/**
+ * Remove leftover `generated.ts` after the barrel moved to `index.ts`.
+ *
+ * @param dir - Absolute flows directory
+ */
+async function unlinkPrevAdoptBarrel(dir: string): Promise<void> {
+  for (const name of [PREV_ADOPT_BARREL_FILE, `${PREV_ADOPT_BARREL_FILE}.tmp`]) {
+    try {
+      await unlink(join(dir, name));
+    } catch {
+      // absent
+    }
+  }
 }
 
 /**
@@ -225,6 +272,7 @@ export async function generateAdoptBarrel(
 
 /**
  * Walk a unit folder for route files (skip-list applied).
+ * `signals.ts` is included only for `export const … = on(` consumers.
  *
  * @param unitAbs - Absolute unit directory
  */
@@ -246,10 +294,11 @@ async function listFlowFiles(unitAbs: string): Promise<WalkedFlowFile[]> {
         continue;
       }
       if (!posixName.endsWith(".ts") && !posixName.endsWith(".tsx")) continue;
-      if (isSkipFlowFile(posixName)) continue;
+      if (isSkipFlowFile(posixName) && posixName !== SIGNALS_FILE) continue;
       const relFile = rel ? `${rel}/${posixName}` : posixName;
       const source = await readFile(join(dir, d.name), "utf8");
-      const exports = listExportedConsts(source);
+      const exports =
+        posixName === SIGNALS_FILE ? listExportedOnConsts(source) : listExportedConsts(source);
       const relPosix = toPosixPath(relFile);
       // Barrel `index.ts` counts even with no `export const` (`export {}` / re-exports).
       if (exports.length === 0 && relPosix !== "index.ts") continue;
@@ -283,6 +332,31 @@ export function listExportedConsts(source: string): string[] {
 }
 
 /**
+ * Collect `export const name = on(` bindings (skip `signal.once` decls).
+ *
+ * @param source - TypeScript source
+ */
+export function listExportedOnConsts(source: string): string[] {
+  const names: string[] = [];
+  EXPORT_ON.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = EXPORT_ON.exec(source))) {
+    const name = match[1];
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+/**
+ * camelCase export → kebab filename (`onCreated` → `on-created`).
+ *
+ * @param name - `export const` binding
+ */
+function camelToKebab(name: string): string {
+  return name.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`).replace(/^-/, "");
+}
+
+/**
  * Emit import + stamped namespace for a tree unit.
  *
  * @param unit - Folder name
@@ -309,10 +383,6 @@ function emitTreeUnit(
     const alias = importAlias(unit, file.relFromUnit);
     importLines.push(`import * as ${alias} from ${JSON.stringify(spec)};`);
 
-    const inferred =
-      pathFromFlowFile(`${unit}/${file.relFromUnit}`) ??
-      pathFromFlowFile(`src/flows/${unit}/${file.relFromUnit}`);
-
     for (const exp of file.exports) {
       const prev = used.get(exp);
       if (prev !== undefined) {
@@ -322,7 +392,7 @@ function emitTreeUnit(
       }
       used.set(exp, file.relFromUnit);
       const flowName = nameFromFlowFile(`${unit}/${file.relFromUnit}`, exp) ?? `${unit}.${exp}`;
-      const pathLit = JSON.stringify(inferred ?? "/");
+      const pathLit = JSON.stringify(httpPathForExport(unit, file.relFromUnit, exp));
       fieldLines.push(
         `  ${exp}: stampHttpPath(stampFlowName(${alias}.${exp}, ${JSON.stringify(flowName)}), ${pathLit}),`,
       );
@@ -338,6 +408,26 @@ function emitTreeUnit(
     `export { ${unit} };`,
   ];
   return { lines, catchAll };
+}
+
+/**
+ * HTTP path stamp for one export.
+ *
+ * Skip-list files (`signals.ts`) have no file-tree path — fall back to
+ * `unit` + kebab export so `onCreated` in `links/signals.ts` stamps
+ * `/links/on-created` like a dedicated `on-created.ts` would.
+ *
+ * @param unit - Folder name
+ * @param relFromUnit - POSIX relative path
+ * @param exp - `export const` binding
+ */
+function httpPathForExport(unit: string, relFromUnit: string, exp: string): string {
+  return (
+    pathFromFlowFile(`${unit}/${relFromUnit}`) ??
+    pathFromFlowFile(`src/flows/${unit}/${relFromUnit}`) ??
+    pathFromFlowFile(`${unit}/${camelToKebab(exp)}.ts`) ??
+    "/"
+  );
 }
 
 /**

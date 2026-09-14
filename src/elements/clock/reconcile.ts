@@ -75,6 +75,14 @@ export interface CronStore {
    * @param leaseMs - Lease TTL
    */
   acquireLease(name: string, instanceId: string, now: number, leaseMs: number): Promise<boolean>;
+  /**
+   * Atomic read-modify-write. Reconcile uses this so a concurrent
+   * {@link CronStore.acquireLease} cannot be clobbered by a stale `get` + `put`.
+   *
+   * @param name - Cron name
+   * @param fn - Receives the current row (or `undefined`); return the next row
+   */
+  update(name: string, fn: (prev: CronRow | undefined) => CronRow): Promise<void>;
 }
 
 /** Result of one reconciliation pass. */
@@ -200,30 +208,29 @@ export async function orphanPerTenantCronRows(
 }
 
 async function putActiveRow(store: CronStore, decl: ClockDecl, name: string): Promise<void> {
-  const prev = await store.get(name);
-  const overrideCron =
-    decl.overridable && prev?.overrideCron !== undefined ? prev.overrideCron : undefined;
-  const overrideEvery =
-    decl.overridable && prev?.overrideEvery !== undefined ? prev.overrideEvery : undefined;
-
-  const row: CronRow = {
-    name,
-    declaredCron: decl.cron,
-    declaredEvery: decl.every,
-    overrideCron,
-    overrideEvery,
-    effectiveCron: overrideCron ?? decl.cron,
-    effectiveEvery: overrideEvery ?? decl.every,
-    timezone: decl.timezone,
-    overridable: decl.overridable,
-    status: "active",
-    leaderInstanceId: prev?.leaderInstanceId,
-    leaderLeaseUntil: prev?.leaderLeaseUntil,
-    lastRunAt: prev?.lastRunAt,
-    nextRunAt: prev?.nextRunAt,
-    dstAmbiguity: prev?.dstAmbiguity,
-  };
-  await store.put(row);
+  await store.update(name, (prev) => {
+    const overrideCron =
+      decl.overridable && prev?.overrideCron !== undefined ? prev.overrideCron : undefined;
+    const overrideEvery =
+      decl.overridable && prev?.overrideEvery !== undefined ? prev.overrideEvery : undefined;
+    return {
+      name,
+      declaredCron: decl.cron,
+      declaredEvery: decl.every,
+      overrideCron,
+      overrideEvery,
+      effectiveCron: overrideCron ?? decl.cron,
+      effectiveEvery: overrideEvery ?? decl.every,
+      timezone: decl.timezone,
+      overridable: decl.overridable,
+      status: "active",
+      leaderInstanceId: prev?.leaderInstanceId,
+      leaderLeaseUntil: prev?.leaderLeaseUntil,
+      lastRunAt: prev?.lastRunAt,
+      nextRunAt: prev?.nextRunAt,
+      dstAmbiguity: prev?.dstAmbiguity,
+    };
+  });
 }
 
 /**
@@ -303,6 +310,12 @@ export function createMemoryCronStore(seed?: readonly CronRow[]): CronStore {
           leaderLeaseUntil: now + leaseMs,
         });
         return true;
+      });
+    },
+    async update(name, fn) {
+      return withLock(name, () => {
+        const prev = rows.get(name);
+        rows.set(name, structuredClone(fn(prev ? structuredClone(prev) : undefined)));
       });
     },
   };
@@ -407,6 +420,14 @@ export function createFileCronStore(path: string): CronStore {
         });
         await flushUnlocked(map);
         return true;
+      });
+    },
+    async update(name, fn) {
+      await withFileLock(async () => {
+        const map = await loadUnlocked();
+        const prev = map.get(name);
+        map.set(name, structuredClone(fn(prev ? structuredClone(prev) : undefined)));
+        await flushUnlocked(map);
       });
     },
   };

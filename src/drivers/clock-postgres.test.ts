@@ -108,14 +108,22 @@ describe("postgres CronStore (fake)", () => {
     const b = createClockRuntime({ instanceId: "b", store, leaseMs: 200 });
     a.register(clock("once", { every: "1h" }));
     b.register(clock("once", { every: "1h" }));
-    await a.reconcile();
     a.onCron("once", () => {
       fires.push("a");
     });
     b.onCron("once", () => {
       fires.push("b");
     });
-    const [ra, rb] = await Promise.all([a.tick(), b.tick()]);
+    const [ra, rb] = await Promise.all([
+      (async () => {
+        await a.reconcile();
+        return a.tick();
+      })(),
+      (async () => {
+        await b.reconcile();
+        return b.tick();
+      })(),
+    ]);
     expect([...ra.ran, ...rb.ran].filter((n) => n === "once")).toHaveLength(1);
     expect(fires).toHaveLength(1);
     await store.close();

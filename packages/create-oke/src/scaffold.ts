@@ -29,6 +29,7 @@ import {
   shouldSkipTemplatePath,
   transformConfigForSqlDriver,
   transformPackageJson,
+  applyProjectNameToSources,
   resolveOkengineDependency,
   type ScaffoldPackageJson,
   type SqlDriverId,
@@ -77,7 +78,7 @@ export type ScaffoldResult = {
   readonly targetDir: string;
   readonly name: string;
   readonly source: ScaffoldSource;
-  /** Display label (`standard`, `notes`, …). */
+  /** Display label (`blank`, `shorter`, …). */
   readonly label: string;
   readonly okengineDependency: string;
   /** Store SQL driver applied to schema + config. */
@@ -119,7 +120,7 @@ export function targetDirectoryBlockReason(targetDir: string): string | null {
 }
 
 /**
- * Scaffold a new okengine project from the standard template.
+ * Scaffold a new okengine project from a bundled starter.
  *
  * @param options - Name, source, destination
  */
@@ -154,6 +155,10 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
     const sourcePkg = JSON.parse(readFileSync(pkgPath, "utf8")) as ScaffoldPackageJson;
     const nextPkg = transformPackageJson(sourcePkg, name, okengineDependency);
     writeFileSync(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`, "utf8");
+
+    for (const rel of applyProjectNameToSources(targetDir, name)) {
+      if (!written.includes(rel)) written.push(rel);
+    }
 
     if (createDefaults) {
       applyCreateDefaultsTransforms(targetDir, createDefaults);

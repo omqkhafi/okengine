@@ -19,9 +19,9 @@ describe("openDuckDB", () => {
     }
   });
 
-  test("both create-oke templates declare @duckdb/node-api", () => {
+  test("create-oke templates declare @duckdb/node-api", () => {
     const root = join(import.meta.dir, "../../packages/create-oke/templates");
-    for (const tier of ["standard", "advanced"] as const) {
+    for (const tier of ["blank", "shorter"] as const) {
       const pkg = JSON.parse(readFileSync(join(root, tier, "package.json"), "utf8")) as {
         dependencies?: { "@duckdb/node-api"?: string };
         trustedDependencies?: readonly string[];

@@ -24,7 +24,7 @@ const TABS: ReadonlyArray<TerminalTab> = [
     label: "Scaffold",
     commands: ["bunx create-oke@latest my-app"],
     output: [
-      { label: "template", value: "standard — recommended project layout" },
+      { label: "template", value: "blank — empty app (Docker-first)" },
       { label: "next", value: "cd my-app && oke dev" },
     ],
   },

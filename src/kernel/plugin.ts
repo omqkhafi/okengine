@@ -290,9 +290,10 @@ export interface PluginApi {
    */
   channelTemplate(decl: ChannelTemplateDecl): PluginApi;
   /**
-   * Contribute template body catalog entries (merged into boot channel catalog).
+   * Contribute template body catalog entries — overlay merged into boot
+   * channel catalog after `.template({ catalog })` bodies (`{{field}}`).
    *
-   * @param catalog - Locale bodies keyed by template name (`{{field}}` interpolation)
+   * @param catalog - Locale bodies keyed by template name
    */
   channelCatalog(catalog: TemplateCatalog): PluginApi;
 }
@@ -475,7 +476,7 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
   gate(decl: GateDecl | GateAllDecl): PluginDef<D>;
   /** Queue a channel template. */
   channelTemplate(decl: ChannelTemplateDecl): PluginDef<D>;
-  /** Queue channel template body catalog entries. */
+  /** Queue channel template body catalog entries (overlay after `.template({ catalog })`). */
   channelCatalog(catalog: TemplateCatalog): PluginDef<D>;
 }
 

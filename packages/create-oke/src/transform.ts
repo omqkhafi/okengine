@@ -10,9 +10,10 @@
  * 3. Drop monorepo-only files that import paths outside the source tree
  *    (today: `tests/docker.test.ts`)
  * 4. Optional `--sql` / wizard choice → `store.sql` pins
+ * 5. `oke({ name })` · welcome `app:` · seed `name:` → project name
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CreateDefaults, CreateProxyId, EnvDriverPins } from "./create-defaults.ts";
 import { DEFAULT_IMAGES, PROXY_IMAGES } from "./drivers-catalog.ts";
@@ -98,6 +99,51 @@ export function transformPackageJson(
     version: "0.0.1",
     dependencies,
   };
+}
+
+/** Placeholder app ids shipped in bundled templates (`blank` · Notes · Shorter). */
+
+/**
+ * Rewrite template placeholder app ids to the scaffolded project name.
+ *
+ * Touches `oke({ name })` in `src/app.ts`, the welcome route `app:` field, and
+ * `defineSeed({ name })` when present.
+ *
+ * @param source - File contents
+ * @param projectName - Sanitized project name
+ * @returns Rewritten source (unchanged when no placeholders)
+ */
+export function rewriteTemplateAppName(source: string, projectName: string): string {
+  const lit = JSON.stringify(projectName);
+  return source
+    .replace(/\bname:\s*["'](?:app|notes|shorter)["']/g, `name: ${lit}`)
+    .replace(/\bapp:\s*["'](?:app|notes|shorter)["']/g, `app: ${lit}`);
+}
+
+/**
+ * Apply {@link rewriteTemplateAppName} to known starter source files under
+ * `targetDir`.
+ *
+ * @param targetDir - Scaffolded project root
+ * @param projectName - Sanitized project name
+ * @returns Relative POSIX paths that were updated
+ */
+export function applyProjectNameToSources(
+  targetDir: string,
+  projectName: string,
+): readonly string[] {
+  const rels = ["src/app.ts", "src/flows/main/route.ts", "src/db/seed/index.ts"] as const;
+  const touched: string[] = [];
+  for (const rel of rels) {
+    const abs = join(targetDir, rel);
+    if (!existsSync(abs)) continue;
+    const prev = readFileSync(abs, "utf8");
+    const next = rewriteTemplateAppName(prev, projectName);
+    if (next === prev) continue;
+    writeFileSync(abs, next, "utf8");
+    touched.push(rel);
+  }
+  return touched;
 }
 
 /**

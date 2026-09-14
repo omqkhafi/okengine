@@ -2,7 +2,7 @@
  * Write AI driver config, env, and AI models into `src/core.ts` for `oke ai setup`.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { extractImages, findImagesBlock, replaceImagesBlock } from "../transform.ts";
 import { CLOUD_PROVIDERS } from "./catalog.ts";
@@ -114,8 +114,35 @@ export function applyAiSetup(
 export const DEFAULT_SEARCH_EMBED_DIMS = 768;
 
 /**
+ * Declare sources to rewrite for hybrid-search embed.
+ * `schema.ts` first, then `schema.decl.ts`, then per-table files under `src/db/schema/`.
+ *
+ * @param cwd - Project root
+ */
+function schemaDeclareSourcePaths(cwd: string): string[] {
+  const out: string[] = [];
+  for (const name of ["schema.ts", "schema.decl.ts"] as const) {
+    const decl = join(cwd, "src", "db", name);
+    if (existsSync(decl)) {
+      out.push(decl);
+      break;
+    }
+  }
+  const schemaDir = join(cwd, "src", "db", "schema");
+  if (!existsSync(schemaDir)) return out;
+  for (const name of readdirSync(schemaDir)) {
+    if (!name.endsWith(".ts") || name === "index.ts") continue;
+    out.push(join(schemaDir, name));
+  }
+  const index = join(schemaDir, "index.ts");
+  if (existsSync(index)) out.push(index);
+  return out;
+}
+
+/**
  * When AI setup includes an embed model, wire Notes hybrid search:
- * - `body: …searchable().embed()` in `schema.decl.ts`
+ * - `body: …searchable().embed()` on the declare module (`schema.ts` or
+ *   `src/db/schema/*.ts`)
  * - `oke({ store: { search: { embed: { model: embedModel, dims } } } })` in `app.ts`
  *
  * Idempotent — safe to re-run.
@@ -127,11 +154,13 @@ export function ensureHybridSearchEmbedWiring(
   cwd: string,
   dims: number = DEFAULT_SEARCH_EMBED_DIMS,
 ): void {
-  const declPath = join(cwd, "src", "db", "schema.decl.ts");
-  if (existsSync(declPath)) {
+  for (const declPath of schemaDeclareSourcePaths(cwd)) {
     const prev = readFileSync(declPath, "utf8");
     const next = ensureNotesBodyEmbed(prev);
-    if (next !== prev) writeFileSync(declPath, next, "utf8");
+    if (next !== prev) {
+      writeFileSync(declPath, next, "utf8");
+      break;
+    }
   }
 
   const appPath = join(cwd, "src", "app.ts");
@@ -145,7 +174,7 @@ export function ensureHybridSearchEmbedWiring(
 /**
  * Ensure the Notes `body` column chains bare `.embed()` after `.searchable()`.
  *
- * @param source - `schema.decl.ts` source
+ * @param source - declare module source
  */
 export function ensureNotesBodyEmbed(source: string): string {
   if (/\bbody:\s*field\.[\s\S]*?\.embed\s*\(/.test(source)) return source;
@@ -510,8 +539,8 @@ export function hasAiApiKeyVaultSecret(source: string, apiKeyEnv: string): boole
 /**
  * Merge a vault.secret contract for the AI API key into core / vault sources.
  *
- * When a `NOTES_VAULT` / `KEEL_VAULT` array exists, inserts the binding there
- * too so `oke({ secrets })` keeps the new contract.
+ * When a `NOTES_VAULT` / `APP_VAULT` / `KEEL_VAULT` array exists, inserts the
+ * binding there too so `oke({ secrets })` keeps the new contract.
  *
  * @param existing - Current module source
  * @param apiKeyEnv - Env / contract name
@@ -521,11 +550,11 @@ export function mergeAiApiKeyVaultSecret(existing: string, apiKeyEnv: string): s
   let next = ensureNamedOkengineImport(existing, "vault");
   const block = renderAiApiKeyVaultSecret(apiKeyEnv);
   const binding = envNameToCamelBinding(apiKeyEnv);
-  const vaultList = /\bexport const (NOTES_VAULT|KEEL_VAULT)\s*=\s*\[/;
+  const vaultList = /\bexport const (NOTES_VAULT|APP_VAULT|KEEL_VAULT)\s*=\s*\[/;
   if (vaultList.test(next)) {
     next = next.replace(vaultList, `${block}\n$&`);
     next = next.replace(
-      /(export const (?:NOTES_VAULT|KEEL_VAULT)\s*=\s*\[\s*\n)/,
+      /(export const (?:NOTES_VAULT|APP_VAULT|KEEL_VAULT)\s*=\s*\[\s*\n)/,
       `$1  ${binding},\n`,
     );
     return next;
@@ -567,8 +596,8 @@ export function ensureAiApiKeyVaultSecret(cwd: string, apiKeyEnv: string): void 
 
 /**
  * Write AI model declarations into `src/core/ai.ts` when that split exists
- * (so a thin `src/core.ts` barrel stays a re-export), else `src/core.ts`,
- * else legacy `src/core/index.ts` + sidecar.
+ * (so a thin `src/core.ts` / `src/core/index.ts` barrel stays a re-export),
+ * else `src/core.ts`.
  *
  * @param cwd - Project root
  * @param input - Setup choices
@@ -578,29 +607,32 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
   const rendered = renderAiTs(input);
   const coreAiPath = join(cwd, "src", "core", "ai.ts");
   const coreTsPath = join(cwd, "src", "core.ts");
-  const legacyIndex = join(cwd, "src", "core", "index.ts");
+  const coreIndexPath = join(cwd, "src", "core", "index.ts");
+  const includeSummarizeNote = existsSync(join(cwd, "src", "flows", "notes"));
+  const splitLayout =
+    existsSync(coreAiPath) || (!existsSync(coreTsPath) && existsSync(coreIndexPath));
 
-  if (existsSync(coreAiPath)) {
-    const existing = readFileSync(coreAiPath, "utf8");
-    writeFileSync(coreAiPath, resolveAiCoreSource(existing, rendered), "utf8");
+  if (splitLayout) {
+    mkdirSync(dirname(coreAiPath), { recursive: true });
+    const existing = existsSync(coreAiPath) ? readFileSync(coreAiPath, "utf8") : "";
+    writeFileSync(
+      coreAiPath,
+      existing ? resolveAiCoreSource(existing, rendered, { includeSummarizeNote }) : rendered,
+      "utf8",
+    );
     ensureCoreBarrelExportsAi(cwd);
     ensureCoreImported(cwd);
     return coreAiPath;
   }
 
-  // Folder layout still in the wild — keep writing a sidecar.
-  if (!existsSync(coreTsPath) && existsSync(legacyIndex)) {
-    const aiTsPath = join(cwd, "src", "core", "ai.ts");
-    mkdirSync(dirname(aiTsPath), { recursive: true });
-    writeFileSync(aiTsPath, rendered, "utf8");
-    ensureLegacyAiImported(cwd);
-    return aiTsPath;
-  }
-
   mkdirSync(dirname(coreTsPath), { recursive: true });
   if (existsSync(coreTsPath)) {
     const existing = readFileSync(coreTsPath, "utf8");
-    writeFileSync(coreTsPath, resolveAiCoreSource(existing, rendered), "utf8");
+    writeFileSync(
+      coreTsPath,
+      resolveAiCoreSource(existing, rendered, { includeSummarizeNote }),
+      "utf8",
+    );
   } else {
     writeFileSync(coreTsPath, rendered, "utf8");
   }
@@ -615,11 +647,16 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
  * @param existing - Current core / AI sidecar source
  * @param rendered - Output of {@link renderAiTs}
  */
-export function resolveAiCoreSource(existing: string, rendered: string): string {
+export function resolveAiCoreSource(
+  existing: string,
+  rendered: string,
+  options: { readonly includeSummarizeNote?: boolean } = {},
+): string {
   if (isIncompleteAiSetup(existing)) {
     return mergeAiIntoCore(stripIncompleteAiExports(existing), rendered);
   }
   if (hasAiModels(existing)) {
+    if (options.includeSummarizeNote === false) return existing;
     return ensureSummarizeNotePrompt(existing);
   }
   return mergeAiIntoCore(existing, rendered);
@@ -758,16 +795,25 @@ export function ensureNamedOkengineImport(source: string, name: string): string 
 }
 
 /**
- * Keep a `src/core.ts` barrel re-exporting `./core/ai.ts` after a split write.
+ * Keep a core barrel re-exporting the AI sidecar after a split write.
+ *
+ * `src/core.ts` → `./core/ai.ts`; `src/core/index.ts` → `./ai.ts`.
  *
  * @param cwd - Project root
  */
 function ensureCoreBarrelExportsAi(cwd: string): void {
   const coreTsPath = join(cwd, "src", "core.ts");
-  if (!existsSync(coreTsPath)) return;
-  const src = readFileSync(coreTsPath, "utf8");
-  if (/from\s+["']\.\/core\/ai/.test(src)) return;
-  writeFileSync(coreTsPath, `${src.trimEnd()}\nexport * from "./core/ai.ts";\n`, "utf8");
+  if (existsSync(coreTsPath)) {
+    const src = readFileSync(coreTsPath, "utf8");
+    if (/from\s+["']\.\/core\/ai(?:\.ts)?["']/.test(src)) return;
+    writeFileSync(coreTsPath, `${src.trimEnd()}\nexport * from "./core/ai.ts";\n`, "utf8");
+    return;
+  }
+  const coreIndexPath = join(cwd, "src", "core", "index.ts");
+  if (!existsSync(coreIndexPath)) return;
+  const src = readFileSync(coreIndexPath, "utf8");
+  if (/from\s+["']\.\/ai(?:\.ts)?["']/.test(src)) return;
+  writeFileSync(coreIndexPath, `${src.trimEnd()}\nexport * from "./ai.ts";\n`, "utf8");
 }
 
 /**
@@ -788,29 +834,4 @@ function ensureCoreImported(cwd: string): void {
     return;
   }
   writeFileSync(appPath, `import "@/core";\n${src}`, "utf8");
-}
-
-/**
- * Legacy `src/core/*` layout — side-effect import the AI sidecar.
- *
- * @param cwd - Project root
- */
-function ensureLegacyAiImported(cwd: string): void {
-  const candidates: ReadonlyArray<{ readonly rel: string; readonly importLine: string }> = [
-    { rel: "src/app.ts", importLine: `import "./core/ai";\n` },
-    { rel: "src/core/index.ts", importLine: `import "./ai";\n` },
-  ];
-  for (const { rel, importLine } of candidates) {
-    const path = join(cwd, rel);
-    if (!existsSync(path)) continue;
-    const src = readFileSync(path, "utf8");
-    if (
-      /from\s+["']\.\/(?:core\/)?ai["']/.test(src) ||
-      /import\s+["']\.\/(?:core\/)?ai["']/.test(src)
-    ) {
-      return;
-    }
-    writeFileSync(path, `${importLine}${src}`, "utf8");
-    return;
-  }
 }

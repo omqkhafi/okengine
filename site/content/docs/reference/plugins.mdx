@@ -54,7 +54,7 @@ export const app = oke({ name: "shop", env: "dev" }).plug(audit);
 <Step>
 ### Everything derives as usual
 
-Plugin flows appear in the Manifest, plugin tables land in `schema.drizzle.ts` on the next `oke db push`, plugin panels show up in the Console. No extra wiring — a contribution is ordinary OKE, just authored elsewhere.
+Plugin flows appear in the Manifest, plugin tables land in `src/db/drizzle/` on the next `oke db push`, plugin panels show up in the Console. No extra wiring — a contribution is ordinary OKE, just authored elsewhere.
 
 </Step>
 
@@ -76,8 +76,8 @@ Every method below exists on both the fluent definition and the boot-time builde
 | `.clock(decl)`                   | A named clock schedule — merged into boot clocks                                              |
 | `.signal(decl)`                  | A signal declaration — merged into boot signals                                               |
 | `.gate(decl)`                    | A gate declaration — merged into boot gates                                                   |
-| `.channelTemplate(decl)`         | A channel template — merged into boot channel templates                                       |
-| `.channelCatalog(catalog)`       | Template body catalog entries — merged into boot channel catalog (`{{field}}` interpolation)  |
+| `.channelTemplate(decl)`         | `channel.<medium>().template(…)` — `catalog` on the decl drains into boot                     |
+| `.channelCatalog(catalog)`       | Overlay bodies after `.template({ catalog })` (`{{field}}`); later locale wins                |
 | `.driver(id, impl)`              | A protocol-named driver for an existing element                                               |
 | `.image(role, recipe)`           | An image recipe for a docker role                                                             |
 | `.table(name, columns, options)` | A whole DB table, merged into the generated schema (`options.description` / `plane` optional) |
@@ -226,7 +226,7 @@ Extending an existing **app-owned** table with plugin columns is not supported i
     two configurations of one plugin would silently diverge. Pass identical config, or rename one
     instance.
   </Accordion>
-  <Accordion title="My plugin table is missing from schema.drizzle.ts">
+  <Accordion title="My plugin table is missing from drizzle/">
     The CLI reads table contributions from the live app entry. Make sure the plugin is actually
     `.plug()`ed in `src/app.ts` (or `db.entry` if overridden), then re-run `oke db push`.
   </Accordion>

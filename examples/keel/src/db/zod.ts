@@ -31,7 +31,7 @@ import {
   task_tags,
   tasks,
   views,
-} from "./schema.drizzle.ts";
+} from "./drizzle/index.ts";
 
 /** SQL table name → generated `pgTable`. */
 export const drizzleBySqlName = {
@@ -66,7 +66,7 @@ export type DrizzleTable = (typeof drizzleBySqlName)[keyof typeof drizzleBySqlNa
 /**
  * Select / insert / update Zod for a generated table.
  *
- * @param table - `pgTable` from {@link schema.drizzle.ts}
+ * @param table - `pgTable` from {@link ./drizzle/index.ts}
  */
 export function tableZod<T extends DrizzleTable>(table: T) {
   return {

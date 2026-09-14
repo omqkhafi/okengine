@@ -12,21 +12,9 @@ import {
 import { assembleDriverDefaults, pinsFromSides, recommendedAiApply } from "./customize-flow.ts";
 
 describe("customizeFacetsFor", () => {
-  test("standard is lean (sql only)", () => {
-    expect(customizeFacetsFor("standard")).toEqual(["sql"]);
-  });
-
-  test("advanced walks the full facet list", () => {
-    expect(customizeFacetsFor("advanced")).toEqual([
-      "sql",
-      "kv",
-      "files",
-      "index",
-      "signal",
-      "clock",
-      "vault",
-      "email",
-    ]);
+  test("both starters are lean (sql only)", () => {
+    expect(customizeFacetsFor("blank")).toEqual(["sql"]);
+    expect(customizeFacetsFor("shorter")).toEqual(["sql"]);
   });
 });
 

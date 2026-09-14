@@ -59,7 +59,7 @@ const T0 = Date.parse("2025-07-31T00:00:00.000Z");
 /** ISO-8601 instant for an epoch-ms seed timestamp. */
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-/** Task row matching `schema.decl` tasks. */
+/** Task row matching `schema/` tasks. */
 export type SeedTaskRow = {
   id: string;
   identifier: string;

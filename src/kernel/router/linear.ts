@@ -31,6 +31,9 @@ export class LinearRouter<T> implements Router<T> {
   }
 
   /**
+   * Match a method + pathname. Static routes win over `/:param` / `*` even
+   * when the parametric route was registered first.
+   *
    * @param method - HTTP method
    * @param path - Pathname
    */
@@ -40,15 +43,18 @@ export class LinearRouter<T> implements Router<T> {
       pathParts.pop();
     }
 
+    // Static first — `GET /health` must win over an earlier `GET /:code`.
     for (const route of this.#routes) {
       if (route.method !== method) continue;
-
-      if (!route.path.includes(":") && !route.path.includes("*")) {
-        if (route.path === path || `${route.path}/` === path) {
-          return { value: route.value, params: {} };
-        }
-        continue;
+      if (route.path.includes(":") || route.path.includes("*")) continue;
+      if (route.path === path || `${route.path}/` === path) {
+        return { value: route.value, params: {} };
       }
+    }
+
+    for (const route of this.#routes) {
+      if (route.method !== method) continue;
+      if (!route.path.includes(":") && !route.path.includes("*")) continue;
 
       const params: Record<string, string> = {};
       let pi = 0;

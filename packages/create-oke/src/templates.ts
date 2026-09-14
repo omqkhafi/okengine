@@ -1,5 +1,5 @@
 /**
- * Starter template resolution — `templates/standard` · `templates/advanced`.
+ * Starter template resolution — `templates/blank` · `shorter`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -7,18 +7,18 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Supported starter templates. */
-export const TEMPLATES = ["standard", "advanced"] as const;
+export const TEMPLATES = ["blank", "shorter"] as const;
 
 /** A known clean starter template. */
 export type TemplateId = (typeof TEMPLATES)[number];
 
 /** Default when `--template` is omitted. */
-export const DEFAULT_TEMPLATE: TemplateId = "standard";
+export const DEFAULT_TEMPLATE: TemplateId = "blank";
 
 /** One-line purpose for the starter (interactive select + help). */
 export const TEMPLATE_PURPOSES: Readonly<Record<TemplateId, string>> = {
-  standard: "Notes app — Docker-first (postgres · redis · s3 · smtp)",
-  advanced: "Notes app — Docker-first + store.index (meilisearch)",
+  blank: "Empty app — Docker-first (postgres · redis · s3 · smtp)",
+  shorter: "URL shortener — Docker-first (postgres · redis · s3 · smtp)",
 };
 
 /**

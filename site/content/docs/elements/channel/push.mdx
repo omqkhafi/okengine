@@ -37,6 +37,9 @@ export const orderPush = push.template("order.status", {
     title: z.string(),
     body: z.string(),
   }),
+  catalog: {
+    en: { subject: "{{title}}", text: "{{body}}" },
+  },
 });
 ```
 
@@ -59,11 +62,6 @@ export const app = oke({
         privateKey: process.env.FCM_PRIVATE_KEY,
       }),
     ],
-    catalog: {
-      "order.status": {
-        en: { subject: "{{title}}", text: "{{body}}" },
-      },
-    },
   },
 });
 ```
@@ -128,13 +126,13 @@ Web Push where the subscription is supplied on the runtime path.
 <Tab value="Catalog">
 
 ```typescript
-"order.status": {
+catalog: {
   en: { subject: "{{title}}", text: "{{body}}" },
 }
 ```
 
-`subject` becomes the notification title on FCM; `text` is the body. Extra `data` fields pass
-through as FCM data payload when present.
+Put that on `push.template({ catalog })`. `subject` becomes the notification title on FCM; `text`
+is the body. Extra `data` fields pass through as FCM data payload when present.
 
 </Tab>
 
@@ -163,7 +161,7 @@ Config key `drivers.channel.push` exists for Manifest / tooling ids (`console` �
 
 ### `.template(name, options?)`
 
-`description` · `locales` · `schema` — same as other mediums.
+`description` · `locales` · `schema` · `catalog` — same as other mediums.
 
 ## Troubleshooting
 

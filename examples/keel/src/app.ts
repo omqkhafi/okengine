@@ -2,7 +2,7 @@ import "@/core";
 
 import { oke } from "okengine/http";
 import { KEEL_VAULT } from "@/core";
-import * as routes from "@/flows/generated";
+import * as routes from "@/flows";
 
 export const app = oke({
   name: "keel",

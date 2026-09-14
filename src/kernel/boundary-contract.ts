@@ -16,7 +16,12 @@ export interface BoundaryContract<
 > {
   /** Request / args schema (Standard Schema). */
   readonly in?: ISchema;
-  /** Success reply schema (Manifest + typed client; not runtime-validated). */
+  /**
+   * Success reply schema (Manifest + typed client). Success values are
+   * projected onto it (`fx.json.create(row)` / `return row`) — Date timestamps
+   * become ISO-8601; extra keys strip when parse succeeds. Miss is not a client
+   * error.
+   */
   readonly out?: OSchema;
   /** Typed domain errors (`fx.fail`). */
   readonly errors?: E;

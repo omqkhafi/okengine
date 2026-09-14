@@ -79,10 +79,9 @@ Mnemonic: O·K·E = 6·5·3.
 \`\`\`bash
 bun install
 bun run dev      # or: bunx oke dev
-bun run web      # Vite SPA (proxies Flows to the app)
 \`\`\`
 
-App \`:6530\` · Console \`:6533\` · App MCP \`:6535\` · Docs MCP \`:6536\`. Vite web is \`bun run web\`.
+App \`:6530\` · Console \`:6533\` · App MCP \`:6535\` · Docs MCP \`:6536\`.
 
 ## Common mistakes
 
@@ -94,6 +93,8 @@ App \`:6530\` · Console \`:6533\` · App MCP \`:6535\` · Docs MCP \`:6536\`. V
 - ✅ \`on(http.get({ in, out }), flow({ do }))\` — or \`http.get("/…", { in, out })\` / \`call("unit.export", { in, out, do })\` when the folder is not the URL
 - ❌ Returning \`{ items, count }\` from a list \`do\` (nests the pager inside \`data\`)
 - ✅ \`out: z.array(Item)\` + \`fx.json.withQuery(rows, input)\` — or any other \`out\` you declare
+- ❌ Rebuilding the HTTP DTO (\`toIso\` / \`toOut(row)\`) when \`out\` already describes the wire
+- ✅ \`out: Item\` + \`fx.json.create(row)\` / \`return row\` — Date timestamps and extra columns project automatically
 
 ## Learn more
 

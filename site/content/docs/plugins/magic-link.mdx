@@ -89,8 +89,9 @@ const { data } = await api.auth.verifyMagicLink({ token });
 | `auth.requestMagicLink` | `POST /auth/magic-link/request` | `gate.public` + otp rate |
 | `auth.verifyMagicLink`  | `POST /auth/magic-link/verify`  | `gate.public` + otp rate |
 
-**Consequence:** the plugin contributes the `auth-magic-link` Channel template and EN/AR
-catalog bodies (`{{link}}`, `{{token}}`). Override copy by merging your own catalog at boot.
+**Consequence:** the plugin contributes `auth-magic-link` with EN/AR `catalog`
+on the template (`{{link}}`, `{{token}}`). Override copy with
+`oke({ channel.catalog })` or `.channelCatalog(…)` — later locale wins.
 
 ## Delivery drivers
 
@@ -155,7 +156,7 @@ unit tests without SMTP, set `exposeDevToken: true`.
 
 - [OTP](/docs/plugins/otp) — numeric code instead of a link
 - [Gate](/docs/elements/gate) — `gate.auth`
-- [Channel](/docs/elements/channel) — `fx.send`, Mailpit, consents
+- [Channel](/docs/elements/channel) — `.template({ catalog })`, `fx.send`, Mailpit
 
 ## Next
 

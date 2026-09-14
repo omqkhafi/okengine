@@ -148,8 +148,9 @@ app mode, or bind a Verify-capable driver (for example `taqnyat`).
 | Auto failover   | On real provider send errors, sently `FallbackTransport` walks remaining media; Taqnyat WhatsApp may use `sendWithFailover` |
 | User resend     | Explicit `resend` with `channel` — not automatic                                                                            |
 
-Templates: `auth-otp-email`, `auth-otp-sms`, `auth-otp-whatsapp` (EN/AR,
-`{{otp}}`). SMS here is a plain message — not Taqnyat Verify.
+Templates `auth-otp-email` / `auth-otp-sms` / `auth-otp-whatsapp` ship EN/AR
+`catalog` on the declare (`{{otp}}`). SMS is a plain message — not Taqnyat Verify.
+Override copy with `oke({ channel.catalog })` or `.channelCatalog(…)` (later locale wins).
 
 ## Options
 
@@ -209,7 +210,7 @@ In `local` / `test` the `console` driver captures messages. Use
 
 - [Magic link](/docs/plugins/magic-link) — link instead of a code
 - [Two-factor](/docs/plugins/two-factor) — email OTP / TOTP as a **second** factor after password (distinct from this primary `/auth/otp` sign-in)
-- [Channel](/docs/elements/channel) — `fx.send`, `fx.sendOtp`, drivers, Mailpit
+- [Channel](/docs/elements/channel) — `.template({ catalog })`, `fx.sendOtp`, Mailpit
 - [Gate](/docs/elements/gate) — `gate.auth`
 
 ## Next

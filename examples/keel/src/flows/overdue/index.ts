@@ -1,7 +1,7 @@
 import { on, flow } from "okengine";
 
 import { db, taskOverdueMail, watchOverdueClock } from "@/core";
-import { inbox, taskAssignees, tasks } from "@/db/schema.decl";
+import { inbox, taskAssignees, tasks } from "@/db/schema";
 
 /** Scan overdue tasks — named clock `watch-overdue`. */
 export const watch = on(

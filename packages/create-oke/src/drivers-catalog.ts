@@ -162,7 +162,7 @@ export function pinsDockerReady(dev: string, test: string): EnvDriverPins {
  */
 export function recommendedDefaults(
   profile: CreateProfile = "docker-ready",
-  template: TemplateId = "standard",
+  template: TemplateId = "blank",
 ): CreateDefaults {
   const store = {
     sql: pinsDockerReady(TEMPLATE_DEV.sql, TEMPLATE_TEST.sql),
@@ -208,9 +208,8 @@ export type CustomizeFacetId =
  *
  * @param template - Starter id
  */
-export function customizeFacetsFor(template: TemplateId): readonly CustomizeFacetId[] {
-  if (template === "standard") return ["sql"];
-  return ["sql", "kv", "files", "index", "signal", "clock", "vault", "email"];
+export function customizeFacetsFor(_template: TemplateId): readonly CustomizeFacetId[] {
+  return ["sql"];
 }
 
 /**
@@ -223,7 +222,7 @@ export function aiDriverForProvider(provider: string): string {
   return hit?.driver ?? "mock";
 }
 
-/** Default image pins keyed by role (standard template). */
+/** Default image pins keyed by role (blank / shorter templates). */
 export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.sql": "postgres:18-alpine",
   pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",

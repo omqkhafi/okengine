@@ -6,14 +6,14 @@ source: "docs/spec/unified-theory.md"
 ---
 
 Email (`channel.email`) is the default Channel medium. Declare a binder with a From address,
-register templates, put bodies in the catalog, and send with `fx.send`.
+put `{{field}}` bodies on `.template({ catalog })`, and send with `fx.send`.
 
 For developers who need local catchers and production HTTP MTAs — same `fx.send` path, swap the
 driver.
 
 <Callout title="The one rule">
-  Use `channel.email({ from }).template(name, { schema, locales })` — never
-  `channel.email("name", { subject, body })`. Subject and body live in the catalog.
+  Use `channel.email({ from }).template(name, { schema, locales, catalog })`. Subject and body
+  live on the template — not on `oke()`.
 </Callout>
 
 ## Smallest Example
@@ -33,32 +33,20 @@ export const passwordReset = mail.template("auth.resetPassword", {
   description: "Password reset link",
   locales: ["en"],
   schema: z.object({ resetLink: z.string().url() }),
+  catalog: {
+    en: {
+      subject: "Reset your password",
+      text: "Open {{resetLink}} to choose a new password.",
+      html: '<p><a href="{{resetLink}}">Reset your password</a></p>',
+    },
+  },
 });
 ```
 
 </Step>
 
 <Step>
-### Catalog + send
-
-```typescript title="src/app.ts"
-import { oke } from "okengine";
-
-oke({
-  name: "app",
-  channel: {
-    catalog: {
-      "auth.resetPassword": {
-        en: {
-          subject: "Reset your password",
-          text: "Open {{resetLink}} to choose a new password.",
-          html: '<p><a href="{{resetLink}}">Reset your password</a></p>',
-        },
-      },
-    },
-  },
-});
-```
+### Send from a Flow
 
 ```typescript title="src/flows/auth/reset.ts"
 import { on, flow, http } from "okengine";
@@ -118,12 +106,12 @@ Per-locale `subject` / `text` / `html` with `{{field}}` interpolation from `data
 
 ```typescript
 catalog: {
-  "auth.resetPassword": {
-    en: { subject: "Reset", text: "{{resetLink}}", html: "<a href=\"{{resetLink}}\">Reset</a>" },
-    ar: { subject: "إعادة التعيين", text: "{{resetLink}}" },
-  },
+  en: { subject: "Reset", text: "{{resetLink}}", html: "<a href=\"{{resetLink}}\">Reset</a>" },
+  ar: { subject: "إعادة التعيين", text: "{{resetLink}}" },
 }
 ```
+
+Put that object on `.template({ catalog })`. Do not nest the template name again.
 
 </Tab>
 
@@ -146,8 +134,8 @@ Receipt status `fallback` means an earlier attempt failed and a later one succee
 
 <Tab value="Plugin catalog">
 
-Official plugins contribute catalogs with `.channelCatalog(…)` (e.g. OTP, magic link). App
-`channel.catalog` merges with plugin contributions at boot.
+Official plugins put copy on `.template({ catalog })` (OTP, magic link, two-factor). App
+`oke({ channel.catalog })` and plugin `.channelCatalog(…)` overlay those bodies at boot.
 
 </Tab>
 
@@ -164,11 +152,12 @@ Official plugins contribute catalogs with `.channelCatalog(…)` (e.g. OTP, magi
 
 ### `.template(name, options?)`
 
-| Option        | Type       | Meaning                     |
-| ------------- | ---------- | --------------------------- |
-| `description` | `string`   | Console label               |
-| `locales`     | `string[]` | Declared locales            |
-| `schema`      | Schema     | Payload contract for `data` |
+| Option        | Type       | Meaning                                |
+| ------------- | ---------- | -------------------------------------- |
+| `description` | `string`   | Console label                          |
+| `locales`     | `string[]` | Declared locales                       |
+| `schema`      | Schema     | Payload contract for `data`            |
+| `catalog`     | object     | Per-locale `subject` / `text` / `html` |
 
 Default From when neither binder nor template sets one: `"oke@localhost.test"`.
 
@@ -229,8 +218,8 @@ Channel catalogs are **not** ICU — do not use `fx.t` for email bodies ([i18n](
 </Accordion>
 
 <Accordion title="Message in Mailpit has JSON body / template name as subject">
-  No catalog entry for that template + locale. Add `channel.catalog` (or a plugin catalog) with
-  `subject` / `text` / `html`.
+  No catalog entry for that template + locale. Add `catalog` on `.template(…)` (or overlay with
+  `oke({channel.catalog})` / plugin `.channelCatalog`) with `subject` / `text` / `html`.
 </Accordion>
 
 <Accordion title="suppressed/opted-out or prior-bounce — no provider call">

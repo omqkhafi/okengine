@@ -295,7 +295,8 @@ function drizzleSqlType(
 
 /**
  * Bind value for a temporal SQL column. Epoch-ms numbers (e.g. `fx.clock.now()`)
- * become `Date` so Postgres `timestamp` / `date` accept them; other values pass through.
+ * and parseable ISO datetime strings (HTTP `z.iso.datetime()`) become `Date`
+ * so Postgres `timestamp` / `date` accept them; other values pass through.
  *
  * @param sqlType - Resolved DDL type
  * @param value - Incoming JS value
@@ -304,12 +305,13 @@ export function coerceTemporalBindValue(
   sqlType: ResolvedColumn["sqlType"],
   value: unknown,
 ): unknown {
-  if (
-    (sqlType === "TIMESTAMP" || sqlType === "DATE") &&
-    typeof value === "number" &&
-    Number.isFinite(value)
-  ) {
+  if (sqlType !== "TIMESTAMP" && sqlType !== "DATE") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
     return new Date(value);
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return new Date(parsed);
   }
   return value;
 }

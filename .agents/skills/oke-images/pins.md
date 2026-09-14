@@ -18,7 +18,7 @@ cloud providers, or BYO `OKE_AI_URL` — not Compose pins.
 
 | Area      | Paths                                                                                                                                                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Templates | `packages/create-oke/templates/{standard,advanced}/oke.config.ts`                                                                                                                                             |
+| Templates | `packages/create-oke/templates/{blank,shorter}/oke.config.ts`                                                                                                                                                 |
 | Keel      | `examples/keel/oke.config.ts`, `examples/keel/docker/docker-compose.yml`                                                                                                                                      |
 | Tests     | `src/docker/images-config.test.ts`, `docker.test.ts`, `stack-id.test.ts`, `src/cli/load-config.images.test.ts`, `src/plugins/auth-delivery.mailpit.integration.test.ts`, `examples/keel/tests/docker.test.ts` |
 | Docs      | `site/content/docs/recipes/*.mdx`, `elements/{store,channel}.mdx`, `reference/configuration.mdx`                                                                                                              |

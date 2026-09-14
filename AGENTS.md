@@ -84,7 +84,7 @@ After changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`,
 Published packages:
 
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./plugins`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
-- `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships Notes starters from `packages/create-oke/templates/{standard,advanced}`.
+- `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships starters from `packages/create-oke/templates/{blank,shorter}`.
 
 Engine: Bun `>=1.4.2`.
 

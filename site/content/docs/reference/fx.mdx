@@ -211,7 +211,8 @@ const rows = await fx.using(
 | `fx.send(template, { to?, data?, via?, … })` | `send`  | `via` orders fallback; `locale` / `profileLocale` / `acceptLanguage` feed the locale chain |
 
 Omit locale opts and the send uses `fx.locale`. Dry runs record _would have fired_ and never
-contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Channel](/docs/elements/channel)).
+contact a provider. Bodies live on `.template({ catalog })` (`{{field}}`, not ICU — see
+[Channel](/docs/elements/channel)).
 
 ## Outbound HTTP
 
@@ -255,13 +256,13 @@ host tooltip).
 
 ## Clock
 
-| Signature                         | Notes                                                               |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"                         |
-| `fx.clock.ago(duration)`          | Instant before now (`"30d"` → now − 30 days)                        |
-| `fx.clock.fromNow(duration)`      | Instant after now (`"14d"` → now + 14 days)                         |
-| `fx.clock.duration(duration)`     | Span in ms — offset a stored instant (`createdAt + duration("7d")`) |
-| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise               |
+| Signature                         | Notes                                                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"; pass into SQL timestamps as-is (store coerces numbers and ISO strings to `Date`) |
+| `fx.clock.ago(duration)`          | Instant before now (`"30d"` → now − 30 days)                                                                                  |
+| `fx.clock.fromNow(duration)`      | Instant after now (`"14d"` → now + 14 days)                                                                                   |
+| `fx.clock.duration(duration)`     | Span in ms — offset a stored instant (`createdAt + duration("7d")`)                                                           |
+| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise                                                                         |
 
 Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400_000 ms, not a calendar day. Unknown strings parse as `0`.
 
@@ -292,6 +293,8 @@ keys. Use `cache: false` to opt out, or `cache: "30s"` for a TTL.
 | `fx.live(signal)`                         | 200    | Same SSE carrier for a live signal (payload frames + `id:`)    |
 
 Returning a plain value instead answers 200 with `{ data: value, error: null }` — the helpers exist for status and `meta` control. Pass `fx.stream(...)` into `fx.json.stream` to reach the HTTP client token-by-token.
+
+When `out` is set, success values are projected onto it (`fx.json.create(row)`, `return row`, `fx.json.withQuery(rows, input)`). Date timestamps and temporal epoch-ms (`*At` / `*_at` / `at`) become ISO-8601 and extra keys strip. A parse miss is not a client error.
 
 ## Logging, i18n, ids
 
@@ -353,6 +356,11 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
 
 <Accordion title="Helper fx type errors on store()">
   Type the parameter as `Fx` from `okengine`, not a hand-rolled structural type.
+</Accordion>
+
+<Accordion title="I mapped Date columns to ISO by hand">
+  Declared `out` projects success values. `fx.json.create(row)`, `return row`, and
+  `fx.json.withQuery(rows, input)` are enough — extra columns strip. A miss is not a client error.
 </Accordion>
 
 </Accordions>

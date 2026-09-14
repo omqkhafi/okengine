@@ -299,12 +299,15 @@ export const get = on(
 );
 ```
 
+Declared `out` projects the row — return it as-is (Date or `fx.clock.now()` epoch-ms → ISO-8601; extra columns strip).
+
 </Tab>
 
 <Tab value="POST">
 
-Create a resource or run a command. `fx.json.create(value)` returns `201 Created` with
-`{ data: value, error: null }`:
+Create a resource or run a command. `fx.json.create(row)` returns `201 Created` with
+`{ data: value, error: null }`. Declared `out` projects the store row (Date / epoch-ms → ISO).
+HTTP `in` timestamps are ISO (`z.iso.datetime()`); store writes coerce them to `Date`.
 
 ```typescript title="src/flows/notes/create.ts"
 import { on, flow, http } from "okengine";
@@ -319,8 +322,8 @@ export const create = on(
   flow({
     do: async ({ title }, fx) => {
       const id = fx.id();
-      await fx.store(db).insert(notes).values({ id, title });
-      return fx.json.create({ id, title });
+      const [row] = await fx.store(db).insert(notes).values({ id, title }).returning();
+      return fx.json.create(row);
     },
   }),
 );
@@ -934,8 +937,9 @@ Every HTTP flow returns the same envelope shape. You choose status and optional 
 custom wrapper.
 
 <Callout title="Envelope is fixed">
-  Success and failure always use `{ data, error }` (optional top-level `meta`). There is no API to
-  replace that shape. Use `fx.json.*` for status codes and `meta`; use `fx.fail` for typed errors.
+  Success and failure always use `{ data, error }` (optional top-level `meta`). Use `fx.json.*` for
+  status and `meta`; use `fx.fail` for typed errors. A raw `Response` from `do` is the exception —
+  `302` + `Location` for redirects.
 </Callout>
 
 **Success** — returning a value from `do` produces `200 OK`:
@@ -946,12 +950,19 @@ custom wrapper.
 
 Returning `undefined` produces a `204 No Content` response with an empty body.
 
-**Custom status** — `fx.json.create` for `201 Created`, or `fx.json.ok` with optional `meta`:
+**Custom status** — `fx.json.create` for `201 Created`, or `fx.json.ok` with optional `meta`.
+When `out` is set, pass the store row — the kernel projects it (Date → ISO-8601; extra keys strip):
 
 ```typescript
-return fx.json.create({ id: "ord_1" });
+return fx.json.create(row);
 // or
 return fx.json.ok({ id: "ord_1" }, { meta: { traceId: fx.runId } });
+```
+
+**Redirects** — return a raw `Response` so the kernel does not wrap `{ data, error }`:
+
+```typescript
+return new Response(null, { status: 302, headers: { Location: url } });
 ```
 
 **Typed failures** — `fx.fail(code, data)` formats the error envelope and maps status:
@@ -1002,6 +1013,11 @@ Standard status code mappings:
 <Accordion title="422 ValidationError on request">
   The merged input payload failed validation against the trigger's `in` schema. Check the
   `error.data.issues` array for the specific field validation failure.
+</Accordion>
+
+<Accordion title="I mapped Date columns to ISO by hand">
+  Declared `out` already projects store rows. `fx.json.create(row)`, `return row`, and
+  `fx.json.withQuery(rows, input)` are enough — extra columns strip. A miss is not a client error.
 </Accordion>
 
 <Accordion title="Browser blocked by CORS / missing Access-Control-*">

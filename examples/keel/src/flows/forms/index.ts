@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { z } from "zod";
 
 import { db, formClassifyPrompt, member, openaiKey, projectAdminWrite } from "@/core";
-import { formSubmissions, forms, projects, spaces } from "@/db/schema.decl";
+import { formSubmissions, forms, projects, spaces } from "@/db/schema";
 import { formsZod } from "@/db/zod";
 import { IdOut, NotFound, Unavailable } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";

@@ -17,7 +17,18 @@ describe("isDomainSchemaWatchPath", () => {
     expect(isDomainSchemaWatchPath("src/schema.decl.ts")).toBe(true);
   });
 
+  test("matches split declare modules under schema/", () => {
+    expect(isDomainSchemaWatchPath("db/schema/links.ts")).toBe(true);
+    expect(isDomainSchemaWatchPath("src/db/schema/daily.ts")).toBe(true);
+    expect(isDomainSchemaWatchPath("src/db/schema/index.ts")).toBe(true);
+    expect(isDomainSchemaWatchPath("src/db/schema/relations.ts")).toBe(true);
+  });
+
   test("ignores emit output (avoids push ↔ generated feedback loop)", () => {
+    expect(isDomainSchemaWatchPath("src/db/drizzle.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("drizzle.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("src/db/drizzle/index.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("src/db/drizzle/links.ts")).toBe(false);
     expect(isDomainSchemaWatchPath("src/db/schema.drizzle.ts")).toBe(false);
     expect(isDomainSchemaWatchPath("schema.drizzle.ts")).toBe(false);
     expect(isDomainSchemaWatchPath("flows/notes/schema.drizzle.tsx")).toBe(false);

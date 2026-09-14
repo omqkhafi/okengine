@@ -241,9 +241,18 @@ export function createPostgresCronFake(): PostgresCronSql & {
         return [{ ...row }];
       }
 
-      const byName = /^SELECT\s+\*\s+FROM\s+oke_crons\s+WHERE\s+name\s*=\s*\?\s*$/i.exec(text);
+      const byName =
+        /^SELECT\s+\*\s+FROM\s+oke_crons\s+WHERE\s+name\s*=\s*\?(?:\s+FOR\s+UPDATE)?\s*$/i.exec(
+          text,
+        );
       if (byName) {
-        return state.rows.filter((r) => r.name === params[0]).map((r) => ({ ...r }));
+        const name = String(params[0]);
+        if (/FOR\s+UPDATE/i.test(text) && active) {
+          if (heldByTxn.has(name) && !active.locked.has(name)) return [];
+          active.locked.add(name);
+          heldByTxn.add(name);
+        }
+        return state.rows.filter((r) => r.name === name).map((r) => ({ ...r }));
       }
 
       const all = /^SELECT\s+\*\s+FROM\s+oke_crons\s*$/i.exec(text);
@@ -403,6 +412,13 @@ export async function createPostgresCronStore(
           name,
         ]);
         return true;
+      });
+    },
+    async update(name, fn) {
+      return sql.begin(async (tx) => {
+        const locked = await tx.query(`SELECT * FROM oke_crons WHERE name = ? FOR UPDATE`, [name]);
+        const prev = locked[0] ? rowToCron(locked[0]) : undefined;
+        await tx.exec(UPSERT_SQL, cronToParams(fn(prev)));
       });
     },
     async close() {

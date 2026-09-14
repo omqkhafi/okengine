@@ -127,6 +127,9 @@ Disable also requires step-up when 2FA is already enabled.
 `{ twoFactorRequired, challengeId, method, userId }` (no tokens) when the
 account has 2FA enabled. Complete login only via `twoFactorVerify`.
 
+Email OTP as second factor sends `auth-2fa-email` (`{{otp}}`, EN/AR `catalog` on
+the template). Overlay copy the same way as other Channel templates.
+
 ## Troubleshooting
 
 <Accordions>
@@ -160,6 +163,7 @@ challenge. A recovery code works once for TOTP, then is consumed.
 
 ## Learn more
 
+- [Channel](/docs/elements/channel) — `auth-2fa-email` catalog and Mailpit
 - [Passkey](/docs/plugins/passkey) — WebAuthn register / authenticate
 - [Gate](/docs/elements/gate) — session + policies
 - [Username](/docs/plugins/username) — first factor to enroll against

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { member, projectAdminWrite } from "@/core";
-import { tags } from "@/db/schema.decl";
+import { tags } from "@/db/schema";
 import { tagsZod } from "@/db/zod";
 import { bindCrud } from "@/lib/resource";
 

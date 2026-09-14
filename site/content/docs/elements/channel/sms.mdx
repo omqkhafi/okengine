@@ -52,6 +52,7 @@ const sms = channel.sms({ sender: "ACME" });
 export const orderShippedSms = sms.template("order.shipped", {
   locales: ["en"],
   schema: z.object({ tracking: z.string() }),
+  catalog: { en: { text: "Shipped — track {{tracking}}" } },
 });
 ```
 
@@ -62,7 +63,7 @@ await fx.send(orderShippedSms, {
 });
 ```
 
-Add a catalog body (`text: "Shipped — track {{tracking}}"`) or accept the JSON fallback.
+Missing `catalog` falls back to `subject: templateName` and `text: JSON.stringify(data)`.
 
 </Step>
 
@@ -102,6 +103,7 @@ Transactional SMS through the same `fx.send` path as email:
 const sms = channel.sms({ from: "ACME" });
 export const alertSms = sms.template("ops.alert", {
   schema: z.object({ message: z.string() }),
+  catalog: { en: { text: "{{message}}" } },
 });
 
 await fx.send(alertSms, { to: phone, data: { message: "Disk 90%" } });
@@ -202,7 +204,7 @@ Same medium options as email: `from` / `sender`.
 
 ### `.template(name, options?)`
 
-`description` · `locales` · `schema` — bodies in the catalog (`text` is typical for SMS).
+`description` · `locales` · `schema` · `catalog` — `text` is typical for SMS.
 
 ## Troubleshooting
 
@@ -229,8 +231,8 @@ Same medium options as email: `from` / `sender`.
 </Accordion>
 
 <Accordion title="channel: otp delivery failed on all channels">
-  Every medium in the failover list failed. Check driver credentials, suppression, and template
-  catalog entries.
+  Every medium in the failover list failed. Check driver credentials, suppression, and `catalog` on
+  each `.template()`.
 </Accordion>
 
 </Accordions>

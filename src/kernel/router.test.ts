@@ -71,6 +71,19 @@ describe("router — RegExp + Trie + Linear + Smart", () => {
     expect(r.match("GET", "/x/1")).toEqual({ value: "x", params: { id: "1" } });
   });
 
+  test("LinearRouter prefers static over an earlier /:param", () => {
+    const linear = new LinearRouter<string>();
+    linear.add("GET", "/:code", "redirect");
+    linear.add("GET", "/health", "health");
+    linear.add("GET", "/links", "list");
+    expect(linear.match("GET", "/health")?.value).toBe("health");
+    expect(linear.match("GET", "/links")?.value).toBe("list");
+    expect(linear.match("GET", "/abc")).toEqual({
+      value: "redirect",
+      params: { code: "abc" },
+    });
+  });
+
   test("allowedMethods lists verbs for a path and is empty for unknown paths", () => {
     const regexp = new RegExpRouter<string>();
     regexp.add("POST", "/notes", "create");

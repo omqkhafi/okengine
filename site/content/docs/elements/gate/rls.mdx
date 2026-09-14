@@ -34,7 +34,7 @@ import { gate } from "okengine";
 export const member = gate.policy("member", ({ auth }) => !!auth.verified);
 ```
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { store, field } from "okengine";
 
 export const tasks = store.schema.table(
@@ -193,7 +193,7 @@ Extras are the **third argument** of `store.schema.table(name, cols, extras)`:
 `for` accepts `select` · `insert` · `update` · `delete` · `all`. Optional `as`:
 `"permissive"` (default) or `"restrictive"`. Optional `to` limits Postgres roles.
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { store, field } from "okengine";
 import { member, bookingCreate } from "@/core/gate";
 

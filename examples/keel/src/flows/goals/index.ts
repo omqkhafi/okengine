@@ -2,7 +2,7 @@ import { on, flow } from "okengine";
 import { z } from "zod";
 
 import { db, member, projectAdminWrite, rollupGoalsClock, weeklySummaryPrompt } from "@/core";
-import { goals, projects } from "@/db/schema.decl";
+import { goals, projects } from "@/db/schema";
 import { goalsZod } from "@/db/zod";
 import { bindCrud } from "@/lib/resource";
 import { goalAtRisk, goalChanged, goalHealth } from "./signals";

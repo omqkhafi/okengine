@@ -1,5 +1,5 @@
 /**
- * `oke build` regenerates `src/flows/generated.ts` before bundling — real
+ * `oke build` regenerates `src/flows/index.ts` before bundling — real
  * before/after proof, not an assumption about the wiring.
  */
 
@@ -16,13 +16,13 @@ async function makeUnit(root: string, name: string): Promise<void> {
 }
 
 describe("oke build — .adopt() barrel regeneration", () => {
-  test("real before/after: no generated.ts before build, real barrel content after", async () => {
+  test("real before/after: no index.ts before build, real barrel content after", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-build-adopt-"));
     try {
       await makeUnit(root, "main");
       await makeUnit(root, "notes");
 
-      const generatedPath = join(root, "src/flows/generated.ts");
+      const generatedPath = join(root, "src/flows/index.ts");
       await expect(readFile(generatedPath, "utf8")).rejects.toThrow();
 
       const code = await runBuild({

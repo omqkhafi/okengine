@@ -67,6 +67,7 @@ describe("pathFromFlowFile", () => {
     expect(pathFromFlowFile("notes/list.test.ts")).toBeUndefined();
     expect(pathFromFlowFile("notes/_lib/util.ts")).toBeUndefined();
     expect(pathFromFlowFile("src/flows/generated.ts")).toBeUndefined();
+    expect(pathFromFlowFile("src/flows/index.ts")).toBeUndefined();
   });
 
   test("accepts a source path under src/flows/", () => {

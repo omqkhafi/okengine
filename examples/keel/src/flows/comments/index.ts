@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { commentsWrite, db, member, tasksWrite } from "@/core";
-import { comments, tasks } from "@/db/schema.decl";
+import { comments, tasks } from "@/db/schema";
 import { commentsZod } from "@/db/zod";
 import { listIn, pageOut } from "@/lib/http";
 import { IdIn, NotFound, Ok } from "@/lib/shapes";

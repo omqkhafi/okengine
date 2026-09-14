@@ -22,6 +22,8 @@ import { setSqlCdcSink, type SqlCdcSink } from "../elements/store/sql-session.ts
 import type { LiveQueryEvent, LiveSubscription } from "../elements/store/live-query-runtime.ts";
 import { currentAbortSignal, linkAbort } from "./abort-scope.ts";
 
+export { MUTATION_ID_HEADER } from "./mutation-id.ts";
+
 /**
  * Column-kind hint for one SQL column — drives {@link restoreImage} type
  * restoration for outbox-round-tripped CDC images.
@@ -40,9 +42,6 @@ const LIVE_SIGNAL_PREFIX = "oke/live/sql:";
 export function liveSignalName(table: string): string {
   return `${LIVE_SIGNAL_PREFIX}${table}`;
 }
-
-/** Mutation header echoed into `mutationId` on write-path events. */
-export const MUTATION_ID_HEADER = "x-oke-mutation-id";
 
 /** Per-stream event buffer cap (bounded memory per SSE session). */
 const LIVE_STREAM_BUFFER_MAX = 512;

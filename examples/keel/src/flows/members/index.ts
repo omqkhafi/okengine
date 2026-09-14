@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { z } from "zod";
 
 import { db, member, memberAdminWrite } from "@/core";
-import { members, spaces } from "@/db/schema.decl";
+import { members, spaces } from "@/db/schema";
 import { membersZod } from "@/db/zod";
 import { IdOut, NotFound } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";

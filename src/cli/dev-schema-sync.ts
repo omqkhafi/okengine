@@ -25,7 +25,7 @@ import { loadOkeConfig, resolveImages } from "./load-config.ts";
 export interface DevSchemaSyncOptions {
   /** Write output (default: stdout). */
   readonly write?: (text: string) => void;
-  /** Skip emitting `schema.drizzle.ts` (tests). */
+  /** Skip emitting `drizzle/` (tests). */
   readonly skipEmit?: boolean;
   /** Injectable push (tests). Default: `runDb("push", ...)`. */
   readonly pushFn?: (cwd: string, env: ConfigEnv) => Promise<number>;

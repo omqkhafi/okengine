@@ -1,7 +1,7 @@
 import { on, flow, call, http, fail, type Fx } from "okengine";
 
 import { db, member, openaiKey, publicDocsUrl, taskIndex } from "@/core";
-import { comments, tasks } from "@/db/schema.decl";
+import { comments, tasks } from "@/db/schema";
 import { tasksZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
 import { Ok } from "@/lib/shapes";

@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { transportOf } from "../client/create.ts";
 import type { ClientCall, ClientResult } from "../client/types.ts";
-import { MUTATION_ID_HEADER } from "../kernel/realtime-bind.ts";
+import { MUTATION_ID_HEADER } from "../kernel/mutation-id.ts";
 import {
   applyOptimisticPatch,
   clearOptimisticPatch,

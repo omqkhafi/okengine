@@ -169,7 +169,7 @@ export const entries = pgTable("entries", {
     expect(pushes.length).toBeGreaterThan(before);
   });
 
-  test("schema.drizzle.ts change does not re-trigger dbPush", async () => {
+  test("generated drizzle.ts change does not re-trigger dbPush", async () => {
     const cwd = await scaffoldProject();
     const pushes: string[] = [];
     const watcher = controlledWatcher();
@@ -221,7 +221,11 @@ export const entries = pgTable("entries", {
     const before = pushes.length;
     expect(before).toBeGreaterThanOrEqual(1);
 
-    // Simulate emit writing schema.drizzle.ts after push — must not loop.
+    // Simulate emit writing drizzle.ts after push — must not loop.
+    watcher.change("drizzle.ts");
+    watcher.change("src/db/drizzle.ts");
+    watcher.change("src/db/drizzle/index.ts");
+    watcher.change("src/db/drizzle/links.ts");
     watcher.change("schema.drizzle.ts");
     watcher.change("src/db/schema.drizzle.ts");
     watcher.change("schema.generated.ts");

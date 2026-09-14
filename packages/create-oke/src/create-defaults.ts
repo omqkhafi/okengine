@@ -161,8 +161,8 @@ export function parseCreateDefaults(raw: unknown): CreateDefaults | null {
   if (o.version !== 1) return null;
   // Reject deprecated local-only / unknown profiles (Docker-first only).
   if (o.profile !== "docker-ready") return null;
-  // Older files omit template — treat as standard so reuse stays usable.
-  const templateRaw = o.template === undefined || o.template === null ? "standard" : o.template;
+  // Older files omit template — treat as blank so reuse stays usable.
+  const templateRaw = o.template === undefined || o.template === null ? "blank" : o.template;
   if (typeof templateRaw !== "string" || !isTemplateId(templateRaw)) return null;
   const template = templateRaw;
   if (!o.drivers || typeof o.drivers !== "object") return null;

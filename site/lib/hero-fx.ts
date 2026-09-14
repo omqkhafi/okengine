@@ -19,20 +19,20 @@ export type HeroFxBeat = {
 export const HERO_FX_BEATS: readonly HeroFxBeat[] = [
   {
     preview: "flow",
-    needle: "http.post({ in: NoteCreateIn, out: NoteOut })",
+    needle: "http.post({ in: LinkCreateIn, out: LinkOut })",
     code: "on(http.post({ in, out })",
     note: "the trigger is a typed value",
   },
   {
     preview: "gate",
-    needle: ".gate(notesMutate)",
-    code: ".gate(notesMutate)",
+    needle: ".gate(linksMutate)",
+    code: ".gate(linksMutate)",
     note: "permission sits on the exposure",
   },
   {
     preview: "vault",
-    needle: "fx.vault.get(webhookSecret)",
-    code: "fx.vault.get(webhookSecret)",
+    needle: "fx.vault.get(publicApiUrl)",
+    code: "fx.vault.get(publicApiUrl)",
     note: "secrets only through fx",
   },
   {
@@ -49,20 +49,20 @@ export const HERO_FX_BEATS: readonly HeroFxBeat[] = [
   },
   {
     preview: "store",
-    needle: "fx.store(db).insert(notes)",
-    code: "fx.store(db).insert(notes)",
+    needle: "fx.store(db).insert(links)",
+    code: "fx.store(db).insert(links)",
     note: "writes are inferred, not annotated",
   },
   {
     preview: "signal",
-    needle: "fx.emit(noteCreated",
-    code: "fx.emit(noteCreated, …)",
+    needle: "fx.emit(linkCreated",
+    code: "fx.emit(linkCreated, …)",
     note: "the next Flow wakes on the same species",
   },
   {
     preview: "channel",
-    needle: "fx.send(noteCreatedMail",
-    code: "fx.send(noteCreatedMail, …)",
+    needle: "fx.send(linkCreatedMail",
+    code: "fx.send(linkCreatedMail, …)",
     note: "humans through a named template",
   },
 ];

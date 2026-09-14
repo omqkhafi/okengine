@@ -27,7 +27,7 @@ the envelope.
 
 ```typescript title="src/app.ts"
 import "@/core";
-import "@/flows/generated";
+import "@/flows";
 import { oke } from "okengine/http";
 
 export const app = oke({ name: "commerce" });
@@ -46,7 +46,7 @@ import { createClient } from "okengine/client";
 import { vault } from "okengine/vault";
 import { app } from "../../src/app";
 
-// Base URL via vault.env (empty = same-origin proxy in create-oke web)
+// Base URL via vault.env (empty = same origin as the page)
 const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "");
 const { data, error } = await api.bookings.get({ id: "bkg_7f3a" });
 
@@ -128,8 +128,8 @@ const api = createClient(vault.env("PUBLIC_API_URL") ?? "");
 ```
 
 Declare the origin on the server with [Vault · Config](/docs/elements/vault/config)
-(`PUBLIC_API_URL`), then set it via env or `oke vault set`. Leave it unset in local web
-dev so `createClient("")` stays same-origin behind the Vite proxy.
+(`PUBLIC_API_URL`), then set it via env or `oke vault set`. Leave it unset in local frontend
+dev so `createClient("")` stays same-origin behind your proxy.
 
 </Tab>
 

@@ -12,7 +12,7 @@ import {
   taskFollowers,
   taskTags,
   tasks,
-} from "@/db/schema.decl";
+} from "@/db/schema";
 import { queryPage } from "@/lib/http";
 import { IdIn, Ok, NotFound, Duplicate } from "@/lib/shapes";
 import {

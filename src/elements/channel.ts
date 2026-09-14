@@ -12,12 +12,15 @@
  * @module
  */
 
-export { channel } from "./channel/declare.ts";
+export { catalogFromTemplates, channel, mergeTemplateCatalogs } from "./channel/declare.ts";
 export type {
+  ChannelLocaleBodies,
+  ChannelLocaleBody,
   ChannelMediumBinder,
   ChannelMediumOptions,
   ChannelTemplateDecl,
   ChannelTemplateOptions,
+  TemplateCatalog,
 } from "./channel/declare.ts";
 
 export { createChannelRuntime, resetChannelProcessLocalWarnForTests } from "./channel/runtime.ts";
@@ -25,7 +28,6 @@ export type {
   ChannelRuntime,
   ChannelSendOptions,
   CreateChannelRuntimeOptions,
-  TemplateCatalog,
 } from "./channel/runtime.ts";
 
 export {

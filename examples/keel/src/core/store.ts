@@ -3,7 +3,7 @@
  */
 
 import { store } from "okengine";
-import * as schema from "@/db/schema.decl";
+import * as schema from "@/db/schema";
 
 /** Primary keel SQL. */
 export const db = store.sql("db", { schema, description: "Primary keel SQL" });

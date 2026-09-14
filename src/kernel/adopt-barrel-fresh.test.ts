@@ -82,7 +82,7 @@ describe("boot-level: stale barrel through a real oke() boot", () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       // "notes" exists on disk but this app only ever adopted "main" —
-      // exactly what a stale `src/flows/generated.ts` after adding a unit
+      // exactly what a stale `src/flows/index.ts` after adding a unit
       // (and forgetting to rerun `oke dev` / `oke build`) looks like.
       await makeUnitDir(root, "notes");
       const mainFlow = flow("main.health", {

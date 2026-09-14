@@ -25,6 +25,7 @@ import {
 import {
   clock,
   createClockRuntime,
+  createFileCronStore,
   createMemoryCronStore,
   createTestClockRuntime,
   createTimeTravel,
@@ -216,6 +217,38 @@ describe("leader election", () => {
     tt.advance(60_001);
     expect(await b.runNow("expire-stale")).toBe(true);
     expect(fired).toEqual([winner, "i-b"]);
+  });
+
+  test("file store: overlapping reconcile cannot double-fire a due tick", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-clock-file-race-"));
+    try {
+      const store = createFileCronStore(join(dir, "crons.json"));
+      const fired: string[] = [];
+      const mk = (instanceId: string) => {
+        const rt = createClockRuntime({ instanceId, store, leaseMs: 200 });
+        rt.register(clock("once", { every: "1h" }));
+        rt.onCron("once", () => {
+          fired.push(instanceId);
+        });
+        return rt;
+      };
+      const a = mk("a");
+      const b = mk("b");
+      const results = await Promise.all([
+        (async () => {
+          await a.reconcile();
+          return a.tick();
+        })(),
+        (async () => {
+          await b.reconcile();
+          return b.tick();
+        })(),
+      ]);
+      expect(results.flatMap((r) => r.ran).filter((n) => n === "once")).toHaveLength(1);
+      expect(fired).toHaveLength(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("tryAcquireLease is exclusive within the lease window", async () => {

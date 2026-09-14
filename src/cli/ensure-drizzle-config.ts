@@ -12,8 +12,9 @@ const DRIZZLE_CONFIG_TEMPLATE = `import { defineConfig } from "drizzle-kit";
  * Domain schema sync for \`oke db push|generate|migrate\`.
  *
  * SQL is PostgreSQL-only (postgres / pglite). Domain tables come from
- * \`src/db/schema.decl.ts\` → \`src/db/schema.drizzle.ts\` (emitted as a
- * pre-step of \`oke db\` / \`oke dev\`).
+ * \`src/db/schema.ts\` (single file) or \`src/db/schema/index.ts\`
+ * (folder) → \`src/db/drizzle/\` (emitted as a pre-step of \`oke db\` /
+ * \`oke dev\`). \`schema.ts\` wins when both exist.
  *
  * System / auth / plugin stubs are separate: \`oke schema generate\` →
  * \`.oke/schema/oke.ts\` (gitignored with \`.oke/\`). Re-run after adding plugins.
@@ -22,7 +23,7 @@ const DRIZZLE_CONFIG_TEMPLATE = `import { defineConfig } from "drizzle-kit";
  */
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./src/db/schema.drizzle.ts",
+  schema: "./src/db/drizzle/index.ts",
   out: "./src/db/migrations",
   // Domain tables live in public. Schema \`oke\` (RLS) and \`oke_console\` are engine-owned.
   schemaFilter: ["public"],

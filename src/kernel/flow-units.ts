@@ -1,7 +1,7 @@
 /**
- * Module-evaluation registry for `src/flows/generated.ts`.
+ * Module-evaluation registry for `src/flows/index.ts`.
  *
- * Same consume/ignore posture as `on()` / `listBindings()`: generated.ts
+ * Same consume/ignore posture as `on()` / `listBindings()`: the adopt barrel
  * calls {@link registerFlowUnits}; {@link oke} drains the bag into `$routes`
  * unless `registry: "ignore"`.
  */
@@ -19,7 +19,7 @@ const pending: Record<string, FlowUnitBag> = {};
 /**
  * Record generated flow units for the next {@link oke} construction.
  *
- * @param units - `{ notes, main, … }` from `generated.ts`
+ * @param units - `{ notes, main, … }` from `src/flows/index.ts`
  */
 export function registerFlowUnits(units: Record<string, FlowUnitBag>): void {
   Object.assign(pending, units);

@@ -126,10 +126,24 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     opts.verifications ?? active?.twoFactorVerifications ?? createVerificationStore();
   const exposeDevOtp = opts.exposeDevOtp === true;
 
+  const TWO_FACTOR_EMAIL_BODIES = {
+    en: {
+      subject: "Your two-factor code",
+      text: "Your two-factor sign-in code is: {{otp}}\n",
+      html: "<p>Your two-factor sign-in code is:</p><p><strong>{{otp}}</strong></p>",
+    },
+    ar: {
+      subject: "رمز التحقق بخطوتين",
+      text: "رمز التحقق بخطوتين هو: {{otp}}\n",
+      html: '<p dir="rtl">رمز التحقق بخطوتين هو:</p><p dir="rtl"><strong>{{otp}}</strong></p>',
+    },
+  } as const;
+
   const emailTmpl = channel.email({ from: "OKE <no-reply@oke.local>" }).template("auth-2fa-email", {
     description: "Two-factor email OTP",
     schema: z.object({ email: z.string(), otp: z.string() }),
     locales: ["en", "ar"],
+    catalog: TWO_FACTOR_EMAIL_BODIES,
   });
 
   async function provisionEmailOtp(userId: string, now: number): Promise<string | undefined> {
@@ -566,6 +580,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
 
   return plugin("twoFactor", { version: "0.0.1", config: { method: "two-factor" } })
     .needs("auth")
+    .channelTemplate(emailTmpl)
     .table("oke_two_factor", undefined, { plane: "user", description: "TOTP secrets + recovery" })
     .binding(bindSessionAuth("/two-factor/enable", enable, enableContract))
     .binding(bindPublicAuth("/two-factor/verify", verify, "otp", verifyContract))

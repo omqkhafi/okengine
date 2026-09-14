@@ -24,7 +24,7 @@ For developers persisting domain data on okengine — one handle shape, drivers 
 <Step>
 ### Declare a SQL store
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { store, field } from "okengine";
 
 export const notes = store.schema.table("notes", {
@@ -49,16 +49,19 @@ import { db, notes } from "@/schema";
 export const create = on(
   http.post({
     in: z.object({ title: z.string().min(1) }),
+    out: z.object({ id: z.string(), title: z.string() }),
   }),
   flow({
     do: async ({ title }, fx) => {
       const id = fx.id();
-      await fx.store(db).insert(notes).values({ id, title });
-      return fx.json.create({ id, title });
+      const [row] = await fx.store(db).insert(notes).values({ id, title }).returning();
+      return fx.json.create(row);
     },
   }),
 );
 ```
+
+`out` projects the insert row — `createdAt` strips; Date timestamps become ISO-8601.
 
 </Step>
 
@@ -83,6 +86,11 @@ Response:
 </Step>
 
 </Steps>
+
+<Callout title="Two declare layouts">
+  One file (`schema.ts`) or a folder (`schema/`, one table per file). Both import as `@/db/schema`.
+  Pick one — see [SQL](/docs/elements/store/sql#declaring-stores).
+</Callout>
 
 <Callout title="Effects are inferred">
   Every `fx.store` touch is recorded on the Flow as `reads` / `writes` (`sql:app`, `kv:sessions`,

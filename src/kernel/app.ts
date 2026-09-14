@@ -39,15 +39,16 @@ import { requirePackageModule } from "../shared/lazy-src.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import type { DurableResult, RunDurableOptions } from "../elements/clock/durable.ts";
 import { applyClockTimezoneDefaults } from "../elements/clock/declare.ts";
-import type { TemplateCatalog } from "../elements/channel/runtime.ts";
+import { catalogFromTemplates, mergeTemplateCatalogs } from "../elements/channel/declare.ts";
 import { parseAcceptLanguage } from "../elements/channel/locale.ts";
 import { runWithLocale } from "../i18n/locale-context.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
 import { withAbortSignal } from "./abort-scope.ts";
 import { withCdcMutationId } from "../elements/store/sql-session.ts";
-import { MUTATION_ID_HEADER } from "./realtime-bind.ts";
+import { MUTATION_ID_HEADER } from "./mutation-id.ts";
 import { fxRetry } from "./concurrency.ts";
+import { projectFlowOut } from "./project-out.ts";
 import type {
   CreateFxOptions,
   Fx,
@@ -381,13 +382,13 @@ export interface UnitHooks<D extends Record<string, unknown> = {}> {
 }
 
 /**
- * Module-augmentation slot filled by `src/flows/generated.ts`.
+ * Module-augmentation slot filled by `src/flows/index.ts`.
  * Kernel tests do not import an app generated file, so this stays `{}`.
  */
 export interface RegisteredFlowUnits {}
 
 /**
- * `$routes` derived from {@link RegisteredFlowUnits} after `import generated`.
+ * `$routes` derived from {@link RegisteredFlowUnits} after `import "@/flows"`.
  *
  * @typeParam U - Augmented unit map
  */
@@ -853,7 +854,7 @@ function registerOnceSignalBinding(
 }
 
 /**
- * Fold `generated.ts` units into `$routes` and `flowsByName`.
+ * Fold `src/flows/index.ts` units into `$routes` and `flowsByName`.
  *
  * @param units - Drained {@link registerFlowUnits} bag
  * @param routes - Runtime `$routes`
@@ -967,12 +968,21 @@ export function oke(options: OkeOptions): OkeApp {
   // explicit `options.channel` nor a registered template exists — a defined
   // object here would flip `resolveElementNeeds`'s `channel` need to `true`
   // for every app, whether or not it uses channel at all.
+  const channelTemplates = mergeUnique(
+    options.channel?.templates,
+    registrySnapshot.channelTemplates,
+  );
+  const channelCatalog = mergeTemplateCatalogs(
+    catalogFromTemplates(channelTemplates),
+    options.channel?.catalog,
+  );
   const effectiveChannel: BootOptions["channel"] =
     options.channel === undefined && registrySnapshot.channelTemplates.length === 0
       ? undefined
       : {
           ...(options.channel ?? {}),
-          templates: mergeUnique(options.channel?.templates, registrySnapshot.channelTemplates),
+          templates: channelTemplates,
+          ...(channelCatalog ? { catalog: channelCatalog } : {}),
         };
   // Same undefined-when-empty rule for AI — a bare `{}` would force the AI
   // runtime open even when the app never declared models / prompts.
@@ -1444,7 +1454,13 @@ export function oke(options: OkeOptions): OkeApp {
     const baseSignals = overrides?.signals ?? effectiveSignals;
     const baseClocks = overrides?.clocks ?? effectiveClocks;
     const baseChannel = overrides?.channel ?? effectiveChannel;
-    const mergedCatalog = mergeTemplateCatalogs(baseChannel?.catalog, ...pluginChannelCatalogs);
+    const mergedTemplates = [...(baseChannel?.templates ?? []), ...pluginChannelTemplates];
+    const mergedCatalog = mergeTemplateCatalogs(
+      catalogFromTemplates(baseChannel?.templates),
+      baseChannel?.catalog,
+      catalogFromTemplates(pluginChannelTemplates),
+      ...pluginChannelCatalogs,
+    );
 
     cdcPkByTable = pkColumnByTableFromManifest(overrides?.manifest ?? options.manifest);
 
@@ -1465,7 +1481,7 @@ export function oke(options: OkeOptions): OkeApp {
       stores: overrides?.stores ?? effectiveStores,
       channel: {
         ...(baseChannel ?? {}),
-        templates: [...(baseChannel?.templates ?? []), ...pluginChannelTemplates],
+        templates: mergedTemplates,
         ...(mergedCatalog ? { catalog: mergedCatalog } : {}),
         defaultLocale:
           baseChannel?.defaultLocale ??
@@ -1965,7 +1981,8 @@ export function oke(options: OkeOptions): OkeApp {
               journalSession?.rewind();
               return flowDef.do(input as never, fx);
             };
-            const output = await (flowDef.retry ? fxRetry(run, flowDef.retry) : run());
+            const raw = await (flowDef.retry ? fxRetry(run, flowDef.retry) : run());
+            const output = isFlowFailure(raw) ? raw : await projectFlowOut(flowDef.out, raw);
             if (!isFlowFailure(output) && cache && storeRt && cacheEffects) {
               const ledgerFx = cache.effectsFromLedger(ledger.entries);
               const writeEffects: Effects = {
@@ -2614,29 +2631,6 @@ function redactArchivedFields(input: unknown, fields: readonly string[] | undefi
     }
   }
   return obj;
-}
-
-/**
- * Deep-merge channel template catalogs (later parts win per locale).
- *
- * @param parts - Catalog fragments (undefined skipped)
- */
-function mergeTemplateCatalogs(
-  ...parts: readonly (TemplateCatalog | undefined)[]
-): TemplateCatalog | undefined {
-  const out: Record<
-    string,
-    Record<string, { readonly subject?: string; readonly text?: string; readonly html?: string }>
-  > = {};
-  let any = false;
-  for (const part of parts) {
-    if (!part) continue;
-    any = true;
-    for (const [template, locales] of Object.entries(part)) {
-      out[template] = { ...(out[template] ?? {}), ...locales };
-    }
-  }
-  return any ? out : undefined;
 }
 
 /** @internal expose smart router type for tests */

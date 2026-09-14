@@ -182,7 +182,11 @@ export interface FxTenant {
 
 /** Clock surface on `fx`. */
 export interface FxClock {
-  /** Current epoch-ms (injectable via {@link CreateFxOptions.now}). */
+  /**
+   * Current epoch-ms (injectable via {@link CreateFxOptions.now}).
+   * Pass into SQL `timestamp` / `date` columns as-is — store insert/update
+   * and WHERE binds coerce finite numbers and parseable ISO strings to `Date`.
+   */
   now(): number;
   /**
    * Instant `duration` before {@link FxClock.now} (`"30d"` → now − 30 days).
@@ -465,11 +469,17 @@ export type JsonPage<T> = {
  * JSON response helpers. `fx.json.create` answers 201; `fx.json.ok` can carry
  * a top-level `meta` (Stripe-style `{ data, meta?, error }`);
  * `fx.json.empty` answers 204.
+ * When the exposure declares `out`, the kernel projects the success value onto
+ * that schema — `fx.json.create(row)` is enough; no Date→ISO mapper.
  */
 export interface FxJson {
   /** 200 — body `{ data: value, meta?, error: null }`. */
   ok<T>(value: T, opts?: { readonly meta?: Record<string, unknown> }): JsonResult<T>;
-  /** 201 — body `{ data: value, error: null }`. */
+  /**
+   * 201 — body `{ data: value, error: null }`.
+   * When the exposure declares `out`, the kernel projects `value` onto that
+   * schema (Date → ISO-8601, extra keys stripped) so a store `row` is enough.
+   */
   create<T>(value: T): JsonResult<T>;
   /** 204 — no body. */
   empty(): JsonResult<never>;

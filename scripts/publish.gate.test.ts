@@ -138,7 +138,7 @@ describe("publish workflow", () => {
   });
 
   test("starters stay at seed version 0.0.1", () => {
-    for (const id of ["standard", "advanced"] as const) {
+    for (const id of ["blank", "shorter"] as const) {
       const pkgPath = join(ROOT, "packages/create-oke/templates", id, "package.json");
       const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
         version?: string;

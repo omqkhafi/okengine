@@ -22,7 +22,7 @@ For developers modeling domain data on okengine — mark columns, push schema, q
 <Step>
 ### Define a table and bind the store
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { store, field } from "okengine";
 
 export const posts = store.schema.table("posts", {
@@ -81,9 +81,9 @@ Response:
 
 </Steps>
 
-<Callout title="Pathless declare">
-  Starters often pass the whole decl module: `store.sql("app", {schema})` where `schema` is `import
-  * as schema from "@/db/schema.decl"`. Named keys and the exported table handles are equivalent.
+<Callout title="Two declare layouts">
+  One file (`schema.ts`, blank) or a folder (`schema/`, one table per file — shorter). Both import
+  as `@/db/schema`. Do not keep the file and the folder in the same app.
 </Callout>
 
 ## Progressive Patterns
@@ -97,7 +97,7 @@ Explore SQL from a bare table to classified columns, CRUD factory, and RLS:
 `field.id()` is `text` + auto id on insert. Use `.okid()` on an existing text
 column when you want the same default without the sugar factory:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { store, field } from "okengine";
 
 export const notes = store.schema.table("notes", {
@@ -171,7 +171,7 @@ Pass extras as the **third argument array**. Helpers take SQL/JS column
 **names** (strings) and stamp `oke.gate()` / `oke.user()` / `oke.has_scope()`
 predicates:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { store, field } from "okengine";
 
 export const tasks = store.schema.table(
@@ -200,23 +200,23 @@ otherwise.
 
 Factories mirror Drizzle pg-core names. Chain modifiers after the factory:
 
-| Factory                                                  | Infers             | Notes                                                                                                                                                         |
-| -------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field.id()`                                             | `string`           | `text` + auto id on insert (`≡ field.text().okid()`)                                                                                                          |
-| `field.okid()`                                           | `string`           | Pins OK ID on a text column                                                                                                                                   |
-| `field.text()` / `varchar` / `char`                      | `string`           | Optional `{ length?, enum? }`                                                                                                                                 |
-| `field.boolean()`                                        | `boolean`          |                                                                                                                                                               |
-| `field.smallint()` / `integer()`                         | `number`           |                                                                                                                                                               |
-| `field.bigint({ mode? })`                                | `number` (default) | `mode`: `"number"` · `"bigint"` · `"string"`                                                                                                                  |
-| `field.serial()` / `smallserial()` / `bigserial()`       | `number`           | NOT NULL by SQL physics                                                                                                                                       |
-| `field.numeric()` / `decimal()`                          | `string` (default) | Exact decimal; `{ precision?, scale?, mode? }`                                                                                                                |
-| `field.real()` / `doublePrecision()`                     | `number`           | Float4 / float8                                                                                                                                               |
-| `field.json()` / `jsonb()`                               | generic            | Narrow with `field.json<MyShape>()`                                                                                                                           |
-| `field.uuid()`                                           | `string`           |                                                                                                                                                               |
-| `field.time()` / `timestamp()` / `date()` / `interval()` | see type           | `timestamp` / `date` default to `Date`; `{ mode: "string" }` for ISO. On write, finite epoch-ms numbers (e.g. `fx.clock.now()`) coerce to `Date` for Postgres |
-| `field.point()` / `line()`                               | tuple              | `{ mode: "xy" }` / `"abc"` for objects                                                                                                                        |
-| `field.bytea()`                                          | `Buffer`           |                                                                                                                                                               |
-| `field.inet()` / `cidr()` / `macaddr()` / `macaddr8()`   | `string`           |                                                                                                                                                               |
+| Factory                                                  | Infers             | Notes                                                                                                                                                                                   |
+| -------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field.id()`                                             | `string`           | `text` + auto id on insert (`≡ field.text().okid()`)                                                                                                                                    |
+| `field.okid()`                                           | `string`           | Pins OK ID on a text column                                                                                                                                                             |
+| `field.text()` / `varchar` / `char`                      | `string`           | Optional `{ length?, enum? }`                                                                                                                                                           |
+| `field.boolean()`                                        | `boolean`          |                                                                                                                                                                                         |
+| `field.smallint()` / `integer()`                         | `number`           |                                                                                                                                                                                         |
+| `field.bigint({ mode? })`                                | `number` (default) | `mode`: `"number"` · `"bigint"` · `"string"`                                                                                                                                            |
+| `field.serial()` / `smallserial()` / `bigserial()`       | `number`           | NOT NULL by SQL physics                                                                                                                                                                 |
+| `field.numeric()` / `decimal()`                          | `string` (default) | Exact decimal; `{ precision?, scale?, mode? }`                                                                                                                                          |
+| `field.real()` / `doublePrecision()`                     | `number`           | Float4 / float8                                                                                                                                                                         |
+| `field.json()` / `jsonb()`                               | generic            | Narrow with `field.json<MyShape>()`                                                                                                                                                     |
+| `field.uuid()`                                           | `string`           |                                                                                                                                                                                         |
+| `field.time()` / `timestamp()` / `date()` / `interval()` | see type           | `timestamp` / `date` default to `Date`; `{ mode: "string" }` for ISO. On write and in WHERE, finite epoch-ms (`fx.clock.now()`) and parseable ISO strings coerce to `Date` for Postgres |
+| `field.point()` / `line()`                               | tuple              | `{ mode: "xy" }` / `"abc"` for objects                                                                                                                                                  |
+| `field.bytea()`                                          | `Buffer`           |                                                                                                                                                                                         |
+| `field.inet()` / `cidr()` / `macaddr()` / `macaddr8()`   | `string`           |                                                                                                                                                                                         |
 
 | Chain                                                    | Meaning                                                                                         |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -238,20 +238,70 @@ suffix (`sql:app`).
 | `classify`    | `table → column → tags` | `{}`       | Explicit tags; wins over schema-derived on conflict |
 | `description` | `string`                | store name | Console / docs label                                |
 
-**Named keys** — pass the tables you care about:
+Pick **one** layout. `oke db` discovers `schema.ts` first, else `schema/index.ts`.
+`schema.decl.ts` still resolves. `db.declare` overrides.
+
+<Tabs items={["Single file", "Folder"]}>
+
+<Tab value="Single file">
+
+Blank starter. Add `store.schema.table` exports in one module. When it grows,
+split into the folder and **delete** `schema.ts`.
+
+```typescript title="src/db/schema.ts"
+import { store, field } from "okengine";
+
+export const posts = store.schema.table("posts", {
+  id: field.id().primaryKey(),
+  title: field.text().notNull(),
+});
+```
+
+```typescript title="src/core.ts"
+import { store } from "okengine";
+import * as schema from "@/db/schema";
+
+export const db = store.sql("app", { schema });
+```
+
+</Tab>
+
+<Tab value="Folder">
+
+Shorter and Keel. One file per table; the barrel is the declare module.
+
+```typescript title="src/db/schema/posts.ts"
+import { store, field } from "okengine";
+
+export const posts = store.schema.table("posts", {
+  id: field.id().primaryKey(),
+  title: field.text().notNull(),
+});
+```
+
+```typescript title="src/db/schema/index.ts"
+export * from "./posts.ts";
+```
+
+```typescript title="src/core/store.ts"
+import { store } from "okengine";
+import * as schema from "@/db/schema";
+
+export const db = store.sql("app", { schema });
+```
+
+</Tab>
+
+</Tabs>
+
+**Named keys** — pass only the tables you care about:
 
 ```typescript
 export const db = store.sql("app", { schema: { posts, notes } });
 ```
 
-**Module star** — starters re-export everything from the decl file:
-
-```typescript title="src/core.ts"
-import { store } from "okengine";
-import * as schema from "@/db/schema.decl";
-
-export const db = store.sql("app", { schema });
-```
+`oke db` / `oke dev` emit generated Drizzle under `src/db/drizzle/` (one file
+per table + `index.ts`). `oke dev` watches the declare path you picked.
 
 **Consequence:** every `fx.store(db)` touch stamps `reads` / `writes` as
 `sql:app` on the Flow — Manifest, Console, and least privilege follow from that.
@@ -306,7 +356,8 @@ export const get = on(
 );
 ```
 
-`findById(notes, id)` is the same PK path without a fluent chain.
+`findById(notes, id)` is the same PK path without a fluent chain. Declared `out` projects the
+row — return it as-is.
 
 </Tab>
 
@@ -331,6 +382,8 @@ export const create = on(
   }),
 );
 ```
+
+`out` projects the returned row — Date timestamps become ISO-8601; extra columns strip.
 
 </Tab>
 
@@ -671,7 +724,7 @@ Pass extras after the column map:
 <Accordion title="Policy helpers">
   Helpers take **string** column / gate / scope names and stamp predicates:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 export const bookings = store.schema.table(
   "bookings",
   {
@@ -717,7 +770,7 @@ export const shared = store.schema.table(
   `store.schema.relations` records one/many links for Drizzle emit — it does
   **not** add `fx.store(db).query.…`:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 export const links = store.schema.table("links", {
   id: field.id().primaryKey(),
   code: field.text().notNull().unique(),
@@ -771,7 +824,7 @@ recorded that identity yet. Categories:
 ```typescript title="src/db/seed/index.ts"
 import { defineSeed, type Fx } from "okengine";
 import { db } from "@/core";
-import { notes } from "@/db/schema.decl";
+import { notes } from "@/db/schema";
 
 async function welcomeNote(fx: Fx) {
   await fx.store(db).upsert(
@@ -896,6 +949,11 @@ export default defineConfig({
 <Accordion title="unknown list param / search is not enabled">
   Default `filter: "none"` / `search: "none"` rejects extra keys. Whitelist
   columns on `store.resource(…, { list: { … } })` or your `liveQuery` options.
+</Accordion>
+
+<Accordion title="@/db/schema hits schema.ts, not my schema/ folder">
+  Cause: both `schema.ts` and `schema/` exist — the file wins for the import and for `oke db`
+  discovery. Delete `schema.ts` after you split, or set `db.declare` to `schema/index.ts`.
 </Accordion>
 
 <Accordion title="fx.store(db).query is undefined">

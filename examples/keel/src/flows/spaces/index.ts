@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { member, projectAdminWrite } from "@/core";
-import { spaces } from "@/db/schema.decl";
+import { spaces } from "@/db/schema";
 import { spacesZod } from "@/db/zod";
 import { bindCrud } from "@/lib/resource";
 

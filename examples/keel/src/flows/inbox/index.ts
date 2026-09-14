@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, member } from "@/core";
-import { inbox } from "@/db/schema.decl";
+import { inbox } from "@/db/schema";
 import { inboxZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
 import { IdIn, NotFound, Ok } from "@/lib/shapes";

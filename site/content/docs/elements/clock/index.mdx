@@ -21,32 +21,19 @@ For developers scheduling work on okengine — one handle shape; drivers swap by
 <Steps>
 
 <Step>
-### Declare a named clock
+### Declare and bind in the unit
 
-```typescript title="src/clocks/digest.ts"
-import { clock } from "okengine";
+```typescript title="src/flows/links/expire.ts"
+import { on, flow, clock } from "okengine/http";
 
-export const digestClock = clock.every("notes.digest", "1d");
-```
+const expireClock = clock.every("links.expire", "1h");
 
-</Step>
-
-<Step>
-### Bind a Flow
-
-```typescript title="src/flows/notes/digest.ts"
-import { on, flow } from "okengine";
-import { digestClock } from "@/clocks/digest";
-import { db, notes } from "@/schema";
-import { isNull } from "drizzle-orm";
-
-export const digest = on(
-  digestClock,
-  flow("notes.digest", {
-    plane: "operator",
-    do: async (_, fx) => {
-      const rows = await fx.store(db).select().from(notes).where(isNull(notes.archivedAt));
-      return { active: rows.length, at: new Date(fx.clock.now()).toISOString() };
+export const expire = on(
+  expireClock,
+  flow({
+    do: async (_input, fx) => {
+      const now = fx.clock.now();
+      return { archived: 0, at: new Date(now).toISOString() };
     },
   }),
 );
@@ -57,9 +44,11 @@ export const digest = on(
 <Step>
 ### See it tick
 
-With `oke dev`, the scheduler reconciles `notes.digest` into the Store and leader-elects
+With `oke dev`, the scheduler reconciles `links.expire` into the Store and leader-elects
 before each fire. `do` receives no payload — read time with `fx.clock.now()` (epoch-ms).
-Map to ISO on the wire with `new Date(fx.clock.now()).toISOString()`.
+
+Pass that number into SQL `timestamp` columns as-is — insert, update, and WHERE binds
+coerce to `Date`. For a hand-built ISO reply, use `new Date(fx.clock.now()).toISOString()`.
 
 Under `drivers.clock.test = "frozen"`, advance time in tests instead of waiting a day.
 

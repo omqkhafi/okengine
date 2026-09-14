@@ -25,7 +25,12 @@ import { OkeError } from "../../kernel/errors.ts";
 import { emitBootWarn } from "../../runtime/boot-warn.ts";
 import { isStandardSchema, type SchemaInput } from "../../validation/standard-schema.ts";
 import type { ConsentStore } from "./consent.ts";
-import type { ChannelTemplateDecl } from "./declare.ts";
+import {
+  catalogFromTemplates,
+  mergeTemplateCatalogs,
+  type ChannelTemplateDecl,
+  type TemplateCatalog,
+} from "./declare.ts";
 import { DEFAULT_MEDIUM_COSTS, type MediumCosts } from "./costs.ts";
 import { resolveLocale, type LocaleChainStep } from "./locale.ts";
 import type { DeliveryOutcomeState } from "./outcomes.ts";
@@ -44,15 +49,7 @@ import {
   type DeliverOtpResult,
 } from "./otp-delivery.ts";
 
-/** Locale catalog: template → locale → rendered body. */
-export type TemplateCatalog = Readonly<
-  Record<
-    string,
-    Readonly<
-      Record<string, { readonly subject?: string; readonly text?: string; readonly html?: string }>
-    >
-  >
->;
+export type { TemplateCatalog } from "./declare.ts";
 
 /**
  * Resolve driver-reported egress for a provider label in a fallback chain.
@@ -203,7 +200,8 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     );
   }
   const costs = options.costs ?? { ...DEFAULT_MEDIUM_COSTS };
-  const catalog = options.catalog ?? {};
+  const catalog =
+    mergeTemplateCatalogs(catalogFromTemplates(options.templates), options.catalog) ?? {};
   const defaultLocale = options.defaultLocale ?? "en";
   const now = options.now ?? (() => Date.now());
 

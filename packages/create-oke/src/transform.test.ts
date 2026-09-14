@@ -8,10 +8,46 @@ import { join } from "node:path";
 import { toCreateDefaults } from "./create-defaults.ts";
 import { pinsDockerReady, recommendedDefaults, VAULT_CHOICES } from "./drivers-catalog.ts";
 import { resolveTemplateDir } from "./templates.ts";
-import { applyCreateAnswers, extractImages, upsertAiDrivers } from "./transform.ts";
+import {
+  applyCreateAnswers,
+  extractImages,
+  rewriteTemplateAppName,
+  upsertAiDrivers,
+} from "./transform.ts";
 import type { EnvDriverPins } from "./create-defaults.ts";
 
-function templateConfig(id: "standard" | "advanced" = "advanced"): string {
+describe("rewriteTemplateAppName", () => {
+  test("rewrites oke name, welcome app, and seed name placeholders", () => {
+    const src = `export const app = oke({ name: "app", secrets: APP_VAULT });
+app: "notes",
+defineSeed({ name: "notes" });
+`;
+    expect(rewriteTemplateAppName(src, "my-app"))
+      .toBe(`export const app = oke({ name: "my-app", secrets: APP_VAULT });
+app: "my-app",
+defineSeed({ name: "my-app" });
+`);
+  });
+
+  test("leaves unrelated literals alone", () => {
+    const src = `const title = "notes";\nexport const x = 1;\n`;
+    expect(rewriteTemplateAppName(src, "my-app")).toBe(src);
+  });
+
+  test("rewrites shorter placeholder app ids", () => {
+    const src = `export const app = oke({ name: "shorter", secrets: APP_VAULT });
+app: "shorter",
+defineSeed({ name: "shorter" });
+`;
+    expect(rewriteTemplateAppName(src, "my-app"))
+      .toBe(`export const app = oke({ name: "my-app", secrets: APP_VAULT });
+app: "my-app",
+defineSeed({ name: "my-app" });
+`);
+  });
+});
+
+function templateConfig(id: "blank" | "shorter" = "shorter"): string {
   return readFileSync(join(resolveTemplateDir(id), "oke.config.ts"), "utf8");
 }
 
@@ -36,7 +72,7 @@ function evalConfig(source: string): {
 
 function defaultsWithIndex(indexDev: string) {
   return toCreateDefaults({
-    template: "advanced",
+    template: "shorter",
     profile: "docker-ready",
     drivers: {
       store: {
@@ -79,7 +115,7 @@ describe("applyCreateAnswers images", () => {
 
 describe("vault backend defaults", () => {
   test("recommended defaults pick the built-in encrypted store", () => {
-    const defaults = recommendedDefaults("docker-ready", "standard");
+    const defaults = recommendedDefaults("docker-ready", "blank");
     expect(defaults.drivers.vault).toEqual({ dev: "vault", test: "memory", prod: "vault" });
   });
 
@@ -89,8 +125,8 @@ describe("vault backend defaults", () => {
     expect(VAULT_CHOICES.find((c) => c.value === "vault")?.label).toContain("recommended");
   });
 
-  test("both templates pin only vault.dev (built-in) — other drivers use defaults", () => {
-    for (const id of ["standard", "advanced"] as const) {
+  test("all templates pin only vault.dev (built-in) — other drivers use defaults", () => {
+    for (const id of ["blank", "shorter"] as const) {
       const source = templateConfig(id);
       expect(source, id).toMatch(/vault:\s*\{\s*dev: "vault",?\s*\}/);
       expect(source, id).not.toMatch(/^\s*sql:\s*\{/m);
@@ -99,36 +135,37 @@ describe("vault backend defaults", () => {
     }
   });
 
-  test("both templates document the master key in .env.example", () => {
-    for (const id of ["standard", "advanced"] as const) {
+  test("all templates document the master key in .env.example", () => {
+    for (const id of ["blank", "shorter"] as const) {
       const env = readFileSync(join(resolveTemplateDir(id), ".env.example"), "utf8");
       expect(env, id).toContain("OKE_VAULT_MASTER_KEY");
       expect(env, id).toContain("oke vault init");
-      expect(env, id).toContain("src/vault.ts");
+      expect(env, id).toContain(id === "shorter" ? "src/core/vault.ts" : "src/vault.ts");
     }
   });
 
-  test("both templates declare stack vault.secret / vault.config contracts", () => {
-    for (const id of ["standard", "advanced"] as const) {
-      const vault = readFileSync(join(resolveTemplateDir(id), "src/vault.ts"), "utf8");
-      expect(vault, id).toContain('vault.secret("APP_WEBHOOK_SECRET"');
+  test("all templates declare stack vault.secret / vault.config contracts", () => {
+    for (const id of ["blank", "shorter"] as const) {
+      const vaultRel = id === "shorter" ? "src/core/vault.ts" : "src/vault.ts";
+      const vault = readFileSync(join(resolveTemplateDir(id), vaultRel), "utf8");
       expect(vault, id).toContain('vault.secret("DATABASE_URL"');
       expect(vault, id).toContain('vault.config("OKE_APP_URL"');
       expect(vault, id).toContain('vault.config("PUBLIC_API_URL"');
       expect(vault, id).toContain('dev: "http://127.0.0.1:6530"');
       expect(vault, id).not.toMatch(/PUBLIC_API_URL[\s\S]*?dev:\s*""/);
-      expect(vault, id).toContain("export const NOTES_VAULT");
       expect(vault, id).toContain("vault.fromDocker");
       const app = readFileSync(join(resolveTemplateDir(id), "src/app.ts"), "utf8");
-      expect(app, id).toContain("secrets: NOTES_VAULT");
+      expect(vault, id).not.toContain("APP_WEBHOOK_SECRET");
+      expect(vault, id).toContain("export const APP_VAULT");
+      expect(app, id).toContain("secrets: APP_VAULT");
     }
   });
 
   test("managed vault does not pin a compose image", () => {
     const next = applyCreateAnswers(
-      templateConfig("standard"),
+      templateConfig("blank"),
       toCreateDefaults({
-        template: "standard",
+        template: "blank",
         profile: "docker-ready",
         drivers: {
           store: {
@@ -162,7 +199,7 @@ describe("upsertAiDrivers", () => {
   };
 
   test("inserts drivers.ai inside drivers (not images / channel)", () => {
-    const next = upsertAiDrivers(templateConfig("advanced"), localAiPins);
+    const next = upsertAiDrivers(templateConfig("shorter"), localAiPins);
     const config = evalConfig(next);
     expect(config.drivers?.ai).toEqual(localAiPins);
     expect(config.drivers?.channel?.ai).toBeUndefined();
@@ -173,11 +210,11 @@ describe("upsertAiDrivers", () => {
 
   test("applyCreateAnswers with ai pins keeps top-level drivers.ai", () => {
     const aiPins = pinsDockerReady("openai-compatible", "mock");
-    for (const id of ["standard", "advanced"] as const) {
+    for (const id of ["blank", "shorter"] as const) {
       const next = applyCreateAnswers(
         templateConfig(id),
         toCreateDefaults({
-          template: "advanced",
+          template: "shorter",
           profile: "docker-ready",
           drivers: {
             store: {
@@ -212,9 +249,9 @@ describe("upsertAiDrivers", () => {
   test("applyCreateAnswers with OpenRouter does not pin images.ai", () => {
     const cloudPins = pinsDockerReady("openai-compatible", "mock");
     const next = applyCreateAnswers(
-      templateConfig("advanced"),
+      templateConfig("shorter"),
       toCreateDefaults({
-        template: "advanced",
+        template: "shorter",
         profile: "docker-ready",
         drivers: {
           store: {

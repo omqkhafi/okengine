@@ -464,6 +464,46 @@ export default defineConfig({
     }
   });
 
+  test("applyAiSetup writes src/core/ai.ts when the barrel is src/core/index.ts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-ai-setup-index-"));
+    try {
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `import { defineConfig } from "okengine/config";
+export default defineConfig({
+  drivers: {
+    channel: { email: { dev: "console", test: "console", prod: "console" } },
+  },
+});
+`,
+        "utf8",
+      );
+      mkdirSync(join(dir, "src", "core"), { recursive: true });
+      writeFileSync(join(dir, "src", "core", "index.ts"), `export * from "./store.ts";\n`, "utf8");
+      writeFileSync(
+        join(dir, "src", "app.ts"),
+        `import "@/core";\nexport const app = {};\n`,
+        "utf8",
+      );
+
+      applyAiSetup(dir, {
+        driver: "openai-compatible",
+        provider: "openrouter",
+        chatModel: "openrouter/free",
+      });
+
+      const index = readFileSync(join(dir, "src", "core", "index.ts"), "utf8");
+      expect(index).not.toContain("ai.model");
+      expect(index).toContain('export * from "./ai.ts"');
+      const aiTs = readFileSync(join(dir, "src", "core", "ai.ts"), "utf8");
+      expect(aiTs).toContain("smart");
+      const app = readFileSync(join(dir, "src", "app.ts"), "utf8");
+      expect(app).not.toContain("./core/ai");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("applyAiSetup writes API token to .env.local and vault.secret into core", () => {
     const dir = mkdtempSync(join(tmpdir(), "oke-ai-setup-key-"));
     try {

@@ -257,8 +257,8 @@ until registered. Full tables: [Errors](/docs/reference/errors).
 
 ## Channel catalogs are separate
 
-`fx.send` templates use `{{field}}` bodies and their own `locales` list — not
-ICU. Omit `locale` / `profileLocale` / `acceptLanguage` on `fx.send` and the
+`fx.send` interpolates `{{field}}` from `.template({ catalog })` — not ICU, not
+`fx.t`. Omit `locale` / `profileLocale` / `acceptLanguage` on `fx.send` and the
 send uses `fx.locale`. Details: [Channel](/docs/elements/channel).
 
 ## Troubleshooting
@@ -280,8 +280,8 @@ the app (proxies sometimes strip it).
 </Accordion>
 <Accordion title="Email body is still English while fx.t is Arabic">
 
-Channel catalogs are separate `{{field}}` strings. Add an `ar` body on the
-template / plugin catalog; `fx.t` does not translate Channel templates.
+Channel catalogs are separate `{{field}}` strings. Add an `ar` key on
+`.template({ catalog })`; `fx.t` does not translate Channel templates.
 
 </Accordion>
 <Accordion title="TypeScript rejects a key that exists at runtime">

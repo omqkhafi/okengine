@@ -17,7 +17,7 @@ export const RESERVED_LEAVES: ReadonlySet<string> = new Set([
   "route",
 ]);
 
-/** Filenames that are never routes. */
+/** Filenames that are never HTTP routes (`signals.ts` may still export `on()` consumers). */
 export const SKIP_FLOW_FILENAMES: ReadonlySet<string> = new Set([
   "generated.ts",
   "shapes.ts",

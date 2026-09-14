@@ -40,31 +40,36 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_FROM = "OKE <no-reply@oke.local>";
 const DEFAULT_BASE_URL = "http://127.0.0.1:6530";
 
+const MAGIC_LINK_SCHEMA = z.object({
+  email: z.string(),
+  token: z.string(),
+  link: z.string(),
+});
+
+const MAGIC_LINK_BODIES = {
+  en: {
+    subject: "Your sign-in link",
+    text: "Sign in with this link:\n{{link}}\n\nOr enter this token:\n{{token}}\n",
+    html: '<p>Sign in with this link:</p><p><a href="{{link}}">{{link}}</a></p><p>Or enter this token:</p><p><code>{{token}}</code></p>',
+  },
+  ar: {
+    subject: "رابط تسجيل الدخول",
+    text: "سجّل الدخول عبر هذا الرابط:\n{{link}}\n\nأو أدخل هذا الرمز:\n{{token}}\n",
+    html: '<p dir="rtl">سجّل الدخول عبر هذا الرابط:</p><p dir="rtl"><a href="{{link}}">{{link}}</a></p><p dir="rtl">أو أدخل هذا الرمز:</p><p dir="rtl"><code>{{token}}</code></p>',
+  },
+} as const;
+
 /** Channel template for magic-link delivery. */
 export const magicLinkTemplate = channel.email({ from: DEFAULT_FROM }).template("auth-magic-link", {
   description: "Magic-link sign-in email",
-  schema: z.object({
-    email: z.string(),
-    token: z.string(),
-    link: z.string(),
-  }),
+  schema: MAGIC_LINK_SCHEMA,
   locales: ["en", "ar"],
+  catalog: MAGIC_LINK_BODIES,
 });
 
-/** Default EN/AR bodies for {@link magicLinkTemplate}. */
+/** Default EN/AR bodies for {@link magicLinkTemplate} (overlay / tests). */
 export const magicLinkCatalog = {
-  "auth-magic-link": {
-    en: {
-      subject: "Your sign-in link",
-      text: "Sign in with this link:\n{{link}}\n\nOr enter this token:\n{{token}}\n",
-      html: '<p>Sign in with this link:</p><p><a href="{{link}}">{{link}}</a></p><p>Or enter this token:</p><p><code>{{token}}</code></p>',
-    },
-    ar: {
-      subject: "رابط تسجيل الدخول",
-      text: "سجّل الدخول عبر هذا الرابط:\n{{link}}\n\nأو أدخل هذا الرمز:\n{{token}}\n",
-      html: '<p dir="rtl">سجّل الدخول عبر هذا الرابط:</p><p dir="rtl"><a href="{{link}}">{{link}}</a></p><p dir="rtl">أو أدخل هذا الرمز:</p><p dir="rtl"><code>{{token}}</code></p>',
-    },
-  },
+  "auth-magic-link": MAGIC_LINK_BODIES,
 } as const;
 
 /** Options for {@link magicLink}. */
@@ -101,12 +106,9 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     opts.from !== undefined
       ? channel.email({ from: opts.from }).template("auth-magic-link", {
           description: "Magic-link sign-in email",
-          schema: z.object({
-            email: z.string(),
-            token: z.string(),
-            link: z.string(),
-          }),
+          schema: MAGIC_LINK_SCHEMA,
           locales: ["en", "ar"],
+          catalog: MAGIC_LINK_BODIES,
         })
       : magicLinkTemplate;
 
@@ -213,7 +215,6 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     .needs("auth")
     .needs("channel")
     .channelTemplate(tmpl)
-    .channelCatalog(magicLinkCatalog)
     .binding(bindPublicAuth("/magic-link/request", request, "otp", requestContract))
     .binding(bindPublicAuth("/magic-link/verify", verify, "otp", verifyContract));
 }

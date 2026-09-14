@@ -12,6 +12,135 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Dev, Keel & create-oke
+
+- create-oke ships a **blank** starter (`-t blank`) — Docker-first empty app with
+  `main.health` and Store/Vault wiring (no Notes domain).
+  Scaffold rewrites `oke({ name })`, the welcome `app:` field, and seed `name`
+  to the project name (same for Shorter).
+- create-oke ships a **shorter** starter (`-t shorter`) — URL shortener with
+  email/password auth, owner checks, public `GET /:code` 302, and a Reach
+  click digest (`clock.daily` + email).
+
+#### Docs
+
+- HTTP Response Envelopes documents returning a raw `Response` as the
+  exception for `302` + `Location`.
+
+### 💥 Breaking Changes
+
+#### Dev, Keel & create-oke
+
+- The `.adopt()` barrel is `src/flows/index.ts` (`import "@/flows"`). `oke dev` /
+  `oke build` still regenerate it; leftover `src/flows/generated.ts` is removed
+  on write. Change `import "@/flows/generated"` to `import "@/flows"`.
+- create-oke no longer ships the Notes `standard` and `advanced` starters.
+  Use `-t blank` (default, empty app) or `-t shorter` (URL shortener).
+
+### ♻️ Changed
+
+#### Runtime
+
+- Channel bodies live on `.template({ catalog })` for every medium (email, SMS,
+  WhatsApp, push). `oke({ channel.catalog })` and plugin `.channelCatalog()`
+  remain overlays. OTP, magic-link, and two-factor copy ride the template
+  declaration.
+- When an exposure declares `out`, success values are projected onto that schema.
+  `fx.json.create(row)`, `return row`, and `fx.json.withQuery(rows, input)`
+  map Date timestamps and temporal epoch-ms (`*At` / `*_at` / `at`, e.g.
+  `fx.clock.now()`) to ISO-8601 and strip extra columns — no DTO mapper.
+- SQL insert/update/upsert **and WHERE binds** coerce parseable ISO datetime
+  strings and epoch-ms (`fx.clock.now()`) to `Date` for `timestamp` / `date`
+  columns, so HTTP `in` fields like `expiresAt: z.iso.datetime()` and
+  `lte(col, fx.clock.now())` pass through without `new Date(...)`.
+
+#### Dev, Keel & create-oke
+
+- Domain schema declare auto-resolves: `schema.ts` (single file) if
+  present, else `src/db/schema/index.ts` (folder). `schema.decl.ts` still
+  resolves. `db.declare` overrides. Shorter and Keel use the folder only.
+  Generated emit is `src/db/drizzle/` (one file per table + `index.ts`).
+  `oke dev` watches `src/db/schema/*.ts`.
+- create-oke starters no longer ship a Vite `web/` SPA — backend + Console only.
+  Add your own frontend when you need one.
+- shorter starter README documents the URL-shortener architecture (HTTP map,
+  insert-only RLS, KV redirect, Reach digest).
+- shorter starter link `in` / `out` contracts are plain Zod (`z.object` +
+  `z.iso.datetime()` on the wire) — not `drizzle-orm/zod`. Store insert
+  coerces ISO / epoch-ms onto timestamp columns, so `links.create` passes
+  `input.expiresAt` through.
+- shorter starter `link-created` / `link-clicked` subscribers live in
+  `links/signals.ts` next to the declarations (not `on-created.ts` /
+  `on-clicked.ts`). `oke dev` / `oke build` still lift `on()` exports from
+  `signals.ts` onto the unit.
+- shorter starter `links.create` stamps `id` / `createdAt` from `fx.id` /
+  `fx.clock.now()` (epoch-ms; store coerces for SQL), passes `expiresAt`
+  from `in` as ISO, omits nullable `archivedAt`, and returns
+  `fx.json.create(row)`. List / get / archive return store rows; `out: LinkOut`
+  projects timestamps (Date or epoch-ms).
+- shorter starter `links/_shared.ts` holds owner lookup, short-code mint,
+  302, KV warming, and `publicShortUrl` (`oke build` skips `_` files).
+  Expire / reach stay inline with a few comments.
+- shorter starter exports carry TSDocs (error shapes, schema, seed,
+  locales, `App`).
+- shorter starter public `GET /:code` uses `gate.all(gate.public, ip rate)`
+  (`linksRedirect`, 300/min) instead of a bare `.public()`.
+- shorter starter `main` unit puts `HealthOut` / `RootOut` in `shapes.ts`
+  (same contract file as `links`), and drops the empty `signals.ts`.
+- blank starter `main` unit matches that pattern (`HealthOut` / `RootOut` in
+  `shapes.ts`, typed health `out`, no empty `signals.ts`).
+- shorter starter element wiring lives under `src/core/` (`store.ts`,
+  `gate.ts`, `vault.ts`, `email.ts`, `ai.ts`) with `src/core/index.ts` as
+  the barrel (`import "@/core"`). `oke ai setup` fills `src/core/ai.ts`.
+- shorter starter `oke({ secrets })` takes `APP_VAULT` (same name as blank).
+- shorter starter `shapes.ts` is HTTP/Zod contracts only; lookups, mint,
+  KV, 302, and `publicShortUrl` live in `_shared.ts`. List/report use SQL
+  `orderBy`; Reach loads owners with `inArray`; expire archives past
+  `expiresAt` in one SQL `UPDATE` (`lte` + `fx.clock.now()`) and only loops
+  to drop KV keys; public SQL fallback is the inverse (`isNull(archivedAt)`
+  and `expiresAt` null or `gt` now). Seed `createdAt` is ISO (store coerces).
+  `mail.template({ catalog })` supplies `link-created` / `reach-digest`
+  subject/body.
+
+- Keel Channel templates carry per-locale `catalog` bodies (no JSON-fallback
+  subjects).
+
+#### Docs
+
+- SQL docs declare both layouts: single-file `schema.ts` (blank) and folder
+  `schema/` (shorter / Keel), both imported as `@/db/schema`. `schema.ts` wins
+  when both exist. Generated emit is `src/db/drizzle/` (one file per table).
+- Vault overview names shorter contracts in `src/core/vault.ts`.
+- Channel docs put `{{field}}` bodies on `.template({ catalog })` for email,
+  SMS, WhatsApp, and push. `oke({ channel.catalog })` is documented as an
+  overlay. Plugin API `.channelCatalog()` matches.
+- Routing, Channel, Clock, CLI, Try It, and the homepage match create-oke
+  `blank` / `shorter` (`links` tree, `signals.ts`, no Notes / `standard`).
+- Routing skip-list: `on()` consumers in `signals.ts` still join the unit
+  (`api.links.onCreated` over RPC).
+- HTTP `out` projects store rows: `fx.json.create(row)` / `return row` /
+  `fx.json.withQuery(rows, input)` (Date → ISO-8601). Documented on Flow,
+  HTTP, Store, SQL, and fx.
+- Clock and SQL docs: pass `fx.clock.now()` into `timestamp` columns as-is
+  for insert, update, **and WHERE** — store coerces epoch-ms / ISO to `Date`.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- File / memory / postgres CronStore reconcile is an atomic read-modify-write,
+  so a second instance cannot clobber a live leader lease and double-fire a due
+  tick.
+
+- Edge LinearRouter prefers static paths over an earlier `/:param`, so
+  `GET /health` is not swallowed by `GET /:code` (`okengine/http` default).
+
+- `okengine/client-react` no longer pulls the server realtime binder into Vite
+  SPAs. Importing `Can` crashed the page on
+  `node:async_hooks`. The mutation-id header now lives in a Node-free module.
+
 ## v0.19.9 — 2026-09-14
 
 ### 🐛 Fixed

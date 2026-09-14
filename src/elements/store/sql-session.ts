@@ -22,9 +22,11 @@ import {
   compileWhere,
   compileOrderBy,
   resolveSelectColumns,
+  type CompiledWhere,
   type WhereMap,
 } from "./sql-condition.ts";
 import {
+  coerceTemporalBindValue,
   mapRowToJs,
   prepareInsertRow,
   prepareUpdateRow,
@@ -622,6 +624,46 @@ export function createSqlStoreHandle(
     return out;
   }
 
+  /**
+   * Coerce epoch-ms / ISO strings on temporal WHERE binds the same way
+   * insert/update SET does, so `lte(col, fx.clock.now())` is a timestamp.
+   *
+   * @param table - Table whose columns supply SQL types
+   * @param compiled - Predicate list from {@link compileWhere}
+   */
+  function coerceCompiledWhere(
+    table: TableHandle | unknown,
+    compiled: CompiledWhere,
+  ): CompiledWhere {
+    const cols = resolveColumns(table);
+    if (cols.length === 0 || compiled.predicates.length === 0) return compiled;
+    const bySql = new Map(cols.map((c) => [c.sqlName, c]));
+
+    let changed = false;
+    const predicates = compiled.predicates.map((p) => {
+      const col = bySql.get(p.column);
+      if (!col || p.op === "is null" || p.op === "is not null") return p;
+      if (p.op === "in" && Array.isArray(p.value)) {
+        const incoming = p.value;
+        const value = incoming.map((v) => coerceTemporalBindValue(col.sqlType, v));
+        if (value.some((v, i) => v !== incoming[i])) changed = true;
+        return { ...p, value };
+      }
+      const value = coerceTemporalBindValue(col.sqlType, p.value);
+      if (value !== p.value) changed = true;
+      return { ...p, value };
+    });
+    if (!changed) return compiled;
+
+    const params: unknown[] = [];
+    for (const p of predicates) {
+      if (p.op === "is null" || p.op === "is not null") continue;
+      if (p.op === "in" && Array.isArray(p.value)) params.push(...p.value);
+      else params.push(p.value);
+    }
+    return { clause: compiled.clause, params, predicates };
+  }
+
   function compileTableWhere(
     table: TableHandle | unknown,
     where: unknown,
@@ -632,9 +674,9 @@ export function createSqlStoreHandle(
       !Array.isArray(where) &&
       !("queryChunks" in (where as object))
     ) {
-      return compileWhere(normalizeWhereMap(table, where as WhereMap));
+      return coerceCompiledWhere(table, compileWhere(normalizeWhereMap(table, where as WhereMap)));
     }
-    return compileWhere(where);
+    return coerceCompiledWhere(table, compileWhere(where));
   }
 
   /**

@@ -24,7 +24,7 @@ For developers ranking rows on okengine — mark columns, query with `fx.store(d
 <Step>
 ### Mark columns and bind a route
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { field, store } from "okengine";
 
 export const articles = store.schema.table("articles", {
@@ -98,7 +98,7 @@ From BM25-only ranking to hybrid LSH, fusion, and opt-in rerank:
 
 Title carries twice the BM25F field weight of body. No `ai` element, no `.embed()`:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { field, store } from "okengine";
 
 export const articles = store.schema.table("articles", {
@@ -283,7 +283,7 @@ Each searchable column binds with `field.text().searchable(…)` (optionally `.e
 
 Mark the text fields you want ranked. No AI, no shadow vector columns:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { field, store } from "okengine";
 
 export const articles = store.schema.table("articles", {
@@ -307,7 +307,7 @@ retrieval (`plainto_tsquery('english', …)`).
 Chain `.embed()` **after** `.searchable()`. Pass `{ model, dims }` on the field, or
 inherit the project default:
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 import { field, store, ai } from "okengine";
 
 const embedder = ai.model("embedder", {
@@ -348,7 +348,7 @@ oke({
 });
 ```
 
-```typescript title="src/db/schema.decl.ts"
+```typescript title="src/db/schema.ts"
 body: field.text().searchable().embed(), // inherits model + dims
 caption: field.text().searchable().embed({ model: captionEmbedder }), // dims still inherit
 alt: field.text().searchable().embed({ model: captionEmbedder, dims: 384 }),

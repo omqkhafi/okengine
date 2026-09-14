@@ -804,7 +804,7 @@ async function tryListFlowsUnits(rootDir: string): Promise<readonly string[] | u
 /**
  * Confirm every `src/flows/<unit>` folder on disk actually reached this
  * boot's adopted flows — the disk-file counterpart of a stale/missing
- * generated `.adopt()` barrel (`src/flows/generated.ts`). A folder present
+ * generated `.adopt()` barrel (`src/flows/index.ts`). A folder present
  * on disk with zero adopted flows under that unit means the barrel wasn't
  * regenerated (or was hand-edited) after the folder was added.
  *
@@ -846,7 +846,7 @@ export async function assertAdoptBarrelFresh(
     staleAdoptBarrelWarned = true;
     emitBootWarn(
       `oke boot: src/flows/${missing[0]} exists on disk but adopted no flows — the ` +
-        '.adopt() barrel ("src/flows/generated.ts") is stale. Run `oke dev` or `oke build` ' +
+        '.adopt() barrel ("src/flows/index.ts") is stale. Run `oke dev` or `oke build` ' +
         "to regenerate it — dev+compose/prod refuse to boot this way.",
     );
   }

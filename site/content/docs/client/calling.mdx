@@ -81,11 +81,11 @@ export const publicApiUrl = vault.config("PUBLIC_API_URL", {
 });
 ```
 
-| Runtime                                    | Base URL for `createClient`                                     |
-| ------------------------------------------ | --------------------------------------------------------------- |
-| Browser / Bun (create-oke web)             | `vault.env("PUBLIC_API_URL") ?? ""` — empty = same-origin proxy |
-| Node / worker / CLI                        | `vault.env.required("PUBLIC_API_URL")`                          |
-| Separate storefront after `oke client add` | Same `vault.env("PUBLIC_API_URL") ?? ""`                        |
+| Runtime                                    | Base URL for `createClient`                               |
+| ------------------------------------------ | --------------------------------------------------------- |
+| Browser / Bun                              | `vault.env("PUBLIC_API_URL") ?? ""` — empty = same origin |
+| Node / worker / CLI                        | `vault.env.required("PUBLIC_API_URL")`                    |
+| Separate storefront after `oke client add` | Same `vault.env("PUBLIC_API_URL") ?? ""`                  |
 
 Set `PUBLIC_API_URL` via environment or `oke vault set`. Prefer `vault.env` over raw
 `process.env` — same helpers as the rest of the measure. See
@@ -362,8 +362,8 @@ const api = createClient(import.meta.env.PUBLIC_API_URL ?? "", { $routes: routes
 
 Ambient `.d.ts` types `in` / `out` / live / stream stamps. The routes module supplies wire REST.
 
-create-oke starters ship `web/`: Vite proxies Flow paths plus `/auth` and `/_oke` to the app.
-Leave `PUBLIC_API_URL` unset in local web so `createClient("")` stays same-origin.
+Point `createClient` at your app origin (`PUBLIC_API_URL`), or leave it empty when the
+browser page is same-origin with the API.
 
 CLI details: [CLI Reference](/docs/reference/cli).
 
@@ -387,7 +387,7 @@ Budget: the `./client` export stays under the measured client-runtime cap (hard 
 <Accordions>
 
 <Accordion title="api.bookings.get is not a function / type error">
-  Confirm the Flow is `export`ed from a generated unit (`import "@/flows/generated"` then
+  Confirm the Flow is `export`ed from a generated unit (`import "@/flows"` then
   `oke({ name })`), or from a module you still `.adopt({ bookings })`.
 
 Type `createClient` with that `App` (or ambient `Register` after `oke-client.d.ts` regenerates).

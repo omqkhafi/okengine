@@ -90,7 +90,7 @@ export function HeroFxCode({ lines }: { readonly lines: ReadonlyArray<HeroCodeLi
               aria-hidden
               className="sently-dot-pulse size-1 rounded-full bg-fd-foreground/60"
             />
-            src/flows/notes/create.ts
+            src/flows/links/create.ts
           </span>
           <AnimatePresence mode="wait" initial={false}>
             <motion.span

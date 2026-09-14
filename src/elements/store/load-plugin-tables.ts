@@ -2,7 +2,7 @@
  * Load plugin table contributions from a live `oke()` app entry.
  *
  * Used by `oke db` emit so `.plug()`-registered `field.*` tables merge into
- * `schema.drizzle.ts` — not only at unit-test merge call sites.
+ * `drizzle.ts` — not only at unit-test merge call sites.
  */
 
 import { resolve } from "node:path";

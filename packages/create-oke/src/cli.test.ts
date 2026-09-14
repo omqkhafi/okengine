@@ -50,16 +50,16 @@ import {
 
 describe("withWizardExtras / withLocalesPgDog", () => {
   test("updates session defaults (reuse / customize)", () => {
-    const session = recommendedDefaults("docker-ready", "advanced");
+    const session = recommendedDefaults("docker-ready", "shorter");
     const next = withWizardExtras({
-      template: "advanced",
+      template: "shorter",
       locales: ["ar"],
       pgdog: true,
       proxy: "nginx",
       session,
       previous: null,
     });
-    expect(next.template).toBe("advanced");
+    expect(next.template).toBe("shorter");
     expect(next.locales).toEqual(["ar"]);
     expect(next.pgdog).toBe(true);
     expect(next.proxy).toBe("nginx");
@@ -68,13 +68,13 @@ describe("withWizardExtras / withLocalesPgDog", () => {
 
   test("updates previous settings when recommended has no session", () => {
     const previous = {
-      ...recommendedDefaults("docker-ready", "advanced"),
+      ...recommendedDefaults("docker-ready", "shorter"),
       locales: [] as const,
       pgdog: false,
       proxy: "none" as const,
     };
     const next = withLocalesPgDog({
-      template: "advanced",
+      template: "shorter",
       locales: ["ar", "fr"],
       pgdog: true,
       proxy: "traefik",
@@ -89,14 +89,14 @@ describe("withWizardExtras / withLocalesPgDog", () => {
 
   test("falls back to recommended pins when nothing is saved", () => {
     const next = withWizardExtras({
-      template: "standard",
+      template: "blank",
       locales: ["ar"],
       pgdog: true,
       proxy: "caddy",
       session: undefined,
       previous: null,
     });
-    expect(next.template).toBe("standard");
+    expect(next.template).toBe("blank");
     expect(next.locales).toEqual(["ar"]);
     expect(next.pgdog).toBe(true);
     expect(next.proxy).toBe("caddy");
@@ -117,18 +117,18 @@ describe("defaultsBranchOptions", () => {
 });
 
 describe("parseArgs", () => {
-  test("defaults template to standard", () => {
+  test("defaults template to blank", () => {
     const a = parseArgs(["my-app"]);
     expect(a.name).toBe("my-app");
-    expect(a.template).toBe("standard");
+    expect(a.template).toBe("blank");
     expect(a.templateExplicit).toBe(false);
   });
 
   test("accepts --template and -t", () => {
-    expect(parseArgs(["x", "--template", "standard"]).template).toBe("standard");
-    expect(parseArgs(["x", "-t", "advanced"]).template).toBe("advanced");
-    expect(parseArgs(["x", "--template=standard"]).template).toBe("standard");
-    expect(parseArgs(["x", "--template", "standard"]).templateExplicit).toBe(true);
+    expect(parseArgs(["x", "--template", "blank"]).template).toBe("blank");
+    expect(parseArgs(["x", "-t", "shorter"]).template).toBe("shorter");
+    expect(parseArgs(["x", "--template=blank"]).template).toBe("blank");
+    expect(parseArgs(["x", "--template", "blank"]).templateExplicit).toBe(true);
   });
 
   test("accepts --sql postgres (sqlite removed)", () => {
@@ -159,8 +159,8 @@ describe("shouldPrompt", () => {
     expect(shouldPrompt(parseArgs([]), false)).toBe(false);
     expect(shouldPrompt(parseArgs(["my-app"]), false)).toBe(false);
     expect(shouldPrompt(parseArgs(["my-app", "--yes"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["my-app", "--template", "standard"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["--template", "standard"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["my-app", "--template", "blank"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["--template", "blank"]), true)).toBe(false);
     expect(shouldPrompt(parseArgs(["--help"]), true)).toBe(false);
   });
 });
@@ -203,7 +203,7 @@ describe("parseArgs flags", () => {
 });
 
 describe("sourceFromArgs", () => {
-  test("uses the standard template", () => {
+  test("uses the default template", () => {
     expect(sourceFromArgs(parseArgs(["x"]))).toEqual({
       kind: "template",
       id: DEFAULT_TEMPLATE,
@@ -214,7 +214,7 @@ describe("sourceFromArgs", () => {
 function recommendedAnswers(overrides: Partial<InteractiveAnswers> = {}): InteractiveAnswers {
   return {
     name: "x",
-    choice: "standard",
+    choice: "blank",
     installAndRun: false,
     agentsMd: true,
     createDefaults: undefined,
@@ -244,20 +244,19 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
   test("interactive defaults to postgres SQL", () => {
     expect(scaffoldArgsFromAnswers(recommendedAnswers()).sqlDriver).toBe("postgres");
     expect(
-      scaffoldArgsFromCli(parseArgs(["x", "--template", "standard", "--sql", "postgres"]))
-        .sqlDriver,
+      scaffoldArgsFromCli(parseArgs(["x", "--template", "blank", "--sql", "postgres"])).sqlDriver,
     ).toBe("postgres");
   });
 
-  test("standard and advanced are available", () => {
-    expect(TEMPLATES).toEqual(["standard", "advanced"]);
+  test("blank and shorter are available", () => {
+    expect(TEMPLATES).toEqual(["blank", "shorter"]);
   });
 });
 
 describe("defaultsBranchOptions template hints", () => {
   test("reuse hint names the selected template", () => {
-    const reuse = defaultsBranchOptions(true, "advanced").find((o) => o.value === "reuse");
-    expect(reuse?.hint).toContain("advanced");
+    const reuse = defaultsBranchOptions(true, "shorter").find((o) => o.value === "reuse");
+    expect(reuse?.hint).toContain("shorter");
   });
 });
 
@@ -319,32 +318,7 @@ describe("interactive branches", () => {
       expect(config).not.toMatch(/^\s*sql:\s*\{/m);
       expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
       expect(existsSync(join(dir, "docker", "docker-compose.yml"))).toBe(true);
-      expect(existsSync(join(dir, "src", "flows", "notes", "create.ts"))).toBe(true);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("recommended advanced → advanced Notes flows + compose", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "oke-rec-adv-"));
-    rmSync(dir, { recursive: true, force: true });
-    try {
-      const code = await run([dir], {
-        stdinIsTTY: true,
-        runPostScaffold: false,
-        ask: async () => recommendedAnswers({ name: dir, choice: "advanced" }),
-      });
-      expect(code).toBe(0);
-      expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
-      expect(existsSync(join(dir, "src", "flows", "notes", "digest.ts"))).toBe(true);
-      expect(existsSync(join(dir, "src", "flows", "notes", "[id]", "attach.ts"))).toBe(true);
-      const digest = readFileSync(join(dir, "src", "flows", "notes", "digest.ts"), "utf8");
-      expect(digest).toContain('clock.every("notes.digest", "1d")');
-      const attach = readFileSync(join(dir, "src", "flows", "notes", "[id]", "attach.ts"), "utf8");
-      expect(attach).toContain("export const attach");
-      expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toMatch(
-        /index:\s*\{\s*test:\s*"memory",\s*prod:\s*"meilisearch"/,
-      );
+      expect(existsSync(join(dir, "src", "flows", "main", "health.ts"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -388,7 +362,7 @@ describe("interactive branches", () => {
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
       expect(config).toMatch(/vault:\s*\{\s*dev: "vault"/);
       const templateConfig = readFileSync(
-        join(resolveTemplateDir("standard"), "oke.config.ts"),
+        join(resolveTemplateDir("blank"), "oke.config.ts"),
         "utf8",
       );
       expect(() => applyCreateAnswers(templateConfig, saved)).not.toThrow();
@@ -402,7 +376,7 @@ describe("interactive branches", () => {
     const home = mkdtempSync(join(tmpdir(), "oke-custom-"));
     const path = createDefaultsPath(home);
     const customized = toCreateDefaults({
-      template: "standard",
+      template: "blank",
       profile: "docker-ready",
       drivers: {
         store: {
@@ -480,7 +454,7 @@ describe("transformPackageJson", () => {
   test("rewrites name and okengine file:../.. to installable ref", () => {
     const next = transformPackageJson(
       {
-        name: "@oke/template-standard",
+        name: "@oke/template-blank",
         private: true,
         dependencies: {
           okengine: "file:../..",
@@ -521,18 +495,9 @@ describe("transformConfigForSqlDriver", () => {
 });
 
 describe("template Vite web", () => {
-  test("proxies API paths and never steals GET / from the SPA", () => {
+  test("no starter ships a Vite web/", () => {
     for (const id of TEMPLATES) {
-      const config = readFileSync(join(resolveTemplateDir(id), "web/vite.config.ts"), "utf8");
-      expect(config).toContain('"/health"');
-      expect(config).toContain('"/notes"');
-      expect(config).toContain('"/_oke"');
-      expect(config).toContain("127.0.0.1:6530");
-      expect(config).not.toMatch(/proxy:\s*\{[^}]*["']\/["']/);
-      expect(config).not.toContain("cors: true");
-      expect(config).not.toContain("5173");
-      expect(config).toContain('from "vite"');
-      expect(config).toContain("@vitejs/plugin-react");
+      expect(existsSync(join(resolveTemplateDir(id), "web"))).toBe(false);
     }
   });
 });
@@ -589,8 +554,13 @@ describe("scaffold structure", () => {
         );
         const readme = readFileSync(join(result.targetDir, "README.md"), "utf8");
         expect(readme).toMatch(/oke dev/);
-        expect(readme).toMatch(new RegExp(`Notes \\(${id}\\)`, "i"));
-        expect(readme).toMatch(/notes\.(create|attach|digest)|main\.health/);
+        if (id === "blank") {
+          expect(readme).toMatch(/App \(blank\)/i);
+          expect(readme).toMatch(/main\.health/);
+        } else {
+          expect(readme).toMatch(/Shorter \(shorter\)/i);
+          expect(readme).toMatch(/links\.(create|redirect)|main\.health/);
+        }
         expect(readme).toMatch(/scaffold|Included vs you build/i);
         expect(readme).toMatch(/\.github\/workflows\/ci\.yml/);
         const gitignore = readFileSync(join(result.targetDir, ".gitignore"), "utf8");
@@ -613,7 +583,7 @@ describe("scaffold structure", () => {
         expect(appTs).not.toMatch(/Object\.assign/);
         expect(appTs).not.toMatch(/env:\s*["']test["']/);
         expect(appTs).not.toMatch(/stores:\s*\[/);
-        expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']/);
+        expect(appTs).toContain(`name: ${JSON.stringify(`app-${id}`)}`);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: {
@@ -642,15 +612,14 @@ describe("scaffold structure", () => {
         expect(pkg.dependencies["oxc-parser"]).toBe("^0.149.0");
         expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
         expect(pkg.scripts.typecheck).toContain("tsc --noEmit");
-        expect(pkg.scripts.typecheck).toContain("tsc -b -p web/tsconfig.json");
-        expect(pkg.scripts.web).toContain("vite --config web/vite.config.ts");
-        expect(pkg.scripts["web:build"]).toContain("tsc -b -p web/tsconfig.json");
         expect(pkg.scripts.test).toBe("bunx --bun oke test");
         expect(pkg.scripts.dev).toBe("bunx --bun oke dev");
-        expect(result.files).toContain("web/vite.config.ts");
-        expect(result.files).toContain("web/src/client.ts");
+        expect(pkg.scripts.typecheck).not.toContain("web/");
+        expect(pkg.scripts.web).toBeUndefined();
+        expect(pkg.scripts["web:build"]).toBeUndefined();
+        expect(pkg.devDependencies.vite).toBeUndefined();
+        expect(result.files.some((f) => f.startsWith("web/"))).toBe(false);
         expect(pkg.devDependencies.typescript).toBeTruthy();
-        expect(pkg.devDependencies.vite).toBe("^8.3.0");
         expect(pkg.devDependencies["@electric-sql/pglite"]).toBe("^0.5.8");
         expect(pkg.devDependencies["@electric-sql/pglite-pgvector"]).toBe("^0.0.9");
         const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
@@ -669,56 +638,132 @@ describe("scaffold structure", () => {
     }
   });
 
-  test("standard has Notes layout (core.ts + notes flows)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "create-oke-standard-assert-"));
+  test("blank has empty layout (no notes flows)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-blank-assert-"));
     try {
       const result = await scaffold({
-        targetDir: join(dir, "standard"),
-        name: "standard-app",
-        source: { kind: "template", id: "standard" },
+        targetDir: join(dir, "blank"),
+        name: "blank-app",
+        source: { kind: "template", id: "blank" },
       });
       for (const path of [
         "src/core.ts",
         "src/vault.ts",
         "src/locales/en.ts",
         "src/locales/index.ts",
-        "src/flows/main/shapes.ts",
-        "src/flows/main/signals.ts",
-        "src/flows/notes/create.ts",
-        "src/flows/notes/[id]/get.ts",
-        "src/db/schema.decl.ts",
+        "src/flows/main/health.ts",
+        "src/flows/main/route.ts",
+        "src/db/schema.ts",
         "src/db/seed/index.ts",
         "src/app.ts",
         ".vscode/settings.json",
       ]) {
         expect(result.files).toContain(path);
       }
-      expect(readFileSync(join(result.targetDir, ".vscode/settings.json"), "utf8")).toContain(
-        "terminal.integrated.env.windows",
+      expect(existsSync(join(result.targetDir, "src/flows/notes"))).toBe(false);
+      expect(readFileSync(join(result.targetDir, "src/db/schema.ts"), "utf8")).not.toMatch(
+        /store\.schema\.table\s*\(/,
       );
-      const create = readFileSync(join(result.targetDir, "src/flows/notes/create.ts"), "utf8");
-      const list = readFileSync(join(result.targetDir, "src/flows/notes/list.ts"), "utf8");
-      expect(create).toContain("export const create");
-      expect(list).toContain("fx.json.withQuery");
-      expect(existsSync(join(result.targetDir, "src/flows/notes/digest.ts"))).toBe(false);
-      expect(existsSync(join(result.targetDir, "src/locales/ar.ts"))).toBe(false);
-      expect(readFileSync(join(result.targetDir, "oke.config.ts"), "utf8")).toContain(
-        'locales: ["en"]',
+      expect(readFileSync(join(result.targetDir, "src/core.ts"), "utf8")).not.toContain(
+        "notesWrite",
       );
-      expect(readFileSync(join(result.targetDir, "oke.config.ts"), "utf8")).not.toMatch(
-        /^\s*pgdog:\s*"/m,
+      expect(readFileSync(join(result.targetDir, "src/app.ts"), "utf8")).toContain(
+        'name: "blank-app"',
       );
-      const appTsStandard = readFileSync(join(result.targetDir, "src/app.ts"), "utf8");
-      expect(appTsStandard).toContain('import "@/core"');
-      expect(appTsStandard).not.toContain('import "@/locales/');
-      expect(readFileSync(join(result.targetDir, "src/core.ts"), "utf8")).toContain(
-        'import "@/locales"',
+      expect(readFileSync(join(result.targetDir, "src/flows/main/route.ts"), "utf8")).toContain(
+        'app: "blank-app"',
       );
-      const all = result.files
-        .filter((f) => f.endsWith(".ts") || f.endsWith(".md"))
-        .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
-        .join("\n");
-      expect(all).not.toMatch(/\bbookings\b|\borders\b|\blinks\b|\bstripe\b/i);
+      expect(readFileSync(join(result.targetDir, "src/db/seed/index.ts"), "utf8")).toContain(
+        'name: "blank-app"',
+      );
+      expect(readFileSync(join(result.targetDir, "src/locales/en.ts"), "utf8")).not.toMatch(
+        /\bnotes\s*:/,
+      );
+      expect(existsSync(join(result.targetDir, "web"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("shorter has URL-shortener layout (gate + links flows)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-shorter-assert-"));
+    try {
+      const result = await scaffold({
+        targetDir: join(dir, "shorter"),
+        name: "shorter-app",
+        source: { kind: "template", id: "shorter" },
+      });
+      for (const path of [
+        "src/core/index.ts",
+        "src/core/store.ts",
+        "src/core/email.ts",
+        "src/core/gate.ts",
+        "src/core/vault.ts",
+        "src/core/ai.ts",
+        "src/locales/en.ts",
+        "src/locales/index.ts",
+        "src/flows/links/create.ts",
+        "src/flows/links/redirect.ts",
+        "src/flows/links/[code]/get.ts",
+        "src/flows/links/reach.ts",
+        "src/db/schema/index.ts",
+        "src/db/schema/links.ts",
+        "src/db/schema/daily.ts",
+        "src/db/schema/relations.ts",
+        "src/db/seed/index.ts",
+        "src/app.ts",
+        ".vscode/settings.json",
+      ]) {
+        expect(result.files).toContain(path);
+      }
+      expect(existsSync(join(result.targetDir, "src/flows/notes"))).toBe(false);
+      expect(existsSync(join(result.targetDir, "web"))).toBe(false);
+      expect(readFileSync(join(result.targetDir, "src/app.ts"), "utf8")).toContain(
+        'name: "shorter-app"',
+      );
+      expect(readFileSync(join(result.targetDir, "src/app.ts"), "utf8")).toContain(
+        "emailAndPassword",
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/gate.ts"), "utf8")).toContain(
+        "linksMutate",
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/gate.ts"), "utf8")).toContain(
+        "linksRedirect",
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/email.ts"), "utf8")).toContain(
+        "linkCreatedMail",
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/store.ts"), "utf8")).toContain(
+        "store.sql",
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/index.ts"), "utf8")).toContain(
+        'export * from "./store.ts"',
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/index.ts"), "utf8")).toContain(
+        'export * from "./ai.ts"',
+      );
+      expect(readFileSync(join(result.targetDir, "src/core/ai.ts"), "utf8")).toContain(
+        "oke ai setup",
+      );
+      expect(existsSync(join(result.targetDir, "src/db/schema.ts"))).toBe(false);
+      expect(readFileSync(join(result.targetDir, "src/db/schema/index.ts"), "utf8")).toContain(
+        'export * from "./links.ts"',
+      );
+      expect(readFileSync(join(result.targetDir, "src/db/schema/links.ts"), "utf8")).toMatch(
+        /store\.schema\.table\(\s*"links"/,
+      );
+      expect(readFileSync(join(result.targetDir, "src/locales/en.ts"), "utf8")).toMatch(
+        /\blinks\s*:/,
+      );
+      expect(readFileSync(join(result.targetDir, "src/locales/en.ts"), "utf8")).not.toMatch(
+        /\bnotes\s*:/,
+      );
+      const createTs = readFileSync(join(result.targetDir, "src/flows/links/create.ts"), "utf8");
+      expect(createTs).toContain("fx.json.create(row)");
+      expect(createTs).not.toContain("toLinkOut");
+      expect(readFileSync(join(result.targetDir, "src/flows/links/list.ts"), "utf8")).toContain(
+        "fx.json.withQuery(rows, input)",
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -730,7 +775,7 @@ describe("scaffold structure", () => {
       const result = await scaffold({
         targetDir: join(dir, "i18n-app"),
         name: "i18n-app",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "blank" },
         locales: ["ar", "fr"],
       });
       expect(result.locales).toEqual(["ar", "fr"]);
@@ -758,7 +803,7 @@ describe("scaffold structure", () => {
       const off = await scaffold({
         targetDir: join(dir, "no-pool"),
         name: "no-pool",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "blank" },
         pgdog: false,
       });
       expect(off.pgdog).toBe(false);
@@ -769,7 +814,7 @@ describe("scaffold structure", () => {
       const on = await scaffold({
         targetDir: join(dir, "with-pool"),
         name: "with-pool",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "blank" },
         pgdog: true,
       });
       expect(on.pgdog).toBe(true);
@@ -789,7 +834,7 @@ describe("scaffold structure", () => {
       const caddy = await scaffold({
         targetDir: join(dir, "with-caddy"),
         name: "with-caddy",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "blank" },
         proxy: "caddy",
       });
       expect(caddy.proxy).toBe("caddy");
@@ -801,7 +846,7 @@ describe("scaffold structure", () => {
       const nginx = await scaffold({
         targetDir: join(dir, "with-nginx"),
         name: "with-nginx",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "blank" },
         proxy: "nginx",
       });
       expect(nginx.proxy).toBe("nginx");
@@ -820,17 +865,21 @@ describe("scaffold structure", () => {
       const result = await scaffold({
         targetDir: join(dir, "pg-app"),
         name: "pg-app",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "shorter" },
         sqlDriver: "postgres",
       });
       expect(result.sqlDriver).toBe("postgres");
-      const decl = readFileSync(join(result.targetDir, "src/db/schema.decl.ts"), "utf8");
+      const decl = readFileSync(join(result.targetDir, "src/db/schema/links.ts"), "utf8");
       expect(decl).toContain("store.schema.table(");
       expect(decl).not.toContain("sqliteTable");
       expect(decl).not.toContain("pgTable");
+      expect(existsSync(join(result.targetDir, "src/db/schema.ts"))).toBe(false);
+      expect(readFileSync(join(result.targetDir, "src/db/schema/index.ts"), "utf8")).toContain(
+        'export * from "./links.ts"',
+      );
       const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
       expect(drizzle).toContain('dialect: "postgresql"');
-      expect(drizzle).toContain("schema.drizzle.ts");
+      expect(drizzle).toContain("drizzle/index.ts");
       expect(drizzle).toContain(".oke/schema/oke.ts");
       const config = readFileSync(join(result.targetDir, "oke.config.ts"), "utf8");
       // postgres is DRIVER_DEFAULTS — sparse templates omit the sql map entirely.
@@ -845,9 +894,9 @@ describe("scaffold structure", () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-no-agents-"));
     try {
       const result = await scaffold({
-        targetDir: join(dir, "standard"),
+        targetDir: join(dir, "blank"),
         name: "no-agents",
-        source: { kind: "template", id: "standard" },
+        source: { kind: "template", id: "blank" },
         writeAgentsMd: false,
       });
       expect(result.files).not.toContain("AGENTS.md");
@@ -939,7 +988,7 @@ describe("non-TTY CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "create-oke-flag-"));
     const target = join(root, "flag-app");
     try {
-      const code = await run([target, "--template", "standard", "--no-install"], {
+      const code = await run([target, "--template", "blank", "--no-install"], {
         stdinIsTTY: false,
         runPostScaffold: false,
       });
@@ -948,11 +997,11 @@ describe("non-TTY CLI", () => {
       expect(existsSync(join(target, "AGENTS.md"))).toBe(true);
       const result = {
         targetDir: target,
-        label: "standard",
+        label: "blank",
       };
       expect(nextStepsText(result)).toContain("bun run dev");
       expect(nextStepsText(result)).toContain("bunx oke");
-      expect(nextStepsText(result)).toContain("bun run web");
+      expect(nextStepsText(result)).not.toContain("bun run web");
       expect(nextStepsText(result)).toContain("bun install");
       expect(nextStepsText(result)).toContain("oke.omqkhafi.dev");
     } finally {

@@ -434,8 +434,8 @@ export function ensureAiApiKeyVaultSecret(cwd: string, apiKeyEnv: string): void 
 
 /**
  * Write AI model declarations into `src/core/ai.ts` when that split exists
- * (so a thin `src/core.ts` barrel stays a re-export), else `src/core.ts`,
- * else legacy `src/core/index.ts` + sidecar.
+ * (so a thin `src/core.ts` / `src/core/index.ts` barrel stays a re-export),
+ * else `src/core.ts`.
  *
  * @param cwd - Project root
  * @param input - Setup choices
@@ -445,23 +445,21 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
   const rendered = renderAiTs(input);
   const coreAiPath = join(cwd, "src", "core", "ai.ts");
   const coreTsPath = join(cwd, "src", "core.ts");
-  const legacyIndex = join(cwd, "src", "core", "index.ts");
+  const coreIndexPath = join(cwd, "src", "core", "index.ts");
+  const splitLayout =
+    existsSync(coreAiPath) || (!existsSync(coreTsPath) && existsSync(coreIndexPath));
 
-  if (existsSync(coreAiPath)) {
-    const existing = readFileSync(coreAiPath, "utf8");
-    writeFileSync(coreAiPath, resolveAiCoreSource(existing, rendered), "utf8");
+  if (splitLayout) {
+    mkdirSync(dirname(coreAiPath), { recursive: true });
+    const existing = existsSync(coreAiPath) ? readFileSync(coreAiPath, "utf8") : "";
+    writeFileSync(
+      coreAiPath,
+      existing ? resolveAiCoreSource(existing, rendered) : rendered,
+      "utf8",
+    );
     ensureCoreBarrelExportsAi(cwd);
     ensureCoreImported(cwd);
     return coreAiPath;
-  }
-
-  // Folder layout still in the wild — keep writing a sidecar.
-  if (!existsSync(coreTsPath) && existsSync(legacyIndex)) {
-    const aiTsPath = join(cwd, "src", "core", "ai.ts");
-    mkdirSync(dirname(aiTsPath), { recursive: true });
-    writeFileSync(aiTsPath, rendered, "utf8");
-    ensureLegacyAiImported(cwd);
-    return aiTsPath;
   }
 
   mkdirSync(dirname(coreTsPath), { recursive: true });
@@ -625,16 +623,25 @@ export function ensureNamedOkengineImport(source: string, name: string): string 
 }
 
 /**
- * Keep a `src/core.ts` barrel re-exporting `./core/ai.ts` after a split write.
+ * Keep a core barrel re-exporting the AI sidecar after a split write.
+ *
+ * `src/core.ts` → `./core/ai.ts`; `src/core/index.ts` → `./ai.ts`.
  *
  * @param cwd - Project root
  */
 function ensureCoreBarrelExportsAi(cwd: string): void {
   const coreTsPath = join(cwd, "src", "core.ts");
-  if (!existsSync(coreTsPath)) return;
-  const src = readFileSync(coreTsPath, "utf8");
-  if (/from\s+["']\.\/core\/ai/.test(src)) return;
-  writeFileSync(coreTsPath, `${src.trimEnd()}\nexport * from "./core/ai.ts";\n`, "utf8");
+  if (existsSync(coreTsPath)) {
+    const src = readFileSync(coreTsPath, "utf8");
+    if (/from\s+["']\.\/core\/ai(?:\.ts)?["']/.test(src)) return;
+    writeFileSync(coreTsPath, `${src.trimEnd()}\nexport * from "./core/ai.ts";\n`, "utf8");
+    return;
+  }
+  const coreIndexPath = join(cwd, "src", "core", "index.ts");
+  if (!existsSync(coreIndexPath)) return;
+  const src = readFileSync(coreIndexPath, "utf8");
+  if (/from\s+["']\.\/ai(?:\.ts)?["']/.test(src)) return;
+  writeFileSync(coreIndexPath, `${src.trimEnd()}\nexport * from "./ai.ts";\n`, "utf8");
 }
 
 /**
@@ -655,29 +662,4 @@ function ensureCoreImported(cwd: string): void {
     return;
   }
   writeFileSync(appPath, `import "@/core";\n${src}`, "utf8");
-}
-
-/**
- * Legacy `src/core/*` layout — side-effect import the AI sidecar.
- *
- * @param cwd - Project root
- */
-function ensureLegacyAiImported(cwd: string): void {
-  const candidates: ReadonlyArray<{ readonly rel: string; readonly importLine: string }> = [
-    { rel: "src/app.ts", importLine: `import "./core/ai";\n` },
-    { rel: "src/core/index.ts", importLine: `import "./ai";\n` },
-  ];
-  for (const { rel, importLine } of candidates) {
-    const path = join(cwd, rel);
-    if (!existsSync(path)) continue;
-    const src = readFileSync(path, "utf8");
-    if (
-      /from\s+["']\.\/(?:core\/)?ai["']/.test(src) ||
-      /import\s+["']\.\/(?:core\/)?ai["']/.test(src)
-    ) {
-      return;
-    }
-    writeFileSync(path, `${importLine}${src}`, "utf8");
-    return;
-  }
 }

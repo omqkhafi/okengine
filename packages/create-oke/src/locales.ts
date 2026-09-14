@@ -99,8 +99,8 @@ export function formatI18nConfig(locales: readonly string[]): string {
   return `i18n: { locales: [${list}], default: "en", dir: { ${dirBody} } }`;
 }
 
-/** Bundled Arabic catalog matching template `src/locales/en.ts` keys. */
-export const AR_LOCALE_SOURCE = `import { defineLocale } from "okengine";
+/** Bundled Arabic catalog matching Notes template `src/locales/en.ts` keys. */
+export const AR_LOCALE_SOURCE_NOTES = `import { defineLocale } from "okengine";
 import type { MessagesFor } from "okengine";
 import type { en } from "./en";
 
@@ -120,13 +120,105 @@ const ar = {
 defineLocale("ar", ar);
 `;
 
+/** Bundled Arabic catalog for blank / errors-only `en.ts`. */
+export const AR_LOCALE_SOURCE_BLANK = `import { defineLocale } from "okengine";
+import type { MessagesFor } from "okengine";
+import type { en } from "./en";
+
+const ar = {
+  errors: {
+    notFound: "غير موجود",
+    unauthorized: "غير مصرح",
+  },
+} satisfies MessagesFor<typeof en>;
+
+defineLocale("ar", ar);
+`;
+
+/** Bundled Arabic catalog matching Shorter template `src/locales/en.ts` keys. */
+export const AR_LOCALE_SOURCE_LINKS = `import { defineLocale } from "okengine";
+import type { MessagesFor } from "okengine";
+import type { en } from "./en";
+
+const ar = {
+  errors: {
+    notFound: "غير موجود",
+    unauthorized: "غير مصرح",
+  },
+  links: {
+    created: "تم إنشاء الرابط القصير «{code}».",
+    archived: "تم أرشفة الرابط.",
+    empty: "لا توجد روابط نشطة بعد.",
+    count: "{count, plural, zero {لا روابط} one {رابط واحد} two {رابطان} few {# روابط} many {# رابط} other {# رابط}}",
+    reach: "ملخص الوصول ليوم {day}.",
+  },
+} satisfies MessagesFor<typeof en>;
+
+defineLocale("ar", ar);
+`;
+
+/** @deprecated Prefer {@link localeFileSource} — Notes Arabic seed. */
+export const AR_LOCALE_SOURCE = AR_LOCALE_SOURCE_NOTES;
+
+/** English catalog shape used to seed extra locales. */
+export type LocaleCatalogKind = "blank" | "notes" | "links";
+
+/**
+ * Whether `src/locales/en.ts` declares a `notes` message namespace.
+ *
+ * @param enSource - English catalog source
+ */
+export function enCatalogHasNotes(enSource: string): boolean {
+  return /\bnotes\s*:\s*\{/.test(enSource);
+}
+
+/**
+ * Whether `src/locales/en.ts` declares a `links` message namespace.
+ *
+ * @param enSource - English catalog source
+ */
+export function enCatalogHasLinks(enSource: string): boolean {
+  return /\blinks\s*:\s*\{/.test(enSource);
+}
+
+/**
+ * Detect which message namespaces the English catalog declares.
+ *
+ * @param enSource - English catalog source
+ */
+export function enCatalogKind(enSource: string): LocaleCatalogKind {
+  if (enCatalogHasLinks(enSource)) return "links";
+  if (enCatalogHasNotes(enSource)) return "notes";
+  return "blank";
+}
+
 /**
  * Stub locale module — English strings as a translation starting point.
  *
  * @param tag - Locale tag (`fr`, `de`, …)
+ * @param catalog - Match Notes / Shorter / blank English catalogs
  */
-export function stubLocaleSource(tag: string): string {
+export function stubLocaleSource(tag: string, catalog: LocaleCatalogKind = "notes"): string {
   const id = tag.replaceAll("-", "_");
+  const domainBlock =
+    catalog === "notes"
+      ? `
+  notes: {
+    created: 'Note "{title}" was created.',
+    archived: "Note archived.",
+    empty: "No active notes yet.",
+    count: "{count, plural, =0 {no notes} one {# note} other {# notes}}",
+  },`
+      : catalog === "links"
+        ? `
+  links: {
+    created: 'Short link "{code}" was created.',
+    archived: "Link archived.",
+    empty: "No active links yet.",
+    count: "{count, plural, =0 {no links} one {# link} other {# links}}",
+    reach: "Reach digest for {day}.",
+  },`
+        : "";
   return `import { defineLocale } from "okengine";
 import type { MessagesFor } from "okengine";
 import type { en } from "./en";
@@ -136,13 +228,7 @@ const ${id} = {
   errors: {
     notFound: "Not found",
     unauthorized: "Unauthorized",
-  },
-  notes: {
-    created: 'Note "{title}" was created.',
-    archived: "Note archived.",
-    empty: "No active notes yet.",
-    count: "{count, plural, =0 {no notes} one {# note} other {# notes}}",
-  },
+  },${domainBlock}
 } satisfies MessagesFor<typeof en>;
 
 defineLocale(${JSON.stringify(tag)}, ${id});
@@ -153,10 +239,15 @@ defineLocale(${JSON.stringify(tag)}, ${id});
  * Resolve source for a locale tag (bundled seed or English stub).
  *
  * @param tag - Normalized locale tag
+ * @param catalog - Match Notes / Shorter / blank English catalogs
  */
-export function localeFileSource(tag: string): string {
-  if (tag === "ar") return AR_LOCALE_SOURCE;
-  return stubLocaleSource(tag);
+export function localeFileSource(tag: string, catalog: LocaleCatalogKind = "notes"): string {
+  if (tag === "ar") {
+    if (catalog === "links") return AR_LOCALE_SOURCE_LINKS;
+    if (catalog === "notes") return AR_LOCALE_SOURCE_NOTES;
+    return AR_LOCALE_SOURCE_BLANK;
+  }
+  return stubLocaleSource(tag, catalog);
 }
 
 /**
@@ -189,12 +280,18 @@ export function applyLocalesToProject(
   }
 
   const list = locales.map((l) => JSON.stringify(l)).join(", ");
-  const channelCandidates = ["src/core.ts", "src/core/channels.ts"] as const;
+  const channelCandidates = [
+    "src/core/email.ts",
+    "src/core/channel.ts",
+    "src/core/channels.ts",
+    "src/email.ts",
+    "src/core.ts",
+  ] as const;
   for (const rel of channelCandidates) {
     const channelsPath = join(targetDir, rel);
     if (!existsSync(channelsPath)) continue;
     const source = readFileSync(channelsPath, "utf8");
-    const next = source.replace(/locales:\s*\[[^\]]*\]/, `locales: [${list}]`);
+    const next = source.replace(/locales:\s*\[[^\]]*\]/g, `locales: [${list}]`);
     if (next !== source) {
       writeFileSync(channelsPath, next, "utf8");
       touched.push(rel);
@@ -204,6 +301,11 @@ export function applyLocalesToProject(
 
   const localesDir = join(targetDir, "src/locales");
   mkdirSync(localesDir, { recursive: true });
+
+  const enPath = join(localesDir, "en.ts");
+  const catalog: LocaleCatalogKind = existsSync(enPath)
+    ? enCatalogKind(readFileSync(enPath, "utf8"))
+    : "notes";
 
   // Remove non-English locale modules that are no longer selected.
   try {
@@ -221,7 +323,7 @@ export function applyLocalesToProject(
 
   for (const tag of extras) {
     const rel = `src/locales/${tag}.ts`;
-    writeFileSync(join(targetDir, rel), localeFileSource(tag), "utf8");
+    writeFileSync(join(targetDir, rel), localeFileSource(tag, catalog), "utf8");
     if (!touched.includes(rel)) touched.push(rel);
   }
 
@@ -285,7 +387,7 @@ export function replaceI18nConfig(source: string, locales: readonly string[]): s
 export function formatLocalesIndex(locales: readonly string[]): string {
   const imports = locales.map((l) => `import "./${l}";`).join("\n");
   return `/**
- * Message catalogs — imported once from \`src/core.ts\`.
+ * Message catalogs — imported once from \`@/core\`.
  * Add a sibling import when you add a locale file.
  */
 

@@ -3,6 +3,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { plugin } from "../../kernel/plugin.ts";
 import { createRecordingApi } from "../../kernel/registry.ts";
 import {
@@ -18,9 +21,13 @@ import {
   type SqlStoreHandle,
 } from "../store.ts";
 import {
+  discoverDeclareRel,
+  discoverGeneratedRel,
   emitDrizzleSource,
   GENERATED_SCHEMA_HEADER,
+  maybeEmitDomainSchema,
   mergeSchemaTables,
+  resolveEmitPaths,
   tablesFromPluginContributions,
 } from "./emit-drizzle.ts";
 
@@ -295,5 +302,176 @@ describe("store.schema RLS extras", () => {
     expect(notes.rls).toBe(true);
     expect(notes.policies).toBeUndefined();
     expect(emitDrizzleSource([notes], "postgres")).toContain("pgTable.withRLS");
+  });
+});
+
+describe("declare path discovery", () => {
+  test("schema.ts wins over schema/index.ts", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-decl-priority-"));
+    await mkdir(join(dir, "src", "db", "schema"), { recursive: true });
+    await writeFile(join(dir, "src", "db", "schema.ts"), "export {}\n");
+    await writeFile(join(dir, "src", "db", "schema", "index.ts"), "export {}\n");
+    expect(discoverDeclareRel(dir)).toBe("src/db/schema.ts");
+    expect(resolveEmitPaths(dir).declarePath).toBe(join(dir, "src/db/schema.ts"));
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("schema.decl.ts when schema.ts is absent", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-decl-prev-"));
+    await mkdir(join(dir, "src", "db", "schema"), { recursive: true });
+    await writeFile(join(dir, "src", "db", "schema.decl.ts"), "export {}\n");
+    await writeFile(join(dir, "src", "db", "schema", "index.ts"), "export {}\n");
+    expect(discoverDeclareRel(dir)).toBe("src/db/schema.decl.ts");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("schema/index.ts when single-file declare is absent", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-decl-folder-"));
+    await mkdir(join(dir, "src", "db", "schema"), { recursive: true });
+    await writeFile(join(dir, "src", "db", "schema", "index.ts"), "export {}\n");
+    expect(discoverDeclareRel(dir)).toBe("src/db/schema/index.ts");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("db.declare overrides discovery", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-decl-override-"));
+    await mkdir(join(dir, "src", "db", "schema"), { recursive: true });
+    await writeFile(join(dir, "src", "db", "schema.ts"), "export {}\n");
+    const resolved = resolveEmitPaths(dir, { declare: "src/db/schema/index.ts" });
+    expect(resolved.declarePath).toBe(join(dir, "src/db/schema/index.ts"));
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("drizzle/index.ts wins over drizzle.ts", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-gen-folder-"));
+    await mkdir(join(dir, "src", "db", "drizzle"), { recursive: true });
+    await writeFile(join(dir, "src", "db", "drizzle", "index.ts"), "export {}\n");
+    await writeFile(join(dir, "src", "db", "drizzle.ts"), "export {}\n");
+    expect(discoverGeneratedRel(dir, "src/db/schema.ts")).toBe("src/db/drizzle/index.ts");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("omitted generated is drizzle/index.ts even if older files exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-gen-default-"));
+    await mkdir(join(dir, "src", "db"), { recursive: true });
+    await writeFile(join(dir, "src", "db", "drizzle.ts"), "export {}\n");
+    await writeFile(join(dir, "src", "db", "schema.drizzle.ts"), "export {}\n");
+    expect(discoverGeneratedRel(dir, "src/db/schema.ts")).toBe("src/db/drizzle/index.ts");
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe("maybeEmitDomainSchema — barrel declare", () => {
+  test("emits from schema/index.ts without schema.ts", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-schema-folder-"));
+    const schemaDir = join(dir, "src", "db", "schema");
+    await mkdir(schemaDir, { recursive: true });
+    const oke = resolve(import.meta.dir, "../../index.ts");
+    await writeFile(
+      join(schemaDir, "posts.ts"),
+      `import { store, field } from ${JSON.stringify(oke)};
+export const posts = store.schema.table("posts", {
+  id: field.id().primaryKey(),
+  title: field.text().notNull(),
+});
+`,
+    );
+    await writeFile(join(schemaDir, "index.ts"), `export * from "./posts.ts";\n`);
+    const result = await maybeEmitDomainSchema({
+      cwd: dir,
+      dialect: "postgres",
+    });
+    expect(result.emitted).toBe(true);
+    expect(result.tableCount).toBe(1);
+    const generated = await readFile(join(dir, "src", "db", "drizzle", "posts.ts"), "utf8");
+    expect(generated).toContain('pgTable("posts"');
+    const barrel = await readFile(join(dir, "src", "db", "drizzle", "index.ts"), "utf8");
+    expect(barrel).toContain('export * from "./posts.ts"');
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("writes one file per table with FK import + relations", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-drizzle-split-"));
+    const schemaDir = join(dir, "src", "db", "schema");
+    await mkdir(schemaDir, { recursive: true });
+    const oke = resolve(import.meta.dir, "../../index.ts");
+    await writeFile(
+      join(schemaDir, "links.ts"),
+      `import { store, field } from ${JSON.stringify(oke)};
+export const links = store.schema.table("links", {
+  id: field.id().primaryKey(),
+  code: field.text().notNull().unique(),
+});
+`,
+    );
+    await writeFile(
+      join(schemaDir, "daily.ts"),
+      `import { store, field } from ${JSON.stringify(oke)};
+import { links } from "./links.ts";
+export const daily = store.schema.table("daily", {
+  id: field.id().primaryKey(),
+  code: field.text().notNull().references(() => links.code, { onDelete: "cascade" }),
+});
+`,
+    );
+    await writeFile(
+      join(schemaDir, "relations.ts"),
+      `import { store } from ${JSON.stringify(oke)};
+import { daily } from "./daily.ts";
+import { links } from "./links.ts";
+export const relations = store.schema.relations({ links, daily }, (r) => ({
+  links: { daily: r.many.daily({ from: r.links.code, to: r.daily.code }) },
+  daily: { link: r.one.links({ from: r.daily.code, to: r.links.code, optional: false }) },
+}));
+`,
+    );
+    await writeFile(
+      join(schemaDir, "index.ts"),
+      `export * from "./links.ts";
+export * from "./daily.ts";
+export * from "./relations.ts";
+`,
+    );
+    const result = await maybeEmitDomainSchema({ cwd: dir, dialect: "postgres" });
+    expect(result.emitted).toBe(true);
+    expect(result.tableCount).toBe(2);
+    const daily = await readFile(join(dir, "src", "db", "drizzle", "daily.ts"), "utf8");
+    expect(daily).toContain('import { links } from "./links.ts"');
+    expect(daily).toContain(".references(() => links.code");
+    const rel = await readFile(join(dir, "src", "db", "drizzle", "relations.ts"), "utf8");
+    expect(rel).toContain("defineRelations({ links, daily }");
+    const barrel = await readFile(join(dir, "src", "db", "drizzle", "index.ts"), "utf8");
+    expect(barrel).toContain('export * from "./relations.ts"');
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("prunes stale generated files and drops sibling drizzle.ts", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-drizzle-prune-"));
+    const schemaDir = join(dir, "src", "db", "schema");
+    await mkdir(schemaDir, { recursive: true });
+    await mkdir(join(dir, "src", "db", "drizzle"), { recursive: true });
+    const oke = resolve(import.meta.dir, "../../index.ts");
+    await writeFile(
+      join(schemaDir, "posts.ts"),
+      `import { store, field } from ${JSON.stringify(oke)};
+export const posts = store.schema.table("posts", {
+  id: field.id().primaryKey(),
+});
+`,
+    );
+    await writeFile(join(schemaDir, "index.ts"), `export * from "./posts.ts";\n`);
+    await writeFile(
+      join(dir, "src", "db", "drizzle.ts"),
+      `// generated by oke — do not edit\nexport const stale = true;\n`,
+    );
+    await writeFile(
+      join(dir, "src", "db", "drizzle", "gone.ts"),
+      `// generated by oke — do not edit\nexport const gone = true;\n`,
+    );
+    await maybeEmitDomainSchema({ cwd: dir, dialect: "postgres" });
+    expect(await Bun.file(join(dir, "src", "db", "drizzle.ts")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "src", "db", "drizzle", "gone.ts")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "src", "db", "drizzle", "posts.ts")).exists()).toBe(true);
+    await rm(dir, { recursive: true, force: true });
   });
 });

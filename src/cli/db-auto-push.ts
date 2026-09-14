@@ -11,8 +11,8 @@ export const DB_AUTO_PUSH_DEBOUNCE_MS = 300;
  * Whether a watched path should trigger `oke db push`.
  *
  * Inputs only: declaration / drizzle config / app entry. Never the emit
- * output (`schema.drizzle.ts`) — push rewrites that file every run, so
- * watching it loops `oke db push` forever under `oke dev`.
+ * output (`src/db/drizzle/`) — push rewrites those files every run, so
+ * watching them loops `oke db push` forever under `oke dev`.
  *
  * @param filename - Relative path from the watcher (may be undefined)
  */
@@ -21,8 +21,10 @@ export function isDomainSchemaWatchPath(filename: string | null | undefined): bo
   const normalized = filename.replace(/\\/g, "/");
   const base = basename(normalized);
   // Emit output — never a watch trigger (feedback loop with `oke db push`).
+  if (base === "drizzle.ts" || base === "drizzle.tsx") return false;
   if (base === "schema.drizzle.ts" || base === "schema.drizzle.tsx") return false;
   if (base === "schema.generated.ts" || base === "schema.generated.tsx") return false;
+  if (/(^|\/)drizzle\/.+\.tsx?$/.test(normalized)) return false;
   if (base === "schema.ts" || base === "schema.tsx") return true;
   if (base === "schema.decl.ts" || base === "schema.decl.tsx") return true;
   if (base === "drizzle.config.ts" || base === "drizzle.config.js") return true;
@@ -30,6 +32,8 @@ export function isDomainSchemaWatchPath(filename: string | null | undefined): bo
   if (base === "app.ts" || base === "app.tsx") return true;
   // Nested domain schemas commonly live under src/**/schema.ts (not emit output).
   if (/(^|\/)schema(\.decl)?\.tsx?$/.test(normalized)) return true;
+  // Split declare modules: `src/db/schema/links.ts` next to `schema/index.ts`.
+  if (/(^|\/)schema\/.+\.tsx?$/.test(normalized)) return true;
   return false;
 }
 

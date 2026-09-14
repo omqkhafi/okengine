@@ -69,7 +69,7 @@ describe("generateAdoptBarrel", () => {
         'export const create = "notes-flow";\n',
       );
       const result = await generateAdoptBarrel({ rootDir: root });
-      const generatedPath = join(root, "src/flows/generated.ts");
+      const generatedPath = join(root, "src/flows/index.ts");
       await mkdir(join(root, "node_modules/okengine"), { recursive: true });
       await writeFile(
         join(root, "node_modules/okengine/package.json"),
@@ -173,10 +173,64 @@ describe("generateAdoptBarrel", () => {
     }
   });
 
+  test("writeAdoptBarrel unlinks leftover generated.ts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oke-adopt-prev-"));
+    try {
+      await mkdir(join(root, "src/flows"), { recursive: true });
+      const prev = join(root, "src/flows/generated.ts");
+      await writeFile(prev, "// old\n");
+      expect((await writeAdoptBarrel(root, "// new\n")).written).toBe(true);
+      expect(await Bun.file(join(root, "src/flows/index.ts")).text()).toBe("// new\n");
+      expect(await Bun.file(prev).exists()).toBe(false);
+      await writeFile(prev, "// leftover\n");
+      expect((await writeAdoptBarrel(root, "// new\n")).written).toBe(false);
+      expect(await Bun.file(prev).exists()).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("import specifiers stay POSIX when the walked path used backslash", () => {
     const spec = importSpecifierFromWalked("notes\\[id]\\get.ts");
     expect(spec).toBe("./notes/[id]/get.ts");
     expect(spec.includes("\\")).toBe(false);
+  });
+
+  test("signals.ts on() consumers join the unit; signal.once decls do not", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oke-adopt-signals-"));
+    try {
+      await mkdir(join(root, "src/flows/links"), { recursive: true });
+      await writeFile(
+        join(root, "src/flows/links/create.ts"),
+        "export const create = on(http.post(), flow({ do: () => 1 }));\n",
+      );
+      await writeFile(
+        join(root, "src/flows/links/signals.ts"),
+        [
+          'export const linkCreated = signal.once("link-created");',
+          "export const onCreated = on(",
+          "  linkCreated,",
+          '  flow("links.onCreated", { do: () => 1 }),',
+          ");",
+          "export const onClicked = on(",
+          "  linkClicked,",
+          '  flow("links.onClicked", { do: () => 1 }),',
+          ");",
+        ].join("\n"),
+      );
+      await writeFile(join(root, "src/flows/links/shapes.ts"), "export const LinkOut = 1;\n");
+      const result = await generateAdoptBarrel({ rootDir: root });
+      expect(result.source).toContain('from "./links/signals.ts"');
+      expect(result.source).toContain("links_signals.onCreated");
+      expect(result.source).toContain("links_signals.onClicked");
+      expect(result.source).toContain('"/links/on-created"');
+      expect(result.source).toContain('"/links/on-clicked"');
+      expect(result.source).not.toContain("linkCreated");
+      expect(result.source).not.toContain("LinkOut");
+      expect(result.source).not.toContain("shapes.ts");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("[...slug] unit adds the * client-key comment", async () => {

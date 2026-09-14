@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { z } from "zod";
 
 import { db, member, projectAdminWrite } from "@/core";
-import { projectUpdates, projects, sections } from "@/db/schema.decl";
+import { projectUpdates, projects, sections } from "@/db/schema";
 import { projectUpdatesZod, projectsZod, sectionsZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
 import { IdIn, IdOut, NotFound, Ok } from "@/lib/shapes";

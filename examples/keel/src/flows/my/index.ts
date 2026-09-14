@@ -1,7 +1,7 @@
 import { on, flow, http } from "okengine";
 
 import { db, member, plannerAgent } from "@/core";
-import { taskAssignees, tasks } from "@/db/schema.decl";
+import { taskAssignees, tasks } from "@/db/schema";
 import { listIn, pageOut, queryPage } from "@/lib/http";
 import { TaskOut } from "@/flows/tasks/shapes";
 

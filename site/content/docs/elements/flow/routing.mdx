@@ -6,8 +6,8 @@ source: "docs/spec/unified-theory.md"
 ---
 
 HTTP routes are inferred from where a Flow file lives. Put `http.get()` in
-`src/flows/notes/[id]/get.ts` and the compiler stamps `GET /notes/:id`, names the
-Flow `notes.get`, and the client calls `api.notes.get({ id })`.
+`src/flows/links/[code]/get.ts` and the compiler stamps `GET /links/:code`, names the
+Flow `links.get`, and the client calls `api.links.get({ code })`.
 
 <Callout title="The one rule">
   On a tree file, omit path and name: `on(http.get(), flow({ do }))`. The file
@@ -22,8 +22,9 @@ Flow `notes.get`, and the client calls `api.notes.get({ id })`.
 | **HTTP path** | Tree file under `src/flows/<unit>/` — `http.get()`, `http.post()`, … | Barrel `index.ts`; a public URL that must not match the folder; `http.resource(path, ops)`; custom live SSE path |
 | **Flow name** | Same tree file — `flow({ do })` stamps `unit.export`                 | Barrel (optional — export still stamps); stable name across moves; call-only Flow you `fx.call` by name          |
 
-**Consequence:** most app code looks like the create-oke template —
-`http.get().public()` + `flow({ … })` — with no string path and no string name.
+**Consequence:** create-oke `shorter` is this tree — `http.get()` + `flow({ … })` with no
+string path and no string name, except where the public URL must not follow the folder
+(`GET /:code`).
 
 ## Smallest Example
 
@@ -32,14 +33,15 @@ Flow `notes.get`, and the client calls `api.notes.get({ id })`.
 <Step>
 ### Place the file in the tree
 
-`oke dev` / `oke build` regenerate `src/flows/generated.ts`. Import it before
+`oke dev` / `oke build` regenerate `src/flows/index.ts`. Import it before
 `oke()` so pathless triggers receive their stamp:
 
 ```typescript title="src/app.ts"
-import "@/flows/generated";
-import { oke } from "okengine";
+import "@/core";
+import "@/flows";
+import { oke } from "okengine/http";
 
-export const app = oke({ name: "notes" });
+export const app = oke({ name: "app" });
 ```
 
 </Step>
@@ -47,20 +49,20 @@ export const app = oke({ name: "notes" });
 <Step>
 ### Use pathless `http.get()`
 
-The tree stamps `GET /notes/:id`. `:id` merges into `in`. The export name is the
-client method (`api.notes.get`):
+The tree stamps `GET /links/:code`. `:code` merges into `in`. The export name is the
+client method (`api.links.get`):
 
-```typescript title="src/flows/notes/[id]/get.ts"
+```typescript title="src/flows/links/[code]/get.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const get = on(
   http.get({
-    in: z.object({ id: z.string() }),
-    out: z.object({ id: z.string() }),
+    in: z.object({ code: z.string() }),
+    out: z.object({ code: z.string(), url: z.string() }),
   }),
   flow({
-    do: async ({ id }) => ({ id }),
+    do: async ({ code }) => ({ code, url: "https://example.com" }),
   }),
 );
 ```
@@ -71,14 +73,14 @@ export const get = on(
 ### Call the endpoint
 
 ```bash
-curl -X GET http://localhost:6530/notes/n_1 -H "accept: application/json"
+curl -X GET http://localhost:6530/links/ok -H "accept: application/json"
 ```
 
 Response:
 
 ```json
 {
-  "data": { "id": "n_1" },
+  "data": { "code": "ok", "url": "https://example.com" },
   "error": null
 }
 ```
@@ -95,16 +97,17 @@ Response:
 
 ## Progressive Patterns
 
-From a pathless tree file to an explicit barrel, an action leaf, and a catch-all:
+From a pathless tree file to an explicit barrel, an action leaf, and a public URL that must
+not follow the folder:
 
-<Tabs items={["Tree", "Barrel", "Action", "Catch-all"]}>
+<Tabs items={["Tree", "Barrel", "Action", "Override"]}>
 
 <Tab value="Tree">
 
 One file per route. Skip the path argument. The generated barrel calls
 `stampHttpPath` / `stampFlowName` after import:
 
-```typescript title="src/flows/notes/list.ts"
+```typescript title="src/flows/links/list.ts"
 import { on, flow, http } from "okengine";
 
 export const list = on(
@@ -115,7 +118,7 @@ export const list = on(
 );
 ```
 
-Stamped to `GET /notes`, Flow `notes.list`, client `api.notes.list()`.
+Stamped to `GET /links`, Flow `links.list`, client `api.links.list()`.
 
 </Tab>
 
@@ -124,21 +127,21 @@ Stamped to `GET /notes`, Flow `notes.list`, client `api.notes.list()`.
 A unit that is **only** `index.ts` (plus skip-list files) is a barrel. The
 generated file re-exports it **without** stamping — pass explicit paths:
 
-```typescript title="src/flows/notes/index.ts"
+```typescript title="src/flows/links/index.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const list = on(
-  http.get("/notes").public(),
-  flow("notes.list", {
+  http.get("/links").public(),
+  flow("links.list", {
     do: () => [],
   }),
 );
 
 export const create = on(
-  http.post("/notes", { in: z.object({ title: z.string().min(1) }) }),
-  flow("notes.create", {
-    do: async ({ title }, fx) => ({ id: fx.id(), title }),
+  http.post("/links", { in: z.object({ url: z.string().url() }) }),
+  flow("links.create", {
+    do: async ({ url }, fx) => ({ id: fx.id(), url }),
   }),
 );
 ```
@@ -151,25 +154,48 @@ Pathless `http.get()` inside a barrel stays unresolved and fails boot
 <Tab value="Action">
 
 A leaf that is not reserved **adds** a segment. `archive.ts` is
-`POST /notes/:id/archive`, not `POST /notes/:id`:
+`POST /links/:code/archive`, not `POST /links/:code`:
 
-```typescript title="src/flows/notes/[id]/archive.ts"
+```typescript title="src/flows/links/[code]/archive.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const archive = on(
-  http.post({ in: z.object({ id: z.string() }) }),
+  http.post({ in: z.object({ code: z.string() }) }),
   flow({
-    do: async ({ id }) => ({ id, archived: true }),
+    do: async ({ code }) => ({ code, archived: true }),
   }),
 );
 ```
 
 </Tab>
 
-<Tab value="Catch-all">
+<Tab value="Override">
 
-`[...slug]` becomes `*` on the URL. The request param is always `"*"`, never
+Pass the path when the folder would stamp the wrong URL. `redirect.ts` would be
+`GET /links/redirect`. Short URLs must be root-level:
+
+```typescript title="src/flows/links/redirect.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const redirect = on(
+  http.get("/:code", { in: z.object({ code: z.string() }) }).public(),
+  flow({
+    do: async ({ code }) =>
+      new Response(null, { status: 302, headers: { Location: `https://example.com/${code}` } }),
+  }),
+);
+```
+
+The tree never overwrites an explicit path. Static `/health` · `/links` · `/auth`
+still win over `/:code`.
+
+</Tab>
+
+</Tabs>
+
+Catch-all `[...slug]` becomes `*` on the URL. The request param is always `"*"`, never
 `slug`:
 
 ```typescript title="src/flows/docs/[...slug]/get.ts"
@@ -192,56 +218,59 @@ curl -X GET http://localhost:6530/docs/getting-started/install \
 `do` receives `{ "*": "getting-started/install" }`. Call
 `api.docs.get({ "*": "a/b/c" })` — not `{ slug }`.
 
-</Tab>
-
-</Tabs>
-
 ## Convention Reference
 
-| Convention    | File                                    | Stamped route             | Client                         |
-| ------------- | --------------------------------------- | ------------------------- | ------------------------------ |
-| Dynamic param | `notes/[id]/get.ts` + `http.get()`      | `GET /notes/:id`          | `api.notes.get({ id })`        |
-| Reserved leaf | `notes/list.ts` + `http.get()`          | `GET /notes`              | `api.notes.list()`             |
-| Action leaf   | `notes/[id]/archive.ts` + `http.post()` | `POST /notes/:id/archive` | `api.notes.archive({ id })`    |
-| Catch-all     | `docs/[...slug]/get.ts` + `http.get()`  | `GET /docs/*`             | `api.docs.get({ "*": "a/b" })` |
-| Route group   | `notes/(ops)/archive.ts`                | `/notes/archive`          | `api.notes.archive`            |
-| Root unit     | `main/health.ts` + `http.get()`         | `GET /health`             | `api.main.health()`            |
-| Folder root   | `main/route.ts` + `http.get()`          | `GET /`                   | `api.main.root()`              |
+| Convention    | File                                       | Stamped route               | Client                         |
+| ------------- | ------------------------------------------ | --------------------------- | ------------------------------ |
+| Dynamic param | `links/[code]/get.ts` + `http.get()`       | `GET /links/:code`          | `api.links.get({ code })`      |
+| Reserved leaf | `links/list.ts` + `http.get()`             | `GET /links`                | `api.links.list()`             |
+| Action leaf   | `links/[code]/archive.ts` + `http.post()`  | `POST /links/:code/archive` | `api.links.archive({ code })`  |
+| Explicit path | `links/redirect.ts` + `http.get("/:code")` | `GET /:code`                | `api.links.redirect({ code })` |
+| Catch-all     | `docs/[...slug]/get.ts` + `http.get()`     | `GET /docs/*`               | `api.docs.get({ "*": "a/b" })` |
+| Route group   | `links/(ops)/archive.ts`                   | `/links/archive`            | `api.links.archive`            |
+| Root unit     | `main/health.ts` + `http.get()`            | `GET /health`               | `api.main.health()`            |
+| Folder root   | `main/route.ts` + `http.get()`             | `GET /`                     | `api.main.root()`              |
 
 ## Units
 
 The first folder under `src/flows/` is the **client unit**. Nested folders and
 the leaf file build the URL. The `export const` name is the method on that unit.
 
+create-oke `-t shorter` ships this tree (`-t blank` is `main/` only):
+
 ```text
 src/flows/
-├── notes/                     # Unit: notes → api.notes.*
-│   ├── list.ts                # GET /notes          (reserved leaf)
-│   ├── create.ts              # POST /notes         (reserved leaf)
-│   ├── shapes.ts              # skipped (not a route)
-│   └── [id]/
-│       ├── get.ts             # GET /notes/:id
-│       └── archive.ts         # POST /notes/:id/archive
-├── billing/
-│   └── (checkout)/            # omitted from the URL
-│       └── charge.ts          # POST /billing/charge  (if http.post())
+├── links/                     # Unit: links → api.links.*
+│   ├── list.ts                # GET /links          (reserved leaf)
+│   ├── create.ts              # POST /links         (reserved leaf)
+│   ├── redirect.ts            # explicit GET /:code
+│   ├── expire.ts              # Clock — not HTTP
+│   ├── reach.ts               # Clock — not HTTP
+│   ├── shapes.ts              # skipped (contracts)
+│   ├── signals.ts             # skipped as a route; on() still joins the unit
+│   ├── _shared.ts             # skipped (_ prefix)
+│   └── [code]/
+│       ├── get.ts             # GET /links/:code
+│       ├── archive.ts         # POST /links/:code/archive
+│       └── report.ts          # GET /links/:code/report
 └── main/                      # Unit: main — prefix omitted from the URL
     ├── health.ts              # GET /health
-    └── route.ts               # GET /
+    ├── route.ts               # GET /
+    └── shapes.ts
 ```
 
 A file sitting directly in `src/flows/` (no unit folder) is not a route.
 
-Unit folder names must be valid JS identifiers (`notes`, `main`, `_` allowed
-inside; `my-notes` is skipped). Folders starting with `_`, `[`, or `(` are not
+Unit folder names must be valid JS identifiers (`links`, `main`, `_` allowed
+inside; `my-links` is skipped). Folders starting with `_`, `[`, or `(` are not
 units.
 
-**Consequence:** `export const getNote` from `get.ts` is `api.notes.getNote`, not
-`api.notes.get`. Match the export to the name you want on the client.
+**Consequence:** `export const getLink` from `get.ts` is `api.links.getLink`, not
+`api.links.get`. Match the export to the name you want on the client.
 
 ## Path Conventions
 
-**Default — pathless.** Omit the path so `generated.ts` stamps the URL from disk:
+**Default — pathless.** Omit the path so `src/flows/index.ts` stamps the URL from disk:
 
 ```typescript
 http.get(); // pending until stampHttpPath runs
@@ -252,7 +281,7 @@ own the route (barrel, public API shape, resource mount). The tree never
 overwrites an explicit path:
 
 ```typescript
-http.get("/organizations/:orgId/members/:memberId");
+http.get("/:code");
 ```
 
 Path params, query string, and JSON body still merge into one object checked by
@@ -260,7 +289,7 @@ Path params, query string, and JSON body still merge into one object checked by
 
 ### Dynamic parameters
 
-`[id]` → `:id`. The folder name is the param key. Declare the same key on `in`:
+`[code]` → `:code`. The folder name is the param key. Declare the same key on `in`:
 
 ```typescript title="src/flows/orgs/[orgId]/members/[memberId]/get.ts"
 import { on, flow, http } from "okengine";
@@ -290,10 +319,10 @@ A folder `(ops)` is omitted from the URL. Use it to group files without adding a
 segment:
 
 ```text
-src/flows/notes/(ops)/archive.ts  →  /notes/archive
+src/flows/links/(ops)/archive.ts  →  /links/archive
 ```
 
-`(ops)` never enters the Flow name either (`notes.archive`).
+`(ops)` never enters the Flow name either (`links.archive`).
 
 ### The `main` unit
 
@@ -307,35 +336,39 @@ src/flows/notes/(ops)/archive.ts  →  /notes/archive
 
 ### Skip list
 
-These files are never routes (walk skips them; path inference returns nothing):
+These files are never HTTP routes (path inference returns nothing). Walk skips
+them except `signals.ts`, which still contributes `on()` consumers:
 
-| Pattern                     | Why                                              |
-| --------------------------- | ------------------------------------------------ |
-| `generated.ts`              | Adopt barrel (`oke dev` / `oke build` writes it) |
-| `shapes.ts`                 | Shared Zod / contracts                           |
-| `signals.ts`                | Signal declarations                              |
-| `*.test.ts` / `*.test.tsx`  | Tests                                            |
-| `_` prefix (file or folder) | Private helpers (`notes/_lib/util.ts`)           |
+| Pattern                     | Why                                                       |
+| --------------------------- | --------------------------------------------------------- |
+| `src/flows/index.ts`        | Adopt barrel (`oke dev` / `oke build` writes it)          |
+| `shapes.ts`                 | Shared Zod / contracts                                    |
+| `signals.ts`                | Declarations. `on()` in the same file still join the unit |
+| `*.test.ts` / `*.test.tsx`  | Tests                                                     |
+| `_` prefix (file or folder) | Private helpers (`links/_shared.ts`)                      |
 
 Skip-list files may sit next to tree routes. They do **not** turn a tree into a
-barrel.
+barrel. Clock files (`expire.ts`, `reach.ts`) still join the unit — they are not
+HTTP unless they bind `http.*`.
 
 ## Reserved Leaves
 
-To avoid `/notes/get` and `/orders/list`, these filenames add **no** URL
+To avoid `/links/get` and `/orders/list`, these filenames add **no** URL
 segment — the same five CRUD names as `http.resource`, plus folder roots:
 
 | Leaf     | Typical trigger | Example file                        | Stamped path    |
 | -------- | --------------- | ----------------------------------- | --------------- |
-| `list`   | `http.get()`    | `notes/list.ts`                     | `/notes`        |
-| `create` | `http.post()`   | `notes/create.ts`                   | `/notes`        |
-| `get`    | `http.get()`    | `notes/[id]/get.ts`                 | `/notes/:id`    |
-| `update` | `http.patch()`  | `notes/[id]/update.ts`              | `/notes/:id`    |
-| `remove` | `http.delete()` | `notes/[id]/remove.ts`              | `/notes/:id`    |
-| `index`  | _(barrel only)_ | `notes/index.ts`                    | `/notes`        |
-| `route`  | any             | `notes/route.ts` or `main/route.ts` | `/notes` or `/` |
+| `list`   | `http.get()`    | `links/list.ts`                     | `/links`        |
+| `create` | `http.post()`   | `links/create.ts`                   | `/links`        |
+| `get`    | `http.get()`    | `links/[code]/get.ts`               | `/links/:code`  |
+| `update` | `http.patch()`  | `links/[code]/update.ts`            | `/links/:code`  |
+| `remove` | `http.delete()` | `links/[code]/remove.ts`            | `/links/:code`  |
+| `index`  | _(barrel only)_ | `links/index.ts`                    | `/links`        |
+| `route`  | any             | `links/route.ts` or `main/route.ts` | `/links` or `/` |
 
-Any other leaf **is** a segment: `query.ts` → `/notes/query`.
+Any other leaf **is** a segment: `query.ts` → `/links/query`. `redirect.ts` with
+pathless `http.get()` would stamp `/links/redirect` — pass `http.get("/:code")`
+instead.
 
 In a tree unit, do **not** add `index.ts` beside other route files — that is a
 generate error. Use `route.ts` (or `list.ts` / `create.ts`) for the collection
@@ -344,7 +377,7 @@ root.
 ## Barrel vs Tree
 
 `oke dev` / `oke build` scans each `src/flows/<unit>/` folder and writes
-`generated.ts`. Two shapes, never mixed:
+`src/flows/index.ts`. Two shapes, never mixed:
 
 <Tabs items={["Tree", "Barrel", "App entry"]}>
 
@@ -354,15 +387,15 @@ root.
 each file and stamps path + name:
 
 ```typescript
-const notes = {
-  get: stampHttpPath(stampFlowName(notes_$id$_get.get, "notes.get"), "/notes/:id"),
-  list: stampHttpPath(stampFlowName(notes_list.list, "notes.list"), "/notes"),
+const links = {
+  get: stampHttpPath(stampFlowName(links_$code$_get.get, "links.get"), "/links/:code"),
+  list: stampHttpPath(stampFlowName(links_list.list, "links.list"), "/links"),
 };
-export { notes };
-registerFlowUnits({ notes });
+export { links };
+registerFlowUnits({ links });
 ```
 
-`oke()` drains `registerFlowUnits` into `$routes`. `.adopt({ notes })` is
+`oke()` drains `registerFlowUnits` into `$routes`. `.adopt({ links })` is
 optional and additive.
 
 </Tab>
@@ -372,12 +405,12 @@ optional and additive.
 Only `index.ts` (+ skip-list). Re-export, no stamp:
 
 ```typescript
-import * as notes from "./notes/index.ts";
-export { notes };
-registerFlowUnits({ notes });
+import * as links from "./links/index.ts";
+export { links };
+registerFlowUnits({ links });
 ```
 
-Declare `http.get("/notes")` and `flow("notes.list", {…})` (or rely on adopt to
+Declare `http.get("/links")` and `flow("links.list", {…})` (or rely on adopt to
 stamp the name from the export). Pathless HTTP fails **OKE1040**.
 
 </Tab>
@@ -385,14 +418,15 @@ stamp the name from the export). Pathless HTTP fails **OKE1040**.
 <Tab value="App entry">
 
 ```typescript title="src/app.ts"
-import "@/flows/generated";
-import { oke } from "okengine";
+import "@/core";
+import "@/flows";
+import { oke } from "okengine/http";
 
-export const app = oke({ name: "notes" });
+export const app = oke({ name: "app" });
 export type App = typeof app;
 ```
 
-Do not edit `generated.ts` by hand. Adding a unit folder without regenerating
+Do not edit `src/flows/index.ts` by hand. Adding a unit folder without regenerating
 leaves a stale barrel — **OKE1030** in prod / `oke dev` with Compose.
 
 </Tab>
@@ -402,10 +436,10 @@ leaves a stale barrel — **OKE1030** in prod / `oke dev` with Compose.
 <Accordions>
 
 <Accordion title="Mixed barrel + tree">
-  `index.ts` plus `[id]/get.ts` (or any other route file) throws at generate:
+  `index.ts` plus `[code]/get.ts` (or any other route file) throws at generate:
 
 ```text
-Unit "notes" mixes a barrel index.ts with tree route files. Use only index.ts (barrel), or move the collection path to route.ts and keep [id]/ beside it.
+Unit "links" mixes a barrel index.ts with tree route files. Use only index.ts (barrel), or move the collection path to route.ts and keep [id]/ beside it.
 ```
 
 Fix: delete `index.ts` and use `list.ts` / `route.ts`, or fold every route into
@@ -417,7 +451,7 @@ Fix: delete `index.ts` and use `list.ts` / `route.ts`, or fold every route into
   Two files in the same unit cannot share an `export const` name:
 
 ```text
-Unit "notes" exports "get" from both list.ts and route.ts.
+Unit "links" exports "get" from both list.ts and route.ts.
 ```
 
 Rename one export. The client method is the export name, not the filename.
@@ -425,13 +459,13 @@ Rename one export. The client method is the export name, not the filename.
 </Accordion>
 
 <Accordion title="Unit-prefix drift">
-  `flow("tasks.get", {…})` living under `src/flows/notes/` throws:
+  `flow("tasks.get", {…})` living under `src/flows/links/` throws:
 
 ```text
-flow("tasks.…") in notes/get.ts does not match the folder "notes".
+flow("tasks.…") in links/get.ts does not match the folder "links".
 ```
 
-Use `flow("notes.get", {…})`, a nameless `flow({ do })` (stamped `notes.get`
+Use `flow("links.get", {…})`, a nameless `flow({ do })` (stamped `links.get`
 from the export), or move the file.
 
 </Accordion>
@@ -442,18 +476,18 @@ from the export), or move the file.
 
 Three names, one file:
 
-| Surface   | Source                                                              | Example                 |
-| --------- | ------------------------------------------------------------------- | ----------------------- |
-| HTTP path | File tree (default) or explicit `http.get("/x")`                    | `/notes/:id`            |
-| Flow name | `unit.export` from `flow({ do })` (default), or `flow("notes.get")` | `notes.get`             |
-| Client    | Unit folder + `export const`                                        | `api.notes.get({ id })` |
+| Surface   | Source                                                              | Example                   |
+| --------- | ------------------------------------------------------------------- | ------------------------- |
+| HTTP path | File tree (default) or explicit `http.get("/x")`                    | `/links/:code`            |
+| Flow name | `unit.export` from `flow({ do })` (default), or `flow("links.get")` | `links.get`               |
+| Client    | Unit folder + `export const`                                        | `api.links.get({ code })` |
 
 Nameless `flow({ do })` is the tree default — same rule as pathless HTTP. Pass
-`flow("notes.get")` only for control (stable name, barrel, or matching unit
+`flow("links.get")` only for control (stable name, barrel, or matching unit
 prefix). Wrong-unit prefixes fail generate.
 
-Non-HTTP files still join the unit. A signal consumer in `notes/on-created.ts`
-is `api.notes.onCreated` over RPC (`POST /_oke/notes/onCreated`), not HTTP.
+Non-HTTP files still join the unit. A signal consumer in `links/signals.ts` is
+`api.links.onCreated` over RPC (`POST /_oke/links/onCreated`), not HTTP.
 
 Signal / Clock consumers pass an explicit `flow("…")` name (**OKE1072** if nameless
 outside `src/flows/<unit>/`; **OKE1070** on collision). Clock may write `clock.every(…)`
@@ -469,11 +503,15 @@ All adopted HTTP bindings go into one matcher. Wrong method on a known path is
 | `"default"`       | yes     | Compiled RegExp (O(1) static map + per-bucket regex for `:id`). Falls back to Trie when a path includes `*` |
 | `"edge"`          |         | Linear scan, then Trie. No RegExp compile — cold-start / isolates                                           |
 
+Static paths win over `:param` on the same method (`GET /health` beats
+`GET /:code`), including the edge linear scan. `okengine/http` defaults to
+`"edge"`.
+
 p99 match stays under **1 ms** on the compiled matcher. You do not pick buckets
 by hand — a catch-all in the table selects Trie for the whole app.
 
 Duplicate `METHOD + path` fails boot (**OKE1041**), including a resource mount
-plus a handwritten `http.get("/notes")`.
+plus a handwritten `http.get("/links")`.
 
 ## Troubleshooting
 
@@ -481,8 +519,8 @@ plus a handwritten `http.get("/notes")`.
 
 <Accordion title="404 Not Found — route missing">
   No Flow is bound to that method + path. Check the explicit path, or for pathless routes the
-  file-tree stamp (`notes/[id]/get.ts` → `GET /notes/:id`). A bare `404` with body `Not Found` means
-  the router found no match.
+  file-tree stamp (`links/[code]/get.ts` → `GET /links/:code`). A bare `404` with body `Not Found`
+  means the router found no match.
 </Accordion>
 
 <Accordion title="405 Method Not Allowed on valid route">
@@ -492,8 +530,8 @@ plus a handwritten `http.get("/notes")`.
 
 <Accordion title="OKE1040 — pathless trigger never stamped">
   Cause: `Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.` Import
-  `@/flows/generated`, run `oke dev` / `oke build`, or pass `http.get("/…")`. Barrels do not stamp —
-  they need the explicit path.
+  `@/flows`, run `oke dev` / `oke build`, or pass `http.get("/…")`. Barrels do not stamp — they need
+  the explicit path.
 </Accordion>
 
 <Accordion title="OKE1030 — adopt barrel stale">
@@ -525,8 +563,8 @@ plus a handwritten `http.get("/notes")`.
 </Accordion>
 
 <Accordion title="422 — path param missing from in">
-  `[id]` stamps `:id`. `in` must declare `id` (same key). A schema that expects `userId` while the
-  path is `:id` fails validation before `do`.
+  `[code]` stamps `:code`. `in` must declare `code` (same key). A schema that expects `id` while the
+  path is `:code` fails validation before `do`.
 </Accordion>
 
 <Accordion title="Catch-all input is empty / wrong key">
@@ -537,7 +575,13 @@ plus a handwritten `http.get("/notes")`.
 
 <Accordion title="Unit mixes index.ts with tree files">
   Generate: `Unit "…" mixes a barrel index.ts with tree route files.` Use only `index.ts` (explicit
-  paths), or move the collection path to `route.ts` and keep `[id]/` beside it.
+  paths), or move the collection path to `route.ts` and keep `[code]/` beside it.
+</Accordion>
+
+<Accordion title="GET /:code swallowed /health">
+  Static paths win. If `/health` 404s, a catch-all `/:code` registered first on the edge matcher
+  used to win — upgrade. Shorter binds `GET /:code` as an explicit override; `GET /health` still
+  matches `main.health`.
 </Accordion>
 
 </Accordions>
@@ -545,7 +589,7 @@ plus a handwritten `http.get("/notes")`.
 ## Learn more
 
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, `http.resource`, live SSE
-- [Client](/docs/client/calling) — `api.notes.get`, REST vs RPC, `$routes`
+- [Client](/docs/client/calling) — `api.links.get`, REST vs RPC, `$routes`
 - [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045 · OKE1070 · OKE1072
 - [The Architecture](/docs/understand/the-architecture) — derived routes, no hand-written table
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the same trigger

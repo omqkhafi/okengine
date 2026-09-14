@@ -41,7 +41,7 @@ import {
   taskTags,
   tasks,
   views,
-} from "@/db/schema.decl";
+} from "@/db/schema";
 import {
   FEATURED_ACTIVITY,
   FEATURED_ASSIGNEES,

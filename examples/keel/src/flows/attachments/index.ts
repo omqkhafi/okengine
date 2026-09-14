@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, keelFiles, member } from "@/core";
-import { fileObjects, tasks } from "@/db/schema.decl";
+import { fileObjects, tasks } from "@/db/schema";
 import { fileObjectsZod } from "@/db/zod";
 import { listIn, pageOut } from "@/lib/http";
 import { IdIn, IdOut, NotFound, Ok } from "@/lib/shapes";

@@ -1,0 +1,34 @@
+import { defineConfig } from "okengine/config";
+
+/**
+ * Blank starter — Docker-first empty app.
+ * `oke dev` always uses Docker Compose (dev). Tests use PGLite / memory.
+ * Pin only driver keys that differ from `DRIVER_DEFAULTS` (see okengine/config).
+ */
+export default defineConfig({
+  db: {
+    declare: "src/db/schema.ts",
+    generated: "src/db/drizzle/index.ts",
+  },
+  drivers: {
+    // Built-in encrypted-at-rest store — lives in Postgres, no extra service.
+    // Default `vault.dev` is `"env"`; pin built-in for local Docker-first apps.
+    // `oke vault init` prints the master key; set OKE_VAULT_MASTER_KEY to unseal.
+    vault: {
+      dev: "vault",
+    },
+  },
+  images: {
+    store: {
+      sql: "postgres:18-alpine",
+      kv: "redis:8-alpine",
+      files: "rustfs/rustfs:1.0.0-rc.5",
+    },
+    channel: {
+      email: "axllent/mailpit:v1.31.1",
+    },
+    // pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57", // create-oke wizard / --pgdog
+    // proxy: "caddy:2-alpine", // or traefik:v3.7 / nginx:1.31-alpine
+  },
+  i18n: { locales: ["en"], default: "en" },
+});

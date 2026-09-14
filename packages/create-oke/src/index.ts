@@ -5,7 +5,7 @@
  * ```bash
  * bunx create-oke@latest my-app
  * bunx create-oke@latest my-app --yes
- * bunx create-oke@latest my-app --template standard
+ * bunx create-oke@latest my-app --template shorter
  * ```
  *
  * @module

@@ -3,6 +3,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { lte } from "drizzle-orm";
 import { timestamp, text, pgTable, integer } from "drizzle-orm/pg-core";
 import { pgliteDriver } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
@@ -21,11 +22,19 @@ describe("coerceTemporalBindValue", () => {
     expect((day as Date).getTime()).toBe(0);
   });
 
-  test("leaves non-temporal and non-number values alone", () => {
+  test("ISO datetime string → Date for TIMESTAMP and DATE", () => {
+    const at = coerceTemporalBindValue("TIMESTAMP", "2024-01-01T00:00:00.000Z");
+    expect(at).toBeInstanceOf(Date);
+    expect((at as Date).toISOString()).toBe("2024-01-01T00:00:00.000Z");
+
+    const day = coerceTemporalBindValue("DATE", "2024-01-01T00:00:00.000Z");
+    expect(day).toBeInstanceOf(Date);
+    expect((day as Date).toISOString()).toBe("2024-01-01T00:00:00.000Z");
+  });
+
+  test("leaves non-temporal and unparseable values alone", () => {
     expect(coerceTemporalBindValue("INTEGER", 42)).toBe(42);
-    expect(coerceTemporalBindValue("TIMESTAMP", "2024-01-01T00:00:00.000Z")).toBe(
-      "2024-01-01T00:00:00.000Z",
-    );
+    expect(coerceTemporalBindValue("TIMESTAMP", "not-an-instant")).toBe("not-an-instant");
     const d = new Date(5);
     expect(coerceTemporalBindValue("TIMESTAMP", d)).toBe(d);
     expect(coerceTemporalBindValue("TIMESTAMP", null)).toBe(null);
@@ -73,6 +82,17 @@ describe("prepareInsertRow / prepareUpdateRow — timestamp columns", () => {
     expect((prepared.created_at as Date).getTime()).toBe(42);
     expect(prepared.hits).toBe(7);
   });
+
+  test("abstract schema: insert coerces ISO datetime on timestamp columns", () => {
+    const prepared = prepareInsertRow(notes, {
+      id: "welcome",
+      createdAt: "2026-09-14T12:00:00.000Z",
+      archivedAt: null,
+    });
+    expect(prepared.created_at).toBeInstanceOf(Date);
+    expect((prepared.created_at as Date).toISOString()).toBe("2026-09-14T12:00:00.000Z");
+    expect(prepared.archived_at).toBe(null);
+  });
 });
 
 describe("SqlStoreHandle upsert — epoch-ms into timestamp (Postgres)", () => {
@@ -119,5 +139,38 @@ describe("SqlStoreHandle upsert — epoch-ms into timestamp (Postgres)", () => {
     const rows = await handle.select().from(notesTs);
     expect(rows).toHaveLength(1);
     expect(Number(rows[0]!.createdAt)).toBe(1);
+  });
+
+  test("select/update WHERE coerces epoch-ms on timestamp columns", async () => {
+    await handle.insert(notesTs).values({ id: "old", title: "old", createdAt: 1 });
+    await handle.insert(notesTs).values({ id: "new", title: "new", createdAt: 100 });
+
+    // Drizzle types timestamp `{ mode: "date" }` as Date; the store still
+    // coerces epoch-ms binds (`fx.clock.now()`) at WHERE compile time.
+    const before = 50 as unknown as Date;
+    const rows = await handle.select().from(notesTs).where(lte(notesTs.createdAt, before));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe("old");
+
+    const n = await handle
+      .update(notesTs)
+      .set({ title: "archived" })
+      .where(lte(notesTs.createdAt, before));
+    expect(n).toBe(1);
+    const archived = await handle.findById(notesTs, "old");
+    expect(archived?.title).toBe("archived");
+  });
+
+  test("upsert accepts ISO datetime strings without Postgres type error", async () => {
+    const first = await handle.upsert(
+      notesTs,
+      { id: "welcome" },
+      { id: "welcome", title: "Welcome", createdAt: "2026-09-14T12:00:00.000Z" },
+    );
+    expect(first.status).toBe("upserted");
+
+    const rows = await handle.select().from(notesTs);
+    expect(rows).toHaveLength(1);
+    expect(new Date(rows[0]!.createdAt as Date).toISOString()).toBe("2026-09-14T12:00:00.000Z");
   });
 });

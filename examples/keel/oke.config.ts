@@ -6,8 +6,7 @@ import { defineConfig } from "okengine/config";
  */
 export default defineConfig({
   db: {
-    declare: "src/db/schema.decl.ts",
-    generated: "src/db/schema.drizzle.ts",
+    generated: "src/db/drizzle/index.ts",
   },
   drivers: {
     store: {

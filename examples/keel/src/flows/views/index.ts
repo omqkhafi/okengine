@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { z } from "zod";
 
 import { db, member, projectAdminWrite, viewPrefsKv } from "@/core";
-import { sections, tasks, views } from "@/db/schema.decl";
+import { sections, tasks, views } from "@/db/schema";
 import { viewsZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
 import { IdOut, NotFound } from "@/lib/shapes";

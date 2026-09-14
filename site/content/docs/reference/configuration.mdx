@@ -212,13 +212,13 @@ Runs retention and redaction — **not** the same key as `drivers.runs`.
 
 Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated to `oke schema generate`.
 
-| Option      | Default                      | Meaning                                                                   |
-| ----------- | ---------------------------- | ------------------------------------------------------------------------- |
-| `autoPush`  | `true`                       | Auto-run `db push` on schema change under `oke dev`; forced off in `prod` |
-| `config`    | `"drizzle.config.ts"`        | Path to the drizzle-kit config                                            |
-| `declare`   | `"src/db/schema.decl.ts"`    | Abstract schema module (`store.schema.table` exports)                     |
-| `generated` | `"src/db/schema.drizzle.ts"` | Where `oke db` emits dialect Drizzle                                      |
-| `entry`     | `src/app.ts`                 | App entry for collecting plugin table contributions                       |
+| Option      | Default               | Meaning                                                                          |
+| ----------- | --------------------- | -------------------------------------------------------------------------------- |
+| `autoPush`  | `true`                | Auto-run `db push` on schema change under `oke dev`; forced off in `prod`        |
+| `config`    | `"drizzle.config.ts"` | Path to the drizzle-kit config                                                   |
+| `declare`   | auto                  | `schema.ts` (file) if present, else `schema/index.ts` (folder). Set to override. |
+| `generated` | auto                  | `src/db/drizzle/index.ts`. Set to override.                                      |
+| `entry`     | `src/app.ts`          | App entry for collecting plugin table contributions                              |
 
 ## topology
 

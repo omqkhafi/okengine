@@ -66,6 +66,11 @@ describe("channel declaration", () => {
     const order = mail.template("order-confirmed");
     expect(order.medium).toBe("email");
     expect(order.from).toBe("noreply@oke.dev");
+
+    const withCopy = mail.template("shipped", {
+      catalog: { en: { subject: "Shipped", text: "Go" } },
+    });
+    expect(withCopy.catalog?.en?.subject).toBe("Shipped");
   });
 });
 
@@ -238,6 +243,43 @@ describe("consent and i18n", () => {
     await runtime.send("hello", { to: "a@b.c", locale: "ar" });
     expect(inbox.entries[0]!.subject).toBe("مرحبا");
     expect(inbox.entries[0]!.text).toBe("أهلا");
+  });
+
+  test("template catalog interpolates without a separate catalog bag", async () => {
+    const inbox = createChannelInbox();
+    const hello = channel.email().template("hello-decl", {
+      catalog: {
+        en: { subject: "Hi {{name}}", text: "Hello {{name}}" },
+      },
+    });
+    const ping = channel.sms().template("ops.alert", {
+      catalog: { en: { text: "Disk {{pct}}%" } },
+    });
+    const runtime = createChannelRuntime({
+      templates: [hello, ping],
+      drivers: [openConsoleChannel({ inbox })],
+    });
+    await runtime.send("hello-decl", { to: "a@b.c", data: { name: "Ali" } });
+    expect(inbox.entries[0]!.subject).toBe("Hi Ali");
+    expect(inbox.entries[0]!.text).toBe("Hello Ali");
+    await runtime.send("ops.alert", { to: "+15551234567", data: { pct: 90 } });
+    expect(inbox.entries[1]!.text).toBe("Disk 90%");
+  });
+
+  test("oke({ channel.catalog }) overlays template catalog per locale", async () => {
+    const inbox = createChannelInbox();
+    const hello = channel.email().template("hello-overlay", {
+      catalog: { en: { subject: "From decl", text: "decl" } },
+    });
+    const runtime = createChannelRuntime({
+      templates: [hello],
+      drivers: [openConsoleChannel({ inbox })],
+      catalog: {
+        "hello-overlay": { en: { subject: "From overlay", text: "overlay" } },
+      },
+    });
+    await runtime.send("hello-overlay", { to: "a@b.c" });
+    expect(inbox.entries[0]!.subject).toBe("From overlay");
   });
 });
 

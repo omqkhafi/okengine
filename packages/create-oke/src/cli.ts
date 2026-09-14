@@ -1,8 +1,8 @@
 /**
- * `create-oke` CLI — standard|advanced Notes starters with recommended / reuse / customize.
+ * `create-oke` CLI — blank|shorter starters with recommended / reuse / customize.
  *
  * ```bash
- * bunx create-oke@latest <name> [--template standard|advanced]
+ * bunx create-oke@latest <name> [--template blank|shorter]
  * bunx create-oke@latest <name> --yes
  * bunx create-oke@latest   # interactive when stdin is a TTY
  * ```
@@ -122,16 +122,16 @@ export type DefaultsBranchOption = {
  */
 export function defaultsBranchOptions(
   hasPreviousForTemplate: boolean,
-  template: TemplateId = "standard",
+  template: TemplateId = DEFAULT_TEMPLATE,
 ): DefaultsBranchOption[] {
   const options: DefaultsBranchOption[] = [
     {
       value: "recommended",
       label: "Yes, use recommended defaults",
       hint:
-        template === "advanced"
-          ? "Notes · Docker-first pins · store.index"
-          : "Notes · Docker-first pins (postgres · redis · s3)",
+        template === "shorter"
+          ? "URL shortener · Docker-first pins (postgres · redis · s3)"
+          : "Empty app · Docker-first pins (postgres · redis · s3)",
     },
   ];
   if (hasPreviousForTemplate) {
@@ -144,7 +144,7 @@ export function defaultsBranchOptions(
   options.push({
     value: "customize",
     label: "No, customize settings",
-    hint: template === "standard" ? "dev/prod SQL · optional AI" : "dev/prod facets · optional AI",
+    hint: "dev/prod SQL · optional AI",
   });
   return options;
 }
@@ -408,7 +408,6 @@ Next steps:
   bunx oke schema generate   # system stubs → .oke/schema/oke.ts (also runs on db push)
   bun run dev                # app :6530 · Console :6533 · MCP :6535
                              # Windows: bunx oke dev  (PowerShell has no local oke on PATH)
-  bun run web                # Vite SPA — proxies /notes · /health to the app
 
 Docs: ${docsUrl("/docs")}
 `;
@@ -425,7 +424,7 @@ export function helpText(): string {
   return `create-oke — scaffold an okengine app
 
 Usage:
-  bunx create-oke@latest <name> [--template standard|advanced]
+  bunx create-oke@latest <name> [--template blank|shorter]
   bunx create-oke@latest <name> --yes
   bunx create-oke@latest          # interactive (TTY only)
 
@@ -450,7 +449,7 @@ Options:
 Template:
 ${templateLines}
 
-On a TTY: pick standard|advanced, then recommended defaults, customize
+On a TTY: pick blank|shorter, then recommended defaults, customize
 (Docker-first facets; store.index with none; AI setup Recommended /
 Customize / Off), optional locales + PgDog + proxy, or reuse when
 saved for that template. Reuse applies saved locales / PgDog / proxy
@@ -668,7 +667,7 @@ export async function askInteractiveAnswers(
     message: "Starter template",
     options: TEMPLATES.map((id) => ({
       value: id,
-      label: id === "standard" ? "standard" : "advanced",
+      label: id,
       hint: TEMPLATE_PURPOSES[id],
     })),
     initialValue: partial.template ?? DEFAULT_TEMPLATE,

@@ -7,7 +7,9 @@
     "**/*.svg",
     "**/oke-client.d.ts",
     "**/schema.drizzle.ts",
+    "**/db/drizzle.ts",
+    "**/db/drizzle/**",
     "**/schema.generated.ts",
-    "**/flows/generated.ts"
+    "**/src/flows/index.ts"
   ]
 }

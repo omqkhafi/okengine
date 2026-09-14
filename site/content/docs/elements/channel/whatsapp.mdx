@@ -53,6 +53,10 @@ const wa = channel.whatsapp();
 export const bookingReminder = wa.template("booking.reminder", {
   locales: ["en", "ar"],
   schema: z.object({ when: z.string(), place: z.string() }),
+  catalog: {
+    en: { text: "Reminder: {{when}} at {{place}}" },
+    ar: { text: "تذكير: {{when}} — {{place}}" },
+  },
 });
 ```
 
@@ -85,14 +89,12 @@ and SMS.
 Catalog typically supplies `text` (and optional `subject` where the transport uses it):
 
 ```typescript
-oke({
-  channel: {
-    catalog: {
-      "booking.reminder": {
-        en: { text: "Reminder: {{when}} at {{place}}" },
-        ar: { text: "تذكير: {{when}} — {{place}}" },
-      },
-    },
+export const bookingReminder = wa.template("booking.reminder", {
+  locales: ["en", "ar"],
+  schema: z.object({ when: z.string(), place: z.string() }),
+  catalog: {
+    en: { text: "Reminder: {{when}} at {{place}}" },
+    ar: { text: "تذكير: {{when}} — {{place}}" },
   },
 });
 ```
@@ -165,7 +167,7 @@ oke boot: unknown whatsapp channel driver "…"
 
 ### `.template(name, options?)`
 
-`description` · `locales` · `schema` — same as other mediums.
+`description` · `locales` · `schema` · `catalog` — same as other mediums.
 
 ## Troubleshooting
 

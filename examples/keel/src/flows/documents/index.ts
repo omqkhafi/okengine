@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { z } from "zod";
 
 import { db, documentSummaryPrompt, member, openaiKey } from "@/core";
-import { documents } from "@/db/schema.decl";
+import { documents } from "@/db/schema";
 import { documentsZod } from "@/db/zod";
 import { IdIn, IdOut, NotFound, Unavailable } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";

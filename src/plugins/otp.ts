@@ -94,11 +94,37 @@ export interface OtpAppModeOptions extends OtpBaseOptions {
 /** Options for {@link otp}. `mode` is mandatory — no auto-detect. */
 export type OtpOptions = OtpProviderModeOptions | OtpAppModeOptions;
 
+const OTP_EMAIL_BODIES = {
+  en: {
+    subject: "Your sign-in code",
+    text: "Your one-time sign-in code is: {{otp}}\n",
+    html: "<p>Your one-time sign-in code is:</p><p><strong>{{otp}}</strong></p>",
+  },
+  ar: {
+    subject: "رمز تسجيل الدخول",
+    text: "رمز تسجيل الدخول لمرة واحدة هو: {{otp}}\n",
+    html: '<p dir="rtl">رمز تسجيل الدخول لمرة واحدة هو:</p><p dir="rtl"><strong>{{otp}}</strong></p>',
+  },
+} as const;
+
+const OTP_SMS_BODIES = {
+  en: { text: "Your sign-in code is: {{otp}}" },
+  ar: { text: "رمز تسجيل الدخول: {{otp}}" },
+} as const;
+
+const OTP_WHATSAPP_BODIES = {
+  en: { text: "Your sign-in code is: {{otp}}" },
+  ar: { text: "رمز تسجيل الدخول: {{otp}}" },
+} as const;
+
+const OTP_EMAIL_SCHEMA = z.object({ email: z.string(), otp: z.string() });
+
 /** Email OTP template (app mode). */
 export const otpEmailTemplate = channel.email({ from: DEFAULT_FROM }).template("auth-otp-email", {
   description: "OTP sign-in code (email)",
-  schema: z.object({ email: z.string(), otp: z.string() }),
+  schema: OTP_EMAIL_SCHEMA,
   locales: ["en", "ar"],
+  catalog: OTP_EMAIL_BODIES,
 });
 
 /** SMS OTP template (app mode — plain message, not provider Verify). */
@@ -106,6 +132,7 @@ export const otpSmsTemplate = channel.sms().template("auth-otp-sms", {
   description: "OTP sign-in code (SMS)",
   schema: z.object({ phone: z.string(), otp: z.string() }),
   locales: ["en", "ar"],
+  catalog: OTP_SMS_BODIES,
 });
 
 /** WhatsApp OTP template (app mode). */
@@ -113,30 +140,14 @@ export const otpWhatsappTemplate = channel.whatsapp().template("auth-otp-whatsap
   description: "OTP sign-in code (WhatsApp)",
   schema: z.object({ phone: z.string(), otp: z.string() }),
   locales: ["en", "ar"],
+  catalog: OTP_WHATSAPP_BODIES,
 });
 
-/** Default EN/AR bodies for OTP templates. */
+/** Default EN/AR bodies for OTP templates (overlay / tests). */
 export const otpCatalog = {
-  "auth-otp-email": {
-    en: {
-      subject: "Your sign-in code",
-      text: "Your one-time sign-in code is: {{otp}}\n",
-      html: "<p>Your one-time sign-in code is:</p><p><strong>{{otp}}</strong></p>",
-    },
-    ar: {
-      subject: "رمز تسجيل الدخول",
-      text: "رمز تسجيل الدخول لمرة واحدة هو: {{otp}}\n",
-      html: '<p dir="rtl">رمز تسجيل الدخول لمرة واحدة هو:</p><p dir="rtl"><strong>{{otp}}</strong></p>',
-    },
-  },
-  "auth-otp-sms": {
-    en: { text: "Your sign-in code is: {{otp}}" },
-    ar: { text: "رمز تسجيل الدخول: {{otp}}" },
-  },
-  "auth-otp-whatsapp": {
-    en: { text: "Your sign-in code is: {{otp}}" },
-    ar: { text: "رمز تسجيل الدخول: {{otp}}" },
-  },
+  "auth-otp-email": OTP_EMAIL_BODIES,
+  "auth-otp-sms": OTP_SMS_BODIES,
+  "auth-otp-whatsapp": OTP_WHATSAPP_BODIES,
 } as const;
 
 function assertOtpOptions(opts: OtpOptions): void {
@@ -217,8 +228,9 @@ export function otp(opts: OtpOptions): PluginDef {
     from !== undefined
       ? channel.email({ from }).template("auth-otp-email", {
           description: "OTP sign-in code (email)",
-          schema: z.object({ email: z.string(), otp: z.string() }),
+          schema: OTP_EMAIL_SCHEMA,
           locales: ["en", "ar"],
+          catalog: OTP_EMAIL_BODIES,
         })
       : otpEmailTemplate;
 
@@ -613,7 +625,6 @@ export function otp(opts: OtpOptions): PluginDef {
     .channelTemplate(emailTmpl)
     .channelTemplate(otpSmsTemplate)
     .channelTemplate(otpWhatsappTemplate)
-    .channelCatalog(otpCatalog)
     .binding(bindPublicAuth("/otp/request", request, "otp", requestContract))
     .binding(bindPublicAuth("/otp/verify", verify, "otp", verifyContract))
     .binding(bindPublicAuth("/otp/resend", resend, "otp", resendContract));

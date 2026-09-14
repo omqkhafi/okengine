@@ -13,6 +13,22 @@ export interface ChannelMediumOptions {
   readonly sender?: string;
 }
 
+/** One locale’s subject / text / html (`{{field}}` interpolation). */
+export interface ChannelLocaleBody {
+  readonly subject?: string;
+  readonly text?: string;
+  readonly html?: string;
+}
+
+/** Per-locale bodies for one template. */
+export type ChannelLocaleBodies = Readonly<Record<string, ChannelLocaleBody>>;
+
+/**
+ * Runtime body catalog: template name → locale → rendered body.
+ * Not part of the Manifest — copy stays off the contract.
+ */
+export type TemplateCatalog = Readonly<Record<string, ChannelLocaleBodies>>;
+
 /** Options for {@link channel.template} / medium `.template`. */
 export interface ChannelTemplateOptions {
   /** Optional human description for Console / docs (falls back to the template name). */
@@ -21,6 +37,11 @@ export interface ChannelTemplateOptions {
   readonly locales?: string[];
   readonly schema?: unknown;
   readonly from?: string;
+  /**
+   * Per-locale `subject` / `text` / `html`. Auto-drained into the runtime
+   * catalog; `oke({ channel.catalog })` remains an overlay.
+   */
+  readonly catalog?: ChannelLocaleBodies;
 }
 
 /** Declared channel template handle. */
@@ -32,6 +53,7 @@ export interface ChannelTemplateDecl {
   readonly locales?: string[];
   readonly schema?: unknown;
   readonly from?: string;
+  readonly catalog?: ChannelLocaleBodies;
 }
 
 /** Medium binder that can declare templates. */
@@ -42,7 +64,7 @@ export interface ChannelMediumBinder {
    * Declare a template on this medium.
    *
    * @param name - Template id
-   * @param options - Schema / locales
+   * @param options - Schema / locales / catalog
    */
   template(
     name: string,
@@ -74,6 +96,45 @@ export function resetChannelTemplates(): void {
 }
 
 /**
+ * Lift per-template `catalog` maps into a boot catalog (template → locale).
+ *
+ * @param templates - Declared templates (undefined / empty skipped)
+ */
+export function catalogFromTemplates(
+  templates: readonly ChannelTemplateDecl[] | undefined,
+): TemplateCatalog | undefined {
+  if (!templates || templates.length === 0) return undefined;
+  const out: Record<string, ChannelLocaleBodies> = {};
+  let any = false;
+  for (const t of templates) {
+    if (!t.catalog) continue;
+    any = true;
+    out[t.name] = t.catalog;
+  }
+  return any ? out : undefined;
+}
+
+/**
+ * Deep-merge channel template catalogs (later parts win per locale).
+ *
+ * @param parts - Catalog fragments (undefined skipped)
+ */
+export function mergeTemplateCatalogs(
+  ...parts: readonly (TemplateCatalog | undefined)[]
+): TemplateCatalog | undefined {
+  const out: Record<string, ChannelLocaleBodies> = {};
+  let any = false;
+  for (const part of parts) {
+    if (!part) continue;
+    any = true;
+    for (const [template, locales] of Object.entries(part)) {
+      out[template] = { ...(out[template] ?? {}), ...locales };
+    }
+  }
+  return any ? out : undefined;
+}
+
+/**
  * Create a medium binder.
  *
  * @param medium - Medium id
@@ -96,6 +157,7 @@ function mediumBinder(
         ...(opts.locales ? { locales: opts.locales } : {}),
         ...(opts.schema !== undefined ? { schema: opts.schema } : {}),
         ...(from !== undefined ? { from } : {}),
+        ...(opts.catalog !== undefined ? { catalog: opts.catalog } : {}),
       };
       channelTemplateRegistry.push(decl);
       return decl;
@@ -111,7 +173,7 @@ export interface ChannelNamespace {
    * Medium-agnostic template.
    *
    * @param name - Template id
-   * @param options - Medium / locales / schema
+   * @param options - Medium / locales / schema / catalog
    */
   template(name: string, options?: ChannelTemplateOptions): ChannelTemplateDecl;
   /** Email medium binder. */
@@ -132,7 +194,7 @@ export const channel: ChannelNamespace = {
    * Medium-agnostic template.
    *
    * @param name - Template id
-   * @param options - Medium / locales / schema
+   * @param options - Medium / locales / schema / catalog
    */
   template(name: string, options: ChannelTemplateOptions = {}): ChannelTemplateDecl {
     if (!name) throw new TypeError("channel.template: name is required");
@@ -144,6 +206,7 @@ export const channel: ChannelNamespace = {
       ...(options.locales ? { locales: options.locales } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
       ...(options.from !== undefined ? { from: options.from } : {}),
+      ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
     };
   },
 

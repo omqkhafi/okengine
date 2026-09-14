@@ -1,6 +1,6 @@
 /**
  * Featured Harbor GA story — ENG / DES / GTM, Aria–Eli, ENG-12 intake chain.
- * Column names match `schema.decl` (camelCase).
+ * Column names match `schema/` (camelCase).
  */
 
 /** Seed origin — 2025-07-31T00:00:00.000Z (readable calendar anchor). */

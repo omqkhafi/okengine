@@ -221,6 +221,11 @@ Prefer [`createAuthClient`](/docs/client/auth) for cookie/Bearer sessions and me
   Without a token, status becomes `"unauthenticated"`.
 </Accordion>
 
+<Accordion title="Vite SPA is a blank page">
+  The console shows `node:async_hooks` / `AsyncLocalStorage` from `okengine/client-react`. Upgrade
+  okengine — `Can` / `useLiveQuery` must not import the server realtime binder.
+</Accordion>
+
 <Accordion title="useLiveQuery never connects">
   Pass `live: { method, path }` from `app.$routes` for the resource’s `/live` route. Set
   `enabled: true` (or omit). See [Live](/docs/client/live) for exposure and resume errors.

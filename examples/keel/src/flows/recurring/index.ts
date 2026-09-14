@@ -2,7 +2,7 @@ import { on, flow } from "okengine";
 import { eq } from "drizzle-orm";
 
 import { db, spawnRecurringClock } from "@/core";
-import { recurrence, spaces, tasks } from "@/db/schema.decl";
+import { recurrence, spaces, tasks } from "@/db/schema";
 
 /** Spawn due recurring tasks — named clock `spawn-recurring`. */
 export const spawn = on(

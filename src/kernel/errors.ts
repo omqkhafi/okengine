@@ -239,7 +239,7 @@ export const OKE_ERRORS = {
   },
   /**
    * A `src/flows/<unit>` folder exists on disk but no adopted flow carries
-   * that unit — the generated `.adopt()` barrel (`src/flows/generated.ts`)
+   * that unit — the generated `.adopt()` barrel (`src/flows/index.ts`)
    * is stale or was hand-edited. dev+compose / prod — never a silently-incomplete
    * route table in a deploy-shaped environment.
    */
@@ -247,7 +247,7 @@ export const OKE_ERRORS = {
     code: 1030,
     domain: "kernel",
     cause: "src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.",
-    fix: "Run `oke dev` or `oke build` to regenerate `src/flows/generated.ts`.",
+    fix: "Run `oke dev` or `oke build` to regenerate `src/flows/index.ts`.",
   },
   /**
    * `http.get()` was never stamped from the file tree — refuse a silent `/`.
@@ -256,7 +256,7 @@ export const OKE_ERRORS = {
     code: 1040,
     domain: "kernel",
     cause: 'Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.',
-    fix: 'Put the file under `src/flows/<unit>/` and import `@/flows/generated`, or pass an explicit path to `http.{method}("/…")`.',
+    fix: 'Put the file under `src/flows/<unit>/` and import `@/flows`, or pass an explicit path to `http.{method}("/…")`.',
   },
   /**
    * Two HTTP bindings share method + path — last-add-wins is the opposite of this DX.

@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { channel } from "../elements/channel/declare.ts";
+import { channel, resetChannelTemplates } from "../elements/channel/declare.ts";
 import { clock } from "../elements/clock/declare.ts";
 import { gate } from "../elements/gate/declare.ts";
 import { signal } from "../elements/signal/declare.ts";
@@ -290,5 +290,30 @@ describe("oke() auto-registry — stores/secrets/signals/clocks/gates/channel.te
     expect(res.status).toBe(200);
     const json = (await res.json()) as { data: { summary: string } };
     expect(json.data.summary).toBe("one-line summary");
+  });
+
+  test("channel.template({ catalog }) drains into oke() without channel.catalog bag", () => {
+    resetBindings();
+    resetChannelTemplates();
+    const mail = channel.email({ from: "Drain <drain@localhost>" });
+    mail.template("welcome-drain", {
+      locales: ["en"],
+      catalog: {
+        en: { subject: "Hi {{name}}", text: "Hello {{name}}" },
+      },
+    });
+    const sms = channel.sms();
+    sms.template("ops.drain", {
+      catalog: { en: { text: "Disk {{pct}}%" } },
+    });
+
+    const app = oke({
+      name: "catalog-drain",
+      autoBoot: false,
+      startScheduler: false,
+    });
+
+    expect(app.$options.channel?.catalog?.["welcome-drain"]?.en?.subject).toBe("Hi {{name}}");
+    expect(app.$options.channel?.catalog?.["ops.drain"]?.en?.text).toBe("Disk {{pct}}%");
   });
 });

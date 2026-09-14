@@ -1,7 +1,7 @@
 import { on, flow } from "okengine";
 
 import { dailyDigestClock, dailyDigestMail, db, slackWebhook, weeklySummaryPrompt } from "@/core";
-import { goals, tasks } from "@/db/schema.decl";
+import { goals, tasks } from "@/db/schema";
 
 /** Morning inbox + goal digest — named clock `daily-digest`. */
 export const daily = on(

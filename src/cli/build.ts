@@ -18,16 +18,16 @@ export interface BuildOptions {
   }) => Promise<{ success: boolean; logs: string }>;
   /**
    * Inject `.adopt()` barrel regeneration (tests). Default: real
-   * `generateAdoptBarrel` + atomic write to `<rootDir>/src/flows/generated.ts`
-   * (`generated.ts.tmp` → rename). Returns the unit names written, for the
+   * `generateAdoptBarrel` + atomic write to `<rootDir>/src/flows/index.ts`
+   * (`index.ts.tmp` → rename). Returns the unit names written, for the
    * status line.
    */
   readonly syncAdoptBarrel?: (rootDir: string) => Promise<readonly string[]>;
 }
 
 /**
- * Regenerate `src/flows/generated.ts` from every `src/flows/<unit>/index.ts`
- * unit folder — pre-step for `oke build` (mirrors `oke db`'s `schema.drizzle.ts`
+ * Regenerate `src/flows/index.ts` from every `src/flows/<unit>/` folder —
+ * pre-step for `oke build` (mirrors `oke db`'s `drizzle/`
  * pre-step). A real file on disk, not a virtual module: identical resolution
  * under `oke dev`'s runtime `import()` and `oke build`'s `Bun.build()`
  * (investigated — a virtual-module Bun plugin does not resolve consistently
@@ -76,7 +76,7 @@ export async function runBuild(options: BuildOptions = {}): Promise<number> {
   try {
     const units = await syncAdoptBarrel(rootDir);
     write(
-      `oke build: .adopt() barrel → src/flows/generated.ts (${units.length} unit${units.length === 1 ? "" : "s"})\n`,
+      `oke build: .adopt() barrel → src/flows/index.ts (${units.length} unit${units.length === 1 ? "" : "s"})\n`,
     );
     const result = await bundle({ entry, outdir, target: bunTarget });
     if (!result.success) {

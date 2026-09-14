@@ -27,6 +27,7 @@ import {
   writeStackCredentialsCache,
   type DeriveOptions,
 } from "../docker/index.ts";
+import { isAdoptBarrelRelPath } from "../compiler/generate-adopt.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { McpContext } from "../mcp/tools.ts";
 import { APP_PORT, CONSOLE_PORT, DOCS_MCP_PORT, MCP_PORT } from "../runtime/types.ts";
@@ -183,9 +184,9 @@ export interface DevOptions {
   readonly onDbAutoPush?: (filename: string) => void;
   /**
    * Injectable `.adopt()` barrel regeneration (tests). Default: real
-   * `generateAdoptBarrel` + atomic write to `<cwd>/src/flows/generated.ts`
-   * (`generated.ts.tmp` → rename). Runs at session start and again on
-   * `src/flows/**` changes except `generated.ts` itself. Write-if-changed
+   * `generateAdoptBarrel` + atomic write to `<cwd>/src/flows/index.ts`
+   * (`index.ts.tmp` → rename). Runs at session start and again on
+   * `src/flows/**` changes except `index.ts` itself. Write-if-changed
    * so the `src/` watcher + bun `--hot` do not loop.
    *
    * @param cwd - Project root
@@ -370,7 +371,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const cwd = options.cwd ?? process.cwd();
 
   // One-shot `.adopt()` barrel regen for the session — real file on disk
-  // (`src/flows/generated.ts`), written atomically (tmp → rename) before the
+  // (`src/flows/index.ts`), written atomically (tmp → rename) before the
   // entry is resolved/imported below so a freshly-added flows unit is
   // adoptable without a hand edit. Best-effort like `syncDevSchema` below:
   // a project with no `src/flows` yet (or a synthetic test tree) never
@@ -1036,7 +1037,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   }
 
   // One-shot schema sync for the compose (`dev`) profile: emits
-  // schema.drizzle.ts for the active dialect, then pushes via drizzle-kit.
+  // drizzle/ for the active dialect, then pushes via drizzle-kit.
   let schemaPushOk = options.noDbPush === true;
   if (!options.noDbPush) {
     const { syncDevSchema } = await import("./dev-schema-sync.ts");
@@ -1576,7 +1577,7 @@ function isBenignDevSchemaEnvSkip(message: string): boolean {
 }
 
 /**
- * Whether a caught sync/push error is a schema.decl definition failure
+ * Whether a caught sync/push error is a schema declare definition failure
  * (import evaluation, emit, duplicate tables, bad `.references()`, …).
  *
  * Message text alone is insufficient — emit-time bugs often look like bare
@@ -1584,7 +1585,7 @@ function isBenignDevSchemaEnvSkip(message: string): boolean {
  * emit frames.
  *
  * @param err - Caught value
- * @param declarePath - Resolved schema.decl path for this project
+ * @param declarePath - Resolved schema declare path for this project
  */
 function isSchemaDeclDefinitionError(err: unknown, declarePath: string): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -1600,15 +1601,15 @@ function isSchemaDeclDefinitionError(err: unknown, declarePath: string): boolean
 
 /**
  * True when a `src/` watcher event is a flows tree change that should
- * regenerate `generated.ts` (never the generated file itself).
+ * regenerate `src/flows/index.ts` (never the barrel itself, nor a leftover
+ * `generated.ts`). Unit `index.ts` files still trigger regen.
  *
  * @param rel - Watcher filename (POSIX or Windows)
  */
 export function isFlowsTreeWatchPath(rel: string): boolean {
   const posix = rel.replace(/\\/g, "/");
   if (!posix.includes("flows/")) return false;
-  const base = posix.split("/").pop() ?? posix;
-  if (base === "generated.ts" || base === "generated.ts.tmp") return false;
+  if (isAdoptBarrelRelPath(posix)) return false;
   return true;
 }
 
@@ -1638,7 +1639,8 @@ async function formatDevSchemaSyncFailure(
   const { resolveEmitPaths } = await import("../elements/store/emit-drizzle.ts");
   const { declarePath } = resolveEmitPaths(cwd);
   if (isSchemaDeclDefinitionError(err, declarePath)) {
-    return formatStatusLine(`schema.decl.ts has an error — ${msg}`, color, "error");
+    const declareName = declarePath.split(/[/\\]/).pop() ?? "schema.ts";
+    return formatStatusLine(`${declareName} has an error — ${msg}`, color, "error");
   }
 
   const label = context === "watch" ? "oke db push (schema change)" : "oke db push (dev)";

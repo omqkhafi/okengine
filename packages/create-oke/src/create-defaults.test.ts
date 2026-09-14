@@ -30,24 +30,24 @@ describe("parseCreateDefaults", () => {
   });
 
   test("accepts recommended shape", () => {
-    const d = recommendedDefaults("docker-ready", "standard");
+    const d = recommendedDefaults("docker-ready", "blank");
     const parsed = parseCreateDefaults(d);
     expect(parsed?.profile).toBe("docker-ready");
-    expect(parsed?.template).toBe("standard");
+    expect(parsed?.template).toBe("blank");
     expect(parsed?.drivers.store.sql.dev).toBe("postgres");
     expect(parsed?.drivers.store.sql.test).toBe("pglite");
     expect(parsed?.ai.enabled).toBe(false);
   });
 
-  test("older files without template default to standard", () => {
-    const d = recommendedDefaults("docker-ready", "standard");
+  test("older files without template default to blank", () => {
+    const d = recommendedDefaults("docker-ready", "blank");
     const { template: _t, ...rest } = d;
     const parsed = parseCreateDefaults(rest);
-    expect(parsed?.template).toBe("standard");
+    expect(parsed?.template).toBe("blank");
   });
 
   test("older files without proxy default to none", () => {
-    const d = recommendedDefaults("docker-ready", "standard");
+    const d = recommendedDefaults("docker-ready", "blank");
     const { proxy: _p, ...rest } = d;
     const parsed = parseCreateDefaults(rest);
     expect(parsed?.proxy).toBe("none");
@@ -60,7 +60,7 @@ describe("read/write round-trip", () => {
     const path = createDefaultsPath(home);
     try {
       const original = toCreateDefaults({
-        template: "advanced",
+        template: "shorter",
         profile: "docker-ready",
         drivers: {
           store: {
@@ -83,7 +83,7 @@ describe("read/write round-trip", () => {
       writeCreateDefaults(original, path);
       const loaded = readCreateDefaults(path);
       expect(loaded).not.toBeNull();
-      expect(loaded!.template).toBe("advanced");
+      expect(loaded!.template).toBe("shorter");
       expect(loaded!.drivers.store.sql.dev).toBe("postgres");
       expect(loaded!.drivers.ai?.dev).toBe("openai-compatible");
       expect(loaded!.ai.provider).toBe("openrouter");

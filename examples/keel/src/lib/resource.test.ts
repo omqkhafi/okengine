@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { member } from "@/core";
-import { documents } from "@/db/schema.decl";
+import { documents } from "@/db/schema";
 import { bindCrud } from "@/lib/resource";
 import { z } from "zod";
 

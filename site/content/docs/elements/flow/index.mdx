@@ -96,19 +96,19 @@ export const ping = on(
 
 `in` / `out` live on the HTTP bag. Invalid input never enters `do`:
 
-```typescript title="src/flows/notes/create.ts"
+```typescript title="src/flows/links/create.ts"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 export const create = on(
   http.post({
-    in: z.object({ title: z.string().min(1) }),
-    out: z.object({ id: z.string(), title: z.string() }),
+    in: z.object({ url: z.string().url() }),
+    out: z.object({ id: z.string(), url: z.string() }),
   }),
   flow({
-    do: async ({ title }, fx) => {
+    do: async ({ url }, fx) => {
       const id = fx.id();
-      return { id, title };
+      return { id, url };
     },
   }),
 );
@@ -238,11 +238,14 @@ Invoke contracts (`in` / `out` / `errors` / `breaking`) belong on the exposure �
 ## Contracts
 
 <Callout title="Detailed section">
-  Invoke contracts live on the **exposure** — `http.post({ in, out, errors })`, `call("name", {
-  in, out, do })`, or `mcp.tool("x", { in, out })`. The Manifest still shows flat
-  `flows.*.{in,out,errors,breaking}` as a projection from that exposure. `in` runs before `do`;
-  `out` runs after a successful return. `fx.fail` skips `out`. Signal / Channel `schema` is a
-  separate **emit** contract (validated at `fx.emit` / `fx.send`).
+  Invoke contracts live on the **exposure** (`http.post({ in, out, errors })`, `call("name", { in,
+  out, do })`, `mcp.tool("x", { in, out })`). Manifest `flows.*` is a projection from that bag.
+
+`in` validates before `do`. After success, `out` projects the reply (Date → ISO-8601, extra keys
+strip); a miss is not a client error. `fx.fail` skips `out`.
+
+Signal / Channel `schema` is a separate **emit** contract (validated at `fx.emit` / `fx.send`).
+
 </Callout>
 
 <Tabs items={["Standard Schema", "Failures", "Envelope"]}>
@@ -344,8 +347,8 @@ A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("
 </Accordion>
 
 <Accordion title="Name stamping">
-  Prefer nameless `flow({ do })` on HTTP tree files — `src/flows/notes/[id]/get.ts` +
-  `export const get` stamps `notes.get`. Signal / Clock workers pass `flow("name", { do })`
+  Prefer nameless `flow({ do })` on HTTP tree files — `src/flows/links/[code]/get.ts` +
+  `export const get` stamps `links.get`. Signal / Clock workers pass `flow("name", { do })`
   (**OKE1072**; Clock inline is [Clock · Inline or named export](/docs/elements/clock#inline-or-named-export)).
 </Accordion>
 

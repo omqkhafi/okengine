@@ -6,16 +6,16 @@ source: "docs/spec/unified-theory.md"
 ---
 
 Channel is how your backend **reaches a person** — the order-confirmation email, the SMS
-sign-in code, a WhatsApp notice, or a device push. You declare a template on a medium, fill a
-`{{field}}` body catalog, and send from a Flow with `fx.send`.
+sign-in code, a WhatsApp notice, or a device push. You declare a template on a medium with
+per-locale `{{field}}` bodies, then send from a Flow with `fx.send`.
 
 For developers wiring Mailpit locally and Resend / Taqnyat / FCM in production — templates and
 drivers first, never vendor SDKs inside `do`.
 
 <Callout title="The one rule">
-  Declare a template (`channel.email(…).template(…)`), then `fx.send(template, { to, data })`.
-  Bodies live in the catalog (`subject` / `text` / `html`), not on the declare call. Consent and
-  prior bounces suppress before any driver runs.
+  Declare a template (`channel.email(…).template({ catalog })`), then `fx.send(template, { to, data })`.
+  Bodies live on the declare (`subject` / `text` / `html` per locale). Consent and prior bounces
+  suppress before any driver runs.
 </Callout>
 
 <ChannelPhysics />
@@ -27,18 +27,28 @@ drivers first, never vendor SDKs inside `do`.
 <Step>
 ### Declare an email template
 
-```typescript title="src/core/channel.ts"
+```typescript title="src/core/email.ts"
 import { channel } from "okengine";
 import { z } from "zod";
 
-const mail = channel.email({ from: "Notes <notes@localhost>" });
+const mail = channel.email({ from: "Shorter <shorter@localhost>" });
 
-export const noteCreatedMail = mail.template("note-created", {
+export const linkCreatedMail = mail.template("link-created", {
+  description: "Short URL delivered to the demo inbox",
   locales: ["en"],
   schema: z.object({
     id: z.string(),
-    title: z.string(),
+    code: z.string(),
+    url: z.string(),
+    shortUrl: z.string(),
   }),
+  catalog: {
+    en: {
+      subject: "Short link {{code}}",
+      text: "{{shortUrl}} → {{url}}",
+      html: '<p><a href="{{shortUrl}}">{{code}}</a> → {{url}}</p>',
+    },
+  },
 });
 ```
 
@@ -50,26 +60,42 @@ Import this module before `oke()` so auto-registry adopts the template (or pass 
 <Step>
 ### Send from a Flow
 
-```typescript title="src/flows/notes/on-created.ts"
-import { on, flow } from "okengine";
-import { noteCreatedMail } from "@/core/channel";
-import { noteCreated } from "./signals";
+```typescript title="src/flows/links/signals.ts"
+import { on, flow, signal } from "okengine";
+import { z } from "zod";
+import { linkCreatedMail } from "@/core";
+
+export const linkCreated = signal.once("link-created", {
+  retries: 3,
+  deadLetter: true,
+  schema: z.object({
+    id: z.string(),
+    code: z.string(),
+    url: z.string(),
+    shortUrl: z.string(),
+  }),
+});
 
 export const onCreated = on(
-  noteCreated,
-  flow("notes.onCreated", {
+  linkCreated,
+  flow("links.onCreated", {
     do: async (payload, fx) => {
-      await fx.send(noteCreatedMail, {
+      await fx.send(linkCreatedMail, {
         to: "you@localhost",
-        data: { id: payload.id, title: payload.title },
+        data: {
+          id: payload.id,
+          code: payload.code,
+          url: payload.url,
+          shortUrl: payload.shortUrl,
+        },
       });
     },
   }),
 );
 ```
 
-The compiler stamps `sends: ["note-created"]` on the Flow’s effects (template name — not
-`email:note-created`).
+The compiler stamps `sends: ["link-created"]` on the Flow’s effects (template name — not
+`email:link-created`). Declaration and subscriber share `signals.ts`.
 
 </Step>
 
@@ -77,8 +103,8 @@ The compiler stamps `sends: ["note-created"]` on the Flow’s effects (template 
 ### See it locally
 
 With `drivers.channel.email.dev: "smtp"` and Mailpit pinned, open the Mailpit UI
-(`MAILPIT_UI_URL`). Missing catalog bodies fall back to `subject: note-created` and
-`text: JSON.stringify(data)`.
+(`MAILPIT_UI_URL`). Subject and HTML come from the template `catalog`. Omit `catalog` and the
+runtime falls back to `subject: link-created` and `text: JSON.stringify(data)`.
 
 </Step>
 
@@ -95,9 +121,14 @@ From a bare send to catalog bodies, locale, and same-medium failover:
 Template handle + recipient — catalog optional for local smoke tests:
 
 ```typescript
-await fx.send(noteCreatedMail, {
+await fx.send(linkCreatedMail, {
   to: "alice@example.com",
-  data: { id: "n1", title: "Hello" },
+  data: {
+    id: "lnk_1",
+    code: "ok",
+    url: "https://example.com",
+    shortUrl: "http://localhost:6530/ok",
+  },
 });
 ```
 
@@ -105,23 +136,22 @@ await fx.send(noteCreatedMail, {
 
 <Tab value="Catalog">
 
-Bodies are `{{field}}` strings per locale — not ICU, not React. Pass them on boot or via a
-plugin `.channelCatalog(…)`:
+Bodies are `{{field}}` strings per locale — not ICU, not React. Put them on the template.
+`oke({ channel.catalog })` and plugin `.channelCatalog(…)` are overlays (later locale wins):
 
-```typescript title="src/app.ts"
-import { oke } from "okengine";
-
-export const app = oke({
-  name: "notes",
-  channel: {
-    catalog: {
-      "note-created": {
-        en: {
-          subject: "Note created",
-          text: "Your note {{title}} ({{id}}) is ready.",
-          html: "<p>Your note <strong>{{title}}</strong> is ready.</p>",
-        },
-      },
+```typescript title="src/core/email.ts"
+export const linkCreatedMail = mail.template("link-created", {
+  locales: ["en"],
+  schema: z.object({
+    code: z.string(),
+    url: z.string(),
+    shortUrl: z.string(),
+  }),
+  catalog: {
+    en: {
+      subject: "Short link {{code}}",
+      text: "{{shortUrl}} → {{url}}",
+      html: '<p><a href="{{shortUrl}}">{{code}}</a> → {{url}}</p>',
     },
   },
 });
@@ -136,9 +166,14 @@ Precedence: explicit `locale` → `profileLocale` → `Accept-Language` →
 `fx.locale`.
 
 ```typescript
-await fx.send(noteCreatedMail, {
+await fx.send(linkCreatedMail, {
   to: "alice@example.com",
-  data: { id: "n1", title: "مرحبا" },
+  data: {
+    id: "lnk_1",
+    code: "ok",
+    url: "https://example.com",
+    shortUrl: "http://localhost:6530/ok",
+  },
   locale: "ar",
 });
 ```
@@ -154,9 +189,14 @@ Order same-medium drivers for failover. Provider / 5xx errors advance; permanent
 (400, invalid address) do **not**:
 
 ```typescript
-await fx.send(noteCreatedMail, {
+await fx.send(linkCreatedMail, {
   to: "alice@example.com",
-  data: { id: "n1", title: "Hello" },
+  data: {
+    id: "lnk_1",
+    code: "ok",
+    url: "https://example.com",
+    shortUrl: "http://localhost:6530/ok",
+  },
   via: ["smtp", "resend"],
 });
 ```
@@ -193,12 +233,14 @@ succeeded — every attempt is kept on the receipt.
 | `description` | `string`   | name      | Console / docs label                                |
 | `locales`     | `string[]` | —         | Declared locale tags for the template               |
 | `schema`      | Schema     | —         | Payload shape (Zod / Standard Schema)               |
+| `catalog`     | object     | —         | Per-locale `subject` / `text` / `html`              |
 | `from`        | `string`   | binder’s  | Override sender on agnostic `channel.template` only |
 | `medium`      | medium     | `"email"` | Only on `channel.template()`                        |
 
 Empty name throws `TypeError: channel.template: name is required`.
 
-There is **no** `subject` / `body` / `html` on declare — those belong in the catalog.
+`oke({ channel.catalog })` overlays bodies after template catalogs (tests / plugin copy
+overrides). Manifest stays free of copy.
 
 ## `fx` surface
 
@@ -295,7 +337,7 @@ Env knobs: [Environment variables](/docs/reference/environment-variables). Local
 
 <Accordion title="OKE1004 — UNDECLARED_SEND">
   Cause: `Flow "{flow}" sends "{resource}" without declaring it.` Touch the template handle
-  inside `do` (inference) or list `effects: { sends: ["note-created"] }`.
+  inside `do` (inference) or list `effects: { sends: ["link-created"] }`.
 </Accordion>
 
 <Accordion title="channel: no email transport in driver chain">

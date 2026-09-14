@@ -706,7 +706,7 @@ describe("oke dev hot reload", () => {
 });
 
 describe("oke dev syncAdoptBarrel atomic write", () => {
-  test("default path regenerates generated.ts and leaves no .tmp behind", async () => {
+  test("default path regenerates index.ts and leaves no .tmp behind", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-dev-adopt-atomic-"));
     await mkdir(join(dir, "src/flows/notes"), { recursive: true });
     await Bun.write(join(dir, "src/flows/notes/index.ts"), "export {};\n");
@@ -791,9 +791,12 @@ describe("oke dev syncAdoptBarrel atomic write", () => {
 });
 
 describe("isFlowsTreeWatchPath", () => {
-  test("flows tree files trigger regen; generated.ts does not", () => {
+  test("flows tree files trigger regen; adopt barrel does not", () => {
     expect(isFlowsTreeWatchPath("flows/notes/[id]/get.ts")).toBe(true);
     expect(isFlowsTreeWatchPath("flows\\notes\\list.ts")).toBe(true);
+    expect(isFlowsTreeWatchPath("flows/notes/index.ts")).toBe(true);
+    expect(isFlowsTreeWatchPath("flows/index.ts")).toBe(false);
+    expect(isFlowsTreeWatchPath("flows/index.ts.tmp")).toBe(false);
     expect(isFlowsTreeWatchPath("flows/generated.ts")).toBe(false);
     expect(isFlowsTreeWatchPath("flows/generated.ts.tmp")).toBe(false);
     expect(isFlowsTreeWatchPath("core.ts")).toBe(false);
@@ -953,7 +956,7 @@ describe("oke dev Docker-first", () => {
   });
 });
 
-describe("oke dev schema.decl sync framing", () => {
+describe("oke dev schema declare sync framing", () => {
   let session: DevSession | undefined;
 
   afterEach(() => {
@@ -981,7 +984,7 @@ describe("oke dev schema.decl sync framing", () => {
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
     // Genuine definition error: `.references()` target is undefined → emit throws.
     await Bun.write(
-      join(dir, "src/db/schema.decl.ts"),
+      join(dir, "src/db/schema.ts"),
       `import { store, field } from ${JSON.stringify(OKE_INDEX)};
 
 export const authors = store.schema.table("authors", {
@@ -1024,8 +1027,8 @@ export const posts = store.schema.table("posts", {
     session = result.session;
 
     const plain = writes.join("").replace(/\x1b\[[0-9;]*m/g, "");
-    expect(plain).toContain("schema.decl.ts has an error");
-    expect(plain).toMatch(/●\s*schema\.decl\.ts has an error/);
+    expect(plain).toContain("schema.ts has an error");
+    expect(plain).toMatch(/●\s*schema\.ts has an error/);
     expect(plain).not.toContain("oke db push (dev) skipped");
   }, 60_000);
 
@@ -1065,7 +1068,7 @@ export const posts = store.schema.table("posts", {
 
     const plain = writes.join("").replace(/\x1b\[[0-9;]*m/g, "");
     expect(plain).toContain("oke db push (dev) skipped — docker mode: oke.config.ts not found");
-    expect(plain).not.toContain("schema.decl.ts has an error");
+    expect(plain).not.toContain("schema.ts has an error");
   }, 60_000);
 });
 

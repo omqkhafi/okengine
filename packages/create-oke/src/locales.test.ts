@@ -125,4 +125,95 @@ describe("applyLocalesToProject", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("prefers src/core/email.ts and updates every channel template", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-locales-email-"));
+    try {
+      mkdirSync(join(dir, "src/locales"), { recursive: true });
+      mkdirSync(join(dir, "src/core"), { recursive: true });
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `export default defineConfig({\n  i18n: { locales: ["en"], default: "en" },\n});\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src/core/index.ts"),
+        `export * from "./email.ts";\nexport const leftover = { locales: ["en"] };\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src/core/email.ts"),
+        `export const linkCreatedMail = mail.template("link-created", {\n  locales: ["en"],\n});\nexport const reachDigestMail = mail.template("reach-digest", {\n  locales: ["en"],\n});\n`,
+        "utf8",
+      );
+      writeFileSync(join(dir, "src/locales/en.ts"), "export const en = {};\n", "utf8");
+      writeFileSync(join(dir, "src/locales/index.ts"), formatLocalesIndex(["en"]), "utf8");
+
+      applyLocalesToProject(dir, ["ar"]);
+
+      const email = readFileSync(join(dir, "src/core/email.ts"), "utf8");
+      expect(email.match(/locales: \["en", "ar"\]/g)?.length).toBe(2);
+      expect(readFileSync(join(dir, "src/core/index.ts"), "utf8")).toContain('locales: ["en"]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("blank-style en.ts seeds locales without notes keys", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-locales-blank-"));
+    try {
+      mkdirSync(join(dir, "src/locales"), { recursive: true });
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `export default defineConfig({\n  i18n: { locales: ["en"], default: "en" },\n});\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src/locales/en.ts"),
+        `export const en = defineMessages({\n  errors: { notFound: "Not found", unauthorized: "Unauthorized" },\n});\n`,
+        "utf8",
+      );
+      writeFileSync(join(dir, "src/locales/index.ts"), formatLocalesIndex(["en"]), "utf8");
+
+      applyLocalesToProject(dir, ["ar"]);
+
+      const ar = readFileSync(join(dir, "src/locales/ar.ts"), "utf8");
+      expect(ar).toContain("غير موجود");
+      expect(ar).not.toMatch(/\bnotes\s*:/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("shorter-style en.ts seeds locales with links keys", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-locales-links-"));
+    try {
+      mkdirSync(join(dir, "src/locales"), { recursive: true });
+      writeFileSync(
+        join(dir, "oke.config.ts"),
+        `export default defineConfig({\n  i18n: { locales: ["en"], default: "en" },\n});\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src/locales/en.ts"),
+        `export const en = defineMessages({\n  errors: { notFound: "Not found", unauthorized: "Unauthorized" },\n  links: { created: "x", archived: "y", empty: "z", count: "c", reach: "r" },\n});\n`,
+        "utf8",
+      );
+      writeFileSync(join(dir, "src/locales/index.ts"), formatLocalesIndex(["en"]), "utf8");
+
+      applyLocalesToProject(dir, ["ar", "fr"]);
+
+      const ar = readFileSync(join(dir, "src/locales/ar.ts"), "utf8");
+      expect(ar).toContain("غير موجود");
+      expect(ar).toMatch(/\blinks\s*:/);
+      expect(ar).toContain("reach");
+      expect(ar).not.toMatch(/\bnotes\s*:/);
+      const fr = readFileSync(join(dir, "src/locales/fr.ts"), "utf8");
+      expect(fr).toMatch(/\blinks\s*:/);
+      expect(fr).toContain("Reach digest");
+      expect(fr).not.toMatch(/\bnotes\s*:/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
