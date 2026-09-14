@@ -200,6 +200,15 @@ Missing `docker` is a separate install — Compose needs it on PATH.
   checkout, run `bun run build` or keep `oke dev` so Vite HMR attaches.
 </Accordion>
 
+<Accordion title="password authentication failed for user oke">
+  Postgres was initialized with an older password than `.env.local` — usual after deleting and
+  recreating the folder. `oke dev` resets that project's volumes when it sees this.
+
+Already failed? From the app folder: `oke docker clean` then `bun run dev`. Run commands
+inside the project (`o1`), not the parent `oke` directory.
+
+</Accordion>
+
 <Accordion title="OKE1020 on oke dev (Compose)">
   The app child had no Manifest to stamp effects (`main.health`). `oke dev` now hands the parent
   extract to the child. A failed extract appends `Manifest extract failed — …` (`oxc-parser`).

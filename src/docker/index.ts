@@ -141,6 +141,15 @@ export {
   stackInstanceId,
 } from "./stack-id.ts";
 export {
+  clearStackCredentialsCache,
+  instanceIdFromComposeProject,
+  mergeStackCredentials,
+  readStackCredentialsCacheText,
+  stackCredentialsCachePath,
+  writeStackCredentialsCache,
+} from "./stack-credentials-cache.ts";
+export { isPostgresPasswordAuthFailure, postgresUrlPasswordRejected } from "./postgres-auth.ts";
+export {
   OKE_DEV_PROJECT_RE,
   composeProjectName,
   defaultDockerRunner,

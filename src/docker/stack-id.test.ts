@@ -11,11 +11,13 @@ import {
   hostPortForInstance,
   instancePortOffset,
   loadExistingStackControls,
+  loadExistingStackCredentials,
   parseStackControls,
   parseStackCredentials,
   stackAppSlug,
   stackInstanceId,
 } from "./stack-id.ts";
+import { writeStackCredentialsCache } from "./stack-credentials-cache.ts";
 import { deriveInfrastructure } from "./derive.ts";
 
 describe("stackInstanceId", () => {
@@ -68,6 +70,25 @@ describe("loadExistingStackControls", () => {
     await writeFile(join(dir, ".env.local"), "# OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
     const controls = await loadExistingStackControls(dir);
     expect(controls?.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
+  });
+});
+
+describe("loadExistingStackCredentials", () => {
+  test("fills missing .env.local SQL password from ~/.oke/stacks/<id>.env", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-stack-cred-"));
+    const home = await mkdtemp(join(tmpdir(), "oke-home-cred-"));
+    await writeFile(join(dir, ".env.local"), "OKE_CONSOLE_SECRET=keep\n", "utf8");
+    await writeStackCredentialsCache(
+      stackInstanceId(dir),
+      {
+        OKE_STORE_SQL_USER: "oke",
+        OKE_STORE_SQL_PASSWORD: "from-cache",
+        OKE_STORE_SQL_DB: "oke",
+      },
+      home,
+    );
+    const creds = await loadExistingStackCredentials(dir, ["store.sql"], { home });
+    expect(creds?.["store.sql"]?.password).toBe("from-cache");
   });
 });
 

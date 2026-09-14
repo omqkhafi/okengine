@@ -16,11 +16,15 @@ import {
   DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
   loadExistingStackControls,
+  composeProjectName,
+  downStack,
   loadExistingStackCredentials,
+  postgresUrlPasswordRejected,
   resolveExtraPorts,
   stackAppSlug,
   stackInstanceId,
   writeDerivedFiles,
+  writeStackCredentialsCache,
   type DeriveOptions,
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
@@ -731,6 +735,57 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
                 : (svc.status ?? "pending"),
             })),
           };
+        }
+
+        await writeStackCredentialsCache(instanceId, stackEnv!);
+        const dbUrl = stackEnv?.DATABASE_URL ?? stackEnv?.OKE_STORE_SQL_URL;
+        if (dbUrl && (await postgresUrlPasswordRejected(dbUrl))) {
+          bootProgress.set(
+            "compose",
+            formatStatusLine(
+              "Postgres password mismatch — resetting this project's Docker volumes",
+              undefined,
+              "pending",
+            ),
+          );
+          await downStack(composeProjectName(cwd));
+          await up(composeFiles, dockerOut);
+          const healthAfterReset = options.composeHealth
+            ? await options.composeHealth({
+                files: composeFiles,
+                cwd: dockerOut,
+                env: dockerStarted.env,
+                onUpdate: onHealthUpdate,
+              })
+            : await (
+                await import("../docker/compose-health.ts")
+              ).watchComposeHealth({
+                files: composeFiles,
+                cwd: dockerOut,
+                env: dockerStarted.env,
+                run: composeHealthRun,
+                timeoutMs: 90_000,
+                isDone: (map) => {
+                  if (map.size === 0) return true;
+                  return [...map.entries()].every(
+                    ([name, s]) => name === aiServiceName || s === "ready" || s === "error",
+                  );
+                },
+                onUpdate: onHealthUpdate,
+              });
+          liveComposeHealth = healthAfterReset;
+          if (pendingStackSummary) {
+            pendingStackSummary = {
+              ...pendingStackSummary,
+              services: pendingStackSummary.services.map((svc) => ({
+                ...svc,
+                status: svc.serviceName
+                  ? (healthAfterReset.get(svc.serviceName) ?? svc.status ?? "pending")
+                  : (svc.status ?? "pending"),
+              })),
+            };
+          }
+          bootProgress.set("compose", formatStatusLine("docker compose up", undefined, "ready"));
         }
 
         // Compose no longer ships local AI recipes — BYO `OKE_AI_URL` watch

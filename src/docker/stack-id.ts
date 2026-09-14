@@ -6,9 +6,11 @@
  */
 
 import { createHash } from "node:crypto";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { ServiceCredentials } from "./types.ts";
 import { defaultHostPort, envPrefix } from "./helpers.ts";
+import { mergeStackCredentials, readStackCredentialsCacheText } from "./stack-credentials-cache.ts";
 
 /**
  * Stable 6-hex id for a project directory (local stacks only).
@@ -147,19 +149,31 @@ export function parseStackControls(text: string): Record<string, string> {
 }
 
 /**
- * Load credentials from `.env.local` when present.
+ * Load credentials from `.env.local`, falling back to `~/.oke/stacks/<id>.env`
+ * for roles the project file does not pin (recreate-at-same-path).
  *
  * @param cwd - Project root
  * @param roles - Image roles
+ * @param options - Injectable home for tests
  */
 export async function loadExistingStackCredentials(
   cwd: string,
   roles: readonly string[],
+  options: { readonly home?: string } = {},
 ): Promise<Readonly<Record<string, ServiceCredentials>> | undefined> {
+  let local: Record<string, ServiceCredentials> | undefined;
   const file = Bun.file(resolve(cwd, ".env.local"));
-  if (!(await file.exists())) return undefined;
-  const parsed = parseStackCredentials(await file.text(), roles);
-  return Object.keys(parsed).length > 0 ? parsed : undefined;
+  if (await file.exists()) {
+    const parsed = parseStackCredentials(await file.text(), roles);
+    if (Object.keys(parsed).length > 0) local = parsed;
+  }
+  const cachedText = await readStackCredentialsCacheText(
+    stackInstanceId(cwd),
+    options.home ?? homedir(),
+  );
+  const cached = cachedText ? parseStackCredentials(cachedText, roles) : undefined;
+  const cachedReady = cached && Object.keys(cached).length > 0 ? cached : undefined;
+  return mergeStackCredentials(local, cachedReady);
 }
 
 /**

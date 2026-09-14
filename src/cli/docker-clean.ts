@@ -14,6 +14,10 @@ import {
   type DockerRunner,
   type OkeStack,
 } from "../docker/cleanup.ts";
+import {
+  clearStackCredentialsCache,
+  instanceIdFromComposeProject,
+} from "../docker/stack-credentials-cache.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 
 /** Parsed flags for {@link runDockerClean}. */
@@ -392,6 +396,8 @@ async function tearDownProjects(
     try {
       write(`oke docker clean: down -v ${project}\n`);
       await downStack(project, run);
+      const instanceId = instanceIdFromComposeProject(project);
+      if (instanceId) await clearStackCredentialsCache(instanceId);
     } catch (err) {
       writeErr(`${err instanceof Error ? err.message : String(err)}\n`);
       return EXIT_RUNTIME;

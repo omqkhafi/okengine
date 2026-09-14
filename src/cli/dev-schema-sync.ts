@@ -14,6 +14,7 @@ import {
   stackAppSlug,
   stackInstanceId,
   writeDerivedFiles,
+  writeStackCredentialsCache,
 } from "../docker/index.ts";
 import { drizzleDialectFromSqlDriver } from "../drivers/drizzle-dialect.ts";
 import { ensureDrizzleConfig } from "./ensure-drizzle-config.ts";
@@ -101,6 +102,7 @@ async function ensureDockerStack(
     host: "127.0.0.1",
   });
   await writeDerivedFiles(derived, resolve(cwd, DEFAULT_DOCKER_DIR), { writeStackEnv: true });
+  await writeStackCredentialsCache(instanceId, derived.stackEnv);
   if (!quietComposeReady) {
     write(
       "oke: docker compose env ready under .env.local (start containers with `oke dev` or docker compose up)\n",

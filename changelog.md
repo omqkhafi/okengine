@@ -12,6 +12,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.8 — 2026-09-14
+
+### 🐛 Fixed
+
+- `oke dev` recovers when Postgres rejects `oke` after you delete and recreate
+  the project folder at the same path. Compose volumes keep the first init
+  password; a new `.env.local` does not. Dev now reuses `~/.oke/stacks/<id>.env`
+  and, on `password authentication failed`, resets that project's volumes once.
+
 ## v0.19.7 — 2026-09-14
 
 ### 🐛 Fixed

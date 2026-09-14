@@ -807,7 +807,13 @@ async function installOkeRlsHelpers(write: (text: string) => void): Promise<void
       await conn.close();
     }
   } catch (err) {
-    write(`oke db: oke.* helpers skipped — ${err instanceof Error ? err.message : String(err)}\n`);
+    const detail = err instanceof Error ? err.message : String(err);
+    write(`oke db: oke.* helpers skipped — ${detail}\n`);
+    if (/password authentication failed/i.test(detail)) {
+      write(
+        "oke db: leftover Postgres volume — password in .env.local does not match this project's Docker volume (common after deleting and recreating the folder). Run `oke docker clean` then `oke dev`.\n",
+      );
+    }
   }
 }
 
