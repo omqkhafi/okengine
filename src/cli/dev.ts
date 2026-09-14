@@ -1771,8 +1771,12 @@ async function waitForAppReady(
   timeoutMs: number,
 ): Promise<number> {
   const started = Date.now();
+  let childExit: number | undefined;
+  void proc.exited.then((code) => {
+    childExit = code;
+  });
   while (Date.now() - started < timeoutMs) {
-    const exitCode = proc.exitCode;
+    const exitCode = proc.exitCode ?? childExit ?? null;
     if (exitCode !== null) {
       throw new Error(`oke dev: app process exited before ready (code ${exitCode})`);
     }

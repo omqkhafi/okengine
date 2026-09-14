@@ -9,8 +9,10 @@ import { resolve } from "node:path";
 import { resolveDriverId } from "../config/index.ts";
 import { VAULT_DEFAULTS } from "../config/driver-defaults.ts";
 import { resolveAppEntryForPluginTables } from "../elements/store/load-plugin-tables.ts";
+import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import { buildVaultBootChain, normalizeVaultDriverId } from "../elements/vault/boot-chain.ts";
 import { createVaultRuntime, VaultBootError, type VaultGap } from "../elements/vault/runtime.ts";
+import type { OkeOptions } from "../kernel/app.ts";
 import { requiredEnvRegistry, secretRegistry } from "../kernel/element-registries.ts";
 import { formatCliChrome } from "../term.ts";
 import { loadOkeConfig } from "./load-config.ts";
@@ -43,6 +45,10 @@ export interface AskVaultGapsOptions {
 /**
  * Probe Vault contracts declared by the app entry and return boot gaps.
  *
+ * `oke()` drains `secretRegistry` at construction (`registry: "consume"`),
+ * so the probe reads `app.$options.secrets` — the same list boot uses —
+ * and unions any leftovers still on the module-evaluation registries.
+ *
  * @param cwd - Project root
  * @param entry - Optional entry override
  */
@@ -54,9 +60,12 @@ export async function probeVaultGaps(cwd: string, entry?: string): Promise<reado
   try {
     const entryAbs = await resolveAppEntryForPluginTables(cwd, entry);
     if (!entryAbs) return [];
-    await import(entryAbs);
-    const secrets = secretRegistry.slice();
-    const requiredEnv = requiredEnvRegistry.slice();
+    const mod = (await import(entryAbs)) as Record<string, unknown>;
+    const fromApp = vaultProbeContracts(mod);
+    const secrets = unionSecrets(fromApp?.secrets ?? [], secretRegistry.slice());
+    const requiredEnv = [
+      ...new Set([...(fromApp?.requiredEnv ?? []), ...requiredEnvRegistry.slice()]),
+    ];
     if (secrets.length === 0 && requiredEnv.length === 0) return [];
 
     const loaded = await loadOkeConfig(cwd).catch(() => null);
@@ -89,6 +98,53 @@ export async function probeVaultGaps(cwd: string, entry?: string): Promise<reado
     requiredEnvRegistry.length = 0;
     requiredEnvRegistry.push(...prevRequired);
   }
+}
+
+/**
+ * Contracts the imported `oke()` app will boot with (`$options.secrets` /
+ * `vault.requiredEnv`). Undefined when the module has no bootable app.
+ *
+ * @param mod - Imported entry namespace
+ */
+function vaultProbeContracts(mod: Record<string, unknown>):
+  | {
+      readonly secrets: readonly VaultSecretDecl[];
+      readonly requiredEnv: readonly string[];
+    }
+  | undefined {
+  for (const key of ["app", "default", ...Object.keys(mod)]) {
+    const value = mod[key];
+    if (!value || typeof value !== "object") continue;
+    const boot = (value as { boot?: unknown }).boot;
+    const options = (value as { $options?: OkeOptions }).$options;
+    if (typeof boot !== "function" || options === undefined) continue;
+    return {
+      secrets: options.secrets ?? [],
+      requiredEnv: options.vault?.requiredEnv ?? [],
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Concat secret lists, skipping later entries that share a contract name.
+ *
+ * @param primary - App `$options.secrets` (boot source of truth)
+ * @param extra - Registry leftovers (`registry: "ignore"` / no `oke()` export)
+ */
+function unionSecrets(
+  primary: readonly VaultSecretDecl[],
+  extra: readonly VaultSecretDecl[],
+): VaultSecretDecl[] {
+  const out: VaultSecretDecl[] = [...primary];
+  const names = new Set(primary.map((secret) => secret.name));
+  for (const secret of extra) {
+    if (!names.has(secret.name)) {
+      names.add(secret.name);
+      out.push(secret);
+    }
+  }
+  return out;
 }
 
 /**

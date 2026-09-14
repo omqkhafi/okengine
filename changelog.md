@@ -12,6 +12,22 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.9 — 2026-09-14
+
+### 🐛 Fixed
+
+#### Dev, Keel & create-oke
+
+- `oke dev` prompts for Vault boot gaps again when the app calls `oke()` at
+  module load (Keel / `OPENROUTER_API_KEY`). The probe now reads
+  `app.$options.secrets` — the same list boot uses — instead of the drained
+  `secretRegistry`. A failed app-child boot exits immediately instead of
+  waiting 30s under `bun --hot`.
+- Keel `prepare` on Windows uses a directory junction (absolute target) instead
+  of a symlink that needs Developer Mode (`EPERM` / `-4048`). Scripts invoke the
+  checkout CLI (`bun ../../src/cli/index.ts`) so PowerShell cannot pick a global
+  `oke` that then fails with `Cannot find package 'zod'`.
+
 ## v0.19.8 — 2026-09-14
 
 ### 🐛 Fixed

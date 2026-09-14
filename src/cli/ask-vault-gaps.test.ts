@@ -2,11 +2,21 @@
  * Tests for interactive Vault gap fill during `oke dev`.
  */
 
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { maybeAskVaultGaps } from "./ask-vault-gaps.ts";
+import { join, resolve } from "node:path";
+import { resetRequiredEnvNames, resetSecrets } from "../elements/vault/declare.ts";
+import { resetBindings } from "../kernel/on.ts";
+import { maybeAskVaultGaps, probeVaultGaps } from "./ask-vault-gaps.ts";
+
+const OKE = resolve(import.meta.dir, "../index.ts");
+
+afterEach(() => {
+  resetBindings();
+  resetSecrets();
+  resetRequiredEnvNames();
+});
 
 describe("maybeAskVaultGaps", () => {
   test("skips when non-TTY", async () => {
@@ -77,6 +87,52 @@ describe("maybeAskVaultGaps", () => {
       });
       expect(code).toBe(1);
       expect(logs.some((l) => l.includes("missing secret"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("probeVaultGaps", () => {
+  test("sees secrets on oke({ secrets }) after consume drains the registry", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "probe-vault-"));
+    const name = `PROBE_GAP_${crypto.randomUUID().replaceAll("-", "_")}`;
+    try {
+      writeFileSync(
+        join(dir, "app.ts"),
+        `
+import { oke, vault } from ${JSON.stringify(OKE)};
+export const key = vault.secret(${JSON.stringify(name)}, {
+  description: "probe gap",
+});
+export const app = oke({
+  name: "probe-vault",
+  autoBoot: false,
+  secrets: [key],
+});
+`,
+      );
+      const gaps = await probeVaultGaps(dir, "app.ts");
+      expect(gaps.map((g) => g.name)).toContain(name);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("sees auto-registered vault.secret after oke() consume", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "probe-vault-auto-"));
+    const name = `PROBE_AUTO_${crypto.randomUUID().replaceAll("-", "_")}`;
+    try {
+      writeFileSync(
+        join(dir, "app.ts"),
+        `
+import { oke, vault } from ${JSON.stringify(OKE)};
+vault.secret(${JSON.stringify(name)}, { description: "auto registry gap" });
+export const app = oke({ name: "probe-vault-auto", autoBoot: false });
+`,
+      );
+      const gaps = await probeVaultGaps(dir, "app.ts");
+      expect(gaps.map((g) => g.name)).toContain(name);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

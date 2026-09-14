@@ -40,10 +40,10 @@ services:
       test:
         - "CMD-SHELL"
         - "pg_isready -h 127.0.0.1 -p 6432 || exit 1"
-      interval: "5s"
-      timeout: "3s"
-      retries: 12
-      start_period: "5s"
+      interval: "2s"
+      timeout: "2s"
+      retries: 20
+      start_period: "2s"
     volumes:
       - "./pgdog/pgdog.toml:/pgdog/pgdog.toml:ro"
       - "./pgdog/users.toml:/pgdog/users.toml:ro"

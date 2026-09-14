@@ -18,12 +18,12 @@ export const routes = {
     remove: {
       method: "DELETE",
       path: "/attachments/:id",
-      gates: ["member", "files:write"] as const,
+      gates: ["member"] as const,
     },
     upload: {
       method: "POST",
       path: "/attachments",
-      gates: ["member", "task:write"] as const,
+      gates: ["member"] as const,
     },
   },
   comments: {
@@ -189,11 +189,6 @@ export const routes = {
     },
   },
   inbox: {
-    list: {
-      method: "GET",
-      path: "/inbox",
-      gates: ["member"] as const,
-    },
     read: {
       method: "POST",
       path: "/inbox/:id/read",

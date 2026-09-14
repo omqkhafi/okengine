@@ -81,10 +81,18 @@ if (
   process.exit(1);
 }
 
-await mod.app.boot({
-  rootDir: process.env["OKE_ROOT_DIR"],
-  ...(manifest !== undefined ? { manifest } : {}),
-});
+try {
+  await mod.app.boot({
+    rootDir: process.env["OKE_ROOT_DIR"],
+    ...(manifest !== undefined ? { manifest } : {}),
+  });
+} catch (err) {
+  // `bun --hot` keeps the watcher alive on an uncaught throw, so `oke dev`
+  // would wait the full ready timeout after VaultBootError. Exit so the
+  // parent sees a dead child immediately.
+  console.error(err);
+  process.exit(1);
+}
 const handle = createBunRuntime().serve(mod.app, {
   port,
   hostname,

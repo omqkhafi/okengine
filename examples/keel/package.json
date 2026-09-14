@@ -6,9 +6,9 @@
   "scripts": {
     "prepare": "bun scripts/link-okengine.ts",
     "typecheck": "tsc --noEmit",
-    "test": "oke test",
-    "dev": "oke dev",
-    "seed": "oke db seed",
+    "test": "bun ../../src/cli/index.ts test",
+    "dev": "bun ../../src/cli/index.ts dev",
+    "seed": "bun ../../src/cli/index.ts db seed",
     "reset": "bun scripts/reset.ts"
   },
   "dependencies": {

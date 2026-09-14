@@ -33,7 +33,7 @@ declare module "okengine/client" {
           errors: {};
           method: "DELETE";
           path: "/attachments/:id";
-          gates: ["member","files:write"];
+          gates: ["member"];
         };
         "upload": {
           in: { "taskId"?: string; "id"?: string; "name": string; "text": string; "contentType"?: string };
@@ -43,13 +43,13 @@ declare module "okengine/client" {
           };
           method: "POST";
           path: "/attachments";
-          gates: ["member","task:write"];
+          gates: ["member"];
         };
       };
       "comments": {
         "create": {
           in: { "id": string; "body": string };
-          out: { "id": string; "taskId": string; "authorEmail": string | null; "body": string };
+          out: { "id": string; "taskId": string; "authorEmail": unknown; "body": string };
           errors: {
             "NotFound": { "id": string };
           };
@@ -59,7 +59,7 @@ declare module "okengine/client" {
         };
         "get": {
           in: { "id": string };
-          out: { "id": string; "taskId": string; "authorEmail": string | null; "body": string };
+          out: { "id": string; "taskId": string; "authorEmail": unknown; "body": string };
           errors: {
             "NotFound": { "id": string };
           };
@@ -69,7 +69,7 @@ declare module "okengine/client" {
         };
         "list": {
           in: { "q"?: string; "search"?: string; "limit"?: number; "order"?: string; "orderBy"?: string; "select"?: string; "or"?: string; "and"?: string; "offset"?: number; "cursor"?: string; "id": string };
-          out: readonly { "id": string; "taskId": string; "authorEmail": string | null; "body": string }[];
+          out: readonly { "id": string; "taskId": string; "authorEmail": unknown; "body": string }[];
           errors: {};
           method: "GET";
           path: "/tasks/:id/comments";
@@ -93,7 +93,7 @@ declare module "okengine/client" {
         };
         "update": {
           in: { "id": string; "body": string };
-          out: { "id": string; "taskId": string; "authorEmail": string | null; "body": string };
+          out: { "id": string; "taskId": string; "authorEmail": unknown; "body": string };
           errors: {
             "NotFound": { "id": string };
           };
@@ -148,7 +148,7 @@ declare module "okengine/client" {
           gates: ["member"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "title": string; "body": string; "parentKind": string; "parentId": string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -246,7 +246,7 @@ declare module "okengine/client" {
           gates: ["member"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "projectId": string; "name": string; "schemaJson"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -323,7 +323,7 @@ declare module "okengine/client" {
           errors: {};
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "name": string; "status"?: string; "ownerEmail"?: string; "targetDate"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -334,14 +334,6 @@ declare module "okengine/client" {
         };
       };
       "inbox": {
-        "list": {
-          in: { "q"?: string; "search"?: string; "limit"?: number; "order"?: string; "orderBy"?: string; "select"?: string; "or"?: string; "and"?: string; "offset"?: number; "cursor"?: string };
-          out: readonly unknown[];
-          errors: {};
-          method: "GET";
-          path: "/inbox";
-          gates: ["member"];
-        };
         "read": {
           in: { "id": string };
           out: { "ok": true };
@@ -409,7 +401,7 @@ declare module "okengine/client" {
           gates: ["member","member:admin"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "email": string; "role": string; "name"?: string; "spaceId"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -439,42 +431,42 @@ declare module "okengine/client" {
       };
       "notify": {
         "onComment": {
-          in: unknown;
+          in: { "id": string; "taskId": string; "body": string };
           out: unknown;
           errors: {};
         };
         "onComplete": {
-          in: unknown;
+          in: { "id": string; "identifier": string; "title": string };
           out: unknown;
           errors: {};
         };
         "onDraft": {
-          in: unknown;
+          in: { "id": string };
           out: unknown;
           errors: {};
         };
         "onForm": {
-          in: unknown;
+          in: { "formId": string; "taskId": string; "customerName": string };
           out: unknown;
           errors: {};
         };
         "onGoal": {
-          in: unknown;
+          in: { "goalId": string; "name": string; "status": string };
           out: unknown;
           errors: {};
         };
         "onGoalChanged": {
-          in: unknown;
+          in: { "goalId": string; "name": string; "status": string };
           out: unknown;
           errors: {};
         };
         "onProject": {
-          in: unknown;
+          in: { "projectId": string; "name": string; "health"?: string; "actorEmail"?: unknown };
           out: unknown;
           errors: {};
         };
         "onTask": {
-          in: unknown;
+          in: { "id": string; "identifier": string; "title": string; "assigneeEmail"?: unknown };
           out: unknown;
           errors: {};
         };
@@ -566,7 +558,7 @@ declare module "okengine/client" {
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "spaceId": string; "goalId"?: string; "name": string; "status"?: string; "leadEmail"?: string; "startDate"?: string; "targetDate"?: string; "color"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -595,22 +587,22 @@ declare module "okengine/client" {
           errors: {};
         };
         "onComment": {
-          in: unknown;
+          in: { "id": string; "taskId": string; "body": string };
           out: unknown;
           errors: {};
         };
         "onComplete": {
-          in: unknown;
+          in: { "id": string; "identifier": string; "title": string };
           out: unknown;
           errors: {};
         };
         "onForm": {
-          in: unknown;
+          in: { "formId": string; "taskId": string; "customerName": string };
           out: unknown;
           errors: {};
         };
         "onProject": {
-          in: unknown;
+          in: { "projectId": string; "name": string; "health"?: string; "actorEmail"?: unknown };
           out: unknown;
           errors: {};
         };
@@ -685,7 +677,7 @@ declare module "okengine/client" {
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "key": string; "name": string; "color"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -706,7 +698,7 @@ declare module "okengine/client" {
         };
         "get": {
           in: { "id": string };
-          out: { "id": string; "name": string; "groupName": string | null };
+          out: { "id": string; "name": string; "groupName": unknown };
           errors: {
             "NotFound": { "id": string };
           };
@@ -716,7 +708,7 @@ declare module "okengine/client" {
         };
         "list": {
           in: { "q"?: string; "search"?: string; "limit"?: number; "order"?: string; "orderBy"?: string; "select"?: string; "or"?: string; "and"?: string; "offset"?: number; "cursor"?: string };
-          out: readonly { "id": string; "name": string; "groupName": string | null }[];
+          out: readonly { "id": string; "name": string; "groupName": unknown }[];
           errors: {};
           method: "GET";
           path: "/tags";
@@ -731,7 +723,7 @@ declare module "okengine/client" {
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "name": string; "groupName"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };
@@ -764,7 +756,7 @@ declare module "okengine/client" {
         };
         "assign": {
           in: { "id": string; "assigneeEmail": string };
-          out: { "id": string; "identifier": string; "userId": string | null };
+          out: { "id": string; "identifier": string; "userId": unknown };
           errors: {
             "NotFound": { "id": string };
           };
@@ -784,7 +776,7 @@ declare module "okengine/client" {
         };
         "create": {
           in: { "title": string; "spaceKey": string; "description"?: string; "priority"?: number; "projectId"?: string; "sectionId"?: string; "parentId"?: string; "dueDate"?: string; "startDate"?: string; "roleNeeded"?: string; "kind"?: string; "assigneeEmail"?: string };
-          out: { "id": string; "identifier": string; "userId": string | null };
+          out: { "id": string; "identifier": string; "userId": unknown };
           errors: {
             "NotFound": { "id": string };
             "Duplicate": { "id"?: string; "identifier"?: string };
@@ -806,7 +798,7 @@ declare module "okengine/client" {
         };
         "duplicate": {
           in: { "id": string };
-          out: { "id": string; "identifier": string; "userId": string | null };
+          out: { "id": string; "identifier": string; "userId": unknown };
           errors: {
             "NotFound": { "id": string };
           };
@@ -826,7 +818,7 @@ declare module "okengine/client" {
         };
         "get": {
           in: { "id": string };
-          out: { "id": string; "identifier": string; "title": string; "description": string | null; "kind": string; "priority": number; "estimate": number | null; "status": string; "spaceId": string; "projectId": string | null; "sectionId": string | null; "parentId": string | null; "dueDate": string | null; "completedAt": string | null; "archivedAt": string | null; "roleNeeded": string | null };
+          out: { "id": string; "identifier": string; "title": string; "description": unknown; "kind": string; "priority": number; "estimate": unknown; "status": string; "spaceId": string; "projectId": unknown; "sectionId": unknown; "parentId": unknown; "dueDate": unknown; "completedAt": unknown; "archivedAt": unknown; "roleNeeded": unknown };
           errors: {
             "NotFound": { "id": string };
           };
@@ -836,7 +828,7 @@ declare module "okengine/client" {
         };
         "list": {
           in: { "q"?: string; "search"?: string; "limit"?: number; "order"?: string; "orderBy"?: string; "select"?: string; "or"?: string; "and"?: string; "offset"?: number; "cursor"?: string; "spaceKey"?: string; "projectId"?: string; "status"?: string };
-          out: readonly { "id": string; "identifier": string; "title": string; "description": string | null; "kind": string; "priority": number; "estimate": number | null; "status": string; "spaceId": string; "projectId": string | null; "sectionId": string | null; "parentId": string | null; "dueDate": string | null; "completedAt": string | null; "archivedAt": string | null; "roleNeeded": string | null }[];
+          out: readonly { "id": string; "identifier": string; "title": string; "description": unknown; "kind": string; "priority": number; "estimate": unknown; "status": string; "spaceId": string; "projectId": unknown; "sectionId": unknown; "parentId": unknown; "dueDate": unknown; "completedAt": unknown; "archivedAt": unknown; "roleNeeded": unknown }[];
           errors: {};
           method: "GET";
           path: "/tasks";
@@ -855,7 +847,7 @@ declare module "okengine/client" {
         };
         "move": {
           in: { "id": string; "projectId"?: string; "sectionId"?: string; "spaceKey"?: string };
-          out: { "id": string; "identifier": string; "userId": string | null };
+          out: { "id": string; "identifier": string; "userId": unknown };
           errors: {
             "NotFound": { "id": string };
           };
@@ -885,8 +877,8 @@ declare module "okengine/client" {
           gates: ["member"];
         };
         "update": {
-          in: { "id": string; "title"?: string; "description"?: string; "priority"?: number; "estimate"?: number | null; "status"?: string; "dueDate"?: string | null; "roleNeeded"?: string | null };
-          out: { "id": string; "identifier": string; "title": string; "description": string | null; "kind": string; "priority": number; "estimate": number | null; "status": string; "spaceId": string; "projectId": string | null; "sectionId": string | null; "parentId": string | null; "dueDate": string | null; "completedAt": string | null; "archivedAt": string | null; "roleNeeded": string | null };
+          in: { "id": string; "title"?: string; "description"?: string; "priority"?: number; "estimate"?: number | null; "status"?: string; "dueDate"?: unknown; "roleNeeded"?: unknown };
+          out: { "id": string; "identifier": string; "title": string; "description": unknown; "kind": string; "priority": number; "estimate": unknown; "status": string; "spaceId": string; "projectId": unknown; "sectionId": unknown; "parentId": unknown; "dueDate": unknown; "completedAt": unknown; "archivedAt": unknown; "roleNeeded": unknown };
           errors: {
             "NotFound": { "id": string };
           };
@@ -941,7 +933,7 @@ declare module "okengine/client" {
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
         };
         "update": {
-          in: unknown;
+          in: { "id": string; "projectId": string; "name": string; "kind": "list" | "board" | "timeline" | "calendar"; "filtersJson"?: string; "ownerEmail"?: string };
           out: { "id": string };
           errors: {
             "NotFound": { "id": string };

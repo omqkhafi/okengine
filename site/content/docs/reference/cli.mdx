@@ -185,6 +185,12 @@ oke db search-backfill notes --batch 500
   okengine`.
 </Accordion>
 
+<Accordion title="Cannot find package zod from a global okengine (Windows)">
+  `oke` resolved to `%USERPROFILE%\.bun\install\global\node_modules\okengine`. From a framework
+  checkout run `bun install` then `bun run dev:keel` — not a global `oke`. Keel links with a Windows
+  junction; a plain symlink needs Developer Mode and fails with `EPERM`.
+</Accordion>
+
 <Accordion title="Ctrl+C emptied the new create-oke folder (Windows)">
   Interrupting install or `bun run dev` used to delete a folder create-oke had just created. On
   Windows that wipe often failed mid-tree (`EBUSY`) and left an empty or half-deleted project.
