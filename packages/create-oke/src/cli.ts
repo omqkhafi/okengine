@@ -22,7 +22,8 @@ import {
   text,
 } from "@clack/prompts";
 import { basename, relative, resolve } from "node:path";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { shouldWipeNewProject, wipeNewProjectDir } from "./cleanup.ts";
 import { agentsMdContent } from "./agents-md.ts";
 import {
   createDefaultsPath,
@@ -1048,7 +1049,9 @@ async function runInteractive(
 }
 
 /**
- * Scaffold with optional spinner / outro, cleaning up on failure or cancel.
+ * Scaffold with optional spinner / outro. Wipe an uncommitted new folder on
+ * scaffold failure or cancel — never after files are written (Ctrl+C during
+ * install / `bun run dev` must leave the project).
  *
  * @param options - Scaffold inputs + interactive / install flags
  */
@@ -1077,21 +1080,28 @@ async function runScaffold(
     runPostScaffold,
   } = options;
   const existed = existsSync(targetDir);
+  let filesCommitted = false;
   let spun: ReturnType<typeof spinner> | undefined;
 
   const cleanup = (): void => {
-    if (!existed && existsSync(targetDir)) {
-      rmSync(targetDir, { recursive: true, force: true });
+    if (shouldWipeNewProject(existed, filesCommitted)) {
+      wipeNewProjectDir(targetDir);
     }
   };
 
-  const onSigInt = (): void => {
+  const onAbort = (): void => {
     spun?.stop("Cancelled.");
     cleanup();
     if (interactive) cancel("Cancelled.");
     process.exit(1);
   };
-  process.once("SIGINT", onSigInt);
+  process.once("SIGINT", onAbort);
+  if (process.platform === "win32") process.once("SIGBREAK", onAbort);
+
+  const detachAbort = (): void => {
+    process.off("SIGINT", onAbort);
+    if (process.platform === "win32") process.off("SIGBREAK", onAbort);
+  };
 
   try {
     if (interactive) {
@@ -1109,6 +1119,8 @@ async function runScaffold(
       ...(pgdog !== undefined ? { pgdog } : {}),
       ...(proxy !== undefined ? { proxy } : {}),
     });
+    filesCommitted = true;
+    detachAbort();
     if (spun) spun.stop("Scaffolded.");
 
     // Models were chosen in the wizard — write env + AI models in src/core.ts before install
@@ -1134,8 +1146,7 @@ async function runScaffold(
       });
       if (!installOk) {
         if (interactive) log.error("Install failed.");
-        cleanup();
-        console.error("create-oke: bun install failed");
+        console.error("create-oke: bun install failed — project kept; retry bun install");
         return 1;
       }
       if (interactive) log.success("Installed.");
@@ -1183,7 +1194,7 @@ async function runScaffold(
     console.error(e instanceof Error ? e.message : e);
     return 1;
   } finally {
-    process.off("SIGINT", onSigInt);
+    detachAbort();
   }
 }
 

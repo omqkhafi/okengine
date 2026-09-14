@@ -12,6 +12,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.7 — 2026-09-14
+
+### 🐛 Fixed
+
+- create-oke no longer deletes a newly created project when you press Ctrl+C
+  during `bun install` or `bun run dev`. That wipe often failed mid-tree on
+  Windows (`EBUSY`) and left an empty or half-deleted folder. Cancel still
+  removes an unfinished folder if you interrupt before scaffold finishes.
+
 ## v0.19.6 — 2026-09-14
 
 ### 🐛 Fixed

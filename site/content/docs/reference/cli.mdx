@@ -185,6 +185,15 @@ oke db search-backfill notes --batch 500
   okengine`.
 </Accordion>
 
+<Accordion title="Ctrl+C emptied the new create-oke folder (Windows)">
+  Interrupting install or `bun run dev` used to delete a folder create-oke had just created. On
+  Windows that wipe often failed mid-tree (`EBUSY`) and left an empty or half-deleted project.
+
+After scaffold, Ctrl+C only stops the process. `cd` into the folder and run `bun run dev` again.
+Missing `docker` is a separate install — Compose needs it on PATH.
+
+</Accordion>
+
 <Accordion title="Console shows Shell assets not built">
   `:6533` is up but the SPA files were not found. Published `okengine` ships them. Upgrade past the
   Windows path bug (`file://` `/C:/…` lookup), then restart `bun run dev`. From a framework

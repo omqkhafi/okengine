@@ -8,12 +8,12 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { wipeNewProjectDir } from "./cleanup.ts";
 import { resolveLocalOkengineRoot, resolveTemplateDir, type TemplateId } from "./templates.ts";
 import { agentsMdContent } from "./agents-md.ts";
 import type { CreateDefaults, CreateProxyId } from "./create-defaults.ts";
@@ -136,7 +136,8 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
 
   const blocked = targetDirectoryBlockReason(targetDir);
   if (blocked) throw new Error(blocked);
-  if (!existsSync(targetDir)) {
+  const createdDir = !existsSync(targetDir);
+  if (createdDir) {
     mkdirSync(targetDir, { recursive: true });
   }
 
@@ -219,7 +220,7 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
       files: written,
     };
   } catch (e) {
-    rmSync(targetDir, { recursive: true, force: true });
+    if (createdDir) wipeNewProjectDir(targetDir);
     throw e;
   }
 }
