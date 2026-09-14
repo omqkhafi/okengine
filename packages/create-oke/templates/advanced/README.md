@@ -7,7 +7,7 @@ Scaffold, not a finished product: keep the Flows you want, replace the rest.
 ```bash
 bun install
 oke mode docker   # seeded by create-oke recommended path
-oke dev           # auto db push; asks once whether to seed
+bun run dev       # or: bunx oke dev  — auto db push; asks once whether to seed
 bun run web       # Vite SPA — proxies /notes · /health to the app
 ```
 

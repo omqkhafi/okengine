@@ -149,6 +149,24 @@ export function nameFromFlowFile(
 }
 
 /**
+ * True when a walked source should be omitted from Manifest extract.
+ *
+ * `node_modules` / `.git` are path *segments* (POSIX-normalized) so Windows
+ * `node_modules\okengine\…` is skipped the same as `node_modules/okengine/…`.
+ * Scanning dependency trees would otherwise parse framework fixtures and
+ * throw during extract — Docker-first `oke dev` then hard-fails **OKE1020**.
+ *
+ * @param relPath - Glob-relative path (any separator)
+ */
+export function isSkippedExtractSource(relPath: string): boolean {
+  const posix = toPosixPath(relPath);
+  const parts = posix.split("/").filter(Boolean);
+  if (parts.includes("node_modules") || parts.includes(".git")) return true;
+  const base = parts[parts.length - 1] ?? "";
+  return base.endsWith(".test.ts") || base.endsWith(".test.tsx");
+}
+
+/**
  * True when the path is under a flows tree (`src/flows/…` or `…/flows/…`).
  *
  * Adopt-relative `unit/file.ts` (no prefix) is not a tree path — generate-adopt

@@ -404,9 +404,10 @@ Next steps:
 
   cd ${formatCdPath(result.targetDir)}
   bun install
-  oke schema generate   # system stubs → .oke/schema/oke.ts (also runs on db push)
-  oke dev               # app :6530 · Console :6533 · MCP :6535
-  bun run web           # Vite SPA — proxies /notes · /health to the app
+  bunx oke schema generate   # system stubs → .oke/schema/oke.ts (also runs on db push)
+  bun run dev                # app :6530 · Console :6533 · MCP :6535
+                             # Windows: bunx oke dev  (PowerShell has no local oke on PATH)
+  bun run web                # Vite SPA — proxies /notes · /health to the app
 
 Docs: ${docsUrl("/docs")}
 `;

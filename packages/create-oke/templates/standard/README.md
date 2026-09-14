@@ -6,7 +6,7 @@ product — every Flow and table here is real wiring you keep or replace.
 
 ```bash
 bun install
-oke dev           # auto db push; asks once whether to seed
+bun run dev       # or: bunx oke dev  — auto db push; asks once whether to seed
 bun run web       # Vite SPA — proxies /notes · /health to the app
 ```
 

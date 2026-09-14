@@ -260,3 +260,47 @@ describe("boot-level: built-in auth flows under docker", () => {
     await app.stop();
   });
 });
+
+describe("boot-level: OKE1020 names a failed extract", () => {
+  test("docker boot includes Manifest extract failed when rootDir extract throws", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const dir = await mkdtemp(join(tmpdir(), "oke-stamp-extract-fail-"));
+    try {
+      await mkdir(join(dir, "src"), { recursive: true });
+      await writeFile(
+        join(dir, "src/poison.ts"),
+        `
+import { on, flow, signal } from "okengine";
+export const inbound = on(signal.once("x"), flow({ do: () => ({}) }));
+`,
+      );
+      const create = on(
+        http.get("/x").public(),
+        flow("main.health", { do: () => ({ ok: true as const }) }),
+      );
+      const app = oke({ name: "stamp-extract-fail", gate: { policies: [gate.public] } }).adopt({
+        create,
+      });
+      const memoryDrivers = {
+        store: {
+          sql: { dev: "memory", prod: "memory" },
+          kv: { dev: "memory", prod: "memory" },
+        },
+        channel: { email: { dev: "console", prod: "console" } },
+      } as const;
+      await expect(
+        app.boot({
+          env: "dev",
+          docker: true,
+          rootDir: dir,
+          unguardedHttp: "allow",
+          startScheduler: false,
+          config: { drivers: memoryDrivers },
+        }),
+      ).rejects.toThrow(/OKE1020[\s\S]*Manifest extract failed/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

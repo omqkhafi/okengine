@@ -34,8 +34,10 @@ cd notes
 ### Run the dev loop
 
 ```bash
-oke dev
+bun run dev
 ```
+
+`bun run dev` is the portable form (`bunx oke dev` is the same). Bare `oke` needs `node_modules/.bin` on PATH — PowerShell does not add it.
 
 Compose comes up (pull / create / start progress streams into the boot status
 lines), the backend listens on **6530**, Console on **6533**, app MCP on **6535**,
@@ -176,6 +178,17 @@ oke db search-backfill notes --batch 500
 ## Troubleshooting
 
 <Accordions>
+
+<Accordion title="oke is not recognized (Windows PowerShell)">
+  PowerShell has no local `oke` on PATH. Use `bun run dev` or `bunx oke dev`. New Cursor/VS Code
+  terminals inherit `node_modules/.bin` from `.vscode/settings.json`. Global: `bun install -g
+  okengine`.
+</Accordion>
+
+<Accordion title="OKE1020 on oke dev (Compose)">
+  The app child had no Manifest to stamp effects (`main.health`). `oke dev` now hands the parent
+  extract to the child. A failed extract appends `Manifest extract failed — …` (`oxc-parser`).
+</Accordion>
 
 <Accordion title="oke start: no entry found">
   Set `package.json` `okengine.entry` or `main`, pass `--entry`, or keep a conventional

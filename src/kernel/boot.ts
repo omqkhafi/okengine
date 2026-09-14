@@ -671,8 +671,8 @@ type AutoExtractResult = {
  */
 async function tryAutoExtractManifest(rootDir: string): Promise<AutoExtractResult> {
   try {
-    const url = new URL("../compiler/extract.ts", import.meta.url);
-    const { extractManifest } = (await import(url.href)) as typeof import("../compiler/extract.ts");
+    const href = new URL("../compiler/extract.ts", import.meta.url.replace(/\\/g, "/")).href;
+    const { extractManifest } = (await import(href)) as typeof import("../compiler/extract.ts");
     return { manifest: await extractManifest({ rootDir }) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -749,7 +749,11 @@ export async function mintCapabilities(
       if (extractError !== undefined) {
         emitBootWarn(`oke boot: Manifest extract failed — ${extractError}`);
       }
-      throwOke("NO_EFFECTS_DECLARED", { flow: f.name });
+      const extract =
+        extractError !== undefined
+          ? ` Manifest extract failed — ${extractError.length > 240 ? `${extractError.slice(0, 237)}...` : extractError}`
+          : "";
+      throwOke("NO_EFFECTS_DECLARED", { flow: f.name, extract });
     }
     if (!noEffectsWarned) {
       noEffectsWarned = true;
@@ -787,9 +791,9 @@ export function resetStaleAdoptBarrelWarnForTests(): void {
  */
 async function tryListFlowsUnits(rootDir: string): Promise<readonly string[] | undefined> {
   try {
-    const url = new URL("../compiler/generate-adopt.ts", import.meta.url);
+    const href = new URL("../compiler/generate-adopt.ts", import.meta.url.replace(/\\/g, "/")).href;
     const { generateAdoptBarrel } = (await import(
-      url.href
+      href
     )) as typeof import("../compiler/generate-adopt.ts");
     return (await generateAdoptBarrel({ rootDir })).units;
   } catch {

@@ -14,7 +14,7 @@
  * `index` is also a reserved leaf).
  */
 
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
@@ -110,7 +110,17 @@ export async function writeAdoptBarrel(
     // missing — write
   }
   await writeFile(tmp, source);
-  await rename(tmp, target);
+  try {
+    await rename(tmp, target);
+  } catch {
+    // Windows cannot rename onto an existing path (EEXIST / EPERM).
+    await writeFile(target, source);
+    try {
+      await unlink(tmp);
+    } catch {
+      // tmp already replaced or removed
+    }
+  }
   return { written: true };
 }
 

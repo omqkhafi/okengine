@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   importSpecifierFromWalked,
   isFlowsTreeFile,
+  isSkippedExtractSource,
   nameFromFlowFile,
   pathFromFlowFile,
   toPosixPath,
@@ -115,5 +116,17 @@ describe("isFlowsTreeFile", () => {
     expect(isFlowsTreeFile("src/signals/inbound.ts")).toBe(false);
     expect(isFlowsTreeFile("src/clocks/digest.ts")).toBe(false);
     expect(isFlowsTreeFile("lib/inbound.ts")).toBe(false);
+  });
+});
+
+describe("isSkippedExtractSource", () => {
+  test("skips node_modules as a path segment, including Windows separators", () => {
+    expect(isSkippedExtractSource("node_modules/okengine/src/index.ts")).toBe(true);
+    expect(isSkippedExtractSource("node_modules\\okengine\\src\\index.ts")).toBe(true);
+    expect(isSkippedExtractSource("web/node_modules/vite/index.ts")).toBe(true);
+    expect(isSkippedExtractSource(".git/hooks/pre-commit.ts")).toBe(true);
+    expect(isSkippedExtractSource("src/flows/main/health.test.ts")).toBe(true);
+    expect(isSkippedExtractSource("src/flows/main/health.ts")).toBe(false);
+    expect(isSkippedExtractSource("src/core.ts")).toBe(false);
   });
 });

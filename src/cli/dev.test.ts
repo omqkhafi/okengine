@@ -1070,8 +1070,55 @@ export const posts = store.schema.table("posts", {
 });
 
 describe("oke dev Console vault config", () => {
+  let session: DevSession | undefined;
+
+  afterEach(() => {
+    session?.stop();
+    session = undefined;
+  });
+
   test("hands loaded oke.config to Console so drivers.vault is not the env default", async () => {
     const src = await Bun.file(new URL("./dev.ts", import.meta.url)).text();
     expect(src).toMatch(/okeConfig:\s*loadedConfig/);
+  });
+
+  test("writes OKE_MANIFEST_PATH for the app child when a Manifest is available", async () => {
+    const runner = await Bun.file(new URL("./dev-app-runner.ts", import.meta.url)).text();
+    expect(runner).toContain("OKE_MANIFEST_PATH");
+    expect(runner).toMatch(/mod\.app\.boot\(\{/);
+
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-manifest-handoff-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    await Bun.write(join(dir, "oke.manifest.json"), JSON.stringify(LIVE_MANIFEST));
+    let seen: Record<string, string> | undefined;
+    const result = await runDev({
+      stdinIsTTY: false,
+      cwd: dir,
+      silentClaim: true,
+      keepAlive: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      docsMcpPort: 0,
+      ...stubCompose(),
+      startApp: async (_entry, env) => {
+        seen = env;
+        return { stop() {} };
+      },
+      regenClient: async () => {},
+      write: () => {},
+      serveConsole: async () => ({ stop() {} }),
+      serveMcp: async () => ({ stop() {} }),
+      serveDocsMcp: async () => ({
+        stop() {},
+        port: 1,
+        url: new URL("http://127.0.0.1:1"),
+      }),
+    });
+    session = result.session;
+    expect(result.code).toBe(0);
+    expect(seen?.["OKE_MANIFEST_PATH"]).toBeTruthy();
+    const dumped = JSON.parse(await Bun.file(seen!["OKE_MANIFEST_PATH"]!).text()) as Manifest;
+    expect(dumped.app).toBe("dev-live");
   });
 });

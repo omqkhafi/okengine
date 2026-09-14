@@ -231,7 +231,7 @@ export const OKE_ERRORS = {
   NO_EFFECTS_DECLARED: {
     code: 1020,
     domain: "kernel",
-    cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.',
+    cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.{extract}',
     fix:
       "Add explicit `effects` to this flow, or boot with a Manifest (`oke build`) / " +
       "`rootDir` so effects can be derived. If extract failed, ensure `oxc-parser` is " +

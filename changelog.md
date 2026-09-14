@@ -12,6 +12,35 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.19.5 — 2026-09-14
+
+### ♻️ Changed
+
+#### Dev, Keel & create-oke
+
+- Starters run the CLI through `bunx --bun oke` (`bun run dev` / `bun run test`)
+  so Windows PowerShell does not need a local `oke` on PATH. Next-steps, README,
+  and `AGENTS.md` show `bun run dev` / `bunx oke`. Scaffolded `.vscode/settings.json`
+  prepends `node_modules/.bin` in integrated terminals.
+
+#### Docs
+
+- Try It and CLI Quick start use `bun run dev`. CLI troubleshooting covers
+  Windows `oke` not found and Compose **OKE1020**.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Manifest extract skips `node_modules` / `.git` as path segments after POSIX
+  normalize, so Windows `node_modules\…` is not parsed. Scanning those trees
+  threw during extract and Docker-first `oke dev` hard-failed **OKE1020** on
+  `main.health`. Failed extract is now part of the OKE1020 cause (not only a
+  suppressible `oke boot:` warn). `oke dev` writes the parent Manifest to a
+  temp file and the app child boots with it (`OKE_MANIFEST_PATH`).
+- `src/flows/generated.ts` replace falls back to write+unlink when `rename`
+  cannot overwrite on Windows.
+
 ## v0.19.4 — 2026-09-12
 
 ### ✨ Added

@@ -7,6 +7,7 @@
  */
 
 import { parseSync } from "oxc-parser";
+import { join } from "node:path";
 
 import {
   AI_NATIVE_DRIVER_IDS,
@@ -55,7 +56,13 @@ import {
   type InferBinding,
   type Literal,
 } from "./effects-infer.ts";
-import { isFlowsTreeFile, nameFromFlowFile, pathFromFlowFile } from "./flow-path.ts";
+import {
+  isFlowsTreeFile,
+  isSkippedExtractSource,
+  nameFromFlowFile,
+  pathFromFlowFile,
+  toPosixPath,
+} from "./flow-path.ts";
 import {
   defaultListInSchema,
   jsonSchemaFromAst,
@@ -295,9 +302,9 @@ async function readSources(rootDir: string, pattern: string): Promise<SourceFile
     cwd: rootDir,
     onlyFiles: true,
   })) {
-    if (path.includes("node_modules/") || path.endsWith(".test.ts")) continue;
-    const abs = `${rootDir.replace(/\/$/, "")}/${path}`;
-    files.push({ path, source: await Bun.file(abs).text() });
+    if (isSkippedExtractSource(path)) continue;
+    const abs = join(rootDir, path);
+    files.push({ path: toPosixPath(path), source: await Bun.file(abs).text() });
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
   return files;

@@ -11,6 +11,9 @@
  * - `PORT` — listen port (`0` = ephemeral)
  * - `OKE_HOSTNAME` — listen hostname (default `127.0.0.1`)
  * - `OKE_READY_PATH` — when set, write bound port here once listening
+ * - `OKE_ROOT_DIR` — project root for Manifest extract (defaults to cwd)
+ * - `OKE_MANIFEST_PATH` — optional JSON Manifest from the parent `oke dev`
+ *   extract (avoids a second extract in the child; Windows-safe fallback)
  *
  * Soft reload must not clear the TTY — the parent `oke dev` board owns
  * Docker status and the first-admin claim code.
@@ -19,6 +22,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { installGracefulShutdown, type GracefulShutdownApp } from "../kernel/graceful-shutdown.ts";
+import type { Manifest } from "../manifest/types.ts";
 import { createBunRuntime } from "../runtime/bun.ts";
 import { APP_PORT, type FetchApp } from "../runtime/types.ts";
 import { formatAppReadyLine } from "../term.ts";
@@ -28,7 +32,7 @@ export const DEV_APP_SERVE_ID = "oke-dev-app";
 
 /** App entry shape — FetchApp plus boot before serve. */
 type BootableApp = FetchApp & {
-  boot(): Promise<unknown>;
+  boot(overrides?: { readonly rootDir?: string; readonly manifest?: Manifest }): Promise<unknown>;
   stop(): Promise<void>;
   readonly bootResult?: GracefulShutdownApp["bootResult"];
 };
@@ -49,6 +53,20 @@ const readyPath = Bun.env["OKE_READY_PATH"];
 // already the project root here (Bun.spawn's `cwd` option in dev.ts).
 process.env["OKE_ROOT_DIR"] ??= process.cwd();
 
+const manifestPath = Bun.env["OKE_MANIFEST_PATH"];
+let manifest: Manifest | undefined;
+if (manifestPath !== undefined && manifestPath.length > 0) {
+  try {
+    manifest = (await Bun.file(manifestPath).json()) as Manifest;
+  } catch (err) {
+    console.error(
+      `oke dev-app-runner: OKE_MANIFEST_PATH unreadable — ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
 const absoluteEntry = resolve(entry);
 const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
   app?: BootableApp;
@@ -63,7 +81,10 @@ if (
   process.exit(1);
 }
 
-await mod.app.boot();
+await mod.app.boot({
+  rootDir: process.env["OKE_ROOT_DIR"],
+  ...(manifest !== undefined ? { manifest } : {}),
+});
 const handle = createBunRuntime().serve(mod.app, {
   port,
   hostname,

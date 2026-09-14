@@ -78,7 +78,7 @@ Mnemonic: O·K·E = 6·5·3.
 
 \`\`\`bash
 bun install
-oke dev          # or: bun run dev
+bun run dev      # or: bunx oke dev
 bun run web      # Vite SPA (proxies Flows to the app)
 \`\`\`
 

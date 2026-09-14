@@ -622,7 +622,13 @@ describe("scaffold structure", () => {
             "oxc-parser"?: string;
           };
           trustedDependencies?: readonly string[];
-          scripts: { typecheck?: string; test?: string; web?: string; "web:build"?: string };
+          scripts: {
+            typecheck?: string;
+            test?: string;
+            dev?: string;
+            web?: string;
+            "web:build"?: string;
+          };
           devDependencies: {
             typescript?: string;
             vite?: string;
@@ -639,7 +645,8 @@ describe("scaffold structure", () => {
         expect(pkg.scripts.typecheck).toContain("tsc -b -p web/tsconfig.json");
         expect(pkg.scripts.web).toContain("vite --config web/vite.config.ts");
         expect(pkg.scripts["web:build"]).toContain("tsc -b -p web/tsconfig.json");
-        expect(pkg.scripts.test).toBe("oke test");
+        expect(pkg.scripts.test).toBe("bunx --bun oke test");
+        expect(pkg.scripts.dev).toBe("bunx --bun oke dev");
         expect(result.files).toContain("web/vite.config.ts");
         expect(result.files).toContain("web/src/client.ts");
         expect(pkg.devDependencies.typescript).toBeTruthy();
@@ -686,6 +693,9 @@ describe("scaffold structure", () => {
       ]) {
         expect(result.files).toContain(path);
       }
+      expect(readFileSync(join(result.targetDir, ".vscode/settings.json"), "utf8")).toContain(
+        "terminal.integrated.env.windows",
+      );
       const create = readFileSync(join(result.targetDir, "src/flows/notes/create.ts"), "utf8");
       const list = readFileSync(join(result.targetDir, "src/flows/notes/list.ts"), "utf8");
       expect(create).toContain("export const create");
@@ -940,7 +950,8 @@ describe("non-TTY CLI", () => {
         targetDir: target,
         label: "standard",
       };
-      expect(nextStepsText(result)).toContain("oke dev");
+      expect(nextStepsText(result)).toContain("bun run dev");
+      expect(nextStepsText(result)).toContain("bunx oke");
       expect(nextStepsText(result)).toContain("bun run web");
       expect(nextStepsText(result)).toContain("bun install");
       expect(nextStepsText(result)).toContain("oke.omqkhafi.dev");

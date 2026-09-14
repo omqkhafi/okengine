@@ -26,8 +26,8 @@
   "trustedDependencies": ["@duckdb/node-api"],
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -b -p web/tsconfig.json",
-    "test": "oke test",
-    "dev": "oke dev",
+    "test": "bunx --bun oke test",
+    "dev": "bunx --bun oke dev",
     "web": "bunx --bun vite --config web/vite.config.ts",
     "web:build": "tsc -b -p web/tsconfig.json && bunx --bun vite build --config web/vite.config.ts",
     "web:preview": "bunx --bun vite preview --config web/vite.config.ts"

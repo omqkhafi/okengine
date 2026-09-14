@@ -1067,6 +1067,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const seedManifest =
     options.manifest !== undefined ? options.manifest : await tryLoadProjectManifest(cwd);
 
+  let seedManifestPath: string | undefined;
+  if (seedManifest) {
+    seedManifestPath = join(tmpdir(), `oke-dev-manifest-${crypto.randomUUID()}.json`);
+    await Bun.write(seedManifestPath, `${JSON.stringify(seedManifest)}\n`);
+    env.OKE_MANIFEST_PATH = seedManifestPath;
+  }
+
   async function refreshManifestInto(state: ConsoleState | null): Promise<void> {
     if (!state) return;
     try {
@@ -1401,6 +1408,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     consoleVite = null;
     void vite?.stop();
     void clearDevSessionLock(cwd);
+    if (seedManifestPath) {
+      void unlink(seedManifestPath).catch(() => {});
+      seedManifestPath = undefined;
+    }
     if (dockerStarted) {
       const started = dockerStarted;
       dockerStarted = null;
