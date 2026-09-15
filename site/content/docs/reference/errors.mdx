@@ -1,6 +1,6 @@
 ---
 title: "Errors"
-description: "OKE codes, gate denials, and subsystem errors — stable numeric codes with causes and fixes."
+description: "fx.fail helpers, built-in HTTP statuses, OKE codes, and subsystem errors — values vs thrown invariants."
 icon: "OctagonAlert"
 source: "docs/spec/unified-theory.md"
 ---
@@ -61,6 +61,90 @@ if (error?.code === "NotFound") {
 
 </Steps>
 
+## `fx.fail`
+
+Same function as `import { fail } from "okengine"`. Returns `{ data: null, error }` — it does **not**
+throw. Built-in codes need no `errors:` bag. Domain codes (`OutOfStock`, `FlightFull`, `Duplicate`)
+still go on the exposure:
+
+```typescript
+on(
+  http.post({
+    in: z.object({ sku: z.string() }),
+    errors: { OutOfStock: z.object({ available: z.number() }) },
+  }),
+  flow({
+    do: async ({ sku }, fx) => {
+      const available = 0;
+      if (available === 0) return fx.fail("OutOfStock", { available });
+      return { sku };
+    },
+  }),
+);
+```
+
+Optional `{ message }` overrides the catalog: `fx.fail("OutOfStock", data, { message })`.
+
+### Helpers
+
+| Call | Code | Status | Payload |
+| ---- | ---- | ------ | ------- |
+| `fx.fail.notFound(data?)` | `NotFound` | **404** | `id?`, `key?`, … |
+| `fx.fail.unauthorized(data?)` | `Unauthorized` | **401** | `reason?` |
+| `fx.fail.forbidden(data?)` | `Forbidden` | **403** | `gate?`, `reason?` |
+| `fx.fail.conflict(data?)` | `Conflict` | **409** | `constraint?`, `table?`, `column?`, `id?` |
+| `fx.fail.foreignKey(data?)` | `ForeignKey` | **409** | `constraint?`, `table?`, `column?` |
+| `fx.fail.rateLimited(data?)` | `RateLimited` | **429** | `retryAfterMs?` |
+| `fx.fail.serviceUnavailable(data?)` | `ServiceUnavailable` | **503** | `retryAfter?` |
+| `fx.fail.database(data)` | `DatabaseError` | by `data.reason` | `reason`, `sqlstate?`, `constraint?`, `table?`, `column?` |
+| `fx.fail.internal(data?)` | `InternalError` | **500** | `{}` — catalog message only |
+
+`DatabaseError` status: `not_null` / `check` → **422**, `retryable` → **503**, else **500**.
+
+Declare a built-in on `errors:` **only to tighten** the payload. Shorter keeps
+`NotFound: z.object({ code: z.string() })` because `{ code }` is not the built-in `{ id? }`.
+Declared schema wins on the Manifest and the typed client.
+
+The typed client always includes built-in codes. A declared key still wins.
+
+### HTTP status
+
+A bare `404` with body `Not Found` means **no route matched**. `fx.fail.notFound` is a JSON envelope
+at **404**. Clients distinguish by envelope, not status. Domain codes stay **400**.
+
+| Code | Status | Helper |
+| ---- | ------ | ------ |
+| `ValidationError` | `422` | none — failed `in`, `do` never runs |
+| `Unauthorized` | `401` | `unauthorized` · also a gate denial |
+| `Forbidden` | `403` | `forbidden` · also a gate denial |
+| `NotFound` | `404` | `notFound` |
+| `Conflict` / `ForeignKey` | `409` | `conflict` / `foreignKey` |
+| `UnsupportedMediaType` | `415` | none — QUERY `Content-Type` is not `application/json` |
+| `RateLimited` / `AuthRateLimited` | `429` | `rateLimited` · `AuthRateLimited` has none |
+| `InvalidQuery` | `400` | none — QUERY missing `Content-Type` or body isn't JSON |
+| `AuthFailed` | `400` | none — credentials / policy, not “no session” |
+| `DatabaseError` | by `reason` | `database` |
+| `ServiceUnavailable` | `503` | `serviceUnavailable` |
+| `InternalError` | `500` | `internal` — never copies a thrown `message` |
+| Domain (`OutOfStock`, `FlightFull`, `Duplicate`) | `400` | `fx.fail("OutOfStock", data)` |
+
+### SQL auto-map
+
+`fx.store` constraint and connection failures become typed `fail` values (same family as
+`ValidationError`). Public `data` is names only — never `message` / `detail` / `hint`.
+
+| Signal | Result |
+| ------ | ------ |
+| Postgres `23505` / `23P01` · SQLite UNIQUE | `Conflict` **409** |
+| Postgres `23503` · SQLite FOREIGN KEY | `ForeignKey` **409** |
+| Postgres `23502` / `23514` · SQLite NOT NULL / CHECK | `DatabaseError` `not_null` / `check` **422** |
+| Postgres `40001` / `40P01` | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `08xxx` / `53300` / connection / paused | `ServiceUnavailable` **503** |
+| `42P01` / `42703` with `domainDdl: "off"` | **OKE1110** (unchanged) |
+| other SQLSTATE | `DatabaseError` `unknown` **500** |
+
+Files / KV `get` returning `null` is **not** auto-`NotFound` — return `fx.fail.notFound` yourself.
+
 ## Localized messages
 
 Typed failures and OKE codes ship English and Arabic ICU catalogs. Locale comes
@@ -116,29 +200,14 @@ string. Custom app codes stay message-less until registered. Full catalogs:
 
 ## Gate denials (typed failures)
 
-Returned, not thrown — the request never reached `do`:
+Returned before `do` — not thrown. Same codes as `fx.fail.unauthorized` / `.forbidden` /
+`.rateLimited`:
 
 | Code           | When                                         | Payload                                                                                    |
 | -------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `Unauthorized` | Policy denied, request not authenticated     | —                                                                                          |
 | `Forbidden`    | Policy denied, authenticated but not allowed | `gate`, `reason` (`tenant_required` · `not_member` · `unknown_scope` · `session_only` · …) |
 | `RateLimited`  | Rate gate budget exhausted                   | `retryAfterMs`                                                                             |
-
-## Framework validation failures
-
-| Code                   | When                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `ValidationError`      | Input failed the `in` schema, or a list param isn't whitelisted (`unknown list param "x"`)                          |
-| `NotFound`             | Missing row / object — **404** JSON envelope (router miss is plain-text `404`)                  |
-| `Conflict`             | Unique / exclusion — **409** (SQL unique auto-maps here)                                       |
-| `ForeignKey`           | Foreign-key violation — **409**                                                                |
-| `DatabaseError`        | Other SQL constraints — `not_null`/`check` **422**, `retryable` **503**, else **500**          |
-| `ServiceUnavailable`   | Connection / exhausted serialization — **503**                                                 |
-| `InternalError`        | Unhandled throw — **500**, catalog message only                                                |
-| `InvalidQuery`         | QUERY missing `Content-Type` (`reason: missing_content_type`) or body isn't JSON (`inconsistent_content`) — **400** |
-| `UnsupportedMediaType` | QUERY `Content-Type` is present but not `application/json` — **415**, `Accept-Query` lists JSON                     |
-| `AuthFailed`           | Credentials / policy — **400**                                                                 |
-| `AuthRateLimited`      | Auth attempts exhausted — **429**                                                              |
 
 ## Subsystem errors
 
@@ -203,6 +272,26 @@ Thrown by specific subsystems — each names its own cause:
   membership, or rate budget. See [Gate](/docs/elements/gate).
 </Accordion>
 
+<Accordion title="Do I need errors: { NotFound }?">
+  No. Built-in codes are always on — `return fx.fail.notFound({ id })`. Put `errors:` only for
+  domain codes, or to tighten a built-in payload (`{ code }` instead of `{ id? }`).
+</Accordion>
+
+<Accordion title="Unique insert is 500 InternalError">
+  Unique / exclusion maps to `Conflict` **409**; missing FK to `ForeignKey` **409**. Serialization
+  (`40001` / `40P01`) stays thrown until retries exhaust, then `ServiceUnavailable` **503**.
+</Accordion>
+
+<Accordion title="404 Not Found — route missing or domain miss?">
+  Bare body `Not Found` means no HTTP route. JSON `{ error: { code: "NotFound" } }` is
+  `fx.fail.notFound`. Clients distinguish by envelope.
+</Accordion>
+
+<Accordion title="InternalError leaked a stack / thrown message">
+  Unhandled throws use the catalog string only. The thrown `message` is not copied onto the
+  envelope. Expected misses belong in `fx.fail.notFound` or a domain `fx.fail("OutOfStock", data)`.
+</Accordion>
+
 <Accordion title="VaultBootError at startup">
   TTY title **OKE1510**. A vault contract has no value in any resolution layer. The printer lists
   every gap — set the missing names ([Vault](/docs/elements/vault)).
@@ -212,11 +301,12 @@ Thrown by specific subsystems — each names its own cause:
 
 ## Learn more
 
+- [fx](/docs/reference/fx) — `fx.fail` helpers on the door
 - [i18n](/docs/reference/i18n) — catalogs, `fx.t`, locale matching
-- [Flow](/docs/elements/flow) — `fx.fail` and the response envelope
+- [Flow](/docs/elements/flow) — envelope and domain `errors:`
+- [HTTP](/docs/elements/flow/http) — response envelopes
 - [Gate](/docs/elements/gate) — where the three denials come from
 - [CLI](/docs/reference/cli) — `oke db migrate` and friends
-- [fx](/docs/reference/fx) — how failures and effects surface
 
 ## Next
 

@@ -35,6 +35,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   Clyde glyph height to the npm “n”, including the mobile menu.
 - Flow / HTTP / Store / Errors / Vault / Try It document always-on helpers,
   honest 404/409/503 tables, SQL auto-fail, and the OKE1510 TTY dump.
+- Errors reference catalogs `fx.fail` helpers, always-on vs domain `errors:`,
+  HTTP statuses, and SQL auto-map.
 
 ### 💥 Breaking Changes
 
