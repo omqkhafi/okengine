@@ -1,6 +1,6 @@
 ---
 title: "Calling"
-description: "createClient forms, REST vs RPC, options, result envelopes, store resources, and remote types."
+description: "createClient forms, REST vs RPC, match/explain for unknown errors, options, envelopes, and remote types."
 icon: "Braces"
 source: "docs/spec/unified-theory.md"
 ---
@@ -13,8 +13,8 @@ For developers wiring a storefront, mobile app, or partner service to an okengin
 **6530**).
 
 <Callout title="The one rule">
-  Treat every call as a result envelope: `{ data, error }`. Switch on `error.code`. Only transport
-  / protocol problems use `code: "TransportError"`.
+  Treat every call as `{ data, error }`. Use `match` from `okengine/client/explain` for success plus
+  unknown failures. Name a code only when this screen has special recovery.
 </Callout>
 
 ## Smallest Example
@@ -125,8 +125,7 @@ if (isOk(result)) {
 <Tab value="Failures">
 
 ```typescript
-import { isOk } from "okengine/client";
-import { matchError } from "okengine/client/explain";
+import { match } from "okengine/client/explain";
 
 const result = await api.bookings.create({
   flightId: "SK481",
@@ -134,18 +133,18 @@ const result = await api.bookings.create({
   cabin: "economy",
 });
 
-if (isOk(result)) {
-  result.data.confirmationCode;
-} else {
-  matchError(result.error, {
-    FlightFull: (data) => offerWaitlist(data.seatsLeft),
-    _: (e) => toast(e.message),
-  });
-}
+match(result, {
+  ok: (data) => show(data.confirmationCode),
+  FlightFull: (data) => offerWaitlist(data.seatsLeft),
+  auth: () => goSignIn(),
+  invalid: (e) => setForm(e.fields),
+  _: (e) => toast(e.message),
+});
 ```
 
-Named arms narrow `data`. `_` is required — store auto-map, transport, and unknown domain codes
-land there. `explain(error)` is the same collapse without a matcher (`kind`, `fields`, `retryable`).
+One import. Named codes narrow `data`. Kind arms (`auth`, `invalid`) cover chrome. `_` is required
+— store auto-map, transport, and unknown domain codes land there. Full table: [`match` /
+`explain`](#match--explain).
 
 </Tab>
 
@@ -182,6 +181,80 @@ JSON envelopes.
 </Tab>
 
 </Tabs>
+
+## `match` / `explain`
+
+A `create` can return `ValidationError`, store auto-map (`Conflict`, `DatabaseError`), gates,
+`TransportError`, plus any domain code. Do not switch on every `error.code`.
+
+```typescript
+import { match } from "okengine/client/explain";
+
+const result = await api.bookings.create({ flightId: "SK481", seats: 2 });
+
+match(result, {
+  ok: (data) => show(data.confirmationCode),
+  FlightFull: (data) => offerWaitlist(data.seatsLeft),
+  auth: () => goSignIn(),
+  invalid: (e) => setForm(e.fields),
+  _: (e) => toast(e.message),
+});
+```
+
+<Callout title="Dispatch order">
+  `ok` → named code (`FlightFull`) → UX kind (`auth`, `invalid`) → required `_`. Kind names are
+  reserved — do not use `auth` or `failed` as domain codes.
+</Callout>
+
+Import from `okengine/client/explain` so the 5 kB `okengine/client` graph stays small. `isOk` /
+`isFail` stay on `okengine/client` when you only need a predicate.
+
+| Helper | When |
+| ------ | ---- |
+| `match(result, { ok, …, _ })` | Whole envelope — one call |
+| `matchError(error, { …, _ })` | You already have `error` |
+| `explain(error)` | Chrome only — no matcher |
+
+### Kinds
+
+| `kind` | Codes | Typical UI |
+| ------ | ----- | ---------- |
+| `auth` | `Unauthorized`, `AuthFailed` | Sign-in |
+| `permission` | `Forbidden` | “You can’t do that” |
+| `missing` | `NotFound`; `TransportError` HTTP 404 | Empty state |
+| `conflict` | `Conflict`, `ForeignKey` | Retry or pick another value |
+| `invalid` | `ValidationError`, `InvalidQuery`, `UnsupportedMediaType`; `DatabaseError` 422 reasons | Form fields |
+| `limited` | `RateLimited`, `AuthRateLimited` | Wait / retry (`retryable`) |
+| `unavailable` | `ServiceUnavailable`; `DatabaseError` `retryable`; other `TransportError` | Offline / retry |
+| `failed` | `InternalError`, unknown `DatabaseError`, unnamed domain codes | Toast `message` |
+
+Named code arms receive typed `data`. Kind arms and `_` receive `{ kind, code, message, retryable,
+fields? }`. `_` is required even if you listed every kind.
+
+`explain(error).fields` maps `ValidationError` issues to `{ email: "Required" }` (`.`-joined
+path; empty path is `_`). `retryable` is true for `limited` and `unavailable`; `retryAfterMs` is
+set when the payload has `retryAfterMs` or `retryAfter` (seconds).
+
+```typescript
+import { explain, matchError } from "okengine/client/explain";
+
+if (result.error) {
+  matchError(result.error, {
+    FlightFull: (data) => offerWaitlist(data.seatsLeft),
+    _: (e) => toast(e.message),
+  });
+}
+
+explain(result.error!); // { kind, code, message, retryable, fields? }
+```
+
+`error.code === "FlightFull"` still narrows `error.data` if you prefer an `if`. HTTP status is on
+the response, not on `error`.
+
+Domain codes with no `{ message }` toast the code name (`OutOfStock`). Pass
+`fx.fail("OutOfStock", data, { message })` on the Flow, or name that code in `match`.
+
+See [Errors](/docs/reference/errors) for `fx.fail` helpers and store auto-map.
 
 ## `createClient` forms
 
@@ -327,30 +400,18 @@ See [Store](/docs/elements/store) for the list query language. Handwritten lists
 ## Result envelopes
 
 Success may include optional top-level `meta` (for example pagination). Declared flow errors and
-transport failures share the failure arm:
+transport failures share the failure arm. Handle them with [`match`](#match--explain).
 
 ```typescript
 import { isOk, isFail, isTransportError } from "okengine/client";
-import { explain, matchError } from "okengine/client/explain";
 
-const result = await api.bookings.create({ flightId: "SK481", seats: 2 });
-
-if (isOk(result)) {
-  result.data.confirmationCode;
-} else {
-  matchError(result.error, {
-    FlightFull: (data) => offerWaitlist(data.seatsLeft),
-    _: (e) => toast(e.message),
-  });
-}
-
-explain(result.error!); // { kind, code, message, retryable, fields? }
 isFail(result); // true when error !== null
+isOk(result); // narrows to success `data`
 isTransportError(result.error); // network / non-envelope HTTP
 ```
 
-`error.code === "FlightFull"` still narrows `error.data`. Use `explain` when you do not know the
-code. HTTP status is on the response, not on `error`.
+`error.code === "FlightFull"` still narrows `error.data`. HTTP status is on the response, not on
+`error`.
 
 ## Remote types
 
@@ -386,7 +447,7 @@ CLI details: [CLI Reference](/docs/reference/cli).
 | `createTransport`                         | function  | Low-level HTTP transport (timeout / retry / auth)   |
 | `isOk` / `isFail`                         | function  | Envelope predicates                                 |
 | `isErrorCode` / `isTransportError`        | function  | Error narrowing                                     |
-| `explain` / `matchError`                  | function  | `okengine/client/explain` — `kind`, `fields`, required `_` |
+| `match` / `matchError` / `explain`        | function  | `okengine/client/explain` — `ok`, codes, kinds, `_` |
 | `Client`, `ClientCall`, `ClientResult`, … | types     | Contracts, `page.next()` / `for await` of `list()`  |
 | `Register`                                | interface | Module-augmentation slot for ambient App types      |
 | `AppOf`                                   | type      | Brand a bare route map as an App                    |
@@ -417,6 +478,16 @@ Restart `oke dev` after renaming exports.
   `error.data.message` holds the text; `explain` maps HTTP 404 transport to kind `missing`.
 </Accordion>
 
+<Accordion title="Why import from okengine/client/explain?">
+  `match` / `explain` stay off the measured `okengine/client` gzip cap. Predicates (`isOk`,
+  `isTransportError`) stay on `okengine/client`.
+</Accordion>
+
+<Accordion title="Toast showed OutOfStock / FlightFull">
+  Domain codes with no `{ message }` use the code name as `explain.message`. Handle the named arm,
+  or pass `fx.fail("OutOfStock", data, { message })` on the Flow.
+</Accordion>
+
 <Accordion title="404 — route miss or NotFound?">
   Bare body `Not Found` means no HTTP route — `TransportError` (kind `missing`). JSON
   `{ error: { code: "NotFound" } }` is `fx.fail.notFound`. Distinguish by envelope, not status.
@@ -443,7 +514,7 @@ Restart `oke dev` after renaming exports.
 - [Vault · Config](/docs/elements/vault/config) — `PUBLIC_API_URL`, `vault.env`
 - [Routing](/docs/elements/flow/routing) — `$routes` stamps
 - [HTTP](/docs/elements/flow/http) — verbs and envelopes on the server
-- [Errors](/docs/reference/errors) — framework codes vs failure values
+- [Errors](/docs/reference/errors) — `fx.fail` helpers, store auto-map, `match` on the client
 - [CLI](/docs/reference/cli) — `oke client add`, `oke dev`
 
 ## Next

@@ -1,9 +1,9 @@
 /**
- * Client `explain` / `matchError` — UX kinds, fields, default matcher.
+ * Client `explain` / `match` / `matchError` — UX kinds, fields, result matcher.
  */
 
 import { describe, expect, test } from "bun:test";
-import { explain, matchError } from "./explain.ts";
+import { explain, match, matchError } from "./explain.ts";
 import type { BuiltinErrorMap } from "../kernel/builtin-errors.ts";
 import type { ClientError } from "./types.ts";
 
@@ -109,11 +109,12 @@ describe("explain — message, retry, fields", () => {
 });
 
 describe("matchError", () => {
+  type Err = ClientError<{
+    FlightFull: { seatsLeft: number };
+    NotFound: Record<string, never>;
+  }>;
+
   test("named arm narrows FlightFull data; _ handles the rest", () => {
-    type Err = ClientError<{
-      FlightFull: { seatsLeft: number };
-      NotFound: Record<string, never>;
-    }>;
     const full: Err = { code: "FlightFull", data: { seatsLeft: 2 } };
     const seats = matchError(full, {
       FlightFull: (data) => {
@@ -135,6 +136,108 @@ describe("matchError", () => {
       },
     });
     expect(fallback).toBe("NotFound");
+  });
+
+  test("kind arm runs when the code is unnamed; code wins over kind", () => {
+    const denied: Err = { code: "NotFound", data: {} };
+    const kindHit = matchError(denied, {
+      missing: (e) => {
+        type _K = Assert<Eq<(typeof e)["kind"], "missing">>;
+        const keep: _K = true;
+        expect(keep).toBe(true);
+        expect(e.kind).toBe("missing");
+        expect(e.code).toBe("NotFound");
+        return e.message;
+      },
+      _: () => "dump",
+    });
+    expect(kindHit).toBe("NotFound");
+
+    const full: Err = { code: "FlightFull", data: { seatsLeft: 3 } };
+    const codeWins = matchError(full, {
+      FlightFull: (data) => data.seatsLeft,
+      failed: () => -2,
+      _: () => -3,
+    });
+    expect(codeWins).toBe(3);
+  });
+
+  test("invalid kind exposes ValidationError fields", () => {
+    const err = {
+      code: "ValidationError",
+      data: { issues: [{ message: "Required", path: ["email"] }] },
+    } as const;
+    const fields = matchError(err, {
+      invalid: (e) => e.fields,
+      _: () => undefined,
+    });
+    expect(fields).toEqual({ email: "Required" });
+  });
+});
+
+describe("match", () => {
+  type Result =
+    | { readonly data: { readonly confirmationCode: string }; readonly error: null }
+    | {
+        readonly data: null;
+        readonly error: ClientError<{
+          FlightFull: { seatsLeft: number };
+          NotFound: Record<string, never>;
+        }>;
+      };
+
+  test("ok arm narrows success data", () => {
+    const result: Result = { data: { confirmationCode: "SK-4812" }, error: null };
+    const code = match(result, {
+      ok: (data) => {
+        type _D = Assert<Eq<typeof data, { readonly confirmationCode: string }>>;
+        const keep: _D = true;
+        expect(keep).toBe(true);
+        return data.confirmationCode;
+      },
+      _: () => "",
+    });
+    expect(code).toBe("SK-4812");
+  });
+
+  test("named code, kind, and _ on one call", () => {
+    const full: Result = {
+      data: null,
+      error: { code: "FlightFull", data: { seatsLeft: 1 } },
+    };
+    expect(
+      match(full, {
+        ok: () => "ok",
+        FlightFull: (data) => `wait:${data.seatsLeft}`,
+        auth: () => "signin",
+        _: (e) => e.message,
+      }),
+    ).toBe("wait:1");
+
+    const missing: Result = { data: null, error: { code: "NotFound", data: {} } };
+    expect(
+      match(missing, {
+        ok: () => "ok",
+        FlightFull: (data) => `wait:${data.seatsLeft}`,
+        missing: (e) => `gone:${e.code}`,
+        _: (e) => e.message,
+      }),
+    ).toBe("gone:NotFound");
+
+    const transport = {
+      data: null,
+      error: { code: "TransportError" as const, data: { message: "offline" } },
+    };
+    expect(
+      match(transport, {
+        ok: () => "ok",
+        unavailable: (e) => {
+          expect(e.retryable).toBe(true);
+          return e.message;
+        },
+        _: () => "dump",
+      }),
+    ).toBe("offline");
   });
 });
 

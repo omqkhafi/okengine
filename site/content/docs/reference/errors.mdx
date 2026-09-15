@@ -19,8 +19,8 @@ Codes are stable after the domain-range renumber — match them safely across up
 (see the Unreleased Breaking Changes mapping if you still have a pre-renumber note).
 
 <Callout title="The one rule">
-  Switch on `error.code` for typed `data`. Use `explain().kind` for chrome when the code is
-  unknown. Catch `OKE####` only for thrown framework invariants.
+  Switch on `error.code` (or a `match` named arm) for typed `data`. Use kind arms / `explain` for
+  chrome when the code is unknown. Catch `OKE####` only for thrown framework invariants.
 </Callout>
 
 ## Smallest Example
@@ -51,14 +51,14 @@ on(
 ### Handle it on the client
 
 ```typescript
-import { explain } from "okengine/client/explain";
+import { match } from "okengine/client/explain";
 
-const { data, error } = await api.notes.get({ id });
-if (error?.code === "NotFound") {
-  // value — not a throw
-} else if (error) {
-  toast(explain(error).message);
-}
+const result = await api.notes.get({ id });
+match(result, {
+  ok: (note) => render(note),
+  NotFound: () => showMissing(),
+  _: (e) => toast(e.message),
+});
 ```
 
 </Step>
@@ -135,8 +135,8 @@ at **404**. Clients distinguish by envelope, not status. Domain codes stay **400
 
 ### Client chrome
 
-`import { explain, matchError } from "okengine/client/explain"`. Do not switch on every code — a
-`create` can return store auto-map, gates, transport, and domain codes.
+`import { match, matchError, explain } from "okengine/client/explain"`. Do not switch on every
+code — a `create` can return store auto-map, gates, transport, and domain codes.
 
 | `kind` | Codes |
 | ------ | ----- |
@@ -150,14 +150,17 @@ at **404**. Clients distinguish by envelope, not status. Domain codes stay **400
 | `failed` | `InternalError`, unknown `DatabaseError`, domain codes |
 
 ```typescript
-matchError(error, {
+match(result, {
+  ok: (data) => show(data),
   FlightFull: (data) => offerWaitlist(data.seatsLeft),
+  auth: () => goSignIn(),
+  invalid: (e) => setForm(e.fields),
   _: (e) => toast(e.message),
 });
 ```
 
-`_` is required. `explain(error).fields` maps `ValidationError` issues to `{ email: "Required" }`.
-See [Calling](/docs/client/calling).
+Dispatch: `ok` → named code → kind → required `_`. `explain(error).fields` maps
+`ValidationError` issues to `{ email: "Required" }`. Full loop: [Calling](/docs/client/calling).
 
 ### Store auto-map
 
@@ -375,7 +378,7 @@ Thrown by specific subsystems — each names its own cause:
 - [i18n](/docs/reference/i18n) — catalogs, `fx.t`, locale matching
 - [Flow](/docs/elements/flow) — envelope and domain `errors:`
 - [HTTP](/docs/elements/flow/http) — response envelopes
-- [Calling](/docs/client/calling) — `explain` / `matchError` on the client
+- [Calling](/docs/client/calling) — `match` / `explain` on the client
 - [Gate](/docs/elements/gate) — where the three denials come from
 - [CLI](/docs/reference/cli) — `oke db migrate` and friends
 
@@ -388,5 +391,5 @@ Thrown by specific subsystems — each names its own cause:
     description="Where Unauthorized and Forbidden come from."
     href="/docs/elements/gate"
   />
-  <Card title="Client" description="Switch on error.code in the browser." href="/docs/client" />
+  <Card title="Client" description="match unknown errors in the browser." href="/docs/client" />
 </Cards>
