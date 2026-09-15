@@ -42,7 +42,7 @@ export const create = on(
         expiresAt,
         createdAt,
       }).returning();
-      if (!row) return fail("Conflict", { code });
+      if (!row) return fail.conflict({ code });
 
       await warmRedirectCache(fx, code, input.url, expiresAt);
 

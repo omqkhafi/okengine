@@ -90,7 +90,8 @@ try {
   // `bun --hot` keeps the watcher alive on an uncaught throw, so `oke dev`
   // would wait the full ready timeout after VaultBootError. Exit so the
   // parent sees a dead child immediately.
-  console.error(err);
+  const { formatFatalError } = await import("../term.ts");
+  console.error(formatFatalError(err));
   process.exit(1);
 }
 const handle = createBunRuntime().serve(mod.app, {

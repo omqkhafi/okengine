@@ -14,7 +14,7 @@
 
 import { flow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "../../kernel/flow.ts";
 import { applyBoundaryContract, stampBoundaryContract } from "../../kernel/boundary-contract.ts";
-import { fail } from "../../kernel/errors.ts";
+import { fail } from "../../kernel/fail-helpers.ts";
 import type { Fx } from "../../kernel/fx.ts";
 import {
   openLiveStream,
@@ -53,7 +53,11 @@ export interface ResourceOptions {
    * used to extend `update` with the path id (wire sends `{ id, ...patch }`).
    */
   readonly idSchema?: unknown;
-  /** Typed errors for get / update / remove (default `{ NotFound }`). */
+  /**
+   * Extra typed errors for get / update / remove.
+   *
+   * Built-in `NotFound` is always on — omit unless tightening the payload.
+   */
   readonly errors?: FlowErrorMap;
   /** `:id` column; defaults to the table primary key. */
   readonly id?: unknown;
@@ -191,7 +195,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   const { mode, limit, maxLimit, cursorColumns: resolvedCursor } = scope;
   const countMode = scope.count;
 
-  const errors = options.errors ?? ({ NotFound: {} as never } as FlowErrorMap);
+  const errors = options.errors;
   const breaking = options.breaking === true;
 
   /** Run the list query and shape rows + meta. */
@@ -309,7 +313,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         findById(t: unknown, id: string): Promise<SqlRow | null>;
       };
       const row = await store.findById(table, String(id));
-      if (!row) return fail("NotFound", {});
+      if (!row) return fail.notFound();
       return row;
     },
   });
@@ -341,7 +345,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         update(t: unknown): { set(row: SqlRow): { where(w: unknown): Promise<number> } };
       };
       const existing = await store.findById(table, String(id));
-      if (!existing) return fail("NotFound", {});
+      if (!existing) return fail.notFound();
       if (Object.keys(patch).length > 0) {
         await store
           .update(table)
@@ -349,7 +353,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
           .where(leafOp(idDrizzleCol, "=", String(id)));
       }
       const row = await store.findById(table, String(id));
-      if (!row) return fail("NotFound", {});
+      if (!row) return fail.notFound();
       return row;
     },
   });
@@ -371,7 +375,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         delete(t: unknown, id: string): Promise<boolean>;
       };
       const deleted = await store.delete(table, String(id));
-      if (!deleted) return fail("NotFound", {});
+      if (!deleted) return fail.notFound();
       return fx.json.empty();
     },
   });

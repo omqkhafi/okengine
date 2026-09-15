@@ -20,6 +20,7 @@ import { CHANNEL_SCHEMA } from "./errors-channel.ts";
 import { FLOW_NAME_DUPLICATE, FLOW_UNNAMED } from "./errors-flow-name.ts";
 import { ONCE_SIGNAL_MULTI_FLOW } from "./errors-once-signal.ts";
 import { TENANT_NOT_MEMBER, TENANT_REQUIRED, TENANT_UNKNOWN_SCOPE } from "./errors-tenant.ts";
+import { VAULT_SECRET_MISSING } from "./errors-vault.ts";
 import {
   assertCodesInDomainRanges,
   assertUniqueCodes,
@@ -65,8 +66,10 @@ describe("OKE error-code registry", () => {
     expect(files).toContain("errors-live-resume.ts");
     expect(files).toContain("errors-channel.ts");
     expect(files).toContain("errors-tenant.ts");
+    expect(files).toContain("errors-vault.ts");
     const codes = defs.map((d) => d.code);
     expect(codes).toContain(1210);
+    expect(codes).toContain(1510);
     expect(codes).toContain(1605);
     expect(codes).toContain(1810);
     expect(codes).toContain(1820);
@@ -158,6 +161,10 @@ describe("OKE error-code registry", () => {
 
   test("lookupOkeError finds the lazy CHANNEL_SCHEMA entry", () => {
     expect(lookupOkeError(1605)).toEqual(CHANNEL_SCHEMA);
+  });
+
+  test("lookupOkeError finds the lazy VAULT_SECRET_MISSING entry", () => {
+    expect(lookupOkeError(1510)).toEqual(VAULT_SECRET_MISSING);
   });
 
   test("lookupOkeError finds lazy tenant entries", () => {

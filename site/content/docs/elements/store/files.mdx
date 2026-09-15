@@ -318,13 +318,12 @@ import { uploads } from "@/core";
 export const get = on(
   http.get({
     in: z.object({ id: z.string(), name: z.string() }),
-    errors: { NotFound: z.object({ key: z.string() }) },
   }),
   flow({
     do: async ({ id, name }, fx) => {
       const key = `notes/${id}/${name}`;
       const bytes = await fx.store(uploads).get(key);
-      if (!bytes) return fx.fail("NotFound", { key });
+      if (!bytes) return fx.fail.notFound({ key });
       return { key, size: bytes.byteLength };
     },
   }),

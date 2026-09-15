@@ -196,13 +196,16 @@ Order (Console labels match these source ids):
 3. **`.env.local`** — local overrides (gitignored)
 4. **dev-fallback** — `dev:` on the contract (dev boot only)
 
-Miss every layer → `VaultBootError` listing **all** gaps in one pass (including
-`vault.env.required` names):
+Miss every layer → `VaultBootError` (TTY title **OKE1510**) listing **all** gaps in one pass
+(including `vault.env.required` names):
 
 ```text
-vault boot failed — 2 missing secret(s):
-  - STRIPE_KEY: Payments gateway key
-  - DATABASE_URL: Primary SQL URL
+◇  OKE1510
+│  2 secrets have no value in any resolution layer.
+│  - STRIPE_KEY
+│  - DATABASE_URL
+│  → Set each name (`oke vault set <name>`, or `.env.local`).
+│  https://oke.omqkhafi.dev/e/1510
 ```
 
 **Consequence:** fix every listed name before traffic — boot does not take a half-configured app.
@@ -297,9 +300,9 @@ Managed provider ids: `aws-secrets-manager` · `azure-key-vault` · `gcp-secret-
 <Accordions>
 
 <Accordion title="VaultBootError — N missing secret(s)">
-  Cause: `vault boot failed — N missing secret(s):` with every gap listed. On a TTY, `oke dev`
-  prompts each into `.env.local`; otherwise use `oke vault set` / env / managed, or a `dev:`
-  fallback. `vault.env.required` joins the same list.
+  TTY title **OKE1510**. Cause: N secrets have no value in any resolution layer, with every gap
+  listed. On a TTY, `oke dev` prompts each into `.env.local`; otherwise use `oke vault set` / env /
+  managed, or a `dev:` fallback. `vault.env.required` joins the same list.
 </Accordion>
 
 <Accordion title='vault: secret "…" is not loaded'>

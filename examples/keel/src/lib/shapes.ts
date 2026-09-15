@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-/** Shared not-found payload. */
-export const NotFound = z.object({
-  id: z.string(),
-});
-
 /** Shared ok payload. */
 export const Ok = z.object({
   ok: z.literal(true),
@@ -19,11 +14,6 @@ export const Duplicate = z.object({
 /** AI / integration unavailable. */
 export const Unavailable = z.object({
   message: z.string(),
-});
-
-/** Forbidden for the caller's role. */
-export const Forbidden = z.object({
-  role: z.string().optional(),
 });
 
 /** Id-only input (path `:id`). */

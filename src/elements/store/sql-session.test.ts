@@ -15,6 +15,7 @@ import { and, desc, eq, like, lt, or } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 import { pgliteDriver } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
+import { isFlowFailure } from "../../kernel/hooks.ts";
 import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
 
 const posts = pgTable("posts", {
@@ -166,5 +167,56 @@ describe("SqlStoreHandle — upsert", () => {
     expect(updated.status).toBe("changed");
     const row = await sharedHandle.findById(posts, "n1");
     expect(row).toEqual({ id: "n1", title: "two", createdAt: 20 });
+  });
+});
+
+describe("SqlStoreHandle — SQL constraints become typed failures", () => {
+  test("unique insert is Conflict; missing FK is ForeignKey", async () => {
+    await sharedConn.exec(`
+      CREATE TABLE IF NOT EXISTS "acct" (
+        "id" TEXT PRIMARY KEY,
+        "email" TEXT NOT NULL UNIQUE
+      )
+    `);
+    await sharedConn.exec(`
+      CREATE TABLE IF NOT EXISTS "note" (
+        "id" TEXT PRIMARY KEY,
+        "acct_id" TEXT NOT NULL REFERENCES "acct"("id")
+      )
+    `);
+    await sharedConn.exec(`TRUNCATE "note", "acct" RESTART IDENTITY CASCADE`);
+
+    const acct = pgTable("acct", {
+      id: text("id").primaryKey(),
+      email: text("email").notNull(),
+    });
+    const note = pgTable("note", {
+      id: text("id").primaryKey(),
+      acctId: text("acct_id").notNull(),
+    });
+
+    await sharedHandle.insert(acct).values({ id: "a1", email: "a@b.c" });
+    let unique: unknown;
+    try {
+      await sharedHandle.insert(acct).values({ id: "a2", email: "a@b.c" });
+    } catch (err) {
+      unique = err;
+    }
+    expect(isFlowFailure(unique)).toBe(true);
+    if (isFlowFailure(unique)) {
+      expect(unique.error.code).toBe("Conflict");
+      expect(JSON.stringify(unique)).not.toContain("a@b.c");
+    }
+
+    let fk: unknown;
+    try {
+      await sharedHandle.insert(note).values({ id: "n1", acctId: "missing" });
+    } catch (err) {
+      fk = err;
+    }
+    expect(isFlowFailure(fk)).toBe(true);
+    if (isFlowFailure(fk)) {
+      expect(fk.error.code).toBe("ForeignKey");
+    }
   });
 });

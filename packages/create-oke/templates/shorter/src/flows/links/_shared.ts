@@ -120,8 +120,8 @@ export async function loadOwnedLink(
   code: string,
 ): Promise<LinkRow | LinkCodeFailure> {
   const [row] = await fx.store(db).select().from(links).where(eq(links.code, code));
-  if (!row) return fail("NotFound", { code });
-  if (String(row.userId) !== fx.auth.userId) return fail("Forbidden", { code });
+  if (!row) return fail.notFound({ code });
+  if (String(row.userId) !== fx.auth.userId) return fail.forbidden({ code });
   return row as LinkRow;
 }
 
@@ -141,9 +141,9 @@ export async function resolveShortCode(
 ): Promise<string | LinkCodeFailure> {
   const code = requested?.trim() ?? "";
   if (code) {
-    if (isReservedCode(code)) return fail("Conflict", { code });
+    if (isReservedCode(code)) return fail.conflict({ code });
     const existing = await fx.store(db).select().from(links).where(eq(links.code, code));
-    if (existing[0]) return fail("Conflict", { code });
+    if (existing[0]) return fail.conflict({ code });
     return code;
   }
   for (let i = 0; i < 4; i++) {
@@ -152,7 +152,7 @@ export async function resolveShortCode(
     const existing = await fx.store(db).select().from(links).where(eq(links.code, candidate));
     if (!existing[0]) return candidate;
   }
-  return fail("Conflict", { code: "retry" });
+  return fail.conflict({ code: "retry" });
 }
 
 /**
@@ -206,7 +206,7 @@ export async function loadLiveUrl(fx: Fx, code: string): Promise<string | LinkCo
         or(isNull(links.expiresAt), gt(links.expiresAt, now)),
       ),
     );
-  if (!row) return fail("NotFound", { code });
+  if (!row) return fail.notFound({ code });
   const url = String(row.url);
   await warmRedirectCache(fx, code, url, row.expiresAt);
   return url;

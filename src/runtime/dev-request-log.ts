@@ -56,6 +56,8 @@ export type DevRequestLogInput = {
   readonly ms: number;
   /** Human failure detail (error.message / code) for 4xx/5xx. */
   readonly detail?: string;
+  /** Failure `error.code` for the title chip. */
+  readonly errorCode?: string;
 };
 
 /**
@@ -85,16 +87,19 @@ export function isSilentDevRequest(method: string, path: string, surface?: DevLo
  *
  * @param response - HTTP response (cloned; original body stays readable)
  */
-export async function failureDetailFromResponse(response: Response): Promise<string | undefined> {
-  if (response.status < 400) return undefined;
+export async function failureEnvelopeFromResponse(
+  response: Response,
+): Promise<{ readonly detail?: string; readonly code?: string }> {
+  if (response.status < 400) return {};
   try {
     const body: unknown = await response.clone().json();
-    if (body === null || typeof body !== "object" || !("error" in body)) return undefined;
+    if (body === null || typeof body !== "object" || !("error" in body)) return {};
     const error = (body as { error: unknown }).error;
-    if (error === null || typeof error !== "object") return undefined;
+    if (error === null || typeof error !== "object") return {};
     const rec = error as { message?: unknown; code?: unknown; data?: unknown };
+    const code = typeof rec.code === "string" ? rec.code : undefined;
     if (typeof rec.message === "string" && rec.message.trim().length > 0) {
-      return rec.message.trim();
+      return { detail: rec.message.trim(), ...(code ? { code } : {}) };
     }
     if (
       rec.data !== null &&
@@ -103,14 +108,25 @@ export async function failureDetailFromResponse(response: Response): Promise<str
       typeof (rec.data as { reason: unknown }).reason === "string"
     ) {
       const reason = (rec.data as { reason: string }).reason;
-      const code = typeof rec.code === "string" ? rec.code : "Error";
-      return `${code}: ${reason}`;
+      return {
+        detail: `${code ?? "Error"}: ${reason}`,
+        ...(code ? { code } : {}),
+      };
     }
-    if (typeof rec.code === "string") return rec.code;
+    if (code) return { detail: code, code };
   } catch {
     // non-JSON error bodies stay status-only
   }
-  return undefined;
+  return {};
+}
+
+/**
+ * Extract a short failure detail from an OKE JSON envelope body.
+ *
+ * @param response - HTTP response (cloned; original body stays readable)
+ */
+export async function failureDetailFromResponse(response: Response): Promise<string | undefined> {
+  return (await failureEnvelopeFromResponse(response)).detail;
 }
 
 /**
@@ -135,6 +151,7 @@ export function logDevRequest(input: DevRequestLogInput): void {
       status: input.status,
       ms: input.ms,
       detail: input.detail,
+      errorCode: input.errorCode,
     }),
   );
 }
@@ -167,7 +184,7 @@ export async function timedDevFetch(
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
   const response = await handle(request);
-  const detail = await failureDetailFromResponse(response);
+  const envelope = await failureEnvelopeFromResponse(response);
   logDevRequest({
     surface: options.surface ?? currentDevSurface(),
     method,
@@ -176,7 +193,8 @@ export async function timedDevFetch(
     runId: options.resolveRunId?.(request, response),
     status: response.status,
     ms: Math.round(performance.now() - started),
-    detail,
+    detail: envelope.detail,
+    errorCode: envelope.code,
   });
   return response;
 }

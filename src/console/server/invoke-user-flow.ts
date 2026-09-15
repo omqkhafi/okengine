@@ -9,10 +9,12 @@
 import { userPrincipal, type UserPrincipal } from "../../auth/planes.ts";
 import { assembleInput } from "../../compiler/http-parse.ts";
 import type { ExecuteResult, OkeApp } from "../../kernel/app.ts";
-import { OkeError } from "../../kernel/errors.ts";
+import { httpStatusForFailure } from "../../kernel/builtin-errors.ts";
+import { fail, OkeError } from "../../kernel/errors.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { isJsonResult } from "../../kernel/fx.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
+import { sqlErrorToFailure } from "../../elements/store/sql-errors.ts";
 import type { Trigger } from "../../kernel/triggers.ts";
 import type { RlsIdentity } from "../../drivers/pg-rls.ts";
 import { resolveRlsIdentity } from "../../elements/store.ts";
@@ -170,22 +172,10 @@ export type InvokeHostApp = Pick<OkeApp, "bindings" | "execute">;
  * Map a host typed failure code to an HTTP-ish status for Call API chrome.
  *
  * @param code - Failure code from the host pipeline
+ * @param data - Failure payload (`DatabaseError.reason` affects status)
  */
-export function statusForInvokeFailure(code: string): number {
-  switch (code) {
-    case "Unauthorized":
-      return 401;
-    case "Forbidden":
-      return 403;
-    case "RateLimited":
-      return 429;
-    case "NotFound":
-      return 404;
-    case "InternalError":
-      return 500;
-    default:
-      return code.startsWith("OKE") ? 500 : 400;
-  }
+export function statusForInvokeFailure(code: string, data?: unknown): number {
+  return httpStatusForFailure(code, data);
 }
 
 /**
@@ -255,7 +245,7 @@ function invokeFailureFromError(
       data: err.data,
       ...(err.message !== undefined ? { message: err.message } : {}),
     },
-    status: statusForInvokeFailure(err.code),
+    status: statusForInvokeFailure(err.code, err.data),
     ...(runId !== undefined ? { runId } : {}),
   };
 }
@@ -273,11 +263,15 @@ function invokeFailureFromThrown(thrown: unknown, runId?: string): InvokeUserFlo
       ...(runId !== undefined ? { runId } : {}),
     };
   }
+  const sqlMapped = sqlErrorToFailure(thrown, { retryable: "unavailable" });
+  if (sqlMapped) return invokeFailureFromError(sqlMapped.error, runId);
+  const internal = fail("InternalError", {});
   return {
     output: null,
     failure: {
       code: "InternalError",
-      message: thrown instanceof Error ? thrown.message : String(thrown),
+      data: internal.error.data,
+      ...(internal.error.message !== undefined ? { message: internal.error.message } : {}),
     },
     status: 500,
     ...(runId !== undefined ? { runId } : {}),

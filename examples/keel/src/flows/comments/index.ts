@@ -6,7 +6,7 @@ import { commentsWrite, db, member, tasksWrite } from "@/core";
 import { comments, tasks } from "@/db/schema";
 import { commentsZod } from "@/db/zod";
 import { listIn, pageOut } from "@/lib/http";
-import { IdIn, NotFound, Ok } from "@/lib/shapes";
+import { IdIn, Ok } from "@/lib/shapes";
 import { commentAdded, commentChanged, commentThread } from "./signals";
 
 import "./signals";
@@ -50,12 +50,12 @@ export const list = on(
 /** Create a comment. */
 export const create = on(
   http
-    .post("/tasks/:id/comments", { in: CommentIn, out: CommentOut, errors: { NotFound } })
+    .post("/tasks/:id/comments", { in: CommentIn, out: CommentOut })
     .gate(tasksWrite),
   flow("comments.create", {
     do: async (input, fx) => {
       const task = await fx.store(db).findById(tasks, input.id);
-      if (!task) return fail("NotFound", { id: input.id });
+      if (!task) return fail.notFound({ id: input.id });
       const id = fx.id();
       const authorEmail = fx.auth.userId ?? "member@keel.dev";
       await fx.store(db).insert(comments).values({
@@ -76,11 +76,11 @@ export const create = on(
 
 /** Get one comment. */
 export const get = on(
-  http.get("/comments/:id", { in: IdIn, out: CommentOut, errors: { NotFound } }).gate(member),
+  http.get("/comments/:id", { in: IdIn, out: CommentOut }).gate(member),
   flow("comments.get", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       return {
         id: String(row.id),
         taskId: String(row.taskId),
@@ -94,12 +94,12 @@ export const get = on(
 /** Edit a comment. */
 export const update = on(
   http
-    .patch("/comments/:id", { in: CommentIn, out: CommentOut, errors: { NotFound } })
+    .patch("/comments/:id", { in: CommentIn, out: CommentOut })
     .gate(commentsWrite),
   flow("comments.update", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       await fx
         .store(db)
         .update(comments)
@@ -120,11 +120,11 @@ export const update = on(
 
 /** Delete a comment. */
 export const remove = on(
-  http.delete("/comments/:id", { in: IdIn, out: Ok, errors: { NotFound } }).gate(commentsWrite),
+  http.delete("/comments/:id", { in: IdIn, out: Ok }).gate(commentsWrite),
   flow("comments.delete", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       await fx.store(db).delete(comments).where(eq(comments.id, input.id));
       return { ok: true as const };
     },

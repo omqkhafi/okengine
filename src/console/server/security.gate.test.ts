@@ -541,7 +541,7 @@ describe("console security gates (whole surface)", () => {
         }),
       }),
     );
-    expect(limited.status).toBe(400);
+    expect(limited.status).toBe(429);
     const limitedBody = (await limited.json()) as {
       error: { code: string };
     };

@@ -16,6 +16,7 @@ import {
   formatOkeWordmark,
   formatServiceLine,
   formatSurfaceBox,
+  formatFatalError,
   formatRequestLine,
   formatStackSummary,
   countTermLines,
@@ -294,6 +295,81 @@ describe("term", () => {
     expect(out).toContain("Password needs at least 12 characters");
     expect(out).toMatch(/◇ {2}400\n│\n│ {2}Password/);
     expect(out).not.toContain("↳");
+  });
+
+  test("formatRequestLine title chip includes error.code", () => {
+    const out = formatRequestLine({
+      surface: "Backend",
+      method: "POST",
+      path: "/links",
+      flow: "links.create",
+      status: 409,
+      ms: 3,
+      detail: "That value is already in use.",
+      errorCode: "Conflict",
+      color: false,
+    });
+    expect(out).toMatch(/◇ {2}409 Conflict\n/);
+  });
+
+  test("formatFatalError prints VaultBootError as OKE1510 with cause and fix", () => {
+    const err = Object.assign(new Error("vault boot failed"), {
+      name: "VaultBootError",
+      gaps: [{ name: "STRIPE_SECRET_KEY" }, { name: "DATABASE_URL" }],
+    });
+    const out = formatFatalError(err, false);
+    expect(out).toContain("OKE1510");
+    expect(out).toContain("2 secrets have no value in any resolution layer.");
+    expect(out).toContain("- STRIPE_SECRET_KEY");
+    expect(out).toContain("oke vault set");
+    expect(out).toContain("https://oke.omqkhafi.dev/e/1510");
+    expect(out).not.toContain("Error:");
+    expect(out).not.toContain("    at ");
+  });
+
+  test("formatFatalError prints GateBootError with posture gaps", () => {
+    const err = Object.assign(new Error("gate boot failed"), {
+      name: "GateBootError",
+      gaps: [{ flowId: "notes.get", method: "GET", path: "/notes/:id" }],
+    });
+    const out = formatFatalError(err, false);
+    expect(out).toContain("Gate");
+    expect(out).toContain("1 trigger(s) missing auth posture.");
+    expect(out).toContain("- notes.get GET /notes/:id");
+    expect(out).toContain("Attach a gate or `.public()`.");
+    expect(out).not.toContain("    at ");
+  });
+
+  test("formatFatalError prints PluginNeedsError with unmet needs", () => {
+    const err = Object.assign(new Error("plugin needs failed"), {
+      name: "PluginNeedsError",
+      gaps: [{ plugin: "auth", need: "store.sql" }],
+    });
+    const out = formatFatalError(err, false);
+    expect(out).toContain("Plugin");
+    expect(out).toContain("1 unmet .needs() dependency.");
+    expect(out).toContain('- auth needs "store.sql"');
+    expect(out).toContain("Install the missing plugin");
+    expect(out).not.toContain("    at ");
+  });
+
+  test("formatFatalError hides stack unless OKE_DEBUG=1", () => {
+    const prev = process.env["OKE_DEBUG"];
+    const boom = new Error("plain boom");
+    try {
+      delete process.env["OKE_DEBUG"];
+      const hidden = formatFatalError(boom, false);
+      expect(hidden).toContain("Error");
+      expect(hidden).toContain("plain boom");
+      expect(hidden).not.toContain("    at ");
+
+      process.env["OKE_DEBUG"] = "1";
+      const shown = formatFatalError(boom, false);
+      expect(shown).toContain("Error");
+    } finally {
+      if (prev === undefined) delete process.env["OKE_DEBUG"];
+      else process.env["OKE_DEBUG"] = prev;
+    }
   });
 
   test("formatStackSummary is scannable", () => {

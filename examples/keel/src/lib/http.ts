@@ -153,7 +153,7 @@ export function listIn(
  * @param id - Missing row id
  */
 export function notFound(id: string) {
-  return fail("NotFound", { id });
+  return fail.notFound({ id });
 }
 
 /**

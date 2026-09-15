@@ -2,7 +2,7 @@ import { on, flow, http, fail, store, type GateAllDecl, type GateDecl } from "ok
 import { z } from "zod";
 import { db } from "@/core";
 import { listIn, pageOut, queryPage } from "@/lib/http";
-import { IdIn, NotFound, Ok } from "@/lib/shapes";
+import { IdIn, Ok } from "@/lib/shapes";
 
 /** Bound CRUD exports. */
 export type CrudBag = {
@@ -118,12 +118,12 @@ export function bindCrud(spec: {
       );
 
   const get = on(
-    http.get(item, { in: IdIn, out: spec.out, errors: { NotFound } }).gate(read),
+    http.get(item, { in: IdIn, out: spec.out }).gate(read),
     flow(`${unit}.get`, {
       effects: readFx,
       do: async (input, fx) => {
         const row = await fx.store(db).findById(table, input.id);
-        if (!row) return fail("NotFound", { id: input.id });
+        if (!row) return fail.notFound({ id: input.id });
         return row as Record<string, unknown>;
       },
     }),
@@ -134,14 +134,13 @@ export function bindCrud(spec: {
       .patch(item, {
         in: z.intersection(IdIn, spec.updateIn ?? spec.createIn),
         out: z.object({ id: z.string() }),
-        errors: { NotFound },
       })
       .gate(write),
     flow(`${unit}.update`, {
       effects: bothFx,
       do: async (input, fx) => {
         const row = await fx.store(db).findById(table, input.id);
-        if (!row) return fail("NotFound", { id: input.id });
+        if (!row) return fail.notFound({ id: input.id });
         const { id, ...patch } = input as Record<string, unknown> & { id: string };
         if (Object.keys(patch).length > 0) {
           await fx
@@ -156,12 +155,12 @@ export function bindCrud(spec: {
   );
 
   const remove = on(
-    http.delete(item, { in: IdIn, out: Ok, errors: { NotFound } }).gate(write),
+    http.delete(item, { in: IdIn, out: Ok }).gate(write),
     flow(`${unit}.delete`, {
       effects: bothFx,
       do: async (input, fx) => {
         const row = await fx.store(db).findById(table, input.id);
-        if (!row) return fail("NotFound", { id: input.id });
+        if (!row) return fail.notFound({ id: input.id });
         await fx
           .store(db)
           .delete(table)

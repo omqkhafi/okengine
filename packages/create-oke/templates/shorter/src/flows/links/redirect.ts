@@ -31,7 +31,7 @@ export const redirect = on(
         // archived past `expiresAt`. Do not fall through to SQL.
         if (isExpired(cached.expiresAt, fx.clock.now())) {
           await fx.store(redirects).delete(input.code);
-          return fail("NotFound", { code: input.code });
+          return fail.notFound({ code: input.code });
         }
         await fx.emit(linkClicked, { code: input.code }, { key: fx.id() });
         return redirectTo(cached.url);

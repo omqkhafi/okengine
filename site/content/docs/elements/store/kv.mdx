@@ -262,7 +262,7 @@ export const get = on(
     do: async ({ token }, fx) => {
       const userId = await fx.store(sessions).get(`session:${token}`);
       if (userId === undefined || userId === null) {
-        return fx.fail("NotFound", { token });
+        return fx.fail.notFound({ token });
       }
       return { userId };
     },

@@ -119,7 +119,7 @@ export const embedTask = call("search.embedTask", {
   do: async (input, fx) => {
     await fx.vault.get(openaiKey);
     const row = await fx.store(db).findById(tasks, input.id);
-    if (!row) return fail("NotFound", { id: input.id });
+    if (!row) return fail.notFound({ id: input.id });
     await upsertTask(fx, row as Record<string, unknown>);
     return { ok: true as const };
   },

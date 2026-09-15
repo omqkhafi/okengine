@@ -32,7 +32,14 @@ export { http, internal, mcp } from "./kernel/triggers.ts";
 export type { BoundaryContract } from "./kernel/boundary-contract.ts";
 export { registerFlowUnits } from "./kernel/flow-units.ts";
 export { stampFlowName, stampHttpPath } from "./kernel/stamp-http.ts";
-export { fail, type FlowFailure, type FlowErrorValue } from "./kernel/errors.ts";
+export { fail, type FailFn } from "./kernel/fail-helpers.ts";
+export { type FlowFailure, type FlowErrorValue } from "./kernel/errors.ts";
+export type {
+  BuiltinErrorBag,
+  BuiltinErrorCode,
+  BuiltinErrorMap,
+  DatabaseErrorReason,
+} from "./kernel/builtin-errors.ts";
 export { isFlowFailure } from "./kernel/hooks.ts";
 export { plugin, isPlugin, type PluginDef, type PluginCapabilities } from "./kernel/plugin.ts";
 export type { Fx, FxPrincipal, StepOptions } from "./kernel/fx.ts";

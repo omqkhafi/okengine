@@ -344,12 +344,11 @@ export const get = on(
   http.get({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), title: z.string() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
       const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
-      if (!note) return fx.fail("NotFound", { id });
+      if (!note) return fx.fail.notFound({ id });
       return note;
     },
   }),
@@ -404,7 +403,6 @@ export const update = on(
       id: z.string(),
       title: z.string().min(1).optional(),
     }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id, title }, fx) => {
@@ -412,7 +410,7 @@ export const update = on(
         await fx.store(db).update(notes).set({ title }).where(eq(notes.id, id));
       }
       const row = await fx.store(db).findById(notes, id);
-      if (!row) return fx.fail("NotFound", { id });
+      if (!row) return fx.fail.notFound({ id });
       return row;
     },
   }),
@@ -591,7 +589,7 @@ The URL id segment is always `:id`. Update is **PATCH**, not PUT.
 | `out`      | Schema    | _(required)_                     | Item shape (get / list / update return)                                  |
 | `update`   | Schema    | `in`                             | Patch fields. Wire body is `{ id, …patch }`                              |
 | `idSchema` | Schema    | `update`/`in` + `{ id: string }` | Replaces the update Flow `in` when set (include the id key)              |
-| `errors`   | error map | `{ NotFound }`                   | Typed failures on get / update / remove                                  |
+| `errors`   | error map | —                                | Extra domain codes. Built-in `NotFound` is always on                     |
 | `id`       | column    | table PK                         | Column bound to `:id`                                                    |
 | `list`     | object    | see List Options                 | List query grammar (`GET /notes`)                                        |
 | `breaking` | `boolean` | `false`                          | Marks the five Flows `breaking: true` (handwritten → resource migration) |

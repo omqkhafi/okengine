@@ -110,7 +110,7 @@ export const create = on(
 
 <Tab value="Failures">
 
-Declare typed domain errors and return clean failure responses using `fx.fail`:
+Declare typed domain errors on `errors:`. Built-in codes use helpers (`fx.fail.notFound`) with no bag:
 
 ```typescript title="src/flows/orders/[id]/get.ts"
 import { on, flow, http } from "okengine";
@@ -120,12 +120,11 @@ export const get = on(
   http.get({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
       const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id));
-      if (!order) return fx.fail("NotFound", { id });
+      if (!order) return fx.fail.notFound({ id });
       return order;
     },
   }),
@@ -287,12 +286,11 @@ export const get = on(
   http.get({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), title: z.string() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
       const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
-      if (!note) return fx.fail("NotFound", { id });
+      if (!note) return fx.fail.notFound({ id });
       return note;
     },
   }),
@@ -378,7 +376,6 @@ export const update = on(
       title: z.string().min(1).optional(),
     }),
     out: z.object({ id: z.string(), title: z.string() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id, title }, fx) => {
@@ -386,7 +383,7 @@ export const update = on(
         await fx.store(db).update(notes).set({ title }).where(eq(notes.id, id));
       }
       const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
-      if (!note) return fx.fail("NotFound", { id });
+      if (!note) return fx.fail.notFound({ id });
       return note;
     },
   }),
@@ -465,7 +462,6 @@ import { db, notes } from "@/schema";
 export const head = on(
   http.head("/notes/:id", {
     in: z.object({ id: z.string() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
@@ -474,7 +470,7 @@ export const head = on(
         .select({ id: notes.id })
         .from(notes)
         .where(eq(notes.id, id));
-      if (!note) return fx.fail("NotFound", { id });
+      if (!note) return fx.fail.notFound({ id });
       return;
     },
   }),
@@ -577,7 +573,7 @@ pathless `http.resource()` — pass an explicit base path.
 | `out`      | Schema    | _(required)_                     | Item shape (get / list / update return)                                  |
 | `update`   | Schema    | `in`                             | Patch fields. Wire body is `{ id, ...patch }`                            |
 | `idSchema` | Schema    | `update`/`in` + `{ id: string }` | Replaces the update Flow `in` when set (include the id key)              |
-| `errors`   | error map | `{ NotFound }`                   | Typed failures on get / update / remove                                  |
+| `errors`   | error map | —                                | Extra domain codes. Built-in `NotFound` is always on                     |
 | `id`       | column    | table PK                         | Column bound to `:id`                                                    |
 | `list`     | object    | see List Options                 | List query grammar (`GET /notes`)                                        |
 | `breaking` | `boolean` | `false`                          | Marks the five Flows `breaking: true` (handwritten → resource migration) |
@@ -965,10 +961,11 @@ return fx.json.ok({ id: "ord_1" }, { meta: { traceId: fx.runId } });
 return new Response(null, { status: 302, headers: { Location: url } });
 ```
 
-**Typed failures** — `fx.fail(code, data)` formats the error envelope and maps status:
+**Typed failures** — built-in helpers need no `errors:` bag. Domain codes still go on `errors:`:
 
 ```typescript
-return fx.fail("NotFound", { id: "123" });
+return fx.fail.notFound({ id: "123" });
+return fx.fail("OutOfStock", { available: 0 });
 ```
 
 ```json
@@ -976,7 +973,7 @@ return fx.fail("NotFound", { id: "123" });
   "data": null,
   "error": {
     "code": "NotFound",
-    "message": "Resource not found",
+    "message": "The requested resource was not found.",
     "data": { "id": "123" }
   }
 }
@@ -987,8 +984,14 @@ Standard status code mappings:
 - `ValidationError` → `422 Unprocessable Entity`
 - `Unauthorized` → `401 Unauthorized`
 - `Forbidden` → `403 Forbidden`
-- `RateLimited` → `429 Too Many Requests`
-- Custom error codes → `400 Bad Request`
+- `NotFound` → `404 Not Found` (JSON envelope — router miss is plain-text `404`)
+- `Conflict` / `ForeignKey` → `409 Conflict`
+- `UnsupportedMediaType` → `415 Unsupported Media Type`
+- `RateLimited` / `AuthRateLimited` → `429 Too Many Requests`
+- `DatabaseError` → `422` (`not_null` / `check`), `503` (`retryable`), else `500`
+- `ServiceUnavailable` → `503 Service Unavailable`
+- `InternalError` → `500 Internal Server Error` (catalog message only)
+- Domain codes (`OutOfStock`, `FlightFull`, `Duplicate`) → `400 Bad Request`
 
 ## Troubleshooting
 

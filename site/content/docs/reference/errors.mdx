@@ -34,12 +34,11 @@ Codes are stable after the domain-range renumber — match them safely across up
 on(
   http.get({
     in: z.object({ id: z.string() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
       const [row] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
-      if (!row) return fx.fail("NotFound", { id });
+      if (!row) return fx.fail.notFound({ id });
       return row;
     },
   }),
@@ -100,6 +99,7 @@ string. Custom app codes stay message-less until registered. Full catalogs:
 | `1071` | once-signal multi-flow | Two different Flows bound to the same `signal.once`    | Use `signal.broadcast`, or bind only one Flow                   |
 | `1072` | flow unnamed           | Signal / Clock consumer still has no `unit.export`     | Export from `flows/<unit>/` or pass a named `flow`              |
 | `1110` | schema missing         | Domain table absent in `prod` — no auto-DDL            | Run `oke db migrate` against this environment                   |
+| `1510` | vault secret missing   | Contract has no value in any resolution layer          | `oke vault set <name>`, `.env.local`, or a `dev:` fallback      |
 | `1210` | live resume gap        | `Last-Event-ID` is not on the retained tape            | Reconnect without the cursor; remaining tape replays            |
 | `1240` | orphan emit            | Emit with zero subscribers and `optional` false        | Add `on(signal, …)` or declare `optional: true`                 |
 | `1250` | signal schema          | Emit payload failed the signal's `schema`              | Pass a payload that matches `schema`, or remove it              |
@@ -129,9 +129,16 @@ Returned, not thrown — the request never reached `do`:
 | Code                   | When                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `ValidationError`      | Input failed the `in` schema, or a list param isn't whitelisted (`unknown list param "x"`)                          |
-| `NotFound`             | A `store.resource` get/update/remove hit a missing row                                                              |
+| `NotFound`             | Missing row / object — **404** JSON envelope (router miss is plain-text `404`)                  |
+| `Conflict`             | Unique / exclusion — **409** (SQL unique auto-maps here)                                       |
+| `ForeignKey`           | Foreign-key violation — **409**                                                                |
+| `DatabaseError`        | Other SQL constraints — `not_null`/`check` **422**, `retryable` **503**, else **500**          |
+| `ServiceUnavailable`   | Connection / exhausted serialization — **503**                                                 |
+| `InternalError`        | Unhandled throw — **500**, catalog message only                                                |
 | `InvalidQuery`         | QUERY missing `Content-Type` (`reason: missing_content_type`) or body isn't JSON (`inconsistent_content`) — **400** |
 | `UnsupportedMediaType` | QUERY `Content-Type` is present but not `application/json` — **415**, `Accept-Query` lists JSON                     |
+| `AuthFailed`           | Credentials / policy — **400**                                                                 |
+| `AuthRateLimited`      | Auth attempts exhausted — **429**                                                              |
 
 ## Subsystem errors
 
@@ -139,7 +146,7 @@ Thrown by specific subsystems — each names its own cause:
 
 | Error                         | Thrown when                                                        | What to do                                                            |
 | ----------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `VaultBootError`              | A vault contract has no value in any resolution layer              | Set the missing names — the error lists every gap                     |
+| `VaultBootError`              | A vault contract has no value in any resolution layer              | TTY **OKE1510** — set each listed name                            |
 | `VaultError` (`UNSUPPORTED`)  | Managed provider unknown                                           | Use an official id, built-in `vault`, or `env`                        |
 | `VaultSealed`                 | Console rotate-master while this process holds no master key       | Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal`               |
 | `VaultRotateBusy`             | Master-rotation lease held or a batch is already in flight         | Wait and continue, or resume with `oke vault rotate-master --new-key` |
@@ -197,8 +204,8 @@ Thrown by specific subsystems — each names its own cause:
 </Accordion>
 
 <Accordion title="VaultBootError at startup">
-  A vault contract has no value in any resolution layer. The error lists every gap — set the missing
-  names ([Vault](/docs/elements/vault)).
+  TTY title **OKE1510**. A vault contract has no value in any resolution layer. The printer lists
+  every gap — set the missing names ([Vault](/docs/elements/vault)).
 </Accordion>
 
 </Accordions>

@@ -6,7 +6,7 @@ import { db, member } from "@/core";
 import { inbox } from "@/db/schema";
 import { inboxZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
-import { IdIn, NotFound, Ok } from "@/lib/shapes";
+import { IdIn, Ok } from "@/lib/shapes";
 
 const InboxHit = inboxZod.select.pick({
   id: true,
@@ -59,11 +59,11 @@ if (inboxR.live) {
 
 /** Mark one inbox row read. */
 export const read = on(
-  http.post("/inbox/:id/read", { in: IdIn, out: Ok, errors: { NotFound } }).gate(member),
+  http.post("/inbox/:id/read", { in: IdIn, out: Ok }).gate(member),
   flow("inbox.read", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(inbox, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const readAt = new Date(fx.clock.now()).toISOString();
       await fx.store(db).update(inbox).set({ readAt }).where(eq(inbox.id, input.id));
       return { ok: true as const };

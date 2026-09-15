@@ -106,14 +106,15 @@ export {
   type RunTelemetry,
 } from "./run-telemetry.ts";
 
+export { fail } from "./fail-helpers.ts";
 export {
-  fail,
   formatOkeMessage,
   lookupOkeError,
   OKE_ERROR_RANGES,
   OKE_ERRORS,
   OkeError,
   throwOke,
+  type FailFn,
   type FailOptions,
   type FlowErrorValue,
   type FlowFailure,
@@ -122,6 +123,15 @@ export {
   type OkeErrorDomain,
   type OkeErrorParams,
 } from "./errors.ts";
+export {
+  BUILTIN_ERROR_STATUS,
+  httpStatusForFailure,
+  statusForBuiltinError,
+  type BuiltinErrorBag,
+  type BuiltinErrorCode,
+  type BuiltinErrorMap,
+  type DatabaseErrorReason,
+} from "./builtin-errors.ts";
 
 export {
   flow,

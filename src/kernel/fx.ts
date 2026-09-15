@@ -58,7 +58,7 @@ import {
   recordWouldHaveFired,
   touchDryRunStore,
 } from "./dry-run.ts";
-import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
+import type { FailFn } from "./errors.ts";
 import { currentAbortSignal, linkAbort } from "./abort-scope.ts";
 import {
   fxAll,
@@ -81,6 +81,13 @@ import type { MessageCatalogs } from "../i18n/messages.ts";
 import { okid } from "../okid.ts";
 import { lazyRequire } from "./lazy-require.ts";
 import type { AppMessageKey, MessageValues } from "../i18n/types.ts";
+
+function loadFail(): FailFn {
+  return lazyRequire<typeof import("./fail-helpers.ts")>(
+    import.meta.dir,
+    ["fail", "helpers"].join("-"),
+  ).fail;
+}
 
 /** Lazy runs/window helpers — kept off the cold `oke` static graph. */
 async function loadRunsWindow(): Promise<typeof import("../runs/window.ts")> {
@@ -884,11 +891,10 @@ export interface Fx {
   /**
    * Flow-boundary failure value (does not throw).
    *
-   * @param code - Declared error code (narrowed by clients via `error.code`)
-   * @param data - Error payload
-   * @param opts - Optional message
+   * Built-in helpers (`fx.fail.notFound`, `fx.fail.forbidden`, …) need no
+   * `errors:` declaration. Domain codes still use `fx.fail("OutOfStock", data)`.
    */
-  fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E>;
+  readonly fail: FailFn;
   /** JSON response helpers (status + Stripe-style envelope). */
   readonly json: FxJson;
   /**
@@ -2246,7 +2252,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     operator,
     principal,
     tenant,
-    fail,
+    fail: loadFail(),
     json: {
       ok<T>(value: T, opts?: { readonly meta?: Record<string, unknown> }): JsonResult<T> {
         return {

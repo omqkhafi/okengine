@@ -51,7 +51,7 @@ const api = createClient(app, vault.env("PUBLIC_API_URL") ?? "");
 const { data, error } = await api.bookings.get({ id: "bkg_7f3a" });
 
 if (error) {
-  // TransportError or a declared flow code (NotFound, …)
+  // TransportError or a flow code (NotFound, …)
   return;
 }
 

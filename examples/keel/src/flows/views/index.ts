@@ -5,7 +5,7 @@ import { db, member, projectAdminWrite, viewPrefsKv } from "@/core";
 import { sections, tasks, views } from "@/db/schema";
 import { viewsZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
-import { IdOut, NotFound } from "@/lib/shapes";
+import { IdOut } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";
 
 const createIn = z.object({
@@ -72,13 +72,12 @@ export const board = on(
           tasks: z.array(z.object({ id: z.string(), title: z.string(), identifier: z.string() })),
         }),
       ),
-      errors: { NotFound },
     })
     .gate(member),
   flow("views.board", {
     do: async (input, fx) => {
       const view = await fx.store(db).findById(views, input.id);
-      if (!view) return fail("NotFound", { id: input.id });
+      if (!view) return fail.notFound({ id: input.id });
       const projectId = String(view.projectId);
       const sectionRows = await fx.store(db).select().from(sections);
       const taskRows = await fx.store(db).select().from(tasks);

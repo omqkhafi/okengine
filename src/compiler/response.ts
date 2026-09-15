@@ -4,11 +4,10 @@
  * Shared by AoT and dynamic so responses stay byte-identical.
  */
 
-import type { FlowFailure } from "../kernel/errors.ts";
+import { fail, type FlowFailure } from "../kernel/errors.ts";
 import type { JsonResult, JsonStreamResult, SseFrame } from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { lazyRequire } from "../kernel/lazy-require.ts";
-import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
 
 /** Successful envelope. */
 export interface SuccessEnvelope {
@@ -26,24 +25,12 @@ export interface FailureEnvelope {
 /**
  * HTTP status for a flow-boundary failure.
  *
- * Gate denials use the status the Gates simulator promises:
- * `Unauthorized` → 401 · `Forbidden` → 403 · `RateLimited` → 429.
+ * Built-in codes use {@link httpStatusForFailure}. Domain codes default to 400.
  *
  * @param failure - Typed failure
  */
 export function statusForFailure(failure: FlowFailure): number {
-  switch (failure.error.code) {
-    case VALIDATION_ERROR_CODE:
-      return 422;
-    case "Unauthorized":
-      return 401;
-    case "Forbidden":
-      return 403;
-    case "RateLimited":
-      return 429;
-    default:
-      return 400;
-  }
+  return loadBuiltinErrors().httpStatusForFailure(failure.error.code, failure.error.data);
 }
 
 /**
@@ -87,6 +74,14 @@ function loadFxLiveStream(): typeof import("../kernel/fx-live-stream.ts") {
   return lazyRequire(`${import.meta.dir}/../kernel`, ["fx", "live", "stream"].join("-"));
 }
 
+function loadBuiltinErrors(): typeof import("../kernel/builtin-errors.ts") {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["builtin", "errors"].join("-"));
+}
+
+function loadSqlErrors(): typeof import("../elements/store/sql-errors.ts") {
+  return lazyRequire(`${import.meta.dir}/../elements/store`, ["sql", "errors"].join("-"));
+}
+
 function loadFxJson(): {
   isJsonResult: (value: unknown) => value is JsonResult;
   isJsonStreamResult: (value: unknown) => value is JsonStreamResult;
@@ -123,18 +118,13 @@ export async function encodeExecuteResult(result: {
         ? loadFxLiveStream().encodeGap(result.error)
         : undefined;
     if (gap) return gap;
+    const sqlMapped = loadSqlErrors().sqlErrorToFailure(result.error, {
+      retryable: "unavailable",
+    });
+    if (sqlMapped) return encodeFailure(sqlMapped);
     // Unhandled throws must never look like success (`undefined` → 204).
-    return Response.json(
-      {
-        data: null,
-        error: {
-          code: "InternalError",
-          data: {},
-          message: result.error instanceof Error ? result.error.message : "internal error",
-        },
-      } satisfies FailureEnvelope,
-      { status: 500 },
-    );
+    // Catalog message only — never copy the thrown `Error.message`.
+    return encodeFailure(fail("InternalError", {}));
   }
   if (loadFxJson().isJsonStreamResult(result.output) && result.output.ready) {
     const early = await loadFxLiveStream().awaitLiveReady(result.output);

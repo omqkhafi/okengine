@@ -23,7 +23,14 @@ export { http, internal } from "./kernel/triggers.ts";
 export type { BoundaryContract } from "./kernel/boundary-contract.ts";
 export { clock } from "./elements/clock/declare.ts";
 export { gate, GATE_PUBLIC_NAME } from "./elements/gate/declare.ts";
-export { fail, type FlowFailure } from "./kernel/errors.ts";
+export { fail, type FailFn } from "./kernel/fail-helpers.ts";
+export { type FlowFailure, type FlowErrorValue } from "./kernel/errors.ts";
+export type {
+  BuiltinErrorBag,
+  BuiltinErrorCode,
+  BuiltinErrorMap,
+  DatabaseErrorReason,
+} from "./kernel/builtin-errors.ts";
 export { isFlowFailure } from "./kernel/hooks.ts";
 export { plugin, isPlugin, type PluginDef } from "./kernel/plugin.ts";
 export { createBunRuntime, APP_PORT, type Runtime, type ServeOptions } from "./runtime/index.ts";

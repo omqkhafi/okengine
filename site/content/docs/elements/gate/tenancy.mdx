@@ -64,7 +64,7 @@ export const list = on(
   flow({
     do: async (_, fx) => {
       const tenantId = fx.tenant.id;
-      if (!tenantId) return fx.fail("Forbidden", { reason: "tenant_required" });
+      if (!tenantId) return fx.fail.forbidden({ reason: "tenant_required" });
       return await fx.store(db).select().from(invoices).where(eq(invoices.tenantId, tenantId));
     },
   }),

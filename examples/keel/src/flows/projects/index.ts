@@ -5,7 +5,7 @@ import { db, member, projectAdminWrite } from "@/core";
 import { projectUpdates, projects, sections } from "@/db/schema";
 import { projectUpdatesZod, projectsZod, sectionsZod } from "@/db/zod";
 import { listIn, pageOut, queryPage } from "@/lib/http";
-import { IdIn, IdOut, NotFound, Ok } from "@/lib/shapes";
+import { IdIn, IdOut, Ok } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";
 import { projectChanged, projectHealth, projectUpdated } from "./signals";
 
@@ -101,13 +101,12 @@ export const postUpdate = on(
         health: z.string().optional(),
       }),
       out: IdOut,
-      errors: { NotFound },
     })
     .gate(projectAdminWrite),
   flow("projects.postUpdate", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(projects, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const id = fx.id();
       const health = input.health ?? "on_track";
       await fx
@@ -187,13 +186,12 @@ export const addSection = on(
     .post("/projects/:id/sections", {
       in: z.object({ id: z.string(), name: z.string().min(1) }),
       out: IdOut,
-      errors: { NotFound },
     })
     .gate(projectAdminWrite),
   flow("projects.addSection", {
     do: async (input, fx) => {
       const project = await fx.store(db).findById(projects, input.id);
-      if (!project) return fail("NotFound", { id: input.id });
+      if (!project) return fail.notFound({ id: input.id });
       const existing = await fx.store(db).select().from(sections);
       const sortOrder = existing.filter((r) => String(r.projectId) === input.id).length;
       const id = fx.id();

@@ -14,7 +14,7 @@ import {
   tasks,
 } from "@/db/schema";
 import { queryPage } from "@/lib/http";
-import { IdIn, Ok, NotFound, Duplicate } from "@/lib/shapes";
+import { IdIn, Ok, Duplicate } from "@/lib/shapes";
 import {
   AssignIn,
   DependIn,
@@ -82,14 +82,14 @@ async function writeActivity(fx: Fx, parentId: string, kind: string, body: strin
 /** Create a task, emit `task-created`. */
 export const create = on(
   http
-    .post("/tasks", { in: TaskCreateIn, out: TaskCreateOut, errors: { NotFound, Duplicate } })
+    .post("/tasks", { in: TaskCreateIn, out: TaskCreateOut, errors: { Duplicate } })
     .gate(tasksWrite),
   flow("tasks.create", {
     do: async (input, fx) => {
       await fx.vault.get(keelWorkspace);
       const spaceRows = await fx.store(db).select().from(spaces);
       const space = spaceRows.find((r) => String(r.key) === input.spaceKey);
-      if (!space) return fail("NotFound", { id: input.spaceKey });
+      if (!space) return fail.notFound({ id: input.spaceKey });
       const identifier = await nextIdentifier(fx, input.spaceKey);
       const id = fx.id();
       await fx
@@ -147,12 +147,12 @@ export const create = on(
 /** Patch task fields. */
 export const update = on(
   http
-    .patch("/tasks/:id", { in: TaskUpdateIn, out: TaskOut, errors: { NotFound } })
+    .patch("/tasks/:id", { in: TaskUpdateIn, out: TaskOut })
     .gate(tasksWrite),
   flow("tasks.update", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const patch: Record<string, unknown> = { updatedAt: new Date(fx.clock.now()).toISOString() };
       if (input.title !== undefined) patch.title = input.title;
       if (input.description !== undefined) patch.description = input.description;
@@ -163,7 +163,7 @@ export const update = on(
       if (input.roleNeeded !== undefined) patch.roleNeeded = input.roleNeeded;
       await fx.store(db).update(tasks).set(patch).where(eq(tasks.id, input.id));
       const next = await fx.store(db).findById(tasks, input.id);
-      if (!next) return fail("NotFound", { id: input.id });
+      if (!next) return fail.notFound({ id: input.id });
       const task = asTask(next);
       await writeActivity(fx, task.id, "updated", task.title);
       return task;
@@ -227,11 +227,11 @@ export const live = on(
 
 /** Fetch one task. */
 export const get = on(
-  http.get("/tasks/:id", { in: IdIn, out: TaskOut, errors: { NotFound } }).gate(member),
+  http.get("/tasks/:id", { in: IdIn, out: TaskOut }).gate(member),
   flow("tasks.get", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       return asTask(row);
     },
   }),
@@ -240,12 +240,12 @@ export const get = on(
 /** Assign a task and notify. */
 export const assign = on(
   http
-    .post("/tasks/:id/assign", { in: AssignIn, out: TaskCreateOut, errors: { NotFound } })
+    .post("/tasks/:id/assign", { in: AssignIn, out: TaskCreateOut })
     .gate(tasksWrite),
   flow("tasks.assign", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       await fx.store(db).insert(taskAssignees).values({
         id: fx.id(),
         taskId: input.id,
@@ -287,11 +287,11 @@ export const assign = on(
 
 /** Mark complete. */
 export const complete = on(
-  http.post("/tasks/:id/complete", { in: IdIn, out: Ok, errors: { NotFound } }).gate(tasksWrite),
+  http.post("/tasks/:id/complete", { in: IdIn, out: Ok }).gate(tasksWrite),
   flow("tasks.complete", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const completedAt = new Date(fx.clock.now()).toISOString();
       await fx
         .store(db)
@@ -312,11 +312,11 @@ export const complete = on(
 
 /** Soft-archive. */
 export const archive = on(
-  http.post("/tasks/:id/archive", { in: IdIn, out: Ok, errors: { NotFound } }).gate(tasksWrite),
+  http.post("/tasks/:id/archive", { in: IdIn, out: Ok }).gate(tasksWrite),
   flow("tasks.archive", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const archivedAt = new Date(fx.clock.now()).toISOString();
       await fx.store(db).update(tasks).set({ archivedAt }).where(eq(tasks.id, input.id));
       return { ok: true as const };
@@ -326,11 +326,11 @@ export const archive = on(
 
 /** Follow a task. */
 export const follow = on(
-  http.post("/tasks/:id/follow", { in: IdIn, out: Ok, errors: { NotFound } }).gate(member),
+  http.post("/tasks/:id/follow", { in: IdIn, out: Ok }).gate(member),
   flow("tasks.follow", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const email = fx.auth.userId ?? "ops@keel.dev";
       await fx.store(db).insert(taskFollowers).values({
         id: fx.id(),
@@ -366,12 +366,12 @@ export const unfollow = on(
 /** Duplicate via `tasks.create`. */
 export const duplicate = on(
   http
-    .post("/tasks/:id/duplicate", { in: IdIn, out: TaskCreateOut, errors: { NotFound } })
+    .post("/tasks/:id/duplicate", { in: IdIn, out: TaskCreateOut })
     .gate(tasksWrite),
   flow("tasks.duplicate", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const task = asTask(row);
       const spaceRows = await fx.store(db).select().from(spaces);
       const space = spaceRows.find((t) => String(t.id) === task.spaceId);
@@ -389,19 +389,19 @@ export const duplicate = on(
 /** Move to another project / section / space. */
 export const move = on(
   http
-    .post("/tasks/:id/move", { in: MoveIn, out: TaskCreateOut, errors: { NotFound } })
+    .post("/tasks/:id/move", { in: MoveIn, out: TaskCreateOut })
     .gate(tasksWrite),
   flow("tasks.move", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       const patch: Record<string, unknown> = { updatedAt: new Date(fx.clock.now()).toISOString() };
       if (input.projectId !== undefined) patch.projectId = input.projectId;
       if (input.sectionId !== undefined) patch.sectionId = input.sectionId;
       if (input.spaceKey) {
         const spaceRows = await fx.store(db).select().from(spaces);
         const space = spaceRows.find((t) => String(t.key) === input.spaceKey);
-        if (!space) return fail("NotFound", { id: input.spaceKey });
+        if (!space) return fail.notFound({ id: input.spaceKey });
         patch.spaceId = String(space.id);
       }
       await fx.store(db).update(tasks).set(patch).where(eq(tasks.id, input.id));
@@ -414,14 +414,14 @@ export const move = on(
 /** Record a blocks/blocked-by edge. */
 export const depend = on(
   http
-    .post("/tasks/:id/depend", { in: DependIn, out: Ok, errors: { NotFound, Duplicate } })
+    .post("/tasks/:id/depend", { in: DependIn, out: Ok, errors: { Duplicate } })
     .gate(tasksWrite),
   flow("tasks.depend", {
     do: async (input, fx) => {
       if (input.id === input.blocksTaskId) return fail("Duplicate", { id: input.id });
       const row = await fx.store(db).findById(tasks, input.id);
       const other = await fx.store(db).findById(tasks, input.blocksTaskId);
-      if (!row || !other) return fail("NotFound", { id: input.id });
+      if (!row || !other) return fail.notFound({ id: input.id });
       await fx.store(db).insert(taskDependencies).values({
         id: fx.id(),
         taskId: input.id,
@@ -434,11 +434,11 @@ export const depend = on(
 
 /** Attach a tag. */
 export const addTag = on(
-  http.post("/tasks/:id/tags", { in: TagIn, out: Ok, errors: { NotFound } }).gate(tasksWrite),
+  http.post("/tasks/:id/tags", { in: TagIn, out: Ok }).gate(tasksWrite),
   flow("tasks.addTag", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       await fx.store(db).insert(taskTags).values({
         id: fx.id(),
         taskId: input.id,
@@ -451,11 +451,11 @@ export const addTag = on(
 
 /** Delete a task. */
 export const remove = on(
-  http.delete("/tasks/:id", { in: IdIn, out: Ok, errors: { NotFound } }).gate(tasksWrite),
+  http.delete("/tasks/:id", { in: IdIn, out: Ok }).gate(tasksWrite),
   flow("tasks.delete", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       await fx.store(db).delete(tasks).where(eq(tasks.id, input.id));
       return { ok: true as const };
     },

@@ -61,7 +61,7 @@ import type {
 } from "./fx.ts";
 import {
   currentDevSurface,
-  failureDetailFromResponse,
+  failureEnvelopeFromResponse,
   logDevRequest,
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
@@ -2328,6 +2328,7 @@ export function oke(options: OkeOptions): OkeApp {
           response.headers.set("accept-query", '"application/json"');
         }
         if (shouldLogDevRequests()) {
+          const envelope = await failureEnvelopeFromResponse(response);
           logDevRequest({
             surface: currentDevSurface(),
             method,
@@ -2336,7 +2337,8 @@ export function oke(options: OkeOptions): OkeApp {
             runId: runLabel,
             status: response.status,
             ms: Math.round(performance.now() - started),
-            detail: await failureDetailFromResponse(response),
+            detail: envelope.detail,
+            errorCode: envelope.code,
           });
         }
         const jcb = loadJsonCodeBlock();

@@ -4,6 +4,7 @@
 
 import { resolve } from "node:path";
 import { APP_PORT } from "../runtime/types.ts";
+import { formatFatalError } from "../term.ts";
 
 /** Options for {@link runStart}. */
 export interface StartOptions {
@@ -77,7 +78,7 @@ export async function runStart(options: StartOptions = {}): Promise<number> {
     await import(entry);
     return 0;
   } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
+    console.error(formatFatalError(err));
     return 1;
   }
 }

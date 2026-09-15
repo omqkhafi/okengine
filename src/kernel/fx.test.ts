@@ -728,6 +728,14 @@ describe("errors — registry", () => {
     });
   });
 
+  test("fx.fail.notFound is callable without errors: declaration", () => {
+    const fx = createFx({ flow: "x", effects: {} });
+    const result = fx.fail.notFound({ id: "n1" });
+    expect(result.error.code).toBe("NotFound");
+    expect(result.error.data).toEqual({ id: "n1" });
+    expect(result.data).toBeNull();
+  });
+
   test("capability token allows only declared resources", () => {
     const token = createCapabilityToken("f", {
       reads: ["sql:a"],

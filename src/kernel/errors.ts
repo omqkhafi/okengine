@@ -9,6 +9,7 @@
 import { docsUrl as absoluteDocsUrl } from "../docs-origin.ts";
 import { getActiveDefaultLocale, getActiveLocale } from "../i18n/locale-context.ts";
 import { lazyRequire } from "./lazy-require.ts";
+import type { BuiltinErrorMap } from "./builtin-errors.ts";
 
 /** Catalogs — kept off the edge `fail` / `OKE_ERRORS` static graph. */
 function loadMessages(): typeof import("../i18n/messages.ts") {
@@ -143,6 +144,93 @@ export interface FailOptions {
   /** Override message (often from `fx.t(...)`). */
   readonly message?: string;
 }
+
+/**
+ * Callable `fail` plus built-in helpers (`fail.notFound`, `fail.forbidden`, …).
+ */
+export interface FailFn {
+  /**
+   * Flow-boundary failure value (does not throw).
+   *
+   * @param code - Declared or built-in error code
+   * @param data - Error payload
+   * @param opts - Optional message override
+   */
+  <E>(code: string, data: E, opts?: FailOptions): FlowFailure<E>;
+  /** Missing row / object — HTTP 404. */
+  notFound(
+    data?: BuiltinErrorMap["NotFound"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["NotFound"]>;
+  /** Not authenticated — HTTP 401. */
+  unauthorized(
+    data?: BuiltinErrorMap["Unauthorized"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["Unauthorized"]>;
+  /** Authenticated but denied — HTTP 403. */
+  forbidden(
+    data?: BuiltinErrorMap["Forbidden"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["Forbidden"]>;
+  /** Unique / exclusion conflict — HTTP 409. */
+  conflict(
+    data?: BuiltinErrorMap["Conflict"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["Conflict"]>;
+  /** Foreign-key violation — HTTP 409. */
+  foreignKey(
+    data?: BuiltinErrorMap["ForeignKey"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["ForeignKey"]>;
+  /** Rate budget exhausted — HTTP 429. */
+  rateLimited(
+    data?: BuiltinErrorMap["RateLimited"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["RateLimited"]>;
+  /** Maintenance / connection — HTTP 503. */
+  serviceUnavailable(
+    data?: BuiltinErrorMap["ServiceUnavailable"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["ServiceUnavailable"]>;
+  /** SQL / store constraint that is not unique or FK. */
+  database(
+    data: BuiltinErrorMap["DatabaseError"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["DatabaseError"]>;
+  /** Unhandled throw — HTTP 500. Catalog message only. */
+  internal(
+    data?: BuiltinErrorMap["InternalError"],
+    opts?: FailOptions,
+  ): FlowFailure<BuiltinErrorMap["InternalError"]>;
+}
+
+/**
+ * Create a flow-boundary failure value (does not throw).
+ *
+ * When `opts.message` is omitted, attaches a localized message from the
+ * built-in / app catalogs (`errors.{code}.{reason}` → `errors.{code}`) using
+ * the active request locale. Custom codes with no catalog entry stay
+ * message-less.
+ *
+ * @param code - Declared error code from the flow's `errors` map
+ * @param data - Error payload
+ * @param opts - Optional message override
+ */
+function failImpl<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E> {
+  const message =
+    opts?.message !== undefined
+      ? opts.message
+      : loadFailureMessage().resolveFailureMessage(code, data);
+  const error: FlowErrorValue<E> = message !== undefined ? { code, data, message } : { code, data };
+  return { data: null, error };
+}
+
+/**
+ * Flow-boundary failure (callable). Built-in helpers live on the lazy
+ * `fail-helpers` chunk so they stay off the kernel edge graph — {@link createFx}
+ * and the public `okengine` export load that chunk.
+ */
+export const fail: FailFn = failImpl as FailFn;
 
 /**
  * Permanent error registry. Codes are stable within their domain range after
@@ -368,6 +456,12 @@ export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefin
       ["errors", "live", "resume"].join("-"),
     ).LIVE_RESUME_GAP;
   }
+  if (code === 1510) {
+    return lazyRequire<typeof import("./errors-vault.ts")>(
+      import.meta.dir,
+      ["errors", "vault"].join("-"),
+    ).VAULT_SECRET_MISSING;
+  }
   if (code === 1605) {
     return lazyRequire<typeof import("./errors-channel.ts")>(
       import.meta.dir,
@@ -381,27 +475,6 @@ export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefin
     if (def.code === code) return def;
   }
   return undefined;
-}
-
-/**
- * Create a flow-boundary failure value (does not throw).
- *
- * When `opts.message` is omitted, attaches a localized message from the
- * built-in / app catalogs (`errors.{code}.{reason}` → `errors.{code}`) using
- * the active request locale. Custom codes with no catalog entry stay
- * message-less.
- *
- * @param code - Declared error code from the flow's `errors` map
- * @param data - Error payload
- * @param opts - Optional message override
- */
-export function fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E> {
-  const message =
-    opts?.message !== undefined
-      ? opts.message
-      : loadFailureMessage().resolveFailureMessage(code, data);
-  const error: FlowErrorValue<E> = message !== undefined ? { code, data, message } : { code, data };
-  return { data: null, error };
 }
 
 /**

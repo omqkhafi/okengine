@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db, documentSummaryPrompt, member, openaiKey } from "@/core";
 import { documents } from "@/db/schema";
 import { documentsZod } from "@/db/zod";
-import { IdIn, IdOut, NotFound, Unavailable } from "@/lib/shapes";
+import { IdIn, IdOut, Unavailable } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";
 
 const DocumentIn = documentsZod.insert
@@ -63,13 +63,13 @@ export const summarize = on(
     .post("/documents/:id/summarize", {
       in: IdIn,
       out: z.object({ summary: z.string() }),
-      errors: { NotFound, Unavailable },
+      errors: { Unavailable },
     })
     .gate(member),
   flow("documents.summarize", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(documents, input.id);
-      if (!row) return fail("NotFound", { id: input.id });
+      if (!row) return fail.notFound({ id: input.id });
       await fx.vault.get(openaiKey);
       try {
         const out = await fx.ask(documentSummaryPrompt, {

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db, formClassifyPrompt, member, openaiKey, projectAdminWrite } from "@/core";
 import { formSubmissions, forms, projects, spaces } from "@/db/schema";
 import { formsZod } from "@/db/zod";
-import { IdOut, NotFound, Unavailable } from "@/lib/shapes";
+import { IdOut, Unavailable } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";
 import { formChanged, formIntake, formSubmitted } from "./signals";
 
@@ -38,13 +38,12 @@ export const create = on(
         schemaJson: z.string().optional(),
       }),
       out: IdOut,
-      errors: { NotFound },
     })
     .gate(projectAdminWrite),
   flow("forms.create", {
     do: async (input, fx) => {
       const project = await fx.store(db).findById(projects, input.projectId);
-      if (!project) return fail("NotFound", { id: input.projectId });
+      if (!project) return fail.notFound({ id: input.projectId });
       const id = fx.id();
       await fx
         .store(db)
@@ -71,7 +70,7 @@ export const submit = on(
         customerName: z.string().min(1),
       }),
       out: z.object({ id: z.string(), taskId: z.string(), identifier: z.string() }),
-      errors: { NotFound, Unavailable },
+      errors: { Unavailable },
     })
     .gate(member),
   flow("forms.submit", {
@@ -79,7 +78,7 @@ export const submit = on(
     durable: true,
     do: async (input, fx) => {
       const form = await fx.store(db).findById(forms, input.id);
-      if (!form) return fail("NotFound", { id: input.id });
+      if (!form) return fail.notFound({ id: input.id });
       const project = await fx.store(db).findById(projects, String(form.projectId));
       const spaceRows = await fx.store(db).select().from(spaces);
       const space = project

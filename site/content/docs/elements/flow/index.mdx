@@ -118,7 +118,7 @@ export const create = on(
 
 <Tab value="Failures">
 
-Declare domain errors on the exposure bag and return `fx.fail` — do not throw for expected failures:
+Declare domain errors on the exposure bag. Built-in codes (`NotFound`, `Forbidden`, …) need no `errors:` — use the helpers:
 
 ```typescript title="src/flows/orders/[id]/get.ts"
 import { on, flow, http } from "okengine";
@@ -130,12 +130,11 @@ export const get = on(
   http.get({
     in: z.object({ id: z.string() }),
     out: z.object({ id: z.string(), sku: z.string(), qty: z.number() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
       const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id));
-      if (!order) return fx.fail("NotFound", { id });
+      if (!order) return fx.fail.notFound({ id });
       return order;
     },
   }),
@@ -323,10 +322,17 @@ Status for `error.code`:
 | `ValidationError`                                     | `422`  |
 | `Unauthorized`                                        | `401`  |
 | `Forbidden`                                           | `403`  |
-| `RateLimited`                                         | `429`  |
-| Any other declared code (`NotFound`, `OutOfStock`, …) | `400`  |
+| `NotFound`                                            | `404`  |
+| `Conflict` / `ForeignKey`                             | `409`  |
+| `UnsupportedMediaType`                                | `415`  |
+| `RateLimited` / `AuthRateLimited`                     | `429`  |
+| `DatabaseError` (`not_null` / `check`)                | `422`  |
+| `DatabaseError` (`retryable`) / `ServiceUnavailable`  | `503`  |
+| `DatabaseError` (else) / `InternalError`              | `500`  |
+| Domain codes (`OutOfStock`, `FlightFull`, `Duplicate`) | `400`  |
 
-A bare `404` with body `Not Found` means **no route matched** — not `fx.fail("NotFound")`.
+A bare `404` with body `Not Found` means **no route matched** — not `fx.fail.notFound`. Clients
+distinguish router miss (plain text) from domain miss (JSON envelope).
 
 </Tab>
 
@@ -546,8 +552,8 @@ Default is `true` once `gate.auth.tenant` is on.
 </Accordion>
 
 <Accordion title="Thrown Error becomes a mystery 500 instead of a typed envelope">
-  Uncaught exceptions are defects. Declare the code in `errors` on the exposure and `return
-  fx.fail("OutOfStock", payload)` from `do`.
+  Uncaught exceptions become `InternalError` (catalog message only — the thrown `message` is not
+  copied). For expected misses use `fx.fail.notFound` / domain `fx.fail("OutOfStock", payload)`.
 </Accordion>
 
 <Accordion title="422 ValidationError — path param missing from in">
@@ -556,9 +562,9 @@ Default is `true` once `gate.auth.tenant` is on.
   Parsing](/docs/elements/flow/http#request-parsing).
 </Accordion>
 
-<Accordion title="fx.fail('NotFound') is 400, not 404">
-  Custom domain codes map to **400**. A bare `404` `Not Found` means the router found no method +
-  path. Use `fx.fail` for domain misses; fix the route for missing bindings.
+<Accordion title="Router 404 vs domain NotFound">
+  A bare `404` with body `Not Found` means **no route matched**. `fx.fail.notFound` is a JSON
+  envelope at **404** with `error.code: "NotFound"`. Clients distinguish by envelope, not status.
 </Accordion>
 
 <Accordion title="Read-only Flow never cache-hits">

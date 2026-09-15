@@ -402,7 +402,7 @@ Restart `oke dev` after renaming exports.
 
 <Accordion title='error.code is "TransportError"'>
   Network failure, abort (`timeout`), non-JSON body, empty error response, or HTTP status without a
-  `{ data, error }` envelope. Declared flow codes (`NotFound`, `FlightFull`, …) never use this code.
+  `{ data, error }` envelope. Built-in and domain flow codes (`NotFound`, `FlightFull`, …) never use this code.
   Message text lives in `error.data.message`; HTTP status may appear as `error.data.status`.
 </Accordion>
 

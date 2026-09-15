@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db, member, memberAdminWrite } from "@/core";
 import { members, spaces } from "@/db/schema";
 import { membersZod } from "@/db/zod";
-import { IdOut, NotFound } from "@/lib/shapes";
+import { IdOut } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";
 
 const createIn = z.object({
@@ -35,13 +35,13 @@ const InviteIn = z.object({
 /** Invite a member. */
 export const invite = on(
   http
-    .post("/members/invite", { in: InviteIn, out: IdOut, errors: { NotFound } })
+    .post("/members/invite", { in: InviteIn, out: IdOut })
     .gate(memberAdminWrite),
   flow("members.invite", {
     do: async (input, fx) => {
       if (input.spaceId) {
         const space = await fx.store(db).findById(spaces, input.spaceId);
-        if (!space) return fail("NotFound", { id: input.spaceId });
+        if (!space) return fail.notFound({ id: input.spaceId });
       }
       const id = fx.id();
       await fx

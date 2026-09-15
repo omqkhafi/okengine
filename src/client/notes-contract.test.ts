@@ -76,6 +76,16 @@ describe("Notes — typeof app carries contracts", () => {
     expect(typeof api.notes.create).toBe("function");
   });
 
+  test("create without errors: bag still types built-in NotFound", () => {
+    const app = oke({ name: "notes" }).adopt({ notes: { create } });
+    const api = createClient<typeof app>("http://localhost:6530");
+    type CreateError = NonNullable<Awaited<ReturnType<typeof api.notes.create>>["error"]>;
+    type NotFoundData = Extract<CreateError, { code: "NotFound" }>["data"];
+    type _Id = Assert<Eq<NotFoundData["id"], string | undefined>>;
+    const ok: [_Id] = [true];
+    expect(ok).toEqual([true]);
+  });
+
   test("Notes client block: createClient<App> narrows data and NotFound", async () => {
     const app = oke({ name: "notes" }).adopt({ notes });
     type App = typeof app;

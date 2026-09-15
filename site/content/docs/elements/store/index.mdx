@@ -117,12 +117,11 @@ import { db, notes } from "@/schema";
 export const get = on(
   http.get({
     in: z.object({ id: z.string() }),
-    errors: { NotFound: z.object({ id: z.string() }) },
   }),
   flow({
     do: async ({ id }, fx) => {
       const [note] = await fx.store(db).select().from(notes).where(eq(notes.id, id));
-      if (!note) return fx.fail("NotFound", { id });
+      if (!note) return fx.fail.notFound({ id });
       return note;
     },
   }),

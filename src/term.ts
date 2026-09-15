@@ -5,6 +5,9 @@
  * Flip to monochrome with `NO_COLOR=1` or non-TTY stdout.
  */
 
+import { docsUrl } from "./docs-origin.ts";
+import { lookupOkeError } from "./kernel/errors.ts";
+
 /** Whether ANSI color should be applied. */
 export function termColorEnabled(stream: { readonly isTTY?: boolean } = process.stdout): boolean {
   if (process.env["NO_COLOR"] !== undefined) return false;
@@ -701,13 +704,167 @@ export function formatDevNote(options: {
   const ink = options.tone === "error" ? s.red : s.yellow;
   const bar = `${s.dim}│${s.reset}`;
   const width = Math.max(40, Math.min(72, (process.stdout.columns ?? 80) - 6));
-  const wrapped = wrapWords(options.body.trim(), width);
+  const wrapped = wrapBodyLines(options.body.trimEnd(), width);
   const lines = [`${ink}◇${s.reset}  ${s.bold}${ink}${options.title}${s.reset}`, bar];
   for (const line of wrapped) {
-    lines.push(`${bar}  ${ink}${line}${s.reset}`);
+    lines.push(line.length === 0 ? bar : `${bar}  ${ink}${line}${s.reset}`);
   }
   lines.push(bar);
   return `${lines.join("\n")}\n`;
+}
+
+function wrapBodyLines(body: string, width: number): string[] {
+  const out: string[] = [];
+  for (const raw of body.split("\n")) {
+    const line = raw.trimEnd();
+    if (line.length === 0) {
+      out.push("");
+      continue;
+    }
+    out.push(...wrapWords(line, width));
+  }
+  return out;
+}
+
+/**
+ * Boot / start fatal — cause, optional list, fix, docs URL. No stack unless
+ * `OKE_DEBUG=1`.
+ *
+ * @param err - Thrown boot value
+ * @param color - Color on/off
+ */
+export function formatFatalError(err: unknown, color: boolean = termColorEnabled()): string {
+  const debug = process.env["OKE_DEBUG"] === "1";
+  const formatted = describeFatalError(err, debug);
+  return formatDevNote({
+    title: formatted.title,
+    body: formatted.body,
+    tone: "error",
+    color,
+  });
+}
+
+function describeFatalError(
+  err: unknown,
+  debug: boolean,
+): { readonly title: string; readonly body: string } {
+  const vault = vaultBootGaps(err);
+  if (vault) {
+    const def = lookupOkeError(1510);
+    const count = String(vault.length);
+    const cause = def
+      ? interpolateTemplate(def.cause, { count })
+      : `${count} secrets have no value in any resolution layer.`;
+    const fix = def
+      ? interpolateTemplate(def.fix, { count })
+      : "Set each name (`oke vault set <name>`, or `.env.local`).";
+    const url = def ? docsUrl(`/e/${def.code}`) : docsUrl("/e/1510");
+    const names = vault.map((g) => (g.description ? `- ${g.name}: ${g.description}` : `- ${g.name}`));
+    return {
+      title: "OKE1510",
+      body: [cause, ...names, `→ ${fix}`, url].join("\n"),
+    };
+  }
+
+  const gate = namedGaps(err, "GateBootError");
+  if (gate) {
+    const lines = gate.map((g) => {
+      const rec = g as Record<string, unknown>;
+      const flow = typeof rec.flowId === "string" ? rec.flowId : "flow";
+      const method = typeof rec.method === "string" ? rec.method : "";
+      const path = typeof rec.path === "string" ? rec.path : "";
+      return `- ${flow} ${method} ${path}`.trim();
+    });
+    return {
+      title: "Gate",
+      body: [
+        `${gate.length} trigger(s) missing auth posture.`,
+        ...lines,
+        "→ Attach a gate or `.public()`.",
+      ].join("\n"),
+    };
+  }
+
+  const plugin = namedGaps(err, "PluginNeedsError");
+  if (plugin) {
+    const lines = plugin.map((g) => {
+      const rec = g as Record<string, unknown>;
+      const name = typeof rec.plugin === "string" ? rec.plugin : "plugin";
+      const need = typeof rec.need === "string" ? rec.need : "";
+      return `- ${name} needs "${need}"`;
+    });
+    return {
+      title: "Plugin",
+      body: [
+        `${plugin.length} unmet .needs() dependenc${plugin.length === 1 ? "y" : "ies"}.`,
+        ...lines,
+        "→ Install the missing plugin or bind the element / driver.",
+      ].join("\n"),
+    };
+  }
+
+  if (isOkeErrorShape(err)) {
+    return {
+      title: `OKE${err.code}`,
+      body: [err.causeText, `→ ${err.fix}`, err.docsUrl].join("\n"),
+    };
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = debug && err instanceof Error && err.stack ? `\n${err.stack}` : "";
+  return { title: "Error", body: `${message}${stack}` };
+}
+
+function interpolateTemplate(template: string, params: Readonly<Record<string, string>>): string {
+  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => params[key] ?? `{${key}}`);
+}
+
+function vaultBootGaps(
+  err: unknown,
+): readonly { readonly name: string; readonly description?: string }[] | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  if ((err as { name?: unknown }).name !== "VaultBootError") return undefined;
+  const gaps = (err as { gaps?: unknown }).gaps;
+  if (!Array.isArray(gaps)) return undefined;
+  const out: { name: string; description?: string }[] = [];
+  for (const g of gaps) {
+    if (!g || typeof g !== "object") continue;
+    const name = (g as { name?: unknown }).name;
+    if (typeof name !== "string") continue;
+    const description = (g as { description?: unknown }).description;
+    out.push({
+      name,
+      ...(typeof description === "string" ? { description } : {}),
+    });
+  }
+  return out;
+}
+
+function namedGaps(err: unknown, name: string): readonly unknown[] | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  if ((err as { name?: unknown }).name !== name) return undefined;
+  const gaps = (err as { gaps?: unknown }).gaps;
+  return Array.isArray(gaps) ? gaps : undefined;
+}
+
+function isOkeErrorShape(
+  err: unknown,
+): err is { code: number; causeText: string; fix: string; docsUrl: string } {
+  if (!err || typeof err !== "object") return false;
+  const rec = err as {
+    name?: unknown;
+    code?: unknown;
+    causeText?: unknown;
+    fix?: unknown;
+    docsUrl?: unknown;
+  };
+  return (
+    rec.name === "OkeError" &&
+    typeof rec.code === "number" &&
+    typeof rec.causeText === "string" &&
+    typeof rec.fix === "string" &&
+    typeof rec.docsUrl === "string"
+  );
 }
 
 /**
@@ -808,6 +965,8 @@ export function formatRequestLine(options: {
   readonly color?: boolean;
   /** Failure detail printed on a follow-up line (4xx/5xx). */
   readonly detail?: string;
+  /** Failure `error.code` for the title chip (`409 Conflict`). */
+  readonly errorCode?: string;
   /** WideEvent / run id when the request executed a flow. */
   readonly runId?: string;
 }): string {
@@ -849,8 +1008,10 @@ export function formatRequestLine(options: {
   const detail = options.detail?.trim();
   if (!detail || options.status < 400) return main;
   const tone: DevNoteTone = options.status >= 500 ? "error" : "warn";
+  const code = options.errorCode?.trim();
+  const title = code && code.length > 0 ? `${options.status} ${code}` : String(options.status);
   const note = formatDevNote({
-    title: String(options.status),
+    title,
     body: detail,
     tone,
     color: options.color ?? termColorEnabled(),

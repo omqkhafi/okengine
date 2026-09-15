@@ -14,6 +14,8 @@ import {
   type RlsIdentity,
 } from "../../drivers/pg-rls.ts";
 import { throwOke } from "../../kernel/errors.ts";
+import { isFlowFailure } from "../../kernel/hooks.ts";
+import { isRetryableSqlError, sqlErrorToFailure } from "./sql-errors.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { maskRows, tableFromSql } from "./classify.ts";
 import { isMissingDomainRelationError } from "./missing-relation.ts";
@@ -549,9 +551,13 @@ export function createSqlStoreHandle(
     try {
       return await fn();
     } catch (err) {
+      if (isFlowFailure(err)) throw err;
       if (domainDdl === "off" && isMissingDomainRelationError(err)) {
         throwOke("DOMAIN_SCHEMA_MISSING");
       }
+      if (isRetryableSqlError(err)) throw err;
+      const failure = sqlErrorToFailure(err, { retryable: "leave" });
+      if (failure) throw failure;
       throw err;
     }
   }

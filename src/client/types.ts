@@ -5,6 +5,8 @@
  * Local / separate-repo: augment {@link Register} so `createClient(url)` needs no import.
  */
 
+import type { BuiltinErrorMap } from "../kernel/builtin-errors.ts";
+
 /**
  * One flow's client contract. `in` / `out` / `errors` are phantom (type-only).
  *
@@ -431,12 +433,12 @@ type ContractIn<C> = "in" extends keyof C
 /** Pull output from a contract shape. */
 type ContractOut<C> = "out" extends keyof C ? NonNullable<C["out"]> : unknown;
 
-/** Pull error map from a contract shape. */
+/** Pull error map from a contract shape. Built-in codes are always on; declared keys win. */
 type ContractErrors<C> = "errors" extends keyof C
   ? NonNullable<C["errors"]> extends Record<string, unknown>
-    ? NonNullable<C["errors"]>
-    : Record<string, never>
-  : Record<string, never>;
+    ? Omit<BuiltinErrorMap, keyof NonNullable<C["errors"]>> & NonNullable<C["errors"]>
+    : BuiltinErrorMap
+  : BuiltinErrorMap;
 
 /**
  * Typed client proxy derived from a route map.

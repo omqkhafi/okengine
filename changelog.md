@@ -14,11 +14,42 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+#### Runtime
+
+- Built-in `fx.fail` helpers (`notFound`, `forbidden`, `conflict`, `foreignKey`,
+  `unauthorized`, `rateLimited`, `serviceUnavailable`, `database`, `internal`)
+  are always on — no `errors: { NotFound }` bag required. Domain codes
+  (`OutOfStock`, `FlightFull`, keel `Duplicate`) still go on `errors:`.
+- `fx.store` SQL unique / FK / NOT NULL / CHECK / connection failures become
+  typed `fail` values (same family as `ValidationError`). Serialization /
+  deadlock (`40001` / `40P01`) stay thrown so `flow.retry` can run, then
+  `ServiceUnavailable`.
+- Boot fatals print cause + fix (`formatFatalError`). `VaultBootError` is
+  **OKE1510**. No TTY stack unless `OKE_DEBUG=1`. Request-line chips include
+  `error.code` (`409 Conflict`).
+
 #### Docs
 
 - Site header adds a Discord square before npm (blurple tile, invite
   `https://discord.gg/j2hkZZbnp`), matching npm’s flush square cell and
   Clyde glyph height to the npm “n”, including the mobile menu.
+- Flow / HTTP / Store / Errors / Vault / Try It document always-on helpers,
+  honest 404/409/503 tables, SQL auto-fail, and the OKE1510 TTY dump.
+
+### 💥 Breaking Changes
+
+#### Runtime
+
+- Built-in HTTP statuses: `NotFound` **404** (was 400), `Conflict` /
+  `ForeignKey` **409**, `AuthRateLimited` **429** (was 400),
+  `ServiceUnavailable` **503**. Domain codes stay **400**. Router miss remains
+  plain-text `404`.
+- SQL unique violations are `Conflict` **409**, not `500 InternalError`.
+- `InternalError` uses the catalog message only — it no longer copies the
+  thrown `Error.message`.
+- Typed client `ContractErrors` always includes built-in codes; a declared
+  key still wins (shorter `{ code }` tightening).
+- `store.resource` no longer stamps Manifest `errors: { NotFound }` by default.
 
 ### ♻️ Changed
 
@@ -39,6 +70,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `src/flows/workers/`, and emits from create (`{ key }` for `once`).
   Code samples on the page focus the lines that change; earlier context
   dims.
+
+#### Dev, Keel & create-oke
+
+- create-oke shorter and examples/keel use `fail.notFound` / `fail.forbidden` /
+  `fail.conflict` helpers. Keel drops redundant `errors: { NotFound }` bags
+  and keeps domain `Duplicate` / `Unavailable`. Shorter keeps `{ code }`
+  tightening on NotFound / Forbidden / Conflict.
 
 ## v0.20.0 — 2026-09-15
 
