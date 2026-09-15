@@ -20,6 +20,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `unauthorized`, `rateLimited`, `serviceUnavailable`, `database`, `internal`)
   are always on — no `errors: { NotFound }` bag required. Domain codes
   (`OutOfStock`, `FlightFull`, keel `Duplicate`) still go on `errors:`.
+- `okengine/client/explain` — `explain` / `matchError` collapse unknown flow
+  and transport errors into a UX kind (`auth`, `missing`, `conflict`, `invalid`,
+  …) with a required `_` default. `ValidationError` issues type as
+  `{ message, path }[]` (`explain.fields` for forms).
 - `fx.store` SQL unique / FK / NOT NULL / CHECK / invalid / too_long /
   out_of_range / connection failures become typed `fail` values (same family
   as `ValidationError`). Serialization / deadlock / lock-busy (`40001` /
@@ -42,6 +46,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   honest 404/409/503 tables, SQL / KV / files auto-fail, and the OKE1510 TTY dump.
 - Errors reference catalogs `fx.fail` helpers, always-on vs domain `errors:`,
   HTTP statuses, and SQL / KV / files store auto-map.
+- Calling / Errors document `explain` / `matchError` (unknown-error chrome) and
+  JSON `NotFound` vs a plain-text router 404.
 
 ### 💥 Breaking Changes
 

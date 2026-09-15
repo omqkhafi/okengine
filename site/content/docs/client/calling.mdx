@@ -125,7 +125,8 @@ if (isOk(result)) {
 <Tab value="Failures">
 
 ```typescript
-import { isOk, isErrorCode } from "okengine/client";
+import { isOk } from "okengine/client";
+import { matchError } from "okengine/client/explain";
 
 const result = await api.bookings.create({
   flightId: "SK481",
@@ -135,14 +136,16 @@ const result = await api.bookings.create({
 
 if (isOk(result)) {
   result.data.confirmationCode;
-} else if (result.error.code === "FlightFull") {
-  offerWaitlist(result.error.data.seatsLeft);
-} else if (isErrorCode(result.error, "NotFound")) {
-  // shared helper narrowing
+} else {
+  matchError(result.error, {
+    FlightFull: (data) => offerWaitlist(data.seatsLeft),
+    _: (e) => toast(e.message),
+  });
 }
 ```
 
-Prefer `error?.code === "FlightFull"` for inference; use `isErrorCode` in shared helpers.
+Named arms narrow `data`. `_` is required — store auto-map, transport, and unknown domain codes
+land there. `explain(error)` is the same collapse without a matcher (`kind`, `fields`, `retryable`).
 
 </Tab>
 
@@ -327,20 +330,27 @@ Success may include optional top-level `meta` (for example pagination). Declared
 transport failures share the failure arm:
 
 ```typescript
-import { isOk, isFail, isErrorCode, isTransportError } from "okengine/client";
+import { isOk, isFail, isTransportError } from "okengine/client";
+import { explain, matchError } from "okengine/client/explain";
 
 const result = await api.bookings.create({ flightId: "SK481", seats: 2 });
 
 if (isOk(result)) {
   result.data.confirmationCode;
-} else if (result.error.code === "FlightFull") {
-  result.error.data.seatsLeft;
-} else if (isTransportError(result.error)) {
-  result.error.data.message;
+} else {
+  matchError(result.error, {
+    FlightFull: (data) => offerWaitlist(data.seatsLeft),
+    _: (e) => toast(e.message),
+  });
 }
 
+explain(result.error!); // { kind, code, message, retryable, fields? }
 isFail(result); // true when error !== null
+isTransportError(result.error); // network / non-envelope HTTP
 ```
+
+`error.code === "FlightFull"` still narrows `error.data`. Use `explain` when you do not know the
+code. HTTP status is on the response, not on `error`.
 
 ## Remote types
 
@@ -376,6 +386,7 @@ CLI details: [CLI Reference](/docs/reference/cli).
 | `createTransport`                         | function  | Low-level HTTP transport (timeout / retry / auth)   |
 | `isOk` / `isFail`                         | function  | Envelope predicates                                 |
 | `isErrorCode` / `isTransportError`        | function  | Error narrowing                                     |
+| `explain` / `matchError`                  | function  | `okengine/client/explain` — `kind`, `fields`, required `_` |
 | `Client`, `ClientCall`, `ClientResult`, … | types     | Contracts, `page.next()` / `for await` of `list()`  |
 | `Register`                                | interface | Module-augmentation slot for ambient App types      |
 | `AppOf`                                   | type      | Brand a bare route map as an App                    |
@@ -402,8 +413,13 @@ Restart `oke dev` after renaming exports.
 
 <Accordion title='error.code is "TransportError"'>
   Network failure, abort (`timeout`), non-JSON body, empty error response, or HTTP status without a
-  `{ data, error }` envelope. Built-in and domain flow codes (`NotFound`, `FlightFull`, …) never use this code.
-  Message text lives in `error.data.message`; HTTP status may appear as `error.data.status`.
+  `{ data, error }` envelope. Built-in and domain flow codes never use this code.
+  `error.data.message` holds the text; `explain` maps HTTP 404 transport to kind `missing`.
+</Accordion>
+
+<Accordion title="404 — route miss or NotFound?">
+  Bare body `Not Found` means no HTTP route — `TransportError` (kind `missing`). JSON
+  `{ error: { code: "NotFound" } }` is `fx.fail.notFound`. Distinguish by envelope, not status.
 </Accordion>
 
 <Accordion title="Failed to fetch …/_oke/client.json">

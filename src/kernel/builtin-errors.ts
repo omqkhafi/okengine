@@ -36,6 +36,15 @@ export type DatabaseErrorReason =
   | "retryable"
   | "unknown";
 
+/**
+ * One `ValidationError` issue — same shape as the validation layer,
+ * inlined so this module stays off that graph.
+ */
+export type BuiltinValidationIssue = {
+  readonly message: string;
+  readonly path: ReadonlyArray<string | number>;
+};
+
 /** Loose identity / constraint bag used by several built-in codes. */
 export type BuiltinErrorBag = {
   readonly id?: string;
@@ -57,7 +66,7 @@ export type BuiltinErrorBag = {
  * Built-in error code → payload. Client unions this with declared `errors:`.
  */
 export type BuiltinErrorMap = {
-  readonly ValidationError: { readonly issues: readonly unknown[] };
+  readonly ValidationError: { readonly issues: readonly BuiltinValidationIssue[] };
   readonly Unauthorized: BuiltinErrorBag;
   readonly Forbidden: BuiltinErrorBag;
   readonly NotFound: BuiltinErrorBag;

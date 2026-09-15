@@ -130,6 +130,7 @@ export {
   type BuiltinErrorBag,
   type BuiltinErrorCode,
   type BuiltinErrorMap,
+  type BuiltinValidationIssue,
   type DatabaseErrorReason,
 } from "./builtin-errors.ts";
 

@@ -29,6 +29,7 @@ export type {
   BuiltinErrorBag,
   BuiltinErrorCode,
   BuiltinErrorMap,
+  BuiltinValidationIssue,
   DatabaseErrorReason,
 } from "./kernel/builtin-errors.ts";
 export { isFlowFailure } from "./kernel/hooks.ts";
