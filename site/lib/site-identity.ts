@@ -7,6 +7,7 @@
 import { DOCS_ORIGIN } from "./agent-onboard";
 import {
   createOkeNpmUrl,
+  discordInviteUrl,
   githubRepoUrl,
   homepageOgPath,
   jsrPackageUrl,
@@ -54,7 +55,7 @@ export const SITE_URL = DOCS_ORIGIN;
  *
  * Included (verified, currently live):
  * GitHub repo, npm `okengine`, npm `create-oke`, JSR `@omqkhafi/okengine`,
- * X `@omqkhafi`.
+ * X `@omqkhafi`, Discord invite.
  *
  * Skipped — no real profile exists: Wikipedia, Wikidata, LinkedIn.
  */
@@ -64,6 +65,7 @@ export const SITE_SAME_AS: readonly string[] = [
   createOkeNpmUrl,
   jsrPackageUrl,
   xProfileUrl,
+  discordInviteUrl,
 ];
 
 /**

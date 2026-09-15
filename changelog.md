@@ -12,6 +12,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Docs
+
+- Site header adds a Discord square before npm (blurple tile, invite
+  `https://discord.gg/j2hkZZbnp`), matching npm’s flush square cell and
+  Clyde glyph height to the npm “n”, including the mobile menu.
+
 ## v0.20.0 — 2026-09-15
 
 ### ✨ Added

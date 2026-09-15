@@ -32,6 +32,9 @@ export const jsrPackageUrl = `https://jsr.io/@${gitConfig.user}/${gitConfig.repo
 /** Public X profile for the project. */
 export const xProfileUrl = "https://x.com/omqkhafi";
 
+/** Public Discord invite for the project. */
+export const discordInviteUrl = "https://discord.gg/j2hkZZbnp";
+
 /** Homepage Open Graph image (same 1200×630 pipeline as docs OG). */
 export const homepageOgPath = "/og/home";
 

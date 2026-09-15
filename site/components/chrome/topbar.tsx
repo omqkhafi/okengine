@@ -31,11 +31,11 @@ import { useTheme } from "@fumadocs/base-ui/provider/base";
 import type * as PageTree from "fumadocs-core/page-tree";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DocsTreeNav } from "@/components/chrome/docs-sidebar";
-import { ExternalArrow, GithubMark, NpmMark } from "@/components/chrome/icons";
+import { DiscordMark, ExternalArrow, GithubMark, NpmMark } from "@/components/chrome/icons";
 import { OkeLogo } from "@/components/oke-logo";
 import { cn } from "@/lib/cn";
 import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from "@/lib/nav";
-import { githubRepoUrl, npmPackageUrl } from "@/lib/shared";
+import { discordInviteUrl, githubRepoUrl, npmPackageUrl } from "@/lib/shared";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 const REPO_URL = githubRepoUrl;
@@ -317,13 +317,22 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
               <ExternalArrow className="size-2.5 opacity-50" />
             </a>
             <a
+              href={discordInviteUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label="okengine on Discord"
+              className={cn(SQUARE_CELL, "transition-opacity duration-150 hover:opacity-90")}
+            >
+              <DiscordMark className="block size-full shrink-0" />
+            </a>
+            <a
               href={npmPackageUrl}
               target="_blank"
               rel="noreferrer noopener"
               aria-label="okengine on npm"
               className={cn(SQUARE_CELL, "transition-opacity duration-150 hover:opacity-90")}
             >
-              <NpmMark className="size-full" />
+              <NpmMark className="block size-full shrink-0" />
             </a>
           </div>
         </div>
@@ -365,12 +374,22 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
                   <ExternalArrow className="size-2.5 opacity-50" />
                 </a>
                 <a
+                  href={discordInviteUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="flex items-center gap-2 px-4 py-3 font-mono text-xs tracking-wider text-fd-muted-foreground uppercase transition-colors hover:text-fd-foreground"
+                >
+                  <DiscordMark className="size-3.5 shrink-0" />
+                  discord
+                  <ExternalArrow className="size-2.5 opacity-50" />
+                </a>
+                <a
                   href={npmPackageUrl}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="flex items-center gap-2 px-4 py-3 font-mono text-xs tracking-wider text-fd-muted-foreground uppercase transition-colors hover:text-fd-foreground"
                 >
-                  <NpmMark className="size-3.5" />
+                  <NpmMark className="size-3.5 shrink-0" />
                   npm
                   <ExternalArrow className="size-2.5 opacity-50" />
                 </a>

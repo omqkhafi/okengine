@@ -13,7 +13,13 @@ import {
   SITE_URL,
   softwareApplicationJsonLd,
 } from "./site-identity.ts";
-import { githubRepoUrl, jsrPackageUrl, npmPackageUrl, xProfileUrl } from "./shared.ts";
+import {
+  discordInviteUrl,
+  githubRepoUrl,
+  jsrPackageUrl,
+  npmPackageUrl,
+  xProfileUrl,
+} from "./shared.ts";
 
 describe("SoftwareApplication JSON-LD", () => {
   test("parses and includes url, applicationCategory, and a free Offer", () => {
@@ -35,7 +41,7 @@ describe("SoftwareApplication JSON-LD", () => {
     });
   });
 
-  test("sameAs lists only live profiles (GitHub, npm, JSR, X) — not Wikipedia/Wikidata/LinkedIn", () => {
+  test("sameAs lists only live profiles (GitHub, npm, JSR, X, Discord) — not Wikipedia/Wikidata/LinkedIn", () => {
     const parsed = JSON.parse(JSON.stringify(softwareApplicationJsonLd())) as ReturnType<
       typeof softwareApplicationJsonLd
     >;
@@ -44,6 +50,7 @@ describe("SoftwareApplication JSON-LD", () => {
     expect(parsed.sameAs).toContain(npmPackageUrl);
     expect(parsed.sameAs).toContain(jsrPackageUrl);
     expect(parsed.sameAs).toContain(xProfileUrl);
+    expect(parsed.sameAs).toContain(discordInviteUrl);
     expect(parsed.sameAs.some((url) => url.includes("wikipedia.org"))).toBe(false);
     expect(parsed.sameAs.some((url) => url.includes("wikidata.org"))).toBe(false);
     expect(parsed.sameAs.some((url) => url.includes("linkedin.com"))).toBe(false);
