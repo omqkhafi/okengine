@@ -27,6 +27,9 @@ describe("statusForBuiltinError", () => {
   test("DatabaseError status follows data.reason", () => {
     expect(statusForBuiltinError("DatabaseError", { reason: "not_null" })).toBe(422);
     expect(statusForBuiltinError("DatabaseError", { reason: "check" })).toBe(422);
+    expect(statusForBuiltinError("DatabaseError", { reason: "invalid" })).toBe(422);
+    expect(statusForBuiltinError("DatabaseError", { reason: "too_long" })).toBe(422);
+    expect(statusForBuiltinError("DatabaseError", { reason: "out_of_range" })).toBe(422);
     expect(statusForBuiltinError("DatabaseError", { reason: "retryable" })).toBe(503);
     expect(statusForBuiltinError("DatabaseError", { reason: "unknown" })).toBe(500);
     expect(statusForBuiltinError("DatabaseError", {})).toBe(500);
@@ -71,6 +74,36 @@ describe("encodeExecuteResult InternalError", () => {
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("Conflict");
     expect(JSON.stringify(body)).not.toContain("a@b.c");
+  });
+
+  test("maps leftover Redis connection failure to ServiceUnavailable", async () => {
+    const res = await encodeExecuteResult({
+      error: Object.assign(new Error("Connection closed"), { code: "ECONNREFUSED" }),
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("ServiceUnavailable");
+    expect(JSON.stringify(body)).not.toContain("Connection closed");
+  });
+
+  test("maps leftover S3 AccessDenied to Forbidden", async () => {
+    const res = await encodeExecuteResult({
+      error: Object.assign(new Error("Access Denied"), { code: "AccessDenied", status: 403 }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("Forbidden");
+    expect(JSON.stringify(body)).not.toContain("Access Denied");
+  });
+
+  test("leaves WRONGTYPE as InternalError", async () => {
+    const res = await encodeExecuteResult({
+      error: new Error("WRONGTYPE Operation against a key holding the wrong kind of value"),
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("InternalError");
+    expect(JSON.stringify(body)).not.toContain("WRONGTYPE");
   });
 
   test("maps exhausted serialization failure to ServiceUnavailable", async () => {

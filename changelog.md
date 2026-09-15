@@ -20,10 +20,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `unauthorized`, `rateLimited`, `serviceUnavailable`, `database`, `internal`)
   are always on — no `errors: { NotFound }` bag required. Domain codes
   (`OutOfStock`, `FlightFull`, keel `Duplicate`) still go on `errors:`.
-- `fx.store` SQL unique / FK / NOT NULL / CHECK / connection failures become
-  typed `fail` values (same family as `ValidationError`). Serialization /
-  deadlock (`40001` / `40P01`) stay thrown so `flow.retry` can run, then
-  `ServiceUnavailable`.
+- `fx.store` SQL unique / FK / NOT NULL / CHECK / invalid / too_long /
+  out_of_range / connection failures become typed `fail` values (same family
+  as `ValidationError`). Serialization / deadlock / lock-busy (`40001` /
+  `40P01` / `55P03`, SQLite BUSY) stay thrown so `flow.retry` can run, then
+  `ServiceUnavailable`. Redis connection / `CLUSTERDOWN` / `READONLY` map to
+  `ServiceUnavailable`; `BUSY` / `TRYAGAIN` follow the same retry-then-503
+  path. `WRONGTYPE` stays `InternalError`. Files `fs` / `s3` `AccessDenied`
+  and path-escape keys map to `Forbidden`; `SlowDown` / `EBUSY` follow
+  retry-then-503; `NoSuchBucket` / `ENOSPC` are `ServiceUnavailable`.
 - Boot fatals print cause + fix (`formatFatalError`). `VaultBootError` is
   **OKE1510**. No TTY stack unless `OKE_DEBUG=1`. Request-line chips include
   `error.code` (`409 Conflict`).
@@ -34,9 +39,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `https://discord.gg/j2hkZZbnp`), matching npm’s flush square cell and
   Clyde glyph height to the npm “n”, including the mobile menu.
 - Flow / HTTP / Store / Errors / Vault / Try It document always-on helpers,
-  honest 404/409/503 tables, SQL auto-fail, and the OKE1510 TTY dump.
+  honest 404/409/503 tables, SQL / KV / files auto-fail, and the OKE1510 TTY dump.
 - Errors reference catalogs `fx.fail` helpers, always-on vs domain `errors:`,
-  HTTP statuses, and SQL auto-map.
+  HTTP statuses, and SQL / KV / files store auto-map.
 
 ### 💥 Breaking Changes
 

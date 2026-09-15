@@ -99,7 +99,8 @@ Optional `{ message }` overrides the catalog: `fx.fail("OutOfStock", data, { mes
 | `fx.fail.database(data)` | `DatabaseError` | by `data.reason` | `reason`, `sqlstate?`, `constraint?`, `table?`, `column?` |
 | `fx.fail.internal(data?)` | `InternalError` | **500** | `{}` — catalog message only |
 
-`DatabaseError` status: `not_null` / `check` → **422**, `retryable` → **503**, else **500**.
+`DatabaseError` status: `not_null` / `check` / `invalid` / `too_long` / `out_of_range` → **422**,
+`retryable` → **503**, `unknown` / missing → **500**.
 
 Declare a built-in on `errors:` **only to tighten** the payload. Shorter keeps
 `NotFound: z.object({ code: z.string() })` because `{ code }` is not the built-in `{ id? }`.
@@ -128,22 +129,48 @@ at **404**. Clients distinguish by envelope, not status. Domain codes stay **400
 | `InternalError` | `500` | `internal` — never copies a thrown `message` |
 | Domain (`OutOfStock`, `FlightFull`, `Duplicate`) | `400` | `fx.fail("OutOfStock", data)` |
 
-### SQL auto-map
+### Store auto-map
 
 `fx.store` constraint and connection failures become typed `fail` values (same family as
 `ValidationError`). Public `data` is names only — never `message` / `detail` / `hint`.
+`get` returning `null` is **not** auto-`NotFound` — return `fx.fail.notFound` yourself.
+
+#### SQL auto-map
 
 | Signal | Result |
 | ------ | ------ |
-| Postgres `23505` / `23P01` · SQLite UNIQUE | `Conflict` **409** |
-| Postgres `23503` · SQLite FOREIGN KEY | `ForeignKey` **409** |
+| Postgres `23505` / `23P01` · SQLite UNIQUE / PRIMARY KEY | `Conflict` **409** |
+| Postgres `23503` / `23001` · SQLite FOREIGN KEY | `ForeignKey` **409** |
 | Postgres `23502` / `23514` · SQLite NOT NULL / CHECK | `DatabaseError` `not_null` / `check` **422** |
-| Postgres `40001` / `40P01` | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
-| `08xxx` / `53300` / connection / paused | `ServiceUnavailable` **503** |
+| Postgres `22P02` / `22007` / `22023` / `42804` | `DatabaseError` `invalid` **422** |
+| Postgres `22001` | `DatabaseError` `too_long` **422** |
+| Postgres `22003` / `22008` | `DatabaseError` `out_of_range` **422** |
+| Postgres `40001` / `40P01` / `55P03` · SQLite BUSY | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `08xxx` / `53xxx` / `57P0x` / `57014` / `25P03` / connection / paused | `ServiceUnavailable` **503** |
 | `42P01` / `42703` with `domainDdl: "off"` | **OKE1110** (unchanged) |
 | other SQLSTATE | `DatabaseError` `unknown` **500** |
 
-Files / KV `get` returning `null` is **not** auto-`NotFound` — return `fx.fail.notFound` yourself.
+#### KV auto-map
+
+Redis-wire `store.kv` only (not Gate / Signal clients). Memory KV does not throw these.
+
+| Signal | Result |
+| ------ | ------ |
+| Connection / `CLUSTERDOWN` / `READONLY` / `OOM` / `MISCONF` | `ServiceUnavailable` **503** |
+| `BUSY` / `TRYAGAIN` / `LOADING` | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `WRONGTYPE` / `NOSCRIPT` | unmapped — `InternalError` **500** |
+
+#### Files auto-map
+
+`fs` and `s3` (`fx.store` files handle). Missing objects stay `null`.
+
+| Signal | Result |
+| ------ | ------ |
+| `AccessDenied` / `EACCES` / `EPERM` / HTTP **403** | `Forbidden` **403** |
+| `fs` key starts with `/` or contains `..` | `Forbidden` **403** (`reason: invalid_key`) |
+| `NoSuchBucket` / `ENOSPC` / connection | `ServiceUnavailable` **503** |
+| `SlowDown` / `EBUSY` / HTTP **429** | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `NoSuchKey` (thrown) | unmapped — `InternalError` **500** |
 
 ## Localized messages
 
@@ -278,8 +305,21 @@ Thrown by specific subsystems — each names its own cause:
 </Accordion>
 
 <Accordion title="Unique insert is 500 InternalError">
-  Unique / exclusion maps to `Conflict` **409**; missing FK to `ForeignKey` **409**. Serialization
-  (`40001` / `40P01`) stays thrown until retries exhaust, then `ServiceUnavailable` **503**.
+  Unique / exclusion → `Conflict` **409**; missing FK → `ForeignKey` **409**; invalid → `DatabaseError` **422**.
+  Serialization (`40001` / `40P01`) stays thrown until retries exhaust, then **503**.
+  See [SQL auto-map](#sql-auto-map).
+</Accordion>
+
+<Accordion title="Redis down returns InternalError">
+  Connection / `CLUSTERDOWN` / `READONLY` map to `ServiceUnavailable` **503**.
+  `BUSY` / `TRYAGAIN` stay thrown until `flow.retry` exhausts, then **503**.
+  `WRONGTYPE` stays `InternalError` — see [KV auto-map](#kv-auto-map).
+</Accordion>
+
+<Accordion title="S3 AccessDenied / disk full is InternalError">
+  `AccessDenied` and `fs` path-escape keys → `Forbidden` **403**.
+  `SlowDown` / `EBUSY` stay thrown until retries exhaust, then **503**. `ENOSPC` / `NoSuchBucket` → **503**.
+  Missing `get` is still `null`, not `NotFound` — see [Files auto-map](#files-auto-map).
 </Accordion>
 
 <Accordion title="404 Not Found — route missing or domain miss?">

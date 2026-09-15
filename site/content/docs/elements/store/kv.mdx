@@ -599,6 +599,12 @@ Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
   does). Prefer prefix filters in admin Flows.
 </Accordion>
 
+<Accordion title="Redis down returns InternalError">
+  Connection / `CLUSTERDOWN` / `READONLY` map to `ServiceUnavailable` **503**.
+  `BUSY` / `TRYAGAIN` stay thrown until `flow.retry` exhausts, then **503**.
+  `WRONGTYPE` stays `InternalError` — see [Errors · KV auto-map](/docs/reference/errors#kv-auto-map).
+</Accordion>
+
 <Accordion title="I expected incr / setNx / fx.store.kv">
   Those helpers are not on the public handle. Use `get` / `set` / `delete` / `list` / `ttlMs` via
   `fx.store(decl)`. Gate rates use Redis Lua internally.
@@ -614,7 +620,7 @@ Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
 - [Gate](/docs/elements/gate) — rate buckets use Redis internally
 - [fx](/docs/reference/fx) — `fx.store(decl)`
 - [Configuration](/docs/reference/configuration) — `drivers.store.kv`
-- [Errors](/docs/reference/errors) — OKE1810
+- [Errors](/docs/reference/errors) — OKE1810 · KV auto-map
 
 ## Next
 

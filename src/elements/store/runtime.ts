@@ -44,6 +44,7 @@ import type {
   StoreDecl,
 } from "./declare.ts";
 import { openSqlKvNamespace } from "./kv-sql.ts";
+import { withStoreErrorMap } from "./store-errors.ts";
 import { createGatedFilesStoreHandle, type GatedFilesFxBridge } from "./files-fx.ts";
 import {
   createFilesImagePipeline,
@@ -434,14 +435,15 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       kvNs.set(decl.name, ns);
     }
     const driverId = ns.driverId;
+    const handle = ns;
     return {
       ref: `kv:${decl.name}`,
       driverId,
-      get: (key) => ns!.get(key),
-      set: (key, value, ttl) => ns!.set(key, value, ttl),
-      delete: (key) => ns!.delete(key),
-      list: (prefix) => ns!.list(prefix),
-      ttlMs: (key) => ns!.ttlMs(key),
+      get: (key) => withStoreErrorMap(() => handle.get(key)),
+      set: (key, value, ttl) => withStoreErrorMap(() => handle.set(key, value, ttl)),
+      delete: (key) => withStoreErrorMap(() => handle.delete(key)),
+      list: (prefix) => withStoreErrorMap(() => handle.list(prefix)),
+      ttlMs: (key) => withStoreErrorMap(() => handle.ttlMs(key)),
     };
   }
 
@@ -458,19 +460,22 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       });
       fileBuckets.set(decl.name, bucket);
     }
+    const handle = bucket;
     const access = {
-      get: (key: string) => bucket!.get(key),
-      put: (key: string, data: Uint8Array | string) => bucket!.put(key, data),
+      get: (key: string) => withStoreErrorMap(() => handle.get(key)),
+      put: (key: string, data: Uint8Array | string) =>
+        withStoreErrorMap(() => handle.put(key, data)),
     };
     return {
       ref: `files:${decl.name}`,
-      driverId: bucket.driverId,
-      put: (key, data) => bucket!.put(key, data),
-      get: (key) => bucket!.get(key),
-      delete: (key) => bucket!.delete(key),
-      list: (prefix) => bucket!.list(prefix),
+      driverId: handle.driverId,
+      put: (key, data) => withStoreErrorMap(() => handle.put(key, data)),
+      get: (key) => withStoreErrorMap(() => handle.get(key)),
+      delete: (key) => withStoreErrorMap(() => handle.delete(key)),
+      list: (prefix) => withStoreErrorMap(() => handle.list(prefix)),
       image: (source, imageOpts) => createFilesImagePipeline(access, source, imageOpts),
-      putImage: (key, data, putOpts) => putImageToBucket(access, key, data, putOpts),
+      putImage: (key, data, putOpts) =>
+        withStoreErrorMap(() => putImageToBucket(access, key, data, putOpts)),
     };
   }
 

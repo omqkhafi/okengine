@@ -24,7 +24,6 @@ export interface SqlErrorToFailureOptions {
 
 type SqlFailure = FlowFailure<
   | BuiltinErrorMap["Conflict"]
-  | BuiltinErrorMap["ForeignKey"]
   | BuiltinErrorMap["DatabaseError"]
   | BuiltinErrorMap["ServiceUnavailable"]
 >;
@@ -34,6 +33,7 @@ type SqlErrShape = {
   readonly code?: unknown;
   readonly errno?: unknown;
   readonly message?: unknown;
+  readonly cause?: unknown;
   readonly constraint?: unknown;
   readonly table?: unknown;
   readonly column?: unknown;
@@ -42,16 +42,42 @@ type SqlErrShape = {
   readonly constraint_name?: unknown;
 };
 
+const CONFLICT_STATE = new Set(["23505", "23P01"]);
+const FOREIGN_KEY_STATE = new Set(["23503", "23001"]);
+const NOT_NULL_STATE = new Set(["23502"]);
+const CHECK_STATE = new Set(["23514"]);
+const RETRY_STATE = new Set(["40001", "40P01", "55P03"]);
+const TOO_LONG_STATE = new Set(["22001"]);
+const OUT_OF_RANGE_STATE = new Set(["22003", "22008"]);
+const INVALID_STATE = new Set(["22P02", "22007", "22023", "42804"]);
+const UNAVAILABLE_STATE = new Set([
+  "53300",
+  "53100",
+  "53200",
+  "53400",
+  "57P01",
+  "57P02",
+  "57P03",
+  "57P04",
+  "57014",
+  "25P03",
+]);
+
+/** bun:sqlite / libsql busy / locked (leave thrown for retry). */
+const SQLITE_RETRY_ERRNO = new Set([5, 6, 261, 517]);
+/** bun:sqlite PRIMARYKEY / ROWID unique. */
+const SQLITE_CONFLICT_ERRNO = new Set([1555, 2067, 2579]);
+const SQLITE_UNAVAILABLE_ERRNO = new Set([8, 10, 13, 14, 15]);
+
 /**
- * True when `err` is a Postgres serialization / deadlock failure.
+ * True when `err` is a serialization / deadlock / lock-busy failure.
  *
  * Left thrown during retries; mapped to `ServiceUnavailable` after exhaust.
  *
  * @param err - Caught driver error
  */
 export function isRetryableSqlError(err: unknown): boolean {
-  const code = sqlCode(err);
-  return code === "40001" || code === "40P01";
+  return walk(err, (node) => retrySignal(node));
 }
 
 /**
@@ -65,25 +91,24 @@ export function sqlErrorToFailure(
   err: unknown,
   options: SqlErrorToFailureOptions = {},
 ): SqlFailure | undefined {
-  if (!err || typeof err !== "object") return undefined;
   const retryable = options.retryable ?? "leave";
-
-  if (isRetryableSqlError(err)) {
-    if (retryable === "leave") return undefined;
-    return fail.serviceUnavailable();
+  let unknownNode: unknown;
+  let current: unknown = err;
+  for (let i = 0; i < 4; i++) {
+    if (!current || typeof current !== "object") break;
+    if (retrySignal(current)) {
+      if (retryable === "leave") return undefined;
+      return fail.serviceUnavailable();
+    }
+    if (isConnectionUnavailable(current)) return fail.serviceUnavailable();
+    const mapped = mapConstraint(current);
+    if (mapped) return mapped;
+    if (unknownNode === undefined && looksLikeSqlError(current)) unknownNode = current;
+    current = causeOf(current);
   }
-
-  if (isConnectionUnavailable(err)) {
-    return fail.serviceUnavailable();
+  if (unknownNode !== undefined) {
+    return fail.database({ reason: "unknown", ...publicNames(unknownNode) });
   }
-
-  const mapped = mapConstraint(err);
-  if (mapped) return mapped;
-
-  if (looksLikeSqlError(err)) {
-    return fail.database({ reason: "unknown", ...publicNames(err) });
-  }
-
   return undefined;
 }
 
@@ -91,18 +116,13 @@ function mapConstraint(err: unknown): SqlFailure | undefined {
   const code = sqlCode(err);
   const names = publicNames(err);
 
-  if (code === "23505" || code === "23P01") {
-    return fail.conflict(names);
-  }
-  if (code === "23503") {
-    return fail.foreignKey(names);
-  }
-  if (code === "23502") {
-    return fail.database({ reason: "not_null", ...names });
-  }
-  if (code === "23514") {
-    return fail.database({ reason: "check", ...names });
-  }
+  if (CONFLICT_STATE.has(code)) return fail.conflict(names);
+  if (FOREIGN_KEY_STATE.has(code)) return fail.foreignKey(names);
+  if (NOT_NULL_STATE.has(code)) return fail.database({ reason: "not_null", ...names });
+  if (CHECK_STATE.has(code)) return fail.database({ reason: "check", ...names });
+  if (TOO_LONG_STATE.has(code)) return fail.database({ reason: "too_long", ...names });
+  if (OUT_OF_RANGE_STATE.has(code)) return fail.database({ reason: "out_of_range", ...names });
+  if (INVALID_STATE.has(code)) return fail.database({ reason: "invalid", ...names });
 
   const sqlite = sqliteConstraint(err);
   if (sqlite === "unique") return fail.conflict(names);
@@ -113,14 +133,32 @@ function mapConstraint(err: unknown): SqlFailure | undefined {
   return undefined;
 }
 
+function retrySignal(err: unknown): boolean {
+  const code = sqlCode(err);
+  if (RETRY_STATE.has(code)) return true;
+  const errno = sqlErrno(err);
+  if (errno !== undefined && SQLITE_RETRY_ERRNO.has(errno)) return true;
+  const named = sqlCode(err);
+  if (named === "SQLITE_BUSY" || named === "SQLITE_LOCKED" || named === "SQLITE_BUSY_SNAPSHOT") {
+    return true;
+  }
+  return false;
+}
+
 function isConnectionUnavailable(err: unknown): boolean {
   const e = err as SqlErrShape;
   const code = sqlCode(err);
   if (code.startsWith("08")) return true;
-  if (code === "53300") return true;
+  if (code.startsWith("53")) return true;
+  if (UNAVAILABLE_STATE.has(code)) return true;
   if (code.startsWith("ERR_POSTGRES_")) return true;
   if (code === "ERR_OKE_POSTGRES_PAUSED") return true;
   if (typeof e.name === "string" && e.name === "SharedPostgresPausedError") return true;
+  const errno = sqlErrno(err);
+  if (errno !== undefined && SQLITE_UNAVAILABLE_ERRNO.has(errno)) return true;
+  if (code === "SQLITE_READONLY" || code === "SQLITE_FULL" || code === "SQLITE_CANTOPEN") {
+    return true;
+  }
   const message = typeof e.message === "string" ? e.message : "";
   if (/postgres pools are paused/i.test(message)) return true;
   return false;
@@ -130,7 +168,8 @@ function looksLikeSqlError(err: unknown): boolean {
   const e = err as SqlErrShape;
   const code = sqlCode(err);
   if (/^[0-9A-Z]{5}$/.test(code)) return true;
-  if (typeof e.name === "string" && /postgres|sqlite|pglite/i.test(e.name)) return true;
+  if (code.startsWith("SQLITE_")) return true;
+  if (typeof e.name === "string" && /postgres|sqlite|pglite|libsql/i.test(e.name)) return true;
   const message = typeof e.message === "string" ? e.message : "";
   return /sqlstate|constraint|syntax error/i.test(message);
 }
@@ -139,6 +178,12 @@ function sqlCode(err: unknown): string {
   if (!err || typeof err !== "object") return "";
   const code = (err as SqlErrShape).code;
   return typeof code === "string" ? code : "";
+}
+
+function sqlErrno(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const errno = (err as SqlErrShape).errno;
+  return typeof errno === "number" ? errno : undefined;
 }
 
 function publicNames(err: unknown): {
@@ -182,7 +227,9 @@ function parseSqliteNames(message: string): {
   constraint?: string;
 } {
   const dotted =
-    /(?:UNIQUE|NOT NULL) constraint failed:\s*([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)/i.exec(message);
+    /(?:UNIQUE|NOT NULL|PRIMARY KEY) constraint failed:\s*([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)/i.exec(
+      message,
+    );
   if (dotted?.[1] && dotted[2]) {
     return { table: dotted[1], column: dotted[2] };
   }
@@ -196,11 +243,52 @@ type SqliteKind = "unique" | "fk" | "not_null" | "check";
 function sqliteConstraint(err: unknown): SqliteKind | undefined {
   const e = err as SqlErrShape;
   const message = typeof e.message === "string" ? e.message : "";
-  const errno = typeof e.errno === "number" ? e.errno : undefined;
-  // bun:sqlite extended codes: UNIQUE 2067, FOREIGNKEY 787, NOTNULL 1299, CHECK 275.
-  if (errno === 2067 || /UNIQUE constraint failed/i.test(message)) return "unique";
-  if (errno === 787 || /FOREIGN KEY constraint failed/i.test(message)) return "fk";
-  if (errno === 1299 || /NOT NULL constraint failed/i.test(message)) return "not_null";
-  if (errno === 275 || /CHECK constraint failed/i.test(message)) return "check";
+  const errno = sqlErrno(err);
+  const code = sqlCode(err);
+  if (
+    (errno !== undefined && SQLITE_CONFLICT_ERRNO.has(errno)) ||
+    code === "SQLITE_CONSTRAINT_UNIQUE" ||
+    code === "SQLITE_CONSTRAINT_PRIMARYKEY" ||
+    /UNIQUE constraint failed/i.test(message) ||
+    /PRIMARY KEY constraint failed/i.test(message)
+  ) {
+    return "unique";
+  }
+  if (
+    errno === 787 ||
+    code === "SQLITE_CONSTRAINT_FOREIGNKEY" ||
+    /FOREIGN KEY constraint failed/i.test(message)
+  ) {
+    return "fk";
+  }
+  if (
+    errno === 1299 ||
+    code === "SQLITE_CONSTRAINT_NOTNULL" ||
+    /NOT NULL constraint failed/i.test(message)
+  ) {
+    return "not_null";
+  }
+  if (
+    errno === 275 ||
+    code === "SQLITE_CONSTRAINT_CHECK" ||
+    /CHECK constraint failed/i.test(message)
+  ) {
+    return "check";
+  }
   return undefined;
+}
+
+function causeOf(err: unknown): unknown {
+  if (!err || typeof err !== "object") return undefined;
+  return (err as SqlErrShape).cause;
+}
+
+function walk(err: unknown, pred: (node: unknown) => boolean): boolean {
+  let current: unknown = err;
+  for (let i = 0; i < 4; i++) {
+    if (pred(current)) return true;
+    current = causeOf(current);
+    if (current === undefined) break;
+  }
+  return false;
 }

@@ -27,7 +27,14 @@ export const BUILTIN_ERROR_STATUS = {
 export type BuiltinErrorCode = keyof typeof BUILTIN_ERROR_STATUS | "DatabaseError";
 
 /** `DatabaseError.data.reason` — encoder maps these to HTTP status. */
-export type DatabaseErrorReason = "not_null" | "check" | "retryable" | "unknown";
+export type DatabaseErrorReason =
+  | "not_null"
+  | "check"
+  | "invalid"
+  | "too_long"
+  | "out_of_range"
+  | "retryable"
+  | "unknown";
 
 /** Loose identity / constraint bag used by several built-in codes. */
 export type BuiltinErrorBag = {
@@ -75,8 +82,8 @@ export type BuiltinErrorMap = {
 /**
  * HTTP status for a built-in failure code, or `undefined` for domain codes.
  *
- * `DatabaseError` uses `data.reason`: `not_null` / `check` → 422, `retryable`
- * → 503, anything else → 500.
+ * `DatabaseError` uses `data.reason`: `retryable` → 503, `unknown` / missing
+ * → 500, any other reason (`not_null`, `check`, `invalid`, …) → 422.
  *
  * @param code - Failure `error.code`
  * @param data - Failure `error.data` (reason for `DatabaseError`)
@@ -84,8 +91,8 @@ export type BuiltinErrorMap = {
 export function statusForBuiltinError(code: string, data?: unknown): number | undefined {
   if (code === "DatabaseError") {
     const reason = databaseErrorReason(data);
-    if (reason === "not_null" || reason === "check") return 422;
     if (reason === "retryable") return 503;
+    if (reason !== undefined && reason !== "unknown") return 422;
     return 500;
   }
   if (Object.prototype.hasOwnProperty.call(BUILTIN_ERROR_STATUS, code)) {

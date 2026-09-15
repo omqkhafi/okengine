@@ -988,7 +988,7 @@ Standard status code mappings:
 - `Conflict` / `ForeignKey` → `409 Conflict`
 - `UnsupportedMediaType` → `415 Unsupported Media Type`
 - `RateLimited` / `AuthRateLimited` → `429 Too Many Requests`
-- `DatabaseError` → `422` (`not_null` / `check`), `503` (`retryable`), else `500`
+- `DatabaseError` → `422` (`not_null` / `check` / `invalid` / `too_long` / `out_of_range`), `503` (`retryable`), else `500`
 - `ServiceUnavailable` → `503 Service Unavailable`
 - `InternalError` → `500 Internal Server Error` (catalog message only)
 - Domain codes (`OutOfStock`, `FlightFull`, `Duplicate`) → `400 Bad Request`

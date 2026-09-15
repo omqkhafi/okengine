@@ -14,7 +14,7 @@ import { fail, OkeError } from "../../kernel/errors.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { isJsonResult } from "../../kernel/fx.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
-import { sqlErrorToFailure } from "../../elements/store/sql-errors.ts";
+import { storeErrorToFailure } from "../../elements/store/store-errors.ts";
 import type { Trigger } from "../../kernel/triggers.ts";
 import type { RlsIdentity } from "../../drivers/pg-rls.ts";
 import { resolveRlsIdentity } from "../../elements/store.ts";
@@ -263,8 +263,8 @@ function invokeFailureFromThrown(thrown: unknown, runId?: string): InvokeUserFlo
       ...(runId !== undefined ? { runId } : {}),
     };
   }
-  const sqlMapped = sqlErrorToFailure(thrown, { retryable: "unavailable" });
-  if (sqlMapped) return invokeFailureFromError(sqlMapped.error, runId);
+  const storeMapped = storeErrorToFailure(thrown, { retryable: "unavailable" });
+  if (storeMapped) return invokeFailureFromError(storeMapped.error, runId);
   const internal = fail("InternalError", {});
   return {
     output: null,

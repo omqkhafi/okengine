@@ -915,6 +915,11 @@ export default defineConfig({
   `oke db migrate` in that environment.
 </Accordion>
 
+<Accordion title="Unique insert is 500 InternalError">
+  Unique / exclusion maps to `Conflict` **409**; missing FK to `ForeignKey` **409**. See
+  [Errors · SQL auto-map](/docs/reference/errors#sql-auto-map).
+</Accordion>
+
 <Accordion title="update().set().where(): condition required">
   Updates and deletes without a `where` are rejected (`delete().where(): condition required`). Pass
   a Drizzle condition or equality map — or use `delete(table, id)` for PK deletes.
@@ -974,7 +979,7 @@ export default defineConfig({
 - [HTTP · Resources](/docs/elements/flow/http#resources) — mount, live SSE, verb table
 - [Consumers · CDC](/docs/elements/flow/consumers#cdc) — `db.table(…).changed()`
 - [fx](/docs/reference/fx) — `fx.store` session
-- [Errors](/docs/reference/errors) — OKE1110 · OKE1041
+- [Errors](/docs/reference/errors) — OKE1110 · OKE1041 · SQL auto-map
 
 ## Next
 

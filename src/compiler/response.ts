@@ -78,8 +78,8 @@ function loadBuiltinErrors(): typeof import("../kernel/builtin-errors.ts") {
   return lazyRequire(`${import.meta.dir}/../kernel`, ["builtin", "errors"].join("-"));
 }
 
-function loadSqlErrors(): typeof import("../elements/store/sql-errors.ts") {
-  return lazyRequire(`${import.meta.dir}/../elements/store`, ["sql", "errors"].join("-"));
+function loadStoreErrors(): typeof import("../elements/store/store-errors.ts") {
+  return lazyRequire(`${import.meta.dir}/../elements/store`, ["store", "errors"].join("-"));
 }
 
 function loadFxJson(): {
@@ -118,10 +118,10 @@ export async function encodeExecuteResult(result: {
         ? loadFxLiveStream().encodeGap(result.error)
         : undefined;
     if (gap) return gap;
-    const sqlMapped = loadSqlErrors().sqlErrorToFailure(result.error, {
+    const storeMapped = loadStoreErrors().storeErrorToFailure(result.error, {
       retryable: "unavailable",
     });
-    if (sqlMapped) return encodeFailure(sqlMapped);
+    if (storeMapped) return encodeFailure(storeMapped);
     // Unhandled throws must never look like success (`undefined` → 204).
     // Catalog message only — never copy the thrown `Error.message`.
     return encodeFailure(fail("InternalError", {}));
