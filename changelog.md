@@ -20,6 +20,26 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `https://discord.gg/j2hkZZbnp`), matching npm’s flush square cell and
   Clyde glyph height to the npm “n”, including the mobile menu.
 
+### ♻️ Changed
+
+#### Docs
+
+- Try It is a first-app walkthrough: scaffold file map, `GET` / `POST /users`
+  in one routes file, persist, then Signal + Channel, then split files /
+  `http.resource` and short Gate · Clock · Vault · AI explainers.
+- Try It Create explains why Bun ≥ 1.4.2 and Docker Compose (host app,
+  production-shaped data plane) and links the install pages.
+- Try It puts **The files** before First HTTP — roles (Flow, Store, root,
+  boot), not the blank tree as the only layout.
+- Try It HTTP contracts can live in the router file or in `shapes.ts`.
+- Try It First HTTP explains the `{ data, error }` envelope (success vs
+  `ValidationError` / `fx.fail`).
+- Try It First HTTP explains `.public()` — required posture, open with no session.
+- Try It First Signal declares in `src/signals/`, binds a worker in
+  `src/flows/workers/`, and emits from create (`{ key }` for `once`).
+  Code samples on the page focus the lines that change; earlier context
+  dims.
+
 ## v0.20.0 — 2026-09-15
 
 ### ✨ Added

@@ -434,23 +434,27 @@ html > body[data-scroll-locked] {
  * Shiki transformer styles: notation-focus, notation-highlight, notation-diff.
  * Lowers color/opacity on non-target code and highlights focused lines.
  */
-pre.has-focused .line {
+pre.has-focused .line,
+figure.has-focused .line {
   transition:
     opacity 180ms ease,
     filter 180ms ease;
 }
 
-pre.has-focused .line:not(.focused) {
+pre.has-focused .line:not(.focused),
+figure.has-focused .line:not(.focused) {
   opacity: 0.32;
   filter: grayscale(40%);
 }
 
-pre.has-focused:hover .line:not(.focused) {
+pre.has-focused:hover .line:not(.focused),
+figure.has-focused:hover .line:not(.focused) {
   opacity: 0.75;
   filter: none;
 }
 
-pre.has-focused .line.focused {
+pre.has-focused .line.focused,
+figure.has-focused .line.focused {
   opacity: 1;
 }
 

@@ -3,7 +3,7 @@
   "version": "0.20.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3333",
     "build": "next build",
     "start": "next start",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",

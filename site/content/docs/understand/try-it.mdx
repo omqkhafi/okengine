@@ -1,60 +1,794 @@
 ---
 title: "Try It"
-description: "From an empty folder to a Flow running in the Console — one sitting, minimal detour."
+description: "Scaffold an app, see the files, add GET and POST /users, save a row — then email and the rest of the model if you want."
 icon: "Terminal"
+source: "docs/spec/unified-theory.md"
 ---
 
-## What you need
+Scaffold a backend. See which file is `GET /health`. Add a users routes file. Save a row.
 
-Bun ≥ 1.4.2, and Docker running. `oke dev` starts everything else — Postgres, Redis, mail — for you.
+Console on **6533** is derived from that code. API is **6530**. Stop after the first working POST if you want — keep reading for email, then the rest of the model.
+
+<Callout title="The one rule">
+  Every URL is a Flow: `on(trigger, flow({ do }))`. Talk to the database, mail, and clock only
+  through `fx` (the second argument to `do`). In a many-routes file you write the path. In a
+  one-route file you can omit it.
+</Callout>
+
+## Create
+
+Your app runs on the host. Postgres, Redis, and mail run in Docker so local is the same _shape_ as production — protocol drivers, not a laptop-only stack.
+
+<Callout title="Why Bun and Docker">
+  OKE is [Bun](https://bun.sh) **≥ 1.4.2** (native SQL, Redis, S3, streams) —
+  [install](https://bun.sh/docs/installation). [Docker](https://docs.docker.com/get-docker/) runs
+  Postgres / Redis / mail so local matches production; your app stays on the host.
+</Callout>
 
 ```bash
-bun --version
-docker info
+# [!code focus:2]
+bun --version   # 1.4.2 or newer
+docker info     # engine running
 ```
 
-## Scaffold and run
+<Steps>
+
+<Step>
+### Scaffold and run
 
 ```bash
-bunx create-oke@latest my-app
+bunx create-oke@latest my-app # [!code focus]
 cd my-app
-bun run dev
+bun run dev # [!code focus]
 ```
 
-Default is `-t blank` (health + Store/Vault). `-t shorter` is a URL shortener (`POST /links`, `GET /:code`).
+Default is `-t blank`. `-t shorter` is a finished URL shortener to read later — not this walkthrough.
 
-Open the Console at the address printed in the terminal and claim it with the code shown there. The Flows listed weren't configured anywhere — they were derived from the code you just scaffolded.
+</Step>
 
-## Call it
+<Step>
+### Call health
 
-The starter ships a health Flow. Call it from a typed client, the same way your frontend would:
+```bash
+curl -X GET http://localhost:6530/health -H "accept: application/json" # [!code focus]
+```
+
+```json
+{ "data": { "ok": true }, "error": null } // [!code focus]
+```
+
+Every call returns `{ data, error }` — see [What comes back](#what-comes-back). The typed client uses the same envelope.
+
+Open Console at **6533** and claim it with the code in the terminal. Health is listed because the file exists, not because you registered a dashboard.
+
+</Step>
+
+</Steps>
+
+## The files
+
+OKE does not ship one folder layout. Roles matter: **Flow** is behavior, **Store** is data at rest, **root** is how the process boots. Names below are common — not a law.
+
+| Role        | Meaning                                                                                | Often lives at                          |
+| ----------- | -------------------------------------------------------------------------------------- | --------------------------------------- |
+| Root config | Drivers and Docker images for `dev` / `test` / `prod`                                  | `oke.config.ts`                         |
+| Boot        | `oke({ name })` — the process                                                          | `src/app.ts`                            |
+| Flow        | Behavior: a URL, a job, a worker. A folder is a router; a file is a route (or several) | `src/flows/<router>/`                   |
+| Store       | Tables and other data at rest. `db.declare` in config points here                      | `src/db/schema.ts` or `src/db/schema/`  |
+| Vault       | Secret and config _names_ — not values                                                 | `src/vault.ts` or `src/core/vault.ts`   |
+| Wiring      | Imported before `oke()` so store, mail, gates exist                                    | `src/core.ts` or `src/core/`            |
+| Generated   | Catalog of Flows; SQL emit from your tables. Do not hand-edit                          | `src/flows/index.ts`, `src/db/drizzle/` |
+| Tests       | `createTestApp` — deterministic drivers                                                | `tests/`                                |
+
+The blank starter is one arrangement of those roles (`main/health.ts` is `GET /health`). Shorter splits `core/` and uses one file per verb. Both are OKE.
+
+<Callout title="Write the path in a many-routes file">
+  One file, one URL can omit the path. Next you put `GET` and `POST` in one file, so you write
+  `"/users"` yourself. Pathless HTTP there fails **OKE1040**.
+</Callout>
+
+## First HTTP
+
+You add a users router. This walkthrough uses `src/flows/users/` — a folder name you choose, not a required path.
+
+```text
+src/flows/users/
+  index.ts      # GET + POST /users
+  shapes.ts     # optional — shared Zod
+```
+
+Do not add `users/route.ts` next to this `index.ts`. Do not omit `"/users"`. `oke dev` rewrites `src/flows/index.ts` when the folder appears.
+
+<Steps>
+
+<Step>
+### Contracts
+
+`in` is the JSON you send. `out` is what `do` returns — that value is `data` in the envelope. List is `UserOut[]`; create is one `UserOut`.
+
+<Tabs items={["In the router", "shapes.ts"]}>
+
+<Tab value="In the router">
+
+```typescript title="src/flows/users/index.ts"
+import { z } from "zod";
+
+// [!code focus:4]
+export const CreateIn = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+});
+
+// [!code focus:4]
+export const UserOut = z.object({
+  email: z.string().email(),
+  name: z.string(),
+});
+```
+
+</Tab>
+
+<Tab value="shapes.ts">
+
+```typescript title="src/flows/users/shapes.ts"
+import { z } from "zod";
+
+// [!code focus:4]
+export const CreateIn = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+});
+
+// [!code focus:4]
+export const UserOut = z.object({
+  email: z.string().email(),
+  name: z.string(),
+});
+```
+
+```typescript title="src/flows/users/index.ts"
+import { CreateIn, UserOut } from "./shapes"; // [!code focus]
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+<Step>
+### Routes
+
+Each export is one Flow. `CreateIn` / `UserOut` come from the Contracts step.
+
+<Callout title=".public()">
+  Every HTTP trigger needs `.public()` or `.gate(...)`. Omit both and boot fails (`GateBootError`).
+  `.public()` means anyone may call — no session. `GET /health` already uses it. `.gate(member)`
+  comes later when a route needs a signed-in user ([Gate](/docs/elements/gate)).
+</Callout>
+
+```typescript title="src/flows/users/index.ts"
+import { on, flow, http } from "okengine/http";
+import { z } from "zod";
+
+// [!code focus:6]
+export const list = on(
+  http.get("/users", { out: z.array(UserOut) }).public(),
+  flow("users.list", {
+    do: () => [],
+  }),
+);
+
+// [!code focus:6]
+export const create = on(
+  http.post("/users", { in: CreateIn, out: UserOut }).public(),
+  flow("users.create", {
+    do: async (input) => input,
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### What comes back
+
+Every HTTP Flow returns `{ data, error }` (optional `meta`). You return a value from `do`; the kernel wraps it. Failures are **values** — not thrown.
+
+| Field   | Success                          | Failure                                               |
+| ------- | -------------------------------- | ----------------------------------------------------- |
+| `data`  | `out` — what `do` returned       | `null`                                                |
+| `error` | `null`                           | `{ code, message?, data? }`                           |
+| Status  | `200` (`fx.json.create` → `201`) | `422` if `in` fails; declared `fx.fail` codes → `400` |
+
+Bad `in` never runs `do`:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "ValidationError", // [!code focus]
+    "message": "The request failed validation."
+  }
+}
+```
+
+On the client, branch on `error` first:
 
 ```typescript
 import { createClient } from "okengine/client";
-import type { App } from "./app";
+import { app } from "@/app";
 
-const api = createClient<App>("http://localhost:6530");
-const { data, error } = await api.main.health({});
+const api = createClient(app, "http://localhost:6530"); // [!code focus]
+// [!code focus:4]
+const { data, error } = await api.users.create({
+  email: "you@localhost",
+  name: "You",
+});
+// [!code focus:4]
+if (error) {
+  // error.code — ValidationError, or a code you declared with fx.fail
+  return;
+}
+data.email; // [!code focus]
 ```
 
-`data` and `error` are inferred straight from the Flow you just ran — not from a separate schema you maintain by hand.
+Full table: [HTTP · Response Envelopes](/docs/elements/flow/http#response-envelopes).
 
-## Prove it, don't just believe it
+</Step>
+
+<Step>
+### Call both
+
+```bash
+curl -X GET http://localhost:6530/users -H "accept: application/json" # [!code focus]
+```
+
+`do` returned `[]`, so `data` is an empty array:
+
+```json
+{ "data": [], "error": null } // [!code focus]
+```
+
+```bash
+curl -X POST http://localhost:6530/users \
+  -H "content-type: application/json" \
+  -d '{"email":"you@localhost","name":"You"}' # [!code focus]
+```
+
+`do` returned the body, so `data` is one `UserOut`:
+
+```json
+{
+  "data": { "email": "you@localhost", "name": "You" }, // [!code focus]
+  "error": null
+}
+```
+
+</Step>
+
+</Steps>
+
+## First Store
+
+`src/db/schema.ts` was empty. `src/core.ts` already has `store.sql("app", { schema })` — do not move it.
+
+```text
+src/db/schema.ts     # you fill this
+src/core.ts          # db is already here
+src/flows/users/index.ts
+```
+
+<Steps>
+
+<Step>
+### Declare the table
+
+```typescript title="src/db/schema.ts"
+import { store, field } from "okengine";
+
+// [!code focus:6]
+export const users = store.schema.table("users", {
+  id: field.id().primaryKey(),
+  email: field.text().notNull(),
+  name: field.text().notNull(),
+  createdAt: field.timestamp().notNull().now(),
+});
+```
+
+`oke dev` pushes schema. Identity and time go through `fx` — `fx.id()`, not a hand-rolled uuid.
+
+</Step>
+
+<Step>
+### Read and write in the routes file
+
+Widen `UserOut` with `id` and `createdAt` — same file as the other contracts (`index.ts` or `shapes.ts`):
 
 ```typescript
-test("boots — health flow", async () => {
-  const t = await createTestApp(app);
-  const { data } = await t.api.main.health({});
-  expect(data).toEqual({ ok: true });
+export const UserOut = z.object({
+  id: z.string(), // [!code focus]
+  email: z.string().email(),
+  name: z.string(),
+  createdAt: z.iso.datetime(), // [!code focus]
+});
+```
+
+```typescript title="src/flows/users/index.ts"
+import { db } from "@/core"; // [!code focus]
+import { users } from "@/db/schema"; // [!code focus]
+
+export const list = on(
+  http.get("/users", { out: z.array(UserOut) }).public(),
+  flow("users.list", {
+    // [!code focus:6]
+    do: async (_input, fx) => {
+      return await fx.store(db).page(users, {
+        orderBy: [users.createdAt],
+        limit: 20,
+      });
+    },
+  }),
+);
+
+export const create = on(
+  http.post("/users", { in: CreateIn, out: UserOut }).public(),
+  flow("users.create", {
+    // [!code focus:8]
+    do: async (input, fx) => {
+      const [row] = await fx
+        .store(db)
+        .insert(users)
+        .values({ id: fx.id(), email: input.email, name: input.name })
+        .returning();
+      return fx.json.create(row);
+    },
+  }),
+);
+```
+
+`fx.json.create` is **201**. Declared `out` projects the row — extra columns strip; timestamps become ISO-8601.
+
+</Step>
+
+<Step>
+### Call it and test
+
+```bash
+curl -X POST http://localhost:6530/users \
+  -H "content-type: application/json" \
+  -d '{"email":"you@localhost","name":"You"}' # [!code focus]
+```
+
+**201** — `data` is the projected row (`id` + ISO `createdAt`):
+
+```json
+{
+  "data": {
+    "id": "…", // [!code focus]
+    "email": "you@localhost",
+    "name": "You",
+    "createdAt": "2026-09-15T14:44:00.000Z" // [!code focus]
+  },
+  "error": null
+}
+```
+
+```typescript title="tests/users.test.ts"
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { createTestApp, type TestApp } from "okengine/test";
+import { app, type App } from "@/app";
+
+let t: TestApp<App>;
+
+// [!code focus:3]
+beforeAll(async () => {
+  t = await createTestApp(app);
+});
+
+afterAll(async () => {
+  await t.close();
+});
+
+// [!code focus:8]
+test("creates a user", async () => {
+  const { data, error } = await t.api.users.create({
+    email: "you@localhost",
+    name: "You",
+  });
+  expect(error).toBeNull();
+  expect(data?.email).toBe("you@localhost");
 });
 ```
 
 ```bash
-bun test
+bun test # [!code focus]
 ```
 
-No mocked HTTP server, no real clock, no live mail provider. `createTestApp` swaps every driver behind `fx` for a deterministic one — because effects were never allowed to happen any other way.
+`createTestApp` swaps every driver behind `fx` for a deterministic one.
 
-## Where this goes next
+</Step>
 
-If this went smoothly, the next page is the honest one: what's solid today, what's still moving, and who this is actually ready for right now.
+</Steps>
+
+<Callout title="You can stop here">
+  This is a working OKE app: files under `src/flows/` are the API, `fx` is the door, Console lists
+  what you wrote. What follows is email off the request path, then optional model.
+</Callout>
+
+## First Signal
+
+The POST should return the user before welcome-mail work runs. `signal.once` is a competing queue: one worker claims each message.
+
+```text
+src/signals/users.ts              # declare — not a URL
+src/flows/users/index.ts          # emit after insert
+src/flows/workers/welcome.ts      # bind worker
+```
+
+Keep the worker in its own unit. A Flow file next to `users/index.ts` is a generate error (`mixes a barrel index.ts with tree route files`).
+
+<Steps>
+
+<Step>
+### Declare
+
+Physics live on the Signal. The worker inherits this payload type — not `flow.in`.
+
+```typescript title="src/signals/users.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+// [!code focus:9]
+export const userRegistered = signal.once("users.registered", {
+  schema: z.object({
+    id: z.string(),
+    email: z.string().email(),
+    name: z.string(),
+  }),
+  retries: 3,
+  deadLetter: true,
+});
+```
+
+</Step>
+
+<Step>
+### Bind the worker
+
+The worker is a Flow that is not a route. Name it — nameless `flow({ do })` here is **OKE1072**. `once` binds **one** worker; next section edits this `do`, it does not add a second `on`.
+
+```typescript title="src/flows/workers/welcome.ts"
+import { on, flow } from "okengine";
+import { userRegistered } from "@/signals/users";
+
+// [!code focus:6]
+export const welcome = on(
+  userRegistered,
+  flow("workers.welcome", {
+    do: async () => {},
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Emit after insert
+
+In `create`, after the insert. `{ key: row.id }` is one job per user — retries stay ordered; different ids run in parallel.
+
+```typescript title="src/flows/users/index.ts"
+import { userRegistered } from "@/signals/users"; // [!code focus]
+
+export const create = on(
+  http.post("/users", { in: CreateIn, out: UserOut }).public(),
+  flow("users.create", {
+    do: async (input, fx) => {
+      const [row] = await fx
+        .store(db)
+        .insert(users)
+        .values({ id: fx.id(), email: input.email, name: input.name })
+        .returning();
+      if (!row) return; // [!code focus]
+      // [!code focus:5]
+      await fx.emit(
+        userRegistered,
+        { id: row.id, email: row.email, name: row.name },
+        { key: row.id },
+      );
+      return fx.json.create(row);
+    },
+  }),
+);
+```
+
+POST `/users` again — **201** is the same envelope. The worker runs after that response.
+
+</Step>
+
+</Steps>
+
+## First Channel
+
+Mailpit is already in the blank images. Add a template, import it from `core.ts` (that file is already loaded before `oke()`).
+
+```text
+src/email.ts                     # you add this
+src/core.ts                      # re-export
+src/flows/workers/welcome.ts     # worker calls fx.send
+```
+
+<Steps>
+
+<Step>
+### Template
+
+```typescript title="src/email.ts"
+import { channel } from "okengine";
+import { z } from "zod";
+
+const mail = channel.email({ from: "App <app@localhost>" }); // [!code focus]
+
+// [!code focus:11]
+export const welcomeMail = mail.template("welcome", {
+  description: "Welcome after signup",
+  locales: ["en"],
+  schema: z.object({ name: z.string() }),
+  catalog: {
+    en: {
+      subject: "Welcome, {{name}}",
+      text: "Hi {{name}} — your account is ready.",
+    },
+  },
+});
+```
+
+```typescript title="src/core.ts"
+export * from "@/email"; // [!code focus]
+```
+
+</Step>
+
+<Step>
+### Send from the worker
+
+```typescript title="src/flows/workers/welcome.ts"
+import { on, flow } from "okengine";
+import { userRegistered } from "@/signals/users";
+import { welcomeMail } from "@/core"; // [!code focus]
+
+export const welcome = on(
+  userRegistered,
+  flow("workers.welcome", {
+    // [!code focus:6]
+    do: async (payload, fx) => {
+      await fx.send(welcomeMail, {
+        to: payload.email,
+        data: { name: payload.name },
+      });
+    },
+  }),
+);
+```
+
+Open Mailpit at `http://127.0.0.1:8025` (`MAILPIT_UI_URL` in `src/vault.ts`). POST `/users` again — the message lands after the HTTP response.
+
+</Step>
+
+</Steps>
+
+## Split files or one mount
+
+Optional. You already have a working routes file. These two shapes omit hand-written paths — **never mix them with `users/index.ts`**, and never put `list.ts` next to `route.ts`.
+
+<Tabs items={["Split files", "One mount"]}>
+
+<Tab value="Split files">
+
+Delete `users/index.ts`. One verb per file. `list` / `create` / `get` do **not** add `/list` to the URL.
+
+```text
+src/flows/users/
+  list.ts        # GET /users
+  create.ts      # POST /users
+  [id]/get.ts    # GET /users/:id
+  shapes.ts
+```
+
+```typescript title="src/flows/users/list.ts"
+import { on, flow, http } from "okengine/http";
+
+export const list = on(
+  http.get().public(), // [!code focus]
+  flow({
+    do: async (_input, fx) => fx.store(db).page(users, { orderBy: [users.createdAt], limit: 20 }),
+  }),
+);
+```
+
+Pathless `http.get()` is correct **here**. Shorter (`-t shorter`) is this tree in a real app.
+
+</Tab>
+
+<Tab value="One mount">
+
+`store.resource` builds list / create / get / update / remove. `http.resource` mounts them. There is no pathless resource — pass `"/users"`.
+
+```typescript title="src/flows/users/resource.ts"
+import { store } from "okengine";
+import { z } from "zod";
+import { db } from "@/core";
+import { users } from "@/db/schema";
+
+// [!code focus:11]
+export const usersResource = store.resource(db, users, {
+  in: z.object({
+    email: z.string().email(),
+    name: z.string().min(1),
+  }),
+  out: z.object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string(),
+  }),
+});
+```
+
+```typescript title="src/flows/users/index.ts"
+import { on, http } from "okengine/http";
+import { usersResource } from "./resource";
+
+export const usersApi = on(http.resource("/users", usersResource.all()).public()); // [!code focus]
+```
+
+Client: `api.users.list` / `.create` / `.get` / `.update` / `.remove`. Update is **PATCH**. Full table: [HTTP · Resources](/docs/elements/flow/http#resources).
+
+</Tab>
+
+</Tabs>
+
+## The rest of the model
+
+Same app. One snippet each — not four more labs.
+
+### Gate
+
+You already used `.public()`. Every HTTP trigger needs `.public()` or `.gate(...)` — boot lists the gaps:
+
+```text
+gate boot failed — 2 trigger(s) missing auth posture (attach a gate or .public()):
+  - users.list GET /users
+  - users.create POST /users
+```
+
+A signed-in check is a policy on the trigger. Identity is `oke({ gate: { auth } })` plus a plugin — [Gate · Auth](/docs/elements/gate/auth), not this sitting.
+
+```typescript title="src/core.ts"
+import { gate } from "okengine";
+
+// [!code focus:4]
+export const member = gate.policy("member", {
+  description: "Signed-in user",
+  check: ({ auth }) => !!auth.verified,
+});
+```
+
+```typescript
+http.get("/users/me").gate(member); // [!code focus]
+```
+
+### Clock
+
+Time is an element. `Date.now()` inside `do` is a defect. While `users/index.ts` is still the routes file, put the schedule **in that file** — do not add `expire.ts` beside `index.ts`.
+
+```typescript
+import { clock } from "okengine/http";
+
+export const expire = on(
+  clock.every("users.expire", "1h"), // [!code focus]
+  flow("users.expire", {
+    do: async (_input, fx) => ({ at: fx.clock.now() }), // [!code focus]
+  }),
+);
+```
+
+`fx.clock.now()` is epoch-ms. [Clock](/docs/elements/clock).
+
+### Vault
+
+`src/vault.ts` already lists contracts. Values resolve at boot — not in the file. Read through `fx`:
+
+```typescript
+import { publicApiUrl } from "@/core";
+
+const origin = await fx.vault.get(publicApiUrl); // [!code focus]
+```
+
+Never log a revealed secret. [Vault](/docs/elements/vault).
+
+### AI
+
+Optional. `fx.ask` is the same door as `fx.store`. Needs a key — skip it to finish Try It.
+
+```typescript
+return await fx.ask(triage, { message }); // [!code focus]
+```
+
+`oke ai setup` and [AI](/docs/elements/ai).
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="bun --version is below 1.4.2">
+  OKE needs Bun ≥ 1.4.2 (`engines.bun`). Install or upgrade from
+  [bun.sh/docs/installation](https://bun.sh/docs/installation), then `bun --version`.
+</Accordion>
+
+<Accordion title="Docker is not running">
+  `oke dev` starts Postgres, Redis, and Mailpit in Compose so local matches production. Install
+  [Docker](https://docs.docker.com/get-docker/), start the engine, then `bun run dev`.
+</Accordion>
+
+<Accordion title="OKE1040 — pathless HTTP never stamped">
+  Cause: `Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.` In
+  `users/index.ts` pass `http.get("/users")`. Pathless `http.get()` belongs on one-file-per-route
+  folders (`health.ts`, or `list.ts` after you delete `index.ts`).
+</Accordion>
+
+<Accordion title="Unit mixes index.ts with other route files">
+  Cause: `Unit "users" mixes a barrel index.ts with tree route files.` Keep only `index.ts` (and
+  `shapes.ts`). Declare signals in `src/signals/`; bind workers in another unit
+  (`workers/welcome.ts`). After you delete `index.ts`, tree files (`list.ts` / `create.ts`) can
+  share the folder.
+</Accordion>
+
+<Accordion title="OKE1072 — Signal or Clock flow unnamed">
+  Cause: `A {kind} flow on "{trigger}" has no name.`
+  Pass `flow("workers.welcome", { do })` on the Signal worker, `flow("users.expire", { do })`
+  on a Clock in the routes file.
+</Accordion>
+
+<Accordion title="GateBootError — missing auth posture">
+  Attach `.public()` or `.gate(...)` on every HTTP trigger. The error lists each gap.
+</Accordion>
+
+<Accordion title="VaultBootError at startup">
+  A contract has no value in any resolution layer. The error lists every gap — set the missing names
+  ([Vault](/docs/elements/vault)).
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Routing](/docs/elements/flow/routing) — when to omit the path, `list` / `create` / `get` filenames
+- [Flow](/docs/elements/flow) — one species; `fx` is the door
+- [Signal](/docs/elements/signal) — `once` / `broadcast` / `live`
+- [Store](/docs/elements/store) — SQL, KV, files, search
+- [Channel](/docs/elements/channel) — templates and `fx.send`
+- [Client · Calling](/docs/client/calling) — `createClient(app, url)`, `{ data, error }`
+
+## Next
+
+<Cards>
+  <Card
+    title="Routing"
+    description="File-tree stamps, many-routes files, and reserved leaves."
+    href="/docs/elements/flow/routing"
+  />
+  <Card title="Flow" description="on(trigger) → do through fx." href="/docs/elements/flow" />
+  <Card title="Signal" description="Move work off the request." href="/docs/elements/signal" />
+  <Card title="Store" description="Tables, fx.store, and resources." href="/docs/elements/store" />
+  <Card
+    title="The Architecture"
+    description="Why this shape stops month-eight drift."
+    href="/docs/understand/the-architecture"
+  />
+  <Card
+    title="Elements"
+    description="Clock, Gate, Vault, Channel, AI — each in depth."
+    href="/docs/elements"
+  />
+</Cards>
