@@ -227,7 +227,7 @@ export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.sql": "postgres:18-alpine",
   pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
   "store.kv": "redis:8-alpine",
-  "store.files": "rustfs/rustfs:1.0.0-rc.5",
+  "store.files": "rustfs/rustfs:1.0.0",
   "channel.email": "axllent/mailpit:v1.31.1",
   "store.index": "getmeili/meilisearch:v1.53",
   proxy: "caddy:2-alpine",

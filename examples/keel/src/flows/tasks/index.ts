@@ -146,9 +146,7 @@ export const create = on(
 
 /** Patch task fields. */
 export const update = on(
-  http
-    .patch("/tasks/:id", { in: TaskUpdateIn, out: TaskOut })
-    .gate(tasksWrite),
+  http.patch("/tasks/:id", { in: TaskUpdateIn, out: TaskOut }).gate(tasksWrite),
   flow("tasks.update", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -239,9 +237,7 @@ export const get = on(
 
 /** Assign a task and notify. */
 export const assign = on(
-  http
-    .post("/tasks/:id/assign", { in: AssignIn, out: TaskCreateOut })
-    .gate(tasksWrite),
+  http.post("/tasks/:id/assign", { in: AssignIn, out: TaskCreateOut }).gate(tasksWrite),
   flow("tasks.assign", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -365,9 +361,7 @@ export const unfollow = on(
 
 /** Duplicate via `tasks.create`. */
 export const duplicate = on(
-  http
-    .post("/tasks/:id/duplicate", { in: IdIn, out: TaskCreateOut })
-    .gate(tasksWrite),
+  http.post("/tasks/:id/duplicate", { in: IdIn, out: TaskCreateOut }).gate(tasksWrite),
   flow("tasks.duplicate", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -388,9 +382,7 @@ export const duplicate = on(
 
 /** Move to another project / section / space. */
 export const move = on(
-  http
-    .post("/tasks/:id/move", { in: MoveIn, out: TaskCreateOut })
-    .gate(tasksWrite),
+  http.post("/tasks/:id/move", { in: MoveIn, out: TaskCreateOut }).gate(tasksWrite),
   flow("tasks.move", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(tasks, input.id);
@@ -413,9 +405,7 @@ export const move = on(
 
 /** Record a blocks/blocked-by edge. */
 export const depend = on(
-  http
-    .post("/tasks/:id/depend", { in: DependIn, out: Ok, errors: { Duplicate } })
-    .gate(tasksWrite),
+  http.post("/tasks/:id/depend", { in: DependIn, out: Ok, errors: { Duplicate } }).gate(tasksWrite),
   flow("tasks.depend", {
     do: async (input, fx) => {
       if (input.id === input.blocksTaskId) return fail("Duplicate", { id: input.id });

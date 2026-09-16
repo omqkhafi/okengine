@@ -12,9 +12,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: { "id": string; "objectKey": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/attachments/:id";
           gates: ["member"];
@@ -38,9 +36,7 @@ declare module "okengine/client" {
         "upload": {
           in: { "taskId"?: string; "id"?: string; "name": string; "text": string; "contentType"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/attachments";
           gates: ["member"];
@@ -50,9 +46,7 @@ declare module "okengine/client" {
         "create": {
           in: { "id": string; "body": string };
           out: { "id": string; "taskId": string; "authorEmail": unknown; "body": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/comments";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -60,9 +54,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: { "id": string; "taskId": string; "authorEmail": unknown; "body": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/comments/:id";
           gates: ["member"];
@@ -94,9 +86,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "body": string };
           out: { "id": string; "taskId": string; "authorEmail": unknown; "body": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/comments/:id";
           gates: ["member","comment:write","rate:sliding-window-counter:120/1m"];
@@ -113,9 +103,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/documents/:id";
           gates: ["member"];
@@ -140,7 +128,6 @@ declare module "okengine/client" {
           in: { "id": string };
           out: { "summary": string };
           errors: {
-            "NotFound": { "id": string };
             "Unavailable": { "message": string };
           };
           method: "POST";
@@ -150,9 +137,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "title": string; "body": string; "parentKind": string; "parentId": string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/documents/:id";
           gates: ["member"];
@@ -201,9 +186,7 @@ declare module "okengine/client" {
         "create": {
           in: { "projectId": string; "name": string; "schemaJson"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/forms";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -211,9 +194,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/forms/:id";
           gates: ["member"];
@@ -238,7 +219,6 @@ declare module "okengine/client" {
           in: { "id": string; "title"?: string; "body"?: string; "customerName": string };
           out: { "id": string; "taskId": string; "identifier": string };
           errors: {
-            "NotFound": { "id": string };
             "Unavailable": { "message": string };
           };
           method: "POST";
@@ -248,9 +228,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "projectId": string; "name": string; "schemaJson"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/forms/:id";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -294,9 +272,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/goals/:id";
           gates: ["member"];
@@ -325,9 +301,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "name": string; "status"?: string; "ownerEmail"?: string; "targetDate"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/goals/:id";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -337,9 +311,7 @@ declare module "okengine/client" {
         "read": {
           in: { "id": string };
           out: { "ok": true };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/inbox/:id/read";
           gates: ["member"];
@@ -367,9 +339,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/members/:id";
           gates: ["member"];
@@ -377,9 +347,7 @@ declare module "okengine/client" {
         "invite": {
           in: { "email": string; "role": string; "spaceId"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/members/invite";
           gates: ["member","member:admin"];
@@ -403,9 +371,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "email": string; "role": string; "name"?: string; "spaceId"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/members/:id";
           gates: ["member","member:admin"];
@@ -482,9 +448,7 @@ declare module "okengine/client" {
         "addSection": {
           in: { "id": string; "name": string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/projects/:id/sections";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -508,9 +472,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/projects/:id";
           gates: ["member"];
@@ -542,9 +504,7 @@ declare module "okengine/client" {
         "postUpdate": {
           in: { "body": string; "health"?: string; "id": string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/projects/:id/updates";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -560,9 +520,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "spaceId": string; "goalId"?: string; "name": string; "status"?: string; "leadEmail"?: string; "startDate"?: string; "targetDate"?: string; "color"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/projects/:id";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -653,9 +611,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/spaces/:id";
           gates: ["member"];
@@ -679,9 +635,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "key": string; "name": string; "color"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/spaces/:id";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -699,9 +653,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: { "id": string; "name": string; "groupName": unknown };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/tags/:id";
           gates: ["member"];
@@ -725,9 +677,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "name": string; "groupName"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/tags/:id";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];
@@ -737,9 +687,7 @@ declare module "okengine/client" {
         "addTag": {
           in: { "id": string; "tagId": string };
           out: { "ok": true };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/tags";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -747,9 +695,7 @@ declare module "okengine/client" {
         "archive": {
           in: { "id": string };
           out: { "ok": true };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/archive";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -757,9 +703,7 @@ declare module "okengine/client" {
         "assign": {
           in: { "id": string; "assigneeEmail": string };
           out: { "id": string; "identifier": string; "userId": unknown };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/assign";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -767,9 +711,7 @@ declare module "okengine/client" {
         "complete": {
           in: { "id": string };
           out: { "ok": true };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/complete";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -778,7 +720,6 @@ declare module "okengine/client" {
           in: { "title": string; "spaceKey": string; "description"?: string; "priority"?: number; "projectId"?: string; "sectionId"?: string; "parentId"?: string; "dueDate"?: string; "startDate"?: string; "roleNeeded"?: string; "kind"?: string; "assigneeEmail"?: string };
           out: { "id": string; "identifier": string; "userId": unknown };
           errors: {
-            "NotFound": { "id": string };
             "Duplicate": { "id"?: string; "identifier"?: string };
           };
           method: "POST";
@@ -789,7 +730,6 @@ declare module "okengine/client" {
           in: { "id": string; "blocksTaskId": string };
           out: { "ok": true };
           errors: {
-            "NotFound": { "id": string };
             "Duplicate": { "id"?: string; "identifier"?: string };
           };
           method: "POST";
@@ -799,9 +739,7 @@ declare module "okengine/client" {
         "duplicate": {
           in: { "id": string };
           out: { "id": string; "identifier": string; "userId": unknown };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/duplicate";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -809,9 +747,7 @@ declare module "okengine/client" {
         "follow": {
           in: { "id": string };
           out: { "ok": true };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/follow";
           gates: ["member"];
@@ -819,9 +755,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: { "id": string; "identifier": string; "title": string; "description": unknown; "kind": string; "priority": number; "estimate": unknown; "status": string; "spaceId": string; "projectId": unknown; "sectionId": unknown; "parentId": unknown; "dueDate": unknown; "completedAt": unknown; "archivedAt": unknown; "roleNeeded": unknown };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/tasks/:id";
           gates: ["member"];
@@ -848,9 +782,7 @@ declare module "okengine/client" {
         "move": {
           in: { "id": string; "projectId"?: string; "sectionId"?: string; "spaceKey"?: string };
           out: { "id": string; "identifier": string; "userId": unknown };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "POST";
           path: "/tasks/:id/move";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -879,9 +811,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "title"?: string; "description"?: string; "priority"?: number; "estimate"?: number | null; "status"?: string; "dueDate"?: unknown; "roleNeeded"?: unknown };
           out: { "id": string; "identifier": string; "title": string; "description": unknown; "kind": string; "priority": number; "estimate": unknown; "status": string; "spaceId": string; "projectId": unknown; "sectionId": unknown; "parentId": unknown; "dueDate": unknown; "completedAt": unknown; "archivedAt": unknown; "roleNeeded": unknown };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/tasks/:id";
           gates: ["member","task:write","rate:sliding-window-counter:60/1m"];
@@ -891,9 +821,7 @@ declare module "okengine/client" {
         "board": {
           in: { "q"?: string; "search"?: string; "limit"?: number; "order"?: string; "orderBy"?: string; "select"?: string; "or"?: string; "and"?: string; "offset"?: number; "cursor"?: string; "id": string };
           out: readonly { "sectionId": string; "name": string; "tasks": readonly { "id": string; "title": string; "identifier": string }[] }[];
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/views/:id/board";
           gates: ["member"];
@@ -909,9 +837,7 @@ declare module "okengine/client" {
         "get": {
           in: { "id": string };
           out: {  };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "GET";
           path: "/views/:id";
           gates: ["member"];
@@ -935,9 +861,7 @@ declare module "okengine/client" {
         "update": {
           in: { "id": string; "projectId": string; "name": string; "kind": "list" | "board" | "timeline" | "calendar"; "filtersJson"?: string; "ownerEmail"?: string };
           out: { "id": string };
-          errors: {
-            "NotFound": { "id": string };
-          };
+          errors: {};
           method: "PATCH";
           path: "/views/:id";
           gates: ["member","project:admin","rate:token-bucket:40/1m"];

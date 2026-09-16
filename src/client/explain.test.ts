@@ -128,7 +128,7 @@ describe("matchError", () => {
     expect(seats).toBe(2);
 
     const miss: Err = { code: "NotFound", data: {} };
-    const fallback = matchError(miss, {
+    const fallback = matchError<Err, string | number>(miss, {
       FlightFull: (data) => data.seatsLeft,
       _: (e) => {
         expect(e.kind).toBe("missing");
@@ -206,7 +206,7 @@ describe("match", () => {
       error: { code: "FlightFull", data: { seatsLeft: 1 } },
     };
     expect(
-      match(full, {
+      match<Result, string>(full, {
         ok: () => "ok",
         FlightFull: (data) => `wait:${data.seatsLeft}`,
         auth: () => "signin",
@@ -216,7 +216,7 @@ describe("match", () => {
 
     const missing: Result = { data: null, error: { code: "NotFound", data: {} } };
     expect(
-      match(missing, {
+      match<Result, string>(missing, {
         ok: () => "ok",
         FlightFull: (data) => `wait:${data.seatsLeft}`,
         missing: (e) => `gone:${e.code}`,

@@ -21,18 +21,18 @@ Companion to [oke-deps](../oke-deps/SKILL.md) (npm) and [oke-ship](../oke-ship/S
 
 ## Catalog (defaults)
 
-| Role            | Current source of truth                                              | Pin style        |
-| --------------- | -------------------------------------------------------------------- | ---------------- |
-| `store.sql`     | `postgres:18-alpine`                                                 | floating family  |
-| `store.kv`      | `redis:8-alpine`                                                     | floating family  |
-| `store.files`   | `rustfs/rustfs:…`                                                    | exact prerelease |
-| `store.index`   | `getmeili/meilisearch:v…`                                            | minor            |
-| `channel.email` | `axllent/mailpit:v…`                                                 | exact patch      |
-| `pgdog`         | `ghcr.io/pgdogdev/pgdog:v…`                                          | exact patch      |
-| `proxy` caddy   | `caddy:2-alpine`                                                     | floating family  |
-| `proxy` traefik | `traefik:v…`                                                         | minor            |
-| `proxy` nginx   | `nginx:…-alpine`                                                     | minor alpine     |
-| socket-proxy    | `tecnativa/docker-socket-proxy:v…` (`src/docker/recipes/traefik.ts`) | exact            |
+| Role            | Current source of truth                                              | Pin style       |
+| --------------- | -------------------------------------------------------------------- | --------------- |
+| `store.sql`     | `postgres:18-alpine`                                                 | floating family |
+| `store.kv`      | `redis:8-alpine`                                                     | floating family |
+| `store.files`   | `rustfs/rustfs:…`                                                    | exact patch     |
+| `store.index`   | `getmeili/meilisearch:v…`                                            | minor           |
+| `channel.email` | `axllent/mailpit:v…`                                                 | exact patch     |
+| `pgdog`         | `ghcr.io/pgdogdev/pgdog:v…`                                          | exact patch     |
+| `proxy` caddy   | `caddy:2-alpine`                                                     | floating family |
+| `proxy` traefik | `traefik:v…`                                                         | minor           |
+| `proxy` nginx   | `nginx:…-alpine`                                                     | minor alpine    |
+| socket-proxy    | `tecnativa/docker-socket-proxy:v…` (`src/docker/recipes/traefik.ts`) | exact           |
 
 There is **no** `images.ai` / AI engine catalog role. Inference is OpenRouter,
 cloud registry providers, or BYO OpenAI-compatible `OKE_AI_URL` / `baseUrl`.

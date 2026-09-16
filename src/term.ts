@@ -759,7 +759,9 @@ function describeFatalError(
       ? interpolateTemplate(def.fix, { count })
       : "Set each name (`oke vault set <name>`, or `.env.local`).";
     const url = def ? docsUrl(`/e/${def.code}`) : docsUrl("/e/1510");
-    const names = vault.map((g) => (g.description ? `- ${g.name}: ${g.description}` : `- ${g.name}`));
+    const names = vault.map((g) =>
+      g.description ? `- ${g.name}: ${g.description}` : `- ${g.name}`,
+    );
     return {
       title: "OKE1510",
       body: [cause, ...names, `→ ${fix}`, url].join("\n"),

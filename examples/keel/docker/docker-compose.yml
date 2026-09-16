@@ -53,7 +53,7 @@ services:
 
   # store.files — object storage (S3)
   store-files:
-    image: "rustfs/rustfs:1.0.0-rc.5"
+    image: "rustfs/rustfs:1.0.0"
     ports:
       - "18850:9000"
       - "19850:9001"

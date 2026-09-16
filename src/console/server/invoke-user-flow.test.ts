@@ -34,16 +34,22 @@ const MANIFEST = {
 } as Manifest;
 
 function execute(over: Partial<ExecuteResult>): ExecuteResult {
-  return {
+  const result = {
     output: undefined,
     failure: undefined,
     response: undefined,
     ctx: {} as ExecuteResult["ctx"],
     fx: {} as ExecuteResult["fx"],
-    cache: "none",
+    cache: "none" as const,
     durationMs: 0,
     runId: "run_test",
     ...over,
+  };
+  return {
+    ...result,
+    get error() {
+      return result.ctx.error;
+    },
   };
 }
 

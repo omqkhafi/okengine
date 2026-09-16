@@ -156,13 +156,13 @@ import { isTransportError } from "okengine/client";
 const result = await api.orders.list({ limit: 20, status: "shipped" });
 
 if (result.error && isTransportError(result.error)) {
-  showOfflineBanner(result.error.data.message);
+  showOfflineBanner(result.error.message); // === error.data.message
   // optional: result.error.data.status
 }
 ```
 
 Network failure, abort (`timeout`), non-JSON body, or HTTP status without a `{ data, error }`
-envelope — never a declared Flow code.
+envelope — never a declared Flow code. Prefer `error.message`; it always matches `error.data.message`.
 
 </Tab>
 
@@ -209,24 +209,24 @@ match(result, {
 Import from `okengine/client/explain` so the 5 kB `okengine/client` graph stays small. `isOk` /
 `isFail` stay on `okengine/client` when you only need a predicate.
 
-| Helper | When |
-| ------ | ---- |
+| Helper                        | When                      |
+| ----------------------------- | ------------------------- |
 | `match(result, { ok, …, _ })` | Whole envelope — one call |
-| `matchError(error, { …, _ })` | You already have `error` |
-| `explain(error)` | Chrome only — no matcher |
+| `matchError(error, { …, _ })` | You already have `error`  |
+| `explain(error)`              | Chrome only — no matcher  |
 
 ### Kinds
 
-| `kind` | Codes | Typical UI |
-| ------ | ----- | ---------- |
-| `auth` | `Unauthorized`, `AuthFailed` | Sign-in |
-| `permission` | `Forbidden` | “You can’t do that” |
-| `missing` | `NotFound`; `TransportError` HTTP 404 | Empty state |
-| `conflict` | `Conflict`, `ForeignKey` | Retry or pick another value |
-| `invalid` | `ValidationError`, `InvalidQuery`, `UnsupportedMediaType`; `DatabaseError` 422 reasons | Form fields |
-| `limited` | `RateLimited`, `AuthRateLimited` | Wait / retry (`retryable`) |
-| `unavailable` | `ServiceUnavailable`; `DatabaseError` `retryable`; other `TransportError` | Offline / retry |
-| `failed` | `InternalError`, unknown `DatabaseError`, unnamed domain codes | Toast `message` |
+| `kind`        | Codes                                                                                  | Typical UI                  |
+| ------------- | -------------------------------------------------------------------------------------- | --------------------------- |
+| `auth`        | `Unauthorized`, `AuthFailed`                                                           | Sign-in                     |
+| `permission`  | `Forbidden`                                                                            | “You can’t do that”         |
+| `missing`     | `NotFound`; `TransportError` HTTP 404                                                  | Empty state                 |
+| `conflict`    | `Conflict`, `ForeignKey`                                                               | Retry or pick another value |
+| `invalid`     | `ValidationError`, `InvalidQuery`, `UnsupportedMediaType`; `DatabaseError` 422 reasons | Form fields                 |
+| `limited`     | `RateLimited`, `AuthRateLimited`                                                       | Wait / retry (`retryable`)  |
+| `unavailable` | `ServiceUnavailable`; `DatabaseError` `retryable`; other `TransportError`              | Offline / retry             |
+| `failed`      | `InternalError`, unknown `DatabaseError`, unnamed domain codes                         | Toast `message`             |
 
 Named code arms receive typed `data`. Kind arms and `_` receive `{ kind, code, message, retryable,
 fields? }`. `_` is required even if you listed every kind.
@@ -475,7 +475,8 @@ Restart `oke dev` after renaming exports.
 <Accordion title='error.code is "TransportError"'>
   Network failure, abort (`timeout`), non-JSON body, empty error response, or HTTP status without a
   `{ data, error }` envelope. Built-in and domain flow codes never use this code.
-  `error.data.message` holds the text; `explain` maps HTTP 404 transport to kind `missing`.
+  Prefer `error.message` — it always equals `error.data.message`. `explain` maps HTTP 404 transport
+  to kind `missing`.
 </Accordion>
 
 <Accordion title="Why import from okengine/client/explain?">
@@ -484,8 +485,8 @@ Restart `oke dev` after renaming exports.
 </Accordion>
 
 <Accordion title="Toast showed OutOfStock / FlightFull">
-  Domain codes with no `{ message }` use the code name as `explain.message`. Handle the named arm,
-  or pass `fx.fail("OutOfStock", data, { message })` on the Flow.
+  Domain codes with no `{message}` use the code name as `explain.message`. Handle the named arm, or
+  pass `fx.fail("OutOfStock", data, {message})` on the Flow.
 </Accordion>
 
 <Accordion title="404 — route miss or NotFound?">

@@ -219,8 +219,12 @@ function sseError(status: number, body: string): Error {
     try {
       const json: unknown = JSON.parse(body);
       if (json !== null && typeof json === "object" && "error" in json) {
-        const err = (json as { error?: { code?: string; data?: { message?: string } } }).error;
-        message = err?.data?.message ?? err?.code ?? message;
+        const err = (
+          json as {
+            error?: { code?: string; message?: string; data?: { message?: string } };
+          }
+        ).error;
+        message = err?.message ?? err?.data?.message ?? err?.code ?? message;
       }
     } catch {
       message = body.slice(0, 200);

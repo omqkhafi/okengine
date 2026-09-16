@@ -29,7 +29,7 @@ Prefer importing catalog / recipe constants over a second string literal.
 
 | Image                             | Style                         | Example              | Probe                                       |
 | --------------------------------- | ----------------------------- | -------------------- | ------------------------------------------- |
-| RustFS                            | exact prerelease, no `v`      | `1.0.0-rc.5`         | `rustfs/rustfs` GitHub + Hub                |
+| RustFS                            | exact patch, no `v`           | `1.0.0`              | `rustfs/rustfs` GitHub + Hub                |
 | Mailpit                           | exact patch, `v` prefix       | `v1.31.1`            | `axllent/mailpit`                           |
 | PgDog                             | exact patch, `v` prefix       | `v0.1.57`            | `pgdogdev/pgdog` + `ghcr.io/pgdogdev/pgdog` |
 | Meilisearch                       | **minor** (`v1.53`, not `.1`) | `v1.53`              | `meilisearch/meilisearch` — Hub has `v1.53` |

@@ -22,7 +22,7 @@ export default defineConfig({
     store: {
       sql: "postgres:18-alpine",
       kv: "redis:8-alpine",
-      files: "rustfs/rustfs:1.0.0-rc.5",
+      files: "rustfs/rustfs:1.0.0",
     },
     channel: {
       email: "axllent/mailpit:v1.31.1",

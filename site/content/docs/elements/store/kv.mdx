@@ -600,9 +600,9 @@ Gate rate strategies inherit `drivers.store.kv` (no separate `drivers.gate`).
 </Accordion>
 
 <Accordion title="Redis down returns InternalError">
-  Connection / `CLUSTERDOWN` / `READONLY` map to `ServiceUnavailable` **503**.
-  `BUSY` / `TRYAGAIN` stay thrown until `flow.retry` exhausts, then **503**.
-  `WRONGTYPE` stays `InternalError` — see [Errors · KV auto-map](/docs/reference/errors#kv-auto-map).
+  Connection / `CLUSTERDOWN` / `READONLY` map to `ServiceUnavailable` **503**. `BUSY` / `TRYAGAIN`
+  stay thrown until `flow.retry` exhausts, then **503**. `WRONGTYPE` stays `InternalError` — see
+  [Errors · KV auto-map](/docs/reference/errors#kv-auto-map).
 </Accordion>
 
 <Accordion title="I expected incr / setNx / fx.store.kv">

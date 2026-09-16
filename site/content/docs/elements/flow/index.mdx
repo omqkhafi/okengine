@@ -317,18 +317,18 @@ HTTP success from a returned value is `200` + `{ data, error: null }`. `undefine
 
 Status for `error.code`:
 
-| Code                                                  | Status |
-| ----------------------------------------------------- | ------ |
-| `ValidationError`                                     | `422`  |
-| `Unauthorized`                                        | `401`  |
-| `Forbidden`                                           | `403`  |
-| `NotFound`                                            | `404`  |
-| `Conflict` / `ForeignKey`                             | `409`  |
-| `UnsupportedMediaType`                                | `415`  |
-| `RateLimited` / `AuthRateLimited`                     | `429`  |
-| `DatabaseError` (`not_null` / `check`)                | `422`  |
-| `DatabaseError` (`retryable`) / `ServiceUnavailable`  | `503`  |
-| `DatabaseError` (else) / `InternalError`              | `500`  |
+| Code                                                   | Status |
+| ------------------------------------------------------ | ------ |
+| `ValidationError`                                      | `422`  |
+| `Unauthorized`                                         | `401`  |
+| `Forbidden`                                            | `403`  |
+| `NotFound`                                             | `404`  |
+| `Conflict` / `ForeignKey`                              | `409`  |
+| `UnsupportedMediaType`                                 | `415`  |
+| `RateLimited` / `AuthRateLimited`                      | `429`  |
+| `DatabaseError` (`not_null` / `check`)                 | `422`  |
+| `DatabaseError` (`retryable`) / `ServiceUnavailable`   | `503`  |
+| `DatabaseError` (else) / `InternalError`               | `500`  |
 | Domain codes (`OutOfStock`, `FlightFull`, `Duplicate`) | `400`  |
 
 A bare `404` with body `Not Found` means **no route matched** — not `fx.fail.notFound`. Clients
@@ -392,7 +392,9 @@ distinguish router miss (plain text) from domain miss (JSON envelope).
 
 <Accordion title="fx.call identity">
   `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed). `fx.tenant.id` propagates.
-  For audit only, read `fx.principal` — gates never consult it. See [fx](/docs/reference/fx).
+  For audit only, read `fx.principal` — gates never consult it. Controlled `return fx.fail(...)`
+  comes back as a `FlowFailure` value; an unhandled `throw` rethrows to the caller (never silent
+  `undefined`). See [fx](/docs/reference/fx).
 </Accordion>
 
 <Accordion title="Undeclared effects (OKE1001–1007)">

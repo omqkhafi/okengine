@@ -164,7 +164,7 @@ describe("deriveInfrastructure instanceId", () => {
     const result = deriveInfrastructure({
       images: {
         "channel.email": "axllent/mailpit:v1.31.1",
-        "store.files": "rustfs/rustfs:1.0.0-rc.5",
+        "store.files": "rustfs/rustfs:1.0.0",
       },
       app: `dev-${id}`,
       instanceId: id,

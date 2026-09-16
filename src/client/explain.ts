@@ -149,10 +149,10 @@ export function matchError<Err extends ExplainableError, R>(
   cases: MatchErrorCases<Err, R>,
 ): R {
   const code = error.code;
-  const codeFn = lookupCode(cases, code);
+  const codeFn = lookupCode<R>(cases, code);
   if (codeFn !== undefined) return codeFn(error.data);
   const explained = explain(error);
-  const kindFn = lookupKind(cases, explained.kind);
+  const kindFn = lookupKind<R>(cases, explained.kind);
   if (kindFn !== undefined) return kindFn(explained);
   return cases._(explained);
 }
@@ -165,25 +165,34 @@ export function matchError<Err extends ExplainableError, R>(
  * @param result - Envelope `{ data, error }`
  * @param cases - Required `ok`, optional per-code / per-kind, required `_`
  */
-export function match<O, Err extends ExplainableError, R>(
-  result: MatchableResult<O, Err>,
-  cases: MatchResultCases<O, Err, R>,
+export function match<T extends MatchableResult<unknown, ExplainableError>, R>(
+  result: T,
+  cases: MatchResultCases<MatchData<T>, MatchErr<T>, R>,
 ): R {
-  if (result.error === null) return cases.ok(result.data);
-  return matchError(result.error, cases);
+  if (result.error === null) return cases.ok(result.data as MatchData<T>);
+  return matchError(result.error as MatchErr<T>, cases);
 }
 
-function lookupCode<R>(
-  cases: MatchErrorCases<ExplainableError, R>,
-  code: string,
-): ((data: unknown) => R) | undefined {
+/** Success `data` from a {@link MatchableResult} union (null-error branch only). */
+type MatchData<T> = T extends { readonly error: null; readonly data: infer O } ? O : never;
+
+/** Failure from a {@link MatchableResult} union (`error` excluding `null`). */
+type MatchErr<T> = T extends { readonly error: infer E }
+  ? E extends null
+    ? never
+    : E extends ExplainableError
+      ? E
+      : never
+  : never;
+
+function lookupCode<R>(cases: object, code: string): ((data: unknown) => R) | undefined {
   if (code === "_" || code === "ok" || KIND_SET.has(code)) return undefined;
   const handler = (cases as Record<string, unknown>)[code];
   return typeof handler === "function" ? (handler as (data: unknown) => R) : undefined;
 }
 
 function lookupKind<R>(
-  cases: MatchErrorCases<ExplainableError, R>,
+  cases: object,
   kind: ErrorKind,
 ): ((explained: ExplainedError) => R) | undefined {
   const handler = (cases as Record<string, unknown>)[kind];

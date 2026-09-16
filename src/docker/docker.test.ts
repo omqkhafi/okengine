@@ -830,7 +830,7 @@ describe("deriveInfrastructure", () => {
       images: {
         "store.sql": "postgres:18-alpine",
         "store.kv": "redis:8-alpine",
-        "store.files": "rustfs/rustfs:1.0.0-rc.5",
+        "store.files": "rustfs/rustfs:1.0.0",
         "channel.email": "axllent/mailpit:v1.31.1",
       },
       credentials: {
@@ -875,7 +875,7 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         "channel.email": "axllent/mailpit:v1.31.1",
-        "store.files": "rustfs/rustfs:1.0.0-rc.5",
+        "store.files": "rustfs/rustfs:1.0.0",
       },
       instanceId: id,
       credentials: {
@@ -914,7 +914,7 @@ describe("deriveInfrastructure", () => {
     const rows = resolveStack({
       images: {
         "channel.email": "axllent/mailpit:v1.31.1",
-        "store.files": "rustfs/rustfs:1.0.0-rc.5",
+        "store.files": "rustfs/rustfs:1.0.0",
       },
       instanceId: id,
       credentials: {

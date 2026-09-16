@@ -194,14 +194,14 @@ export function flattenRoutes(
 function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): unknown {
   const invoke = async (input?: unknown, callOpts?: CallOpts): Promise<ClientResult> => {
     if (path.length < 2) {
+      const message = `Incomplete path: api.${path.join(".") || "?"}(…)`;
       return attachPager(
         {
           data: null,
           error: {
             code: "TransportError" as const,
-            data: {
-              message: `Incomplete path: api.${path.join(".") || "?"}(…)`,
-            },
+            message,
+            data: { message },
           },
         },
         (nextInput) => invoke(nextInput, callOpts),

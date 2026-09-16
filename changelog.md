@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.21.0 — 2026-09-17
+
 ### ✨ Added
 
 #### Runtime
@@ -68,6 +70,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Runtime
+
+- Export gzip regression baselines refreshed in `budgets.json` after always-on
+  `fx.fail` helpers, store SQL/KV/files auto-map, and i18n catalog strings
+  (kernel edge 16.99 kB and client 4.99 kB still under the 17 kB / 5 kB
+  absolute caps).
+
 #### Docs
 
 - Try It is a first-app walkthrough: scaffold file map, `GET` / `POST /users`
@@ -88,10 +97,38 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Compose default RustFS pin: `1.0.0-rc.5` → `1.0.0` (stable, no `v` prefix).
 - create-oke shorter and examples/keel use `fail.notFound` / `fail.forbidden` /
   `fail.conflict` helpers. Keel drops redundant `errors: { NotFound }` bags
   and keeps domain `Duplicate` / `Unavailable`. Shorter keeps `{ code }`
   tightening on NotFound / Forbidden / Conflict.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Untriggered RPC flows (`POST /_oke/...`) returning unhandled throws now
+  serialize to 500 `InternalError` (or store auto-mapped failure) instead of
+  empty `204 No Content`.
+- `fx.call()` and `app.call()` rethrow unhandled exceptions across flow
+  boundaries instead of returning `undefined`.
+
+#### Client
+
+- `TransportError` runtime instances now consistently populate `error.message`
+  matching `error.data.message`. The type requires `message` (same string as
+  `data.message`).
+- SSE handshake failure decoding prioritizes top-level `error.message` while
+  preserving fallback to `error.data.message` and `error.code`.
+- Typed client `ContractErrors` treats a missing `errors` bag as the built-in
+  map — a phantom `Record<string, unknown>` no longer wipes `NotFound.id`.
+- `match` success `ok` data is the success type, not `O | null`.
+
+#### Docs
+
+- Calling / Errors document `TransportError.message === error.data.message`.
+  Flow / fx note that `fx.call` / `app.call` rethrow unhandled throws (not
+  silent `undefined`).
 
 ## v0.20.0 — 2026-09-15
 

@@ -158,6 +158,8 @@ on(
 `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed for authorization) and
 propagates `fx.tenant.id`. For audit/attribution only, read `fx.principal` — it propagates the
 originating identity without copying into `fx.auth`. Gates never consult `fx.principal`.
+Controlled `return fx.fail(...)` returns a `FlowFailure` value; an unhandled `throw` rethrows
+(never silent `undefined`). The same rules apply to `app.call`.
 
 ## Concurrency and retry
 

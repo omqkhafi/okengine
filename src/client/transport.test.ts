@@ -46,6 +46,11 @@ describe("transport — retry", () => {
     const { error } = await api.sys.ping();
     expect(error?.code).toBe("TransportError");
     expect(n).toBe(2);
+    if (error?.code === "TransportError") {
+      expect(typeof error.message).toBe("string");
+      expect(error.message.length).toBeGreaterThan(0);
+      expect(error.message).toBe(error.data.message);
+    }
   });
 
   test("structured 5xx envelope is returned (not TransportError)", async () => {
@@ -139,6 +144,68 @@ describe("transport — auth refresh", () => {
     expect(error?.code).toBe("TransportError");
     if (error?.code === "TransportError") {
       expect(error.data.status).toBe(401);
+      expect(error.message).toBe(error.data.message);
+      expect(error.message).toBe("Invalid JSON (401)");
+    }
+  });
+});
+
+describe("transport — TransportError message contract", () => {
+  test("empty error body populates matching message fields", async () => {
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () => new Response("", { status: 404 }),
+    });
+    const { error } = await api.sys.ping();
+    expect(error?.code).toBe("TransportError");
+    if (error?.code === "TransportError") {
+      expect(error.message).toBe("HTTP 404");
+      expect(error.message).toBe(error.data.message);
+      expect(error.data.status).toBe(404);
+    }
+  });
+
+  test("malformed JSON populates matching message fields", async () => {
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () =>
+        new Response("not-json", {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    const { error } = await api.sys.ping();
+    expect(error?.code).toBe("TransportError");
+    if (error?.code === "TransportError") {
+      expect(error.message).toBe("Invalid JSON (400)");
+      expect(error.message).toBe(error.data.message);
+      expect(error.data.status).toBe(400);
+    }
+  });
+
+  test("incomplete proxy path populates matching message fields", async () => {
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () => Response.json({ data: { ok: true }, error: null }),
+    });
+    // path stops at unit — api.sys() is incomplete
+    const result = await (
+      api.sys as unknown as () => Promise<{
+        error: { code: string; message: string; data: { message: string } };
+      }>
+    )();
+    expect(result.error.code).toBe("TransportError");
+    expect(result.error.message).toMatch(/Incomplete path/);
+    expect(result.error.message).toBe(result.error.data.message);
+  });
+
+  test("binary error path populates matching message fields", async () => {
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () => new Response("nope", { status: 403 }),
+    });
+    const { error } = await api.sys.ping({ response: "blob" });
+    expect(error?.code).toBe("TransportError");
+    if (error?.code === "TransportError") {
+      expect(error.message).toBe("HTTP 403");
+      expect(error.message).toBe(error.data.message);
+      expect(error.data.status).toBe(403);
     }
   });
 });

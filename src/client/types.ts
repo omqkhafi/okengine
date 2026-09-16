@@ -127,7 +127,8 @@ export interface TransportError {
     readonly message: string;
     readonly status?: number;
   };
-  readonly message?: string;
+  /** Same string as {@link TransportError.data.message}. */
+  readonly message: string;
 }
 
 /** Next / previous list request — TanStack `pageParam` / URL bag. */
@@ -433,10 +434,18 @@ type ContractIn<C> = "in" extends keyof C
 /** Pull output from a contract shape. */
 type ContractOut<C> = "out" extends keyof C ? NonNullable<C["out"]> : unknown;
 
-/** Pull error map from a contract shape. Built-in codes are always on; declared keys win. */
+/**
+ * Pull error map from a contract shape. Built-in codes are always on; declared
+ * keys win. A missing `errors` bag (phantom `Record<string, unknown>`) is
+ * treated as unspecified — not as an index signature that wipes the builtins.
+ */
 type ContractErrors<C> = "errors" extends keyof C
-  ? NonNullable<C["errors"]> extends Record<string, unknown>
-    ? Omit<BuiltinErrorMap, keyof NonNullable<C["errors"]>> & NonNullable<C["errors"]>
+  ? NonNullable<C["errors"]> extends infer E
+    ? E extends Record<string, unknown>
+      ? string extends keyof E
+        ? BuiltinErrorMap
+        : Omit<BuiltinErrorMap, keyof E> & E
+      : BuiltinErrorMap
     : BuiltinErrorMap
   : BuiltinErrorMap;
 

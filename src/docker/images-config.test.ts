@@ -66,9 +66,9 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       },
       // store.files / store.index
       {
-        images: { store: { files: "rustfs/rustfs:1.0.0-rc.5" } },
+        images: { store: { files: "rustfs/rustfs:1.0.0" } },
         role: "store.files",
-        image: "rustfs/rustfs:1.0.0-rc.5",
+        image: "rustfs/rustfs:1.0.0",
       },
       {
         images: { store: { index: "getmeili/meilisearch:v1.53" } },
@@ -110,7 +110,7 @@ describe("ImagesConfig nesting — compose output parity", () => {
       "store.sql": "postgres:18-alpine",
       pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
       "store.kv": "redis:8-alpine",
-      "store.files": "rustfs/rustfs:1.0.0-rc.5",
+      "store.files": "rustfs/rustfs:1.0.0",
       "store.index": "getmeili/meilisearch:v1.53",
       "channel.email": "axllent/mailpit:v1.31.1",
     };
@@ -119,7 +119,7 @@ describe("ImagesConfig nesting — compose output parity", () => {
       store: {
         sql: "postgres:18-alpine",
         kv: "redis:8-alpine",
-        files: "rustfs/rustfs:1.0.0-rc.5",
+        files: "rustfs/rustfs:1.0.0",
         index: "getmeili/meilisearch:v1.53",
       },
       channel: { email: "axllent/mailpit:v1.31.1" },

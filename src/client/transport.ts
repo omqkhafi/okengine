@@ -83,21 +83,32 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
         } catch (err) {
           const transient = isTransient(err);
           if (!transient || attempt >= retries) {
-            return {
-              data: null,
-              error: {
-                code: "TransportError",
-                data: {
-                  message: err instanceof Error ? err.message : String(err),
-                },
-              },
-            };
+            return transportEnvelope(err instanceof Error ? err.message : String(err));
           }
           await sleep(delay);
           delay *= backoff;
           attempt += 1;
         }
       }
+    },
+  };
+}
+
+/**
+ * Build a {@link ClientEnvelope} for a transport / protocol failure.
+ *
+ * Guarantees `error.message === error.data.message`.
+ *
+ * @param message - Human-readable failure text
+ * @param status - Optional HTTP status
+ */
+function transportEnvelope(message: string, status?: number): ClientEnvelope {
+  return {
+    data: null,
+    error: {
+      code: "TransportError",
+      message,
+      data: status !== undefined ? { message, status } : { message },
     },
   };
 }
@@ -277,29 +288,14 @@ async function decode(res: Response): Promise<ClientEnvelope> {
   const text = await res.text();
   if (!text) {
     if (res.ok) return { data: undefined, error: null };
-    return {
-      data: null,
-      error: {
-        code: "TransportError",
-        data: { message: `HTTP ${res.status}`, status: res.status },
-      },
-    };
+    return transportEnvelope(`HTTP ${res.status}`, res.status);
   }
 
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
-    return {
-      data: null,
-      error: {
-        code: "TransportError",
-        data: {
-          message: `Invalid JSON (${res.status})`,
-          status: res.status,
-        },
-      },
-    };
+    return transportEnvelope(`Invalid JSON (${res.status})`, res.status);
   }
 
   if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
@@ -310,26 +306,14 @@ async function decode(res: Response): Promise<ClientEnvelope> {
     return { data: json, error: null };
   }
 
-  return {
-    data: null,
-    error: {
-      code: "TransportError",
-      data: { message: `HTTP ${res.status}`, status: res.status },
-    },
-  };
+  return transportEnvelope(`HTTP ${res.status}`, res.status);
 }
 
 async function decodeBinary(res: Response, mode: "blob" | "arrayBuffer"): Promise<ClientEnvelope> {
   if (!res.ok) {
     const structured = await decodeIfEnvelopeClone(res);
     if (structured) return structured;
-    return {
-      data: null,
-      error: {
-        code: "TransportError",
-        data: { message: `HTTP ${res.status}`, status: res.status },
-      },
-    };
+    return transportEnvelope(`HTTP ${res.status}`, res.status);
   }
   const data = mode === "blob" ? await res.blob() : await res.arrayBuffer();
   return { data, error: null };

@@ -49,9 +49,7 @@ export const list = on(
 
 /** Create a comment. */
 export const create = on(
-  http
-    .post("/tasks/:id/comments", { in: CommentIn, out: CommentOut })
-    .gate(tasksWrite),
+  http.post("/tasks/:id/comments", { in: CommentIn, out: CommentOut }).gate(tasksWrite),
   flow("comments.create", {
     do: async (input, fx) => {
       const task = await fx.store(db).findById(tasks, input.id);
@@ -93,9 +91,7 @@ export const get = on(
 
 /** Edit a comment. */
 export const update = on(
-  http
-    .patch("/comments/:id", { in: CommentIn, out: CommentOut })
-    .gate(commentsWrite),
+  http.patch("/comments/:id", { in: CommentIn, out: CommentOut }).gate(commentsWrite),
   flow("comments.update", {
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);

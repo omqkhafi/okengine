@@ -195,10 +195,10 @@ export const create = on(
 
 Every HTTP Flow returns `{ data, error }` (optional `meta`). You return a value from `do`; the kernel wraps it. Failures are **values** — not thrown.
 
-| Field   | Success                          | Failure                                               |
-| ------- | -------------------------------- | ----------------------------------------------------- |
-| `data`  | `out` — what `do` returned       | `null`                                                |
-| `error` | `null`                           | `{ code, message?, data? }`                           |
+| Field   | Success                          | Failure                                                                         |
+| ------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| `data`  | `out` — what `do` returned       | `null`                                                                          |
+| `error` | `null`                           | `{ code, message?, data? }`                                                     |
 | Status  | `200` (`fx.json.create` → `201`) | `422` if `in` fails; `fx.fail.notFound` → `404`; domain `fx.fail` codes → `400` |
 
 Bad `in` never runs `do`:
@@ -738,9 +738,9 @@ return await fx.ask(triage, { message }); // [!code focus]
 </Accordion>
 
 <Accordion title="Unit mixes index.ts with other route files">
-  Cause: `Unit "users" mixes a barrel index.ts with tree route files.` Keep only `index.ts`
-  (and `shapes.ts`). Signals in `src/signals/`; workers in another unit (`workers/welcome.ts`).
-  After deleting `index.ts`, tree files (`list.ts` / `create.ts`) can share the folder.
+  Cause: `Unit "users" mixes a barrel index.ts with tree route files.` Keep only `index.ts` (and
+  `shapes.ts`). Signals in `src/signals/`; workers in another unit (`workers/welcome.ts`). After
+  deleting `index.ts`, tree files (`list.ts` / `create.ts`) can share the folder.
 </Accordion>
 
 <Accordion title="OKE1072 — Signal or Clock flow unnamed">

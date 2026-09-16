@@ -91,17 +91,17 @@ Optional `{ message }` overrides the catalog: `fx.fail("OutOfStock", data, { mes
 
 ### Helpers
 
-| Call | Code | Status | Payload |
-| ---- | ---- | ------ | ------- |
-| `fx.fail.notFound(data?)` | `NotFound` | **404** | `id?`, `key?`, … |
-| `fx.fail.unauthorized(data?)` | `Unauthorized` | **401** | `reason?` |
-| `fx.fail.forbidden(data?)` | `Forbidden` | **403** | `gate?`, `reason?` |
-| `fx.fail.conflict(data?)` | `Conflict` | **409** | `constraint?`, `table?`, `column?`, `id?` |
-| `fx.fail.foreignKey(data?)` | `ForeignKey` | **409** | `constraint?`, `table?`, `column?` |
-| `fx.fail.rateLimited(data?)` | `RateLimited` | **429** | `retryAfterMs?` |
-| `fx.fail.serviceUnavailable(data?)` | `ServiceUnavailable` | **503** | `retryAfter?` |
-| `fx.fail.database(data)` | `DatabaseError` | by `data.reason` | `reason`, `sqlstate?`, `constraint?`, `table?`, `column?` |
-| `fx.fail.internal(data?)` | `InternalError` | **500** | `{}` — catalog message only |
+| Call                                | Code                 | Status           | Payload                                                   |
+| ----------------------------------- | -------------------- | ---------------- | --------------------------------------------------------- |
+| `fx.fail.notFound(data?)`           | `NotFound`           | **404**          | `id?`, `key?`, …                                          |
+| `fx.fail.unauthorized(data?)`       | `Unauthorized`       | **401**          | `reason?`                                                 |
+| `fx.fail.forbidden(data?)`          | `Forbidden`          | **403**          | `gate?`, `reason?`                                        |
+| `fx.fail.conflict(data?)`           | `Conflict`           | **409**          | `constraint?`, `table?`, `column?`, `id?`                 |
+| `fx.fail.foreignKey(data?)`         | `ForeignKey`         | **409**          | `constraint?`, `table?`, `column?`                        |
+| `fx.fail.rateLimited(data?)`        | `RateLimited`        | **429**          | `retryAfterMs?`                                           |
+| `fx.fail.serviceUnavailable(data?)` | `ServiceUnavailable` | **503**          | `retryAfter?`                                             |
+| `fx.fail.database(data)`            | `DatabaseError`      | by `data.reason` | `reason`, `sqlstate?`, `constraint?`, `table?`, `column?` |
+| `fx.fail.internal(data?)`           | `InternalError`      | **500**          | `{}` — catalog message only                               |
 
 `DatabaseError` status: `not_null` / `check` / `invalid` / `too_long` / `out_of_range` → **422**,
 `retryable` → **503**, `unknown` / missing → **500**.
@@ -117,37 +117,37 @@ The typed client always includes built-in codes. A declared key still wins.
 A bare `404` with body `Not Found` means **no route matched**. `fx.fail.notFound` is a JSON envelope
 at **404**. Clients distinguish by envelope, not status. Domain codes stay **400**.
 
-| Code | Status | Helper |
-| ---- | ------ | ------ |
-| `ValidationError` | `422` | none — failed `in`, `do` never runs |
-| `Unauthorized` | `401` | `unauthorized` · also a gate denial |
-| `Forbidden` | `403` | `forbidden` · also a gate denial |
-| `NotFound` | `404` | `notFound` |
-| `Conflict` / `ForeignKey` | `409` | `conflict` / `foreignKey` |
-| `UnsupportedMediaType` | `415` | none — QUERY `Content-Type` is not `application/json` |
-| `RateLimited` / `AuthRateLimited` | `429` | `rateLimited` · `AuthRateLimited` has none |
-| `InvalidQuery` | `400` | none — QUERY missing `Content-Type` or body isn't JSON |
-| `AuthFailed` | `400` | none — credentials / policy, not “no session” |
-| `DatabaseError` | by `reason` | `database` |
-| `ServiceUnavailable` | `503` | `serviceUnavailable` |
-| `InternalError` | `500` | `internal` — never copies a thrown `message` |
-| Domain (`OutOfStock`, `FlightFull`, `Duplicate`) | `400` | `fx.fail("OutOfStock", data)` |
+| Code                                             | Status      | Helper                                                 |
+| ------------------------------------------------ | ----------- | ------------------------------------------------------ |
+| `ValidationError`                                | `422`       | none — failed `in`, `do` never runs                    |
+| `Unauthorized`                                   | `401`       | `unauthorized` · also a gate denial                    |
+| `Forbidden`                                      | `403`       | `forbidden` · also a gate denial                       |
+| `NotFound`                                       | `404`       | `notFound`                                             |
+| `Conflict` / `ForeignKey`                        | `409`       | `conflict` / `foreignKey`                              |
+| `UnsupportedMediaType`                           | `415`       | none — QUERY `Content-Type` is not `application/json`  |
+| `RateLimited` / `AuthRateLimited`                | `429`       | `rateLimited` · `AuthRateLimited` has none             |
+| `InvalidQuery`                                   | `400`       | none — QUERY missing `Content-Type` or body isn't JSON |
+| `AuthFailed`                                     | `400`       | none — credentials / policy, not “no session”          |
+| `DatabaseError`                                  | by `reason` | `database`                                             |
+| `ServiceUnavailable`                             | `503`       | `serviceUnavailable`                                   |
+| `InternalError`                                  | `500`       | `internal` — never copies a thrown `message`           |
+| Domain (`OutOfStock`, `FlightFull`, `Duplicate`) | `400`       | `fx.fail("OutOfStock", data)`                          |
 
 ### Client chrome
 
 `import { match, matchError, explain } from "okengine/client/explain"`. Do not switch on every
 code — a `create` can return store auto-map, gates, transport, and domain codes.
 
-| `kind` | Codes |
-| ------ | ----- |
-| `auth` | `Unauthorized`, `AuthFailed` |
-| `permission` | `Forbidden` |
-| `missing` | `NotFound`; `TransportError` with HTTP 404 |
-| `conflict` | `Conflict`, `ForeignKey` |
-| `invalid` | `ValidationError`, `InvalidQuery`, `UnsupportedMediaType`; `DatabaseError` 422 reasons |
-| `limited` | `RateLimited`, `AuthRateLimited` |
-| `unavailable` | `ServiceUnavailable`; `DatabaseError` `retryable`; other `TransportError` |
-| `failed` | `InternalError`, unknown `DatabaseError`, domain codes |
+| `kind`        | Codes                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------- |
+| `auth`        | `Unauthorized`, `AuthFailed`                                                           |
+| `permission`  | `Forbidden`                                                                            |
+| `missing`     | `NotFound`; `TransportError` with HTTP 404                                             |
+| `conflict`    | `Conflict`, `ForeignKey`                                                               |
+| `invalid`     | `ValidationError`, `InvalidQuery`, `UnsupportedMediaType`; `DatabaseError` 422 reasons |
+| `limited`     | `RateLimited`, `AuthRateLimited`                                                       |
+| `unavailable` | `ServiceUnavailable`; `DatabaseError` `retryable`; other `TransportError`              |
+| `failed`      | `InternalError`, unknown `DatabaseError`, domain codes                                 |
 
 ```typescript
 match(result, {
@@ -162,6 +162,9 @@ match(result, {
 Dispatch: `ok` → named code → kind → required `_`. `explain(error).fields` maps
 `ValidationError` issues to `{ email: "Required" }`. Full loop: [Calling](/docs/client/calling).
 
+`TransportError` always sets both `error.message` and `error.data.message` to the same string.
+Prefer `error.message` in UI code.
+
 ### Store auto-map
 
 `fx.store` constraint and connection failures become typed `fail` values (same family as
@@ -170,40 +173,40 @@ Dispatch: `ok` → named code → kind → required `_`. `explain(error).fields`
 
 #### SQL auto-map
 
-| Signal | Result |
-| ------ | ------ |
-| Postgres `23505` / `23P01` · SQLite UNIQUE / PRIMARY KEY | `Conflict` **409** |
-| Postgres `23503` / `23001` · SQLite FOREIGN KEY | `ForeignKey` **409** |
-| Postgres `23502` / `23514` · SQLite NOT NULL / CHECK | `DatabaseError` `not_null` / `check` **422** |
-| Postgres `22P02` / `22007` / `22023` / `42804` | `DatabaseError` `invalid` **422** |
-| Postgres `22001` | `DatabaseError` `too_long` **422** |
-| Postgres `22003` / `22008` | `DatabaseError` `out_of_range` **422** |
-| Postgres `40001` / `40P01` / `55P03` · SQLite BUSY | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
-| `08xxx` / `53xxx` / `57P0x` / `57014` / `25P03` / connection / paused | `ServiceUnavailable` **503** |
-| `42P01` / `42703` with `domainDdl: "off"` | **OKE1110** (unchanged) |
-| other SQLSTATE | `DatabaseError` `unknown` **500** |
+| Signal                                                                | Result                                                                            |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Postgres `23505` / `23P01` · SQLite UNIQUE / PRIMARY KEY              | `Conflict` **409**                                                                |
+| Postgres `23503` / `23001` · SQLite FOREIGN KEY                       | `ForeignKey` **409**                                                              |
+| Postgres `23502` / `23514` · SQLite NOT NULL / CHECK                  | `DatabaseError` `not_null` / `check` **422**                                      |
+| Postgres `22P02` / `22007` / `22023` / `42804`                        | `DatabaseError` `invalid` **422**                                                 |
+| Postgres `22001`                                                      | `DatabaseError` `too_long` **422**                                                |
+| Postgres `22003` / `22008`                                            | `DatabaseError` `out_of_range` **422**                                            |
+| Postgres `40001` / `40P01` / `55P03` · SQLite BUSY                    | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `08xxx` / `53xxx` / `57P0x` / `57014` / `25P03` / connection / paused | `ServiceUnavailable` **503**                                                      |
+| `42P01` / `42703` with `domainDdl: "off"`                             | **OKE1110** (unchanged)                                                           |
+| other SQLSTATE                                                        | `DatabaseError` `unknown` **500**                                                 |
 
 #### KV auto-map
 
 Redis-wire `store.kv` only (not Gate / Signal clients). Memory KV does not throw these.
 
-| Signal | Result |
-| ------ | ------ |
-| Connection / `CLUSTERDOWN` / `READONLY` / `OOM` / `MISCONF` | `ServiceUnavailable` **503** |
-| `BUSY` / `TRYAGAIN` / `LOADING` | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
-| `WRONGTYPE` / `NOSCRIPT` | unmapped — `InternalError` **500** |
+| Signal                                                      | Result                                                                            |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Connection / `CLUSTERDOWN` / `READONLY` / `OOM` / `MISCONF` | `ServiceUnavailable` **503**                                                      |
+| `BUSY` / `TRYAGAIN` / `LOADING`                             | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `WRONGTYPE` / `NOSCRIPT`                                    | unmapped — `InternalError` **500**                                                |
 
 #### Files auto-map
 
 `fs` and `s3` (`fx.store` files handle). Missing objects stay `null`.
 
-| Signal | Result |
-| ------ | ------ |
-| `AccessDenied` / `EACCES` / `EPERM` / HTTP **403** | `Forbidden` **403** |
-| `fs` key starts with `/` or contains `..` | `Forbidden` **403** (`reason: invalid_key`) |
-| `NoSuchBucket` / `ENOSPC` / connection | `ServiceUnavailable` **503** |
-| `SlowDown` / `EBUSY` / HTTP **429** | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
-| `NoSuchKey` (thrown) | unmapped — `InternalError` **500** |
+| Signal                                             | Result                                                                            |
+| -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `AccessDenied` / `EACCES` / `EPERM` / HTTP **403** | `Forbidden` **403**                                                               |
+| `fs` key starts with `/` or contains `..`          | `Forbidden` **403** (`reason: invalid_key`)                                       |
+| `NoSuchBucket` / `ENOSPC` / connection             | `ServiceUnavailable` **503**                                                      |
+| `SlowDown` / `EBUSY` / HTTP **429**                | left thrown so `flow.retry` can run; after exhaust → `ServiceUnavailable` **503** |
+| `NoSuchKey` (thrown)                               | unmapped — `InternalError` **500**                                                |
 
 ## Localized messages
 
@@ -275,7 +278,7 @@ Thrown by specific subsystems — each names its own cause:
 
 | Error                         | Thrown when                                                        | What to do                                                            |
 | ----------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `VaultBootError`              | A vault contract has no value in any resolution layer              | TTY **OKE1510** — set each listed name                            |
+| `VaultBootError`              | A vault contract has no value in any resolution layer              | TTY **OKE1510** — set each listed name                                |
 | `VaultError` (`UNSUPPORTED`)  | Managed provider unknown                                           | Use an official id, built-in `vault`, or `env`                        |
 | `VaultSealed`                 | Console rotate-master while this process holds no master key       | Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal`               |
 | `VaultRotateBusy`             | Master-rotation lease held or a batch is already in flight         | Wait and continue, or resume with `oke vault rotate-master --new-key` |
@@ -338,21 +341,21 @@ Thrown by specific subsystems — each names its own cause:
 </Accordion>
 
 <Accordion title="Unique insert is 500 InternalError">
-  Unique / exclusion → `Conflict` **409**; missing FK → `ForeignKey` **409**; invalid → `DatabaseError` **422**.
-  Serialization (`40001` / `40P01`) stays thrown until retries exhaust, then **503**.
-  See [SQL auto-map](#sql-auto-map).
+  Unique / exclusion → `Conflict` **409**; missing FK → `ForeignKey` **409**; invalid →
+  `DatabaseError` **422**. Serialization (`40001` / `40P01`) stays thrown until retries exhaust,
+  then **503**. See [SQL auto-map](#sql-auto-map).
 </Accordion>
 
 <Accordion title="Redis down returns InternalError">
-  Connection / `CLUSTERDOWN` / `READONLY` map to `ServiceUnavailable` **503**.
-  `BUSY` / `TRYAGAIN` stay thrown until `flow.retry` exhausts, then **503**.
-  `WRONGTYPE` stays `InternalError` — see [KV auto-map](#kv-auto-map).
+  Connection / `CLUSTERDOWN` / `READONLY` map to `ServiceUnavailable` **503**. `BUSY` / `TRYAGAIN`
+  stay thrown until `flow.retry` exhausts, then **503**. `WRONGTYPE` stays `InternalError` — see [KV
+  auto-map](#kv-auto-map).
 </Accordion>
 
 <Accordion title="S3 AccessDenied / disk full is InternalError">
-  `AccessDenied` and `fs` path-escape keys → `Forbidden` **403**.
-  `SlowDown` / `EBUSY` stay thrown until retries exhaust, then **503**. `ENOSPC` / `NoSuchBucket` → **503**.
-  Missing `get` is still `null`, not `NotFound` — see [Files auto-map](#files-auto-map).
+  `AccessDenied` and `fs` path-escape keys → `Forbidden` **403**. `SlowDown` / `EBUSY` stay thrown
+  until retries exhaust, then **503**. `ENOSPC` / `NoSuchBucket` → **503**. Missing `get` is still
+  `null`, not `NotFound` — see [Files auto-map](#files-auto-map).
 </Accordion>
 
 <Accordion title="404 Not Found — route missing or domain miss?">

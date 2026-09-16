@@ -351,6 +351,11 @@ export interface ExecuteResult {
   readonly failure: PipelineResult["failure"];
   readonly response: Response | undefined;
   readonly ctx: InvocationContext;
+  /**
+   * Derived projection of {@link InvocationContext.error} — never a separate
+   * store. Always `=== ctx.error` by reference.
+   */
+  readonly error: unknown;
   readonly fx: Fx;
   /** Wide-event cache dimension from this invocation's telemetry. */
   readonly cache: "hit" | "miss" | "none";
@@ -1915,6 +1920,7 @@ export function oke(options: OkeOptions): OkeApp {
           },
         );
         if (inner.failure) return inner.failure;
+        if (inner.ctx.error !== undefined) throw inner.ctx.error;
         return inner.output;
       },
     });
@@ -2144,6 +2150,9 @@ export function oke(options: OkeOptions): OkeApp {
       failure: result.failure,
       response: result.response,
       ctx: result.ctx,
+      get error() {
+        return result.ctx.error;
+      },
       fx,
       cache: cacheDimensionOf(telemetry),
       durationMs,
@@ -2554,6 +2563,7 @@ export function oke(options: OkeOptions): OkeApp {
         flowDef.triggers[0] ?? ({ kind: "internal" } satisfies InternalTrigger);
       const result = await execute(flowDef, input, trigger);
       if (result.failure) return result.failure;
+      if (result.ctx.error !== undefined) throw result.ctx.error;
       return result.output;
     },
     resolveMcpTool(name) {

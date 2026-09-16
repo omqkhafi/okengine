@@ -413,6 +413,50 @@ describe("createClient — live", () => {
   });
 });
 
+describe("sseError — envelope message fallback", () => {
+  test("prefers top-level error.message", async () => {
+    const { sseError } = await import("./sse.ts");
+    const err = sseError(
+      401,
+      JSON.stringify({
+        data: null,
+        error: { code: "Unauthorized", message: "Auth required", data: {} },
+      }),
+    );
+    expect(err.message).toBe("Auth required");
+  });
+
+  test("falls back to error.data.message", async () => {
+    const { sseError } = await import("./sse.ts");
+    const err = sseError(
+      401,
+      JSON.stringify({
+        data: null,
+        error: { code: "Unauthorized", data: { message: "Auth required" } },
+      }),
+    );
+    expect(err.message).toBe("Auth required");
+  });
+
+  test("falls back to error.code", async () => {
+    const { sseError } = await import("./sse.ts");
+    const err = sseError(
+      401,
+      JSON.stringify({
+        data: null,
+        error: { code: "Unauthorized" },
+      }),
+    );
+    expect(err.message).toBe("Unauthorized");
+  });
+
+  test("falls back to HTTP status for plain body", async () => {
+    const { sseError } = await import("./sse.ts");
+    const err = sseError(401, "nope");
+    expect(err.message).toBe("nope");
+  });
+});
+
 async function waitFor(pred: () => boolean, ms = 500): Promise<void> {
   const start = Date.now();
   while (!pred()) {
