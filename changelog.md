@@ -40,6 +40,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - `drizzle-seed` — unused devDependency and optional peer.
 
+### 🐛 Fixed
+
+#### Runtime
+
+- HTTP cold start no longer evaluates Zod or hybrid SQL search while importing
+  `okengine/http`. The client route descriptor loads on `GET /_oke/client.json`,
+  and BM25/LSH search loads on the first `search()`.
+
+#### Dev, Keel & create-oke
+
+- `oke dev` regenerates `oke-client.d.ts` only when a flow or schema file
+  changes, and a burst of saves produces one regen. Unchanged schema objects
+  keep their printed type string.
+
 ## v0.21.0 — 2026-09-17
 
 ### ✨ Added

@@ -10,6 +10,15 @@ import type { RuntimeRouteMap } from "./adopt-routes.ts";
 import { z } from "zod";
 
 /**
+ * Printed type string per schema object.
+ *
+ * A flows-tree reload replaces the schema objects of the modules that
+ * actually changed. Every other flow keeps the same reference and hits
+ * this map instead of running `toJSONSchema` again.
+ */
+const schemaTsCache = new WeakMap<object, string>();
+
+/**
  * Build a client descriptor from runtime routes + flow defs (type strings + stamps).
  *
  * @param routes - Runtime `$routes` map
@@ -62,6 +71,20 @@ export function buildClientDescriptor(
  */
 export function schemaToTsString(schema: unknown): string {
   if (schema === undefined || schema === null) return "unknown";
+  if (typeof schema !== "object" && typeof schema !== "function") return "unknown";
+  const cached = schemaTsCache.get(schema);
+  if (cached !== undefined) return cached;
+  const printed = printSchemaToTs(schema);
+  schemaTsCache.set(schema, printed);
+  return printed;
+}
+
+/**
+ * Convert one schema object to a TypeScript type string. Uncached.
+ *
+ * @param schema - Object or function schema
+ */
+function printSchemaToTs(schema: object): string {
   try {
     if (hasToJSONSchema(schema)) {
       return jsonSchemaToTs(schema.toJSONSchema());

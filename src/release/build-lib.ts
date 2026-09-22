@@ -26,6 +26,7 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   // Lazy sync chunks — loaded via requirePackageModule / computed require
   // when the feature actually runs (auth, list page, auto-cache).
   { src: "src/kernel/fx-runtime.ts", out: "dist/fx-runtime.js" },
+  { src: "src/kernel/client-descriptor.ts", out: "dist/client-descriptor.js" },
   { src: "src/auth/config.ts", out: "dist/auth-config.js" },
   { src: "src/kernel/fx-auth-keys.ts", out: "dist/fx-auth-keys.js" },
   { src: "src/kernel/fx-auth-tenants.ts", out: "dist/fx-auth-tenants.js" },
@@ -50,6 +51,8 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   { src: "src/kernel/list-page.ts", out: "dist/list-page.js" },
   { src: "src/kernel/http-resource.ts", out: "dist/http-resource.js" },
   { src: "src/elements/store/cache.ts", out: "dist/store-cache.js" },
+  { src: "src/elements/store/search-runtime.ts", out: "dist/search-runtime.js" },
+  { src: "src/elements/store/schema-decl.ts", out: "dist/schema-decl.js" },
   { src: "src/i18n/messages.ts", out: "dist/messages.js" },
   { src: "src/i18n/failure-message.ts", out: "dist/failure-message.js" },
   { src: "src/okid.ts", out: "dist/okid.js" },

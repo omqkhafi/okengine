@@ -9,6 +9,13 @@
  * for deterministic tests (§7.6).
  */
 
+import {
+  isJsonResult,
+  isJsonStreamResult,
+  jsonResultBrand,
+  type JsonResult,
+  type JsonStreamResult,
+} from "./json-result.ts";
 import type { Effects, ResourceRef, SignalResourceRef } from "../manifest/types.ts";
 import { isMcpToolRef } from "../manifest/mcp-ref.ts";
 import type { QueryPageSpec } from "./list-page.ts";
@@ -394,29 +401,8 @@ export interface FxSearchOptions {
   readonly topK?: number;
 }
 
-/** Brand for {@link JsonResult} (kept internal — flows never construct it). */
-export const jsonResultBrand: unique symbol = Symbol.for("oke.json");
-
-/** Carrier from {@link FxJson} — status + body read by the response encoder. */
-export interface JsonResult<T = unknown> {
-  readonly [jsonResultBrand]: true;
-  readonly status: number;
-  readonly value?: T;
-  readonly meta?: Record<string, unknown>;
-  readonly kind?: undefined;
-}
-
-/** SSE carrier from {@link FxJson.stream} / {@link Fx.live}. */
-export interface JsonStreamResult {
-  readonly [jsonResultBrand]: true;
-  readonly kind: "stream";
-  readonly status: 200;
-  readonly chunks: AsyncIterable<unknown>;
-  /** Awaited before the 200 SSE body; throws OKE1210 on a missing resume cursor. */
-  ready?: () => Promise<void>;
-  /** Set by the kernel to commit journal / Runs after the stream settles. */
-  finalize?: () => Promise<void>;
-}
+export { isJsonResult, isJsonStreamResult, jsonResultBrand };
+export type { JsonResult, JsonStreamResult };
 
 const sseFrameBrand: unique symbol = Symbol.for("oke.sse.frame");
 
@@ -444,26 +430,6 @@ export function sseFrame(data: unknown, id?: string): SseFrame {
  */
 export function isSseFrame(value: unknown): value is SseFrame {
   return typeof value === "object" && value !== null && (value as SseFrame)[sseFrameBrand] === true;
-}
-
-/** True when `value` is an {@link FxJson} JSON-envelope carrier. */
-export function isJsonResult(value: unknown): value is JsonResult {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as JsonResult)[jsonResultBrand] === true &&
-    (value as JsonStreamResult).kind !== "stream"
-  );
-}
-
-/** True when `value` is an SSE stream carrier from {@link FxJson.stream}. */
-export function isJsonStreamResult(value: unknown): value is JsonStreamResult {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as JsonStreamResult)[jsonResultBrand] === true &&
-    (value as JsonStreamResult).kind === "stream"
-  );
 }
 
 /**

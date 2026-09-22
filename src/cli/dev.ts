@@ -1417,12 +1417,20 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   const watchFs: DevWatchFn =
     options.watchFs ?? ((path, watchOptions, listener) => watch(path, watchOptions, listener));
+  // Trailing timer, always re-armed. A burst resets the window and still
+  // fires once after it goes quiet — a timestamp check that only `return`s
+  // drops the save and never regenerates.
+  const clientRegen = createDebouncedRunner(() => {
+    void regen(appUrl);
+  }, CLIENT_REGEN_DEBOUNCE_MS);
   const watcher = watchFs(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
     const rel = (filename?.toString() ?? "").replace(/\\/g, "/");
     if (isFlowsTreeWatchPath(rel)) {
       void syncAdoptBarrel(cwd);
     }
-    void regen(appUrl);
+    if (isClientRegenWatchPath(rel)) {
+      clientRegen.trigger();
+    }
     // Only live-extract when the host did not pin a Manifest (tests).
     if (options.manifest === undefined) {
       void refreshManifestInto(consoleState);
@@ -1444,6 +1452,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     stopComposeHealthWatch = null;
     bootBoard.stop();
     autoPushRunner.cancel();
+    clientRegen.cancel();
     watcher.close();
     const host = attachedHost;
     attachedHost = null;
@@ -1611,6 +1620,28 @@ export function isFlowsTreeWatchPath(rel: string): boolean {
   if (!posix.includes("flows/")) return false;
   if (isAdoptBarrelRelPath(posix)) return false;
   return true;
+}
+
+/** Quiet window before one `oke-client.d.ts` regen after a burst of saves. */
+export const CLIENT_REGEN_DEBOUNCE_MS = 200;
+
+/**
+ * True when a `src/` watcher event can change the typed client
+ * (flow files, or a schema declare module those flows import).
+ *
+ * Editor temp files and the adopt barrel are excluded so a regen cannot
+ * retrigger itself.
+ *
+ * @param rel - Watcher filename (POSIX or Windows)
+ */
+export function isClientRegenWatchPath(rel: string): boolean {
+  const posix = rel.replace(/\\/g, "/");
+  if (posix.endsWith(".tmp")) return false;
+  if (isFlowsTreeWatchPath(posix)) return true;
+  if (/(^|\/)drizzle\//.test(posix)) return false;
+  if (/(^|\/)schema(\.decl)?\.tsx?$/.test(posix)) return true;
+  if (/(^|\/)schema\/.+\.tsx?$/.test(posix)) return true;
+  return false;
 }
 
 /**

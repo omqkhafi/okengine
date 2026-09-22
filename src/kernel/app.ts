@@ -17,7 +17,6 @@ import {
   type RoutesFromNamespace,
   type RuntimeRouteMap,
 } from "./adopt-routes.ts";
-import { buildClientDescriptor } from "./client-descriptor.ts";
 import { liveExposureKey, liveGatesKey, liveMatchKeyFromPath } from "./live-http.ts";
 // `./boot.ts` pulls in every element + driver module (vault, store, signal,
 // clock, gate, channel, ai, runs) — a type-only import here keeps that whole
@@ -201,6 +200,14 @@ function loadDurable(): {
  */
 function loadJsonCodeBlock(): typeof import("../runtime/json-code-block.ts") {
   return lazyRequire(`${import.meta.dir}/../runtime`, ["json", "code", "block"].join("-"));
+}
+
+/**
+ * Route descriptor for `GET /_oke/client.json`.
+ * A static import evaluates Zod on every HTTP cold start; load it on first fetch.
+ */
+function loadClientDescriptor(): typeof import("./client-descriptor.ts") {
+  return lazyRequire(import.meta.dir, ["client", "descriptor"].join("-"));
 }
 
 /** Options for {@link oke}. */
@@ -2381,7 +2388,7 @@ export function oke(options: OkeOptions): OkeApp {
       }
 
       if (method === "GET" && url.pathname === "/_oke/client.json") {
-        const descriptor = buildClientDescriptor(routes, flowsByName);
+        const descriptor = loadClientDescriptor().buildClientDescriptor(routes, flowsByName);
         return respond(
           new Response(JSON.stringify(descriptor), {
             headers: { "content-type": "application/json" },

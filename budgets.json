@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 20.922,
+      "value": 8.915,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",

@@ -12,7 +12,12 @@
 
 import type { SchemaInput } from "../validation/standard-schema.ts";
 import { validate } from "../validation/standard-schema.ts";
-import { isJsonResult, isJsonStreamResult, jsonResultBrand, type JsonResult } from "./fx.ts";
+import {
+  isJsonResult,
+  isJsonStreamResult,
+  jsonResultBrand,
+  type JsonResult,
+} from "./json-result.ts";
 
 /**
  * Project `output` through `schema` when the exposure declared `out`.

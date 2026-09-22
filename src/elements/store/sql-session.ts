@@ -15,6 +15,7 @@ import {
 } from "../../drivers/pg-rls.ts";
 import { throwOke } from "../../kernel/errors.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
+import { lazyRequire } from "../../kernel/lazy-require.ts";
 import { isRetryableSqlError, sqlErrorToFailure } from "./sql-errors.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { maskRows, tableFromSql } from "./classify.ts";
@@ -36,9 +37,8 @@ import {
   resolveTableName,
   type TableHandle,
 } from "./table.ts";
-import { isSchemaTableDecl } from "./schema-decl.ts";
 import { SearchConfigError } from "./search-errors.ts";
-import { runSqlSearch, type SearchColumnMeta, type SqlSearchOptions } from "./search-runtime.ts";
+import type { SearchColumnMeta, SqlSearchOptions } from "./search-runtime.ts";
 
 export type { WhereMap } from "./sql-condition.ts";
 
@@ -1212,7 +1212,7 @@ export function createSqlStoreHandle(
       await ensureFromMeta(table);
       const columns = searchColumnsFromTable(table);
       const pk = resolvePkColumn(table);
-      return runSqlSearch({
+      return loadSearchRuntime().runSqlSearch({
         conn: connection,
         table,
         columns,
@@ -1258,12 +1258,28 @@ export function resolvePkColumn(table: unknown): string {
 }
 
 /**
+ * Hybrid search (BM25 / LSH / fusion). First `search()` loads it.
+ * A static import pins that graph on every HTTP cold start.
+ */
+function loadSearchRuntime(): typeof import("./search-runtime.ts") {
+  return lazyRequire(import.meta.dir, ["search", "runtime"].join("-"));
+}
+
+/**
+ * Schema-table predicate. Only `search()` needs it.
+ * `schema-decl` is the declare-site module and stays off the HTTP import graph.
+ */
+function loadSchemaDecl(): typeof import("./schema-decl.ts") {
+  return lazyRequire(import.meta.dir, ["schema", "decl"].join("-"));
+}
+
+/**
  * Collect `.searchable()` / `.embed()` column meta from a schema table.
  *
  * @param table - Table handle
  */
 function searchColumnsFromTable(table: unknown): SearchColumnMeta[] {
-  if (!isSchemaTableDecl(table)) {
+  if (!loadSchemaDecl().isSchemaTableDecl(table)) {
     throw new Error(
       "search(): table must be a store.schema.table() declaration with .searchable() columns",
     );

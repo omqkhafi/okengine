@@ -13,7 +13,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 | Kernel (edge profile)           | 12.26 kB  | 17.00 kB  |
 | Client runtime                  | 4.49 kB   | 5.00 kB   |
 | Console initial load            | 345.33 kB | 700.00 kB |
-| Cold start on Bun               | 20.922 ms | 75.000 ms |
+| Cold start on Bun               | 8.915 ms  | 75.000 ms |
 | p99 routing overhead            | 0.000 ms  | 1.000 ms  |
 | HTTP ping app (gzip, externals) | 43.17 kB  | 46.47 kB  |
 | HTTP ping app (raw, externals)  | 124.84 kB | 134.31 kB |

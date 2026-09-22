@@ -19,7 +19,15 @@ import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
 import { mintMcpSession } from "../mcp/session.ts";
-import { isFlowsTreeWatchPath, runDev, type DevOptions, type DevSession } from "./dev.ts";
+import {
+  CLIENT_REGEN_DEBOUNCE_MS,
+  isClientRegenWatchPath,
+  isFlowsTreeWatchPath,
+  runDev,
+  type DevOptions,
+  type DevSession,
+  type DevWatchFn,
+} from "./dev.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 
 /** Repo public entry — absolute import so temp apps need no install. */
@@ -800,6 +808,76 @@ describe("isFlowsTreeWatchPath", () => {
     expect(isFlowsTreeWatchPath("flows/generated.ts")).toBe(false);
     expect(isFlowsTreeWatchPath("flows/generated.ts.tmp")).toBe(false);
     expect(isFlowsTreeWatchPath("core.ts")).toBe(false);
+  });
+});
+
+describe("isClientRegenWatchPath", () => {
+  test("flow files and schema declares regenerate the client; unrelated files do not", () => {
+    expect(isClientRegenWatchPath("flows/notes/get.ts")).toBe(true);
+    expect(isClientRegenWatchPath("schema.ts")).toBe(true);
+    expect(isClientRegenWatchPath("db/schema/links.ts")).toBe(true);
+    expect(isClientRegenWatchPath("lib/util.ts")).toBe(false);
+    expect(isClientRegenWatchPath("flows/index.ts")).toBe(false);
+    expect(isClientRegenWatchPath("flows/notes/get.ts.tmp")).toBe(false);
+    expect(isClientRegenWatchPath("db/drizzle/schema.ts")).toBe(false);
+  });
+});
+
+describe("oke dev client regen watch", () => {
+  let session: DevSession | undefined;
+
+  afterEach(() => {
+    session?.stop();
+    session = undefined;
+  });
+
+  test("three flow saves within 50ms regenerate the client once", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-regen-"));
+    await mkdir(join(dir, "src"), { recursive: true });
+    await Bun.write(join(dir, "src/app.ts"), "export {};\n");
+
+    let regens = 0;
+    let listener: Parameters<DevWatchFn>[2] | undefined;
+    const result = await runDev({
+      cwd: dir,
+      stdinIsTTY: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      ...stubSurfaces(),
+      startApp: async () => ({
+        port: 0,
+        url: new URL("http://127.0.0.1:9"),
+        stop() {},
+      }),
+      syncAdoptBarrel: async () => [],
+      regenClient: async () => {
+        regens++;
+      },
+      watchFs: (_path, _options, next) => {
+        listener = next;
+        return { close() {} };
+      },
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+    const boot = regens;
+    expect(boot).toBe(1);
+    if (!listener) throw new Error("watcher not started");
+
+    listener("change", "flows/notes/get.ts");
+    listener("change", "flows/notes/list.ts");
+    listener("change", "flows/notes/[id]/delete.ts");
+    await Bun.sleep(50);
+    expect(regens).toBe(boot);
+
+    await Bun.sleep(CLIENT_REGEN_DEBOUNCE_MS + 80);
+    expect(regens).toBe(boot + 1);
+
+    listener("change", "lib/util.ts");
+    await Bun.sleep(CLIENT_REGEN_DEBOUNCE_MS + 80);
+    expect(regens).toBe(boot + 1);
   });
 });
 
