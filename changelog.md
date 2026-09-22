@@ -12,6 +12,19 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+#### Runtime
+
+- `@tanstack/react-virtual` is a Console build dependency. Vite inlines it into
+  the prebuilt SPA, so consumer installs no longer pull it.
+
+### 🔥 Removed
+
+#### Runtime
+
+- `drizzle-seed` — unused devDependency and optional peer.
+
 ## v0.21.0 — 2026-09-17
 
 ### ✨ Added
