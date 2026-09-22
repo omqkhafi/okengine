@@ -1423,6 +1423,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const clientRegen = createDebouncedRunner(() => {
     void regen(appUrl);
   }, CLIENT_REGEN_DEBOUNCE_MS);
+  const manifestRefresh = createDebouncedRunner(() => {
+    void refreshManifestInto(consoleState);
+  }, CLIENT_REGEN_DEBOUNCE_MS);
   const watcher = watchFs(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
     const rel = (filename?.toString() ?? "").replace(/\\/g, "/");
     if (isFlowsTreeWatchPath(rel)) {
@@ -1433,7 +1436,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     }
     // Only live-extract when the host did not pin a Manifest (tests).
     if (options.manifest === undefined) {
-      void refreshManifestInto(consoleState);
+      manifestRefresh.trigger();
     }
     if (autoPushEnabled && isDomainSchemaWatchPath(filename?.toString())) {
       lastSchemaFilename = filename?.toString() ?? "schema.ts";
@@ -1453,6 +1456,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     bootBoard.stop();
     autoPushRunner.cancel();
     clientRegen.cancel();
+    manifestRefresh.cancel();
     watcher.close();
     const host = attachedHost;
     attachedHost = null;

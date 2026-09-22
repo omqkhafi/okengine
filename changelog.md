@@ -53,6 +53,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - `oke dev` regenerates `oke-client.d.ts` only when a flow or schema file
   changes, and a burst of saves produces one regen. Unchanged schema objects
   keep their printed type string.
+- A burst of saves runs one Manifest extract. `oke dev` was re-extracting the
+  whole tree on every filesystem event.
 
 ## v0.21.0 — 2026-09-17
 

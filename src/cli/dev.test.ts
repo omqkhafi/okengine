@@ -6,7 +6,7 @@
  * context and exercises `oke.manifest.get` over HTTP on :6535.
  */
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -17,6 +17,8 @@ import {
 } from "../compiler/generate-adopt.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
+import type { ConsoleAppHandle } from "../console/server/app.ts";
+import { createConsoleState } from "../console/server/state.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
 import { mintMcpSession } from "../mcp/session.ts";
 import {
@@ -829,12 +831,24 @@ describe("oke dev client regen watch", () => {
   afterEach(() => {
     session?.stop();
     session = undefined;
+    mock.restore();
   });
 
   test("three flow saves within 50ms regenerate the client once", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-dev-regen-"));
     await mkdir(join(dir, "src"), { recursive: true });
     await Bun.write(join(dir, "src/app.ts"), "export {};\n");
+
+    const extractMod = await import("../compiler/extract.ts");
+    const originalExtract = extractMod.extractManifest;
+    let extracts = 0;
+    mock.module(resolve(import.meta.dir, "../compiler/extract.ts"), () => ({
+      ...extractMod,
+      extractManifest: (opts: Parameters<typeof originalExtract>[0]) => {
+        extracts++;
+        return originalExtract(opts);
+      },
+    }));
 
     let regens = 0;
     let listener: Parameters<DevWatchFn>[2] | undefined;
@@ -845,6 +859,13 @@ describe("oke dev client regen watch", () => {
       consolePort: 0,
       mcpPort: 0,
       ...stubSurfaces(),
+      serveConsole: async () => ({
+        port: 0,
+        stop() {},
+        console: {
+          state: createConsoleState({ cwd: dir, secret: SECRET }),
+        } as ConsoleAppHandle,
+      }),
       startApp: async () => ({
         port: 0,
         url: new URL("http://127.0.0.1:9"),
@@ -864,6 +885,8 @@ describe("oke dev client regen watch", () => {
     session = result.session;
     const boot = regens;
     expect(boot).toBe(1);
+    const extractsAfterBoot = extracts;
+    expect(extractsAfterBoot).toBeGreaterThan(0);
     if (!listener) throw new Error("watcher not started");
 
     listener("change", "flows/notes/get.ts");
@@ -871,9 +894,11 @@ describe("oke dev client regen watch", () => {
     listener("change", "flows/notes/[id]/delete.ts");
     await Bun.sleep(50);
     expect(regens).toBe(boot);
+    expect(extracts).toBe(extractsAfterBoot);
 
     await Bun.sleep(CLIENT_REGEN_DEBOUNCE_MS + 80);
     expect(regens).toBe(boot + 1);
+    expect(extracts).toBe(extractsAfterBoot + 1);
 
     listener("change", "lib/util.ts");
     await Bun.sleep(CLIENT_REGEN_DEBOUNCE_MS + 80);
