@@ -16,6 +16,8 @@ Run this **before** you claim the work is done. Incomplete changelog or silent d
 
 **Does not bump the version.** Changelog notes for unfinished work go under `## Unreleased`. `bun run bump` (version-bump) promotes that section into `## vX.Y.Z — <date>` when you cut the next release.
 
+**Does not write Discord copy.** After a published `## v…` section exists, that is [oke-discord](../oke-discord/SKILL.md) — only when the user asks.
+
 ## When to run
 
 After any implementation that changes behavior, API surface, CLI, plugins, drivers, config, errors, or user-facing docs. Skip only for pure typo/format-only edits with no product impact.

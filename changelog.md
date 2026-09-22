@@ -12,6 +12,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Docs
+
+- Agent skill `oke-discord` — Discord release announcement copy from
+  `changelog.md` (`/oke-discord`). Scaffold a new app, not upgrade; changelog
+  URL is `https://oke.omqkhafi.dev/changelog/{major}.{minor}`.
+
 ### ♻️ Changed
 
 #### Runtime
