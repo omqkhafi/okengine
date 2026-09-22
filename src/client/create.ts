@@ -12,7 +12,7 @@
  * Untriggered flows fall back to `POST /_oke/{unit}/{flow}` RPC.
  */
 
-import { createTransport, type Transport } from "./transport.ts";
+import { createTransport, transportEnvelope, type Transport } from "./transport.ts";
 import { asThenableIterable, attachPager } from "./pager.ts";
 import {
   flattenLiveRoutes,
@@ -33,6 +33,7 @@ import type {
   LiveHandlers,
   ResolveApp,
 } from "./types.ts";
+import { methodAndPath, walkContracts } from "./wire.ts";
 
 /** App-shaped value that carries a runtime `$routes` table from typed adopt. */
 export interface AppWithRoutes {
@@ -169,19 +170,11 @@ function mergeHeaders(base: ClientHeaders | undefined, over: ClientHeaders): Cli
 export function flattenRoutes(
   $routes: ClientRouteMap | undefined,
 ): ClientOptions["routes"] | undefined {
-  if (!$routes) return undefined;
   const out: Record<string, { readonly method: string; readonly path: string }> = {};
-  for (const [unit, flows] of Object.entries($routes)) {
-    if (!flows || typeof flows !== "object") continue;
-    for (const [flow, contract] of Object.entries(flows)) {
-      if (!contract || typeof contract !== "object") continue;
-      const method = "method" in contract ? contract.method : undefined;
-      const path = "path" in contract ? contract.path : undefined;
-      if (typeof method === "string" && typeof path === "string") {
-        out[`${unit}.${flow}`] = { method, path };
-      }
-    }
-  }
+  walkContracts($routes, (unit, flow, contract) => {
+    const route = methodAndPath(contract);
+    if (route) out[`${unit}.${flow}`] = route;
+  });
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -196,25 +189,19 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
     if (path.length < 2) {
       const message = `Incomplete path: api.${path.join(".") || "?"}(…)`;
       return attachPager(
-        {
-          data: null,
-          error: {
-            code: "TransportError" as const,
-            message,
-            data: { message },
-          },
-        },
+        transportEnvelope(message),
         (nextInput) => invoke(nextInput, callOpts),
         input,
       );
     }
     const unit = path[0]!;
     const flow = path.slice(1).join(".");
-    const result = await transport.call(`${unit}/${flow}`, input, {
-      headers: ctx.perCallHeaders.read(),
-      ...(callOpts?.response !== undefined ? { response: callOpts.response } : {}),
-      ...(callOpts?.signal !== undefined ? { signal: callOpts.signal } : {}),
-    });
+    const headers = ctx.perCallHeaders.read();
+    const result = await transport.call(
+      `${unit}/${flow}`,
+      input,
+      callOpts ? { headers, ...callOpts } : headers,
+    );
     return attachPager(result, (nextInput) => invoke(nextInput, callOpts), input);
   };
   const call = (a?: unknown, b?: unknown): unknown => {

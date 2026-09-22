@@ -16,6 +16,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Kernel edge and client runtime bundles are smaller. AoT route codegen, SQL
+  store handles, concurrency helpers, the `okid` options encoder, and OKE
+  cause/fix text load on first use. `okid()`, `OKE_ERRORS` cause/fix,
+  `compileRoute`, and `createClient` return the same results.
+- Ambiguous `api.live` errors no longer list every matching flow. They still
+  say to pass `via: "unit.flow"`.
+
 - `@tanstack/react-virtual` is a Console build dependency. Vite inlines it into
   the prebuilt SPA, so consumer installs no longer pull it.
 

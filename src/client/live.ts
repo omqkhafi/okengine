@@ -4,7 +4,16 @@
 
 import type { ClientFetch, ClientOptions, ClientRouteMap, FlowContract } from "./types.ts";
 import type { LiveHandlers, LiveUnsubscribe } from "./types.ts";
-import { readSse, sseError } from "./sse.ts";
+import { iterateSseFrames, sseError } from "./sse.ts";
+import {
+  applyAuthHeader,
+  applyHeaderBag,
+  interpolatePath,
+  methodAndPath,
+  resolveHeaders,
+  toQuery,
+  walkContracts,
+} from "./wire.ts";
 
 /** One HTTP exposure of a live signal. */
 export interface LiveExposure {
@@ -31,24 +40,16 @@ export function flattenLiveRoutes($routes: ClientRouteMap | undefined): {
 } {
   const bySignal: Record<string, LiveExposure[]> = {};
   const byFlow: Record<string, LiveExposure> = {};
-  if (!$routes) return { bySignal, byFlow };
-  for (const [unit, flows] of Object.entries($routes)) {
-    if (!flows || typeof flows !== "object") continue;
-    for (const [flow, contract] of Object.entries(flows)) {
-      if (!contract || typeof contract !== "object") continue;
-      const live = liveName(contract);
-      const method = "method" in contract ? contract.method : undefined;
-      const path = "path" in contract ? contract.path : undefined;
-      if (typeof live !== "string" || typeof method !== "string" || typeof path !== "string") {
-        continue;
-      }
-      const matchKey = matchKeyOf(contract);
-      const id = `${unit}.${flow}`;
-      const exposure: LiveExposure = { flow: id, method, path, matchKey };
-      (bySignal[live] ??= []).push(exposure);
-      byFlow[id] = exposure;
-    }
-  }
+  walkContracts($routes, (unit, flow, contract) => {
+    const live = liveName(contract);
+    const route = methodAndPath(contract);
+    if (typeof live !== "string" || !route) return;
+    const matchKey = matchKeyOf(contract);
+    const id = `${unit}.${flow}`;
+    const exposure: LiveExposure = { flow: id, method: route.method, path: route.path, matchKey };
+    (bySignal[live] ??= []).push(exposure);
+    byFlow[id] = exposure;
+  });
   return { bySignal, byFlow };
 }
 
@@ -87,11 +88,7 @@ export function pickLiveExposure(
 ): LiveExposure {
   if (via) {
     const hit = exposures.find((e) => e.flow === via);
-    if (!hit) {
-      throw new Error(
-        `Unknown live via "${via}". Known: ${exposures.map((e) => e.flow).join(", ")}`,
-      );
-    }
+    if (!hit) throw new Error(`Unknown live via "${via}"`);
     return hit;
   }
   const keys =
@@ -100,19 +97,12 @@ export function pickLiveExposure(
       : [];
   const candidates = exposures.filter((e) => e.matchKey.every((k) => keys.includes(k)));
   if (candidates.length === 0) {
-    throw new Error(
-      `No live exposure matches input keys [${keys.join(", ")}]. Flows: ${exposures.map((e) => e.flow).join(", ")}`,
-    );
+    throw new Error(`No live exposure matches input keys [${keys.join(", ")}]`);
   }
-  let max = -1;
-  for (const e of candidates) {
-    if (e.matchKey.length > max) max = e.matchKey.length;
-  }
+  const max = Math.max(...candidates.map((e) => e.matchKey.length));
   const top = candidates.filter((e) => e.matchKey.length === max);
   if (top.length !== 1) {
-    throw new Error(
-      `Multiple live exposures match: ${top.map((e) => e.flow).join(", ")}. Pass via: "unit.flow".`,
-    );
+    throw new Error(`Multiple live exposures match. Pass via: "unit.flow".`);
   }
   return top[0]!;
 }
@@ -173,6 +163,11 @@ async function pump(
   let delayMs = LIVE_RESUBSCRIBE_INITIAL_MS;
   let attempt = 0;
   let lastSeenId: string | undefined;
+  /** Report `err`. Returns whether the loop should resubscribe. */
+  const note = (err: unknown): boolean => {
+    handlers.onError?.(err);
+    return auto;
+  };
   for (;;) {
     if (signal.aborted) return;
     if (attempt > 0 && auto) {
@@ -182,45 +177,26 @@ async function pump(
     }
     attempt += 1;
     try {
-      const res = await openSse(base, exposure, input, opts, signal, lastSeenId);
+      let res = await openSse(base, exposure, input, opts, signal, lastSeenId);
       if (signal.aborted) return;
       if (res.status === 401 && opts.auth?.refresh) {
         await opts.auth.refresh();
-        const retry = await openSse(base, exposure, input, opts, signal, lastSeenId);
+        res = await openSse(base, exposure, input, opts, signal, lastSeenId);
         if (signal.aborted) return;
-        lastSeenId = await consumeSse(retry, handlers, signal, lastSeenId);
-        if (signal.aborted) return;
-        const closed = new Error("live connection closed");
-        if (auto) {
-          handlers.onError?.(closed);
-          continue;
-        }
-        handlers.onError?.(closed);
-        return;
       }
       if (res.status === 410) {
-        const err = await liveResumeGapError(res);
         lastSeenId = undefined;
-        handlers.onError?.(err);
-        if (!auto) return;
-        continue;
+        const text = await res.text().catch(() => "");
+        if (note(sseError(410, text))) continue;
+        return;
       }
       lastSeenId = await consumeSse(res, handlers, signal, lastSeenId);
       if (signal.aborted) return;
-      const closed = new Error("live connection closed");
-      if (auto) {
-        handlers.onError?.(closed);
-        continue;
-      }
-      handlers.onError?.(closed);
+      if (note(new Error("live connection closed"))) continue;
       return;
     } catch (err) {
       if (signal.aborted) return;
-      if (auto) {
-        handlers.onError?.(err);
-        continue;
-      }
-      handlers.onError?.(err);
+      if (note(err)) continue;
       return;
     }
   }
@@ -233,21 +209,11 @@ async function consumeSse(
   lastSeenId: string | undefined,
 ): Promise<string | undefined> {
   let cursor = lastSeenId;
-  await readSse(
-    res,
-    (event, id) => {
-      handlers.onEvent(event);
-      if (id !== undefined && id.length > 0) cursor = id;
-    },
-    signal,
-    handlers.onOpen,
-  );
+  for await (const frame of iterateSseFrames(res, signal, handlers.onOpen)) {
+    handlers.onEvent(frame.event);
+    if (frame.id !== undefined && frame.id.length > 0) cursor = frame.id;
+  }
   return cursor;
-}
-
-async function liveResumeGapError(res: Response): Promise<Error> {
-  const text = await res.text().catch(() => "");
-  return sseError(410, text);
 }
 
 /**
@@ -280,19 +246,8 @@ async function openSse(
 ): Promise<Response> {
   const { url, method } = restGet(base, exposure.path, input);
   const headers = new Headers({ accept: "text/event-stream" });
-  const extra = typeof opts.headers === "function" ? await opts.headers() : opts.headers;
-  if (Array.isArray(extra)) {
-    for (const [k, v] of extra) headers.set(k, v);
-  } else if (extra) {
-    for (const [k, v] of Object.entries(extra)) headers.set(k, v);
-  }
-  const token =
-    opts.auth && "getToken" in opts.auth && typeof opts.auth.getToken === "function"
-      ? await opts.auth.getToken()
-      : undefined;
-  if (token && !headers.has("authorization")) {
-    headers.set("authorization", `Bearer ${token}`);
-  }
+  applyHeaderBag(headers, await resolveHeaders(opts));
+  await applyAuthHeader(headers, opts);
   if (lastSeenId) headers.set("last-event-id", lastSeenId);
   const fetchFn: ClientFetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
   return fetchFn(url, {
@@ -304,18 +259,6 @@ async function openSse(
 }
 
 function restGet(base: string, path: string, input: unknown): { url: string; method: string } {
-  const params =
-    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  let pathOut = path;
-  const query: string[] = [];
-  for (const [k, v] of Object.entries(params)) {
-    const token = `:${k}`;
-    if (pathOut.includes(token)) {
-      pathOut = pathOut.replaceAll(token, encodeURIComponent(String(v)));
-    } else if (v !== undefined) {
-      query.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
-    }
-  }
-  const qs = query.length ? `?${query.join("&")}` : "";
-  return { url: `${base}${pathOut}${qs}`, method: "GET" };
+  const { path: pathOut, rest } = interpolatePath(path, input);
+  return { url: `${base}${pathOut}${toQuery(rest)}`, method: "GET" };
 }

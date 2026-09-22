@@ -6,30 +6,20 @@
  * {@link compileDynamic} / `aot: false` on edge runtimes that ban `eval`.
  */
 
-import type { FlowFailure } from "../kernel/errors.ts";
 import { validate, type SchemaInput } from "../validation/standard-schema.ts";
 import {
   assembleInput,
-  extractParts,
   parseBody,
   parseCookie,
   parseHeaders,
   parseQuery,
   type ContextInference,
-  type InputParts,
 } from "./http-parse.ts";
+import { createInterpretedParseValidate, type CompiledParseValidate } from "./interpret.ts";
 import { sucrose } from "./sucrose.ts";
 
-/** Result of parse + validate for one request. */
-export type ParseValidateResult =
-  | { readonly ok: true; readonly input: unknown }
-  | { readonly ok: false; readonly failure: FlowFailure };
-
-/** Compiled parse/validate function. */
-export type CompiledParseValidate = (
-  request: Request,
-  params: Readonly<Record<string, string>>,
-) => Promise<ParseValidateResult>;
+export type { CompiledParseValidate, ParseValidateResult } from "./interpret.ts";
+export { createInterpretedParseValidate };
 
 /** Options for {@link compileAot}. */
 export interface CompileRouteOptions {
@@ -150,25 +140,6 @@ function generateParseValidate(
   ) as (helpers: AotHelpers) => CompiledParseValidate;
 
   return factory(helpers);
-}
-
-/**
- * Interpreted parse/validate using the same helpers (AoT fallback).
- *
- * @param inference - Context flags
- * @param schema - Input schema
- */
-export function createInterpretedParseValidate(
-  inference: ContextInference,
-  schema: SchemaInput | undefined,
-): CompiledParseValidate {
-  return async (request, params) => {
-    const parts: InputParts = await extractParts(request, params, inference);
-    const raw = assembleInput(parts);
-    const result = await validate(schema, raw);
-    if (!result.ok) return { ok: false, failure: result.failure };
-    return { ok: true, input: result.value };
-  };
 }
 
 /**

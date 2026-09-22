@@ -12,6 +12,13 @@ import type {
   ClientHeaders,
   ClientOptions,
 } from "./types.ts";
+import {
+  applyAuthHeader,
+  applyHeaderBag,
+  interpolatePath,
+  resolveHeaders,
+  toQuery,
+} from "./wire.ts";
 
 /** Per-call transport options (binary decode, abort). */
 export interface TransportCallOptions {
@@ -102,7 +109,7 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
  * @param message - Human-readable failure text
  * @param status - Optional HTTP status
  */
-function transportEnvelope(message: string, status?: number): ClientEnvelope {
+export function transportEnvelope(message: string, status?: number): ClientEnvelope {
   return {
     data: null,
     error: {
@@ -154,37 +161,16 @@ async function once(
     : rpcRequest(base, key, input);
 
   const headers = new Headers();
-  const extra = typeof opts.headers === "function" ? await opts.headers() : opts.headers;
-  if (Array.isArray(extra)) {
-    for (const [k, v] of extra) headers.set(k, v);
-  } else if (extra) {
-    for (const [k, v] of Object.entries(extra)) headers.set(k, v);
-  }
-  if (Array.isArray(callHeaders)) {
-    for (const [k, v] of callHeaders) headers.set(k, v);
-  } else if (callHeaders) {
-    for (const [k, v] of Object.entries(callHeaders)) headers.set(k, v);
-  }
+  applyHeaderBag(headers, await resolveHeaders(opts));
+  applyHeaderBag(headers, callHeaders);
   if (body !== undefined && !headers.has("content-type") && typeof body === "string") {
     headers.set("content-type", "application/json");
   }
+  await applyAuthHeader(headers, opts);
 
-  const token =
-    opts.auth && "getToken" in opts.auth && typeof opts.auth.getToken === "function"
-      ? await opts.auth.getToken()
-      : undefined;
-  if (token && !headers.has("authorization")) {
-    headers.set("authorization", `Bearer ${token}`);
-  }
-
-  const signals: AbortSignal[] = [];
-  if (opts.signal) signals.push(opts.signal);
-  if (opts.timeout !== undefined) {
-    const t = AbortSignal.timeout(opts.timeout);
-    signals.push(t);
-  }
+  const timeout = opts.timeout !== undefined ? AbortSignal.timeout(opts.timeout) : undefined;
   const signal =
-    signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+    opts.signal && timeout ? AbortSignal.any([opts.signal, timeout]) : (opts.signal ?? timeout);
 
   return await fetchFn(url, {
     method,
@@ -236,47 +222,32 @@ function restRequest(
   if (isRawBody(input)) {
     return { url: `${base}${path}`, method: method.toUpperCase(), body: input };
   }
-  const params =
-    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  let pathOut = path;
-  const query: string[] = [];
-  const rest: Record<string, unknown> = {};
-
-  for (const [k, v] of Object.entries(params)) {
-    const token = `:${k}`;
-    if (pathOut.includes(token)) {
-      pathOut = pathOut.replaceAll(token, encodeURIComponent(String(v)));
-    } else {
-      rest[k] = v;
-    }
-  }
+  const interpolated = interpolatePath(path, input);
+  const pathOut = interpolated.path;
+  const rest = interpolated.rest;
 
   const upper = method.toUpperCase();
+  const hasRest = Object.keys(rest).length > 0;
   let body: ClientBodyInit | undefined;
+  let qs = "";
   if (upper === "GET" || upper === "HEAD") {
-    for (const [k, v] of Object.entries(rest)) {
-      if (v !== undefined) {
-        query.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
-      }
-    }
+    qs = toQuery(rest);
   } else if (upper === "QUERY") {
     // RFC 10008 QUERY always carries JSON content (empty object when only path params).
-    body = JSON.stringify(Object.keys(rest).length > 0 ? rest : {});
-  } else if (Object.keys(rest).length > 0 || path === pathOut) {
-    body = JSON.stringify(Object.keys(rest).length > 0 ? rest : (input ?? {}));
+    body = JSON.stringify(hasRest ? rest : {});
+  } else if (hasRest || path === pathOut) {
+    body = JSON.stringify(hasRest ? rest : (input ?? {}));
   }
 
-  const qs = query.length ? `?${query.join("&")}` : "";
   return { url: `${base}${pathOut}${qs}`, method: upper, body };
 }
 
 function isRawBody(input: unknown): input is ClientBodyInit {
-  if (input === null || input === undefined) return false;
-  if (typeof Blob !== "undefined" && input instanceof Blob) return true;
-  if (typeof FormData !== "undefined" && input instanceof FormData) return true;
-  if (typeof ArrayBuffer !== "undefined" && input instanceof ArrayBuffer) return true;
-  if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(input)) return true;
-  if (typeof ReadableStream !== "undefined" && input instanceof ReadableStream) return true;
+  if (input instanceof Blob) return true;
+  if (input instanceof FormData) return true;
+  if (input instanceof ArrayBuffer) return true;
+  if (ArrayBuffer.isView(input)) return true;
+  if (input instanceof ReadableStream) return true;
   return false;
 }
 
@@ -311,28 +282,12 @@ async function decode(res: Response): Promise<ClientEnvelope> {
 
 async function decodeBinary(res: Response, mode: "blob" | "arrayBuffer"): Promise<ClientEnvelope> {
   if (!res.ok) {
-    const structured = await decodeIfEnvelopeClone(res);
+    const structured = await decodeIfEnvelope(res);
     if (structured) return structured;
     return transportEnvelope(`HTTP ${res.status}`, res.status);
   }
   const data = mode === "blob" ? await res.blob() : await res.arrayBuffer();
   return { data, error: null };
-}
-
-/** Try JSON envelope from an error response without assuming the body is reusable. */
-async function decodeIfEnvelopeClone(res: Response): Promise<ClientEnvelope | null> {
-  const text = await res.text();
-  if (!text) return null;
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
-    return json as ClientEnvelope;
-  }
-  return null;
 }
 
 function isTransient(err: unknown): boolean {

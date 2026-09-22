@@ -7,15 +7,18 @@
  * a requirement). Produces byte-identical responses to {@link compileAot}.
  */
 
+import { lazyRequire } from "../kernel/lazy-require.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
-import {
-  compileAot,
-  createInterpretedParseValidate,
-  type CompiledRoute,
-  type CompileRouteOptions,
-} from "./aot.ts";
+import type { CompiledRoute, CompileRouteOptions } from "./aot.ts";
 import { FULL_INFERENCE } from "./http-parse.ts";
-import { dynamicInference } from "./sucrose.ts";
+import { createInterpretedParseValidate } from "./interpret.ts";
+
+/**
+ * Load AoT codegen. Computed stem so the edge profile keeps the interpreted path only.
+ */
+function loadAot(): typeof import("./aot.ts") {
+  return lazyRequire(import.meta.dir, ["ao", "t"].join(""));
+}
 
 /**
  * Compile a route with the dynamic fallback (full context every request).
@@ -23,10 +26,9 @@ import { dynamicInference } from "./sucrose.ts";
  * @param options - Route metadata
  */
 export function compileDynamic(options: CompileRouteOptions): CompiledRoute {
-  const inference = dynamicInference();
   return {
-    inference,
-    parseValidate: createInterpretedParseValidate(inference, options.schema),
+    inference: FULL_INFERENCE,
+    parseValidate: createInterpretedParseValidate(FULL_INFERENCE, options.schema),
     aot: false,
   };
 }
@@ -39,7 +41,7 @@ export function compileDynamic(options: CompileRouteOptions): CompiledRoute {
  */
 export function compileRoute(options: CompileRouteOptions, aot: boolean = true): CompiledRoute {
   if (!aot) return compileDynamic(options);
-  return compileAot(options);
+  return loadAot().compileAot(options);
 }
 
 /**

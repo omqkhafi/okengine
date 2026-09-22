@@ -236,6 +236,9 @@ export const fail: FailFn = failImpl as FailFn;
  * Permanent error registry. Codes are stable within their domain range after
  * the domain-range renumber; each entry declares `domain` for range guards.
  *
+ * Cause/fix templates load from {@link OKE_ERROR_TEXT} on first read so the
+ * edge profile does not carry the English strings.
+ *
  * Ranges:
  * - `1000–1099` — Kernel (Flow / Trigger / Gate-posture)
  * - `1100–1199` — Store
@@ -248,168 +251,117 @@ export const fail: FailFn = failImpl as FailFn;
  * - `1800–1899` — MCP + Tenancy
  * - `1900–1999` — Compiler / Manifest
  */
-export const OKE_ERRORS = {
+const OKE_ERROR_ROWS = {
   /** Flow reads a store resource not listed in `effects.reads`. */
-  UNDECLARED_READ: {
-    code: 1001,
-    domain: "kernel",
-    cause: 'Flow "{flow}" reads "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.reads.',
-  },
+  UNDECLARED_READ: { code: 1001, domain: "kernel" },
   /** Flow writes a store resource not listed in `effects.writes`. */
-  UNDECLARED_WRITE: {
-    code: 1002,
-    domain: "kernel",
-    cause: 'Flow "{flow}" writes "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.writes.',
-  },
+  UNDECLARED_WRITE: { code: 1002, domain: "kernel" },
   /** Flow emits a signal not listed in `effects.emits`. */
-  UNDECLARED_EMIT: {
-    code: 1003,
-    domain: "kernel",
-    cause: 'Flow "{flow}" emits "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.emits.',
-  },
+  UNDECLARED_EMIT: { code: 1003, domain: "kernel" },
   /** Flow sends a channel template not listed in `effects.sends`. */
-  UNDECLARED_SEND: {
-    code: 1004,
-    domain: "kernel",
-    cause: 'Flow "{flow}" sends "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.sends.',
-  },
+  UNDECLARED_SEND: { code: 1004, domain: "kernel" },
   /** Flow asks a prompt not listed in `effects.asks`. */
-  UNDECLARED_ASK: {
-    code: 1005,
-    domain: "kernel",
-    cause: 'Flow "{flow}" asks "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.asks.',
-  },
+  UNDECLARED_ASK: { code: 1005, domain: "kernel" },
   /** Flow reads a secret not listed in `effects.secrets`. */
-  UNDECLARED_SECRET: {
-    code: 1006,
-    domain: "kernel",
-    cause: 'Flow "{flow}" reads secret "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.secrets.',
-  },
+  UNDECLARED_SECRET: { code: 1006, domain: "kernel" },
   /** Flow calls another flow not listed in `effects.calls`. */
-  UNDECLARED_CALL: {
-    code: 1007,
-    domain: "kernel",
-    cause: 'Flow "{flow}" calls "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.calls.',
-  },
+  UNDECLARED_CALL: { code: 1007, domain: "kernel" },
   /** Flow fetches a host not listed in `effects.fetches`. */
-  UNDECLARED_FETCH: {
-    code: 1008,
-    domain: "kernel",
-    cause: 'Flow "{flow}" fetches "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.fetches.',
-  },
+  UNDECLARED_FETCH: { code: 1008, domain: "kernel" },
   /** Flow embeds via a model not listed in `effects.embeds`. */
-  UNDECLARED_EMBED: {
-    code: 1009,
-    domain: "kernel",
-    cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
-    fix: 'Add "{resource}" to this flow\'s effects.embeds.',
-  },
+  UNDECLARED_EMBED: { code: 1009, domain: "kernel" },
   /**
    * Flow has no declared `effects` and no Manifest-derived effects were
    * available to stamp at boot (dev+compose / prod — never a silent open token).
    */
-  NO_EFFECTS_DECLARED: {
-    code: 1020,
-    domain: "kernel",
-    cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.{extract}',
-    fix:
-      "Add explicit `effects` to this flow, or boot with a Manifest (`oke build`) / " +
-      "`rootDir` so effects can be derived. If extract failed, ensure `oxc-parser` is " +
-      "installed (okengine dependency). dev+compose/prod refuse an open capability token.",
-  },
+  NO_EFFECTS_DECLARED: { code: 1020, domain: "kernel" },
   /**
    * A `src/flows/<unit>` folder exists on disk but no adopted flow carries
    * that unit — the generated `.adopt()` barrel (`src/flows/index.ts`)
    * is stale or was hand-edited. dev+compose / prod — never a silently-incomplete
    * route table in a deploy-shaped environment.
    */
-  ADOPT_BARREL_STALE: {
-    code: 1030,
-    domain: "kernel",
-    cause: "src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.",
-    fix: "Run `oke dev` or `oke build` to regenerate `src/flows/index.ts`.",
-  },
-  /**
-   * `http.get()` was never stamped from the file tree — refuse a silent `/`.
-   */
-  HTTP_PATH_UNRESOLVED: {
-    code: 1040,
-    domain: "kernel",
-    cause: 'Flow "{flow}" bound {method} with no path — the file-tree stamp never ran.',
-    fix: 'Put the file under `src/flows/<unit>/` and import `@/flows`, or pass an explicit path to `http.{method}("/…")`.',
-  },
-  /**
-   * Two HTTP bindings share method + path — last-add-wins is the opposite of this DX.
-   */
-  HTTP_ROUTE_DUPLICATE: {
-    code: 1041,
-    domain: "kernel",
-    cause: '{method} {path} is bound twice (flow "{flow}").',
-    fix: "Give each HTTP flow a unique method + path.",
-  },
-  /**
-   * Adopted HTTP flow still has no name (`flow({ do })` outside a unit).
-   */
-  HTTP_FLOW_UNNAMED: {
-    code: 1045,
-    domain: "kernel",
-    cause: "An HTTP flow on {method} {path} has no name.",
-    fix: 'Use `flow("unit.export", {…})` or export it from a `src/flows/<unit>/` file so the tree can stamp `unit.export`.',
-  },
-  /**
-   * Two live HTTP exposures of the same signal share gates + match shape.
-   */
-  LIVE_EXPOSURE_DUPLICATE: {
-    code: 1050,
-    domain: "kernel",
-    cause:
-      'Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).',
-    fix: "Use a different gate or path-param filter, or drop the extra route.",
-  },
-  /**
-   * Two MCP tool bindings share the same exposed tool name.
-   */
-  MCP_TOOL_DUPLICATE: {
-    code: 1060,
-    domain: "kernel",
-    cause: 'MCP tool "{tool}" is bound twice (flow "{flow}").',
-    fix: "Give each MCP tool exposure a unique tool name.",
-  },
+  ADOPT_BARREL_STALE: { code: 1030, domain: "kernel" },
+  /** `http.get()` was never stamped from the file tree — refuse a silent `/`. */
+  HTTP_PATH_UNRESOLVED: { code: 1040, domain: "kernel" },
+  /** Two HTTP bindings share method + path. */
+  HTTP_ROUTE_DUPLICATE: { code: 1041, domain: "kernel" },
+  /** Adopted HTTP flow still has no name (`flow({ do })` outside a unit). */
+  HTTP_FLOW_UNNAMED: { code: 1045, domain: "kernel" },
+  /** Two live HTTP exposures of the same signal share gates + match shape. */
+  LIVE_EXPOSURE_DUPLICATE: { code: 1050, domain: "kernel" },
+  /** Two MCP tool bindings share the same exposed tool name. */
+  MCP_TOOL_DUPLICATE: { code: 1060, domain: "kernel" },
   /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */
-  ORPHAN_EMIT: {
-    code: 1240,
-    domain: "signal",
-    cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
-    fix: "Add `on({resource}, …)` or mark the signal `{ optional: true }`.",
-  },
+  ORPHAN_EMIT: { code: 1240, domain: "signal" },
   /** Emit payload failed the signal's declared Standard Schema. */
-  SIGNAL_SCHEMA: {
-    code: 1250,
-    domain: "signal",
-    cause: '"{resource}": {detail}',
-    fix: "Fix schema payload.",
-  },
-  /**
-   * Domain table/column missing under docker/prod (migrations not applied).
-   */
-  DOMAIN_SCHEMA_MISSING: {
-    code: 1110,
-    domain: "store",
-    cause: "domain table not found — migrations have not been applied.",
-    fix: "run `oke db migrate` against this environment.",
-  },
-} as const satisfies Record<string, OkeErrorDefinition>;
+  SIGNAL_SCHEMA: { code: 1250, domain: "signal" },
+  /** Domain table/column missing under docker/prod (migrations not applied). */
+  DOMAIN_SCHEMA_MISSING: { code: 1110, domain: "store" },
+} as const satisfies Record<string, { readonly code: number; readonly domain: OkeErrorDomain }>;
+
+type OkeErrorRowTable = typeof OKE_ERROR_ROWS;
+
+/** Registry entries with literal codes and lazy cause/fix. */
+type OkeErrorTable = {
+  readonly [K in keyof OkeErrorRowTable]: OkeErrorDefinition & {
+    readonly code: OkeErrorRowTable[K]["code"];
+    readonly domain: OkeErrorRowTable[K]["domain"];
+  };
+};
+
+/**
+ * Load English cause/fix templates. Computed stem so Bun.build cannot inline them.
+ */
+function loadErrorText(): typeof import("./errors-text.ts") {
+  return lazyRequire(import.meta.dir, ["errors", "text"].join("-"));
+}
+
+/**
+ * Read one cause or fix template.
+ *
+ * @param key - {@link OKE_ERRORS} property name
+ * @param part - `cause` or `fix`
+ */
+function errorPart(key: string, part: "cause" | "fix"): string {
+  const row = loadErrorText().OKE_ERROR_TEXT[key];
+  if (!row) throw new Error(`Missing OKE error text for ${key}.${part}`);
+  return row[part];
+}
+
+/**
+ * Attach lazy cause/fix getters. Strings stay in the text chunk until read.
+ *
+ * @param rows - Code and domain table
+ */
+function attachErrorText(rows: OkeErrorRowTable): OkeErrorTable {
+  const out: Record<string, OkeErrorDefinition> = {};
+  for (const key of Object.keys(rows) as (keyof OkeErrorRowTable)[]) {
+    const row = rows[key];
+    out[key] = {
+      code: row.code,
+      domain: row.domain,
+      get cause() {
+        return errorPart(key, "cause");
+      },
+      get fix() {
+        return errorPart(key, "fix");
+      },
+    };
+  }
+  return out as OkeErrorTable;
+}
+
+/**
+ * Permanent error registry. Cause/fix load from the lazy text chunk.
+ *
+ * `@__PURE__` lets bundles that never read the registry drop the getter
+ * table. A plain call looks like a side effect and stays in every importer.
+ */
+export const OKE_ERRORS: OkeErrorTable = /* @__PURE__ */ attachErrorText(OKE_ERROR_ROWS);
 
 /** Tenant error keys — definitions live in the lazy `errors-tenant` chunk. */
 export type TenantOkeErrorKey = "TENANT_REQUIRED" | "TENANT_NOT_MEMBER" | "TENANT_UNKNOWN_SCOPE";

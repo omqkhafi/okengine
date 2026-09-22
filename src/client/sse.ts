@@ -4,32 +4,29 @@
  * @module
  */
 
-/** Callback for one parsed SSE data frame. */
-export type SseFrameHandler = (event: unknown, id: string | undefined) => void;
+/** One parsed SSE data frame. */
+export interface ParsedSseFrame {
+  readonly event: unknown;
+  readonly id: string | undefined;
+}
 
 /**
- * Read an SSE response body until `[DONE]`, abort, or EOF.
+ * Shared frame pump. `[DONE]` and abort end the iterator without throwing.
  *
- * @param res - Fetch response (`text/event-stream`)
- * @param onEvent - Frame handler
+ * @param res - Fetch response
  * @param signal - Abort signal
  * @param onOpen - Called after content-type validation
  */
-export async function readSse(
+export async function* iterateSseFrames(
   res: Response,
-  onEvent: SseFrameHandler,
   signal: AbortSignal,
   onOpen?: () => void,
-): Promise<void> {
+): AsyncGenerator<ParsedSseFrame> {
   if (signal.aborted) return;
   const ct = res.headers.get("content-type") ?? "";
-  if (!res.ok || !res.body) {
+  if (!res.ok || !res.body || !ct.includes("text/event-stream")) {
     const text = await res.text().catch(() => "");
     throw sseError(res.status, text);
-  }
-  if (!ct.includes("text/event-stream")) {
-    const text = await res.text().catch(() => "");
-    throw sseError(res.status, text || `Expected text/event-stream, got ${ct || "none"}`);
   }
   onOpen?.();
   const reader = res.body.getReader();
@@ -39,14 +36,15 @@ export async function readSse(
     for (;;) {
       if (signal.aborted) return;
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) return;
       buf += dec.decode(value, { stream: true });
       let sep = buf.indexOf("\n\n");
       while (sep >= 0) {
         const raw = buf.slice(0, sep);
         buf = buf.slice(sep + 2);
-        const stop = dispatchFrame(raw, onEvent, signal);
-        if (stop || signal.aborted) return;
+        const frame = parseFrame(raw);
+        if (frame === "done" || signal.aborted) return;
+        if (frame) yield frame;
         sep = buf.indexOf("\n\n");
       }
     }
@@ -56,65 +54,21 @@ export async function readSse(
 }
 
 /**
- * Yield SSE JSON frames as an async iterable until `[DONE]`.
+ * Parse one SSE block. `"done"` stops the pump; `null` skips empty blocks.
  *
- * @param res - Fetch response
- * @param signal - Abort signal
+ * @param raw - Text between blank lines
  */
-export async function* iterateSse(res: Response, signal: AbortSignal): AsyncGenerator<unknown> {
-  const queue: unknown[] = [];
-  let wake: (() => void) | undefined;
-  let done = false;
-  let err: unknown;
-
-  const pump = readSse(
-    res,
-    (event) => {
-      queue.push(event);
-      wake?.();
-    },
-    signal,
-  )
-    .then(() => {
-      done = true;
-      wake?.();
-    })
-    .catch((e) => {
-      err = e;
-      done = true;
-      wake?.();
-    });
-
-  try {
-    for (;;) {
-      while (queue.length > 0) {
-        yield queue.shift();
-      }
-      if (done) break;
-      await new Promise<void>((r) => {
-        wake = r;
-      });
-      wake = undefined;
-    }
-    if (err) throw err;
-  } finally {
-    await pump.catch(() => {});
-  }
-}
-
-function dispatchFrame(raw: string, onEvent: SseFrameHandler, signal: AbortSignal): boolean {
+function parseFrame(raw: string): ParsedSseFrame | "done" | null {
   const dataLines: string[] = [];
   let id: string | undefined;
   for (const line of raw.split("\n")) {
     if (line.startsWith("id:")) id = line.slice(3).replace(/^ /, "");
     if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
   }
-  if (dataLines.length === 0) return false;
+  if (dataLines.length === 0) return null;
   const data = dataLines.join("\n");
-  if (data === "[DONE]") return true;
-  if (signal.aborted) return true;
-  onEvent(JSON.parse(data) as unknown, id);
-  return false;
+  if (data === "[DONE]") return "done";
+  return { event: JSON.parse(data) as unknown, id };
 }
 
 /** Build an Error with optional HTTP status. */
