@@ -74,7 +74,7 @@ Number paste blocks **`N / M`**. Discord hard-caps ~2000 characters — aim ≤1
 
 **1 / M — headline**
 
-```text
+````text
 # okengine v{X.Y.Z}
 {D Mon YYYY}
 
@@ -83,7 +83,7 @@ Number paste blocks **`N / M`**. Discord hard-caps ~2000 characters — aim ≤1
 ```bash
 bunx create-oke@latest my-app
 bunx create-oke@latest my-app -t shorter
-```
+````
 
 Changelog: https://oke.omqkhafi.dev/changelog/{major}.{minor}
 
@@ -92,7 +92,8 @@ Changelog: https://oke.omqkhafi.dev/changelog/{major}.{minor}
 ## Added — {area}
 
 …
-```
+
+````
 
 Date: from the heading `YYYY-MM-DD` → `D Mon YYYY` (e.g. `2026-09-15` → `15 Sep 2026`).
 
@@ -119,13 +120,14 @@ Keep `####` areas (`Runtime`, `Dev, Keel & create-oke`, `Docs`, …). Split a la
 bunx create-oke@latest play
 cd play
 bun run dev
-```
+````
 
 URL shortener:
 
 ```bash
 bunx create-oke@latest play -t shorter
 ```
+
 ```
 
 Omit the shorter stanza only if create-oke no longer ships `-t shorter` (verify in changelog / `packages/create-oke`).
@@ -143,3 +145,4 @@ Omit the shorter stanza only if create-oke no longer ships `-t shorter` (verify 
 - [ ] Changelog link is `https://oke.omqkhafi.dev/changelog/{major}.{minor}`
 - [ ] CTA is scaffold, not upgrade
 - [ ] Paste blocks labeled `N / M`, each under ~1900 characters
+```
