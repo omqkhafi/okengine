@@ -8,6 +8,19 @@
  */
 
 import {
+  createPostgresIdempotencyStore,
+  IDEM_ATTACH_SQL,
+  IDEM_COMPLETE_SQL,
+  IDEM_DELETE_EXPIRED_ONE_SQL,
+  IDEM_FORFEIT_SQL,
+  IDEM_INSERT_SQL,
+  IDEM_PURGE_SQL,
+  IDEM_RECLAIM_SQL,
+  IDEM_REMOVE_SQL,
+  IDEM_RENEW_SQL,
+  IDEM_SELECT_SQL,
+} from "../kernel/idempotency-store.ts";
+import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
   type JournalLeaseStore,
@@ -199,6 +212,26 @@ async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
   await sql.exec(
     `CREATE INDEX IF NOT EXISTS oke_journal_runs_lease ON oke_journal_runs (status, lease_expires_at)`,
   );
+  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_idempotency (
+    tenant TEXT NOT NULL DEFAULT '',
+    principal TEXT NOT NULL,
+    flow TEXT NOT NULL,
+    key TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    status TEXT NOT NULL,
+    claim_token TEXT NOT NULL,
+    lease_expires_at BIGINT NOT NULL,
+    run_id TEXT,
+    response_status INTEGER,
+    response_headers TEXT,
+    response_body TEXT,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    PRIMARY KEY (tenant, principal, flow, key)
+  )`);
+  await sql.exec(
+    `CREATE INDEX IF NOT EXISTS oke_idempotency_expires ON oke_idempotency (expires_at)`,
+  );
 }
 
 /**
@@ -208,9 +241,25 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
   /** Force-kill mid-transaction (drops uncommitted state). */
   killActiveTransaction(): void;
 } {
-  type State = { rows: JournalDbRow[] };
+  type IdemDbRow = {
+    tenant: string;
+    principal: string;
+    flow: string;
+    key: string;
+    fingerprint: string;
+    status: string;
+    claim_token: string;
+    lease_expires_at: number;
+    run_id: string | null;
+    response_status: number | null;
+    response_headers: string | null;
+    response_body: string | null;
+    created_at: number;
+    expires_at: number;
+  };
+  type State = { rows: JournalDbRow[]; idem: IdemDbRow[] };
 
-  let committed: State = { rows: [] };
+  let committed: State = { rows: [], idem: [] };
   let active: { state: State; locked: Set<string>; done: boolean } | null = null;
   /** Run ids held by other active transactions (SKIP LOCKED). */
   const heldByTxn = new Set<string>();
@@ -222,7 +271,19 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
   }
 
   function cloneState(s: State): State {
-    return { rows: s.rows.map((r) => ({ ...r })) };
+    return {
+      rows: s.rows.map((r) => ({ ...r })),
+      idem: s.idem.map((r) => ({ ...r })),
+    };
+  }
+
+  function idemPk(row: IdemDbRow, params: readonly unknown[], offset = 0): boolean {
+    return (
+      row.tenant === String(params[offset]) &&
+      row.principal === String(params[offset + 1]) &&
+      row.flow === String(params[offset + 2]) &&
+      row.key === String(params[offset + 3])
+    );
   }
 
   function claimable(r: JournalDbRow, holder: string, cutoff: number): boolean {
@@ -309,6 +370,12 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         return state.rows.map((r) => ({ ...r }));
       }
 
+      if (text === IDEM_SELECT_SQL) {
+        return state.idem
+          .filter((row) => idemPk(row, params))
+          .map((row) => ({ ...row }) as Record<string, unknown>);
+      }
+
       throw new Error(`postgres journal fake: unsupported query: ${sql}`);
     },
     async exec(sql, params = []) {
@@ -388,6 +455,100 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         return { changes: 0 };
       }
 
+      if (text === IDEM_PURGE_SQL) {
+        const now = Number(params[0]);
+        const before = state.idem.length;
+        state.idem = state.idem.filter((row) => row.expires_at > now);
+        return { changes: before - state.idem.length };
+      }
+      if (text === IDEM_DELETE_EXPIRED_ONE_SQL) {
+        const now = Number(params[4]);
+        const idx = state.idem.findIndex((row) => idemPk(row, params) && row.expires_at <= now);
+        if (idx < 0) return { changes: 0 };
+        state.idem.splice(idx, 1);
+        return { changes: 1 };
+      }
+      if (text === IDEM_INSERT_SQL) {
+        if (state.idem.some((row) => idemPk(row, params))) return { changes: 0 };
+        state.idem.push({
+          tenant: String(params[0]),
+          principal: String(params[1]),
+          flow: String(params[2]),
+          key: String(params[3]),
+          fingerprint: String(params[4]),
+          status: "in_progress",
+          claim_token: String(params[5]),
+          lease_expires_at: Number(params[6]),
+          run_id: null,
+          response_status: null,
+          response_headers: null,
+          response_body: null,
+          created_at: Number(params[7]),
+          expires_at: Number(params[8]),
+        });
+        return { changes: 1 };
+      }
+      if (text === IDEM_RECLAIM_SQL) {
+        const row = state.idem.find(
+          (candidate) => idemPk(candidate, params, 2) && candidate.claim_token === String(params[6]),
+        );
+        if (row === undefined || row.status !== "in_progress") return { changes: 0 };
+        row.claim_token = String(params[0]);
+        row.lease_expires_at = Number(params[1]);
+        return { changes: 1 };
+      }
+      if (text === IDEM_COMPLETE_SQL) {
+        const row = state.idem.find(
+          (candidate) => idemPk(candidate, params, 4) && candidate.claim_token === String(params[8]),
+        );
+        if (row === undefined) return { changes: 0 };
+        row.status = "completed";
+        row.response_status = Number(params[0]);
+        row.response_headers = params[1] === null ? null : String(params[1]);
+        row.response_body = params[2] === null ? null : String(params[2]);
+        if (params[3] !== null && params[3] !== undefined) row.run_id = String(params[3]);
+        return { changes: 1 };
+      }
+      if (text === IDEM_REMOVE_SQL) {
+        const idx = state.idem.findIndex(
+          (candidate) => idemPk(candidate, params) && candidate.claim_token === String(params[4]),
+        );
+        if (idx < 0) return { changes: 0 };
+        state.idem.splice(idx, 1);
+        return { changes: 1 };
+      }
+      if (text === IDEM_RENEW_SQL) {
+        const row = state.idem.find(
+          (candidate) =>
+            idemPk(candidate, params, 1) &&
+            candidate.claim_token === String(params[5]) &&
+            candidate.status === "in_progress",
+        );
+        if (row === undefined) return { changes: 0 };
+        row.lease_expires_at = Number(params[0]);
+        return { changes: 1 };
+      }
+      if (text === IDEM_ATTACH_SQL) {
+        const row = state.idem.find(
+          (candidate) => idemPk(candidate, params, 1) && candidate.claim_token === String(params[5]),
+        );
+        if (row === undefined) return { changes: 0 };
+        row.run_id = String(params[0]);
+        return { changes: 1 };
+      }
+      if (text === IDEM_FORFEIT_SQL) {
+        const row = state.idem.find(
+          (candidate) =>
+            idemPk(candidate, params, 1) &&
+            candidate.claim_token === String(params[5]) &&
+            candidate.status === "in_progress",
+        );
+        if (row === undefined) return { changes: 0 };
+        row.claim_token = String(params[0]);
+        row.lease_expires_at = 0;
+        return { changes: 1 };
+      }
+
       throw new Error(`postgres journal fake: unsupported exec: ${sql}`);
     },
     async begin(fn) {
@@ -460,6 +621,7 @@ export async function createPostgresJournalStore(
 
   const store: PostgresJournalStore = {
     sql,
+    idempotency: createPostgresIdempotencyStore(sql),
     async get(runId) {
       const rows = await sql.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [runId]);
       if (!rows[0]) return undefined;

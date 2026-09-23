@@ -1,0 +1,187 @@
+---
+title: "Idempotency"
+description: "Send one Idempotency-Key so a retried mutating call runs once and a later retry replays the stored response."
+icon: "KeyRound"
+source: "docs/spec/unified-theory.md"
+---
+
+A checkout that times out should not charge the card twice. Send one `Idempotency-Key` for that attempt. The server runs `do` once and replays the stored response when the same key comes back.
+
+<Callout title="The one rule">
+  Mint one key per logical call and send it on every retry of that call. Two submits are two calls
+  unless your app passes the same key. Provider webhooks do not send this header — keep a unique
+  constraint on the provider's event id.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Mark the flow
+
+`idempotency: "required"` rejects a call that omits the header. Leave it off and the header is
+optional. `"required"` on a read, GET, stream, or live flow fails extract.
+
+```typescript
+import { on, flow, http } from "okengine";
+
+export const charge = on(
+  http.post("/charges", { in: ChargeIn, out: ChargeOut }),
+  flow("payments.charge", {
+    idempotency: "required",
+    do: async (input, fx) => {
+      return fx.store(db).insert(charges).values(input);
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Call it
+
+The client sends `Idempotency-Key` on every non-GET call. Pass a string to reuse a key across
+your own retries, or `false` to send none.
+
+```typescript
+await api.payments.charge({ amount: 1000 });
+await api.payments.charge(
+  { amount: 1000 },
+  { idempotencyKey: "checkout-attempt-9f3a2c" },
+);
+```
+
+</Step>
+
+<Step>
+### Read the replay
+
+The first response is the live result. A later call with the same key, principal, and payload
+returns that stored response and sets `Idempotent-Replayed: true`. The client copies that onto
+`meta.idempotentReplayed`.
+
+</Step>
+
+</Steps>
+
+## When the header is honored
+
+All of these are required. Otherwise the header is ignored.
+
+| Check | Honored when |
+| ----- | ------------ |
+| Entry | HTTP, and the method is not GET. RPC counts. `fx.call` has no request, so it does not. |
+| Effects | Inferred effects include a write, emit, send, call, fetch, ask, or embed — or the flow uses `fx.raw`. Secrets alone do not qualify. |
+| Shape | Not `stream`, and not a live SSE feed. |
+| Option | Omitted or `{ ttl }` is `auto` (header optional). `"required"` or `{ required: true }` demands the header. `false` ignores it. |
+
+`QUERY` is not GET. It qualifies when the rest of the row matches.
+
+| Option | Meaning |
+| ------ | ------- |
+| omitted | `auto` when the flow qualifies. Default TTL `24h`. |
+| `"required"` | Missing header is `400 IdempotencyKeyMissing`. |
+| `{ ttl: "1h" }` | `auto`, with that TTL. `ms`, `s`, `m`, `h`, or `d`. |
+| `{ required: true, ttl: "1h" }` | Required, with that TTL. |
+| `false` | Header ignored. |
+
+An unparseable TTL, or `required` on a flow that cannot honor the header, fails extract.
+
+The key is 16–255 printable ASCII characters (`0x20`–`0x7E`). Anything else is
+`400 IdempotencyKeyInvalid`.
+
+The scope is tenant, principal, and flow. The principal is `user:<id>`, else `apikey:<id>`, else
+`anon`. The same key from two people is two records. The fingerprint is a hash of the flow name
+and the validated input. The same key with a different payload is `422 IdempotencyKeyReused`.
+
+## What a second request sees
+
+The claim happens after the gate and after input validation. A `401`, `403`, or validation
+failure stores nothing, so the same key can still succeed.
+
+| Row | Response |
+| --- | -------- |
+| No row, or the TTL has passed | `do` runs. The response is stored until the TTL. |
+| Same payload, completed | Stored status, body, `content-type`, and `location`, plus `Idempotent-Replayed: true`. |
+| Same payload, still running | `409 IdempotencyInProgress` and `Retry-After` (seconds until the lease, at least 1). |
+| Different payload | `422 IdempotencyKeyReused`. |
+
+A stream, an SSE body, or a raw `Response` that is not a buffered JSON envelope is not stored.
+The live response is returned and the row is deleted.
+
+A throw before any non-read effect deletes the row. The same key may run again. A throw after a
+write, emit, send, call, fetch, ask, embed, or `fx.raw` stores the `500 InternalError` envelope.
+A new key is required. A declared `fx.fail(...)` is stored as that failure, not as a 500.
+
+## Crashes
+
+The in-progress lease is 30 seconds and is renewed while `do` runs. A disconnect does not cancel
+a claimed `do`. The lease is what notices a crash.
+
+| Flow | After the lease expires |
+| ---- | ----------------------- |
+| Not durable | The next request with the same key runs `do` again. That is at-least-once. |
+| Durable | The next request resumes that journal run. Completed steps are not run again. |
+
+A durable sleep stores the `204` and parks the journal run. A retry replays the `204`. The
+scheduler continues the run.
+
+## Where the body lives
+
+Rows sit in `oke_idempotency` on the journal driver: memory in tests, `.oke/idempotency.json`
+beside the journal file, and Postgres when that journal driver is bound.
+
+The stored body can contain personal data and stays until the TTL. Expired rows are deleted on
+the next claim and by a periodic sweep.
+
+The Console flow contract shows an idempotency pill when the mode is `auto` or `required`.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="400 IdempotencyKeyMissing">
+
+The catalog message is `This call requires an Idempotency-Key header.` The flow is `required`
+and this request did not send the header. Send a key, or drop `"required"` if the header should
+stay optional.
+
+</Accordion>
+<Accordion title="400 IdempotencyKeyInvalid">
+
+The catalog message is `Idempotency-Key must be 16–255 printable ASCII characters.` Lengthen the
+key or drop characters outside printable ASCII.
+
+</Accordion>
+<Accordion title="422 IdempotencyKeyReused">
+
+The catalog message is `This Idempotency-Key was already used with a different request.` The
+payload changed. Mint a new key for the new payload.
+
+</Accordion>
+<Accordion title="409 IdempotencyInProgress">
+
+The catalog message is `This Idempotency-Key is still running. Retry after the given delay.`
+Wait for `Retry-After`, then send the same key. The client does this when `retry` is configured.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Calling](/docs/client/calling) — `idempotencyKey` and the retry rule
+- [Errors](/docs/reference/errors) — the four idempotency codes and their statuses
+- [The Architecture](/docs/understand/the-architecture) — a retry of one call runs once
+
+## Next
+
+<Cards>
+  <Card title="Calling" description="Client retry and Idempotency-Key." href="/docs/client/calling" />
+  <Card title="Errors" description="Statuses for the four idempotency codes." href="/docs/reference/errors" />
+  <Card
+    title="The Architecture"
+    description="One retry runs once. Two submits are two calls."
+    href="/docs/understand/the-architecture"
+  />
+</Cards>

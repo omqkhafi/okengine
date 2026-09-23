@@ -601,6 +601,15 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     docker,
   });
 
+  const needsIdempotencyJournal = (options.flows ?? []).some((f) => {
+    const mode = f.resolvedIdempotency?.mode;
+    return mode === "auto" || mode === "required";
+  });
+  if (!journal && needsIdempotencyJournal) {
+    journalBind ??= await loadBind<JournalBind>("journal");
+    journal = (await journalBind.bindJournal(options, env)).journal;
+  }
+
   // 9. `.adopt()` barrel freshness — opt-in only (same `rootDir` gate as
   // capability minting above; never a filesystem read the kernel performs
   // on its own).
@@ -712,7 +721,13 @@ export async function mintCapabilities(
 
   let manifest = options.manifest;
   let extractError: string | undefined;
-  const needsManifest = manifest === undefined && flows.some((f) => f.effects === undefined);
+  const needsManifest =
+    manifest === undefined &&
+    flows.some(
+      (f) =>
+        f.effects === undefined ||
+        (f.idempotency !== false && f.resolvedIdempotency === undefined),
+    );
   if (needsManifest) {
     const rootDir = options.rootDir ?? process.env["OKE_ROOT_DIR"];
     if (rootDir) {
@@ -723,6 +738,10 @@ export async function mintCapabilities(
   }
 
   for (const f of flows) {
+    const manifestFlow = manifest?.flows?.[f.name];
+    if (manifestFlow?.idempotency) f.resolvedIdempotency = manifestFlow.idempotency;
+    if (manifestFlow?.usesRaw === true) f.usesRaw = true;
+
     if (f.effects !== undefined) {
       map.set(f.name, createCapabilityToken(f.name, f.effects));
       continue;

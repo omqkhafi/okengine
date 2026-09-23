@@ -338,8 +338,12 @@ function isCallOpts(value: unknown): value is CallOpts {
   if ("signal" in v) {
     return v.signal === undefined || v.signal instanceof AbortSignal;
   }
-  if ("retry" in v && typeof v.retry === "boolean") {
-    return Object.keys(v).every((k) => k === "response" || k === "signal" || k === "retry");
+  const keyOk =
+    "idempotencyKey" in v && (typeof v.idempotencyKey === "string" || v.idempotencyKey === false);
+  if (("retry" in v && typeof v.retry === "boolean") || keyOk) {
+    return Object.keys(v).every(
+      (k) => k === "response" || k === "signal" || k === "retry" || k === "idempotencyKey",
+    );
   }
   return false;
 }
@@ -349,8 +353,13 @@ export interface CallOpts {
   readonly response?: "json" | "blob" | "arrayBuffer";
   readonly signal?: AbortSignal;
   /**
-   * Repeat this call under the client `retry` policy even when the method
-   * is not `GET` or `QUERY`.
+   * Repeat this call under the client `retry` policy even when it sends
+   * no idempotency key.
    */
   readonly retry?: boolean;
+  /**
+   * Stable `Idempotency-Key`, or `false` to send none.
+   * See {@link ClientCallOpts.idempotencyKey}.
+   */
+  readonly idempotencyKey?: string | false;
 }

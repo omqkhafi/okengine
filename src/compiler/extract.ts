@@ -16,6 +16,13 @@ import {
   getAiProviderEntry,
 } from "../elements/ai/providers.ts";
 import { buildCronExpression, type CronField } from "../elements/clock/cron-fields.ts";
+import {
+  hasMutatingEffects,
+  idempotencyTtlMs,
+  resolveIdempotencyMode,
+  ttlOf,
+  type FlowIdempotencyOption,
+} from "../kernel/idempotency.ts";
 import { SearchConfigError } from "../elements/store/search-errors.ts";
 
 import type {
@@ -2092,6 +2099,27 @@ function registerFlow(args: {
     flow.cacheKeys = `computed:${effects.reads[0]}/userId`;
   }
 
+  const idempotencyOption = parseIdempotencyOption(opts);
+  const httpMethod = manifestTrigger?.http?.method;
+  const stream = boolProp(opts, "stream") === true;
+  const live = typeof liveFromTrigger === "string";
+  const canHonor =
+    httpMethod !== "GET" &&
+    !stream &&
+    !live &&
+    (inferred.usesRaw || hasMutatingEffects(effects));
+  if (idempotencyRequired(idempotencyOption) && !canHonor) {
+    throw new Error(
+      `flow "${name}" sets idempotency required, but the header would be ignored (read-only, GET, stream, or live).`,
+    );
+  }
+  const ttl = ttlOf(idempotencyOption);
+  if (idempotencyTtlMs(ttl) <= 0) {
+    throw new Error(`flow "${name}" has an idempotency ttl that is not a duration ("${ttl}").`);
+  }
+  flow.idempotency = resolveIdempotencyMode(idempotencyOption, canHonor);
+  if (inferred.usesRaw) flow.usesRaw = true;
+
   putFlow(args.scope, name, flow);
 }
 
@@ -3330,6 +3358,29 @@ function numberProp(obj: AstNode | undefined, key: string): number | undefined {
   if (!node || node.type !== "Literal") return undefined;
   const v = (node as Literal).value;
   return typeof v === "number" ? v : undefined;
+}
+
+function parseIdempotencyOption(opts: AstNode | undefined): FlowIdempotencyOption | undefined {
+  const node = objectProp(opts, "idempotency");
+  if (!node) return undefined;
+  if (node.type === "Literal") {
+    const value = (node as Literal).value;
+    if (value === false) return false;
+    if (value === "required") return "required";
+  }
+  if (node.type === "ObjectExpression") {
+    const required = boolProp(node, "required");
+    const ttl = stringProp(node, "ttl");
+    return {
+      ...(required !== undefined ? { required } : {}),
+      ...(ttl !== undefined ? { ttl } : {}),
+    };
+  }
+  return undefined;
+}
+
+function idempotencyRequired(option: FlowIdempotencyOption | undefined): boolean {
+  return option === "required" || (typeof option === "object" && option.required === true);
 }
 
 function boolProp(obj: AstNode | undefined, key: string): boolean | undefined {

@@ -24,7 +24,7 @@ beforeAll(async () => {
       },
     },
   });
-});
+}, 30_000);
 
 afterAll(async () => {
   await t.close();

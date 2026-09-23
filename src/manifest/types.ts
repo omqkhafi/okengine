@@ -201,6 +201,14 @@ export interface Flow {
   source?: string;
   plane?: FlowPlane;
   durable?: boolean;
+  /**
+   * HTTP idempotency stamp. `off` ignores `Idempotency-Key`.
+   * `auto` honors it when present. `required` rejects a missing header.
+   * `ttl` is how long a stored response (possibly PII) is kept.
+   */
+  idempotency?: { mode: "off" | "auto" | "required"; ttl: string };
+  /** True when the body calls `fx.raw`. Throws then keep the idempotency record. */
+  usesRaw?: boolean;
   /** Live signal name when this flow streams `delivery: "live"` SSE. */
   live?: string;
   cache?: boolean | string;

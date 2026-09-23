@@ -43,7 +43,7 @@ import { parseAcceptLanguage } from "../elements/channel/locale.ts";
 import { runWithLocale } from "../i18n/locale-context.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
-import { withAbortSignal } from "./abort-scope.ts";
+import { runDetached, withAbortSignal } from "./abort-scope.ts";
 import { withCdcMutationId } from "../elements/store/sql-session.ts";
 import { MUTATION_ID_HEADER } from "./mutation-id.ts";
 import { fxRetry } from "./concurrency.ts";
@@ -83,6 +83,7 @@ import {
 } from "./hooks.ts";
 import {
   createJournal,
+  createJournalSlot,
   createMemoryJournalStore,
   hasJournalLease,
   isJournalLeaseBusy,
@@ -91,6 +92,7 @@ import {
   type JournalSession,
   type JournalStore,
 } from "./journal.ts";
+import type { IdempotencyAttempt } from "./idempotency.ts";
 import { releaseInstanceLeases } from "./graceful-shutdown.ts";
 import { mintInstanceId } from "./instance-id.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
@@ -179,6 +181,11 @@ function loadFx(): {
   resolveName: (ref: NamedRef) => string;
 } {
   return lazyRequire(import.meta.dir, ["fx", "runtime"].join("-"));
+}
+
+/** Idempotency policy — off the edge graph until a request actually claims. */
+function loadIdempotency(): typeof import("./idempotency.ts") {
+  return lazyRequire(import.meta.dir, ["idem", "potency"].join(""));
 }
 
 /** App-shell tenancy wiring — loaded only when `gate.auth.tenant` is on. */
@@ -1837,23 +1844,61 @@ export function oke(options: OkeOptions): OkeApp {
       );
 
       capability = booted.capabilities.get(flowDef.name);
-
-      if (flowDef.durable) {
-        const { store, instanceId, leaseMs } = activeJournal();
-        const journal = createJournal({
-          store,
-          now,
-          id: () => runId,
-          // Hold the run lease for the request's lifetime — a crash mid-run
-          // leaves an expired lease another instance can reclaim and resume.
-          ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
-        });
-        journalSession = await journal.start(flowDef.name, input);
-        inflightRuns.add(journalSession.runId);
-      }
     }
 
     const effects = flowDef.effects ?? capability?.declared;
+    const requestForIdem = extras?.request;
+    const rawIdemHeader = requestForIdem?.headers.get("idempotency-key") ?? null;
+    const idemRequired =
+      flowDef.idempotency === "required" ||
+      (typeof flowDef.idempotency === "object" && flowDef.idempotency.required === true) ||
+      flowDef.resolvedIdempotency?.mode === "required";
+    let idemAttempt: IdempotencyAttempt | undefined;
+    if (requestForIdem && (rawIdemHeader !== null || idemRequired)) {
+      const method = trigger.kind === "http" ? trigger.method : requestForIdem.method;
+      const live =
+        flowDef.live !== undefined || (trigger.kind === "http" && trigger.liveSignal !== undefined);
+      idemAttempt = loadIdempotency().prepareIdempotencyAttempt({
+        hasRequest: true,
+        method,
+        stream: flowDef.stream === true,
+        live,
+        effects,
+        usesRaw: flowDef.usesRaw === true,
+        option: flowDef.idempotency,
+        resolved: flowDef.resolvedIdempotency,
+        header: rawIdemHeader,
+      });
+    }
+    const claiming = idemAttempt?.claiming === true;
+
+    const openJournal = (): ReturnType<typeof createJournal> => {
+      const { store, instanceId, leaseMs } = activeJournal();
+      return createJournal({
+        store,
+        now,
+        id: () => runId,
+        // Hold the run lease for the request's lifetime — a crash mid-run
+        // leaves an expired lease another instance can reclaim and resume.
+        ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
+      });
+    };
+
+    // A claim starts the journal only after it wins, so a replay or a 409
+    // does not open a run. Auto with no header keeps the start here.
+    if (booted && flowDef.durable && !claiming) {
+      journalSession = await openJournal().start(flowDef.name, input);
+      inflightRuns.add(journalSession.runId);
+    }
+
+    let journalSlot: { session?: JournalSession } | undefined;
+    let journalFacade: JournalSession | undefined;
+    if (booted && flowDef.durable && claiming) {
+      const created = createJournalSlot();
+      journalSlot = created.slot;
+      journalFacade = created.facade;
+    }
+    const journalForFx = journalSession ?? journalFacade;
     const { fx, ledger } = loadFx().createFxContext({
       ...options.fx,
       flow: flowDef.name,
@@ -1906,7 +1951,7 @@ export function oke(options: OkeOptions): OkeApp {
           }
         : {}),
       runsRuntime: booted?.runs ?? (isRunsRuntimeLike(options.runs) ? options.runs : undefined),
-      ...(journalSession ? { journal: journalSession, durable: true } : {}),
+      ...(journalForFx ? { journal: journalForFx, durable: true } : {}),
       callHandler: async (name, callInput) => {
         const target = flowsByName.get(name);
         if (!target) {
@@ -2038,13 +2083,138 @@ export function oke(options: OkeOptions): OkeApp {
             }
             return output;
           };
+          const runClaimed = async (validated: unknown): Promise<unknown> => {
+            if (!claiming || idemAttempt === undefined) return invoke(validated);
+            const policy = loadIdempotency();
+            const classified = policy.classifyIdempotencyKey(rawIdemHeader);
+            if (classified === "missing") {
+              return policy.idempotencyErrorResponse("IdempotencyKeyMissing");
+            }
+            if (classified === "invalid") {
+              return policy.idempotencyErrorResponse("IdempotencyKeyInvalid");
+            }
+            const idemStore = activeJournal().store.idempotency;
+            if (!idemStore) return invoke(validated);
+            const scope = {
+              tenant: fx.tenant.id ?? "",
+              principal: policy.idempotencyPrincipal(fx.auth),
+              flow: flowDef.name,
+              key: classified,
+            };
+            const claimToken = crypto.randomUUID();
+            const leaseMs = activeJournal().leaseMs;
+            const claimed = await idemStore.claim({
+              scope,
+              fingerprint: policy.idempotencyFingerprint(flowDef.name, validated),
+              claimToken,
+              now: now(),
+              leaseMs,
+              ttlMs: idemAttempt.ttlMs,
+            });
+            if (claimed.kind === "mismatch") {
+              return policy.idempotencyErrorResponse("IdempotencyKeyReused");
+            }
+            if (claimed.kind === "in_progress") {
+              return policy.idempotencyErrorResponse(
+                "IdempotencyInProgress",
+                claimed.retryAfterSeconds,
+              );
+            }
+            if (claimed.kind === "replay") return policy.replayResponse(claimed.row);
+
+            if (booted && flowDef.durable) {
+              const journal = openJournal();
+              const resumeId = claimed.kind === "reclaimed" ? claimed.row.runId : undefined;
+              try {
+                const session = resumeId
+                  ? await journal.resume(resumeId)
+                  : await journal.start(flowDef.name, validated);
+                if (journalSlot) journalSlot.session = session;
+                journalSession = session;
+                inflightRuns.add(session.runId);
+                const tenantId = principals?.tenant.id ?? fx.tenant.id;
+                if (tenantId) await session.stampTenant(tenantId);
+                await idemStore.attachRun(scope, claimToken, session.runId);
+              } catch (err) {
+                if (isJournalLeaseBusy(err)) {
+                  await idemStore.forfeit(scope, claimToken);
+                  return policy.idempotencyErrorResponse("IdempotencyInProgress", 1);
+                }
+                await idemStore.remove(scope, claimToken);
+                throw err;
+              }
+            }
+
+            const timer = setInterval(() => {
+              void idemStore.renew(scope, claimToken, now() + leaseMs);
+            }, Math.max(5, Math.floor(leaseMs / 3)));
+            if (typeof timer === "object" && timer !== null && "unref" in timer) timer.unref();
+
+            const storeEncoded = async (encoded: {
+              readonly status: number;
+              readonly headers: { get(name: string): string | null };
+              text(): Promise<string>;
+            }): Promise<void> => {
+              const stored = await policy.storedFromResponse(encoded);
+              if (!stored) {
+                await idemStore.remove(scope, claimToken);
+                return;
+              }
+              await idemStore.complete(scope, claimToken, stored, journalSession?.runId);
+            };
+            try {
+              const output = await runDetached(() => invoke(validated));
+              if (loadFx().isJsonStreamResult(output)) {
+                await idemStore.remove(scope, claimToken);
+                return output;
+              }
+              if (output instanceof Response) {
+                const contentType = output.headers.get("content-type") ?? "";
+                const buffered =
+                  output.status === 204 ||
+                  contentType.includes("json") ||
+                  contentType.startsWith("text/");
+                if (!buffered || contentType.includes("text/event-stream")) {
+                  await idemStore.remove(scope, claimToken);
+                  return output;
+                }
+                await storeEncoded(output.clone());
+                return output;
+              }
+              await storeEncoded(
+                await encodeExecuteResult({
+                  output: isFlowFailure(output) ? undefined : output,
+                  failure: isFlowFailure(output) ? output : undefined,
+                }),
+              );
+              return output;
+            } catch (err) {
+              if (flowDef.durable && isJournalSuspend(err)) {
+                await idemStore.complete(
+                  scope,
+                  claimToken,
+                  { status: 204, body: "" },
+                  journalSession?.runId,
+                );
+                throw err;
+              }
+              if (policy.attemptedMutation(ledger.entries) || idemAttempt.usesRaw) {
+                await storeEncoded(encodeFailure(fail("InternalError", {})));
+              } else {
+                await idemStore.remove(scope, claimToken);
+              }
+              throw err;
+            } finally {
+              clearInterval(timer);
+            }
+          };
           if (!alreadyValidated) {
             const parsed = await validate(flowDef.in, ctx.input);
             if (!parsed.ok) return parsed.failure;
             ctx.input = parsed.value;
-            return await invoke(parsed.value);
+            return await runClaimed(parsed.value);
           }
-          return await invoke(ctx.input);
+          return await runClaimed(ctx.input);
         } catch (err) {
           if (isFlowFailure(err)) return err;
           // A durable sleep that has not yet elapsed suspends the run — this

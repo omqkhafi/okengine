@@ -10,7 +10,9 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { okid } from "../okid.ts";
+import type { IdempotencyStore } from "./idempotency-store.ts";
 import { JournalSuspend } from "./journal-suspend.ts";
+import { lazyRequire } from "./lazy-require.ts";
 
 export { JournalSuspend, isJournalSuspend } from "./journal-suspend.ts";
 
@@ -151,8 +153,21 @@ export interface JournalLeaseStore {
   listOrphans(now: number): Promise<readonly JournalRun[]>;
 }
 
+/**
+ * Load the idempotency table implementation without a static import.
+ * Computed stem so the edge profile does not inline it.
+ */
+function loadIdempotencyStore(): typeof import("./idempotency-store.ts") {
+  return lazyRequire(import.meta.dir, ["idempotency", "store"].join("-"));
+}
+
 /** Persistence backend for journal runs. */
 export interface JournalStore extends Partial<JournalLeaseStore> {
+  /**
+   * Idempotency records on this same driver. Absent on a custom store that
+   * only implements run `get` / `put`.
+   */
+  readonly idempotency?: IdempotencyStore;
   /**
    * Load a run by id.
    *
@@ -286,6 +301,11 @@ export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalS
       return [...runs.values()].map(cloneRun);
     },
     ...leaseMethods(load),
+    get idempotency(): IdempotencyStore {
+      const created = loadIdempotencyStore().createMemoryIdempotencyStore();
+      Object.defineProperty(this, "idempotency", { value: created });
+      return created;
+    },
   };
 }
 
@@ -332,6 +352,13 @@ export function createFileJournalStore(path: string): JournalStore {
     },
     // Single-host file: leases coordinate same-machine processes only.
     ...leaseMethods(load, flush),
+    get idempotency(): IdempotencyStore {
+      const created = loadIdempotencyStore().createFileIdempotencyStore(
+        `${dirname(path)}/idempotency.json`,
+      );
+      Object.defineProperty(this, "idempotency", { value: created });
+      return created;
+    },
   };
 }
 
@@ -426,6 +453,33 @@ export interface JournalSession {
     status: JournalRunStatus,
     patch?: { readonly wakeAt?: number; readonly output?: unknown; readonly error?: string },
   ): Promise<void>;
+}
+
+/**
+ * A journal session that forwards to a real session once one is assigned.
+ *
+ * Idempotent durable flows start the journal only after the claim, which is
+ * after `fx` has already been created.
+ */
+export function createJournalSlot(): {
+  readonly slot: { session?: JournalSession };
+  readonly facade: JournalSession;
+} {
+  const slot: { session?: JournalSession } = {};
+  const facade = new Proxy({} as JournalSession, {
+    get(_target, prop, receiver) {
+      const session = slot.session;
+      if (!session) {
+        if (prop === "runId") return "";
+        if (prop === "stampTenant") return async () => undefined;
+        if (prop === "rewind") return () => undefined;
+        return undefined;
+      }
+      const value = Reflect.get(session, prop, receiver);
+      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(session) : value;
+    },
+  });
+  return { slot, facade };
 }
 
 /** Journal facade. */

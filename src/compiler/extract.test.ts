@@ -63,6 +63,7 @@ describe("extractManifest — five trigger types", () => {
       http: { method: "POST", path: "/orders" },
     });
     expect(manifest.flows?.["triggers.http"]?.effects?.writes).toEqual(["sql:orders"]);
+    expect(manifest.flows?.["triggers.http"]?.idempotency).toEqual({ mode: "auto", ttl: "24h" });
 
     expect(manifest.flows?.["triggers.every"]?.trigger).toEqual({
       every: "10m",
@@ -86,6 +87,7 @@ describe("extractManifest — five trigger types", () => {
       true,
     );
     expect(internal?.effects?.reads).toEqual(["sql:links"]);
+    expect(internal?.idempotency).toEqual({ mode: "off", ttl: "24h" });
   });
 });
 
@@ -99,8 +101,41 @@ describe("extractManifest — fx.raw", () => {
     });
 
     expect(manifest.flows?.["raw.unannotated"]?.cache).toBe(false);
+    expect(manifest.flows?.["raw.unannotated"]?.usesRaw).toBe(true);
+    expect(manifest.flows?.["raw.unannotated"]?.idempotency).toEqual({ mode: "off", ttl: "24h" });
     expect(manifest.flows?.["raw.annotated"]?.cache).toBeUndefined();
+    expect(manifest.flows?.["raw.annotated"]?.usesRaw).toBe(true);
     expect(manifest.flows?.["raw.annotated"]?.effects?.reads).toEqual(["sql:orders"]);
+  });
+
+  test("required on a GET flow is an extract error; a bad ttl is an extract error", async () => {
+    const requiredGet = `
+      import { on, flow, http } from "okengine";
+      export const read = on(
+        http.get("/read"),
+        flow("pay.read", { idempotency: "required", do: async () => ({ ok: true }) }),
+      );
+    `;
+    await expect(
+      extractFromSources({ "src/flows/pay.ts": requiredGet }),
+    ).rejects.toThrow(/header would be ignored/);
+
+    const badTtl = `
+      import { on, flow, http, store, field } from "okengine";
+      export const db = store.sql("db");
+      export const payments = store.schema.table("payments", { id: field.text().primaryKey() });
+      export const charge = on(
+        http.post("/charge"),
+        flow("pay.charge", {
+          idempotency: { ttl: "nope" },
+          do: async (input, fx) => {
+            await fx.store(db).insert(payments).values(input);
+            return { ok: true };
+          },
+        }),
+      );
+    `;
+    await expect(extractFromSources({ "src/flows/pay.ts": badTtl })).rejects.toThrow(/not a duration/);
   });
 });
 

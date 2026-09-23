@@ -193,7 +193,9 @@ do: async (input, fx) => {
 };
 ```
 
-This one rule is what made the month-8 drift visible: every effect is in the Manifest, every run is in `fx.runs`, and a duplicate is a second run you can see. The fix stays one line — a unique constraint or upsert — not a second system.
+This one rule is what made the month-8 drift visible: every effect is in the Manifest, every run is in `fx.runs`, and a duplicate is a second run you can see.
+A retried HTTP call can send one `Idempotency-Key`, so that retry runs once.
+A provider event still needs a unique constraint, because the provider does not send that header.
 
 ### Putting the five pieces together
 
@@ -228,7 +230,7 @@ Nothing about the code above looks more complicated than the four lines that sta
 | **Week 2 spike** — hand-build a queue + worker to run the send later | The send is a Signal consumer. The Manifest lists it. The run is in `fx.runs`. |
 | **Month 2 silence** — a retry count in a worker nobody remembers     | The retry count lives on `signal.once` (default 3) or on `durable` + `fx.step`, which skips a step already journaled. A failed HTTP request is not retried by `fx`. |
 | **Month 4 audit** — a `sent_emails` table written by hand from a job | The send is an effect in the Manifest and a run in `fx.runs`. Channel records a receipt. The default receipt ledger is process-local memory. |
-| **Month 6 double-submit** — dedup split across a queue and a DB      | The duplicate is two runs in `fx.runs`. The fix is one line: a unique constraint or upsert. `{ key }` serializes `once` per key. It does not deduplicate. |
+| **Month 6 double-submit** — dedup split across a queue and a DB      | A retry of one call runs once when it sends `Idempotency-Key`. Two submits are two calls unless the app passes the same key. Provider webhooks still need a unique constraint on the provider's event id, because providers do not send that header. `{ key }` serializes `once` per key. It does not deduplicate. |
 
 The door makes each of those problems visible, and the fix is one line in a known place. The signup sample is safe to run twice once the user row has a unique constraint or an upsert. The second attempt is a second run in `fx.runs`.
 

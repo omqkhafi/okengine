@@ -26,10 +26,12 @@ export interface TransportCallOptions {
   readonly response?: "json" | "blob" | "arrayBuffer";
   readonly signal?: AbortSignal;
   /**
-   * Repeat this call under the client `retry` policy even when the method
-   * is not `GET` or `QUERY`.
+   * Repeat this call under the client `retry` policy even when it sends
+   * no idempotency key.
    */
   readonly retry?: boolean;
+  /** Stable key, or `false` to send none. */
+  readonly idempotencyKey?: string | false;
 }
 
 /** Internal transport handle. */
@@ -69,11 +71,24 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
       const callClientOpts: ClientOptions =
         callOpts.signal !== undefined ? { ...opts, signal: callOpts.signal } : opts;
       const method = (opts.routes?.[key.replace("/", ".")]?.method ?? "POST").toUpperCase();
-      const allowRetry = allowsRetry(method, callOpts.retry);
+      const idempotencyKey = resolveIdempotencyKey(method, callOpts.idempotencyKey);
+      const allowRetry =
+        callOpts.retry === true ||
+        method === "GET" ||
+        method === "QUERY" ||
+        idempotencyKey !== undefined;
 
       for (;;) {
         try {
-          const res = await once(base, key, input, callClientOpts, fetchFn, callOpts.headers);
+          const res = await once(
+            base,
+            key,
+            input,
+            callClientOpts,
+            fetchFn,
+            callOpts.headers,
+            idempotencyKey,
+          );
           if (
             res.status === 401 &&
             opts.auth &&
@@ -85,9 +100,22 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
             await opts.auth.refresh();
             continue;
           }
+          if (res.status === 409 && allowRetry && attempt < retries) {
+            const seconds = Number(res.headers.get("retry-after"));
+            const wait = seconds > 0 ? seconds * 1000 : delay;
+            const structured = await decodeIfEnvelope(res);
+            if (structured?.error?.code === "IdempotencyInProgress") {
+              await sleep(wait);
+              delay *= backoff;
+              attempt += 1;
+              continue;
+            }
+            if (structured) return stampReplay(structured, res);
+            return transportEnvelope("HTTP 409", 409);
+          }
           if (res.status >= 500) {
             const structured = await decodeIfEnvelope(res);
-            if (structured) return structured;
+            if (structured) return stampReplay(structured, res);
             throw new Error(`HTTP ${res.status}`);
           }
           if (callOpts.response === "blob" || callOpts.response === "arrayBuffer") {
@@ -137,14 +165,16 @@ function normalizeCallOpts(
     ("response" in headersOrOpts ||
       "signal" in headersOrOpts ||
       "headers" in headersOrOpts ||
-      "retry" in headersOrOpts)
+      "retry" in headersOrOpts ||
+      "idempotencyKey" in headersOrOpts)
   ) {
     const o = headersOrOpts as TransportCallOptions;
     if (
       o.response !== undefined ||
       o.signal !== undefined ||
       o.headers !== undefined ||
-      o.retry !== undefined
+      o.retry !== undefined ||
+      o.idempotencyKey !== undefined
     ) {
       return o;
     }
@@ -154,8 +184,8 @@ function normalizeCallOpts(
 
 /**
  * Single HTTP attempt. Throws on network / abort / non-envelope 5xx.
- * The caller retries that throw only for `GET` and `QUERY`, or when the
- * call passed `{ retry: true }`.
+ * A client timeout is rethrown as a plain `Error` so the retry loop can
+ * repeat it. A caller `AbortSignal` stays an `AbortError` and is not retried.
  *
  * @param base - Origin
  * @param key - `unit/flow`
@@ -171,6 +201,7 @@ async function once(
   opts: ClientOptions,
   fetchFn: ClientFetch,
   callHeaders?: ClientHeaders,
+  idempotencyKey?: string,
 ): Promise<Response> {
   const route = opts.routes?.[key.replace("/", ".")];
   const { url, method, body } = route
@@ -180,6 +211,7 @@ async function once(
   const headers = new Headers();
   applyHeaderBag(headers, await resolveHeaders(opts));
   applyHeaderBag(headers, callHeaders);
+  if (idempotencyKey !== undefined) headers.set("Idempotency-Key", idempotencyKey);
   if (body !== undefined && !headers.has("content-type") && typeof body === "string") {
     headers.set("content-type", "application/json");
   }
@@ -189,13 +221,20 @@ async function once(
   const signal =
     opts.signal && timeout ? AbortSignal.any([opts.signal, timeout]) : (opts.signal ?? timeout);
 
-  return await fetchFn(url, {
-    method,
-    headers,
-    body: body as RequestInit["body"],
-    signal,
-    ...(opts.credentials !== undefined ? { credentials: opts.credentials } : {}),
-  });
+  try {
+    return await fetchFn(url, {
+      method,
+      headers,
+      body: body as RequestInit["body"],
+      signal,
+      ...(opts.credentials !== undefined ? { credentials: opts.credentials } : {}),
+    });
+  } catch (err) {
+    if (isAbortError(err) && timeout?.aborted === true && opts.signal?.aborted !== true) {
+      throw new Error(err instanceof Error ? err.message : "timeout");
+    }
+    throw err;
+  }
 }
 
 /**
@@ -270,12 +309,12 @@ function isRawBody(input: unknown): input is ClientBodyInit {
 
 async function decode(res: Response): Promise<ClientEnvelope> {
   if (res.status === 204) {
-    return { data: undefined, error: null };
+    return stampReplay({ data: undefined, error: null }, res);
   }
 
   const text = await res.text();
   if (!text) {
-    if (res.ok) return { data: undefined, error: null };
+    if (res.ok) return stampReplay({ data: undefined, error: null }, res);
     return transportEnvelope(`HTTP ${res.status}`, res.status);
   }
 
@@ -287,11 +326,11 @@ async function decode(res: Response): Promise<ClientEnvelope> {
   }
 
   if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
-    return json as ClientEnvelope;
+    return stampReplay(json as ClientEnvelope, res);
   }
 
   if (res.ok) {
-    return { data: json, error: null };
+    return stampReplay({ data: json, error: null }, res);
   }
 
   return transportEnvelope(`HTTP ${res.status}`, res.status);
@@ -304,18 +343,41 @@ async function decodeBinary(res: Response, mode: "blob" | "arrayBuffer"): Promis
     return transportEnvelope(`HTTP ${res.status}`, res.status);
   }
   const data = mode === "blob" ? await res.blob() : await res.arrayBuffer();
-  return { data, error: null };
+  return stampReplay({ data, error: null }, res);
+}
+
+/** 21-char key. `randomUUID` stays smaller than pulling the okid alphabet. */
+function mintIdempotencyKey(): string {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, 21);
 }
 
 /**
- * Safe methods may repeat. Anything else runs once unless the call opted in.
+ * Key for this logical call, or `undefined` when none is sent.
  *
  * @param method - HTTP method, already uppercased
- * @param optIn - Per-call `{ retry: true }`
+ * @param opt - Per-call override
  */
-function allowsRetry(method: string, optIn: boolean | undefined): boolean {
-  if (optIn === true) return true;
-  return method === "GET" || method === "QUERY";
+function resolveIdempotencyKey(method: string, opt: string | false | undefined): string | undefined {
+  if (opt === false) return undefined;
+  if (typeof opt === "string") return opt;
+  if (method === "GET") return undefined;
+  return mintIdempotencyKey();
+}
+
+/**
+ * Copy `Idempotent-Replayed: true` onto result meta.
+ *
+ * @param envelope - Decoded envelope
+ * @param res - HTTP response
+ */
+function stampReplay(envelope: ClientEnvelope, res: Response): ClientEnvelope {
+  if (res.headers.get("idempotent-replayed") !== "true") return envelope;
+  const prev = envelope.meta;
+  return { ...envelope, meta: { ...prev, idempotentReplayed: true } };
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
 }
 
 function isTransient(err: unknown): boolean {

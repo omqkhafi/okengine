@@ -6,7 +6,7 @@ let t: TestApp<App>;
 
 beforeAll(async () => {
   t = await createTestApp(app);
-});
+}, 30_000);
 
 afterAll(async () => {
   await t.close();

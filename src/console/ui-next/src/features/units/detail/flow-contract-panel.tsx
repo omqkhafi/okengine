@@ -156,6 +156,13 @@ export function FlowContractPanel({
             title="Durable — long-running, retryable steps"
           />
         ) : null}
+        {row.flow.idempotency && row.flow.idempotency.mode !== "off" ? (
+          <MetaPill
+            icon={SecurityCheckIcon}
+            label={row.flow.idempotency.mode === "required" ? "idempotency required" : "idempotency"}
+            title={`Idempotency ${row.flow.idempotency.mode} — stored responses expire after ${row.flow.idempotency.ttl}`}
+          />
+        ) : null}
         {row.flow.live ? (
           <MetaPill
             icon={InternetAntenna03Icon}

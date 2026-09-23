@@ -16,6 +16,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+- HTTP idempotency. A mutating call can send `Idempotency-Key`. The server claims
+  it after the gate and validation, replays the stored response, and holds a
+  lease while `do` runs. Rows live in `oke_idempotency` on the journal driver
+  until the TTL (default 24h). The client sends one key per non-GET call and
+  surfaces `Idempotent-Replayed: true` as `meta.idempotentReplayed`.
 - Effect inference follows a project helper whose parameter is named `fx`, and
   a same-function `fx.store` chain alias. `liveQuery` and `applySearchEmbedCdc`
   record their effects as package intrinsics. The shorter starter's link flows
@@ -40,9 +45,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### 💥 Breaking Changes
 
-- Client `retry` no longer repeats mutations. Network errors and non-envelope
-  5xx retry only for `GET` and `QUERY`. `POST` and other methods run once
-  unless the call passes `{ retry: true }`.
+- With `retry` configured, a call retries when it is GET/QUERY or it carries an
+  idempotency key (automatic on every non-GET call). `idempotencyKey: false`
+  runs once unless that call passes `{ retry: true }`. A `409 IdempotencyInProgress`
+  waits for `Retry-After` and retries within those attempts.
 - `createTestApp` enforces Manifest tokens. Inline tests that are not an app
   pass `capability: "open"`. App suites pick the tokens up from the project
   root.
@@ -51,10 +57,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
   aliases in the same function. An explicit `effects` block must include
   every effect inference can see. It may add keys. It no longer replaces
   the inferred set.
-- Store RLS emit calls `pgTable.withRLS` whenever `rls: true`. Before, an
-  insert-only table did not enable RLS in the generated file. After, RLS is
-  on and any command without a policy returns zero rows for `oke_app`.
-  Shorter adds an open SELECT policy in the same change.
+- Store RLS emit calls `pgTable.withRLS` whenever `rls: true`. After upgrading,
+  a command without a policy returns zero rows, with no error, and there is no
+  runtime warning. Shorter adds an open SELECT policy in the same change.
 
 ### ♻️ Changed
 

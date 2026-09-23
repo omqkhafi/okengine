@@ -54,6 +54,16 @@ export interface FlowOptions<I = unknown, O = unknown> {
    * (`"30s"`) adds a TTL on top of write invalidation.
    */
   readonly cache?: boolean | string;
+  /**
+   * HTTP `Idempotency-Key` handling.
+   * Omitted is auto: the header is honored on an eligible mutating flow.
+   * `"required"` rejects a missing header. `false` ignores the header.
+   * A TTL string (`"24h"`) overrides the 24 hour default.
+   */
+  readonly idempotency?:
+    | false
+    | "required"
+    | { readonly required?: boolean; readonly ttl?: string };
   /** Declared service-level objective. */
   readonly slo?: Slo;
   /**
@@ -168,6 +178,19 @@ export interface FlowDef<
   readonly liveCustomMatch: boolean;
   /** Cache option. */
   readonly cache: boolean | string | undefined;
+  /** Author idempotency option. */
+  readonly idempotency:
+    | false
+    | "required"
+    | { readonly required?: boolean; readonly ttl?: string }
+    | undefined;
+  /**
+   * Extracted idempotency stamp. Boot copies this from the Manifest.
+   * Runtime resolves it when extract has not run.
+   */
+  resolvedIdempotency?: { readonly mode: "off" | "auto" | "required"; readonly ttl: string };
+  /** True when extract saw `fx.raw`. A throw then completes the idempotency row. */
+  usesRaw?: boolean;
   /** SLO. */
   readonly slo: Slo | undefined;
   /** Plane (user vs operator). */
@@ -305,6 +328,7 @@ export function flow(
     live: undefined,
     liveCustomMatch: false,
     cache: options.cache,
+    idempotency: options.idempotency,
     slo: options.slo,
     plane: options.plane,
     breaking: false,

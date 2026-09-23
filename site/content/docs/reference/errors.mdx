@@ -120,6 +120,10 @@ at **404**. Clients distinguish by envelope, not status. Domain codes stay **400
 | Code                                             | Status      | Helper                                                 |
 | ------------------------------------------------ | ----------- | ------------------------------------------------------ |
 | `ValidationError`                                | `422`       | none — failed `in`, `do` never runs                    |
+| `IdempotencyKeyMissing`                          | `400`       | none — `idempotency: "required"` and no header        |
+| `IdempotencyKeyInvalid`                          | `400`       | none — header is not 16–255 printable ASCII           |
+| `IdempotencyKeyReused`                           | `422`       | none — same key, different payload                    |
+| `IdempotencyInProgress`                          | `409`       | none — `Retry-After` until the in-flight call finishes |
 | `Unauthorized`                                   | `401`       | `unauthorized` · also a gate denial                    |
 | `Forbidden`                                      | `403`       | `forbidden` · also a gate denial                       |
 | `NotFound`                                       | `404`       | `notFound`                                             |

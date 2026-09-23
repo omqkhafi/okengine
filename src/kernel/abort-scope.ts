@@ -34,6 +34,21 @@ export async function withAbortSignal<T>(
   return storage.run(signal, fn);
 }
 
+/** Never-aborted signal for work that must outlive the caller connection. */
+const DETACHED: AbortSignal = new AbortController().signal;
+
+/**
+ * Run `fn` without the request abort signal.
+ *
+ * A claimed idempotent `do` keeps running when the client times out. The
+ * lease, not the socket, is what detects a crash.
+ *
+ * @param fn - Work to detach
+ */
+export function runDetached<T>(fn: () => T | Promise<T>): Promise<T> {
+  return withAbortSignal(DETACHED, fn);
+}
+
 /**
  * When `parent` aborts, abort `child` with the same reason.
  *

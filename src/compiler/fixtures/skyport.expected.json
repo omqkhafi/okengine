@@ -3,6 +3,10 @@
   "app": "skyport",
   "flows": {
     "bookings.create": {
+      "idempotency": {
+        "mode": "auto",
+        "ttl": "24h"
+      },
       "trigger": {
         "http": {
           "method": "POST",
@@ -29,12 +33,20 @@
       "plane": "user"
     },
     "bookings.getBooking": {
+      "idempotency": {
+        "mode": "off",
+        "ttl": "24h"
+      },
       "effects": {
         "reads": ["sql:bookings"]
       },
       "source": "src/flows/bookings/index.ts:50"
     },
     "bookings.mine": {
+      "idempotency": {
+        "mode": "off",
+        "ttl": "24h"
+      },
       "trigger": {
         "http": {
           "method": "GET",
@@ -49,6 +61,10 @@
       "cacheKeys": "computed:sql:bookings/userId"
     },
     "bookings.refundBooking": {
+      "idempotency": {
+        "mode": "auto",
+        "ttl": "24h"
+      },
       "effects": {
         "reads": ["sql:bookings"],
         "writes": ["sql:bookings"]
@@ -56,6 +72,10 @@
       "source": "src/flows/bookings/index.ts:54"
     },
     "payments.chargeBooking": {
+      "idempotency": {
+        "mode": "off",
+        "ttl": "24h"
+      },
       "effects": {
         "secrets": ["STRIPE_KEY"]
       },
@@ -64,6 +84,10 @@
       "steps": ["create-intent", "confirm"]
     },
     "support.createTicket": {
+      "idempotency": {
+        "mode": "auto",
+        "ttl": "24h"
+      },
       "trigger": {
         "http": {
           "method": "POST",

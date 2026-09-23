@@ -21,6 +21,10 @@ export const BUILTIN_ERROR_STATUS = {
   AuthFailed: 400,
   InternalError: 500,
   ServiceUnavailable: 503,
+  IdempotencyKeyMissing: 400,
+  IdempotencyKeyInvalid: 400,
+  IdempotencyKeyReused: 422,
+  IdempotencyInProgress: 409,
 } as const;
 
 /** Built-in error code (including `DatabaseError`). */
@@ -86,6 +90,10 @@ export type BuiltinErrorMap = {
   };
   readonly InternalError: Record<string, never>;
   readonly ServiceUnavailable: { readonly retryAfter?: number };
+  readonly IdempotencyKeyMissing: Record<string, never>;
+  readonly IdempotencyKeyInvalid: Record<string, never>;
+  readonly IdempotencyKeyReused: Record<string, never>;
+  readonly IdempotencyInProgress: { readonly retryAfter?: number };
 };
 
 /**

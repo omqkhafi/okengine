@@ -80,24 +80,155 @@ describe("transport — retry", () => {
     expect(error?.message).toMatch(/password policy/i);
   });
 
-  test("POST network error is not re-sent unless the call opts in", async () => {
+  test("POST retries when it carries an idempotency key", async () => {
     let handled = 0;
+    const keys: string[] = [];
     const api = createClient<PingApp>("http://app.test", {
       retry: { retries: 2, delay: 1, backoff: 1 },
-      fetch: async () => {
+      fetch: async (_input, init) => {
         handled += 1;
+        keys.push(new Headers(init?.headers).get("idempotency-key") ?? "");
         throw new TypeError("Failed to fetch");
       },
     });
 
     const lost = await api.sys.ping();
     expect(lost.error?.code).toBe("TransportError");
+    expect(handled).toBe(3);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[1]).toBe(keys[2]);
+    expect(keys[0]!.length).toBeGreaterThanOrEqual(16);
+  });
+
+  test("idempotencyKey false runs once unless retry is opted in", async () => {
+    let handled = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 2, delay: 1, backoff: 1 },
+      fetch: async (_input, init) => {
+        handled += 1;
+        expect(new Headers(init?.headers).get("idempotency-key")).toBeNull();
+        throw new TypeError("Failed to fetch");
+      },
+    });
+
+    const lost = await api.sys.ping({ idempotencyKey: false });
+    expect(lost.error?.code).toBe("TransportError");
     expect(handled).toBe(1);
 
     handled = 0;
-    const opted = await api.sys.ping({ retry: true });
+    const opted = await api.sys.ping({ idempotencyKey: false, retry: true });
     expect(opted.error?.code).toBe("TransportError");
     expect(handled).toBe(3);
+  });
+
+  test("two calls mint two keys; a string key is reused", async () => {
+    const keys: string[] = [];
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async (_input, init) => {
+        keys.push(new Headers(init?.headers).get("idempotency-key") ?? "");
+        return Response.json({ data: { ok: true }, error: null });
+      },
+    });
+    await api.sys.ping();
+    await api.sys.ping();
+    expect(keys[0]).not.toBe(keys[1]);
+    keys.length = 0;
+    await api.sys.ping({ idempotencyKey: "form-key-0123456789" });
+    expect(keys).toEqual(["form-key-0123456789"]);
+  });
+
+  test("GET sends no idempotency key", async () => {
+    const api = createClient<PingApp>("http://app.test", {
+      routes: getPing,
+      fetch: async (_input, init) => {
+        expect(new Headers(init?.headers).get("idempotency-key")).toBeNull();
+        return Response.json({ data: { ok: true }, error: null });
+      },
+    });
+    const { error } = await api.sys.ping();
+    expect(error).toBeNull();
+  });
+
+  test("401 resend reuses the idempotency key", async () => {
+    const keys: string[] = [];
+    let token = "old";
+    const api = createClient<PingApp>("http://app.test", {
+      auth: {
+        getToken: () => token,
+        refresh: async () => {
+          token = "new";
+          return token;
+        },
+      },
+      fetch: async (_input, init) => {
+        const headers = new Headers(init?.headers);
+        keys.push(headers.get("idempotency-key") ?? "");
+        if (headers.get("authorization") === "Bearer old") {
+          return new Response("unauthorized", { status: 401 });
+        }
+        return Response.json({ data: { ok: true }, error: null });
+      },
+    });
+    const { error } = await api.sys.ping();
+    expect(error).toBeNull();
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  test("IdempotencyInProgress waits for Retry-After then replays", async () => {
+    let n = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 2, delay: 1, backoff: 1 },
+      timeout: 30,
+      fetch: async (_input, init) => {
+        n += 1;
+        const signal = init?.signal;
+        if (n === 1) {
+          await new Promise<void>((_resolve, reject) => {
+            if (signal?.aborted) {
+              reject(new DOMException("Aborted", "AbortError"));
+              return;
+            }
+            signal?.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"));
+            });
+          });
+        }
+        if (n === 2) {
+          return Response.json(
+            { data: null, error: { code: "IdempotencyInProgress", data: {} } },
+            { status: 409, headers: { "retry-after": "0.01" } },
+          );
+        }
+        return Response.json(
+          { data: { ok: true }, error: null },
+          { headers: { "idempotent-replayed": "true" } },
+        );
+      },
+    });
+
+    const result = await api.sys.ping();
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual({ ok: true });
+    expect(result.meta?.idempotentReplayed).toBe(true);
+    expect(n).toBe(3);
+  });
+
+  test("other 409 envelopes are not retried", async () => {
+    let n = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 2, delay: 1, backoff: 1 },
+      fetch: async () => {
+        n += 1;
+        return Response.json(
+          { data: null, error: { code: "Conflict", data: {} } },
+          { status: 409 },
+        );
+      },
+    });
+    const { error } = await api.sys.ping();
+    expect(error?.code).toBe("Conflict");
+    expect(n).toBe(1);
   });
 
   test("GET still retries a network error", async () => {

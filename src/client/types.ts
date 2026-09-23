@@ -146,6 +146,8 @@ export type ClientListMeta = {
   readonly prev?: ClientPagerLink | null;
   readonly total?: number;
   readonly offset?: number;
+  /** Set when the server replayed a completed idempotent call. */
+  readonly idempotentReplayed?: true;
 };
 
 /**
@@ -163,7 +165,11 @@ export type ClientEnvelope<
       readonly error: null;
       readonly meta?: ClientListMeta;
     }
-  | { readonly data: null; readonly error: ClientError<E> | TransportError };
+  | {
+      readonly data: null;
+      readonly error: ClientError<E> | TransportError;
+      readonly meta?: ClientListMeta;
+    };
 
 /**
  * Client call result — envelope plus always-callable `next` / `prev`.
@@ -252,11 +258,13 @@ export interface ClientOptions {
   /** Abort the request after this many milliseconds. */
   readonly timeout?: number;
   /**
-   * Retry transient failures (network errors and non-envelope 5xx).
+   * Retry transient failures (network errors, client timeouts, and
+   * non-envelope 5xx).
    *
-   * Safe methods only: `GET` and `QUERY`. `POST`, `PUT`, `PATCH`, `DELETE`,
-   * and RPC (`POST /_oke/…`) run once — a lost response may already have
-   * committed. Pass `{ retry: true }` on that call to opt in.
+   * A call retries when it is `GET` or `QUERY`, or when it carries an
+   * idempotency key. Keys are sent automatically on every non-GET call.
+   * `idempotencyKey: false` runs once unless that call passes `{ retry: true }`.
+   * `409 IdempotencyInProgress` waits for `Retry-After` and counts as an attempt.
    */
   readonly retry?: {
     /** Extra attempts after the first (default 0). */
@@ -308,10 +316,16 @@ export interface ClientCallOpts {
   readonly response?: "json" | "blob" | "arrayBuffer";
   readonly signal?: AbortSignal;
   /**
-   * Repeat this call under the client `retry` policy even when the method
-   * is not `GET` or `QUERY`.
+   * Repeat this call under the client `retry` policy even when it sends
+   * no idempotency key.
    */
   readonly retry?: boolean;
+  /**
+   * Stable `Idempotency-Key` for this logical call. A string is sent as-is
+   * (one key per form render dedupes double submits). `false` sends no key.
+   * Omitted on a non-GET call generates one key and reuses it across retries.
+   */
+  readonly idempotencyKey?: string | false;
 }
 
 /**
@@ -514,6 +528,7 @@ export interface ClientDescriptor {
         readonly stream?: true;
         readonly matchKey?: readonly string[];
         readonly gates?: readonly string[];
+        readonly idempotency?: { readonly mode: "off" | "auto" | "required"; readonly ttl: string };
       };
     };
   };
