@@ -69,16 +69,22 @@ Mnemonic: **O·K·E = 6·5·3**.
 The starter already exports a health Flow — change it and save; App and Console update from the same Manifest:
 
 ```typescript
-// src/flows/main/health.ts — folders are the URL: `main/health.ts` → GET /health
-import { on, flow, http } from "okengine";
+// src/flows/main/shapes.ts
 import { z } from "zod";
 
+/** Liveness payload for `GET /health`. */
+export const HealthOut = z.object({
+  ok: z.literal(true),
+});
+
+// src/flows/main/health.ts — folders are the URL: `main/health.ts` → GET /health
+import { on, flow, http } from "okengine/http";
+
+import { HealthOut } from "./shapes";
+
 export const health = on(
-  http.get().public(),
-  flow({
-    out: z.object({ ok: z.literal(true) }),
-    do: () => ({ ok: true as const }),
-  }),
+  http.get({ out: HealthOut }).public(),
+  flow({ do: () => ({ ok: true as const }) }),
 );
 ```
 

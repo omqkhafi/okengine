@@ -27,3 +27,13 @@ export const EXPORT_REGRESSION_TOLERANCE_RATIO = 0.02;
 
 /** Minimum allowed growth (bytes) before a subpath export fails regression. */
 export const EXPORT_REGRESSION_TOLERANCE_FLOOR_BYTES = 256;
+
+/**
+ * Growth multiple for an absolute budget that still has room under its cap.
+ *
+ * The sample fails when it reaches this multiple of the last committed value
+ * and that multiple is still below the absolute cap. Two is the line: one
+ * cold-start run has already printed a phantom jump of about this size, so
+ * the probe re-runs before failing instead of tightening the ratio.
+ */
+export const ABSOLUTE_REGRESSION_RATIO = 2;

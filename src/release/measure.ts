@@ -13,6 +13,7 @@ import {
   resolveExportBudgetTargets,
 } from "./exports.ts";
 import {
+  ABSOLUTE_REGRESSION_RATIO,
   CLIENT_BUDGET_BYTES,
   COLD_START_BUDGET_MS,
   CONSOLE_BUDGET_BYTES,
@@ -80,8 +81,18 @@ export interface BudgetSample {
   readonly label: string;
   /** Measured value. */
   readonly value: number;
-  /** Upper bound used for `ok` (absolute cap or regression ceiling). */
+  /**
+   * Absolute cap, or the regression ceiling for export samples.
+   * Landing copy reads this as the published cap — do not replace it
+   * with {@link regressionLimit}.
+   */
   readonly limit: number;
+  /**
+   * Tighter growth ceiling (`ABSOLUTE_REGRESSION_RATIO` × last committed
+   * value) when that multiple is still under {@link limit}. Absent when
+   * the absolute cap is the only gate.
+   */
+  readonly regressionLimit?: number;
   /** Unit for display / snapshot. */
   readonly unit: "bytes" | "ms";
   /** Gate mode. */
@@ -451,17 +462,66 @@ process.stdout.write(String(ms));
 /**
  * Median cold-start ms across Bun subprocesses.
  *
- * Takes the best of up to five rounds (early-exit when under budget) so
- * noisy shared CI runners do not fail a real sub-budget cold start.
+ * Takes the best of up to five rounds and returns as soon as one round is
+ * under `exitBelowMs`. If every round is still at or above that line, runs
+ * one confirmation round and keeps the minimum. A single noisy run has
+ * printed a phantom jump of about 2×; the confirmation is what keeps that
+ * from failing the regression gate.
+ *
+ * @param exitBelowMs - Stop when a round is under this (regression ceiling, or the 75 ms cap)
  */
-export async function measureColdStartMedianMs(): Promise<number> {
+export async function measureColdStartMedianMs(
+  exitBelowMs = COLD_START_BUDGET_MS,
+): Promise<number> {
   let best = Number.POSITIVE_INFINITY;
   for (let round = 0; round < 5; round++) {
     const median = await measureColdStartMedianMsOnce();
     if (median < best) best = median;
-    if (best < COLD_START_BUDGET_MS) return best;
+    if (best < exitBelowMs) return best;
   }
-  return best;
+  const confirm = await measureColdStartMedianMsOnce();
+  return Math.min(best, confirm);
+}
+
+/**
+ * Growth ceiling for an absolute budget that still has room under its cap.
+ *
+ * Undefined when there is no positive baseline, or when doubling would
+ * already miss the absolute cap (kernel and client today). Zero baselines
+ * (routing p99 reads as 0 ms) stay on the absolute cap — a ratio of zero
+ * would fail the next positive sample.
+ *
+ * @param previous - Last committed value, if the snapshot has this id
+ * @param absoluteLimit - Published cap
+ * @param unit - Rounding: whole bytes, or milliseconds to 0.001
+ */
+export function absoluteRegressionCeiling(
+  previous: number | undefined,
+  absoluteLimit: number,
+  unit: BudgetSample["unit"],
+): number | undefined {
+  if (previous === undefined || !(previous > 0)) return undefined;
+  const raw = previous * ABSOLUTE_REGRESSION_RATIO;
+  const ceiling = unit === "bytes" ? Math.round(raw) : Math.round(raw * 1000) / 1000;
+  if (ceiling >= absoluteLimit) return undefined;
+  return ceiling;
+}
+
+/**
+ * True when a rounded absolute sample is under the cap and any regression ceiling.
+ *
+ * @param value - Rounded measurement
+ * @param absoluteLimit - Published cap
+ * @param regressionLimit - Growth ceiling, when the cap would still allow it
+ */
+export function absoluteBudgetOk(
+  value: number,
+  absoluteLimit: number,
+  regressionLimit: number | undefined,
+): boolean {
+  if (value >= absoluteLimit) return false;
+  if (regressionLimit !== undefined && value >= regressionLimit) return false;
+  return true;
 }
 
 /**
@@ -542,8 +602,15 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
   const previous = await loadPreviousBudgetValues();
 
   // Cold start alone first — parallel gzip work contends for CPU on CI and
-  // falsely inflates the wall-clock probe.
-  const coldStartMedianMs = await measureColdStartMedianMs();
+  // falsely inflates the wall-clock probe. Exit under the 2× ceiling when
+  // that line is tighter than 75 ms, so a phantom jump gets another round
+  // instead of being recorded.
+  const coldCeiling = absoluteRegressionCeiling(
+    previous.get("coldStartMedianMs"),
+    COLD_START_BUDGET_MS,
+    "ms",
+  );
+  const coldStartMedianMs = await measureColdStartMedianMs(coldCeiling ?? COLD_START_BUDGET_MS);
   const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes, httpPing] =
     await Promise.all([
       measureKernelEdgeGzipBytes(),
@@ -562,6 +629,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       "bytes",
       "absolute",
       "core",
+      previous,
     ),
     sample(
       "clientGzipBytes",
@@ -571,6 +639,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       "bytes",
       "absolute",
       "core",
+      previous,
     ),
     sample(
       "consoleInitialGzipBytes",
@@ -580,6 +649,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       "bytes",
       "absolute",
       "core",
+      previous,
     ),
     sample(
       "coldStartMedianMs",
@@ -589,6 +659,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       "ms",
       "absolute",
       "core",
+      previous,
     ),
     sample(
       "routingP99Ms",
@@ -598,6 +669,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       "ms",
       "absolute",
       "core",
+      previous,
     ),
     regressionSample(
       "httpPingGzipBytes",
@@ -648,9 +720,7 @@ export function formatBudgetsReport(snapshot: BudgetsSnapshot): string {
     lines.push(GROUP_HEADINGS[group]);
     for (const b of rows) {
       const flag = b.ok ? "ok" : "FAIL";
-      lines.push(
-        `  [${flag}] ${b.label}: ${formatValue(b.value, b.unit)} < ${formatValue(b.limit, b.unit)}`,
-      );
+      lines.push(`  [${flag}] ${b.label}: ${formatValue(b.value, b.unit)} < ${formatBound(b)}`);
     }
   }
   return `${lines.join("\n")}\n`;
@@ -692,7 +762,7 @@ export function formatBudgetsMarkdown(snapshot: BudgetsSnapshot): string {
     "",
     `_okengine v${snapshot.version} · measured ${snapshot.measuredAt}_`,
     "",
-    "Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.",
+    "Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absolute sample also fails when it reaches 2× its last committed value and that multiple is still under the cap (cold start, and any other absolute row with the same headroom). Cold start keeps the best of five rounds and confirms a failure once, so one noisy run does not fail. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.",
   ];
   const order: readonly BudgetGroup[] = ["core", "exports", "plugins", "drivers"];
   for (const group of order) {
@@ -758,18 +828,35 @@ function sample(
   unit: BudgetSample["unit"],
   gate: BudgetGate,
   group: BudgetGroup,
+  previous?: ReadonlyMap<string, number>,
 ): BudgetSample {
   const rounded = unit === "bytes" ? Math.round(value) : Math.round(value * 1000) / 1000;
+  const regressionLimit =
+    gate === "absolute" ? absoluteRegressionCeiling(previous?.get(id), limit, unit) : undefined;
   return {
     id,
     label,
     value: rounded,
     limit,
+    ...(regressionLimit !== undefined ? { regressionLimit } : {}),
     unit,
     gate,
     group,
-    ok: rounded < limit,
+    ok: absoluteBudgetOk(rounded, limit, regressionLimit),
   };
+}
+
+/**
+ * CI log bound. When the 2× ceiling is tighter than the cap, print both.
+ *
+ * @param sample - Measured row
+ */
+function formatBound(row: BudgetSample): string {
+  const ceiling = row.regressionLimit;
+  if (ceiling !== undefined && ceiling < row.limit) {
+    return `${formatValue(ceiling, row.unit)} (cap ${formatValue(row.limit, row.unit)})`;
+  }
+  return formatValue(row.limit, row.unit);
 }
 
 /**

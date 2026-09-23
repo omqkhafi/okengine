@@ -75,7 +75,7 @@ Mnemonic: O·K·E = 6·5·3.
 | Cold start on Bun     | < 75 ms |
 | p99 routing overhead  | < 1 ms  |
 
-A regression fails the build. Claims we cannot measure, we do not make.
+A regression fails the build. An absolute sample that can still double and stay under its cap (cold start today) also fails at 2× the last committed value. Claims we cannot measure, we do not make.
 
 After changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts`, run `bun run budgets:core` (kernel edge + client gzip) before claiming done. Do not raise the published 17 kB / 5 kB caps without a measured before/after and an Unreleased changelog note; prefer lazy-loading off the edge graph.
 
@@ -103,7 +103,7 @@ Engine: Bun `>=1.4.2`.
 
 ## After every implementation
 
-Before claiming work done: run [`.agents/skills/oke-ship`](.agents/skills/oke-ship/SKILL.md) — append notes to `changelog.md` under `## Unreleased` (never under a shipped `## v…` section), and update site docs via [`.agents/skills/oke-docs`](.agents/skills/oke-docs/SKILL.md) for any user-facing surface. Version bump is separate: `bun run bump` promotes Unreleased into the next `## vX.Y.Z`.
+Before claiming work done: run [`.agents/skills/oke-ship`](.agents/skills/oke-ship/SKILL.md) — append notes to `changelog.md` under `## Unreleased` (never under a shipped `## v…` section), and update site docs via [`.agents/skills/oke-docs`](.agents/skills/oke-docs/SKILL.md) for any user-facing surface. Version bump is separate: `bun run bump` promotes Unreleased into the next `## vX.Y.Z`. Before that bump, run [`.agents/skills/oke-perf`](.agents/skills/oke-perf/SKILL.md).
 
 Do **NOT** run `bun run ci` automatically after finishing an implementation. Only run `bun run ci` when the user explicitly requests it.
 

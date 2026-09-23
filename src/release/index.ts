@@ -18,6 +18,7 @@ export {
 } from "./exports.ts";
 
 export {
+  ABSOLUTE_REGRESSION_RATIO,
   CLIENT_BUDGET_BYTES,
   COLD_START_BUDGET_MS,
   CONSOLE_BUDGET_BYTES,
@@ -28,6 +29,8 @@ export {
 } from "./limits.ts";
 
 export {
+  absoluteBudgetOk,
+  absoluteRegressionCeiling,
   budgetsPass,
   exportRegressionLimitBytes,
   formatBudgetsMarkdown,

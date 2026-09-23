@@ -46,7 +46,7 @@ Task:
 ### Fix discipline
 
 - **Format** when Format fails — run `bun run fmt`, then full `bun run ci` again.
-- **Budgets / cold start** — pause local `bun:dev` (and anything hammering the CPU) before re-running; do not raise the 75 ms cap to paper over load.
+- **Budgets / cold start** — pause local `bun:dev` (and anything hammering the CPU) before re-running. A failure can be the 2× regression ceiling, not the 75 ms cap. Do not raise the cap. If a quiet re-run still fails, the growth is real.
 - **Do not** `--no-verify`, skip hooks, or delete/weaken gates to get green.
 - **Do not** expand test skips to hide regressions. Integration skips stay skip-visible (`console.log("skip: …")` + `test.skip`).
 - Budgets / Gate / Site failures are real — treat them like test failures.

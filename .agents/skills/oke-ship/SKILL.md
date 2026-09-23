@@ -18,6 +18,8 @@ Run this **before** you claim the work is done. Incomplete changelog or silent d
 
 **Does not write Discord copy.** After a published `## v…` section exists, that is [oke-discord](../oke-discord/SKILL.md) — only when the user asks.
 
+**Does not measure perf drift.** Before `bun run bump`, that is [oke-perf](../oke-perf/SKILL.md).
+
 ## When to run
 
 After any implementation that changes behavior, API surface, CLI, plugins, drivers, config, errors, or user-facing docs. Skip only for pure typo/format-only edits with no product impact.
@@ -60,7 +62,7 @@ inside Unreleased (create the group / area if missing).
 Do not dump a new bullet at the top of a large group.
 ```
 
-**Version bump is separate** — when cutting a release:
+**Version bump is separate** — when cutting a release, run [oke-perf](../oke-perf/SKILL.md) first (drift the caps still allow), then:
 
 ```bash
 bun run bump        # or: bun run bump -- patch|minor|major
@@ -140,3 +142,4 @@ Fix every failure before finishing.
 - [ ] Docs authored via oke-docs when pages were created/rewritten
 - [ ] Changelog + docs gates pass
 - [ ] Version bump deferred to `bun run bump` when cutting the release
+- [ ] Before that bump, [oke-perf](../oke-perf/SKILL.md) has run

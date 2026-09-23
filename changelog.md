@@ -12,6 +12,25 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+- Absolute budget samples that can still double and stay under their cap
+  (cold start, and console initial load while it sits this far under 700 kB)
+  fail CI at 2× the last committed value. The 75 ms cold-start cap stays.
+  The probe keeps the best of five rounds and confirms a failure once, so
+  one noisy run does not fail the build.
+- The `okengine/http` static import graph fails CI when `zod` or the
+  hybrid-search runtime is included. Forbidden modules live in one list,
+  so the next heavy module is a single entry.
+- Agent skill `oke-perf` — before a release, measure budgets, flag drift
+  the gates still allow, bisect to the commit, and fix it with a lazy
+  import, `createDebouncedRunner`, or a memo (`/oke-perf`).
+
+### 🐛 Fixed
+
+- README quick start puts the health contract on `http.get({ out: HealthOut })`,
+  matching the create-oke starter. `out` stays on the exposure; the Flow is `do`.
+
 ## v0.21.1 — 2026-09-22
 
 ### ✨ Added
