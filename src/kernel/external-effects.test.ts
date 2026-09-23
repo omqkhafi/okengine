@@ -85,6 +85,42 @@ describe("fx.fetch", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("fx.race aborts an in-flight fx.fetch", async () => {
+    const originalFetch = globalThis.fetch;
+    let signal: AbortSignal | undefined;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        const onAbort = (): void => {
+          reject(new DOMException("aborted", "AbortError"));
+        };
+        if (init?.signal?.aborted) {
+          onAbort();
+          return;
+        }
+        init?.signal?.addEventListener("abort", onAbort, { once: true });
+      });
+    }) as typeof fetch;
+    try {
+      const { fx } = createFxContext({
+        flow: "stripe.pull",
+        effects: { fetches: ["api.stripe.com"] },
+      });
+      const winner = await fx.race([
+        () => fx.fetch("https://api.stripe.com/v1/charges").then(() => "slow"),
+        async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          return "fast" as const;
+        },
+      ]);
+      expect(winner).toBe("fast");
+      await new Promise((r) => setTimeout(r, 15));
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe("Channel failover — winning provider on EffectEntry", () => {

@@ -115,4 +115,14 @@ describe("builtin vault driver", () => {
       await rm(dir, { recursive: true, force: true });
     }
   }, 15_000);
+
+  test("webhook audit without a URL fails open instead of degrading", async () => {
+    await expect(
+      builtinVaultDriver.open({
+        connection: sharedConn,
+        env: {},
+        audit: { sink: "webhook" },
+      }),
+    ).rejects.toThrow(/webhookUrl/);
+  });
 });

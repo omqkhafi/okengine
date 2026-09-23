@@ -22,6 +22,7 @@ import type {
   TextIndexStore,
 } from "./types.ts";
 import { hostFromUrl } from "./external.ts";
+import { requestSignal } from "../kernel/abort-scope.ts";
 
 /** Error thrown when the remote Meilisearch is unreachable / unhealthy / errors. */
 export class MeilisearchUnavailableError extends Error {
@@ -134,6 +135,7 @@ export async function openMeilisearchIndex(
       res = await fetchFn(`${url}${path}`, {
         ...init,
         headers: { ...headers, ...(init?.headers ?? {}) },
+        signal: requestSignal(init?.signal ?? null),
       });
     } catch (err) {
       throw new MeilisearchUnavailableError(

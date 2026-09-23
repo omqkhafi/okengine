@@ -5,6 +5,7 @@
  * Bare `oke` (TTY) → interactive Ink TUI. `oke <command>` runs directly.
  */
 
+import type { VaultAuditConfig } from "../elements/vault/types.ts";
 import { aiCli } from "./ai.ts";
 import { branchCli } from "./branch.ts";
 import { buildCli } from "./build.ts";
@@ -28,6 +29,7 @@ import { stackCli } from "./stack.ts";
 import { startCli } from "./start.ts";
 import { testCli } from "./test.ts";
 import { upgradeCli } from "./upgrade.ts";
+import { loadOkeConfig } from "./load-config.ts";
 import { vaultCli } from "./vault-cmd.ts";
 
 const rawArgv = process.argv.slice(2);
@@ -90,7 +92,13 @@ if (cmd === "client" && sub === "add") {
 }
 
 if (cmd === "vault") {
-  process.exit(await vaultCli(sub ? [sub, ...rest] : rest));
+  let audit: VaultAuditConfig | undefined;
+  try {
+    audit = (await loadOkeConfig()).config.vault?.audit;
+  } catch {
+    audit = undefined;
+  }
+  process.exit(await vaultCli(sub ? [sub, ...rest] : rest, audit === undefined ? {} : { audit }));
 }
 
 if (cmd === "docker") {

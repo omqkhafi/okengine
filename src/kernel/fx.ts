@@ -62,7 +62,7 @@ import {
   touchDryRunStore,
 } from "./dry-run.ts";
 import type { FailFn } from "./errors.ts";
-import { currentAbortSignal, linkAbort } from "./abort-scope.ts";
+import { abortError, currentAbortSignal, linkAbort } from "./abort-scope.ts";
 import type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 import { maskRedactedDeep, Redacted } from "./redacted.ts";
 import type { JournalSession, JournalStepOptions } from "./journal.ts";
@@ -1201,6 +1201,8 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       | EffectExternal
       | ((result: T | undefined, error: unknown) => EffectExternal | undefined),
   ): Promise<T> {
+    const signal = currentAbortSignal();
+    if (signal.aborted) throw abortError(signal.reason);
     capability.assert(kind, resource);
     const execute = () => recordEffect(ledger, kind, resource, now, body, externalOf);
     if (journal) {
@@ -1511,6 +1513,8 @@ export function createFxContext(options: CreateFxOptions): FxContext {
    * @param body - Work to run under the gate
    */
   async function gatedSecret<T>(name: string, body: () => T | Promise<T>): Promise<T> {
+    const signal = currentAbortSignal();
+    if (signal.aborted) throw abortError(signal.reason);
     capability.assert("secret", name);
     const timestamp = now();
     const t0 = performance.now();

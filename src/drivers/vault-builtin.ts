@@ -18,6 +18,7 @@ import {
   sqlConnectionAsExec,
   type BuiltinVaultAdapter,
 } from "../elements/vault/builtin-adapter.ts";
+import { isVaultError } from "../elements/vault/errors.ts";
 import type { SqlConnection } from "./types.ts";
 import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
@@ -39,6 +40,10 @@ export interface OpenBuiltinVaultOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
   /** DEKs re-wrapped per master-rotation batch. */
   readonly kekRewrapBatchSize?: number;
+  /** `vault.audit` from config. Omitted means the SQL hash chain. */
+  readonly audit?: import("../elements/vault/types.ts").VaultAuditConfig;
+  /** Fetch override for the webhook audit sink (tests). */
+  readonly fetch?: typeof globalThis.fetch;
 }
 
 /** An adapter plus the connection this module opened for it, if any. */
@@ -76,6 +81,8 @@ export async function openBuiltinVaultAdapter(
     ...(options.kekRewrapBatchSize === undefined
       ? {}
       : { kekRewrapBatchSize: options.kekRewrapBatchSize }),
+    ...(options.audit === undefined ? {} : { audit: options.audit }),
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
 
   const masterKey = options.masterKey ?? env[VAULT_MASTER_KEY_ENV];
@@ -114,6 +121,8 @@ export const builtinVaultDriver: VaultDriver = {
         opened = await openBuiltinVaultAdapter({
           env,
           ...(options.connection !== undefined ? { connection: options.connection } : { url }),
+          ...(options.audit === undefined ? {} : { audit: options.audit }),
+          ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         });
         if (opened.adapter.getUnsealer() !== null) {
           for (const entry of await opened.adapter.list()) {
@@ -121,7 +130,10 @@ export const builtinVaultDriver: VaultDriver = {
             if (secret) map.set(entry.path, secret.value);
           }
         }
-      } catch {
+      } catch (err) {
+        // A bad audit sink is a config error — do not hide it behind the
+        // uninitialized-backend fallback.
+        if (isVaultError(err, "MISSING_PEER")) throw err;
         // Uninitialized / sealed / unreachable: fall back to the seed bag so
         // boot reports missing contracts instead of a driver stack trace.
         await opened?.close().catch(() => undefined);

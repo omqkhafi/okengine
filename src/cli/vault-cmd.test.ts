@@ -282,6 +282,29 @@ describe("oke vault audit", () => {
       await h.close();
     }
   });
+
+  test("audit verify refuses a webhook sink", async () => {
+    const sql = createMemoryVaultSql();
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((part) => String(part)).join(" "));
+    };
+    try {
+      const code = await vaultCli(["audit", "verify"], {
+        sql,
+        env: {},
+        stdinIsTTY: false,
+        audit: { sink: "webhook", webhookUrl: "https://audit.example/hook" },
+        write: () => undefined,
+      });
+      expect(code).toBe(1);
+      expect(errors.join("\n")).toContain('audit.sink "db"');
+    } finally {
+      console.error = original;
+      await sql.close();
+    }
+  });
 });
 
 describe("oke vault backup / restore", () => {

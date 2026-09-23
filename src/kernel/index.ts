@@ -212,6 +212,7 @@ export {
   currentAbortSignal,
   isAbortError,
   linkAbort,
+  requestSignal,
   withAbortSignal,
 } from "./abort-scope.ts";
 

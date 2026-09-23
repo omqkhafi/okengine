@@ -22,6 +22,7 @@ import {
 import { parseDotenv } from "../../drivers/vault-dotenv-parse.ts";
 import type { VaultDriverId } from "../../drivers/vault-types.ts";
 import { resolveComposeEnvPath } from "./chain.ts";
+import type { VaultAuditConfig } from "./types.ts";
 import type { VaultChainLayer } from "./runtime.ts";
 
 /** Options for {@link buildVaultBootChain}. */
@@ -34,6 +35,10 @@ export interface BuildVaultBootChainOptions {
   readonly env?: ConfigEnv;
   /** Seed secrets for the terminal memory / managed layer. */
   readonly seed?: Readonly<Record<string, string>>;
+  /**
+   * Built-in store audit block. Forwarded only to the `vault` driver layer.
+   */
+  readonly audit?: VaultAuditConfig;
 }
 
 /**
@@ -142,7 +147,10 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
         {
           driver: builtinVaultDriver,
           source: "driver",
-          options: { secrets: seed },
+          options: {
+            secrets: seed,
+            ...(options.audit === undefined ? {} : { audit: options.audit }),
+          },
         },
         ...envLayers,
       ];

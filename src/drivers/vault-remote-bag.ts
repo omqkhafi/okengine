@@ -8,6 +8,7 @@
  */
 
 import { VaultError } from "../elements/vault/errors.ts";
+import { requestSignal } from "../kernel/abort-scope.ts";
 import type { VaultBag } from "./vault-types.ts";
 
 /**
@@ -183,7 +184,10 @@ export async function vaultHttpJson(
 ): Promise<VaultHttpJsonResult> {
   let response: Response;
   try {
-    response = await fetchFn(url, init);
+    response = await fetchFn(url, {
+      ...init,
+      signal: requestSignal(init.signal),
+    });
   } catch (error) {
     throw asRemoteVaultError(error, message);
   }

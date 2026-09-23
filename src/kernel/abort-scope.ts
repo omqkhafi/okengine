@@ -2,8 +2,8 @@
  * Ambient AbortSignal scope for structured concurrency.
  *
  * Same ALS pattern as dry-run: `fx.all` / `fx.race` enter a child signal so
- * cooperative branches (and future driver plumbing) can observe cancellation
- * without every call site passing a signal argument.
+ * cooperative branches and outbound HTTP can observe cancellation without
+ * every call site passing a signal argument.
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -86,6 +86,22 @@ export function abortError(reason?: unknown): Error {
   );
   err.name = "AbortError";
   return err;
+}
+
+/**
+ * Signal for one outbound request: the ambient scope, the caller's signal, or both.
+ *
+ * Read at request time, not at driver `open`, so an `fx.race` / `fx.all` abort
+ * reaches HTTP that is already in flight.
+ *
+ * @param explicit - Caller-supplied signal, when the API already accepts one
+ */
+export function requestSignal(explicit?: AbortSignal | null): AbortSignal {
+  const ambient = currentAbortSignal();
+  if (explicit == null || explicit === ambient) return ambient;
+  if (ambient.aborted) return ambient;
+  if (explicit.aborted) return explicit;
+  return AbortSignal.any([ambient, explicit]);
 }
 
 /**

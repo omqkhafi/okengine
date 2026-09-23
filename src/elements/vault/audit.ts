@@ -9,8 +9,10 @@
 
 import { VaultError } from "./errors.ts";
 import type { VaultErrorCode } from "./errors.ts";
-import type { VaultActorType } from "./types.ts";
-import type { VaultAuditSinkKind } from "./types.ts";
+import type { VaultActorType, VaultAuditConfig, VaultAuditSinkKind } from "./types.ts";
+
+/** Bound on a webhook audit POST so a dead receiver cannot stall a write. */
+const AUDIT_WEBHOOK_TIMEOUT_MS = 5_000;
 
 /** Operations recorded in the audit chain. */
 export type AuditAction =
@@ -110,8 +112,10 @@ export interface AuditWriter {
 export interface CreateAuditSinkOptions {
   /** Required for the `db` sink. */
   readonly writer?: AuditWriter;
-  /** Required for the `webhook` sink (not yet implemented). */
+  /** Required for the `webhook` sink. Absolute `http:` or `https:` URL. */
   readonly webhookUrl?: string;
+  /** Fetch implementation for the `webhook` sink (tests). */
+  readonly fetch?: typeof globalThis.fetch;
   /** Line writer for the `stdout` sink (tests). */
   readonly write?: (line: string) => void;
   /** Clock for `stdout` timestamps (tests). */
@@ -170,22 +174,97 @@ export async function computeAuditRowHash(
 }
 
 /**
+ * Reject a webhook URL that is missing or not an absolute http(s) URL.
+ *
+ * @param webhookUrl - Configured destination
+ * @returns Absolute URL string
+ * @throws VaultError `MISSING_PEER` when the URL is absent or not http(s)
+ */
+function requireWebhookUrl(webhookUrl: string | undefined): string {
+  const raw = webhookUrl?.trim() ?? "";
+  if (raw.length === 0) {
+    throw new VaultError("MISSING_PEER", "vault: webhook audit sink requires webhookUrl");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new VaultError(
+      "MISSING_PEER",
+      "vault: webhook audit sink requires an absolute http(s) webhookUrl",
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new VaultError(
+      "MISSING_PEER",
+      "vault: webhook audit sink requires an absolute http(s) webhookUrl",
+    );
+  }
+  return parsed.href;
+}
+
+/**
+ * JSON body shared by the `stdout` and `webhook` sinks.
+ *
+ * Only normalized metadata is serialized — an entry never holds a value.
+ *
+ * @param entry - Operation to record
+ * @param now - Clock when the entry has no `at`
+ */
+function auditEventJson(entry: AuditEntry, now: () => Date): string {
+  return JSON.stringify({
+    sink: "oke.vault.audit",
+    ...toAuditHashPayload(entry, entry.at ?? now()),
+  });
+}
+
+/**
  * Build an audit sink.
  *
  * - `db` delegates to an {@link AuditWriter} supplied by storage.
  * - `stdout` writes one secret-free JSON line per operation.
- * - `webhook` is not implemented yet and throws `UNSUPPORTED`.
+ * - `webhook` POSTs that same JSON. Delivery failure throws; callers that
+ *   record after a successful operation swallow it.
+ *
+ * Hash-chain verify and purge apply only to the `db` sink.
  *
  * @param kind - Sink kind from `audit.sink`
  * @param opts - Writer / webhook URL / test seams
- * @throws VaultError `UNSUPPORTED` for `webhook`, or `MISSING_PEER` when `db` has no writer
+ * @throws VaultError `MISSING_PEER` when `db` has no writer or `webhook` has no absolute URL
  */
 export function createAuditSink(
   kind: VaultAuditSinkKind,
   opts: CreateAuditSinkOptions = {},
 ): AuditSink {
   if (kind === "webhook") {
-    throw new VaultError("UNSUPPORTED", "vault: webhook audit sink is not implemented");
+    const url = requireWebhookUrl(opts.webhookUrl);
+    const fetchFn = opts.fetch ?? globalThis.fetch;
+    const now = opts.now ?? (() => new Date());
+    return {
+      kind: "webhook",
+      async append(entry) {
+        const body = auditEventJson(entry, now);
+        let response: Response;
+        try {
+          response = await fetchFn(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+            redirect: "error",
+            signal: AbortSignal.timeout(AUDIT_WEBHOOK_TIMEOUT_MS),
+          });
+        } catch (err) {
+          if (err instanceof VaultError) throw err;
+          throw new VaultError("BACKEND_ERROR", "vault: webhook audit sink request failed");
+        }
+        if (!response.ok) {
+          throw new VaultError(
+            "BACKEND_ERROR",
+            `vault: webhook audit sink failed (${response.status})`,
+          );
+        }
+      },
+    };
   }
 
   if (kind === "db") {
@@ -206,15 +285,29 @@ export function createAuditSink(
   return {
     kind: "stdout",
     async append(entry) {
-      // Only normalized metadata is serialized — an entry never holds a value.
-      write(
-        JSON.stringify({
-          sink: "oke.vault.audit",
-          ...toAuditHashPayload(entry, entry.at ?? now()),
-        }),
-      );
+      write(auditEventJson(entry, now));
     },
   };
+}
+
+/**
+ * Pick the sink for a built-in adapter from `vault.audit`.
+ *
+ * `enabled: false` drops every row. Omitted config is the `db` chain.
+ *
+ * @param config - `vault.audit` block, when present
+ * @param opts - SQL writer and optional fetch
+ */
+export function auditSinkForConfig(
+  config: VaultAuditConfig | undefined,
+  opts: { readonly writer: AuditWriter; readonly fetch?: typeof globalThis.fetch },
+): AuditSink {
+  if (config?.enabled === false) return createNullAuditSink();
+  return createAuditSink(config?.sink ?? "db", {
+    writer: opts.writer,
+    ...(config?.webhookUrl === undefined ? {} : { webhookUrl: config.webhookUrl }),
+    ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
+  });
 }
 
 /**

@@ -46,8 +46,13 @@ export interface VaultOpenOptions {
   readonly region?: string;
   /** Seed map for `memory` / `managed` drivers. */
   readonly secrets?: Readonly<Record<string, string>>;
-  /** HTTP fetch override for remote drivers (tests). */
+  /** HTTP fetch override for remote drivers and the webhook audit sink (tests). */
   readonly fetch?: typeof globalThis.fetch;
+  /**
+   * Built-in vault audit block (`vault.audit`). Honored by the `vault` driver.
+   * Omitted means the SQL hash chain.
+   */
+  readonly audit?: import("../elements/vault/types.ts").VaultAuditConfig;
 }
 
 /** Resolved secret bag — names → cleartext values. Never logged. */

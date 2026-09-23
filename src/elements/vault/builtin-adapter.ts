@@ -20,7 +20,7 @@
  * cleartext value ever reaches the log, an error message, or a `VaultError`.
  */
 
-import { createAuditSink, type AuditAction, type AuditSink } from "./audit.ts";
+import { auditSinkForConfig, type AuditAction, type AuditSink } from "./audit.ts";
 import {
   ALGORITHM,
   buildAad,
@@ -66,6 +66,7 @@ import type {
   VaultActor,
   VaultAdapter,
   VaultAlgorithm,
+  VaultAuditConfig,
   VaultGetOptions,
   VaultInitResult,
   VaultListEntry,
@@ -96,8 +97,15 @@ export interface CreateBuiltinVaultOptions {
    * {@link VaultAdapter.unseal} is not required.
    */
   readonly unsealer?: Unsealer;
-  /** Audit destination. Defaults to a `db` sink over `oke_vault_audit`. */
+  /** Audit destination. Wins over {@link audit} when both are set. */
   readonly auditSink?: AuditSink;
+  /**
+   * `vault.audit` from config. Omitted means the `db` hash chain.
+   * Ignored when {@link auditSink} is set.
+   */
+  readonly audit?: VaultAuditConfig;
+  /** Fetch override for the `webhook` audit sink (tests). */
+  readonly fetch?: typeof globalThis.fetch;
   /** DEKs re-wrapped per rotation batch. Defaults to {@link DEFAULT_KEK_REWRAP_BATCH_SIZE}. */
   readonly kekRewrapBatchSize?: number;
   /**
@@ -306,7 +314,25 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
   const db = createResilientSqlExec(rawDb);
   const batchSize = Math.max(1, opts.kekRewrapBatchSize ?? DEFAULT_KEK_REWRAP_BATCH_SIZE);
   const rotateLeaseMs = Math.max(50, opts.rotateLeaseMs ?? DEFAULT_ROTATE_LEASE_MS);
-  const audit = opts.auditSink ?? createAuditSink("db", { writer: createSqlAuditWriter(rawDb) });
+  const audit =
+    opts.auditSink ??
+    auditSinkForConfig(opts.audit, {
+      writer: createSqlAuditWriter(rawDb),
+      ...(opts.fetch === undefined ? {} : { fetch: opts.fetch }),
+    });
+
+  /**
+   * Hash-chain commands only exist for the `db` sink.
+   *
+   * @param op - Command name for the error
+   */
+  function requireDbAudit(op: string): void {
+    if (audit.kind === "db") return;
+    throw new VaultError(
+      "UNSUPPORTED",
+      `vault: ${op} requires audit.sink "db" (got "${audit.kind}")`,
+    );
+  }
 
   let unsealer: Unsealer | null = opts.unsealer ?? null;
   let pending: PendingRotation | null = null;
@@ -1018,6 +1044,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
     },
 
     async purgeAuditBefore(before: Date): Promise<number> {
+      requireDbAudit("audit purge");
       await ensureReady();
       const removed = await purgeAuditRows(db, before);
       await record("purge", undefined);
@@ -1043,16 +1070,19 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
     },
 
     async verifyAudit(): Promise<AuditChainResult> {
+      requireDbAudit("audit verify");
       await ensureReady();
       return verifyAuditChain(db);
     },
 
     async listAudit(options?: AuditPageOptions): Promise<readonly VaultAuditRecord[]> {
+      requireDbAudit("audit list");
       await ensureReady();
       return readAuditPage(db, options ?? {});
     },
 
     async readAuditRow(id: string): Promise<VaultAuditRecord | null> {
+      requireDbAudit("audit read");
       await ensureReady();
       return readAuditRow(db, id);
     },

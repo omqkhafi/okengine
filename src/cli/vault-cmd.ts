@@ -24,6 +24,7 @@ import type { SqlConnection } from "../drivers/types.ts";
 import { openBuiltinVaultAdapter, VAULT_MASTER_KEY_ENV } from "../drivers/vault-builtin.ts";
 import { parseDotenv, formatDotenv } from "../drivers/vault-dotenv-parse.ts";
 import type { BuiltinVaultAdapter } from "../elements/vault/builtin-adapter.ts";
+import type { VaultAuditConfig } from "../elements/vault/types.ts";
 import { promptHidden, readStdinSecure } from "./vault-secure-input.ts";
 
 /** Env var for the *new* master key when resuming an interrupted `rotate-master`. */
@@ -70,6 +71,11 @@ export interface VaultCmdOptions {
    * closes a connection it did not open.
    */
   readonly sql?: SqlConnection;
+  /**
+   * `vault.audit` from `oke.config.ts`. The `oke` binary loads this; tests
+   * pass it directly. Omitted means the SQL hash chain.
+   */
+  readonly audit?: VaultAuditConfig;
 }
 
 /**
@@ -332,6 +338,7 @@ async function withVault<T>(
     masterKey,
     ...(flags.url === undefined ? {} : { url: flags.url }),
     ...(options.sql === undefined ? {} : { connection: options.sql }),
+    ...(options.audit === undefined ? {} : { audit: options.audit }),
   });
   try {
     return await run(opened.adapter);

@@ -190,10 +190,13 @@ const charge = await fx.step("charge", () =>
 | `when`            | thrown  | Predicate; skips `AbortError` and sleep park |
 
 <Callout title="Cooperative cancel">
-  Losing branches see `fx.signal` abort. Drivers that do not yet honor the signal may still finish
-  in the background — check `fx.signal.aborted` in long user work, and prefer `fx.all` over bare
-  `Promise.all`.
+  Losing branches see `fx.signal` abort. `fx.fetch`, Meilisearch, remote Vault HTTP, and AI streams
+  cancel in flight. An effect that has not started throws `AbortError`.
 </Callout>
+
+SQL (`Bun.sql`), Redis, and a Channel send already on the wire through sently still finish. Those
+clients expose no abort hook, and the shared connection stays open. Prefer `fx.all` over bare
+`Promise.all`.
 
 `fx.using(acquire, release, use)` scopes a process-local resource to one attempt: `release` runs
 exactly once when `use` settles **or** when the ambient signal aborts (a sibling `fx.race` winner,
@@ -223,7 +226,7 @@ contact a provider. Bodies live on `.template({ catalog })` (`{{field}}`, not IC
 
 | Signature              | Records                     | Notes                                                                     |
 | ---------------------- | --------------------------- | ------------------------------------------------------------------------- |
-| `fx.fetch(url, init?)` | `fetch` on the URL hostname | Always stamps `EffectEntry.external` with `{ host, kind: "third-party" }` |
+| `fx.fetch(url, init?)` | `fetch` on the URL hostname | Stamps `external: { host, kind: "third-party" }`. Aborts with `fx.signal`. |
 
 Declare hosts in `effects.fetches` (e.g. `["api.stripe.com"]`). Prefer `fx.step`; use
 `fx.retry` only when the remote API is safe to repeat. Dry runs never hit the network.

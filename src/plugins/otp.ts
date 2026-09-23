@@ -77,7 +77,8 @@ export interface OtpProviderModeOptions extends OtpBaseOptions {
   readonly channels?: never;
   /** Forbidden in provider mode — code never exists server-side. */
   readonly exposeDevOtp?: never;
-  readonly resendCooldownMs?: never;
+  /** Spacing between provider SMS resends. Default 60s. */
+  readonly resendCooldownMs?: number;
   readonly from?: never;
 }
 
@@ -216,10 +217,7 @@ export function otp(opts: OtpOptions): PluginDef {
   const identities = resolveSharedIdentities(opts);
   const verifications = opts.verifications ?? createVerificationStore();
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
-  const resendCooldownMs =
-    opts.mode === "app"
-      ? (opts.resendCooldownMs ?? DEFAULT_RESEND_COOLDOWN_MS)
-      : DEFAULT_RESEND_COOLDOWN_MS;
+  const resendCooldownMs = opts.resendCooldownMs ?? DEFAULT_RESEND_COOLDOWN_MS;
   const channels = opts.mode === "app" ? opts.channels : ([] as const);
   const exposeDevOtp = opts.mode === "app" && opts.exposeDevOtp === true;
   const from = opts.mode === "app" ? opts.from : undefined;
@@ -288,8 +286,61 @@ export function otp(opts: OtpOptions): PluginDef {
           attempts: 0,
           phone,
           sealedOtp: null,
+          lastDeliveredAt: now,
+          lastChannel: "sms",
         });
-        // Provider mode: resend-via-different-channel is impossible — provider owns the code.
+        return { ok: true as const, channel: "sms" as const };
+      },
+    });
+
+    const resendContract = {
+      in: z.object({
+        phone: z.string().min(8),
+        lang: z.enum(["en", "ar"]).optional(),
+        channel: z.enum(["sms", "whatsapp", "email"]).optional(),
+      }),
+      out: requestOut,
+      errors: { AuthFailed, AuthRateLimited },
+    };
+
+    const resend = flow("auth.resendOtp", {
+      plane: "user",
+      effects: { sends: ["sms-otp"] },
+      do: async (input, fx) => {
+        if (input.channel !== undefined && input.channel !== "sms") {
+          return fail("AuthFailed", { reason: "invalid_channel" });
+        }
+        const phone = input.phone.trim();
+        if (!E164.test(phone)) return fail("AuthFailed", { reason: "invalid_phone" });
+        const now = runtime.now();
+        const row = findActiveVerification(verifications, `otp:${phone}`, now);
+        if (!row || row.sealedOtp) {
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        if (row.lastDeliveredAt !== undefined && now - row.lastDeliveredAt < resendCooldownMs) {
+          return fail("AuthFailed", { reason: "resend_cooldown" });
+        }
+
+        const requestId = okid();
+        await fx.sendOtp({
+          to: phone,
+          requestId,
+          ...(input.lang ? { lang: input.lang } : {}),
+        });
+        invalidateVerifications(verifications, `otp:${phone}`, now);
+        putVerification(verifications, {
+          id: okid(),
+          identifier: `otp:${phone}`,
+          value: `provider:${requestId}`,
+          expiresAt: now + ttlMs,
+          createdAt: now,
+          consumedAt: null,
+          attempts: 0,
+          phone,
+          sealedOtp: null,
+          lastDeliveredAt: now,
+          lastChannel: "sms",
+        });
         return { ok: true as const, channel: "sms" as const };
       },
     });
@@ -373,7 +424,8 @@ export function otp(opts: OtpOptions): PluginDef {
     return plugin("otp", { version: "0.0.1", config: configSnapshot })
       .needs("auth")
       .binding(bindPublicAuth("/otp/request", request, "otp", requestContract))
-      .binding(bindPublicAuth("/otp/verify", verify, "otp", verifyContract));
+      .binding(bindPublicAuth("/otp/verify", verify, "otp", verifyContract))
+      .binding(bindPublicAuth("/otp/resend", resend, "otp", resendContract));
   }
 
   // ── App mode ───────────────────────────────────────────────────────────

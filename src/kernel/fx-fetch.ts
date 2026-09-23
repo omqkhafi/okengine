@@ -5,6 +5,7 @@
 
 import type { EffectExternal } from "./effects.ts";
 import { isDryRun, recordWouldHaveFired } from "./dry-run.ts";
+import { requestSignal } from "./abort-scope.ts";
 
 /**
  * Hostname for `fx.fetch` capability / ledger resource.
@@ -48,7 +49,10 @@ export function runFxFetch(gated: Gated, url: string | URL, init?: RequestInit):
         recordWouldHaveFired("fetch", host);
         return new Response(null, { status: 204 });
       }
-      return globalThis.fetch(url, init);
+      return globalThis.fetch(url, {
+        ...init,
+        signal: requestSignal(init?.signal),
+      });
     },
     { host, kind: "third-party" },
   );

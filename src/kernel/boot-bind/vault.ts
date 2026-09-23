@@ -51,6 +51,7 @@ export async function bindVault(options: BootOptions, env: ConfigEnv): Promise<V
       env,
       cwd: process.cwd(),
       seed: {},
+      ...(options.config?.vault?.audit === undefined ? {} : { audit: options.config.vault.audit }),
     });
   const vault = createVaultRuntime({
     secrets: vaultSecrets,

@@ -117,7 +117,68 @@ describe("otp() provider mode boot", () => {
     const body = (await res.json()) as { data: { ok: true; devOtp?: string } };
     expect(body.data.ok).toBe(true);
     expect(body.data.devOtp).toBeUndefined();
-    expect(app.router.match("POST", "/auth/otp/resend")).toBeFalsy();
+    expect(app.router.match("POST", "/auth/otp/resend")).toBeTruthy();
+    await app.stop();
+  });
+
+  test("SMS resend issues a new request id, honors cooldown, and rejects another channel", async () => {
+    let now = 1_000_000;
+    const requestIds: string[] = [];
+    const verifications = createVerificationStore();
+    const driver = mockOtpSmsDriver();
+    const transport = driver.smsTransport as SmsOtpTransport;
+    const original = transport.sendOtp.bind(transport);
+    transport.sendOtp = async (opts) => {
+      requestIds.push(opts.requestId);
+      return original(opts);
+    };
+
+    const app = oke({
+      name: `otp-provider-resend-${crypto.randomUUID()}`,
+      env: "test",
+      registry: "ignore",
+      gate: { auth: { secret: SECRET } },
+      channel: { drivers: [driver] },
+      fx: { now: () => now },
+    }).plug(
+      otp({
+        mode: "provider",
+        resendCooldownMs: 60_000,
+        verifications,
+        now: () => now,
+      }),
+    );
+    await app.boot({ env: "test" });
+
+    const phone = "+15551234567";
+    expect((await app.fetch(jsonPost("/auth/otp/request", { phone }))).status).toBe(200);
+    const first = findActiveVerification(verifications, `otp:${phone}`, now);
+    expect(first?.value.startsWith("provider:")).toBe(true);
+    expect(first?.sealedOtp).toBeNull();
+    const firstId = first?.value.slice("provider:".length);
+
+    const cooled = await app.fetch(jsonPost("/auth/otp/resend", { phone }));
+    const cooledBody = (await cooled.json()) as { error?: { data?: { reason?: string } } };
+    expect(cooledBody.error?.data?.reason).toBe("resend_cooldown");
+
+    const other = await app.fetch(jsonPost("/auth/otp/resend", { phone, channel: "email" }));
+    const otherBody = (await other.json()) as { error?: { data?: { reason?: string } } };
+    expect(otherBody.error?.data?.reason).toBe("invalid_channel");
+
+    now += 60_001;
+    const resent = await app.fetch(jsonPost("/auth/otp/resend", { phone, channel: "sms" }));
+    expect(resent.status).toBe(200);
+    const resentBody = (await resent.json()) as { data: { channel: string; devOtp?: string } };
+    expect(resentBody.data.channel).toBe("sms");
+    expect(resentBody.data.devOtp).toBeUndefined();
+
+    const second = findActiveVerification(verifications, `otp:${phone}`, now);
+    const secondId = second?.value.slice("provider:".length);
+    expect(secondId).toBeDefined();
+    expect(secondId).not.toBe(firstId);
+    expect(requestIds).toEqual([firstId, secondId]);
+    expect(findActiveVerification(verifications, `otp:${phone}`, now)?.sealedOtp).toBeNull();
+
     await app.stop();
   });
 });

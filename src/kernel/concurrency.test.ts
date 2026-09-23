@@ -90,6 +90,39 @@ describe("fx.race — structured concurrency", () => {
   test("empty race throws", async () => {
     await expect(fxRace([])).rejects.toThrow(/empty/);
   });
+
+  test("a gated effect does not start after the branch is aborted", async () => {
+    const { fx } = createFxContext({
+      flow: "t",
+      effects: { reads: ["sql:notes"] },
+    });
+    const store = fx.store("sql:notes") as { get(key: string): Promise<unknown> };
+    let sawAbort = false;
+
+    const winner = await fx.race([
+      async () => {
+        await new Promise<void>((resolve) => {
+          const signal = fx.signal;
+          if (signal.aborted) {
+            resolve();
+            return;
+          }
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        try {
+          await store.get("n1");
+        } catch (err) {
+          sawAbort = isAbortError(err);
+        }
+        return "slow";
+      },
+      async () => "fast",
+    ]);
+
+    expect(winner).toBe("fast");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sawAbort).toBe(true);
+  });
 });
 
 describe("fx.using — scoped cleanup", () => {

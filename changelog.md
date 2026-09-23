@@ -14,6 +14,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+- Vault `audit.sink: "webhook"` POSTs each operation as secret-free JSON to
+  `vault.audit.webhookUrl`. `oke vault audit` (list, verify, purge) stays on
+  the SQL hash chain and refuses `stdout` / `webhook`.
+- `otp({ mode: "provider" })` exposes `POST /auth/otp/resend` for the same SMS
+  number. The provider issues a new code; `resendCooldownMs` applies. Another
+  channel is rejected.
 - Absolute budget samples that can still double and stay under their cap
   (cold start, and console initial load while it sits this far under 700 kB)
   fail CI at 2× the last committed value. The 75 ms cold-start cap stays.
@@ -25,6 +31,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Agent skill `oke-perf` — before a release, measure budgets, flag drift
   the gates still allow, bisect to the commit, and fix it with a lazy
   import, `createDebouncedRunner`, or a memo (`/oke-perf`).
+
+### ♻️ Changed
+
+- `fx.fetch`, Meilisearch, and remote Vault HTTP abort with the ambient
+  `fx.signal` (`fx.race` / `fx.all`). An effect that has not started throws
+  `AbortError`. SQL, Redis, and an in-flight sently Channel send still finish.
 
 ### 🐛 Fixed
 

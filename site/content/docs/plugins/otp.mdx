@@ -69,7 +69,7 @@ invalidated. Delivery follows `channels` order for addresses you pass.
 </Step>
 
 <Step>
-### Resend on another channel (app mode only)
+### Resend
 
 ```typescript
 const { data } = await api.auth.resendOtp({
@@ -79,8 +79,8 @@ const { data } = await api.auth.resendOtp({
 });
 ```
 
-Same code, same TTL. Default cooldown is 60 seconds. Provider mode has no
-resend surface — the provider owns the code.
+App mode keeps the same code and TTL. Provider mode is SMS only and asks the
+provider for a new code. Default cooldown is 60 seconds either way.
 
 </Step>
 
@@ -114,12 +114,12 @@ const { data } = await api.auth.verifyOtp({
 | Who owns the code    | Provider (Verify API)         | Your app                                      |
 | Delivery             | `fx.sendOtp` / `fx.verifyOtp` | `fx.deliverOtp` (Channel templates)           |
 | Channels             | SMS only                      | `sms` · `whatsapp` · `email` (declared order) |
-| Resend other channel | Impossible                    | `POST /auth/otp/resend`                       |
+| Resend                 | SMS only, new provider code   | Same code, any declared channel               |
 | `exposeDevOtp`       | Forbidden                     | Optional (default off)                        |
 
 <Callout type="warn" title="Provider mode limitation">
-  Resend-via-different-channel is impossible in provider mode — the code value is never visible to
-  OKE. Use app mode when you need SMS → email fallback for the same code.
+  A provider resend is a new SMS code (`resendCooldownMs`, default 60s). The code never reaches
+  OKE, so SMS → email for the same code needs `mode: "app"`.
 </Callout>
 
 ### Provider mode setup
@@ -159,7 +159,7 @@ Override copy with `oke({ channel.catalog })` or `.channelCatalog(…)` (later l
 | `mode`             | `"provider" \| "app"`            | required                   | Delivery mechanism — no auto        |
 | `channels`         | `("sms"\|"whatsapp"\|"email")[]` | required in app mode       | Build-time preferred order          |
 | `ttlMs`            | `number`                         | 10m                        | Challenge lifetime                  |
-| `resendCooldownMs` | `number`                         | 60s                        | App-mode resend spacing             |
+| `resendCooldownMs` | `number`                         | 60s                        | Spacing between resends (both modes) |
 | `exposeDevOtp`     | `boolean`                        | `false`                    | App mode only — raw OTP in response |
 | `from`             | `string`                         | `OKE <no-reply@oke.local>` | Email template From                 |
 | `secret`           | `string`                         | active\*                   | Auth secret (\*from `gate.auth`)    |
@@ -174,7 +174,7 @@ Override copy with `oke({ channel.catalog })` or `.channelCatalog(…)` (later l
 | ----------------- | ------------------------ | ------------------------ | ------------- |
 | `auth.requestOtp` | `POST /auth/otp/request` | `gate.public` + otp rate | both          |
 | `auth.verifyOtp`  | `POST /auth/otp/verify`  | `gate.public` + otp rate | both          |
-| `auth.resendOtp`  | `POST /auth/otp/resend`  | `gate.public` + otp rate | app mode only |
+| `auth.resendOtp`  | `POST /auth/otp/resend`  | `gate.public` + otp rate | both (provider: SMS only) |
 
 ## Troubleshooting
 
