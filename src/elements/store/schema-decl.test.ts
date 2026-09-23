@@ -289,6 +289,7 @@ describe("store.schema RLS extras", () => {
       "scope_booking_create_insert",
     ]);
     const src = emitDrizzleSource([bookings], "postgres");
+    expect(src).toContain("pgTable.withRLS");
     expect(src).toContain("pgPolicy");
     expect(src).toContain("oke.gate() = ");
     expect(src).toContain("oke.user()");

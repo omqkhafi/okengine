@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createTestApp, type TestApp } from "okengine/test";
 import { app, type App } from "@/app";
+import { redirects } from "@/core";
 
 process.env.OKE_PGLITE_URL ??= "memory://";
 
@@ -195,6 +196,34 @@ test("create rejects non-http urls, reserved aliases, and duplicates", async () 
     { as: owner },
   );
   expect(again.error?.code).toBe("Conflict");
+});
+
+test("cold cache GET /:code is 302 after the row exists", async () => {
+  const owner = await t.auth.loginAs({ id: "usr_cold" });
+  const created = await t.api.links!.create!(
+    { url: "https://oke.omqkhafi.dev/cold", code: "cold" },
+    { as: owner },
+  );
+  expect(created.error).toBeNull();
+  const owned = await t.api.links!.get!({ code: "cold" }, { as: owner });
+  expect(owned.error).toBeNull();
+  expect((owned.data as { code: string }).code).toBe("cold");
+
+  const warm = await app.fetch(new Request("http://localhost/cold", { redirect: "manual" }));
+  expect(warm.status).toBe(302);
+  expect(warm.headers.get("Location")).toBe("https://oke.omqkhafi.dev/cold");
+
+  const store = app.bootResult?.store;
+  if (!store) throw new Error("store runtime missing");
+  const handle = await store.open(redirects, {
+    effects: { reads: ["kv:redirects"], writes: ["kv:redirects"] },
+  });
+  if (!("ttlMs" in handle)) throw new Error("expected the redirects kv handle");
+  expect(await handle.delete("cold")).toBe(true);
+
+  const cold = await app.fetch(new Request("http://localhost/cold", { redirect: "manual" }));
+  expect(cold.status).toBe(302);
+  expect(cold.headers.get("Location")).toBe("https://oke.omqkhafi.dev/cold");
 });
 
 test("unknown public code is not a 302", async () => {

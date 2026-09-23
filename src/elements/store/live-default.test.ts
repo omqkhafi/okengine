@@ -88,6 +88,7 @@ describe("project-wide store.live default — real boot", () => {
     });
     try {
       await createTestApp(app, {
+        capability: "open",
         boot: {
           stores: [db],
           config: { drivers: { store: { sql: { test: "pglite" } } } },
@@ -127,6 +128,7 @@ describe("project-wide store.live default — real boot", () => {
     });
     try {
       await createTestApp(app, {
+        capability: "open",
         boot: {
           stores: [db],
           config: { drivers: { store: { sql: { test: "pglite" } } } },

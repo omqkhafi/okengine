@@ -124,6 +124,7 @@ describe("manual live flow (.live(table) + liveQuery) — real boot", () => {
     // SQL unless boot.config.drivers.store.sql is set explicitly.
     try {
       await createTestApp(app, {
+        capability: "open",
         boot: {
           stores: [db],
           config: { drivers: { store: { sql: { test: "pglite" } } } },

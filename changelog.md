@@ -12,8 +12,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.22.0 — 2026-09-24
+
 ### ✨ Added
 
+- Effect inference follows a project helper whose parameter is named `fx`, and
+  a same-function `fx.store` chain alias. `liveQuery` and `applySearchEmbedCdc`
+  record their effects as package intrinsics. The shorter starter's link flows
+  stamp the SQL, KV, and signal effects those helpers perform.
 - Vault `audit.sink: "webhook"` POSTs each operation as secret-free JSON to
   `vault.audit.webhookUrl`. `oke vault audit` (list, verify, purge) stays on
   the SQL hash chain and refuses `stdout` / `webhook`.
@@ -37,6 +43,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Client `retry` no longer repeats mutations. Network errors and non-envelope
   5xx retry only for `GET` and `QUERY`. `POST` and other methods run once
   unless the call passes `{ retry: true }`.
+- `createTestApp` enforces Manifest tokens. Inline tests that are not an app
+  pass `capability: "open"`. App suites pick the tokens up from the project
+  root.
+- Code that renames, destructures, or lets `fx` (or a chain alias) escape
+  fails extract with **OKE1900**. Name the parameter `fx` and keep chain
+  aliases in the same function. An explicit `effects` block must include
+  every effect inference can see. It may add keys. It no longer replaces
+  the inferred set.
+- Store RLS emit calls `pgTable.withRLS` whenever `rls: true`. Before, an
+  insert-only table did not enable RLS in the generated file. After, RLS is
+  on and any command without a policy returns zero rows for `oke_app`.
+  Shorter adds an open SELECT policy in the same change.
 
 ### ♻️ Changed
 

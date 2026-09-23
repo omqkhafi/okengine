@@ -111,6 +111,7 @@ describe("Provisions integration", () => {
     app.adopt(chargeOrder);
 
     const t = await createTestApp(app, {
+      capability: "open",
       gates: [member, canOrder],
       secrets: [stripeKey],
       signals: [orderPlaced, orderNews],

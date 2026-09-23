@@ -81,6 +81,7 @@ describe("createTestApp — four-applications surface", () => {
     });
 
     const t = await createTestApp(app, {
+      capability: "open",
       gates: [member],
       signals: [orderPlaced],
       boot: {
@@ -116,7 +117,7 @@ describe("createTestApp — four-applications surface", () => {
     resetBindings();
     resetFlowSeq();
     const app = oke({ name: "ai-harness", env: "test" });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     t.ai.mock("ticket-triage", { urgency: "high", team: "ops" });
     expect(t.ai.cost()).toBeLessThan(0.02);
     await t.close();
@@ -131,6 +132,7 @@ describe("createTestApp — vault gaps still fail boot", () => {
 
     try {
       await createTestApp(app, {
+        capability: "open",
         secrets: [vault("A", { description: "alpha" }), vault("B", { description: "beta" })],
         boot: {
           env: "prod",

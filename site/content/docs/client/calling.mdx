@@ -476,10 +476,9 @@ Restart `oke dev` after renaming exports.
 </Accordion>
 
 <Accordion title='error.code is "TransportError"'>
-  Network failure, abort (`timeout`), non-JSON body, empty error response, or HTTP status without a
-  `{ data, error }` envelope. Built-in and domain flow codes never use this code.
-  Prefer `error.message` — it always equals `error.data.message`. `explain` maps HTTP 404 transport
-  to kind `missing`.
+  Network failure, abort, non-JSON, or HTTP without a `{ data, error }` envelope. Flow codes never
+  use this code. Prefer `error.message` — it equals `error.data.message`. `explain` maps HTTP 404
+  transport to kind `missing`.
 </Accordion>
 
 <Accordion title="Why import from okengine/client/explain?">

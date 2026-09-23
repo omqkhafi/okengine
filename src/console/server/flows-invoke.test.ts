@@ -622,7 +622,7 @@ describe("console flows invoke", () => {
       config: { drivers: { store: { sql: { test: "pglite" } } } },
       startScheduler: false,
     });
-    const harness = await createTestApp(host);
+    const harness = await createTestApp(host, { capability: "open" });
     const seedFlow = host.bindings.find((b) => b.flow.name === "views.seed")?.flow;
     expect(seedFlow).toBeDefined();
     const seeded = await host.execute(
@@ -728,7 +728,7 @@ describe("console flows invoke", () => {
       config: { drivers: { store: { sql: { test: "pglite" } } } },
       startScheduler: false,
     });
-    const harness = await createTestApp(host);
+    const harness = await createTestApp(host, { capability: "open" });
     const manifest = {
       ...FLOWS_TEST_MANIFEST,
       flows: {

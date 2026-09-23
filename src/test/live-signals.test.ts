@@ -41,6 +41,7 @@ describe("createTestApp live-signal subscriptions", () => {
     });
 
     const t = await createTestApp(app, {
+      capability: "open",
       signals: [orderStatus],
     });
 

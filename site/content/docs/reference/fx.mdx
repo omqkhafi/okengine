@@ -54,7 +54,9 @@ async function loadNote(id: string, fx: Fx) {
 }
 ```
 
-A narrower structural type will not match `store()` overloads. See [Flow](/docs/elements/flow).
+Name that parameter `fx`. A narrower structural type will not match `store()` overloads. See [Flow](/docs/elements/flow).
+
+Inference follows `fx` in four shapes: a direct `fx.*` call, a chain alias kept in the same function (`const q = fx.store(db)` then `q.select()`), a project helper whose parameter is named `fx`, and two package intrinsics — `liveQuery(fx, table, …)` records `reads: ["sql:<table>"]`, and `applySearchEmbedCdc` records the static `sqlRef` plus each column's embed model.
 
 </Step>
 
@@ -155,11 +157,13 @@ on(
 | `fx.auth.createTenant({ name, slug?, id? })`                                   | `write` `auth:tenants`  | Creator becomes a member. Session only                                                             |
 | `fx.auth.upsertTenantRole({ tenantId, roleName, scopes })`                     | `write` `auth:tenants`  | Application scopes only — `console:*` is unknown_scope                                             |
 
-`fx.call` starts the callee with an **empty** `fx.auth` (fail-closed for authorization) and
-propagates `fx.tenant.id`. For audit/attribution only, read `fx.principal` — it propagates the
-originating identity without copying into `fx.auth`. Gates never consult `fx.principal`.
-Controlled `return fx.fail(...)` returns a `FlowFailure` value; an unhandled `throw` rethrows
-(never silent `undefined`). The same rules apply to `app.call`.
+`fx.call` starts the callee with an **empty** `fx.auth` (fail-closed) and propagates `fx.tenant.id`.
+Read `fx.principal` for audit — it does not copy into `fx.auth`.
+
+<Callout>
+  Gates never consult `fx.principal`. `return fx.fail(...)` is a `FlowFailure`; an unhandled
+  `throw` rethrows. The same rules apply to `app.call`.
+</Callout>
 
 ## Concurrency and retry
 
@@ -343,9 +347,15 @@ to the key — see [Gate](/docs/elements/gate#api-keys).
 <Accordions>
 
 <Accordion title="OKE1001–1007 / 1008 / 1009 undeclared effect">
-  An explicit `effects` block drifted from what `do` touches. Add the missing ledger entry (`reads`
-  · `writes` · `emits` · `sends` · `asks` · `embeds` · `secrets` · `calls` · `fetches`), or drop the
-  block so inference covers the Flow ([Errors](/docs/reference/errors)).
+  The Manifest token does not include what `do` touched. Add the missing ledger entry (`reads` ·
+  `writes` · `emits` · `sends` · `asks` · `embeds` · `secrets` · `calls` · `fetches`). An `effects`
+  block must include every effect inference can see ([Errors](/docs/reference/errors)).
+</Accordion>
+
+<Accordion title="OKE1900 fx hidden from inference">
+  Name the parameter `fx` and keep chain aliases in the same function. Passing `fx` to an unresolved
+  callee, or returning, reassigning, or storing `fx` or a chain alias, fails extract. An `effects`
+  block may add keys. It must include every effect the walk can see.
 </Accordion>
 
 <Accordion title="OKE1240 orphan emit">

@@ -14,6 +14,7 @@
  * ```
  */
 
+import { stat } from "node:fs/promises";
 import {
   createMockAiDriver,
   createChannelInbox,
@@ -29,6 +30,7 @@ import type { GateDecl } from "../elements/gate.ts";
 import { flattenGatePolicies } from "../elements/gate/config.ts";
 import type { SignalDecl } from "../elements/signal.ts";
 import type { VaultSecretDecl } from "../elements/vault.ts";
+import { extractManifest } from "../compiler/extract.ts";
 import type { OkeApp } from "../kernel/app.ts";
 import type { BootOptions } from "../kernel/boot.ts";
 import type { EffectEntry } from "../kernel/effects.ts";
@@ -212,6 +214,26 @@ export interface CreateTestAppOptions {
   readonly vaultSecrets?: Readonly<Record<string, string>>;
   /** Start the background scheduler (default false). */
   readonly startScheduler?: boolean;
+  /**
+   * `manifest` (default) extracts the app and stamps capability tokens.
+   * `open` keeps an ungated token for inline flows that are not an app.
+   */
+  readonly capability?: "manifest" | "open";
+}
+
+/**
+ * True when `dir` is an app tree (`oke.config.ts` or `src/flows`).
+ *
+ * @param dir - Candidate root
+ */
+async function isTestAppRoot(dir: string): Promise<boolean> {
+  if (await Bun.file(`${dir}/oke.config.ts`).exists()) return true;
+  try {
+    const info = await stat(`${dir}/src/flows`);
+    return info.isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -270,8 +292,26 @@ export async function createTestApp<App extends OkeApp>(
   };
   const rawGates = options.gates ?? options.boot?.gates ?? appOpts.gate?.policies;
 
+  const capability = options.capability ?? "manifest";
+  let manifest = options.boot?.manifest;
+  let rootDir = options.boot?.rootDir;
+  if (capability === "manifest" && manifest === undefined) {
+    const explicit = rootDir ?? process.env["OKE_ROOT_DIR"];
+    const discovered =
+      explicit ?? ((await isTestAppRoot(process.cwd())) ? process.cwd() : undefined);
+    if (!discovered) {
+      throw new Error(
+        'createTestApp: no app root. Pass capability: "open" for inline flows, or rootDir for an app tree.',
+      );
+    }
+    rootDir = discovered;
+    manifest = await extractManifest({ rootDir: discovered });
+  }
+
   await app.boot({
     ...(options.boot ?? {}),
+    ...(capability === "manifest" && rootDir !== undefined ? { rootDir } : {}),
+    ...(capability === "manifest" && manifest !== undefined ? { manifest } : {}),
     env: "test",
     config,
     // Test-only opt-out (honoured because env is "test" below). Production

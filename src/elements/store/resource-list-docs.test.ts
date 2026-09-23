@@ -40,7 +40,7 @@ describe("resource-list-docs fixtures — documented behaviors stay real", () =>
       // (and cleared by the global afterEach registry reset).
       Object.assign(app.$options, { env: "test", stores: [docsListItemsStore] });
 
-      const t = await createTestApp(app);
+      const t = await createTestApp(app, { capability: "open" });
 
       const bad = await app.fetch(new Request("http://localhost/docs-restricted?secret=eq.x"));
       expect(bad.status).toBe(422);
@@ -70,7 +70,7 @@ describe("resource-list-docs fixtures — documented behaviors stay real", () =>
       const app = oke({ name: "docs-admin-test" }).adopt({ docs: exactMounted });
       Object.assign(app.$options, { env: "test", stores: [docsListItemsStore] });
 
-      const t = await createTestApp(app);
+      const t = await createTestApp(app, { capability: "open" });
       const created = await app.fetch(
         new Request("http://localhost/docs-admin", {
           method: "POST",

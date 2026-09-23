@@ -27,11 +27,11 @@ app.post("/signup", async (req, res) => {
 
 It works. It ships. Then a traffic spike, a silent failure, a compliance question, and a double-submit turn those four lines into six files — endpoint, queue, worker, Redis connection, mail client, audit table — that never agreed with each other about anything.
 
-**A payment webhook.** A provider confirms a charge. Mark the order paid. Simple — until the provider retries the same webhook twice during a network hiccup, and "mark the order paid" needs to somehow know it already ran.
+**A payment webhook.** A provider confirms a charge. Mark the order paid. The provider retries the same event during a hiccup. That attempt is a second run, visible in `fx.runs`. The fix is one line: a unique constraint or upsert on the provider's event id.
 
 **A nightly report.** Summarize yesterday's activity and email it to managers. Trivial — until a manager's access gets revoked at 11:58pm and the report that runs at midnight has no idea the permission it checked when the feature was built isn't the permission that holds right now.
 
-Three teams. Three domains. Nobody on any of them talked to the other two. And all three land on the identical fork: **something has to happen later, exactly once, provably — and nothing in the original four lines said what "provably" would end up costing.**
+Three teams. Three domains. Nobody on any of them talked to the other two. And all three land on the identical fork: **something has to happen later, and the original four lines never said where the retry, the receipt, or the duplicate would be visible.** The door makes that visible. The fix is one line.
 
 ### Follow one all the way through
 
@@ -49,7 +49,7 @@ The endpoint is fast again. It's also no longer one system — it's an endpoint,
 
 <SixSystemsDrift />
 
-From here the same pattern repeats on a longer clock. A support ticket reveals a job failed silently — nobody had configured retries, so you add them, and now a specific number (3? 5? with what backoff?) lives in a file that nobody will remember the reasoning for in six weeks. Compliance asks for proof of every email sent — you add a table written to from inside the worker, and now that worker has two jobs instead of one, quietly capable of disagreeing with itself if the second write fails. Someone double-clicks submit — two jobs enqueue, two emails send, and idempotency becomes a fact that has to live in two systems that were never introduced to each other.
+From here the same pattern repeats on a longer clock. A support ticket reveals a job failed silently — nobody had configured retries, so you add them, and now a specific number (3? 5? with what backoff?) lives in a file that nobody will remember the reasoning for in six weeks. Compliance asks for proof of every email sent — you add a table written to from inside the worker, and now that worker has two jobs instead of one, quietly capable of disagreeing with itself if the second write fails. Someone double-clicks submit — two jobs enqueue, two emails send. The duplicate is two runs. The fix is one line, a unique constraint or upsert, not a second protocol shared by a queue and a database.
 
 None of these were mistakes. Each one was the correct call, made by a competent engineer, in direct response to something that actually happened.
 
@@ -74,7 +74,7 @@ OKE removes the disagreement by removing the choice. It's one rule, in two parts
 
 **First: every trigger reduces to the same shape.** An HTTP request, a scheduled tick, a queue message, a database change — whatever wakes the code up, what follows has one identical anatomy: `on(Trigger) → Effects`. Not four systems that happen to look similar. One system, with four ways to wake it up.
 
-**Second: every effect passes through one door.** Nothing is allowed to touch a database, send an email, check a permission, or read the clock on its own — all of it goes through a single surface. Not because that's tidier. Because it's the only way retries, auditing, idempotency, and permission checks stop being infrastructure every team reinvents at the exact moment they get burned by not having it.
+**Second: every effect passes through one door.** Nothing is allowed to touch a database, send an email, check a permission, or read the clock on its own — all of it goes through a single surface. The Manifest lists every effect. Least privilege is enforced at runtime. Every run is recorded in `fx.runs`. Durability is one line in a known place — `signal.once` retries, or `durable` plus `fx.step` — not a new system.
 
 <FlowShape />
 
@@ -193,7 +193,7 @@ do: async (input, fx) => {
 };
 ```
 
-This one rule is what made the month-8 drift above avoidable: if `fx` is the only door, retries, auditing, and idempotency stop being separate systems teams build by hand, and become properties of the one boundary everything already passes through.
+This one rule is what made the month-8 drift visible: every effect is in the Manifest, every run is in `fx.runs`, and a duplicate is a second run you can see. The fix stays one line — a unique constraint or upsert — not a second system.
 
 ### Putting the five pieces together
 
@@ -223,14 +223,14 @@ export const signup = on(
 
 Nothing about the code above looks more complicated than the four lines that started the drift — because it isn't. The difference only shows up when the same pressure from that timeline hits it. Every fork was really the same question — _is this safe to retry, safe to audit, safe to run twice?_ — and now it has one home:
 
-| Then: a new system per incident                                      | Now: one door, fixed answer                                             |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| **Week 2 spike** — hand-build a queue + worker to run the send later | Running later, safely, is asked of the trigger or the effect itself     |
-| **Month 2 silence** — a retry count in a worker nobody remembers     | Retries are a property of the `fx` boundary every effect passes through |
-| **Month 4 audit** — a `sent_emails` table written by hand from a job | What was sent is already known — nothing sends outside `fx`             |
-| **Month 6 double-submit** — dedup split across a queue and a DB      | One call through one door — no second path for a duplicate              |
+| Then: a new system per incident                                      | Now: the door makes it visible, and the fix is one line                  |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Week 2 spike** — hand-build a queue + worker to run the send later | The send is a Signal consumer. The Manifest lists it. The run is in `fx.runs`. |
+| **Month 2 silence** — a retry count in a worker nobody remembers     | The retry count lives on `signal.once` (default 3) or on `durable` + `fx.step`, which skips a step already journaled. A failed HTTP request is not retried by `fx`. |
+| **Month 4 audit** — a `sent_emails` table written by hand from a job | The send is an effect in the Manifest and a run in `fx.runs`. Channel records a receipt. The default receipt ledger is process-local memory. |
+| **Month 6 double-submit** — dedup split across a queue and a DB      | The duplicate is two runs in `fx.runs`. The fix is one line: a unique constraint or upsert. `{ key }` serializes `once` per key. It does not deduplicate. |
 
-None of that required new code beyond what's above. It required the four lines to already be the kind of thing where those questions have a fixed answer, instead of a new one invented per team, per incident.
+The door makes each of those problems visible, and the fix is one line in a known place. The signup sample is safe to run twice once the user row has a unique constraint or an upsert. The second attempt is a second run in `fx.runs`.
 
 ### Five kinds of trigger
 

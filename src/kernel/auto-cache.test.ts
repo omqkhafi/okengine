@@ -58,7 +58,7 @@ describe("automatic tier-1 cache from effects", () => {
       stores: [db],
       gate: { policies: [gate.public] },
     }).adopt({ list });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const notesApi = requireNotesApi(t);
 
     const first = await notesApi.list({});
@@ -90,7 +90,7 @@ describe("automatic tier-1 cache from effects", () => {
       stores: [db],
       gate: { policies: [gate.public] },
     }).adopt({ list });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const trigger = list.triggers[0];
     if (trigger === undefined) throw new Error("notes.list has no trigger");
 
@@ -128,7 +128,7 @@ describe("automatic tier-1 cache from effects", () => {
       stores: [db],
       gate: { policies: [gate.public] },
     }).adopt({ list });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const notesApi = requireNotesApi(t);
     await notesApi.list({});
     await notesApi.list({});
@@ -158,7 +158,7 @@ describe("automatic tier-1 cache from effects", () => {
       stores: [db],
       gate: { policies: [gate.public] },
     }).adopt({ list });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const notesApi = requireNotesApi(t);
 
     await notesApi.list({});
@@ -209,7 +209,7 @@ describe("automatic tier-1 cache from effects", () => {
       stores: [db],
       gate: { policies: [gate.public] },
     }).adopt({ list, create });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const notesApi = requireNotesApi(t);
 
     await notesApi.list({});
@@ -251,7 +251,7 @@ describe("automatic tier-1 cache from effects", () => {
       stores: [db],
       gate: { policies: [gate.public] },
     }).adopt({ list, create });
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const notesApi = requireNotesApi(t);
 
     await notesApi.list({});

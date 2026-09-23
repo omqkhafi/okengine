@@ -71,7 +71,7 @@ describe("boot-level: undeclared-effects flow, no manifest / rootDir", () => {
     const create = buildUnannotatedCreateFlow(db);
     const app = oke({ name: "stamp-open", gate: { policies: [gate.public] } }).adopt({ create });
     Object.assign(app.$options, { stores: [db] });
-    await createTestApp(app); // createTestApp always boots env: "test"
+    await createTestApp(app, { capability: "open" });
 
     const res = await app.fetch(
       new Request("http://localhost/notes", {
@@ -157,7 +157,7 @@ describe("boot-level: table-ref resolution stays backward compatible", () => {
       create,
     });
     Object.assign(app.$options, { stores: [db] });
-    await createTestApp(app);
+    await createTestApp(app, { capability: "open" });
 
     const res = await app.fetch(
       new Request("http://localhost/notes", {

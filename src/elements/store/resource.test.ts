@@ -156,7 +156,7 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
 
   test("app.fetch list/get/create/update: only createdAt + masked email, never raw SQL keys", async () => {
     const app = buildApp();
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
 
     // create → 201
     const created = await app.fetch(
@@ -234,7 +234,7 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
 
   test("list cursor meta walks next and previous", async () => {
     const app = buildApp();
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     for (const email of ["a@example.com", "b@example.com", "c@example.com"]) {
       const created = await app.fetch(
         new Request("http://localhost/contacts", {
@@ -317,7 +317,7 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
       config: { drivers: { store: { sql: { test: "pglite" } } } },
     });
 
-    const t = await createTestApp(app);
+    const t = await createTestApp(app, { capability: "open" });
     const created = await app.fetch(
       new Request("http://localhost/people", {
         method: "POST",

@@ -405,7 +405,7 @@ test("creates a user", async () => {
 bun test # [!code focus]
 ```
 
-`createTestApp` swaps every driver behind `fx` for a deterministic one.
+`createTestApp` swaps every driver behind `fx` for a deterministic one. It stamps Manifest tokens. Inline flows that are not an app pass `capability: "open"`.
 
 </Step>
 

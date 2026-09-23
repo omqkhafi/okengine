@@ -519,12 +519,12 @@ function emitTableBlock(table: SchemaTableDecl, dialect: SqlDialect): string {
   const exportName = exportNameForTable(sqlName);
   const cols = `{\n${lines.join("\n")}\n}`;
   const policies = table.policies ?? [];
+  const ctor = table.rls === true ? "pgTable.withRLS" : "pgTable";
   if (policies.length === 0) {
-    const ctor = table.rls === true ? "pgTable.withRLS" : "pgTable";
     return `export const ${exportName} = ${ctor}(${JSON.stringify(sqlName)}, ${cols});`;
   }
   const extras = policies.map((policy) => `  ${emitPolicyExtra(policy, sqlName)},`).join("\n");
-  return `export const ${exportName} = pgTable(${JSON.stringify(sqlName)}, ${cols}, (_t) => [\n${extras}\n]);`;
+  return `export const ${exportName} = ${ctor}(${JSON.stringify(sqlName)}, ${cols}, (_t) => [\n${extras}\n]);`;
 }
 
 function emitPolicyExtra(policy: SchemaPolicyDecl, table: string): string {

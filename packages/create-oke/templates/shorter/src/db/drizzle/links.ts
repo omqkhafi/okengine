@@ -3,7 +3,7 @@ import { pgTable, text, bigint, timestamp, pgPolicy } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm";
 import { id, nowDate } from "okengine/store";
 
-export const links = pgTable("links", {
+export const links = pgTable.withRLS("links", {
   id: text("id").primaryKey().$defaultFn(id),
   userId: text("user_id").notNull(),
   code: text("code").notNull().unique(),
@@ -13,6 +13,12 @@ export const links = pgTable("links", {
   archivedAt: timestamp("archived_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(nowDate),
 }, (_t) => [
+  pgPolicy("public read", {
+    as: "permissive",
+    to: "public",
+    for: "select",
+    using: sql`true`,
+  }),
   pgPolicy("gate_member_insert", {
     as: "permissive",
     to: "public",

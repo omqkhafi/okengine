@@ -86,6 +86,7 @@ describe("createTestApp tenancy testing & RLS isolation", () => {
     });
 
     const t = await createTestApp(app, {
+      capability: "open",
       gates: [memberGate],
       boot: {
         config: {

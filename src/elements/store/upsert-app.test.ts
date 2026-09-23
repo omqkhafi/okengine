@@ -65,7 +65,7 @@ describe("fx.store(db).upsert via app.fetch (real boot)", () => {
       gate: { policies: [gate.public] },
     }).adopt({ seed });
     Object.assign(app.$options, { env: "test", stores: [db], unguardedHttp: "allow" });
-    await createTestApp(app);
+    await createTestApp(app, { capability: "open" });
 
     async function post(body: unknown) {
       const res = await app.fetch(

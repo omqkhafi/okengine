@@ -301,8 +301,14 @@ Thrown by specific subsystems — each names its own cause:
 <Accordions>
 
 <Accordion title="I hit OKE1001–1009">
-  Explicit `effects` drifted from `do`. Add the missing ledger entry or remove the hand-written
-  `effects` block so inference covers the Flow.
+  The capability token does not include what the Flow touched. Add the missing ledger entry. An
+  `effects` block must include every effect inference can see.
+</Accordion>
+
+<Accordion title="OKE1900 fx hidden from inference">
+  Cause: the Flow renames `fx`, lets a chain alias escape, or passes `fx` to a callee inference
+  cannot resolve. Fix: name the parameter `fx`, keep `const q = fx.store(db)` in the same function,
+  and include every effect the walk can see. Extra keys in an `effects` block are allowed.
 </Accordion>
 
 <Accordion title="OKE1040 pathless HTTP never stamped">

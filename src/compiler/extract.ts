@@ -6,6 +6,7 @@
  * from source to `manifest.oke.json`.
  */
 
+import { readdir } from "node:fs/promises";
 import { parseSync } from "oxc-parser";
 import { join } from "node:path";
 
@@ -45,6 +46,7 @@ import type {
 } from "../manifest/types.ts";
 import { sqlTableRef } from "../manifest/sql-resource.ts";
 import {
+  effectsMissingFromDeclaration,
   identifierName,
   inferEffects,
   resolveCallTarget,
@@ -56,6 +58,7 @@ import {
   type InferBinding,
   type Literal,
 } from "./effects-infer.ts";
+import { buildFxIndex, readTsconfigPaths, type FxIndex } from "./fx-index.ts";
 import {
   isFlowsTreeFile,
   isSkippedExtractSource,
@@ -131,6 +134,8 @@ interface ProjectScope {
   /** Store-wide live defaulting — `oke({ store: { live: true } })`. */
   store?: Manifest["store"];
   flows: Record<string, Flow>;
+  /** Project functions that can receive `fx`, built once per extract. */
+  fxIndex: FxIndex;
   /** Export name → flow id (for agent tools). */
   flowExports: Map<string, string>;
   /** Local binding name → store.resource declaration (for on(http.resource)). */
@@ -168,6 +173,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
 
   const scope: ProjectScope = {
     app: options.app ?? "app",
+    fxIndex: buildFxIndex([]),
     bindings: new Map(),
     signals: {},
     stores: {},
@@ -197,6 +203,12 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
     });
     return { file, program: result.program as unknown as AstNode };
   });
+
+  const tsPaths = options.rootDir ? await readTsconfigPaths(options.rootDir) : [];
+  scope.fxIndex = buildFxIndex(
+    parsed.map(({ file, program }) => ({ path: file.path, program })),
+    tsPaths,
+  );
 
   // Pass 1 — declarations (elements, config, named bindings).
   for (const { file, program } of parsed) {
@@ -295,19 +307,48 @@ export async function extractFromSources(
 }
 
 async function readSources(rootDir: string, pattern: string): Promise<SourceFile[]> {
-  // Bun.Glob (global) — bare `import … from "bun"` is rejected by JSR.
-  const glob = new Bun.Glob(pattern);
   const files: SourceFile[] = [];
-  for await (const path of glob.scan({
-    cwd: rootDir,
-    onlyFiles: true,
-  })) {
-    if (isSkippedExtractSource(path)) continue;
-    const abs = join(rootDir, path);
-    files.push({ path: toPosixPath(path), source: await Bun.file(abs).text() });
+  if (pattern === "**/*.{ts,tsx}") {
+    await walkSources(rootDir, rootDir, files);
+  } else {
+    // Bun.Glob (global) — bare `import … from "bun"` is rejected by JSR.
+    const glob = new Bun.Glob(pattern);
+    for await (const path of glob.scan({ cwd: rootDir, onlyFiles: true })) {
+      if (isSkippedExtractSource(path)) continue;
+      const abs = join(rootDir, path);
+      files.push({ path: toPosixPath(path), source: await Bun.file(abs).text() });
+    }
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
   return files;
+}
+
+/**
+ * Walk an app tree without entering `node_modules` or directory symlinks.
+ *
+ * A template's `node_modules/okengine` link points back at this repo, which
+ * contains the template again. Globbing through that link never terminates.
+ */
+async function walkSources(rootDir: string, dir: string, files: SourceFile[]): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name === ".git" || entry.isSymbolicLink()) continue;
+    const abs = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkSources(rootDir, abs, files);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) continue;
+    const rel = toPosixPath(abs.slice(rootDir.length + 1));
+    if (isSkippedExtractSource(rel)) continue;
+    files.push({ path: rel, source: await Bun.file(abs).text() });
+  }
 }
 
 function collectDeclarations(filePath: string, program: AstNode, scope: ProjectScope): void {
@@ -1882,13 +1923,17 @@ function registerFlow(args: {
   }
   args.scope.bindings.set(name, { kind: "flow", ref: name });
 
-  const hasExplicitEffects = objectProp(opts, "effects") !== undefined;
+  const effectsNode = objectProp(opts, "effects");
+  const hasExplicitEffects = effectsNode !== undefined;
   const doNode = objectProp(opts, "do");
   const inferred = doNode
     ? inferEffects({
         doNode,
         bindings: args.scope.bindings,
         hasExplicitEffects,
+        flowName: name,
+        file: args.file.path,
+        resolveCallee: (callee, file) => args.scope.fxIndex.resolve(file, callee),
       })
     : {
         effects: {} as Effects,
@@ -1900,8 +1945,16 @@ function registerFlow(args: {
       };
 
   let effects: Effects | undefined;
-  if (hasExplicitEffects) {
-    effects = parseEffectsObject(objectProp(opts, "effects"));
+  if (hasExplicitEffects && effectsNode?.type === "ObjectExpression") {
+    effects = parseEffectsObject(effectsNode);
+    const missing = effectsMissingFromDeclaration(effects ?? {}, inferred.effects);
+    if (missing.length > 0) {
+      throw new Error(
+        `OKE1900: flow "${name}" declares effects that omit ${missing.join(", ")}. An effects block must include every effect inference can see.`,
+      );
+    }
+  } else if (hasExplicitEffects) {
+    effects = parseEffectsObject(effectsNode);
   } else {
     effects = inferred.effects;
   }
