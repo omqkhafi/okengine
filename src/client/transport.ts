@@ -20,11 +20,16 @@ import {
   toQuery,
 } from "./wire.ts";
 
-/** Per-call transport options (binary decode, abort). */
+/** Per-call transport options (binary decode, abort, retry opt-in). */
 export interface TransportCallOptions {
   readonly headers?: ClientHeaders;
   readonly response?: "json" | "blob" | "arrayBuffer";
   readonly signal?: AbortSignal;
+  /**
+   * Repeat this call under the client `retry` policy even when the method
+   * is not `GET` or `QUERY`.
+   */
+  readonly retry?: boolean;
 }
 
 /** Internal transport handle. */
@@ -63,6 +68,8 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
       let delay = delay0;
       const callClientOpts: ClientOptions =
         callOpts.signal !== undefined ? { ...opts, signal: callOpts.signal } : opts;
+      const method = (opts.routes?.[key.replace("/", ".")]?.method ?? "POST").toUpperCase();
+      const allowRetry = allowsRetry(method, callOpts.retry);
 
       for (;;) {
         try {
@@ -89,7 +96,7 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
           return decode(res);
         } catch (err) {
           const transient = isTransient(err);
-          if (!transient || attempt >= retries) {
+          if (!transient || !allowRetry || attempt >= retries) {
             return transportEnvelope(err instanceof Error ? err.message : String(err));
           }
           await sleep(delay);
@@ -127,10 +134,18 @@ function normalizeCallOpts(
   if (Array.isArray(headersOrOpts)) return { headers: headersOrOpts };
   if (
     typeof headersOrOpts === "object" &&
-    ("response" in headersOrOpts || "signal" in headersOrOpts || "headers" in headersOrOpts)
+    ("response" in headersOrOpts ||
+      "signal" in headersOrOpts ||
+      "headers" in headersOrOpts ||
+      "retry" in headersOrOpts)
   ) {
     const o = headersOrOpts as TransportCallOptions;
-    if (o.response !== undefined || o.signal !== undefined || o.headers !== undefined) {
+    if (
+      o.response !== undefined ||
+      o.signal !== undefined ||
+      o.headers !== undefined ||
+      o.retry !== undefined
+    ) {
       return o;
     }
   }
@@ -138,7 +153,9 @@ function normalizeCallOpts(
 }
 
 /**
- * Single HTTP attempt. Throws on network / abort / 5xx (retryable).
+ * Single HTTP attempt. Throws on network / abort / non-envelope 5xx.
+ * The caller retries that throw only for `GET` and `QUERY`, or when the
+ * call passed `{ retry: true }`.
  *
  * @param base - Origin
  * @param key - `unit/flow`
@@ -288,6 +305,17 @@ async function decodeBinary(res: Response, mode: "blob" | "arrayBuffer"): Promis
   }
   const data = mode === "blob" ? await res.blob() : await res.arrayBuffer();
   return { data, error: null };
+}
+
+/**
+ * Safe methods may repeat. Anything else runs once unless the call opted in.
+ *
+ * @param method - HTTP method, already uppercased
+ * @param optIn - Per-call `{ retry: true }`
+ */
+function allowsRetry(method: string, optIn: boolean | undefined): boolean {
+  if (optIn === true) return true;
+  return method === "GET" || method === "QUERY";
 }
 
 function isTransient(err: unknown): boolean {

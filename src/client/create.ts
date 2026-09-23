@@ -338,11 +338,19 @@ function isCallOpts(value: unknown): value is CallOpts {
   if ("signal" in v) {
     return v.signal === undefined || v.signal instanceof AbortSignal;
   }
+  if ("retry" in v && typeof v.retry === "boolean") {
+    return Object.keys(v).every((k) => k === "response" || k === "signal" || k === "retry");
+  }
   return false;
 }
 
-/** Per-call options on a Flow invoke (binary decode / abort). */
+/** Per-call options on a Flow invoke (binary decode, abort, retry opt-in). */
 export interface CallOpts {
   readonly response?: "json" | "blob" | "arrayBuffer";
   readonly signal?: AbortSignal;
+  /**
+   * Repeat this call under the client `retry` policy even when the method
+   * is not `GET` or `QUERY`.
+   */
+  readonly retry?: boolean;
 }

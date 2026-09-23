@@ -251,7 +251,13 @@ export interface ClientOptions {
   readonly headers?: ClientHeaders | (() => ClientHeaders | Promise<ClientHeaders>);
   /** Abort the request after this many milliseconds. */
   readonly timeout?: number;
-  /** Retry transient failures (network / 5xx). */
+  /**
+   * Retry transient failures (network errors and non-envelope 5xx).
+   *
+   * Safe methods only: `GET` and `QUERY`. `POST`, `PUT`, `PATCH`, `DELETE`,
+   * and RPC (`POST /_oke/…`) run once — a lost response may already have
+   * committed. Pass `{ retry: true }` on that call to opt in.
+   */
   readonly retry?: {
     /** Extra attempts after the first (default 0). */
     readonly retries?: number;
@@ -296,11 +302,16 @@ export interface ClientOptions {
 export type ClientThenableIterable<T> = PromiseLike<T> & AsyncIterable<T>;
 
 /**
- * Per-call options on a Flow invoke (binary decode / abort).
+ * Per-call options on a Flow invoke (binary decode, abort, retry opt-in).
  */
 export interface ClientCallOpts {
   readonly response?: "json" | "blob" | "arrayBuffer";
   readonly signal?: AbortSignal;
+  /**
+   * Repeat this call under the client `retry` policy even when the method
+   * is not `GET` or `QUERY`.
+   */
+  readonly retry?: boolean;
 }
 
 /**

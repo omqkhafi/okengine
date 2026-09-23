@@ -15,11 +15,16 @@ type PingApp = AppOf<{
   };
 }>;
 
+const getPing = {
+  "sys.ping": { method: "GET", path: "/ping" },
+} as const;
+
 describe("transport — retry", () => {
   test("retries 5xx then succeeds", async () => {
     let n = 0;
     const api = createClient<PingApp>("http://app.test", {
       retry: { retries: 2, delay: 1, backoff: 1 },
+      routes: getPing,
       fetch: async () => {
         n += 1;
         if (n < 3) return new Response("nope", { status: 503 });
@@ -37,6 +42,7 @@ describe("transport — retry", () => {
     let n = 0;
     const api = createClient<PingApp>("http://app.test", {
       retry: { retries: 1, delay: 1, backoff: 1 },
+      routes: getPing,
       fetch: async () => {
         n += 1;
         return new Response("nope", { status: 502 });
@@ -72,6 +78,62 @@ describe("transport — retry", () => {
     const { error } = await api.sys.ping();
     expect(error?.code).toBe("InternalError");
     expect(error?.message).toMatch(/password policy/i);
+  });
+
+  test("POST network error is not re-sent unless the call opts in", async () => {
+    let handled = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 2, delay: 1, backoff: 1 },
+      fetch: async () => {
+        handled += 1;
+        throw new TypeError("Failed to fetch");
+      },
+    });
+
+    const lost = await api.sys.ping();
+    expect(lost.error?.code).toBe("TransportError");
+    expect(handled).toBe(1);
+
+    handled = 0;
+    const opted = await api.sys.ping({ retry: true });
+    expect(opted.error?.code).toBe("TransportError");
+    expect(handled).toBe(3);
+  });
+
+  test("GET still retries a network error", async () => {
+    let n = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 1, delay: 1, backoff: 1 },
+      routes: getPing,
+      fetch: async () => {
+        n += 1;
+        if (n < 2) throw new TypeError("Failed to fetch");
+        return Response.json({ data: { ok: true }, error: null });
+      },
+    });
+
+    const { data, error } = await api.sys.ping();
+    expect(error).toBeNull();
+    expect(data).toEqual({ ok: true });
+    expect(n).toBe(2);
+  });
+
+  test("QUERY still retries a network error", async () => {
+    let n = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 1, delay: 1, backoff: 1 },
+      routes: { "sys.ping": { method: "QUERY", path: "/ping" } },
+      fetch: async () => {
+        n += 1;
+        if (n < 2) throw new TypeError("Failed to fetch");
+        return Response.json({ data: { ok: true }, error: null });
+      },
+    });
+
+    const { data, error } = await api.sys.ping();
+    expect(error).toBeNull();
+    expect(data).toEqual({ ok: true });
+    expect(n).toBe(2);
   });
 });
 

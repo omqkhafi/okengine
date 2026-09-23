@@ -32,6 +32,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   the gates still allow, bisect to the commit, and fix it with a lazy
   import, `createDebouncedRunner`, or a memo (`/oke-perf`).
 
+### 💥 Breaking Changes
+
+- Client `retry` no longer repeats mutations. Network errors and non-envelope
+  5xx retry only for `GET` and `QUERY`. `POST` and other methods run once
+  unless the call passes `{ retry: true }`.
+
 ### ♻️ Changed
 
 - `fx.fetch`, Meilisearch, and remote Vault HTTP abort with the ambient
