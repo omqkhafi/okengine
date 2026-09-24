@@ -11,8 +11,10 @@
 import { describe, expect, test } from "bun:test";
 import { createMockAiDriver, memoryIndexDriver, mockAiDriver } from "../drivers/index.ts";
 import { createFx } from "../kernel/fx.ts";
+import { createJournal, createMemoryJournalStore } from "../kernel/journal.ts";
 import {
   ai,
+  AI_OBSERVABILITY_LIMIT,
   AiPiiBuildError,
   AiSchemaValidationError,
   assertAllowPiiForAsk,
@@ -190,7 +192,7 @@ describe("pii to third-party model fails the build", () => {
 });
 
 describe("journaling forced · auto-cache disabled", () => {
-  test("ask is journaled and replayed without re-calling the model", async () => {
+  test("identical asks both reach the model and both are journaled", async () => {
     let calls = 0;
     const driver = createMockAiDriver({
       "*": { urgency: "high", team: "ops" },
@@ -219,8 +221,81 @@ describe("journaling forced · auto-cache disabled", () => {
     const a = await runtime.ask("ticket-triage", { subject: "x" });
     const b = await runtime.ask("ticket-triage", { subject: "x" });
     expect(a).toEqual(b);
+    expect(calls).toBe(2);
+    expect(runtime.journal).toHaveLength(2);
+  });
+
+  test("ask journal and agent runs keep only the newest observability rows", async () => {
+    const smart = ai.model("ring-smart", { provider: "mock" });
+    const prompt = smart.prompt("ring-prompt", { version: 1 });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [prompt],
+      agents: [
+        ai.agent("ring-agent", {
+          model: "ring-smart",
+          tools: [],
+          maxSteps: 1,
+        }),
+      ],
+      defaultDriver: createMockAiDriver({
+        "*": { ok: true },
+      }),
+    });
+
+    for (let i = 0; i < AI_OBSERVABILITY_LIMIT + 1; i++) {
+      await runtime.ask("ring-prompt", { n: i });
+      await runtime.runAgent("ring-agent", { message: `m-${i}` });
+    }
+    expect(runtime.journal).toHaveLength(AI_OBSERVABILITY_LIMIT);
+    expect(runtime.agentRuns).toHaveLength(AI_OBSERVABILITY_LIMIT);
+    expect(runtime.journal[0]?.input).toEqual({ n: 1 });
+    expect(runtime.journal.at(-1)?.input).toEqual({ n: AI_OBSERVABILITY_LIMIT });
+    expect(runtime.agentRuns[0]?.message).toBe("m-1");
+    expect(runtime.agentRuns.at(-1)?.message).toBe(`m-${AI_OBSERVABILITY_LIMIT}`);
+  });
+
+  test("a durable journal replays fx.ask without a second model call", async () => {
+    let calls = 0;
+    const driver = createMockAiDriver({
+      "*": { urgency: "high" },
+    });
+    const base = await driver.open({ model: "mock" });
+    const counting = {
+      ...base,
+      async complete(opts: Parameters<typeof base.complete>[0]) {
+        calls++;
+        return base.complete(opts);
+      },
+    };
+    const smart = ai.model("durable-smart", { provider: "mock" });
+    const triage = smart.prompt("durable-triage", { version: 1 });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: { "durable-smart": counting },
+    });
+    const journal = createJournal({ store: createMemoryJournalStore() });
+    const session = await journal.start("support.triage", { subject: "x" });
+    const fx = createFx({
+      flow: "support.triage",
+      effects: { asks: ["durable-triage"] },
+      aiRuntime: runtime,
+      journal: session,
+    });
+    const first = await fx.ask("durable-triage", { subject: "x" });
     expect(calls).toBe(1);
-    expect(runtime.journal).toHaveLength(1);
+
+    const resumed = await journal.resume(session.runId);
+    const again = createFx({
+      flow: "support.triage",
+      effects: { asks: ["durable-triage"] },
+      aiRuntime: runtime,
+      journal: resumed,
+    });
+    const second = await again.ask("durable-triage", { subject: "x" });
+    expect(calls).toBe(1);
+    expect(second).toEqual(first);
   });
 
   test("fx.cache is disabled when aiRuntime is bound", async () => {

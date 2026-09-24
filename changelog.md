@@ -38,6 +38,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Runtime
+
+- Repeated identical `fx.ask` calls outside a durable run reach the model. Replay
+  stays on that run's journal. Console keeps the newest 500 ask journal entries
+  and agent runs.
+
 #### Console — Flows & traces
 
 - Long traces group the waterfall and event list by kind and resource. A run

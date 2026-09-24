@@ -8,7 +8,8 @@
  * Prompts are versioned artifacts with validated output shapes and eval sets
  * (`oke eval` gates CI). Agents' tools are the app's own flows (gates apply).
  * PII fields cannot reach a third-party model without explicit `allowPii`.
- * Nondeterministic ⇒ journaling forced, auto-cache disabled.
+ * Nondeterministic ⇒ journaling forced for Console, auto-cache disabled.
+ * Replay belongs to a durable run's journal, not this process-wide log.
  * @module
  */
 
@@ -45,6 +46,7 @@ export {
   AiSchemaValidationError,
   promptContentFromInput,
   AI_DEFAULT_MAX_STEPS,
+  AI_OBSERVABILITY_LIMIT,
 } from "./ai/runtime.ts";
 export type {
   AgentDenial,

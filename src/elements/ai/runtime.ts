@@ -49,6 +49,20 @@ const AI_SAME_MODEL_RETRY_BACKOFF_MS = 250;
 /** Default bound for tool / agent loops. */
 export const AI_DEFAULT_MAX_STEPS = 6;
 
+/** Console observability cap for ask journal entries and agent run records. */
+export const AI_OBSERVABILITY_LIMIT = 500;
+
+/**
+ * Keep the newest entries. Older rows are observability, not storage.
+ *
+ * @param buf - Mutable ring
+ * @param item - Entry to append
+ */
+function pushObservability<T>(buf: T[], item: T): void {
+  buf.push(item);
+  if (buf.length > AI_OBSERVABILITY_LIMIT) buf.shift();
+}
+
 /**
  * Split `name` / `name@version` the same way capability pins do.
  *
@@ -285,7 +299,7 @@ export interface AiRuntime {
   readonly denials: readonly AgentDenial[];
   /** Agent runs with full tool trails. */
   readonly agentRuns: readonly AgentRunRecord[];
-  /** Journal of ask results (replay without re-calling the model). */
+  /** Ask results kept for Console (last {@link AI_OBSERVABILITY_LIMIT}). Not a replay cache. */
   readonly journal: readonly AiJournalEntry[];
   /**
    * Egress identity from the most recent ask / embed / stream complete.
@@ -721,21 +735,6 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         currentAbortSignal(),
       );
 
-      // Replay from journal when input matches (nondeterministic contract)
-      if (journalingForced && tools.length === 0) {
-        const hit = [...journal]
-          .reverse()
-          .find(
-            (e) =>
-              e.prompt === prompt &&
-              e.outcome === "ok" &&
-              JSON.stringify(e.input) === JSON.stringify(input),
-          );
-        if (hit) {
-          return hit.output as Record<string, unknown>;
-        }
-      }
-
       const via =
         opts?.via ?? decl.via ?? (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
       const attempts: AiFallbackAttempt[] = [];
@@ -747,7 +746,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const responseFormat = promptResponseFormat(prompt, decl.out);
 
       const pushJournal = (entry: Omit<AiJournalEntry, "inputTokens" | "outputTokens">): void => {
-        journal.push({
+        pushObservability(journal, {
           ...entry,
           ...tokenFields(totalTokens),
         });
@@ -988,7 +987,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         at: started,
         cost: loop.cost,
       };
-      agentRuns.push(record);
+      pushObservability(agentRuns, record);
 
       return {
         ok: record.ok,
