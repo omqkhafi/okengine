@@ -53,6 +53,7 @@ docker/pgdog/
 # caches
 .eslintcache
 .cache
+.turbo
 *.tsbuildinfo
 
 # IntelliJ based IDEs

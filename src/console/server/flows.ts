@@ -17,13 +17,12 @@ import {
 import { DryRunWriteIsolationError } from "../../kernel/dry-run.ts";
 import { fail, flow, http, type AnyFlowDef, type Binding } from "../../kernel/index.ts";
 import { redactHttpFrame } from "../../kernel/http-frame.ts";
+import { lazyRequire } from "../../kernel/lazy-require.ts";
 import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts";
 import { eventHasIrreversible, runReplay } from "../../cli/replay.ts";
 import { createRunsRuntime } from "../../runs/runtime.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
-import { agentConsoleBindings } from "./ai-runs-flows.ts";
-import { decisionConsoleBindings } from "./decisions-flows.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
 import { clearClaimCodeArtifact, verifyClaimCode } from "./claim.ts";
 import { maskPiiValue, maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
@@ -2395,8 +2394,14 @@ export function createConsoleBindings(state: ConsoleState): {
       }),
       channelSendTest,
     ),
-    ...decisionConsoleBindings(state),
-    ...agentConsoleBindings(state),
+    ...lazyRequire<typeof import("./decisions-flows.ts")>(
+      import.meta.dir,
+      ["decisions", "flows"].join("-"),
+    ).decisionConsoleBindings(state),
+    ...lazyRequire<typeof import("./ai-runs-flows.ts")>(
+      import.meta.dir,
+      ["ai", "runs", "flows"].join("-"),
+    ).agentConsoleBindings(state),
   ];
 
   return {

@@ -477,7 +477,7 @@ services:
     command:
       - sh
       - -c
-      - exec dragonfly --requirepass "$$OKE_STORE_KV_PASSWORD" --maxmemory "$${OKE_STORE_KV_MAXMEMORY:-0}"
+      - exec dragonfly --requirepass "$$OKE_STORE_KV_PASSWORD" --maxmemory "$$\{OKE_STORE_KV_MAXMEMORY:-0}"
     healthcheck:
       test:
         - CMD

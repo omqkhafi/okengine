@@ -185,8 +185,7 @@
           "type": "array",
           "items": { "$ref": "#/$defs/FlowRef" },
           "uniqueItems": true
-        }
-        ,
+        },
         "decides": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
@@ -743,8 +742,7 @@
           "type": "object",
           "propertyNames": { "type": "string", "minLength": 1 },
           "additionalProperties": { "$ref": "#/$defs/AiAgent" }
-        }
-        ,
+        },
         "decisions": {
           "type": "object",
           "propertyNames": { "type": "string", "minLength": 1 },

@@ -14,9 +14,9 @@ export interface DecisionFormQuestion {
 export interface DecisionResolveResult {
   readonly error?: {
     readonly code: string;
-    readonly data?: { readonly retryAfter?: number | string };
-  };
-  readonly data?: { readonly ok: true };
+    readonly data?: unknown;
+  } | null;
+  readonly data?: { readonly ok: true } | null;
 }
 
 /**
@@ -70,7 +70,7 @@ export async function resolveDecisionWithRetry(
   for (let i = 0; i < attempts; i++) {
     last = await post(body);
     if (last.error?.code !== "JournalLeaseBusy") return last;
-    const waitMs = retryAfterToMs(last.error.data?.retryAfter);
+    const waitMs = retryAfterToMs(retryAfterValue(last.error?.data));
     if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   return last;
@@ -82,6 +82,17 @@ export function decisionStateLabel(
 ): string {
   if (state === "candidate") return "candidate ready";
   return state;
+}
+
+/**
+ * Read `retryAfter` from a resolve error body.
+ *
+ * @param data - Error payload
+ */
+function retryAfterValue(data: unknown): number | string | undefined {
+  if (!data || typeof data !== "object" || !("retryAfter" in data)) return undefined;
+  const retryAfter = data.retryAfter;
+  return typeof retryAfter === "number" || typeof retryAfter === "string" ? retryAfter : undefined;
 }
 
 /**

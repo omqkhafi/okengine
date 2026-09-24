@@ -5,8 +5,7 @@
  * confirmation token (no session-level consent cache).
  */
 
-import { addPiiFieldName, PII_MASK } from "../elements/store/classify.ts";
-import { maskRedactedDeep } from "../kernel/redacted.ts";
+import { lazyRequire } from "../kernel/lazy-require.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import { authorizeToolCall, MCP_TOOL_POLICIES, type McpToolPolicy } from "./authorization.ts";
@@ -299,12 +298,20 @@ function visibleTenant(
   return { ok: true, tenant: own };
 }
 
+function loadClassify(): typeof import("../elements/store/classify.ts") {
+  return lazyRequire(`${import.meta.dir}/../elements/store`, ["class", "ify"].join(""));
+}
+
+function loadRedacted(): typeof import("../kernel/redacted.ts") {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["redact", "ed"].join(""));
+}
+
 /**
  * PII-classified and sensitive column names, plus {@link Redacted} values.
  * Same mask token the Console traces projection uses.
  */
 function maskAiValue(manifest: Manifest | null | undefined, value: unknown): unknown {
-  return maskPiiWalk(maskRedactedDeep(value), classifiedFieldNames(manifest));
+  return maskPiiWalk(loadRedacted().maskRedactedDeep(value), classifiedFieldNames(manifest));
 }
 
 function classifiedFieldNames(manifest: Manifest | null | undefined): ReadonlySet<string> {
@@ -313,7 +320,7 @@ function classifiedFieldNames(manifest: Manifest | null | undefined): ReadonlySe
   for (const store of Object.values(manifest.stores)) {
     for (const table of Object.values(store.tables ?? {})) {
       for (const [col, tags] of Object.entries(table.columns ?? {})) {
-        if (tags?.pii || tags?.sensitive) addPiiFieldName(names, col);
+        if (tags?.pii || tags?.sensitive) loadClassify().addPiiFieldName(names, col);
       }
     }
   }
@@ -326,7 +333,7 @@ function maskPiiWalk(value: unknown, fields: ReadonlySet<string>): unknown {
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = fields.has(key) ? PII_MASK : maskPiiWalk(child, fields);
+      out[key] = fields.has(key) ? loadClassify().PII_MASK : maskPiiWalk(child, fields);
     }
     return out;
   }

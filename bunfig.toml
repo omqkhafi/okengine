@@ -12,7 +12,10 @@ coverageSkipTestFiles = true
 preload = ["./src/test/reset-element-registries.ts"]
 # Playwright specs use @playwright/test — run via `bun run test:console:smoke`.
 # The bundled create-oke starter is not a workspace app.
+# Live suites are opt-in (docker, network, provider keys) — not the default `bun test`.
+# Do not pass `--path-ignore-patterns` on the CLI: Bun replaces this list instead of extending it.
 pathIgnorePatterns = [
+  "**/*.live.test.ts",
   "tests/console/**",
   "packages/create-oke/templates/**",
   "examples/**",

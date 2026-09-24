@@ -7,13 +7,19 @@
 
 import { flow } from "../../kernel/flow.ts";
 import type { Fx } from "../../kernel/fx.ts";
-import { sseComment, sseFrame } from "../../kernel/fx.ts";
+import { lazyRequire } from "../../kernel/lazy-require.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
-import { getAgentEventLog } from "./run-events.ts";
 import type { GateRuntime } from "../gate/runtime.ts";
 import type { StandardSchemaV1 } from "../../validation/standard-schema.ts";
 import { journalLeaseBusyResponse } from "./approval.ts";
+import { getAgentEventLog } from "./agent-event-slot.ts";
+import type { AgentEventLog } from "./run-events.ts";
+
+/** SSE frame helpers live on `fx.ts`. Load them on the first follow frame. */
+function loadSseFrames(): typeof import("../../kernel/fx.ts") {
+  return lazyRequire(`${import.meta.dir}/../../kernel`, ["f", "x"].join(""));
+}
 
 /** Body the approve route accepts. `args` replaces the tool input. */
 const approveIn: StandardSchemaV1<{ id: string; args?: unknown }> = {
@@ -165,7 +171,7 @@ async function followAgentRun(input: unknown, fx: Fx): Promise<unknown> {
 }
 
 async function* frames(
-  log: NonNullable<ReturnType<typeof getAgentEventLog>>,
+  log: AgentEventLog,
   runId: string,
   afterSeq: number,
   signal: AbortSignal,
@@ -185,13 +191,13 @@ async function* frames(
       if (timer) clearTimeout(timer);
       if (winner.kind === "ping") {
         if (signal.aborted) return;
-        yield sseComment("keepalive");
+        yield loadSseFrames().sseComment("keepalive");
         continue;
       }
       pending = iter.next();
       if (winner.row.done || winner.row.value === undefined) return;
       const row = winner.row.value;
-      yield sseFrame(row.event, String(row.seq));
+      yield loadSseFrames().sseFrame(row.event, String(row.seq));
       if (row.event.type === "RUN_ERROR") return;
       if (row.event.type === "RUN_FINISHED" && row.event.outcome?.type !== "interrupt") return;
     }

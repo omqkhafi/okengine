@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.23.0 — 2026-09-25
+
 ### ✨ Added
 
 #### Runtime
@@ -110,6 +112,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Turborepo runs the workspace tasks. `bun run typecheck` still checks the framework, the Console, create-oke, and Keel, now in parallel. Builds, lint, format check, and the framework test suite cache locally. Dev servers stay uncached. Package tags keep the docs site and the Keel example from being imported by the library or the CLI.
 - `oke dev` reloads `oke-decisions.lock.json` when the file changes. Production reads the lockfile once, at boot.
 
 #### Runtime
@@ -174,6 +177,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- A streamed `fx.run` resumes a parked tool approval. The ask is ledgered when the run id is known, and the tool steps stay on the journal so replay runs the tool.
+- A stored agent event that fails once is retried. The first failure is still recorded on the run, and the stream ends.
+- `journal:runs` on `effects.writes` does not open a store. Unknown, other, and none client facts stay off the trace request card.
+- Memory SQL accepts `CREATE INDEX IF NOT EXISTS`, so identity tables can be ensured on the in-process driver.
+- HTTP cold start no longer evaluates `fx`, boot, or the decision modules. Those load on first use, and `okengine/http` rejects a static `fx` import. The follow log slot stays a tiny module so the AI runtime and the approval route share one log.
 - A failed agent-event append does not consume a seq. It retries once. If it still fails, the next stored row is `oke.events.gap`.
 - A sweep claim expires after 30 seconds on the memory, file, and Postgres event stores, so another instance can close a run whose sweeper stopped.
 - Postgres truncation looks at `event_type` and `event_name`, not a `LIKE` over the payload.
@@ -271,6 +279,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- create-oke's minimal Docker stub escapes the Dragonfly `--maxmemory` default, so the scaffold file parses. The command still passes `${OKE_STORE_KV_MAXMEMORY:-0}`.
+- `bun test` keeps Playwright specs, starter templates, examples, the site, and `*.live.test.ts` out of the default suite. A CLI `--path-ignore-patterns` flag replaces that list, so the framework script no longer passes one.
 - Client gzip is one measure. `bun test` was building with `NODE_ENV=test` (~5323) while `budgets.json` recorded the production build (5194). The probe now spawns with `NODE_ENV=production`.
 - `oke dev` soft reload disposes the previous app generation. Each save was
   leaving that boot's scheduler and Bun.SQL pool open, so one process held

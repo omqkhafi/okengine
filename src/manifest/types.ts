@@ -59,6 +59,12 @@ export type AuthApiKeysResourceRef = "auth:api-keys";
 export type AuthTenantsResourceRef = "auth:tenants";
 
 /**
+ * Agent-run journal capability for approval routes.
+ * Not a store facet — the journal driver owns the rows.
+ */
+export type JournalRunsResourceRef = "journal:runs";
+
+/**
  * Dead-letter / live-stream read capability — not a store facet.
  * Declare on `effects.reads` (never `writes`).
  */
@@ -101,8 +107,10 @@ export interface Effects {
     | AuthApiKeysResourceRef
     | AuthTenantsResourceRef
   >;
-  /** Store writes, plus `"auth:api-keys"` / `"auth:tenants"` for `fx.auth` mutations. */
-  writes?: Array<ResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef>;
+  /** Store writes, plus `"auth:api-keys"` / `"auth:tenants"` and `"journal:runs"`. */
+  writes?: Array<
+    ResourceRef | AuthApiKeysResourceRef | AuthTenantsResourceRef | JournalRunsResourceRef
+  >;
   /** Emitted signals. */
   emits?: SignalRef[];
   /** Channel template sends (irreversible). */

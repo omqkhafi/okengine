@@ -316,7 +316,7 @@ const SHEET_GRID_MIN = "17rem";
  * Equal columns that fill the row. Drops a column when a track would be
  * narrower than {@link SHEET_GRID_MIN}. `columns` is the widest the row goes.
  */
-function sheetGridTracks(max: 2 | 3 | 4): string {
+function sheetGridTracks(max: 1 | 2 | 3 | 4): string {
   const floor = `${100 / max}%`;
   return `repeat(auto-fit, minmax(min(100%, max(${SHEET_GRID_MIN}, ${floor})), 1fr))`;
 }

@@ -66,13 +66,13 @@ describe.skipIf(apiKey === undefined)("openrouter decisions live", () => {
     const original = globalThis.fetch;
     let seenUrl = "";
     let raw: unknown;
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = (async (input, init) => {
       seenUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       const res = await original(input, init);
       const text = await res.clone().text();
       raw = JSON.parse(text) as unknown;
       return res;
-    };
+    }) as typeof fetch;
     try {
       const decl = decision();
       const result = (await fx().decide(decl, {

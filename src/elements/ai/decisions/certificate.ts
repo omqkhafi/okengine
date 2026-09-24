@@ -210,38 +210,11 @@ export function calibrateBoolean(
   return 1 / (1 + Math.exp(-c) * ratio);
 }
 
-/**
- * One-sided exact binomial cdf, `P(X ≤ k)` for `X ~ Binomial(n, p)`.
- *
- * @param k - Observed errors
- * @param n - Accepted labels
- * @param p - Boundary error rate
- */
 /** Fixed Learn-then-Test grid: 0.50 through 0.99, step 0.01. */
 export const LEARN_THEN_TEST_GRID: readonly number[] = Array.from(
   { length: 50 },
   (_, i) => (50 + i) / 100,
 );
-
-const LANCZOS = [
-  0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
-  -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
-  1.5056327351493116e-7,
-] as const;
-
-/**
- * Log-gamma via Lanczos. Used so a binomial cdf at n = 20000 does not overflow.
- *
- * @param z - Positive argument
- */
-function lgamma(z: number): number {
-  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
-  let x = LANCZOS[0];
-  const shifted = z - 1;
-  for (let i = 1; i < LANCZOS.length; i++) x += LANCZOS[i]! / (shifted + i);
-  const t = shifted + 7.5;
-  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(x);
-}
 
 /**
  * One-sided exact binomial cdf, `P(X ≤ k)` for `X ~ Binomial(n, p)`.

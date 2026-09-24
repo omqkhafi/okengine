@@ -166,6 +166,7 @@ describe("SqlStoreHandle — upsert", () => {
         return sharedConn.query(sql, params);
       },
       exec: (sql: string, params?: readonly unknown[]) => sharedConn.exec(sql, params),
+      close: () => sharedConn.close(),
     } satisfies SqlConnection;
     const handle = createSqlStoreHandle("sql:app", {
       connection: counting,

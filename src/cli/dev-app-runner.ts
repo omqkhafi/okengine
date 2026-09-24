@@ -90,18 +90,15 @@ const absoluteEntry = resolve(entry);
 const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
   app?: BootableApp;
 };
+const app = mod.app;
 
-if (
-  mod.app === undefined ||
-  typeof mod.app.boot !== "function" ||
-  typeof mod.app.fetch !== "function"
-) {
+if (app === undefined || typeof app.boot !== "function" || typeof app.fetch !== "function") {
   console.error(`oke dev: ${absoluteEntry} must export app with boot() and fetch()`);
   process.exit(1);
 }
 
 try {
-  await mod.app.boot({
+  await app.boot({
     rootDir: process.env["OKE_ROOT_DIR"],
     ...(manifest !== undefined ? { manifest } : {}),
   });
@@ -113,19 +110,19 @@ try {
   console.error(formatFatalError(err));
   process.exit(1);
 }
-const handle = createBunRuntime().serve(mod.app, {
+const handle = createBunRuntime().serve(app, {
   port,
   hostname,
   id: DEV_APP_SERVE_ID,
 });
 const { watchDecisionLockfile } = await import("./decision-lock-watch.ts");
 const decisionLockWatch = watchDecisionLockfile(process.env.OKE_ROOT_DIR ?? process.cwd());
-const removeSignals = installGracefulShutdown({ app: mod.app, handle });
+const removeSignals = installGracefulShutdown({ app, handle });
 installDevHotGeneration({
   async dispose() {
     decisionLockWatch.close();
     removeSignals();
-    await mod.app.stop();
+    await app.stop();
     await closeSharedPostgresClients();
   },
 });

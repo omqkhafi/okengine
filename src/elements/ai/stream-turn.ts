@@ -92,9 +92,9 @@ async function consumeStream(
       onText(delta) {
         if (!textOpen) {
           messageId = nextMessageId();
-        emit({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
-        textOpen = true;
-        emittedText = true;
+          emit({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
+          textOpen = true;
+          emittedText = true;
         }
         text += delta;
         emit({ type: "TEXT_MESSAGE_CONTENT", messageId: messageId!, delta });

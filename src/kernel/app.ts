@@ -219,6 +219,39 @@ function loadClientDescriptor(): typeof import("./client-descriptor.ts") {
   return lazyRequire(import.meta.dir, ["client", "descriptor"].join("-"));
 }
 
+/** Decision HTTP flows. A static `import()` still lands on every HTTP bundle. */
+function loadDecisionBind(): typeof import("../elements/ai/decisions/bind.ts") {
+  return lazyRequire(`${import.meta.dir}/../elements/ai/decisions`, ["bi", "nd"].join(""));
+}
+
+/** Decision lockfile. Loaded only when the manifest declares decisions. */
+function loadDecisionCertificate(): typeof import("../elements/ai/decisions/certificate.ts") {
+  return lazyRequire(`${import.meta.dir}/../elements/ai/decisions`, ["certificate"].join(""));
+}
+
+/** Decision label opener. Loaded only when the manifest declares decisions. */
+function loadDecisionLabels(): typeof import("../elements/ai/decisions/labels.ts") {
+  return lazyRequire(`${import.meta.dir}/../elements/ai/decisions`, ["lab", "els"].join(""));
+}
+
+/** Drift-flag registration. Loaded only when the manifest declares decisions. */
+function loadDecisionLabelStore(): typeof import("./decision-label-store.ts") {
+  return lazyRequire(import.meta.dir, ["decision", "label", "store"].join("-"));
+}
+
+/** `fx.decide` gate hook. Loaded only when the manifest declares decisions. */
+function loadFxDecideModule(): typeof import("./fx-decide.ts") {
+  return lazyRequire(import.meta.dir, ["fx", "decide"].join("-"));
+}
+
+/**
+ * Full boot graph (drivers, elements). A static `import()` string is still
+ * bundled into every HTTP app; the stem stays computed.
+ */
+function loadBoot(): typeof import("./boot.ts") {
+  return lazyRequire(import.meta.dir, ["bo", "ot"].join(""));
+}
+
 /** Options for {@link oke}. */
 export interface OkeOptions {
   /** Application name (Manifest `app`). */
@@ -1129,8 +1162,7 @@ export function oke(options: OkeOptions): OkeApp {
    */
   async function ensureDecisionFlows(manifest: BootOptions["manifest"] | undefined): Promise<void> {
     if (decisionFlowsBound || !manifest) return;
-    const { bindDecisionFlows, manifestHasDecisionAutonomy } =
-      await import("../elements/ai/decisions/bind.ts");
+    const { bindDecisionFlows, manifestHasDecisionAutonomy } = loadDecisionBind();
     if (!manifestHasDecisionAutonomy(manifest)) {
       decisionFlowsBound = true;
       return;
@@ -1403,7 +1435,7 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   async function doBoot(overrides?: Partial<BootOptions>): Promise<BootResult> {
-    const { bootApplication, resolveElementNeeds } = await import("./boot.ts");
+    const { bootApplication, resolveElementNeeds } = loadBoot();
     const { assertHttpGatePosture } = await import("../elements/gate/boot.ts");
     const { assertPluginNeeds, buildAvailableNeedTokens } = await import("./plugin-needs.ts");
     const dockerFlag =
@@ -1597,11 +1629,10 @@ export function oke(options: OkeOptions): OkeApp {
     const decisionManifest = overrides?.manifest ?? options.manifest;
     const declaredDecisions = decisionManifest?.ai?.decisions;
     if (declaredDecisions && Object.keys(declaredDecisions).length > 0) {
-      const { loadDecisionLockfile, setDecisionDrift } =
-        await import("../elements/ai/decisions/certificate.ts");
-      const { openDecisionLabelStore } = await import("../elements/ai/decisions/labels.ts");
-      const { setDeclaredDriftDecisions } = await import("./decision-label-store.ts");
-      const { setDecisionGateAllow } = await import("./fx-decide.ts");
+      const { loadDecisionLockfile, setDecisionDrift } = loadDecisionCertificate();
+      const { openDecisionLabelStore } = loadDecisionLabels();
+      const { setDeclaredDriftDecisions } = loadDecisionLabelStore();
+      const { setDecisionGateAllow } = loadFxDecideModule();
       const root = overrides?.rootDir ?? options.rootDir ?? process.env["OKE_ROOT_DIR"];
       if (!root) {
         throw new Error(

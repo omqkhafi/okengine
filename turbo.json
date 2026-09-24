@@ -1,0 +1,100 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "globalConfiguration": true
+  },
+  "global": {
+    "env": ["CI"],
+    "passThroughEnv": ["OKE_*", "DATABASE_URL"],
+    "ui": "tui",
+    "cacheMaxAge": "1d",
+    "cacheMaxSize": "2GB"
+  },
+  "tags": ["library"],
+  "boundaries": {
+    "implicitDependencies": ["okengine"],
+    "tags": {
+      "library": {
+        "dependencies": {
+          "deny": ["app", "example", "cli"]
+        }
+      },
+      "cli": {
+        "dependencies": {
+          "deny": ["app", "example"]
+        }
+      },
+      "app": {
+        "dependents": {
+          "deny": ["library", "cli", "example", "app"]
+        }
+      },
+      "example": {
+        "dependents": {
+          "deny": ["library", "cli", "app", "example"]
+        }
+      }
+    }
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "env": ["NODE_ENV"]
+    },
+    "//#build:console": {
+      "outputs": ["src/console/ui-next/dist/**"],
+      "env": ["NODE_ENV"]
+    },
+    "//#build:lib:repo": {
+      "outputs": ["dist/**"],
+      "env": ["NODE_ENV"]
+    },
+    "typecheck": {
+      "outputs": []
+    },
+    "//#typecheck:framework": {
+      "outputs": []
+    },
+    "//#typecheck:console": {
+      "outputs": []
+    },
+    "//#typecheck:console-tests": {
+      "outputs": []
+    },
+    "types:check": {
+      "outputs": [".source/**"]
+    },
+    "//#lint:repo": {
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "packages/**", "examples/**", "site/**"]
+    },
+    "//#fmt:check:repo": {
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "packages/**", "examples/**", "site/**"]
+    },
+    "test": {
+      "outputs": [],
+      "env": ["OKE_*", "DATABASE_URL", "CI"]
+    },
+    "//#test:framework": {
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "packages/create-oke/src/**"],
+      "env": ["OKE_*", "DATABASE_URL", "CI"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "//#dev:console:repo": {
+      "cache": false,
+      "persistent": true
+    },
+    "seed": {
+      "cache": false
+    },
+    "reset": {
+      "cache": false
+    }
+  }
+}

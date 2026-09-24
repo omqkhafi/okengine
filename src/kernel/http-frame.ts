@@ -47,11 +47,11 @@ export function requestForHttpInvoke(
   const headers = new Headers({ accept: "application/json", "x-oke-client": "console" });
   if (!methodCarriesBody(method)) {
     appendScalarQuery(url, options.input, new Set(Object.keys(params)));
-    return new Request(url, { method, headers });
+    return new Request(url.href, { method, headers });
   }
   headers.set("content-type", "application/json");
   const body = options.input === undefined ? undefined : JSON.stringify(options.input);
-  return new Request(url, {
+  return new Request(url.href, {
     method,
     headers,
     ...(body !== undefined ? { body } : {}),

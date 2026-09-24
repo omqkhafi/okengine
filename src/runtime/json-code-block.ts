@@ -605,7 +605,9 @@ function responsePaneHtml(
 ): string {
   const tone = options.status >= 500 ? "err" : options.status >= 400 ? "warn" : "ok";
   const reason = STATUS_REASON[options.status] ?? "";
-  const hint = [responseShapeHint(value), responseByteLabel(options.json)].filter(Boolean).join(" · ");
+  const hint = [responseShapeHint(value), responseByteLabel(options.json)]
+    .filter(Boolean)
+    .join(" · ");
   const headers = jsonCodeResponseHeaders(options.headers);
   const headerRows = responseFieldRows(headers);
   const headerBlock =
@@ -707,7 +709,13 @@ function fieldListHtml(rows: readonly ResponseFieldRow[]): string {
 function fieldRowHtml(row: ResponseFieldRow): string {
   const depth = Math.max(0, row.path.length - 1);
   const tone =
-    row.kind === "string" ? " s" : row.kind === "number" ? " m" : row.kind === "boolean" ? " l" : "";
+    row.kind === "string"
+      ? " s"
+      : row.kind === "number"
+        ? " m"
+        : row.kind === "boolean"
+          ? " l"
+          : "";
   const copy = `<button type="button" class="field-copy" data-field-copy="${escapeHtml(JSON.stringify(row.path))}" aria-label="Copy ${escapeHtml(row.key)}">${FIELD_COPY}</button>`;
   const label = `<span class="field-key">${escapeHtml(row.key)}</span><span class="field-val${tone}${row.kind === "null" ? " is-null" : ""}">${escapeHtml(row.display)}</span><span class="field-kind">${row.kind}</span>`;
   if (row.children) {

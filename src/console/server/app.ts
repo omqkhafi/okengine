@@ -15,7 +15,7 @@ import {
 } from "../../runs/index.ts";
 import { piiFieldNamesFromManifest } from "./runs-pii.ts";
 import { runConsoleRunsQuery } from "./runs-query.ts";
-import { getAgentEventLog } from "../../elements/ai/run-events.ts";
+import { getAgentEventLog } from "../../elements/ai/agent-event-slot.ts";
 import { createManifestAiRuntime } from "./ai.ts";
 import { CONSOLE_GATES } from "./console-gates.ts";
 import { createConsoleBindings } from "./flows.ts";

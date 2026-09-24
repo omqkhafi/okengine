@@ -313,7 +313,7 @@ async function* readAnthropicSse(
   yield {
     text: "",
     done: true,
-    ...((inputTokens !== undefined || outputTokens !== undefined)
+    ...(inputTokens !== undefined || outputTokens !== undefined
       ? {
           usage: {
             ...(inputTokens !== undefined ? { inputTokens } : {}),

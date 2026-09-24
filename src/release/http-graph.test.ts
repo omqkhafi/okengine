@@ -19,6 +19,8 @@ describe("okengine/http static import graph", () => {
     expect(forbiddenHttpGraphHits(["src/elements/store/search-runtime.ts"])).toEqual([
       "hybrid-search runtime",
     ]);
+    expect(forbiddenHttpGraphHits(["src/kernel/fx.ts"])).toEqual(["fx runtime"]);
+    expect(forbiddenHttpGraphHits(["src/kernel/fx-decide.ts"])).toEqual([]);
     expect(forbiddenHttpGraphHits(["src/elements/store/search-lsh.ts"])).toEqual([]);
     expect(forbiddenHttpGraphHits(["src/kernel/app.ts"])).toEqual([]);
   });

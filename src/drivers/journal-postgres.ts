@@ -20,14 +20,9 @@ import {
   IDEM_RENEW_SQL,
   IDEM_SELECT_SQL,
 } from "../kernel/idempotency-store.ts";
-import {
-  createPostgresDecisionLabelStore,
-  type DecisionLabelStore,
-} from "../kernel/decision-label-store.ts";
-import {
-  createPostgresAgentEventStore,
-  type AgentEventStore,
-} from "../kernel/agent-event-store.ts";
+import type { DecisionLabelStore } from "../kernel/decision-label-store.ts";
+import type { AgentEventStore } from "../kernel/agent-event-store.ts";
+import { lazyRequire } from "../kernel/lazy-require.ts";
 import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
@@ -826,10 +821,18 @@ export type PostgresJournalStore = JournalStore &
  *
  * @param sql - Journal SQL client
  */
+function loadDecisionLabelModule(): typeof import("../kernel/decision-label-store.ts") {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["decision", "label", "store"].join("-"));
+}
+
+function loadAgentEventModule(): typeof import("../kernel/agent-event-store.ts") {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["agent", "event", "store"].join("-"));
+}
+
 function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
   let pending: Promise<DecisionLabelStore> | undefined;
   const ready = (): Promise<DecisionLabelStore> => {
-    pending ??= createPostgresDecisionLabelStore(sql);
+    pending ??= loadDecisionLabelModule().createPostgresDecisionLabelStore(sql);
     return pending;
   };
   return {
@@ -851,7 +854,7 @@ function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
 function lazyAgentEvents(sql: PostgresJournalSql): AgentEventStore {
   let pending: Promise<AgentEventStore> | undefined;
   const ready = (): Promise<AgentEventStore> => {
-    pending ??= createPostgresAgentEventStore(sql);
+    pending ??= loadAgentEventModule().createPostgresAgentEventStore(sql);
     return pending;
   };
   return {

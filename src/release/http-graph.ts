@@ -39,6 +39,11 @@ export const HTTP_STATIC_GRAPH_FORBIDDEN: readonly HttpGraphForbidden[] = [
       specifier.includes("search-runtime.js") ||
       /(^|\/)search-runtime$/.test(specifier),
   },
+  {
+    id: "fx runtime",
+    test: (specifier) =>
+      specifier.endsWith("/fx.ts") || specifier.endsWith("/fx.js") || /(^|\/)fx$/.test(specifier),
+  },
 ];
 
 /** Metafile slice this gate reads. */

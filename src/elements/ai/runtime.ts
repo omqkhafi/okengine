@@ -31,6 +31,7 @@ import { createMcpClient, type McpClient } from "./mcp-client.ts";
 import type { McpTransport } from "./mcp-transport.ts";
 import type { IndexStore } from "../../drivers/types.ts";
 import { maskRedactedDeep } from "../../kernel/redacted.ts";
+import { lazyRequire } from "../../kernel/lazy-require.ts";
 import type { GatePolicyContext } from "../gate/declare.ts";
 import type { GateRuntime } from "../gate/runtime.ts";
 import type {
@@ -41,6 +42,8 @@ import type {
   AiPromptDecl,
   AiTimeout,
 } from "./declare.ts";
+import type { AgentEventLog, AgentRunHeader } from "./run-events.ts";
+import { setAgentEventLog } from "./agent-event-slot.ts";
 import {
   isRetryableAiError,
   mergeAskAbortSignal,
@@ -53,16 +56,6 @@ import {
   type AgentEventEmit,
   type AgUiEvent,
 } from "./events.ts";
-import { readModelTurn } from "./stream-turn.ts";
-import {
-  createMemoryAgentEventLog,
-  setAgentEventLog,
-  type AgentEventLog,
-  type AgentRunHeader,
-} from "./run-events.ts";
-import { setAgentFollowGates } from "./approval-http.ts";
-import { okid } from "../../okid.ts";
-import { withSseId } from "../../kernel/sse-id.ts";
 import {
   AiSchemaValidationError,
   coerceModelObject,
@@ -78,10 +71,35 @@ const AI_SAME_MODEL_RETRY_BACKOFF_MS = 250;
 /** Default bound for tool / agent loops. */
 export const AI_DEFAULT_MAX_STEPS = 6;
 
+/** Model-turn reader. Stream parsing stays off the AI barrel until a turn runs. */
+function loadStreamTurn(): typeof import("./stream-turn.ts") {
+  return lazyRequire(import.meta.dir, ["stream", "turn"].join("-"));
+}
+
+/** Follow log. A static import pulls the journal event store onto every AI import. */
+function loadRunEvents(): typeof import("./run-events.ts") {
+  return lazyRequire(import.meta.dir, ["run", "events"].join("-"));
+}
+
+/** Approval HTTP routes. Bound when an AI runtime is created, not at import. */
+function loadApprovalHttp(): typeof import("./approval-http.ts") {
+  return lazyRequire(import.meta.dir, ["approval", "http"].join("-"));
+}
+
+/** Run ids. The extended okid table stays off this graph. */
+function loadOkid(): typeof import("../../okid.ts") {
+  return lazyRequire(`${import.meta.dir}/../..`, ["ok", "id"].join(""));
+}
+
+/** SSE id stamp for a followed event. */
+function loadSseId(): typeof import("../../kernel/sse-id.ts") {
+  return lazyRequire(`${import.meta.dir}/../../kernel`, ["sse", "id"].join("-"));
+}
+
 /** Thrown inside the tool loop when a deny or abort ends the run. */
 class AgentLoopHalt extends Error {
   readonly stopReason: "aborted" | "denied" | "error";
-  readonly cause: unknown;
+  override readonly cause: unknown;
   readonly trail: readonly AgentToolStep[];
   readonly denials: readonly AgentDenial[];
   readonly steps: number;
@@ -544,13 +562,15 @@ const agentRunSlots = new WeakMap<JournalSession, { epoch: number; slot: number 
 async function allocateAgentRunId(agent: string, runOpts: AiAgentRunOptions): Promise<string> {
   if (runOpts.runId) return runOpts.runId;
   const journal = runOpts.journal;
-  if (!journal) return okid();
+  if (!journal) return loadOkid().okid();
   const epoch = journal.epoch;
   const prev = agentRunSlots.get(journal);
   const next = prev && prev.epoch === epoch ? prev.slot + 1 : 1;
   agentRunSlots.set(journal, { epoch, slot: next });
-  const stored = await journal.effect("ask", `oke.agent.run.${agent}.${next}`, () => okid());
-  return typeof stored === "string" ? stored : okid();
+  const stored = await journal.effect("ask", `oke.agent.run.${agent}.${next}`, () =>
+    loadOkid().okid(),
+  );
+  return typeof stored === "string" ? stored : loadOkid().okid();
 }
 
 /**
@@ -617,7 +637,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   const eventStore = options.journalStore?.agentEvents;
   const eventLog =
     options.eventLog ??
-    createMemoryAgentEventLog(eventStore, {
+    loadRunEvents().createMemoryAgentEventLog(eventStore, {
       claim: async (runId) => {
         const journal = options.journalStore;
         if (journal && hasJournalLease(journal)) {
@@ -630,7 +650,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       },
     });
   setAgentEventLog(eventLog);
-  setAgentFollowGates(options.gates);
+  loadApprovalHttp().setAgentFollowGates(options.gates);
   const mcpClient: McpClient = createMcpClient({
     servers: options.mcpServers,
     ...(options.resolveSecret !== undefined ? { resolveSecret: options.resolveSecret } : {}),
@@ -925,7 +945,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (depth >= parentLimit) {
         return { error: `ai: agent "${agentLabel}" is nested past maxDepth ${parentLimit}` };
       }
-      const childId = okid();
+      const childId = loadOkid().okid();
       opts.emit?.({
         type: "CUSTOM",
         name: "oke.subagent.started",
@@ -1098,7 +1118,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       try {
         const produce = async () => {
           executed = true;
-          const turn = await readModelTurn(
+          const turn = await loadStreamTurn().readModelTurn(
             opts.client,
             {
               model: providerModel,
@@ -1593,7 +1613,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const started = now();
       const runId = await allocateAgentRunId(agent, runOpts);
       runOpts.onRunId?.(runId);
-      const threadId = runOpts.threadId ?? okid();
+      const threadId = runOpts.threadId ?? loadOkid().okid();
       const logHeader = agentLogHeader(runId, threadId, agent, runOpts);
       const safeAppend = async (event: AgUiEvent): Promise<void> => {
         try {
@@ -1833,7 +1853,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     streamAgent(agent, runOpts) {
       const queue = createEventQueue();
       const signal = currentAbortSignal();
-      const threadId = runOpts.threadId ?? okid();
+      const threadId = runOpts.threadId ?? loadOkid().okid();
       let skipLoggedStart = false;
       let runId = runOpts.runId ?? "";
       let appendChain: Promise<unknown> = Promise.resolve();
@@ -1853,7 +1873,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           } catch (err) {
             noteAppendFailure(runId, agent, agentMessageLabel(runOpts), err);
           }
-          queue.emit(seq !== undefined ? withSseId(event, String(seq)) : event);
+          queue.emit(seq !== undefined ? loadSseId().withSseId(event, String(seq)) : event);
         });
       };
       let resolveResult: (value: unknown) => void = () => undefined;
@@ -1879,7 +1899,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             const prior = await eventLog.read(runId, 0);
             skipLoggedStart = prior.some((row) => row.event.type === "RUN_STARTED");
           } else {
-            runId = runOpts.runId ?? okid();
+            runId = runOpts.runId ?? loadOkid().okid();
             runOpts.onRunId?.(runId);
           }
           emit({ type: "RUN_STARTED", threadId, runId });

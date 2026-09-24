@@ -46,9 +46,8 @@ describe("flow — one species", () => {
     on(signal, shared);
 
     const app = oke({ autoBoot: false, name: "one-species" });
-    expect(app.bindings).toHaveLength(2);
-    expect(app.bindings[0]?.flow).toBe(shared);
-    expect(app.bindings[1]?.flow).toBe(shared);
+    const sharedBindings = app.bindings.filter((binding) => binding.flow === shared);
+    expect(sharedBindings).toHaveLength(2);
 
     const httpResult = await app.execute(shared, { n: 3 }, shared.triggers[0]!);
     const signalResults = await app.dispatchSignal("order-placed", { n: 4 });

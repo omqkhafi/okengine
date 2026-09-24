@@ -282,9 +282,14 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
   const considerFlow = (f: AnyFlowDef): void => {
     const e = f.effects;
     if (f.durable === true) journal = true;
-    if ((e?.reads?.length ?? 0) > 0 || (e?.writes?.length ?? 0) > 0) {
-      store = true;
-    }
+    const touchesStore = [...(e?.reads ?? []), ...(e?.writes ?? [])].some(
+      (ref) =>
+        ref.startsWith("sql:") ||
+        ref.startsWith("kv:") ||
+        ref.startsWith("files:") ||
+        ref.startsWith("index:"),
+    );
+    if (touchesStore) store = true;
     if ((e?.emits?.length ?? 0) > 0) signal = true;
     if ((e?.secrets?.length ?? 0) > 0) vault = true;
     if ((e?.sends?.length ?? 0) > 0) channel = true;
@@ -548,8 +553,11 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       if (clockRt) void Promise.resolve(clockRt.tick()).catch(ignoreBenignSql);
       if (journal && durableResume) void Promise.resolve(durableResume()).catch(ignoreBenignSql);
       if (fleet) void fleet.maybeHeartbeat().catch(ignoreBenignSql);
-      void import("../elements/ai/run-events.ts")
-        .then((mod) => mod.sweepInstalledAgentEvents())
+      const stem = ["run", "events"].join("-");
+      void import(`../elements/ai/${stem}.ts`)
+        .then((mod: typeof import("../elements/ai/run-events.ts")) =>
+          mod.sweepInstalledAgentEvents(),
+        )
         .catch(ignoreBenignSql);
     }, period);
     schedulerTimer.unref?.();

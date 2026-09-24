@@ -51,7 +51,8 @@ describe("decision breaker", () => {
     let calls = 0;
     const fetchImpl = async () => {
       calls += 1;
-      if (calls === 1) return new Response("slow", { status: 429, headers: { "retry-after": "0" } });
+      if (calls === 1)
+        return new Response("slow", { status: 429, headers: { "retry-after": "0" } });
       return Response.json({ model: "jev", answers: { urgent: { noul: 0.9 } }, usage: {} });
     };
     const result = await decisionHttp({
@@ -132,7 +133,10 @@ describe("decision breaker", () => {
     let calls = 0;
     const fetchImpl = async () => {
       calls += 1;
-      return new Response("not-json", { status: 200, headers: { "content-type": "application/json" } });
+      return new Response("not-json", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     };
     await expect(
       decisionHttp({

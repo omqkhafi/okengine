@@ -173,14 +173,14 @@ export function RequestClientCard({ headers }: RequestClientCardProps): JSX.Elem
 
 function clientChips(client: RequestClient): Chip[] {
   const chips: Chip[] = [];
-  if (client.deviceType) {
+  if (client.deviceType && client.deviceType !== "unknown") {
     chips.push({
       id: "device",
       icon: deviceIcon(client.deviceType),
       label: DEVICE_LABEL[client.deviceType],
     });
   }
-  if (client.platform) {
+  if (client.platform && client.platform !== "other") {
     chips.push({
       id: "platform",
       icon: platformIcon(client.platform),
@@ -193,14 +193,14 @@ function clientChips(client: RequestClient): Chip[] {
 }
 
 function identityChip(client: RequestClient): Chip | null {
-  if (client.browser) {
+  if (client.browser && client.browser !== "none" && client.browser !== "other") {
     return {
       id: "browser",
       icon: client.browser === "chrome" ? ChromeIcon : BrowserIcon,
       label: withVersion(BROWSER_LABEL[client.browser], client.browserVersion),
     };
   }
-  if (client.apiClient) {
+  if (client.apiClient && client.apiClient !== "none" && client.apiClient !== "other") {
     return {
       id: "api",
       icon: SourceCodeIcon,
@@ -208,7 +208,7 @@ function identityChip(client: RequestClient): Chip | null {
     };
   }
   if (client.console) return { id: "console", icon: ComputerTerminal01Icon, label: "Console" };
-  if (client.clientType) {
+  if (client.clientType && client.clientType !== "other") {
     return {
       id: "client",
       icon: clientIcon(client.clientType),
@@ -221,7 +221,7 @@ function identityChip(client: RequestClient): Chip | null {
 
 function clientFacts(client: RequestClient): Fact[] {
   const facts: Fact[] = [];
-  if (client.deviceType) {
+  if (client.deviceType && client.deviceType !== "unknown") {
     facts.push({
       id: "device",
       icon: deviceIcon(client.deviceType),
@@ -229,7 +229,7 @@ function clientFacts(client: RequestClient): Fact[] {
       value: DEVICE_LABEL[client.deviceType],
     });
   }
-  if (client.platform) {
+  if (client.platform && client.platform !== "other") {
     facts.push({
       id: "platform",
       icon: platformIcon(client.platform),
@@ -237,7 +237,7 @@ function clientFacts(client: RequestClient): Fact[] {
       value: PLATFORM_LABEL[client.platform],
     });
   }
-  if (client.browser) {
+  if (client.browser && client.browser !== "none" && client.browser !== "other") {
     facts.push({
       id: "browser",
       icon: client.browser === "chrome" ? ChromeIcon : BrowserIcon,
@@ -247,7 +247,11 @@ function clientFacts(client: RequestClient): Fact[] {
   }
   if (client.console) {
     facts.push({ id: "client", icon: ComputerTerminal01Icon, label: "Client", value: "Console" });
-  } else if (client.clientType && client.clientType !== "browser") {
+  } else if (
+    client.clientType &&
+    client.clientType !== "browser" &&
+    client.clientType !== "other"
+  ) {
     facts.push({
       id: "client",
       icon: clientIcon(client.clientType),
@@ -255,7 +259,7 @@ function clientFacts(client: RequestClient): Fact[] {
       value: CLIENT_LABEL[client.clientType],
     });
   }
-  if (client.apiClient) {
+  if (client.apiClient && client.apiClient !== "none" && client.apiClient !== "other") {
     facts.push({
       id: "api",
       icon: SourceCodeIcon,

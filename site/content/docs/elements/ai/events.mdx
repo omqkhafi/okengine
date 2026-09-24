@@ -49,8 +49,7 @@ import { support } from "@/core/ai";
 export const assist = on(
   http.post({ in: z.object({ message: z.string().min(1) }) }).public(),
   flow({
-    do: ({ message }, fx) =>
-      fx.json.stream(fx.run(support, { message }, { stream: true })),
+    do: ({ message }, fx) => fx.json.stream(fx.run(support, { message }, { stream: true })),
   }),
 );
 ```
@@ -119,21 +118,21 @@ Import `okengine/client/agent`. That module stays off `okengine/client`.
 
 Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
 
-| Type | Fields | When it fires |
-| --- | --- | --- |
-| `RUN_STARTED` | `threadId`, `runId` | The run begins. `threadId` is the option you passed, or the run id. |
-| `STEP_STARTED` | `stepName` | A step starts. `maxSteps` counts tool calls, not model calls. Names are `step-1`, `step-2`, … |
-| `TEXT_MESSAGE_START` | `messageId`, `role` | Assistant text is about to arrive. `role` is `assistant`. Empty text is skipped. |
-| `TEXT_MESSAGE_CONTENT` | `messageId`, `delta` | One piece of assistant text. A streaming driver emits one frame per delta. A driver without `stream` emits the whole turn in one frame. |
-| `TEXT_MESSAGE_END` | `messageId` | That text message is complete. |
-| `TOOL_CALL_START` | `toolCallId`, `toolCallName`, `parentMessageId?` | The model named a tool. `parentMessageId` is set when that step emitted assistant text. |
-| `TOOL_CALL_ARGS` | `toolCallId`, `delta` | One piece of the tool arguments. Streaming drivers emit each args delta. A driver without `stream` emits one JSON string. |
-| `TOOL_CALL_END` | `toolCallId` | Arguments are complete. The tool has not run yet. |
-| `TOOL_CALL_RESULT` | `messageId`, `toolCallId`, `content`, `role` | The tool returned. `role` is `tool`. `content` is a string. |
-| `STEP_FINISHED` | `stepName` | That model step is done, including its tool calls. |
-| `RUN_FINISHED` | `threadId`, `runId`, `result?`, `usage?`, `outcome?` | The loop stopped, or a tool is waiting for approval. |
-| `RUN_ERROR` | `message`, `code?` | The run failed and did not finish. `code` is the error name when it is not `Error`. |
-| `CUSTOM` | `name`, `value` | A nested agent started, finished, or failed. |
+| Type                   | Fields                                               | When it fires                                                                                                                           |
+| ---------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `RUN_STARTED`          | `threadId`, `runId`                                  | The run begins. `threadId` is the option you passed, or the run id.                                                                     |
+| `STEP_STARTED`         | `stepName`                                           | A step starts. `maxSteps` counts tool calls, not model calls. Names are `step-1`, `step-2`, …                                           |
+| `TEXT_MESSAGE_START`   | `messageId`, `role`                                  | Assistant text is about to arrive. `role` is `assistant`. Empty text is skipped.                                                        |
+| `TEXT_MESSAGE_CONTENT` | `messageId`, `delta`                                 | One piece of assistant text. A streaming driver emits one frame per delta. A driver without `stream` emits the whole turn in one frame. |
+| `TEXT_MESSAGE_END`     | `messageId`                                          | That text message is complete.                                                                                                          |
+| `TOOL_CALL_START`      | `toolCallId`, `toolCallName`, `parentMessageId?`     | The model named a tool. `parentMessageId` is set when that step emitted assistant text.                                                 |
+| `TOOL_CALL_ARGS`       | `toolCallId`, `delta`                                | One piece of the tool arguments. Streaming drivers emit each args delta. A driver without `stream` emits one JSON string.               |
+| `TOOL_CALL_END`        | `toolCallId`                                         | Arguments are complete. The tool has not run yet.                                                                                       |
+| `TOOL_CALL_RESULT`     | `messageId`, `toolCallId`, `content`, `role`         | The tool returned. `role` is `tool`. `content` is a string.                                                                             |
+| `STEP_FINISHED`        | `stepName`                                           | That model step is done, including its tool calls.                                                                                      |
+| `RUN_FINISHED`         | `threadId`, `runId`, `result?`, `usage?`, `outcome?` | The loop stopped, or a tool is waiting for approval.                                                                                    |
+| `RUN_ERROR`            | `message`, `code?`                                   | The run failed and did not finish. `code` is the error name when it is not `Error`.                                                     |
+| `CUSTOM`               | `name`, `value`                                      | A nested agent started, finished, or failed.                                                                                            |
 
 `RUN_FINISHED.result` is `{ cost, stopReason, output }`. `cost` is the sum of model-reported spend for this run. `output` is the last tool result. A text reply with no tool call may be the raw provider payload, not the assistant string.
 
@@ -188,11 +187,11 @@ curl -X POST http://localhost:6530/agent/approvals/deny \
 
 `args` replaces the tool input. `reason` is what the model sees after a deny. The first decision wins. The default wait is `24h`, then the tool is denied with reason `timeout`.
 
-| Outcome | HTTP | What you do |
-| --- | --- | --- |
-| `{ ok: true }` | 200 `{ "data": { "ok": true }, "error": null }` | The journal sleep wakes now. |
-| Already resolved | 409 `Conflict`. No `Retry-After`. Message: `That value is already in use.` | Stop. Do not retry. |
-| Lease held | 409 `JournalLeaseBusy` with `Retry-After`. Message: `This run is locked by another worker. Retry after the given delay.` | Retry after the delay. |
+| Outcome          | HTTP                                                                                                                     | What you do                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| `{ ok: true }`   | 200 `{ "data": { "ok": true }, "error": null }`                                                                          | The journal sleep wakes now. |
+| Already resolved | 409 `Conflict`. No `Retry-After`. Message: `That value is already in use.`                                               | Stop. Do not retry.          |
+| Lease held       | 409 `JournalLeaseBusy` with `Retry-After`. Message: `This run is locked by another worker. Retry after the given delay.` | Retry after the delay.       |
 
 Approving or denying does not continue this SSE response. Follow the run to see the rest.
 
@@ -263,9 +262,7 @@ return fx.json.stream(
 Pass `threadId` when the chat already has one. The default is a unique id.
 
 ```typescript
-return fx.json.stream(
-  fx.run(support, { message }, { stream: true, threadId: chatId }),
-);
+return fx.json.stream(fx.run(support, { message }, { stream: true, threadId: chatId }));
 ```
 
 `RUN_STARTED` and `RUN_FINISHED` both carry that `threadId`.
@@ -278,11 +275,11 @@ return fx.json.stream(
 
 A tool that names another agent emits `CUSTOM` on the parent stream. `okengine/client/agent` also returns typed names.
 
-| `CUSTOM.name` | Parsed `type` | `value` |
-| --- | --- | --- |
-| `oke.subagent.started` | `subagent.started` | `runId`, `parentToolCallId?` |
+| `CUSTOM.name`           | Parsed `type`       | `value`                      |
+| ----------------------- | ------------------- | ---------------------------- |
+| `oke.subagent.started`  | `subagent.started`  | `runId`, `parentToolCallId?` |
 | `oke.subagent.finished` | `subagent.finished` | `runId`, `parentToolCallId?` |
-| `oke.subagent.error` | `subagent.error` | `runId`, `parentToolCallId?` |
+| `oke.subagent.error`    | `subagent.error`    | `runId`, `parentToolCallId?` |
 
 Any other `CUSTOM` name stays `CUSTOM`. Nesting stops at `maxDepth` (default 3).
 
@@ -292,10 +289,10 @@ Any other `CUSTOM` name stays `CUSTOM`. Nesting stops at `maxDepth` (default 3).
 
 ## Text stream or event stream
 
-| Call | What each SSE `data:` frame is |
-| --- | --- |
-| `fx.json.stream(fx.stream(model, { prompt }))` | A JSON string of plain text (`"Hel"`, `"lo"`). |
-| `fx.json.stream(fx.run(agent, input, { stream: true }))` | One AG-UI event object. |
+| Call                                                     | What each SSE `data:` frame is                 |
+| -------------------------------------------------------- | ---------------------------------------------- |
+| `fx.json.stream(fx.stream(model, { prompt }))`           | A JSON string of plain text (`"Hel"`, `"lo"`). |
+| `fx.json.stream(fx.run(agent, input, { stream: true }))` | One AG-UI event object.                        |
 
 `fx.stream` is the model text iterator. `fx.json.stream` is the SSE carrier. Agent UIs use the second row.
 
@@ -305,11 +302,11 @@ Disconnecting the HTTP client aborts the in-flight model call. The run records `
 
 `result.stopReason` on a normal `RUN_FINISHED`:
 
-| `stopReason` | Meaning |
-| --- | --- |
-| `completed` | The model stopped calling tools. A gate denial fed back to the model stays `completed`. |
-| `max_steps` | The loop hit `maxSteps` (default 6). |
-| `budget` | Spend reached `budget.maxCostPerRun`. The trail so far is the output. This does not throw. |
+| `stopReason` | Meaning                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| `completed`  | The model stopped calling tools. A gate denial fed back to the model stays `completed`.    |
+| `max_steps`  | The loop hit `maxSteps` (default 6).                                                       |
+| `budget`     | Spend reached `budget.maxCostPerRun`. The trail so far is the output. This does not throw. |
 
 `denied` (unknown tool) and `aborted` arrive as `RUN_ERROR`, not as `result.stopReason`. A thrown tool ends with `RUN_FINISHED` and `result.stopReason` `"error"`, then `data: [DONE]`. The same close follows an approval interrupt: the final frame, then `[DONE]`, then the body ends.
 
@@ -318,27 +315,37 @@ Disconnecting the HTTP client aborts the in-flight model call. The run records `
 <Accordions>
 
 <Accordion title='ai: flow "support.assist" must set durable: true to run agent "support"'>
-  The tool has `approval`, and the Flow is not durable. The message names that Flow: `ai: flow "support.assist" must set durable: true to run agent "support"`. Set `durable: true`. A false `approval` predicate does not park.
+  The tool has `approval`, and the Flow is not durable. The message names that Flow: `ai: flow
+  "support.assist" must set durable: true to run agent "support"`. Set `durable: true`. A false
+  `approval` predicate does not park.
 </Accordion>
 
 <Accordion title='RUN_ERROR: ai: model requested unknown tool "refund"'>
-  The model called a tool that is not on `ai.agent({ tools })`. `code` is `AgentLoopHalt`. Add the Flow name to `tools`, or stop offering it in the prompt.
+  The model called a tool that is not on `ai.agent({tools})`. `code` is `AgentLoopHalt`. Add the
+  Flow name to `tools`, or stop offering it in the prompt.
 </Accordion>
 
 <Accordion title="RUN_FINISHED stopReason is budget">
-  `result.stopReason` is `budget` and `result.cost` is the spend so far. Raise `budget.maxCostPerRun`, or treat the partial `output` as the reply. A prompt's `maxCostPerCall` is different: `fx.ask` throws `ai: prompt "…" exceeded maxCostPerCall …` (`AiBudgetExceededError`).
+  `result.stopReason` is `budget` and `result.cost` is the spend so far. Raise
+  `budget.maxCostPerRun`, or treat the partial `output` as the reply. A prompt's `maxCostPerCall` is
+  different: `fx.ask` throws `ai: prompt "…" exceeded maxCostPerCall …` (`AiBudgetExceededError`).
 </Accordion>
 
 <Accordion title="The client disconnected">
-  The model call aborts. You may see `RUN_ERROR` with message `aborted` and code `AbortError`, or only a closed socket. The recorded `stopReason` is `aborted`.
+  The model call aborts. You may see `RUN_ERROR` with message `aborted` and code `AbortError`, or
+  only a closed socket. The recorded `stopReason` is `aborted`.
 </Accordion>
 
 <Accordion title="A frame is not one of the core types">
-  `readAgentEvents` yields `CUSTOM` unchanged when `name` is not `oke.subagent.started`, `oke.subagent.finished`, or `oke.subagent.error`. Those three become `subagent.started`, `subagent.finished`, and `subagent.error`. An object with no `type` is skipped. `data: [DONE]` is skipped. The iterator ends when the body ends, not because of that line.
+  `readAgentEvents` yields `CUSTOM` unchanged when `name` is not `oke.subagent.started`,
+  `oke.subagent.finished`, or `oke.subagent.error`. Those three become `subagent.started`,
+  `subagent.finished`, and `subagent.error`. An object with no `type` is skipped. `data: [DONE]` is
+  skipped. The iterator ends when the body ends, not because of that line.
 </Accordion>
 
 <Accordion title="Conflict or JournalLeaseBusy">
-  A second approve or deny after the decision is stored is `Conflict`. Do not retry it. A lost race while another worker holds the run is `JournalLeaseBusy` with `Retry-After`. Retry only that code.
+  A second approve or deny after the decision is stored is `Conflict`. Do not retry it. A lost race
+  while another worker holds the run is `JournalLeaseBusy` with `Retry-After`. Retry only that code.
 </Accordion>
 
 </Accordions>
@@ -352,7 +359,15 @@ Disconnecting the HTTP client aborts the in-flight model call. The run records `
 ## Next
 
 <Cards>
-  <Card title="Agents" description="Bounded tool loops with fx.run." href="/docs/elements/ai/agents" />
-  <Card title="Decisions" description="One calibrated choice, with a person when it cannot auto." href="/docs/elements/ai/decide" />
+  <Card
+    title="Agents"
+    description="Bounded tool loops with fx.run."
+    href="/docs/elements/ai/agents"
+  />
+  <Card
+    title="Decisions"
+    description="One calibrated choice, with a person when it cannot auto."
+    href="/docs/elements/ai/decide"
+  />
   <Card title="AI" description="Models, prompts, agents, and decisions." href="/docs/elements/ai" />
 </Cards>

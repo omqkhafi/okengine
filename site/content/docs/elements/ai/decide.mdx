@@ -8,11 +8,13 @@ source: "docs/spec/unified-theory.md"
 A decision picks labels for one piece of work: which queue a ticket belongs in, and whether it needs a person today. One request asks every question. The result records whether the model or a person supplied each value.
 
 <Callout title="OpenRouter">
-  The OpenRouter decisions endpoint is alpha on the provider side. Score levels and a whole question held in a same-file const are checked at compile time.
+  The OpenRouter decisions endpoint is alpha on the provider side. Score levels and a whole question
+  held in a same-file const are checked at compile time.
 </Callout>
 
 <Callout title="The one rule">
-  Declare exactly one of `review` or `onUncertain: "abstain"`, then call it with `fx.decide`. Only `oke-decisions.lock.json` can grant `auto`.
+  Declare exactly one of `review` or `onUncertain: "abstain"`, then call it with `fx.decide`. Only
+  `oke-decisions.lock.json` can grant `auto`.
 </Callout>
 
 ## Quick start
@@ -117,7 +119,11 @@ The consumer then returns. Each question is a top-level field. `$` records how i
       "provider": "openrouter",
       "usage": { "inputTokens": 120, "outputTokens": 40 }
     },
-    "team": { "how": "reviewed", "p": 0.42, "raw": { "billing": 0.2, "technical": 0.2, "none_of_these": 0.6 } },
+    "team": {
+      "how": "reviewed",
+      "p": 0.42,
+      "raw": { "billing": 0.2, "technical": 0.2, "none_of_these": 0.6 }
+    },
     "urgent": { "how": "reviewed", "p": 0.51, "raw": { "noul": 0.51 } }
   }
 }
@@ -125,11 +131,11 @@ The consumer then returns. Each question is a top-level field. `$` records how i
 
 `how: "reviewed"` is the value the gate submitted, including a choice of `none_of_these`. `p` stays the model's confidence. `raw.noul` is the provider's yes/no score for a boolean question.
 
-| `how` | Value the Flow sees |
-| --- | --- |
-| `reviewed` | The value the review gate submitted. |
+| `how`       | Value the Flow sees                                                           |
+| ----------- | ----------------------------------------------------------------------------- |
+| `reviewed`  | The value the review gate submitted.                                          |
 | `abstained` | `null` on that question only. Certain questions in the same call stay `auto`. |
-| `auto` | The calibrated answer, after a lockfile exists. See Certify and promote. |
+| `auto`      | The calibrated answer, after a lockfile exists. See Certify and promote.      |
 
 </Step>
 
@@ -138,7 +144,46 @@ The consumer then returns. Each question is a top-level field. `$` records how i
 ## Options
 
 <TypeTable
-  type={{ ask: { description: "Named questions. One request sends all of them.", type: "Record<string, Choice | Score | Boolean>", required: true }, review: { description: "Gate that may resolve a park. Exclusive with onUncertain. The Flow must be durable. No timeout.", type: "Gate | string" }, onUncertain: { description: "Only abstain. Returns null and does not park. Exclusive with review.", type: '"abstain"' }, autonomy: { description: "maxError is required. audit is required, from 0 to 1. risk defaults to 0.1.", type: "{ maxError: number; audit: number; risk?: number }" }, model: { description: "Model id. Default is typesafe/jev-1.13 on OpenRouter, or jev-1.13.0 on TypeSafe.", type: "AiModel | string" }, driverId: { description: "Which provider to call.", type: '"openrouter" | "typesafe"', default: "openrouter" }, locale: { description: "Slice the certificate by a string from the input. Absent means one slice.", type: "(input) => string | undefined" }, evals: { description: "Seed JSONL path. Same role as a prompt evals file.", type: "string" }, timeout: { description: "Provider deadline. A duration string or milliseconds.", type: "string | number", default: "30s" } }}
+  type={{
+    ask: {
+      description: "Named questions. One request sends all of them.",
+      type: "Record<string, Choice | Score | Boolean>",
+      required: true,
+    },
+    review: {
+      description:
+        "Gate that may resolve a park. Exclusive with onUncertain. The Flow must be durable. No timeout.",
+      type: "Gate | string",
+    },
+    onUncertain: {
+      description: "Only abstain. Returns null and does not park. Exclusive with review.",
+      type: '"abstain"',
+    },
+    autonomy: {
+      description: "maxError is required. audit is required, from 0 to 1. risk defaults to 0.1.",
+      type: "{ maxError: number; audit: number; risk?: number }",
+    },
+    model: {
+      description:
+        "Model id. Default is typesafe/jev-1.13 on OpenRouter, or jev-1.13.0 on TypeSafe.",
+      type: "AiModel | string",
+    },
+    driverId: {
+      description: "Which provider to call.",
+      type: '"openrouter" | "typesafe"',
+      default: "openrouter",
+    },
+    locale: {
+      description: "Slice the certificate by a string from the input. Absent means one slice.",
+      type: "(input) => string | undefined",
+    },
+    evals: { description: "Seed JSONL path. Same role as a prompt evals file.", type: "string" },
+    timeout: {
+      description: "Provider deadline. A duration string or milliseconds.",
+      type: "string | number",
+      default: "30s",
+    },
+  }}
 />
 
 ## Lifecycle
@@ -151,12 +196,12 @@ learning  --labels-->  candidate ready  --promote-->  certified
                                \---- drift ----> suspended
 ```
 
-| State | What is true | What moves it |
-| --- | --- | --- |
-| `learning` | No lockfile entry and no candidate. | Reviews and audit labels accumulate. |
-| `candidate ready` | The clock has built a candidate from those labels. The page shows the fit and `oke decide promote <name>`. Counts are not the grant. | Promote writes that slot. |
-| `certified` | `oke-decisions.lock.json` has this decision, and the declaration sets `autonomy`. A lock entry is ignored without `autonomy`. | The runtime may return `auto` under that certificate. |
-| `suspended` | This decision's audit labels since its certificate, inside 7 days, for the pinned model, failed the error cap. The monitor emitted `oke/decision/drift` with that name. | Promote or recertify clears only this decision. A newer `certifiedAt` on the next load ignores the flag. |
+| State             | What is true                                                                                                                                                            | What moves it                                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `learning`        | No lockfile entry and no candidate.                                                                                                                                     | Reviews and audit labels accumulate.                                                                     |
+| `candidate ready` | The clock has built a candidate from those labels. The page shows the fit and `oke decide promote <name>`. Counts are not the grant.                                    | Promote writes that slot.                                                                                |
+| `certified`       | `oke-decisions.lock.json` has this decision, and the declaration sets `autonomy`. A lock entry is ignored without `autonomy`.                                           | The runtime may return `auto` under that certificate.                                                    |
+| `suspended`       | This decision's audit labels since its certificate, inside 7 days, for the pinned model, failed the error cap. The monitor emitted `oke/decision/drift` with that name. | Promote or recertify clears only this decision. A newer `certifiedAt` on the next load ignores the flag. |
 
 `oke dev` reloads `oke-decisions.lock.json` when the file changes. Production reads it once, at boot.
 
@@ -182,10 +227,10 @@ curl -X POST http://127.0.0.1:6533/console/decisions/resolve \
   -d '{"id":"<audit id>","labelOnly":true,"values":{"team":"billing","urgent":true}}'
 ```
 
-| Result | HTTP | What you do |
-| --- | --- | --- |
-| `{ ok: true }` | 200 | The consumer resumes with `how: "reviewed"`. |
-| Already resolved | 409 `Conflict`. No `Retry-After`. `That value is already in use.` | Stop. |
+| Result                       | HTTP                                                                                                            | What you do                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `{ ok: true }`               | 200                                                                                                             | The consumer resumes with `how: "reviewed"`.          |
+| Already resolved             | 409 `Conflict`. No `Retry-After`. `That value is already in use.`                                               | Stop.                                                 |
 | Another worker holds the run | 409 `JournalLeaseBusy` with `Retry-After`. `This run is locked by another worker. Retry after the given delay.` | Retry after the delay. A wait over 60 seconds is 503. |
 
 The same 409 split applies to tool approval. Retry only `JournalLeaseBusy`.
@@ -213,10 +258,10 @@ The loosest cutoff that passes is the threshold. If none pass, that question can
 With `risk` at 0.1 and no mistakes, the label count is about `log(0.1 / 50) / log(1 − maxError)`:
 
 | `maxError` | Error-free labels |
-| --- | --- |
-| `0.1` | ≈ 59 |
-| `0.05` | ≈ 122 |
-| `0.01` | ≈ 619 |
+| ---------- | ----------------- |
+| `0.1`      | ≈ 59              |
+| `0.05`     | ≈ 122             |
+| `0.01`     | ≈ 619             |
 
 A seed file is JSONL. `expect` is the label for each question. `locale` is optional.
 
@@ -254,7 +299,13 @@ matches: the runtime stops returning `auto` until you certify again.
             "hash": "…",
             "calibrator": { "kind": "temperature", "t": 1.2 },
             "threshold": 0.8,
-            "metrics": { "labels": 122, "accepted": 122, "errors": 0, "maxError": 0.05, "delta": 0.1 }
+            "metrics": {
+              "labels": 122,
+              "accepted": 122,
+              "errors": 0,
+              "maxError": 0.05,
+              "delta": 0.1
+            }
           }
         }
       }
@@ -372,10 +423,10 @@ The key is a Vault secret. `fx.decide` reads `OPENROUTER_API_KEY`, or `TYPESAFE_
 `driverId` is `"typesafe"`. Declare that secret on the Flow when you write an `effects` block.
 An empty value throws `DecisionConfigError`.
 
-| `driverId` | Default model | Secret |
-| --- | --- | --- |
+| `driverId`   | Default model                                                                                     | Secret               |
+| ------------ | ------------------------------------------------------------------------------------------------- | -------------------- |
 | `openrouter` | `typesafe/jev-1.13` (the response `model` is a dated pin, currently `typesafe/jev-1.13-20260917`) | `OPENROUTER_API_KEY` |
-| `typesafe` | `jev-1.13.0` | `TYPESAFE_API_KEY` |
+| `typesafe`   | `jev-1.13.0`                                                                                      | `TYPESAFE_API_KEY`   |
 
 The deadline defaults to 30 seconds. `400`, `401`, `402`, `403`, `404`, and `422` throw `DecisionRequestError` and leave the breaker closed.
 `429` and `529` retry up to 3 attempts and honor `Retry-After`. A wait over 60 seconds is an outage.
@@ -392,54 +443,71 @@ An open breaker is an outage: review parks, abstain returns `null`.
 </Accordion>
 
 <Accordion title="review cannot run in HTTP flow">
-  `ai.decision("triage") review cannot run in HTTP flow "support.open" — a park answers 204. fx.emit a signal and decide in a consumer.`
-  Move `fx.decide` to a signal or clock Flow with `durable: true`.
+  `ai.decision("triage") review cannot run in HTTP flow "support.open" — a park answers 204. fx.emit
+  a signal and decide in a consumer.` Move `fx.decide` to a signal or clock Flow with `durable:
+  true`.
 </Accordion>
 
 <Accordion title="must set durable: true to review">
-  Compile: `ai.decision("triage"): flow "support.route" must set durable: true to review`.
-  Runtime, if it still runs: `fx.decide: "triage" review requires a durable journal`.
-  Abstain is the mode that can skip `durable`.
+  Compile: `ai.decision("triage"): flow "support.route" must set durable: true to review`. Runtime,
+  if it still runs: `fx.decide: "triage" review requires a durable journal`. Abstain is the mode
+  that can skip `durable`.
 </Accordion>
 
 <Accordion title="choice, score, and duplicate names">
-  `choice "team" has 255 options; max 254`. `choice "team" must not set none_of_these` — that option is added for you. `score "urgency" needs 2–10 levels`. `question id "$" is reserved`. `duplicate decision name` when two declarations share a name. `ask is empty` when `ask` has no questions.
+  `choice "team" has 255 options; max 254`. `choice "team" must not set none_of_these` — that option
+  is added for you. `score "urgency" needs 2–10 levels`. `question id "$" is reserved`. `duplicate
+  decision name` when two declarations share a name. `ask is empty` when `ask` has no questions.
 </Accordion>
 
 <Accordion title="OKE1010 UNDECLARED_DECIDE">
-  Cause: `Flow "support.route" decides "triage" without declaring it.` Add `triage` to `effects.decides`, or drop the hand-written `effects` block so inference can see `fx.decide`.
+  Cause: `Flow "support.route" decides "triage" without declaring it.` Add `triage` to
+  `effects.decides`, or drop the hand-written `effects` block so inference can see `fx.decide`.
 </Accordion>
 
 <Accordion title='fx.decide: secret "OPENROUTER_API_KEY" is not configured'>
-  `DecisionConfigError`. The Vault contract is missing or empty. TypeSafe looks for `TYPESAFE_API_KEY` instead. This is not an outage, and it does not park.
+  `DecisionConfigError`. The Vault contract is missing or empty. TypeSafe looks for
+  `TYPESAFE_API_KEY` instead. This is not an outage, and it does not park.
 </Accordion>
 
 <Accordion title="400, 401, 402, 403, 404, or 422 from the provider">
-  `DecisionRequestError`. 400 and 422 are a body the provider rejected. 401 is the key. 402 is billing. 403 is forbidden. 404 is an unknown model or path. The breaker stays closed. Fix the request. Do not retry as if the provider were down.
+  `DecisionRequestError`. 400 and 422 are a body the provider rejected. 401 is the key. 402 is
+  billing. 403 is forbidden. 404 is an unknown model or path. The breaker stays closed. Fix the
+  request. Do not retry as if the provider were down.
 </Accordion>
 
 <Accordion title="oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset">
-  `oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset, so the decision lockfile cannot load.` Boot with `rootDir`, or set `OKE_ROOT_DIR` to the directory that holds `oke-decisions.lock.json`.
+  `oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset, so the decision lockfile
+  cannot load.` Boot with `rootDir`, or set `OKE_ROOT_DIR` to the directory that holds
+  `oke-decisions.lock.json`.
 </Accordion>
 
 <Accordion title="autonomy requires audit">
-  `ai.decision("triage"): autonomy requires audit`. `autonomy` without `audit` fails to compile. Set `audit` from 0 to 1. `maxError` is required in the same object.
+  `ai.decision("triage"): autonomy requires audit`. `autonomy` without `audit` fails to compile. Set
+  `audit` from 0 to 1. `maxError` is required in the same object.
 </Accordion>
 
 <Accordion title="options must be an object literal">
-  `ai.decision("triage"): choice "team" options must be an object literal`. Write the options inline. A variable is invisible to the compiler. The same applies when the review gate name cannot be resolved: `ai.decision: review gate name could not be resolved`.
+  `ai.decision("triage"): choice "team" options must be an object literal`. Write the options
+  inline. A variable is invisible to the compiler. The same applies when the review gate name cannot
+  be resolved: `ai.decision: review gate name could not be resolved`.
 </Accordion>
 
 <Accordion title="The candidate route is missing">
-  The candidate route is registered only when some decision declares `autonomy`. Without that block there is no lockfile grant to promote, and `GET /_oke/decisions/:name/candidate` is not mounted.
+  The candidate route is registered only when some decision declares `autonomy`. Without that block
+  there is no lockfile grant to promote, and `GET /_oke/decisions/:name/candidate` is not mounted.
 </Accordion>
 
 <Accordion title="Conflict or JournalLeaseBusy">
-  A second resolve after the review is stored is `Conflict`. Do not retry it. A lost race is `JournalLeaseBusy` with `Retry-After`. Retry only that code. A suggested wait over 60 seconds comes back as 503.
+  A second resolve after the review is stored is `Conflict`. Do not retry it. A lost race is
+  `JournalLeaseBusy` with `Retry-After`. Retry only that code. A suggested wait over 60 seconds
+  comes back as 503.
 </Accordion>
 
 <Accordion title="The certificate went stale after an edit">
-  Changing the question text or its options changes the hash. The runtime then refuses `auto` (`stale-hash`) until `oke eval --certify` or `oke decide promote` writes a new lock entry. The old threshold is not reused.
+  Changing the question text or its options changes the hash. The runtime then refuses `auto`
+  (`stale-hash`) until `oke eval --certify` or `oke decide promote` writes a new lock entry. The old
+  threshold is not reused.
 </Accordion>
 
 </Accordions>
@@ -454,7 +522,15 @@ An open breaker is an outage: review parks, abstain returns `null`.
 ## Next
 
 <Cards>
-  <Card title="Events" description="Stream an agent run as AG-UI events." href="/docs/elements/ai/events" />
-  <Card title="Agents" description="Bounded tool loops with fx.run." href="/docs/elements/ai/agents" />
+  <Card
+    title="Events"
+    description="Stream an agent run as AG-UI events."
+    href="/docs/elements/ai/events"
+  />
+  <Card
+    title="Agents"
+    description="Bounded tool loops with fx.run."
+    href="/docs/elements/ai/agents"
+  />
   <Card title="AI" description="Models, prompts, agents, and decisions." href="/docs/elements/ai" />
 </Cards>

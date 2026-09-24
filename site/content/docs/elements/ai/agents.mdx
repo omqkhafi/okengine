@@ -159,13 +159,13 @@ ai.agent("planner", {
 
 ## Options
 
-| Option     | Type                                  | Default     | Meaning                      |
-| ---------- | ------------------------------------- | ----------- | ---------------------------- |
-| `model`    | `AiModelDecl` \| `string`             | first model | Logical binding for the loop |
-| `tools`    | Flow ref, MCP ref, or `{ name, approval?, gate?, timeout? }` | `[]` | Callable via `fx.call` |
-| `maxSteps` | `number`                              | `6`         | Hard cap on tool rounds      |
-| `maxDepth` | `number`                              | `3`         | Nested agent limit           |
-| `budget`   | `{ maxCostPerCall?, maxCostPerRun? }` | —           | Cost contracts for the run   |
+| Option     | Type                                                         | Default     | Meaning                      |
+| ---------- | ------------------------------------------------------------ | ----------- | ---------------------------- |
+| `model`    | `AiModelDecl` \| `string`                                    | first model | Logical binding for the loop |
+| `tools`    | Flow ref, MCP ref, or `{ name, approval?, gate?, timeout? }` | `[]`        | Callable via `fx.call`       |
+| `maxSteps` | `number`                                                     | `6`         | Hard cap on tool rounds      |
+| `maxDepth` | `number`                                                     | `3`         | Nested agent limit           |
+| `budget`   | `{ maxCostPerCall?, maxCostPerRun? }`                        | —           | Cost contracts for the run   |
 
 ## `fx.run` input
 
@@ -206,10 +206,13 @@ const support = ai.agent("support", {
   tools: [{ name: "billing.refund", approval: true, gate: ops, timeout: "1h" }],
 });
 
-on(http.post("/assist"), flow("assist", {
-  durable: true,
-  do: async (_input, fx) => fx.run(support, { message: "Refund order 14" }),
-}));
+on(
+  http.post("/assist"),
+  flow("assist", {
+    durable: true,
+    do: async (_input, fx) => fx.run(support, { message: "Refund order 14" }),
+  }),
+);
 ```
 
 `gate` is who may resolve. A function for `approval` waits only when it returns true.
@@ -236,8 +239,8 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
 </Accordion>
 
 <Accordion title="The agent stopped before it finished">
-  `fx.run` returns the partial trail when `budget.maxCostPerRun` is spent. It does not throw.
-  Raise the budget, lower `maxSteps`, or shrink the tool bag.
+  `fx.run` returns the partial trail when `budget.maxCostPerRun` is spent. It does not throw. Raise
+  the budget, lower `maxSteps`, or shrink the tool bag.
 </Accordion>
 
 <Accordion title='ai: model requested unknown tool "…"'>
@@ -245,7 +248,7 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
   or tighten instructions in the user `message`.
 </Accordion>
 
-<Accordion title='must set durable: true'>
+<Accordion title="must set durable: true">
   An approval tool cannot wait in memory. Set `durable: true` on the Flow that calls `fx.run`.
 </Accordion>
 

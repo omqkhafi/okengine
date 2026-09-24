@@ -13,6 +13,9 @@ import {
   type AgentEventStore,
 } from "../../kernel/agent-event-store.ts";
 import type { AgUiEvent } from "./events.ts";
+import { getAgentEventLog } from "./agent-event-slot.ts";
+
+export { getAgentEventLog, setAgentEventLog } from "./agent-event-slot.ts";
 
 /** Stored rows per run before deltas stop. Structural events still land. */
 export const AGENT_EVENT_CAP = 5_000;
@@ -161,19 +164,22 @@ export function createMemoryAgentEventLog(
     return !DELTA_TYPES.has(event.type);
   };
 
-  const persist = async (runId: string, row: StoredAgentEvent): Promise<boolean> => {
-    if (!store) return true;
+  const persist = async (
+    runId: string,
+    row: StoredAgentEvent,
+  ): Promise<{ readonly ok: true; readonly error?: unknown } | { readonly ok: false }> => {
+    if (!store) return { ok: true };
     try {
       await store.append(runId, row);
-      return true;
+      return { ok: true };
     } catch (err) {
       if (err instanceof AgentEventDuplicateSeqError) throw err;
       try {
         await store.append(runId, row);
-        return true;
+        return { ok: true, error: err };
       } catch (again) {
         if (again instanceof AgentEventDuplicateSeqError) throw again;
-        return false;
+        return { ok: false };
       }
     }
   };
@@ -188,7 +194,7 @@ export function createMemoryAgentEventLog(
     const seq = run.nextSeq;
     const row: StoredAgentEvent = { seq, event };
     const stored = await persist(run.header.runId, row);
-    if (!stored) {
+    if (!stored.ok) {
       run.pendingGap = true;
       return undefined;
     }
@@ -196,6 +202,7 @@ export function createMemoryAgentEventLog(
     run.nextSeq = seq + 1;
     run.rows.push(row);
     for (const listener of run.listeners) listener(row);
+    if (stored.error) throw stored.error;
     return seq;
   };
 
@@ -501,24 +508,6 @@ function mergeDelta(left: AgUiEvent, right: AgUiEvent): AgUiEvent {
   return right;
 }
 
-let activeLog: AgentEventLog | undefined;
-
-/**
- * Install the log the follow route reads. Boot and tests call this.
- *
- * @param log - Active log
- */
-export function setAgentEventLog(log: AgentEventLog | undefined): void {
-  activeLog = log;
-}
-
-/**
- * Log installed by the running AI runtime.
- */
-export function getAgentEventLog(): AgentEventLog | undefined {
-  return activeLog;
-}
-
 /**
  * Sweep the installed log. The scheduler calls this on every tick.
  *
@@ -529,5 +518,5 @@ export async function sweepInstalledAgentEvents(
   now = Date.now(),
   ttlMs = AGENT_EVENT_TTL_MS,
 ): Promise<number> {
-  return (await activeLog?.sweep(now, ttlMs)) ?? 0;
+  return (await getAgentEventLog()?.sweep(now, ttlMs)) ?? 0;
 }

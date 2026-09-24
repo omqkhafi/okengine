@@ -1191,7 +1191,7 @@ describe("oke dev Console vault config", () => {
   test("writes OKE_MANIFEST_PATH for the app child when a Manifest is available", async () => {
     const runner = await Bun.file(new URL("./dev-app-runner.ts", import.meta.url)).text();
     expect(runner).toContain("OKE_MANIFEST_PATH");
-    expect(runner).toMatch(/mod\.app\.boot\(\{/);
+    expect(runner).toMatch(/\bapp\.boot\(\{/);
 
     const dir = await mkdtemp(join(tmpdir(), "oke-dev-manifest-handoff-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");

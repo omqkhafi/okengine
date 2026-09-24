@@ -503,7 +503,7 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
       }
 
       const create =
-        /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\((.+)\)\s*$/i.exec(
+        /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\((.+)\)\s*$/is.exec(
           text,
         );
       if (create) {
@@ -518,6 +518,26 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         }
         return { changes: 0 };
       }
+
+      const addColumn =
+        /^ALTER\s+TABLE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\b/is.exec(
+          text,
+        );
+      if (addColumn) {
+        const name = parseIdent(addColumn[1]!);
+        const column = parseIdent(addColumn[2]!);
+        const table = tables.get(name);
+        if (table && !table.columns.includes(column)) table.columns.push(column);
+        return { changes: 0 };
+      }
+
+      // Scan results do not depend on indexes. Identity and vault DDL still
+      // issue CREATE INDEX IF NOT EXISTS on the shared memory connection.
+      const createIndex =
+        /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?:"?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+ON\s+/is.exec(
+          text,
+        );
+      if (createIndex) return { changes: 0 };
 
       const insert =
         /^INSERT\s+INTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*$/i.exec(

@@ -6,7 +6,6 @@
 
 import { fail, type FlowFailure } from "../kernel/errors.ts";
 import type { JsonResult, JsonStreamResult, SseFrame } from "../kernel/fx.ts";
-import { readSseId } from "../kernel/sse-id.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { lazyRequire } from "../kernel/lazy-require.ts";
 
@@ -69,6 +68,11 @@ export function encodeFailure(failure: FlowFailure): Response {
   return Response.json({ data: null, error: failure.error } satisfies FailureEnvelope, {
     status: statusForFailure(failure),
   });
+}
+
+/** SSE id reader. Kept off the edge bundle until a stream chunk is encoded. */
+function loadSseId(): typeof import("../kernel/sse-id.ts") {
+  return lazyRequire(`${import.meta.dir}/../kernel`, ["sse", "id"].join("-"));
 }
 
 function loadFxLiveStream(): typeof import("../kernel/fx-live-stream.ts") {
@@ -166,7 +170,7 @@ function encodeSseStream(carrier: JsonStreamResult): Response {
         for await (const chunk of carrier.chunks) {
           const frame = loadFxJson().isSseFrame(chunk)
             ? chunk
-            : { data: chunk as unknown, id: readSseId(chunk) };
+            : { data: chunk as unknown, id: loadSseId().readSseId(chunk) };
           const lines: string[] = [];
           if ("comment" in frame && frame.comment && frame.data === undefined) {
             controller.enqueue(encoder.encode(`: ${frame.comment}\n\n`));

@@ -28,17 +28,17 @@ The server on **6535** speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), re
 
 Default-safe — they return inert data envelopes, never live handles. Approving a tool, resolving a review, and promoting a decision are not tools. Those stay with a person in the Console or the CLI.
 
-| Tool               | Returns                                        | Scope (any of)                                |
-| ------------------ | ---------------------------------------------- | --------------------------------------------- |
-| `oke.manifest.get` | The current Manifest catalogue                 | `mcp:manifest:read` · `console:manifest:read` |
-| `oke.schema.get`   | In/out/error schemas for one flow (`flowId`)   | `mcp:schema:read` · `console:manifest:read`   |
-| `oke.effects.get`  | Declared effects for one flow (`flowId`)       | `mcp:effects:read` · `console:manifest:read`  |
-| `oke.traces.list`       | Recent runs (`limit` ≤ 200, optional `flowId`)      | `mcp:traces:read` · `console:runs:read`       |
-| `oke.traces.get`        | One run/trace record (`runId`)                      | `mcp:traces:read` · `console:runs:read`       |
+| Tool                    | Returns                                                                                                                                      | Scope (any of)                                |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `oke.manifest.get`      | The current Manifest catalogue                                                                                                               | `mcp:manifest:read` · `console:manifest:read` |
+| `oke.schema.get`        | In/out/error schemas for one flow (`flowId`)                                                                                                 | `mcp:schema:read` · `console:manifest:read`   |
+| `oke.effects.get`       | Declared effects for one flow (`flowId`)                                                                                                     | `mcp:effects:read` · `console:manifest:read`  |
+| `oke.traces.list`       | Recent runs (`limit` ≤ 200, optional `flowId`)                                                                                               | `mcp:traces:read` · `console:runs:read`       |
+| `oke.traces.get`        | One run/trace record (`runId`)                                                                                                               | `mcp:traces:read` · `console:runs:read`       |
 | `oke.ai.runs.list`      | Agent runs for the token's tenant (`limit` ≤ 200). `console:*` or `mcp:*` may omit `tenant` or name another one. PII and secrets are masked. | `mcp:ai:read` · `console:runs:read`           |
-| `oke.ai.runs.get`       | One agent run plus its follow events (`runId`). Same tenant rule. Args, trail, and events are masked. | `mcp:ai:read` · `console:runs:read`           |
-| `oke.ai.approvals.list` | Pending tool approvals for the token's tenant. Same operator rule. Approval args are masked. | `mcp:ai:read` · `console:runs:read`           |
-| `oke.decisions.list`    | Decision state, pending count, metrics, and drift for the token's tenant. Same operator rule. Inputs are masked. | `mcp:decisions:read` · `console:runs:read`    |
+| `oke.ai.runs.get`       | One agent run plus its follow events (`runId`). Same tenant rule. Args, trail, and events are masked.                                        | `mcp:ai:read` · `console:runs:read`           |
+| `oke.ai.approvals.list` | Pending tool approvals for the token's tenant. Same operator rule. Approval args are masked.                                                 | `mcp:ai:read` · `console:runs:read`           |
+| `oke.decisions.list`    | Decision state, pending count, metrics, and drift for the token's tenant. Same operator rule. Inputs are masked.                             | `mcp:decisions:read` · `console:runs:read`    |
 
 ## Write tools — confirmed, every single call
 

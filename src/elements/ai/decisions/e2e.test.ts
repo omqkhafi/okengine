@@ -175,7 +175,7 @@ describe("fx.decide end to end", () => {
     setDecisionProvider(async () => providerBody());
     const sql = createPostgresJournalFake();
     const store = await createPostgresJournalStore({ sql });
-    const consoleState = { journalStore: store, manifest } as ConsoleState;
+    const consoleState = { journalStore: store, manifest } as unknown as ConsoleState;
     const resolve = decisionConsoleBindings(consoleState).find(
       (binding) => binding.flow.name === "console.decisions.resolve",
     );

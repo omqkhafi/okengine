@@ -35,7 +35,6 @@ import { decisionExportFields, maskDecisionInput } from "../elements/ai/decision
 import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
-  type JournalRun,
   type JournalSession,
   type JournalStore,
 } from "./journal.ts";

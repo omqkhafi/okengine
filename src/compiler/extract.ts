@@ -1837,7 +1837,12 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
     if (key === "meta" || key === "$") {
       throw new Error(`ai.decision("${decisionName}"): question id "${key}" is reserved`);
     }
-    assertDecisionQuestion(decisionName, key, (prop as AstNode & { value?: AstNode }).value, program);
+    assertDecisionQuestion(
+      decisionName,
+      key,
+      (prop as AstNode & { value?: AstNode }).value,
+      program,
+    );
   }
   if (scope.ai.decisions?.[decisionName]) {
     throw new Error(`ai.decision("${decisionName}"): duplicate decision name`);

@@ -74,11 +74,12 @@ function retryAfterMs(res: Response, now = Date.now()): number | "outage" {
   const header = res.headers.get("retry-after");
   if (!header) return 250;
   const seconds = Number(header);
-  const ms = Number.isFinite(seconds) && seconds >= 0
-    ? seconds * 1000
-    : Number.isFinite(Date.parse(header))
-      ? Math.max(0, Date.parse(header) - now)
-      : 250;
+  const ms =
+    Number.isFinite(seconds) && seconds >= 0
+      ? seconds * 1000
+      : Number.isFinite(Date.parse(header))
+        ? Math.max(0, Date.parse(header) - now)
+        : 250;
   if (ms > RETRY_CAP_MS) return "outage";
   return ms;
 }
@@ -227,7 +228,9 @@ export async function decisionHttp(options: DecisionHttpOptions): Promise<Decisi
       if (err instanceof DecisionOutageError) throw err;
       noteFailure(options.breakerKey, Date.now());
       lastError = err;
-      throw new DecisionOutageError(err instanceof Error ? err.message : "decision transport failed");
+      throw new DecisionOutageError(
+        err instanceof Error ? err.message : "decision transport failed",
+      );
     } finally {
       clearTimeout(timer);
       parent?.removeEventListener("abort", onParent);

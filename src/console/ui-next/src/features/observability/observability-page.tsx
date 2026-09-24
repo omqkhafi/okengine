@@ -212,7 +212,9 @@ export function ObservabilityPage(): JSX.Element {
                 className={cn(
                   EXPLORER_STRIP_TOKEN_CLASS,
                   "font-semibold tracking-[0.08em] uppercase",
-                  view === "ai" ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+                  view === "ai"
+                    ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS
+                    : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                 )}
                 onClick={() => setView("ai")}
                 data-slot="observability-view-ai"

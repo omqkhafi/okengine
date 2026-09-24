@@ -544,11 +544,11 @@ writes (`set` · `delete`). Declare the same refs when you hand-write
 
 ## Drivers
 
-| Driver                                       | Runs as                          | Best for                           |
-| -------------------------------------------- | -------------------------------- | ---------------------------------- |
+| Driver                                       | Runs as                           | Best for                           |
+| -------------------------------------------- | --------------------------------- | ---------------------------------- |
 | `redis`                                      | Dragonfly by default (Redis-wire) | Dev + prod default                 |
-| `memory`                                     | Process map                      | Test default                       |
-| Durable (`postgres` / `pglite` via `oke_kv`) | Shared SQL URL                   | Namespaces that must outlive Redis |
+| `memory`                                     | Process map                       | Test default                       |
+| Durable (`postgres` / `pglite` via `oke_kv`) | Shared SQL URL                    | Namespaces that must outlive Redis |
 
 Defaults: `redis` / `memory` / `redis` (dev / test / prod). Pin overrides in
 `oke.config.ts`; image pins stay under `images.store.kv` — the driver id stays

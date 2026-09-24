@@ -717,7 +717,7 @@ describe("fx.decide", () => {
       await fx.decide(decl, { ticket: "1" });
       expect(seen).toEqual(["Bearer key-v1"]);
       expect(JSON.stringify(session.run.entries)).not.toContain("key-v1");
-      session.run.entries = session.run.entries.filter(
+      const kept = session.run.entries.filter(
         (entry) =>
           !(
             entry.kind === "effect" &&
@@ -726,6 +726,7 @@ describe("fx.decide", () => {
               entry.effectKind === "decide-view")
           ),
       );
+      session.run.entries.splice(0, session.run.entries.length, ...kept);
       secrets.OPENROUTER_API_KEY = "key-v2";
       session.rewind();
       await fx.decide(decl, { ticket: "1" });

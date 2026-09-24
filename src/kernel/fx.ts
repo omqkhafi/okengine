@@ -1502,7 +1502,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   if (telemetry) {
     lazyRequire<{ bindDecisionLabelTelemetry(telemetry: RunTelemetry): void }>(
       `${import.meta.dir}/../elements/ai/decisions`,
-      "labels",
+      ["lab", "els"].join(""),
     ).bindDecisionLabelTelemetry(telemetry);
   }
 
@@ -1929,7 +1929,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return { ok: true as const, channel: result.channel };
       });
     },
-    ask(prompt, input, opts) {
+    ask: function (prompt, input, opts) {
       const name = resolveName(prompt);
       if (opts?.stream) {
         return (async function* () {
@@ -1987,7 +1987,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         },
         () => options.aiRuntime?.lastExternal,
       );
-    },
+    } as Fx["ask"],
     embed(model, text) {
       const name = resolveName(model);
       return gated(
@@ -2057,7 +2057,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return resolveAgentDecision(id, { decision: "deny", reason: opts?.reason });
       },
     },
-    run(agent, input, opts?: { readonly stream?: boolean; readonly threadId?: string }) {
+    run: function (agent, input, opts?: { readonly stream?: boolean; readonly threadId?: string }) {
       const name = resolveName(agent);
       const turn = agentTurn(input);
       if (opts?.stream) {
@@ -2077,55 +2077,59 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           const local = new AbortController();
           const unlink = linkAbort(currentAbortSignal(), local);
           try {
-            await withAbortSignal(local.signal, () =>
-              gated(
+            await withAbortSignal(local.signal, async () => {
+              // The inner tool loop journals each step. Recording the whole
+              // stream as one ask effect would replay the run id and skip
+              // the parked tool.
+              capability.assert("ask", name);
+              const events = await options.aiRuntime!.streamAgent(name, {
+                ...turn,
+                ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
+                gates: (options.rlsGateNames ?? []).filter((gate) => gate !== "public"),
+                userId: auth.userId,
+                operatorId: operator.id,
+                ...(options.journal ? { journal: options.journal } : {}),
+                ...(options.flow !== undefined ? { flow: options.flow } : {}),
+                tenantId: tenant.id,
+                auth: {
+                  userId: auth.userId,
+                  scopes: auth.scopes,
+                  verified: auth.verified,
+                },
+                callTool: (tool, toolInput) => fx.call(tool, toolInput),
+                recordCall: (tool, runId) => {
+                  void gated(
+                    "call",
+                    tool,
+                    async () => runId,
+                    undefined,
+                    (id) =>
+                      typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined,
+                  );
+                },
+                onRunId(id) {
+                  heldRunId = id;
+                  markRun();
+                },
+              });
+              inner = events as AsyncIterable<AgUiEvent> & {
+                readonly result?: Promise<unknown>;
+              };
+              const settled = inner.result?.then(
+                () => undefined,
+                () => undefined,
+              );
+              await Promise.race([heldReady, settled ?? Promise.resolve()]);
+              await recordEffect(
+                ledger,
                 "ask",
                 name,
-                async () => {
-                  const events = await options.aiRuntime!.streamAgent(name, {
-                    ...turn,
-                    ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
-                    gates: (options.rlsGateNames ?? []).filter((gate) => gate !== "public"),
-                    userId: auth.userId,
-                    operatorId: operator.id,
-                    ...(options.journal ? { journal: options.journal } : {}),
-                    ...(options.flow !== undefined ? { flow: options.flow } : {}),
-                    tenantId: tenant.id,
-                    auth: {
-                      userId: auth.userId,
-                      scopes: auth.scopes,
-                      verified: auth.verified,
-                    },
-                    callTool: (tool, toolInput) => fx.call(tool, toolInput),
-                    recordCall: (tool, runId) => {
-                      void gated(
-                        "call",
-                        tool,
-                        async () => runId,
-                        undefined,
-                        (id) =>
-                          typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined,
-                      );
-                    },
-                    onRunId(id) {
-                      heldRunId = id;
-                      markRun();
-                    },
-                  });
-                  inner = events as AsyncIterable<AgUiEvent> & {
-                    readonly result?: Promise<unknown>;
-                  };
-                  const settled = inner.result?.then(
-                    () => undefined,
-                    () => undefined,
-                  );
-                  await Promise.race([heldReady, settled ?? Promise.resolve()]);
-                  return heldRunId;
-                },
+                now,
+                async () => heldRunId,
                 undefined,
                 (id) => (typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined),
-              ),
-            );
+              );
+            });
             if (inner) yield* inner;
           } finally {
             unlink();
@@ -2180,7 +2184,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           return typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined;
         },
       );
-    },
+    } as Fx["run"],
     stream(model, opts) {
       const name = resolveName(model);
       const chunks = (async function* () {
@@ -2267,7 +2271,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             return undefined;
           },
         });
-        return carrier;
+        return carrier as JsonStreamResult;
       },
     },
     async step<T>(name: string, fn: () => T | Promise<T>, opts?: StepOptions<T>): Promise<T> {

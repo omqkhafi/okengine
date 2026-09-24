@@ -483,9 +483,7 @@ describe("fx — wholesale swap", () => {
       async deliverOtp(opts) {
         return { ok: true as const, channel: opts.only ?? opts.channels[0] ?? "email" };
       },
-      async ask() {
-        return {};
-      },
+      ask: (async () => ({})) as unknown as Fx["ask"],
       async embed() {
         return [];
       },
@@ -495,6 +493,9 @@ describe("fx — wholesale swap", () => {
       async fetch() {
         return new Response(null, { status: 204 });
       },
+      async decide<T>(): Promise<T> {
+        return {} as T;
+      },
       agent: {
         async approve() {
           return { ok: true as const };
@@ -503,9 +504,7 @@ describe("fx — wholesale swap", () => {
           return { ok: true as const };
         },
       },
-      async run() {
-        return {};
-      },
+      run: (async () => ({})) as unknown as Fx["run"],
       async *stream() {
         /* empty */
       },
