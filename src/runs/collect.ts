@@ -13,7 +13,7 @@ import type { Trigger } from "../kernel/triggers.ts";
 import type { FlowPlane } from "../manifest/types.ts";
 import { cacheDimensionOf, type RunTelemetry } from "../kernel/run-telemetry.ts";
 import { okid } from "../okid.ts";
-import type { RunError, WideEvent } from "./types.ts";
+import type { RunError, RunHttpFrame, WideEvent } from "./types.ts";
 
 /** Inputs for {@link collectWideEvent}. */
 export interface CollectWideEventInput {
@@ -42,6 +42,8 @@ export interface CollectWideEventInput {
   readonly input?: unknown;
   /** Flow return value when the run completed with an output. */
   readonly output?: unknown;
+  /** HTTP wire frame when the trigger was `http`. */
+  readonly http?: RunHttpFrame;
   /** Optional parent run id (causal chain). */
   readonly parentId?: string;
   /** Optional run id (generated when omitted). */
@@ -123,6 +125,7 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
     error,
     ...(input.input !== undefined ? { input: input.input } : {}),
     ...(input.output !== undefined ? { output: input.output } : {}),
+    ...(input.http !== undefined ? { http: input.http } : {}),
     effects: [...input.ledger.entries],
     logs: [...input.telemetry.logs],
     durationMs,

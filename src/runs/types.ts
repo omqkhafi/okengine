@@ -29,6 +29,32 @@ export interface RunError {
 export type RunDimensions = Record<string, string | number | boolean | null | undefined>;
 
 /**
+ * HTTP message around a run — everything except the flow body.
+ *
+ * Credential header and query values are `[redacted]` before this is stored.
+ */
+export interface RunHttpFrame {
+  /** Request line plus query and headers. */
+  readonly request: {
+    /** Verb as received (`GET`, `POST`, …). */
+    readonly method: string;
+    /** Pathname only — query lives in {@link query}. */
+    readonly path: string;
+    /** Query string, last value wins for a repeated key. */
+    readonly query: Readonly<Record<string, string>>;
+    /** Lower-case header names. */
+    readonly headers: Readonly<Record<string, string>>;
+  };
+  /** Final response after `onResponse`, when the trigger produced one. */
+  readonly response?: {
+    /** Status code. */
+    readonly status: number;
+    /** Lower-case header names. */
+    readonly headers: Readonly<Record<string, string>>;
+  };
+}
+
+/**
  * One wide event — the atomic observability record.
  *
  * Personal fields that must survive erasure go in {@link archived}
@@ -83,6 +109,11 @@ export interface WideEvent {
    * Absent on failures / in-flight sleeps — never invent a response.
    */
   readonly output?: unknown;
+  /**
+   * HTTP wire frame when the trigger was `http`.
+   * Absent on signal, clock, call-only, and runs recorded before the frame existed.
+   */
+  readonly http?: RunHttpFrame;
   /** Effect ledger snapshot. */
   readonly effects: readonly EffectEntry[];
   /**

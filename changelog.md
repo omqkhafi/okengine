@@ -19,6 +19,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Trace Request and Response Fields expand objects and arrays into nested
   fields. A collapsed row shows a short preview (`id: ENG-12`, `5 items`)
   instead of the raw JSON string. Array bodies use indexed rows.
+- HTTP traces show the rest of the message beside the body: query, request
+  headers, status, and response headers. Credential headers (`authorization`,
+  `cookie`, `set-cookie`, token and secret names) are stored as `[redacted]`.
+  Runs recorded before this change still show the body only. Console Call API
+  invokes record the same frame (method, path, query, `accept` /
+  `content-type`, and the response status) even though they do not arrive as
+  a socket request.
 
 ## v0.22.0 — 2026-09-24
 

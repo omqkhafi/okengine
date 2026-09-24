@@ -357,6 +357,32 @@ export type RunLog = {
   readonly at: number;
 };
 
+/**
+ * HTTP message stored beside the flow body.
+ *
+ * Credential headers arrive already replaced with `[redacted]`.
+ */
+export type RunHttpFrame = {
+  /** Request line, query, and headers. */
+  readonly request: {
+    /** Verb as received. */
+    readonly method: string;
+    /** Pathname. Query is {@link query}. */
+    readonly path: string;
+    /** Query string. */
+    readonly query: Readonly<Record<string, string>>;
+    /** Lower-case header names. */
+    readonly headers: Readonly<Record<string, string>>;
+  };
+  /** Final response, when the trigger produced one. */
+  readonly response?: {
+    /** Status code. */
+    readonly status: number;
+    /** Lower-case header names. */
+    readonly headers: Readonly<Record<string, string>>;
+  };
+};
+
 /** One run row from `GET /console/runs` (matches server `projectRun`). */
 export type RunRow = {
   readonly id: string;
@@ -396,6 +422,11 @@ export type RunRow = {
    * (failures, sleeps, or legacy rows).
    */
   readonly output: unknown;
+  /**
+   * HTTP wire frame. `null` for non-HTTP runs and rows recorded before the
+   * frame existed.
+   */
+  readonly http?: RunHttpFrame | null;
 };
 
 /** Runs list payload (`GET /console/runs`). */

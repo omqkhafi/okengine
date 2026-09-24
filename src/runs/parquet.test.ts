@@ -12,7 +12,13 @@ import { join } from "node:path";
 
 import { duckPath, openDuckDB } from "./duckdb.ts";
 import { createRunsRuntime } from "./runtime.ts";
-import { readParquet, wideEventToRow, writeParquet, type ParquetRow } from "./parquet.ts";
+import {
+  readParquet,
+  rowToWideEvent,
+  wideEventToRow,
+  writeParquet,
+  type ParquetRow,
+} from "./parquet.ts";
 import type { WideEvent } from "./types.ts";
 
 const temps: string[] = [];
@@ -61,6 +67,26 @@ async function writeLegacyParquet(path: string, rows: readonly ParquetRow[]): Pr
     await rm(jsonl, { force: true }).catch(() => undefined);
   }
 }
+
+describe("parquet http frame", () => {
+  test("round-trips a frame and omits a null column", () => {
+    const event = sample("framed", null);
+    const framed = {
+      ...event,
+      http: {
+        request: {
+          method: "GET",
+          path: "/tasks",
+          query: { limit: "20" },
+          headers: { accept: "application/json" },
+        },
+        response: { status: 200, headers: { "content-type": "application/json" } },
+      },
+    };
+    expect(rowToWideEvent(wideEventToRow(framed)).http).toEqual(framed.http);
+    expect(rowToWideEvent(wideEventToRow(event)).http).toBeUndefined();
+  });
+});
 
 describe("parquet error_code types", () => {
   test("readParquet unions all-null JSON error_code with VARCHAR Unauthorized", async () => {

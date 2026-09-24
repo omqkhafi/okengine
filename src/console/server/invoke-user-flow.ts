@@ -8,6 +8,7 @@
 
 import { userPrincipal, type UserPrincipal } from "../../auth/planes.ts";
 import { assembleInput } from "../../compiler/http-parse.ts";
+import { requestForHttpInvoke } from "../../kernel/http-frame.ts";
 import type { ExecuteResult, OkeApp } from "../../kernel/app.ts";
 import { httpStatusForFailure } from "../../kernel/builtin-errors.ts";
 import { fail, OkeError } from "../../kernel/errors.ts";
@@ -357,9 +358,17 @@ export function bindHostInvokeUserFlow(app: InvokeHostApp): ConsoleInvokeUserFlo
     });
 
     const runId = okid();
+    const request =
+      trigger.kind === "http"
+        ? requestForHttpInvoke(trigger, {
+            ...(input.pathParams !== undefined ? { pathParams: input.pathParams } : {}),
+            input: assembled,
+          })
+        : undefined;
     const result = await app.execute(flowDef, assembled, trigger, {
       trustedInvoke: true,
       runId,
+      ...(request !== undefined ? { request } : {}),
       ...(input.bypassGates === true ? { bypassGates: true } : {}),
       ...(input.revealPii === true ? { revealPii: true } : {}),
       ...(input.rls ? { rls: input.rls } : {}),

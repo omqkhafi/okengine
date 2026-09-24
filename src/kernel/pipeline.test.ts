@@ -14,6 +14,7 @@ import { createClockRuntime } from "../elements/clock.ts";
 import { gate } from "../elements/gate.ts";
 import { createRunsRuntime, memoryRunsDriver } from "../runs/index.ts";
 import { oke } from "./app.ts";
+import { HTTP_FRAME_REDACTED } from "./http-frame.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
 import { http } from "./triggers.ts";
@@ -192,6 +193,50 @@ describe("pipeline — Unauthorized for anonymous", () => {
       },
     );
     expect(forbid.failure?.error.code).toBe("Forbidden");
+    await app.bootResult?.close();
+  });
+});
+
+describe("pipeline — HTTP wire frame", () => {
+  test("fetch stores query, headers, and status beside the body", async () => {
+    resetBindings();
+    resetFlowSeq();
+
+    on(
+      http.get("/tasks", { out: z.object({ ok: z.literal(true) }) }).public(),
+      flow("tasks.list", {
+        do: () => ({ ok: true as const }),
+      }),
+    );
+
+    const runs = createRunsRuntime({ driver: memoryRunsDriver });
+    await runs.open();
+    const app = oke({
+      name: "http-frame",
+      gate: { policies: [gate.public] },
+      runs,
+      env: "test",
+    });
+    await app.boot({ env: "test", gates: [gate.public], runs });
+
+    const res = await app.fetch(
+      new Request("http://localhost/tasks?limit=20", {
+        headers: { accept: "application/json", cookie: "sid=secret" },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const event = (await runs.all()).find((row) => row.flow === "tasks.list");
+    expect(event?.input).toBeUndefined();
+    expect(event?.http).toMatchObject({
+      request: {
+        method: "GET",
+        path: "/tasks",
+        query: { limit: "20" },
+        headers: { cookie: HTTP_FRAME_REDACTED, accept: "application/json" },
+      },
+      response: { status: 200 },
+    });
     await app.bootResult?.close();
   });
 });

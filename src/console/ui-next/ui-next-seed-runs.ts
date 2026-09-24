@@ -363,6 +363,24 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     replica: "replica",
     replicaLagMs: 12,
     buildVersion: BUILD,
+    http: {
+      request: {
+        method: "GET",
+        path: "/tasks",
+        query: { limit: "20" },
+        headers: {
+          accept: "application/json",
+          authorization: "[redacted]",
+          host: "localhost:6530",
+        },
+      },
+      response: {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      },
+    },
     output: {
       count: 3,
       tasks: [

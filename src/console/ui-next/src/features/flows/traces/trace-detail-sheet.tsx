@@ -549,6 +549,7 @@ export function TraceDetailSheet({
                 headline={requestMeta.headline}
                 input={run.input}
                 output={run.output}
+                http={run.http ?? null}
                 error={run.error}
                 errorMessage={run.errorMessage}
                 inputOpen={inputOpen}

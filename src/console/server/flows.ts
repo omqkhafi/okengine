@@ -16,6 +16,7 @@ import {
 } from "../../auth/index.ts";
 import { DryRunWriteIsolationError } from "../../kernel/dry-run.ts";
 import { fail, flow, http, type AnyFlowDef, type Binding } from "../../kernel/index.ts";
+import { redactHttpFrame } from "../../kernel/http-frame.ts";
 import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts";
 import { eventHasIrreversible, runReplay } from "../../cli/replay.ts";
 import { createRunsRuntime } from "../../runs/runtime.ts";
@@ -150,6 +151,26 @@ const RunsListOut = z.object({
       input: z.unknown().nullable(),
       /** Flow return value snapshot — null when absent (failures / legacy). */
       output: z.unknown().nullable(),
+      /**
+       * HTTP wire frame — null for non-HTTP runs and rows recorded before
+       * the frame existed.
+       */
+      http: z
+        .object({
+          request: z.object({
+            method: z.string(),
+            path: z.string(),
+            query: z.record(z.string(), z.string()),
+            headers: z.record(z.string(), z.string()),
+          }),
+          response: z
+            .object({
+              status: z.number(),
+              headers: z.record(z.string(), z.string()),
+            })
+            .optional(),
+        })
+        .nullable(),
     }),
   ),
 });
@@ -2667,6 +2688,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
     dimensions,
     input: masked.input === undefined ? null : masked.input,
     output: masked.output === undefined ? null : masked.output,
+    http: r.http ? redactHttpFrame(r.http) : null,
   };
 }
 

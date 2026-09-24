@@ -45,6 +45,22 @@ const WideEventIngestSchema = z
       .optional(),
     input: z.unknown().optional(),
     output: z.unknown().optional(),
+    http: z
+      .object({
+        request: z.object({
+          method: z.string(),
+          path: z.string(),
+          query: z.record(z.string(), z.string()),
+          headers: z.record(z.string(), z.string()),
+        }),
+        response: z
+          .object({
+            status: z.number(),
+            headers: z.record(z.string(), z.string()),
+          })
+          .optional(),
+      })
+      .optional(),
     effects: z.array(z.unknown()),
     logs: z.array(z.unknown()),
     durationMs: z.number(),

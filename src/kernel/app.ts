@@ -67,6 +67,7 @@ import {
 import { GATE_PUBLIC_NAME } from "../elements/gate/flatten.ts";
 import type { JsonCodeAuth } from "../runtime/json-code-block.ts";
 import { resolveDurationMs } from "./elapsed.ts";
+import { captureHttpFrame } from "./http-frame.ts";
 import { fail, throwOke, OkeError } from "./errors.ts";
 import { FLOW_NAME_DUPLICATE, FLOW_UNNAMED } from "./errors-flow-name.ts";
 import { ONCE_SIGNAL_MULTI_FLOW } from "./errors-once-signal.ts";
@@ -2309,6 +2310,9 @@ export function oke(options: OkeOptions): OkeApp {
               ? { output: streamOut ? { streamed: true } : result.output }
               : {}),
             ...(parentId !== undefined ? { parentId } : {}),
+            ...(trigger.kind === "http" && extras?.request
+              ? { http: captureHttpFrame(extras.request, result.response) }
+              : {}),
           },
           archiveCleartext,
         );

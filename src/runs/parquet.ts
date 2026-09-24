@@ -35,6 +35,7 @@ const PARQUET_VARCHAR_COLUMNS = [
   "error_message",
   "input",
   "output",
+  "http",
   "effects",
   "logs",
   "archived",
@@ -88,6 +89,7 @@ export function wideEventToRow(event: WideEvent): ParquetRow {
     error_message: event.error?.message ?? null,
     input: event.input === undefined ? null : JSON.stringify(event.input),
     output: event.output === undefined ? null : JSON.stringify(event.output),
+    http: event.http === undefined ? null : JSON.stringify(event.http),
     effects: JSON.stringify(event.effects),
     logs: JSON.stringify(event.logs),
     duration_ms: event.durationMs,
@@ -167,6 +169,7 @@ export function rowToWideEvent(row: Record<string, unknown>): WideEvent {
               : (row.output as unknown),
         }
       : {}),
+    ...httpFromRow(row.http),
     effects: parseJsonArray(row.effects) as WideEvent["effects"],
     logs: parseJsonArray(row.logs) as WideEvent["logs"],
     durationMs: Number(row.duration_ms ?? 0),
@@ -306,6 +309,22 @@ function columnNameOf(row: Record<string, unknown>): string | undefined {
 function columnTypeOf(row: Record<string, unknown>): string | undefined {
   const type = row.column_type ?? row.Type;
   return typeof type === "string" && type.length > 0 ? type : undefined;
+}
+
+function httpFromRow(value: unknown): { http: WideEvent["http"] } | undefined {
+  const raw = typeof value === "string" && value.length > 0 ? safeJson(value) : value;
+  if (raw === null || raw === undefined || typeof raw !== "object") return undefined;
+  const frame = raw as NonNullable<WideEvent["http"]>;
+  if (typeof frame.request !== "object" || frame.request === null) return undefined;
+  return { http: frame };
+}
+
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 function parseJsonArray(value: unknown): unknown[] {

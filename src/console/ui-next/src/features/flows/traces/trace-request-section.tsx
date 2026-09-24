@@ -28,7 +28,9 @@ import { HighlightedJson } from "@/components/highlighted-json";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { RunHttpFrame } from "@/client.ts";
 import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
+import { httpStatusRailClass, httpStatusReason, httpStatusTextClass } from "./http-status.ts";
 import {
   fieldCopyText,
   inputByteLabel,
@@ -50,6 +52,11 @@ export type TraceRequestSectionProps = {
   readonly input: unknown;
   /** Projected run output snapshot. */
   readonly output: unknown;
+  /**
+   * HTTP wire frame. `null` for non-HTTP runs and rows recorded before the
+   * frame existed — those still show the body only.
+   */
+  readonly http: RunHttpFrame | null;
   /** Declared / framework error code when the run failed. */
   readonly error: string | null;
   /** Optional human message paired with {@link error}. */
@@ -81,6 +88,7 @@ export function TraceRequestSection({
   headline,
   input,
   output,
+  http,
   error,
   errorMessage,
   inputOpen,
@@ -88,7 +96,16 @@ export function TraceRequestSection({
   outputOpen,
   onOutputOpenChange,
 }: TraceRequestSectionProps): JSX.Element {
-  const endpoint = method && path ? `${method} ${path}` : headline;
+  const shownMethod = http?.request.method ?? method;
+  const shownPath = http?.request.path ?? path;
+  const endpoint = shownMethod && shownPath ? `${shownMethod} ${shownPath}` : headline;
+  const query = http?.request.query ?? {};
+  const requestHeaders = http?.request.headers ?? {};
+  const hasQuery = Object.keys(query).length > 0;
+  const hasRequestHeaders = Object.keys(requestHeaders).length > 0;
+  const responseStatus = http?.response?.status;
+  const responseHeaders = http?.response?.headers ?? {};
+  const hasResponseHeaders = Object.keys(responseHeaders).length > 0;
   const failed = error !== null;
   const hasInput = input !== null && input !== undefined;
   const hasOutput = output !== null && output !== undefined;
@@ -119,9 +136,39 @@ export function TraceRequestSection({
 
         <div data-slot="trace-request-frame" className={requestFills ? FILL_COL_CLASS : undefined}>
           <div className={cn("flex min-w-0", requestFills && "min-h-0 flex-1")}>
-            <MethodRail method={method} />
+            <MethodRail method={shownMethod} />
             <div className={cn("flex min-w-0 flex-1 flex-col", requestFills && "min-h-0")}>
-              <RequestEndpoint method={method} path={path} headline={headline} />
+              <RequestEndpoint method={shownMethod} path={shownPath} headline={headline} />
+              {hasQuery ? (
+                <PayloadPanel
+                  value={query}
+                  open
+                  onOpenChange={() => undefined}
+                  label="Query"
+                  empty=""
+                  copyLabel="Copy query JSON"
+                  copySlot="trace-request-copy-query"
+                  toggleSlot="trace-request-query-toggle"
+                  fieldsSlot="trace-request-query"
+                  jsonSlot="trace-request-query-json"
+                  localOpen
+                />
+              ) : null}
+              {hasRequestHeaders ? (
+                <PayloadPanel
+                  value={requestHeaders}
+                  open
+                  onOpenChange={() => undefined}
+                  label="Headers"
+                  empty=""
+                  copyLabel="Copy request headers"
+                  copySlot="trace-request-copy-headers"
+                  toggleSlot="trace-request-headers-toggle"
+                  fieldsSlot="trace-request-headers"
+                  jsonSlot="trace-request-headers-json"
+                  localOpen
+                />
+              ) : null}
               <PayloadPanel
                 value={input}
                 open={inputOpen}
@@ -167,33 +214,8 @@ export function TraceRequestSection({
           </div>
         </div>
 
-        {failed ? (
-          <div data-slot="trace-response-error" role="alert">
-            <div className="flex min-w-0">
-              <div
-                className="w-1 shrink-0 self-stretch bg-destructive"
-                aria-hidden
-                data-slot="trace-response-rail"
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2.5">
-                <div className="flex items-center gap-1.5">
-                  <HugeiconsIcon
-                    icon={Alert02Icon}
-                    className="size-3.5 shrink-0 text-destructive"
-                    aria-hidden
-                  />
-                  <span className="font-mono text-xs font-semibold text-destructive">{error}</span>
-                </div>
-                {errorMessage ? (
-                  <p className="text-[11px] leading-snug text-destructive/90">{errorMessage}</p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    Run failed with this error code — no return value was stored.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+        {failed && responseStatus === undefined ? (
+          <ResponseError error={error} errorMessage={errorMessage} />
         ) : (
           <div
             data-slot="trace-response-frame"
@@ -201,30 +223,131 @@ export function TraceRequestSection({
           >
             <div className={cn("flex min-w-0", responseFills && "min-h-0 flex-1")}>
               <div
-                className="w-1 shrink-0 self-stretch bg-emerald-500"
+                className={cn(
+                  "w-1 shrink-0 self-stretch",
+                  responseStatus !== undefined
+                    ? httpStatusRailClass(responseStatus)
+                    : "bg-emerald-500",
+                )}
                 aria-hidden
                 data-slot="trace-response-rail"
               />
               <div className={cn("flex min-w-0 flex-1 flex-col", responseFills && "min-h-0")}>
-                <PayloadPanel
-                  value={output}
-                  open={outputOpen}
-                  onOpenChange={onOutputOpenChange}
-                  label="Body"
-                  empty="No stored response — this run completed without a return value."
-                  copyLabel="Copy response JSON"
-                  copySlot="trace-response-copy-body"
-                  toggleSlot="trace-response-toggle"
-                  fieldsSlot="trace-response-fields"
-                  jsonSlot="trace-response-json"
-                  fill={responseFills}
-                />
+                {responseStatus !== undefined ? <ResponseStatus status={responseStatus} /> : null}
+                {hasResponseHeaders ? (
+                  <PayloadPanel
+                    value={responseHeaders}
+                    open
+                    onOpenChange={() => undefined}
+                    label="Headers"
+                    empty=""
+                    copyLabel="Copy response headers"
+                    copySlot="trace-response-copy-headers"
+                    toggleSlot="trace-response-headers-toggle"
+                    fieldsSlot="trace-response-headers"
+                    jsonSlot="trace-response-headers-json"
+                    localOpen
+                  />
+                ) : null}
+                {failed ? (
+                  <ResponseError error={error} errorMessage={errorMessage} bare />
+                ) : (
+                  <PayloadPanel
+                    value={output}
+                    open={outputOpen}
+                    onOpenChange={onOutputOpenChange}
+                    label="Body"
+                    empty="No stored response — this run completed without a return value."
+                    copyLabel="Copy response JSON"
+                    copySlot="trace-response-copy-body"
+                    toggleSlot="trace-response-toggle"
+                    fieldsSlot="trace-response-fields"
+                    jsonSlot="trace-response-json"
+                    fill={responseFills}
+                  />
+                )}
               </div>
             </div>
           </div>
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * Status line for an HTTP response frame.
+ *
+ * @param props - Status code
+ */
+function ResponseStatus({ status }: { readonly status: number }): JSX.Element {
+  const reason = httpStatusReason(status);
+  return (
+    <div className="flex min-w-0 items-center gap-2 px-2.5 py-2" data-slot="trace-response-status">
+      <span
+        className={cn(
+          "shrink-0 font-mono text-[10px] font-semibold tabular-nums",
+          httpStatusTextClass(status),
+        )}
+      >
+        {status}
+      </span>
+      {reason ? <span className="font-mono text-xs text-foreground">{reason}</span> : null}
+    </div>
+  );
+}
+
+/**
+ * Failed-run alert. `bare` sits inside a frame that already has a rail.
+ *
+ * @param props - Error code and optional message
+ */
+function ResponseError({
+  error,
+  errorMessage,
+  bare = false,
+}: {
+  readonly error: string | null;
+  readonly errorMessage: string | null;
+  readonly bare?: boolean;
+}): JSX.Element {
+  const body = (
+    <div className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2.5">
+      <div className="flex items-center gap-1.5">
+        <HugeiconsIcon
+          icon={Alert02Icon}
+          className="size-3.5 shrink-0 text-destructive"
+          aria-hidden
+        />
+        <span className="font-mono text-xs font-semibold text-destructive">{error}</span>
+      </div>
+      {errorMessage ? (
+        <p className="text-[11px] leading-snug text-destructive/90">{errorMessage}</p>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">
+          Run failed with this error code — no return value was stored.
+        </p>
+      )}
+    </div>
+  );
+  if (bare) {
+    return (
+      <div data-slot="trace-response-error" role="alert" className="border-t border-border/60">
+        {body}
+      </div>
+    );
+  }
+  return (
+    <div data-slot="trace-response-error" role="alert">
+      <div className="flex min-w-0">
+        <div
+          className="w-1 shrink-0 self-stretch bg-destructive"
+          aria-hidden
+          data-slot="trace-response-rail"
+        />
+        {body}
+      </div>
+    </div>
   );
 }
 
@@ -245,6 +368,7 @@ function PayloadPanel({
   fieldsSlot,
   jsonSlot,
   fill = false,
+  localOpen = false,
 }: {
   readonly value: unknown;
   readonly open: boolean;
@@ -258,6 +382,8 @@ function PayloadPanel({
   readonly jsonSlot: string;
   /** Grow to fill leftover sheet height instead of capping at 14rem. */
   readonly fill?: boolean;
+  /** Own the open state, starting expanded. Used for query and headers. */
+  readonly localOpen?: boolean;
 }): JSX.Element {
   const hasValue = value !== null && value !== undefined;
   const json = useMemo(() => (hasValue ? JSON.stringify(value, null, 2) : ""), [hasValue, value]);
@@ -265,6 +391,9 @@ function PayloadPanel({
   const shapeHint = useMemo(() => (hasValue ? inputShapeHint(value) : null), [hasValue, value]);
   const byteLabel = useMemo(() => (hasValue ? inputByteLabel(json) : null), [hasValue, json]);
   const [view, setView] = useState<BodyView>(rows ? "fields" : "raw");
+  const [ownOpen, setOwnOpen] = useState(true);
+  const panelOpen = localOpen ? ownOpen : open;
+  const setPanelOpen = localOpen ? setOwnOpen : onOpenChange;
 
   useEffect(() => {
     setView(rows ? "fields" : "raw");
@@ -280,9 +409,9 @@ function PayloadPanel({
 
   return (
     <Collapsible
-      open={open}
-      onOpenChange={onOpenChange}
-      className={fill ? FILL_COL_CLASS : undefined}
+      open={panelOpen}
+      onOpenChange={setPanelOpen}
+      className={fill ? FILL_COL_CLASS : "shrink-0"}
     >
       <div className={cn(EXPLORER_STRIP_CLASS, "border-t")}>
         <CollapsibleTrigger
@@ -291,7 +420,7 @@ function PayloadPanel({
         >
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
+            className={cn(EXPLORER_CHEVRON_CLASS, !panelOpen && "-rotate-90")}
           />
           <span>{label}</span>
           {shapeHint ? (
