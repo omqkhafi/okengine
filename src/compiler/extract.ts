@@ -1703,24 +1703,77 @@ function assertDecisionPlacement(flowName: string, flow: Flow, scope: ProjectSco
   }
 }
 
+function decisionReviewName(node: AstNode | undefined): string {
+  const literal = stringArg(node);
+  if (literal) return literal;
+  if (node?.type === "Identifier") return (node as Identifier).name;
+  if (node?.type === "CallExpression") {
+    const arg = stringArg((node as CallExpression).arguments[0]);
+    if (arg) return arg;
+  }
+  if (node?.type === "MemberExpression") {
+    const member = node as AstNode & { property: AstNode; computed?: boolean };
+    if (member.property.type === "Identifier" && member.computed !== true) {
+      return (member.property as Identifier).name;
+    }
+  }
+  throw new Error("ai.decision: review gate name could not be resolved");
+}
+
+function assertDecisionQuestion(decisionName: string, key: string, value: AstNode | undefined): void {
+  if (!value || value.type !== "CallExpression") return;
+  const callee = (value as CallExpression).callee;
+  const member = callee as AstNode & { property?: AstNode };
+  const fn =
+    callee.type === "MemberExpression" && member.property?.type === "Identifier"
+      ? (member.property as Identifier).name
+      : undefined;
+  const args = (value as CallExpression).arguments;
+  if (fn === "choice") {
+    const options = args[1];
+    if (!options || options.type !== "ObjectExpression") return;
+    const keys = objectProperties(options)
+      .map((prop) => propKey(prop))
+      .filter((name): name is string => typeof name === "string");
+    if (keys.includes("none_of_these")) {
+      throw new Error(`ai.decision("${decisionName}"): choice "${key}" must not set none_of_these`);
+    }
+    if (keys.length > 254) {
+      throw new Error(`ai.decision("${decisionName}"): choice "${key}" has ${keys.length} options; max 254`);
+    }
+  }
+  if (fn === "score") {
+    const levels = args[1];
+    if (!levels || levels.type !== "ArrayExpression") return;
+    const count = ((levels as AstNode & { elements?: unknown[] }).elements ?? []).length;
+    if (count < 2 || count > 10) {
+      throw new Error(`ai.decision("${decisionName}"): score "${key}" needs 2–10 levels`);
+    }
+  }
+}
+
 function collectDecision(call: CallExpression, program: AstNode, scope: ProjectScope): void {
   const decisionName = stringArg(call.arguments[0]);
   const opts = objectArg(call.arguments[1]);
   if (!decisionName || !opts) return;
   const ask = objectProp(opts, "ask");
-  const questionNames =
-    ask?.type === "ObjectExpression"
-      ? objectProperties(ask)
-          .map((prop) => propKey(prop))
-          .filter((name): name is string => typeof name === "string" && name.length > 0)
-      : [];
+  const questionProps = ask?.type === "ObjectExpression" ? objectProperties(ask) : [];
+  const questionNames = questionProps
+    .map((prop) => propKey(prop))
+    .filter((name): name is string => typeof name === "string" && name.length > 0);
   if (questionNames.length === 0) {
     throw new Error(`ai.decision("${decisionName}"): ask is empty`);
   }
-  for (const key of questionNames) {
+  for (const prop of questionProps) {
+    const key = propKey(prop);
+    if (!key) continue;
     if (key === "meta" || key === "$") {
       throw new Error(`ai.decision("${decisionName}"): question id "${key}" is reserved`);
     }
+    assertDecisionQuestion(decisionName, key, (prop as AstNode & { value?: AstNode }).value);
+  }
+  if (scope.ai.decisions?.[decisionName]) {
+    throw new Error(`ai.decision("${decisionName}"): duplicate decision name`);
   }
   const hasReview = objectProp(opts, "review") !== undefined;
   const uncertain = stringProp(opts, "onUncertain");
@@ -1737,7 +1790,7 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
   const decision: AiDecision = {
     mode: abstain ? "abstain" : "review",
     questions: questionNames,
-    ...(hasReview ? { review: stringProp(opts, "review") ?? "review" } : {}),
+    ...(hasReview ? { review: decisionReviewName(objectProp(opts, "review")) } : {}),
     ...(stringProp(opts, "model") ? { model: stringProp(opts, "model") } : {}),
     driverId: stringProp(opts, "driverId") === "typesafe" ? "typesafe" : "openrouter",
   };

@@ -32,4 +32,46 @@ describe("ai.decision extract", () => {
       }),
     ).rejects.toThrow(/fx\.emit/);
   });
+
+  test("choice, score, and duplicate names fail at compile time", async () => {
+    const many = Array.from({ length: 255 }, (_, i) => `o${i}: "x"`).join(", ");
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { ${many} }) },\n});\n`,
+      }),
+    ).rejects.toThrow(/max 254/);
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { none_of_these: null }) },\n});\n`,
+      }),
+    ).rejects.toThrow(/none_of_these/);
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `${header}  onUncertain: "abstain",\n  ask: { rank: ai.score("rank", ["only"]) },\n});\n`,
+      }),
+    ).rejects.toThrow(/2–10 levels/);
+    await expect(
+      extractFromSources({
+        "src/flows/a.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { a: "A", b: "B" }) },\n});\n`,
+        "src/flows/b.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { a: "A", b: "B" }) },\n});\n`,
+      }),
+    ).rejects.toThrow(/duplicate decision name/);
+  });
+
+  test("review records the gate name", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/run.ts": `
+        const ops = gate.policy("ops", () => true);
+        const triage = ai.decision("triage", {
+          review: ops,
+          ask: { team: ai.choice("which", { a: "A", b: "B" }) },
+        });
+        on(signal.once("job"), flow("run", {
+          durable: true,
+          do: async (input, fx) => fx.decide(triage, input),
+        }));
+      `,
+    });
+    expect(manifest.ai?.decisions?.triage?.review).toBe("ops");
+  });
 });
