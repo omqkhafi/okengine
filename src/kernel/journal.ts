@@ -130,6 +130,24 @@ export interface JournalLeaseStore {
    */
   acquireLease(runId: string, instanceId: string, now: number, leaseMs: number): Promise<boolean>;
   /**
+   * Take the lease and write `update(run)` in that same hold.
+   * `undefined` from `update` keeps the previous entries and still holds the lease.
+   * `"lease"` means another holder won. `"missing"` means no run.
+   *
+   * @param runId - Run id
+   * @param instanceId - Claimant instance
+   * @param now - Epoch-ms
+   * @param leaseMs - Lease duration
+   * @param update - Next snapshot, or undefined to leave entries
+   */
+  cas(
+    runId: string,
+    instanceId: string,
+    now: number,
+    leaseMs: number,
+    update: (run: JournalRun) => JournalRun | undefined,
+  ): Promise<"ok" | "missing" | { readonly lease: true; readonly leaseExpiresAt?: number }>;
+  /**
    * Release a lease held by `instanceId` (no-op for other holders).
    *
    * @param runId - Run id
@@ -247,6 +265,7 @@ function leaseMethods(
   load: () => Promise<Map<string, JournalRun>>,
   flush?: (map: Map<string, JournalRun>) => Promise<void>,
 ): JournalLeaseStore {
+  let gate: Promise<void> = Promise.resolve();
   return {
     async acquireLease(runId, instanceId, now, leaseMs) {
       const map = await load();
@@ -256,6 +275,31 @@ function leaseMethods(
       run.leaseExpiresAt = now + leaseMs;
       await flush?.(map);
       return true;
+    },
+    async cas(runId, instanceId, now, leaseMs, update) {
+      let release!: () => void;
+      const slot = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const prev = gate;
+      gate = slot;
+      await prev;
+      try {
+        const map = await load();
+        const run = map.get(runId);
+        if (!run) return "missing";
+        if (!claimable(run, instanceId, now)) {
+          return { lease: true, leaseExpiresAt: run.leaseExpiresAt };
+        }
+        const next = update(cloneRun(run)) ?? run;
+        next.lockedBy = instanceId;
+        next.leaseExpiresAt = now + leaseMs;
+        map.set(runId, next);
+        await flush?.(map);
+        return "ok";
+      } finally {
+        release();
+      }
     },
     async releaseLease(runId, instanceId) {
       const map = await load();

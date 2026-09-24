@@ -57,6 +57,40 @@ describe("fx.run messages", () => {
 });
 
 describe("agent event stream", () => {
+  test("a thrown tool ends with RUN_FINISHED stopReason error", async () => {
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [ai.agent("support", { model: "smart", tools: ["orders.get"], maxSteps: 2 })],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return {
+              text: "",
+              raw: { provider: "raw" },
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "c1", name: "orders.get", arguments: {} }],
+            };
+          },
+        },
+      },
+      callFlow: async () => {
+        throw new Error("provider said no");
+      },
+    });
+    const seen: AgUiEvent[] = [];
+    for await (const event of runtime.streamAgent("support", { message: "status" })) {
+      seen.push(event);
+    }
+    const finished = seen.at(-1);
+    expect(finished?.type).toBe("RUN_FINISHED");
+    if (finished?.type === "RUN_FINISHED") {
+      expect(finished.result?.stopReason).toBe("error");
+    }
+  });
+
   test("a tool call yields AG-UI events and RUN_FINISHED.result", async () => {
     const runtime = createAiRuntime({
       models: [ai.model("smart")],

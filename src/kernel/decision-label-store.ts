@@ -10,7 +10,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { DecisionLabel } from "../elements/ai/decisions/certificate.ts";
+import type { DecisionCandidate, DecisionLabel } from "../elements/ai/decisions/certificate.ts";
 
 /** SQL surface the postgres journal client already exposes. */
 export interface DecisionLabelSql {
@@ -54,6 +54,21 @@ export interface DecisionLabelStore {
   drift(): Promise<DecisionDriftRecord>;
   /** Persist the app-level suspension flag. */
   setDrift(record: DecisionDriftRecord): Promise<void>;
+  /**
+   * Store one candidate on this journal. Any instance can read it after a restart.
+   *
+   * @param decision - Decision name
+   * @param entry - Lock entry the clock fitted
+   */
+  putCandidate(decision: string, entry: DecisionCandidate): Promise<void>;
+  /**
+   * Candidate last written for this decision.
+   *
+   * @param decision - Decision name
+   */
+  getCandidate(decision: string): Promise<DecisionCandidate | undefined>;
+  /** Decision names that have a candidate. */
+  listCandidates(): Promise<readonly string[]>;
 }
 
 interface StoredLabel extends DecisionLabel {
@@ -65,6 +80,7 @@ interface StoredLabel extends DecisionLabel {
  */
 export function createMemoryDecisionLabelStore(): DecisionLabelStore {
   const rows: StoredLabel[] = [];
+  const candidates = new Map<string, DecisionCandidate>();
   let driftRecord: DecisionDriftRecord = { suspended: false, certifiedAt: 0 };
   return {
     async insert(label, at) {
@@ -82,6 +98,15 @@ export function createMemoryDecisionLabelStore(): DecisionLabelStore {
     async setDrift(next) {
       driftRecord = next;
     },
+    async putCandidate(decision, entry) {
+      candidates.set(decision, entry);
+    },
+    async getCandidate(decision) {
+      return candidates.get(decision);
+    },
+    async listCandidates() {
+      return [...candidates.keys()];
+    },
   };
 }
 
@@ -92,6 +117,7 @@ export function createMemoryDecisionLabelStore(): DecisionLabelStore {
  */
 export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
   let rows: StoredLabel[] | undefined;
+  let candidates: Record<string, DecisionCandidate> = {};
   let driftRecord: DecisionDriftRecord = { suspended: false, certifiedAt: 0 };
   const load = async (): Promise<void> => {
     if (rows) return;
@@ -102,8 +128,10 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
         rows?: StoredLabel[];
         suspended?: boolean;
         certifiedAt?: number;
+        candidates?: Record<string, DecisionCandidate>;
       };
       rows = raw.rows ?? [];
+      candidates = raw.candidates ?? {};
       driftRecord = {
         suspended: raw.suspended === true,
         certifiedAt: typeof raw.certifiedAt === "number" ? raw.certifiedAt : 0,
@@ -116,6 +144,7 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
       path,
       JSON.stringify({
         rows,
+        candidates,
         suspended: driftRecord.suspended,
         certifiedAt: driftRecord.certifiedAt,
       }),
@@ -142,6 +171,19 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
       await load();
       driftRecord = next;
       await flush();
+    },
+    async putCandidate(decision, entry) {
+      await load();
+      candidates[decision] = entry;
+      await flush();
+    },
+    async getCandidate(decision) {
+      await load();
+      return candidates[decision];
+    },
+    async listCandidates() {
+      await load();
+      return Object.keys(candidates);
     },
   };
 }
@@ -178,6 +220,10 @@ export async function createPostgresDecisionLabelStore(
     await sql.exec(
       `ALTER TABLE oke_decision_drift ADD COLUMN IF NOT EXISTS certified_at BIGINT NOT NULL DEFAULT 0`,
     );
+    await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_candidates (
+      decision_id TEXT PRIMARY KEY,
+      body TEXT NOT NULL
+    )`);
   } catch (cause) {
     throw new DecisionLabelStoreError("decision label store failed to open", { cause });
   }
@@ -267,6 +313,28 @@ export async function createPostgresDecisionLabelStore(
          ON CONFLICT (id) DO UPDATE SET suspended = excluded.suspended, certified_at = excluded.certified_at`,
         [next.suspended ? 1 : 0, next.certifiedAt],
       );
+    },
+    async putCandidate(decision, entry) {
+      await exec(
+        `INSERT INTO oke_decision_candidates (decision_id, body) VALUES (?, ?)
+         ON CONFLICT (decision_id) DO UPDATE SET body = excluded.body`,
+        [decision, JSON.stringify(entry)],
+      );
+    },
+    async getCandidate(decision) {
+      const rows = await query(
+        `SELECT body FROM oke_decision_candidates WHERE decision_id = ?`,
+        [decision],
+      );
+      const body = rows[0]?.body;
+      if (typeof body !== "string") return undefined;
+      const parsed = JSON.parse(body) as DecisionCandidate;
+      if (!parsed || typeof parsed.model !== "string" || !parsed.questions) return undefined;
+      return parsed;
+    },
+    async listCandidates() {
+      const rows = await query(`SELECT decision_id FROM oke_decision_candidates`);
+      return rows.map((row) => String(row.decision_id));
     },
   };
 }

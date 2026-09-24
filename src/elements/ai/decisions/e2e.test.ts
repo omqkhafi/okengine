@@ -28,6 +28,7 @@ import { flow } from "../../../kernel/flow.ts";
 import { signal } from "../../signal/declare.ts";
 import { resetBindings } from "../../../kernel/on.ts";
 import { http } from "../../../kernel/triggers.ts";
+import { extractFromSources } from "../../../compiler/extract.ts";
 import type { Manifest } from "../../../manifest/types.ts";
 import { resetDecisionProvider, setDecisionProvider } from "../../../kernel/fx-decide.ts";
 import { DECISION_DRIFT_SIGNAL, decisionOperatorGate } from "./bind.ts";
@@ -65,20 +66,20 @@ function providerBody() {
 
 describe("fx.decide end to end", () => {
   test("boot without a project root fails when decisions are declared", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/run.ts": `
+        ai.decision("triage", {
+          onUncertain: "abstain",
+          ask: { team: ai.choice("which", { a: "A" }) },
+        });
+      `,
+    });
     const app = oke({
       name: "decide-no-root",
       env: "test",
       startScheduler: false,
       registry: "ignore",
-      manifest: {
-        oke: "1",
-        app: "decide-no-root",
-        ai: {
-          decisions: {
-            triage: { mode: "abstain", questions: ["team"] },
-          },
-        },
-      } as unknown as Manifest,
+      manifest,
     });
     await expect(app.boot({ env: "test" })).rejects.toThrow(/rootDir/);
   });
@@ -114,35 +115,33 @@ describe("fx.decide end to end", () => {
     ).join("\n");
     let certifyCalls = 0;
     await Bun.write(join(root, "ship.jsonl"), seed);
-    const manifest = {
-      oke: "1",
-      app: "decide-e2e",
-      ai: {
-        decisions: {
-          ship: {
-            mode: "abstain",
-            questions: ["team"],
-            model: "typesafe/jev-1.13.0",
-            evals: join(root, "ship.jsonl"),
-            autonomy: { maxError: 0.05, audit: 0 },
-          },
-          triage: {
-            mode: "review",
-            questions: ["team"],
-            review: "ops",
-            model: "typesafe/jev-1.13.0",
-            autonomy: { maxError: 0.05, audit: 0 },
-          },
-          route: {
-            mode: "review",
-            questions: ["team"],
-            review: "ops",
-            model: "typesafe/jev-1.13.0",
-            autonomy: { maxError: 0.05, audit: 0 },
-          },
-        },
-      },
-    } as unknown as Manifest;
+    const evals = JSON.stringify(join(root, "ship.jsonl"));
+    const manifest = (await extractFromSources({
+      "src/flows/support/route.ts": `
+        const ops = gate.policy("ops", () => true);
+        ai.decision("ship", {
+          onUncertain: "abstain",
+          model: "typesafe/jev-1.13.0",
+          autonomy: { maxError: 0.05, audit: 0 },
+          evals: ${evals},
+          ask: { team: ai.choice("which team", { billing: "Billing", technical: "Technical" }) },
+        });
+        ai.decision("triage", {
+          review: ops,
+          model: "typesafe/jev-1.13.0",
+          autonomy: { maxError: 0.05, audit: 0 },
+          ask: { team: ai.choice("which team", { billing: "Billing", technical: "Technical" }) },
+        });
+        ai.decision("route", {
+          review: ops,
+          model: "typesafe/jev-1.13.0",
+          autonomy: { maxError: 0.05, audit: 0 },
+          ask: { team: ai.choice("which team", { billing: "Billing", technical: "Technical" }) },
+        });
+      `,
+    })) as Manifest;
+    expect(manifest.ai?.decisions?.ship?.evals).toBe(join(root, "ship.jsonl"));
+    expect(manifest.ai?.decisions?.ship?.autonomy).toEqual({ maxError: 0.05, audit: 0 });
     const code = await runOkeCertify({
       root,
       manifest,

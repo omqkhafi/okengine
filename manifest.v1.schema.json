@@ -719,7 +719,8 @@
           "required": ["maxError", "audit"],
           "properties": {
             "maxError": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-            "audit": { "type": "number", "minimum": 0, "maximum": 1 }
+            "audit": { "type": "number", "minimum": 0, "maximum": 1 },
+            "risk": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
           }
         }
       }

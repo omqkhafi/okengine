@@ -65,9 +65,12 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const { decisionDriftSuspended, getDecisionLock } =
         await import("../../elements/ai/decisions/certificate.ts");
-      const { decisionLabelWriteFailures } = await import("../../elements/ai/decisions/labels.ts");
+      const { decisionLabelWriteFailures, listDecisionCandidates } = await import(
+        "../../elements/ai/decisions/labels.ts"
+      );
+      const names = new Set(await listDecisionCandidates());
       return {
-        decisions: projectDecisionList(state.manifest, getDecisionLock()),
+        decisions: projectDecisionList(state.manifest, getDecisionLock(), names),
         suspended: decisionDriftSuspended(),
         failures: decisionLabelWriteFailures(),
       };

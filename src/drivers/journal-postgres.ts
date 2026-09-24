@@ -280,9 +280,10 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     idem: IdemDbRow[];
     labels: LabelDbRow[];
     drift: { suspended: number; certified_at: number } | null;
+    candidates: { decision_id: string; body: string }[];
   };
 
-  let committed: State = { rows: [], idem: [], labels: [], drift: null };
+  let committed: State = { rows: [], idem: [], labels: [], drift: null, candidates: [] };
   let active: { state: State; locked: Set<string>; done: boolean } | null = null;
   /** Run ids held by other active transactions (SKIP LOCKED). */
   const heldByTxn = new Set<string>();
@@ -299,6 +300,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       idem: s.idem.map((r) => ({ ...r })),
       labels: s.labels.map((r) => ({ ...r })),
       drift: s.drift ? { ...s.drift } : null,
+      candidates: s.candidates.map((r) => ({ ...r })),
     };
   }
 
@@ -417,6 +419,14 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
 
       if (/FROM\s+oke_decision_drift/i.test(text)) {
         return state.drift ? [{ ...state.drift }] : [];
+      }
+
+      if (/FROM\s+oke_decision_candidates/i.test(text)) {
+        if (/decision_id\s*=\s*\?/i.test(text)) {
+          const id = String(params[0] ?? "");
+          return state.candidates.filter((row) => row.decision_id === id).map((row) => ({ ...row }));
+        }
+        return state.candidates.map((row) => ({ ...row }));
       }
 
       throw new Error(`postgres journal fake: unsupported query: ${sql}`);
@@ -600,6 +610,15 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         return { changes: 1 };
       }
 
+      if (/^INSERT\s+INTO\s+oke_decision_candidates\b/i.test(text)) {
+        const decisionId = String(params[0]);
+        const body = String(params[1]);
+        const idx = state.candidates.findIndex((row) => row.decision_id === decisionId);
+        if (idx >= 0) state.candidates[idx] = { decision_id: decisionId, body };
+        else state.candidates.push({ decision_id: decisionId, body });
+        return { changes: 1 };
+      }
+
       if (/^INSERT\s+INTO\s+oke_decision_drift\b/i.test(text)) {
         state.drift = {
           suspended: Number(params[0]),
@@ -690,6 +709,9 @@ function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
     list: (decision, tenant) => ready().then((store) => store.list(decision, tenant)),
     drift: () => ready().then((store) => store.drift()),
     setDrift: (record) => ready().then((store) => store.setDrift(record)),
+    putCandidate: (decision, entry) => ready().then((store) => store.putCandidate(decision, entry)),
+    getCandidate: (decision) => ready().then((store) => store.getCandidate(decision)),
+    listCandidates: () => ready().then((store) => store.listCandidates()),
   };
 }
 
@@ -732,6 +754,25 @@ export async function createPostgresJournalStore(
         if (!claimed[0]) return false;
         await tx.exec(UPDATE_LEASE_SQL, [instanceId, now + leaseMs, runId]);
         return true;
+      });
+    },
+    async cas(runId, instanceId, now, leaseMs, update) {
+      return sql.begin(async (tx) => {
+        const claimed = await tx.query(CLAIM_LEASE_SQL, [runId, instanceId, now]);
+        const row = claimed[0];
+        if (!row) {
+          const exists = await tx.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [runId]);
+          const held = exists[0];
+          if (!held) return "missing";
+          const current = rowToRun(held);
+          return { lease: true, leaseExpiresAt: current.leaseExpiresAt };
+        }
+        const current = rowToRun(row);
+        const next = update(current) ?? current;
+        next.lockedBy = instanceId;
+        next.leaseExpiresAt = now + leaseMs;
+        await tx.exec(UPSERT_SQL, runToParams(next));
+        return "ok";
       });
     },
     async releaseLease(runId, instanceId) {

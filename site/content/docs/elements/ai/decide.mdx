@@ -5,23 +5,14 @@ icon: "Scale"
 source: "docs/spec/unified-theory.md"
 ---
 
-<Callout title="Experimental">
-  `ai.decision` is experimental. A lockfile grants an automatic answer only after labels exist.
-  A seed file can print a certificate. It is not a production pilot.
+A decision picks labels for one piece of work: which queue a ticket belongs in, and whether it needs a person today. One request asks every question. The result records whether the model or a person supplied each value.
 
-  - A promoted lockfile takes effect after the app restarts or deploys.
-  - One drift flag covers the app. Recertifying any decision clears it at boot until the monitor raises it again.
-  - Compile-time checks do not see score levels, or a whole question, held in a variable. Runtime still validates them.
-  - Autonomy is statistically certified only after a real-data pilot. At δ = 0.1 that takes at least about 122 accepted, error-free labels per threshold.
+<Callout title="Experimental">
+  `ai.decision` is experimental. A lockfile grants an automatic answer only after labels exist. A seed file can print a certificate. It is not a production pilot.
 </Callout>
 
-A decision picks labels for one piece of work: which queue a ticket belongs in, and whether it
-needs a person today. One request asks every question. The result records whether the model
-or a person supplied each value.
-
 <Callout title="The one rule">
-  Declare exactly one of `review` or `onUncertain: "abstain"`. Call it with `fx.decide`.
-  The runtime can only take autonomy away. Only `oke-decisions.lock.json` grants `auto`.
+  Declare exactly one of `review` or `onUncertain: "abstain"`, then call it with `fx.decide`. Only `oke-decisions.lock.json` can grant `auto`.
 </Callout>
 
 ## Quick start
@@ -46,13 +37,15 @@ export const triage = ai.decision("triage", {
       billing: "Billing",
       technical: "Technical",
     }),
-    urgent: ai.boolean("Does this need a person today?"),
+    urgent: ai.boolean("Does this need a person today?", {
+      true: "A person should see it today",
+      false: "It can wait",
+    }),
   },
 });
 ```
 
-`ai.choice` takes at most 254 options. The model may also answer `none_of_these`, which never
-returns as `auto`. `ai.score` takes 2–10 levels, best to worst. Question ids `meta` and `$` are reserved.
+`ai.choice` takes at most 254 options. The model may also answer `none_of_these`, which never returns as `auto`. A reviewer may still submit `none_of_these`; the Flow receives that string. `ai.boolean` takes an optional `{ true, false }` criteria pair. `ai.score` takes 2–10 levels, best to worst. Question ids `meta` and `$` are reserved.
 
 </Step>
 
@@ -99,11 +92,20 @@ export const route = on(
 </Step>
 
 <Step>
-### Read the result
+### Resolve it in Console
 
-`fx.decide` returns one object. Each question is a top-level field. `$` records how it was produced.
-`p` is calibrated confidence from 0 to 1. `raw` is the provider distribution before calibration.
-`audited: true` means that automatic answer was also queued for a label. Audit is not a `how`.
+The park waits until someone who passes the `ops` gate submits every open question. Console on port 6533 does that as an operator: the route sends the signed-in operator and that session's auth scopes into the review gate. The gate must allow them. An operator may resolve any tenant. A user-plane caller whose tenant does not match the park is 403.
+
+Open `/flows/decisions`, or POST the review id from the queue:
+
+```bash
+curl -X POST http://127.0.0.1:6533/console/decisions/resolve \
+  -H "authorization: Bearer $OKE_OPERATOR_AUTHORIZATION" \
+  -H "content-type: application/json" \
+  -d '{"id":"<review id>","values":{"team":"billing","urgent":false}}'
+```
+
+The consumer then returns. Each question is a top-level field. `$` records how it was produced. `p` is calibrated confidence from 0 to 1. `raw` is the provider distribution before calibration.
 
 ```json
 {
@@ -115,27 +117,19 @@ export const route = on(
       "provider": "openrouter",
       "usage": { "inputTokens": 120, "outputTokens": 40 }
     },
-    "team": {
-      "how": "auto",
-      "p": 0.91,
-      "raw": { "billing": 0.84, "technical": 0.12, "none_of_these": 0.04 }
-    },
-    "urgent": {
-      "how": "auto",
-      "p": 0.88,
-      "raw": { "noul": 0.12 }
-    }
+    "team": { "how": "reviewed", "p": 0.42, "raw": { "billing": 0.2, "technical": 0.2, "none_of_these": 0.6 } },
+    "urgent": { "how": "reviewed", "p": 0.51, "raw": { "noul": 0.51 } }
   }
 }
 ```
 
-`raw.noul` is the provider's yes/no score for a boolean question. Calibration turns it into `p`.
+`how: "reviewed"` is the value the gate submitted, including a choice of `none_of_these`. `p` stays the model's confidence. `raw.noul` is the provider's yes/no score for a boolean question.
 
 | `how` | Value the Flow sees |
 | --- | --- |
-| `auto` | The calibrated answer. The lockfile allowed it. |
-| `reviewed` | The value the review gate submitted. `p` stays the model's confidence. |
-| `abstained` | `null`. The Flow did not park. |
+| `reviewed` | The value the review gate submitted. |
+| `abstained` | `null` on that question only. Certain questions in the same call stay `auto`. |
+| `auto` | The calibrated answer, after a lockfile exists. See Certify and promote. |
 
 </Step>
 
@@ -163,7 +157,7 @@ learning  --labels-->  candidate  --promote-->  certified
 | `learning` | No lockfile entry and no candidate. | Reviews and audit labels accumulate. |
 | `candidate` | The clock has built a candidate from those labels. Counts are not the grant. | `oke decide promote` fetches it. |
 | `certified` | `oke-decisions.lock.json` has this decision. | The runtime may return `auto` under that certificate. |
-| `suspended` | The drift monitor raised the app flag and emitted `oke/decision/drift`. | Boot with a lockfile certificate newer than that flag. The monitor can also clear it. |
+| `suspended` | Drift: audit labels since certification, inside 7 days, for the pinned model, failed the error cap. The monitor emitted `oke/decision/drift`. | The next boot, once the lockfile's `certifiedAt` is newer than that flag. |
 
 The runtime never raises a threshold and never invents a certificate. Missing lock, a stale
 question, a model version mismatch, an uncertified locale, low confidence, drift, and an
@@ -178,14 +172,15 @@ the row out.
 An audit row is a label only. The original Flow already returned. A review row is the park:
 submitting it wakes the consumer.
 
-The review gate must allow the caller. Operator Console resolves any tenant. A user-plane
-caller whose tenant does not match the park is 403. The body must include every question
-that was not `auto`. A partial body is 422: `review values do not match the open questions`.
+The review gate must allow the caller. Console resolve runs on the operator plane: it passes the signed-in operator id and the session auth into the gate, and it may resolve any tenant. A user-plane caller whose tenant does not match the park is 403.
+
+A review body must include every question that was not `auto`. An audit row (`labelOnly: true`) must include every question, including ones that were already `auto`. A choice may be `none_of_these`. A partial body is 422: `review values do not match the open questions`.
 
 ```bash
-curl -X POST http://localhost:6533/console/decisions/resolve \
+curl -X POST http://127.0.0.1:6533/console/decisions/resolve \
+  -H "authorization: Bearer $OKE_OPERATOR_AUTHORIZATION" \
   -H "content-type: application/json" \
-  -d '{"id":"<review id>","values":{"team":"billing","urgent":true}}'
+  -d '{"id":"<audit id>","labelOnly":true,"values":{"team":"billing","urgent":true}}'
 ```
 
 | Result | HTTP | What you do |
@@ -212,10 +207,17 @@ model is allowed to return alone. `0.05` means at most 5 in 100 of those automat
 score use a temperature. Yes/no uses a curve fit on the provider score. The lockfile stores
 that fit next to the question.
 
-**The test**, once: for each confidence cutoff from 0.50 to 0.99, count mistakes on labels that cleared it.
+**The test**, once: for each confidence cutoff from 0.50 to 0.99 (50 cutoffs), count mistakes on labels that cleared it.
 A binomial test passes only when those mistakes are few enough to show the error rate is under `maxError`.
-The loosest cutoff that passes is the threshold.
-If none pass, that question cannot return `auto`.
+The loosest cutoff that passes is the threshold. If none pass, that question cannot return `auto`.
+
+With `risk` at 0.1 and no mistakes, the label count is about `log(0.1 / 50) / log(1 − maxError)`:
+
+| `maxError` | Error-free labels |
+| --- | --- |
+| `0.1` | ≈ 59 |
+| `0.05` | ≈ 122 |
+| `0.01` | ≈ 619 |
 
 A seed file is JSONL. `expect` is the label for each question. `locale` is optional.
 
@@ -224,18 +226,21 @@ A seed file is JSONL. `expect` is the label for each question. `locale` is optio
 {"id":"t2","input":{"text":"The app crashes on save"},"expect":{"team":"technical","urgent":false},"locale":"en"}
 ```
 
-Point `evals` at that file, then certify. Prompt evals do not run when the flag is present.
-The command prints one JSON line per decision and writes `oke-decisions.lock.json` next to
-the app config. Boot reads that file from `rootDir` or `OKE_ROOT_DIR`. Declared decisions
-without a project root fail at boot.
+Point `evals` at that file, then certify. The command loads the app the same way boot does, so the decision is in the registry. Prompt evals do not run when the flag is present.
+It prints one JSON line per decision and writes `oke-decisions.lock.json` in the app root (`OKE_ROOT_DIR`, or `rootDir`), not in the shell's current directory. Boot reads that same file. Declared decisions without a project root fail at boot.
+
+`how: "auto"` is what the Flow sees after that file is loaded and the question clears its threshold:
+
+```json
+{ "team": "technical", "$": { "team": { "how": "auto", "p": 0.91, "audited": true } } }
+```
 
 ```bash
-oke eval --certify
+OKE_ROOT_DIR=/srv/app oke eval --certify
 ```
 
 ```text
-oke eval: skip summarize (no evals)
-{"triage":{"model":"typesafe/jev-1.13","certifiedAt":1710000000000,"questions":{"team":{"":{"hash":"…","calibrator":{"kind":"temperature","t":1.2},"threshold":0.8}}}}}
+{"triage":{"model":"typesafe/jev-1.13","certifiedAt":1710000000000,"questions":{"team":{"":{"hash":"…","calibrator":{"kind":"temperature","t":1.2},"threshold":0.8,"metrics":{"labels":122,"accepted":122,"errors":0,"maxError":0.05,"delta":0.1}}}}}}
 ```
 
 The empty-string key is the slice used when `locale` is absent. A locale function gets its
@@ -253,7 +258,8 @@ matches: the runtime stops returning `auto` until you certify again.
           "": {
             "hash": "…",
             "calibrator": { "kind": "temperature", "t": 1.2 },
-            "threshold": 0.8
+            "threshold": 0.8,
+            "metrics": { "labels": 122, "accepted": 122, "errors": 0, "maxError": 0.05, "delta": 0.1 }
           }
         }
       }
@@ -262,16 +268,18 @@ matches: the runtime stops returning `auto` until you certify again.
 }
 ```
 
-After production labels exist, the clock builds a candidate. Promote fetches it. It does not
-recompute the certificate. Other decisions already in the file stay. This decision's slot
-is replaced. Drift is cleared.
+After production labels exist, the clock stores a candidate on the journal. Any instance can serve it, including after a restart. Promote fetches it. It does not recompute the certificate. Other decisions already in the file stay. This decision's slot is replaced. The running process keeps the old drift flag. The next boot with this lockfile clears it when the new `certifiedAt` is newer than the flag.
 
 ```bash
-oke decide promote triage --origin http://127.0.0.1:6530
+OKE_ORIGIN=http://127.0.0.1:6530 \
+OKE_OPERATOR_AUTHORIZATION='Bearer …' \
+oke decide promote triage \
+  --origin "$OKE_ORIGIN" \
+  --authorization "$OKE_OPERATOR_AUTHORIZATION" \
+  --lock "$OKE_ROOT_DIR/oke-decisions.lock.json"
 ```
 
-That GET is `/_oke/decisions/triage/candidate`. The caller must be an operator. A missing
-candidate is 404.
+That GET is `/_oke/decisions/triage/candidate`. The caller must be an operator. A missing candidate is 404. The route exists only when a decision declares `autonomy`.
 
 ## Patterns
 
@@ -298,8 +306,7 @@ export const triage = ai.decision("triage", {
 
 <Tab value="Abstain">
 
-The same uncertainty returns `null` and `how: "abstained"`. The Flow is not parked, so it
-can run on HTTP and without `durable`.
+Only the uncertain questions return `null` and `how: "abstained"`. A question that cleared its threshold stays `auto`. The Flow is not parked, so it can run on HTTP and without `durable`.
 
 ```typescript
 export const triage = ai.decision("triage", {
@@ -369,7 +376,7 @@ An empty value throws `DecisionConfigError`.
 | `openrouter` | `typesafe/jev-1.13` | `OPENROUTER_API_KEY` |
 | `typesafe` | `jev-1.13.0` | `TYPESAFE_API_KEY` |
 
-The deadline defaults to 30 seconds. `401`, `402`, and `422` throw `DecisionRequestError` and leave the breaker closed.
+The deadline defaults to 30 seconds. `400`, `401`, `402`, `403`, `404`, and `422` throw `DecisionRequestError` and leave the breaker closed.
 `429` and `529` retry up to 3 attempts and honor `Retry-After`. A wait over 60 seconds is an outage.
 
 Network errors, timeouts, and HTTP 5xx count toward the breaker. Three failures open it for 30 seconds.
@@ -406,8 +413,24 @@ An open breaker is an outage: review parks, abstain returns `null`.
   `DecisionConfigError`. The Vault contract is missing or empty. TypeSafe looks for `TYPESAFE_API_KEY` instead. This is not an outage, and it does not park.
 </Accordion>
 
-<Accordion title="401, 402, or 422 from the provider">
-  `DecisionRequestError`. 401 is the key. 402 is billing. 422 is a body the provider rejected. The breaker stays closed. Fix the request. Do not retry as if the provider were down.
+<Accordion title="400, 401, 402, 403, 404, or 422 from the provider">
+  `DecisionRequestError`. 400 and 422 are a body the provider rejected. 401 is the key. 402 is billing. 403 is forbidden. 404 is an unknown model or path. The breaker stays closed. Fix the request. Do not retry as if the provider were down.
+</Accordion>
+
+<Accordion title="oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset">
+  `oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset, so the decision lockfile cannot load.` Boot with `rootDir`, or set `OKE_ROOT_DIR` to the directory that holds `oke-decisions.lock.json`.
+</Accordion>
+
+<Accordion title="autonomy requires audit">
+  `ai.decision("triage"): autonomy requires audit`. `autonomy` without `audit` fails to compile. Set `audit` from 0 to 1. `maxError` is required in the same object.
+</Accordion>
+
+<Accordion title="options must be an object literal">
+  `ai.decision("triage"): choice "team" options must be an object literal`. Write the options inline. A variable is invisible to the compiler. The same applies when the review gate name cannot be resolved: `ai.decision: review gate name could not be resolved`.
+</Accordion>
+
+<Accordion title="The candidate route is missing">
+  The candidate route is registered only when some decision declares `autonomy`. Without that block there is no lockfile grant to promote, and `GET /_oke/decisions/:name/candidate` is not mounted.
 </Accordion>
 
 <Accordion title="Conflict or JournalLeaseBusy">

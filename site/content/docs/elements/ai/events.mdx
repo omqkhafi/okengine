@@ -55,7 +55,7 @@ export const assist = on(
 );
 ```
 
-The response is `text/event-stream`. `threadId` defaults to this run's id. Pass `{ stream: true, threadId }` to set it.
+The response is `text/event-stream`. Pass `threadId` when the chat already has an id. The default is this process's run id (`agent-run-1`, …), so two processes do not share a thread.
 
 </Step>
 
@@ -122,7 +122,7 @@ Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
 | Type | Fields | When it fires |
 | --- | --- | --- |
 | `RUN_STARTED` | `threadId`, `runId` | The run begins. `threadId` is the option you passed, or the run id. |
-| `STEP_STARTED` | `stepName` | One model call starts. Names are `step-1`, `step-2`, … |
+| `STEP_STARTED` | `stepName` | A step starts. `maxSteps` counts tool calls, not model calls. Names are `step-1`, `step-2`, … |
 | `TEXT_MESSAGE_START` | `messageId`, `role` | Assistant text is about to arrive. `role` is `assistant`. Empty text is skipped. |
 | `TEXT_MESSAGE_CONTENT` | `messageId`, `delta` | The full assistant text for that step, in one frame. |
 | `TEXT_MESSAGE_END` | `messageId` | That text message is complete. |
@@ -135,7 +135,7 @@ Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
 | `RUN_ERROR` | `message`, `code?` | The run failed and did not finish. `code` is the error name when it is not `Error`. |
 | `CUSTOM` | `name`, `value` | A nested agent started, finished, or failed. |
 
-`RUN_FINISHED.result` is `{ cost, stopReason, output }`. `cost` is the sum of model-reported spend for this run. `output` is the last tool result, or the last model payload when no tool ran.
+`RUN_FINISHED.result` is `{ cost, stopReason, output }`. `cost` is the sum of model-reported spend for this run. `output` is the last tool result. A text reply with no tool call may be the raw provider payload, not the assistant string.
 
 `RUN_FINISHED.usage` is a one-element array, `{ inputTokens?, outputTokens? }`, and only when those numbers came from the model. Counts are never invented.
 
@@ -143,7 +143,7 @@ Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
 
 ## Tool approval
 
-A tool with `approval` and `gate` parks a durable Flow. The stream emits `RUN_FINISHED` and then the response ends. The browser does not stay open for the rest of the run.
+A tool with `approval` and `gate` parks a durable Flow. The stream emits `RUN_FINISHED` with `outcome.type` `"interrupt"`, then `data: [DONE]`, then the response ends. The browser does not stay open. The approval id is base64url of `runId.toolCallId`, so it carries the durable Flow run id.
 
 ```json
 {
@@ -192,7 +192,7 @@ curl -X POST http://localhost:6530/agent/approvals/deny \
 | Already resolved | 409 `Conflict`. No `Retry-After`. Message: `That value is already in use.` | Stop. Do not retry. |
 | Lease held | 409 `JournalLeaseBusy` with `Retry-After`. Message: `This run is locked by another worker. Retry after the given delay.` | Retry after the delay. |
 
-Approving or denying does not continue this SSE response. The scheduler resumes the durable run in the background and replays the tool once.
+Approving or denying does not continue this SSE response. The scheduler resumes the durable run in the background and replays the tool once. Decode the approval id to get the run id, then read that run's `output` after it finishes. That is the resumed result. This stream will not yield it.
 
 ## Patterns
 
@@ -232,7 +232,7 @@ return fx.json.stream(
 
 <Tab value="Thread id">
 
-Set `threadId` when the chat already has an id. Otherwise it is the run id (`agent-run-1`, …).
+Pass `threadId`. Otherwise each process mints its own (`agent-run-1`, …) and a restart starts over.
 
 ```typescript
 return fx.json.stream(
@@ -271,7 +271,7 @@ Any other `CUSTOM` name stays `CUSTOM`. Nesting stops at `maxDepth` (default 3).
 
 ## Abort and stop reasons
 
-Disconnecting the HTTP client aborts the in-flight model call. The run records `stopReason` `aborted`. If the frame is still written, it is `RUN_ERROR` with `message` `aborted` and `code` `AbortError`.
+Disconnecting the HTTP client aborts the in-flight model call. The run records `stopReason` `aborted`. If the frame is still written, it is `RUN_ERROR` with `code` `AbortError`. `message` may be the provider's abort text, not only `aborted`.
 
 `result.stopReason` on a normal `RUN_FINISHED`:
 
@@ -281,14 +281,14 @@ Disconnecting the HTTP client aborts the in-flight model call. The run records `
 | `max_steps` | The loop hit `maxSteps` (default 6). |
 | `budget` | Spend reached `budget.maxCostPerRun`. The trail so far is the output. This does not throw. |
 
-`denied` (unknown tool) and `aborted` arrive as `RUN_ERROR`, not as `result.stopReason`. A thrown tool fails the stream with no `RUN_ERROR` frame. The recorded reason is `error`.
+`denied` (unknown tool) and `aborted` arrive as `RUN_ERROR`, not as `result.stopReason`. A thrown tool ends with `RUN_FINISHED` and `result.stopReason` `"error"`, then `data: [DONE]`. The same close follows an approval interrupt: the final frame, then `[DONE]`, then the body ends.
 
 ## Troubleshooting
 
 <Accordions>
 
 <Accordion title='ai: flow "assist" must set durable: true to run agent "support"'>
-  The tool has `approval`, and the Flow is not durable. The stream errors with `AiDurableRequiredError`. Set `durable: true` on that Flow. A false `approval` predicate does not park.
+  The tool has `approval`, and the Flow is not durable. The message names that Flow: `ai: flow "support.assist" must set durable: true to run agent "support"`. Set `durable: true`. A false `approval` predicate does not park.
 </Accordion>
 
 <Accordion title='RUN_ERROR: ai: model requested unknown tool "refund"'>
@@ -304,7 +304,7 @@ Disconnecting the HTTP client aborts the in-flight model call. The run records `
 </Accordion>
 
 <Accordion title="A frame is not one of the core types">
-  `readAgentEvents` yields `CUSTOM` unchanged when `name` is not `oke.subagent.started`, `oke.subagent.finished`, or `oke.subagent.error`. Those three become `subagent.started`, `subagent.finished`, and `subagent.error`. An object with no `type` is skipped. `data: [DONE]` ends the body and is not an event.
+  `readAgentEvents` yields `CUSTOM` unchanged when `name` is not `oke.subagent.started`, `oke.subagent.finished`, or `oke.subagent.error`. Those three become `subagent.started`, `subagent.finished`, and `subagent.error`. An object with no `type` is skipped. `data: [DONE]` is skipped. The iterator ends when the body ends, not because of that line.
 </Accordion>
 
 <Accordion title="Conflict or JournalLeaseBusy">

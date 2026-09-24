@@ -193,11 +193,10 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(publicHtml).not.toContain('data-slot="json-code-auth-switch"');
     expect(publicHtml).not.toContain("data-auth-default");
     expect(publicHtml).not.toContain("data-route-public");
-    expect(publicHtml).not.toContain(">Inherit</button>");
-    expect(publicHtml).not.toContain(">Custom</button>");
-    expect(publicHtml).not.toContain("oke:json-code:bearer");
     expect(publicHtml).toContain('data-rail-section="auth"');
-    expect(publicHtml).toContain(">Authorization</span>");
+    expect(publicHtml).toContain(">Auth</span>");
+    expect(publicHtml).toContain(">Inherit</button>");
+    expect(publicHtml).toContain(">Custom</button>");
 
     const userHtml = renderJsonCodeBlockHtml({
       json: '{"ok":true}',
@@ -232,8 +231,18 @@ describe("renderJsonCodeBlockHtml", () => {
       auth: { kind: "public" },
     });
     expect(html).not.toContain('data-slot="json-code-auth-switch"');
-    expect(html).not.toContain(">Inherit</button>");
-    expect(html).not.toContain(">Custom</button>");
+    expect(html).toContain(">Inherit</button>");
+    expect(html).toContain(">Custom</button>");
+    expect(html).toContain('aria-label="Request headers"');
+    expect(html).toContain('data-headers-mode="inherit"');
+    expect(html).toContain('data-headers-mode="custom"');
+    expect(html).toContain("data-headers-custom");
+    expect(html).toContain("oke:json-code:headers-mode");
+    expect(html).toContain("function headersMode");
+    const headersAt = html.indexOf('data-rail-section="headers"');
+    const authAt = html.indexOf('data-rail-section="auth"');
+    expect(html.slice(headersAt, authAt)).toContain('data-headers-mode="inherit"');
+    expect(html.slice(authAt)).toContain('data-auth-mode="inherit"');
     expect(html).not.toContain("function resolveBearer");
     expect(html.indexOf('data-rail-section="headers"')).toBeLessThan(
       html.indexOf('data-rail-section="auth"'),
@@ -241,7 +250,7 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html.indexOf('data-rail-section="auth"')).toBeLessThan(
       html.indexOf('data-rail-section="path"'),
     );
-    expect(html).toContain(">Authorization</span>");
+    expect(html).toContain(">Auth</span>");
     expect(html).toContain('data-auth-type="none"');
     expect(html).toContain(">No</button>");
     expect(html).toContain(">Bearer</button>");
@@ -258,6 +267,11 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain("oke:json-code:auth-global");
     expect(html).toContain("oke:json-code:headers-global");
     expect(html).toContain("function effectiveAuth");
+    expect(html).toContain("function storedAuth");
+    expect(html).toContain("function forgetSecretsOnReload");
+    expect(html).toContain("parsed.token");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("data-auth-reveal");
     expect(html).toContain('data-slot="json-code-send"');
   });
 
@@ -333,8 +347,8 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain('data-slot="json-code-body-hi"');
     expect(html).toContain('data-kv="body"');
     expect(html).toContain('data-rail-section="auth"');
-    expect(html).not.toContain(">Inherit</button>");
-    expect(html).not.toContain(">Custom</button>");
+    expect(html).toContain(">Inherit</button>");
+    expect(html).toContain(">Custom</button>");
     expect(html).toContain('data-slot="json-code-global-headers"');
     expect(html).toContain('data-rail-section="cookies"');
     expect(html).toContain('data-rail-section="headers"');
@@ -349,7 +363,12 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain('data-method="POST"');
     expect(html).toContain('class="rail-acc"');
     expect(html).toContain('class="rail-dock"');
-    expect(html).toContain(">Routes</p>");
+    expect(html.indexOf('data-slot="json-code-request-dock"')).toBeLessThan(
+      html.indexOf('data-rail-section="routes"'),
+    );
+    expect(html).toContain(">Routes</span>");
+    expect(html).toContain('aria-label="Collapse routes"');
+    expect(html).toContain('aria-label="Expand routes"');
     expect(html).toContain('data-kv="cookies"');
     expect(html).toContain('data-kv="headers"');
     expect(html).toContain('data-kv="query"');

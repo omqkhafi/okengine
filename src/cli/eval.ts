@@ -135,9 +135,21 @@ export async function runOkeCertify(
   const { DECISION_LOCK_FILENAME, parseDecisionLockfile } = await import(
     "../elements/ai/decisions/certificate.ts"
   );
+  const { resolveStartEntry } = await import("./start.ts");
+  const root = resolve(options.root ?? process.env["OKE_ROOT_DIR"] ?? ".");
+  process.env["OKE_ROOT_DIR"] ??= root;
   let manifest = options.manifest;
   if (!manifest) {
-    const path = resolve(options.manifestPath ?? "oke.manifest.json");
+    try {
+      const entry = await resolveStartEntry(root);
+      await import(entry);
+    } catch (err) {
+      console.error(
+        `oke eval: failed to load the app: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return 1;
+    }
+    const path = resolve(root, options.manifestPath ?? "oke.manifest.json");
     const file = Bun.file(path);
     if (!(await file.exists())) {
       console.error(`oke eval: manifest not found: ${path}`);
@@ -152,7 +164,6 @@ export async function runOkeCertify(
     return 0;
   }
   const injected = options.evaluate;
-  const root = resolve(options.root ?? ".");
   const lockPath = resolve(root, DECISION_LOCK_FILENAME);
   const existingFile = Bun.file(lockPath);
   const current = (await existingFile.exists())
@@ -170,7 +181,7 @@ export async function runOkeCertify(
       console.error(`oke eval: decision "${name}" is not loaded`);
       return 1;
     }
-    const text = await Bun.file(resolve(decision.evals)).text();
+    const text = await Bun.file(resolve(root, decision.evals)).text();
     const evaluate = injected ?? (await providerForDecision(decl));
     next.decisions[name] = await certifySeed({
       model: decl.model ?? decision.model ?? "",

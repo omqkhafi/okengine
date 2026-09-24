@@ -89,6 +89,15 @@ export interface AiAgentToolOptions {
   readonly timeout?: string;
 }
 
+/**
+ * Choice answer a Flow can receive. Author keys, plus `none_of_these`.
+ *
+ * @typeParam Options - Author option map
+ */
+export type DecisionChoiceValue<Options extends Readonly<Record<string, string | null>>> =
+  | keyof Options
+  | "none_of_these";
+
 /** One choice question. `none_of_these` is injected on the wire. */
 export interface AiChoiceQuestion {
   readonly kind: "choice";
@@ -321,7 +330,7 @@ export interface AiNamespace {
    */
   decision(name: string, options: AiDecisionOptions): AiDecisionDecl;
   /**
-   * A choice question. `none_of_these` is added when the request is built.
+   * A choice question. The answer union is {@link DecisionChoiceValue}: author keys or `none_of_these`.
    *
    * @param instructions - What to decide
    * @param options - At most 254 author options

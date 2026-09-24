@@ -17,9 +17,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 #### Runtime
 
 - Browser JSON page Authorization sits after Headers. Its summary switches
-  No, Bearer, Basic, or API. The strip Auth and Headers tokens set global
-  credentials and headers. A request with No Auth uses the global credentials.
-  Request headers override global headers on the same name.
+  No, Bearer, Basic, or API. The strip Auth and Headers tokens each open one row
+  under that strip. The request rail Auth and Headers summaries are Inherit or
+  Custom: Inherit uses the global credentials or headers, Custom sets them on
+  that request. Custom header rows override global headers on the same name.
+  Token, password, and API key value stay masked until the eye control reveals
+  them, and a refresh or a closed tab drops those secrets.
 - `prompt({ repair: 1 })` sends one follow-up when the answer misses `out`. That
   completion counts toward `maxCostPerCall` and is its own journal entry. `repair: 0`
   still throws `AiSchemaValidationError`.
@@ -51,6 +54,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Decisions document the full loop: a real review gate, emit-then-decide, the `$` result,
   the learning → candidate → certified → suspended lifecycle, Console review, and
   `oke eval --certify` / `oke decide promote`.
+- Decisions and agent events match the lockfile root, per-question abstain, the operator
+  resolve route, the label counts, and a stream that ends with `[DONE]`.
 
 #### Console — Flows & traces
 
@@ -89,6 +94,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Browser JSON page puts Params, Body, Cookies, Headers, Auth, and Path above
+  the route list. Routes stays pinned to the bottom of the Request rail, and
+  its header ends with a control that collapses the list downward.
 - `fx.run` accepts `{ messages }` (user, assistant, and tool turns) as well as one
   `message`. Passing both throws. Thread storage stays in the app.
 - `fx.run(agent, input, { stream: true })` and tool-using `fx.ask(..., { stream: true })`
@@ -145,6 +153,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Browser JSON page Auth keeps the token, password, and API key value when the
+  Auth row closes. A refresh or a closed tab still drops those secrets.
+- The compiler writes `autonomy` (`maxError`, `audit`, `risk`) and `evals` onto `manifest.ai.decisions`. `oke eval --certify` loads the app entry, then writes `oke-decisions.lock.json` under `OKE_ROOT_DIR` (the same root as `oke decide promote`).
+- Two decision resolves take the journal lease and compare-and-swap the review. The first writer wins. The other gets `JournalLeaseBusy`. A candidate is stored on the journal driver, so another instance can serve it after a restart.
+- Abstain drops only the uncertain questions. A certain question in the same call stays `auto`. A reviewer may submit `none_of_these`; the Flow receives that value.
+- An approval interrupt and a tool error close the agent stream with the final frame and `data: [DONE]`.
 - A decision label keeps the time it was written. A failed label write stays on the
   trace and the decisions page, and the next write still runs. Postgres matches a
   null tenant with `IS NOT DISTINCT FROM`. An older drift table gains `certified_at`

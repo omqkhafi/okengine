@@ -79,7 +79,7 @@ class AgentLoopHalt extends Error {
   readonly output: unknown;
 
   constructor(
-    stopReason: "aborted" | "denied",
+    stopReason: "aborted" | "denied" | "error",
     cause: unknown,
     partial: {
       readonly trail: readonly AgentToolStep[];
@@ -1693,7 +1693,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           });
           queue.finish();
         } catch (err) {
-          if (isJournalSuspend(err) || err instanceof AiDurableRequiredError) {
+          if (isJournalSuspend(err)) {
+            queue.finish();
+            return;
+          }
+          if (err instanceof AiDurableRequiredError) {
             queue.finish(err);
             return;
           }
@@ -1714,7 +1718,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               cost: err.cost,
             });
             if (err.stopReason === "error") {
-              queue.finish(err.cause instanceof Error ? err.cause : new Error(message));
+              queue.emit({
+                type: "RUN_FINISHED",
+                threadId: runOpts.threadId ?? runId,
+                runId,
+                result: { cost: err.cost, stopReason: "error", output: err.output },
+              });
+              queue.finish();
               return;
             }
           }

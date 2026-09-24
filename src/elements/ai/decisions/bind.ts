@@ -12,13 +12,14 @@ import { aiDecisionRegistry } from "../../../kernel/element-registries.ts";
 import {
   aggregateDecisionCandidate,
   decisionDriftSuspended,
-  getDecisionCandidate,
   setDecisionDrift,
 } from "./certificate.ts";
 import { certifyLabels } from "./certify.ts";
 import {
   auditDriftExceeded,
+  loadDecisionCandidate,
   loadDecisionLabels,
+  persistDecisionCandidate,
   persistDecisionDrift,
   pinnedDecision,
 } from "./labels.ts";
@@ -60,7 +61,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
         const decl = aiDecisionRegistry.find((item) => item.name === name);
         const pinned = pinnedDecision(name);
         const rows = await loadDecisionLabels(name);
-        aggregateDecisionCandidate(name, () =>
+        const fitted = aggregateDecisionCandidate(name, () =>
           certifyLabels({
             model: pinned?.model ?? decl?.model ?? "",
             maxError: decl?.autonomy?.maxError ?? 0.05,
@@ -69,6 +70,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
             labels: rows,
           }),
         );
+        await persistDecisionCandidate(name, fitted);
       }
       return { ok: true };
     },
@@ -118,7 +120,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     do: async (input: { name?: string }, fx) => {
       if (!fx.operator.id) return fx.fail.unauthorized();
       const name = input.name ?? "";
-      const body = getDecisionCandidate(name);
+      const body = await loadDecisionCandidate(name);
       if (!body) return fx.fail.notFound();
       return body;
     },

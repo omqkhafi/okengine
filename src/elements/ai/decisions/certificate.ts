@@ -92,7 +92,6 @@ export const DECISION_LOCK_FILENAME = "oke-decisions.lock.json";
 const labels: DecisionLabel[] = [];
 let lockfile: DecisionLockfile | undefined;
 let suspended = false;
-const candidates = new Map<string, DecisionCandidate>();
 
 /**
  * Replace the in-memory lock. `undefined` is a missing lockfile.
@@ -134,13 +133,12 @@ export function decisionLabels(): readonly DecisionLabel[] {
 }
 
 /**
- * Drop lock, labels, drift, and candidates. Tests only.
+ * Drop lock, labels, and drift. Tests only.
  */
 export function resetDecisionCertificates(): void {
   labels.length = 0;
   lockfile = undefined;
   suspended = false;
-  candidates.clear();
 }
 
 /**
@@ -311,18 +309,7 @@ export function aggregateDecisionCandidate(
   }),
 ): DecisionCandidate {
   const rows = labels.filter((label) => label.decision === decision);
-  const candidate = fit(rows);
-  candidates.set(decision, candidate);
-  return candidate;
-}
-
-/**
- * Candidate the admin endpoint serves. Undefined until the clock job runs.
- *
- * @param decision - Decision name
- */
-export function getDecisionCandidate(decision: string): DecisionCandidate | undefined {
-  return candidates.get(decision);
+  return fit(rows);
 }
 
 /**

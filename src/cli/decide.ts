@@ -3,7 +3,7 @@
  * The command does not recompute a certificate.
  */
 
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
   DECISION_LOCK_FILENAME,
   lockFromCandidate,
@@ -41,7 +41,8 @@ export async function promoteDecision(options: PromoteDecisionOptions): Promise<
     throw new Error(`oke decide promote: ${res.status} from ${url}`);
   }
   const candidate: unknown = await res.json();
-  const path = resolve(options.lockPath ?? DECISION_LOCK_FILENAME);
+  const root = resolve(process.env["OKE_ROOT_DIR"] ?? ".");
+  const path = resolve(options.lockPath ?? join(root, DECISION_LOCK_FILENAME));
   let current = options.current;
   if (!current) {
     const file = Bun.file(path);

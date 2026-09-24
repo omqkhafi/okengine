@@ -403,6 +403,106 @@ describe("fx.decide", () => {
     expect(result.$.team.how).toBe("abstained");
   });
 
+  test("abstain leaves a certain question on auto", async () => {
+    setDecisionProvider(async () => ({
+      model: "typesafe/jev-1.13.0",
+      provider: "openrouter",
+      answers: {
+        team: {
+          type: "choice",
+          choice: "technical",
+          probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
+        },
+        urgent: { type: "noul", noul: 0.51 },
+      },
+      usage: {},
+    }));
+    const team = choice();
+    const urgent = ai.boolean("urgent?");
+    const decl = ai.decision("triage", {
+      onUncertain: "abstain",
+      autonomy: { maxError: 0.05, audit: 0 },
+      ask: { team, urgent },
+    });
+    setDecisionLock({
+      decisions: {
+        triage: {
+          model: "typesafe/jev-1.13.0",
+          questions: {
+            team: {
+              "": {
+                hash: questionHash(team),
+                calibrator: { kind: "temperature" as const, t: 1 },
+                threshold: 0.5,
+              },
+            },
+            urgent: {
+              "": {
+                hash: questionHash(urgent),
+                calibrator: { kind: "platt" as const, a: 1, b: 0 },
+                threshold: 0.99,
+              },
+            },
+          },
+        },
+      },
+    });
+    const fx = createFx({ flow: "run", effects: { decides: ["triage"] }, now: () => 1 });
+    const result = (await fx.decide(decl, {})) as {
+      team: string;
+      urgent: null;
+      $: { team: { how: string }; urgent: { how: string } };
+    };
+    expect(result.team).toBe("technical");
+    expect(result.$.team.how).toBe("auto");
+    expect(result.urgent).toBeNull();
+    expect(result.$.urgent.how).toBe("abstained");
+  });
+
+  test("a reviewer may resolve a choice as none_of_these", async () => {
+    provider();
+    gate.policy("ops", () => true);
+    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const journal = createJournal({ store, now: () => 1 });
+    const session = await journal.start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      now: () => 1,
+    });
+    let suspended = false;
+    try {
+      await fx.decide(decl, {});
+    } catch (err) {
+      suspended = isJournalSuspend(err);
+      if (!suspended) throw err;
+    }
+    expect(suspended).toBe(true);
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    if (!step || step.kind !== "step") throw new Error("expected a parked decision");
+    const id = step.name.slice("ai-decision:".length);
+    expect(
+      await resolveDecisionReview(store, id, { values: { team: "none_of_these" }, reviewer: "a" }, () => 1),
+    ).toEqual({ ok: true });
+    const resumed = await journal.resume(session.runId);
+    const again = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: resumed,
+      runId: resumed.runId,
+      durable: true,
+      now: () => 2,
+    });
+    const done = (await again.decide(decl, {})) as { team: string };
+    expect(done.team).toBe("none_of_these");
+  });
+
   test("boolean value follows the calibrated probability", async () => {
     setDecisionProvider(async () => ({
       model: "typesafe/jev-1.13.0",

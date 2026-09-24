@@ -6,7 +6,6 @@ import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import {
   decisionDriftSuspended,
-  getDecisionCandidate,
   getDecisionLock,
   type DecisionLockfile,
 } from "../../elements/ai/decisions/certificate.ts";
@@ -41,12 +40,13 @@ export interface DecisionQueueRow {
 export function projectDecisionList(
   manifest: Manifest | null | undefined,
   lock: DecisionLockfile | undefined = getDecisionLock(),
+  candidates: ReadonlySet<string> = new Set(),
 ): DecisionListRow[] {
   const decisions = manifest?.ai?.decisions ?? {};
   const suspended = decisionDriftSuspended();
   return Object.entries(decisions).map(([name, decision]) => {
     const certified = lock?.decisions[name] !== undefined;
-    const candidate = getDecisionCandidate(name) !== undefined;
+    const candidate = candidates.has(name);
     const state: DecisionListState = suspended
       ? "suspended"
       : certified

@@ -92,6 +92,25 @@ describe("ai.decision extract", () => {
     expect(manifest.ai?.decisions?.triage?.review).toBe("ops");
   });
 
+  test("autonomy and evals survive extraction", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/run.ts": `
+        const triage = ai.decision("triage", {
+          onUncertain: "abstain",
+          evals: "evals/triage.jsonl",
+          autonomy: { maxError: 0.05, audit: 0.1, risk: 0.1 },
+          ask: { team: ai.choice("which", { a: "A", b: "B" }) },
+        });
+      `,
+    });
+    expect(manifest.ai?.decisions?.triage?.evals).toBe("evals/triage.jsonl");
+    expect(manifest.ai?.decisions?.triage?.autonomy).toEqual({
+      maxError: 0.05,
+      audit: 0.1,
+      risk: 0.1,
+    });
+  });
+
   test("choice options passed through a variable fail to compile", async () => {
     await expect(
       extractFromSources({

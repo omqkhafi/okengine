@@ -382,13 +382,6 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
       ...(recorded.audited && questionAuto ? { audited: true } : {}),
     };
   }
-  if (!auto && decl.mode === "abstain") {
-    for (const id of Object.keys(questions)) {
-      const slot = questions[id];
-      if (!slot) continue;
-      questions[id] = { ...slot, value: null, how: "abstained", uncertain: true };
-    }
-  }
   return {
     auto,
     ...(reason !== undefined ? { reason } : {}),
@@ -596,38 +589,33 @@ export async function resolveDecisionReview(
   labelOnly = false,
 ): Promise<DecisionReviewResult> {
   const parsed = parseReviewId(id);
-  if (!parsed || typeof store.acquireLease !== "function") return { ok: false, status: 404 };
+  if (!parsed || typeof store.cas !== "function") return { ok: false, status: 404 };
   const decl = aiDecisionRegistry.find((item) => item.name === parsed.name);
   if (!decl) return { ok: false, status: 404 };
   if (!(await reviewGateAllows(decl.review, input))) return { ok: false, status: 403 };
   const name = decisionStepName(id, labelOnly);
   const token = crypto.randomUUID();
   const at = now();
-  const claimed = await store.acquireLease(parsed.runId, token, at, JOURNAL_DEFAULT_LEASE_MS);
-  if (!claimed) {
-    const held = await store.get(parsed.runId);
-    const retryAfterSeconds = leaseRetryAfterSeconds(held?.leaseExpiresAt, at);
-    if (retryAfterSeconds > DECISION_RETRY_CAP_SECONDS) {
-      return { ok: false, status: 503, reason: "outage" };
-    }
-    return {
-      ok: false,
-      status: 409,
-      reason: "lease",
-      retryAfterSeconds,
-    };
-  }
-  try {
-    const run = await store.get(parsed.runId);
-    if (!run) return { ok: false, status: 404 };
+  let stop: DecisionReviewResult | undefined;
+  const claimed = await store.cas(parsed.runId, token, at, JOURNAL_DEFAULT_LEASE_MS, (run) => {
     const entry = run.entries.find((item) => item.kind === "step" && item.name === name);
-    if (!entry || entry.kind !== "step") return { ok: false, status: 404 };
-    const current = entry.value as DecisionReviewRecord;
-    if (current.status !== "pending") return { ok: false, status: 409, reason: "resolved" };
-    if (input.plane !== "operator" && (input.tenantId ?? null) !== current.tenant) {
-      return { ok: false, status: 403 };
+    if (!entry || entry.kind !== "step") {
+      stop = { ok: false, status: 404 };
+      return undefined;
     }
-    if (!valuesMatchQuestions(decl, current, input.values)) return { ok: false, status: 422 };
+    const current = entry.value as DecisionReviewRecord;
+    if (current.status !== "pending") {
+      stop = { ok: false, status: 409, reason: "resolved" };
+      return undefined;
+    }
+    if (input.plane !== "operator" && (input.tenantId ?? null) !== current.tenant) {
+      stop = { ok: false, status: 403 };
+      return undefined;
+    }
+    if (!valuesMatchQuestions(decl, current, input.values)) {
+      stop = { ok: false, status: 422 };
+      return undefined;
+    }
     const next: DecisionReviewRecord = {
       ...current,
       status: "reviewed",
@@ -639,8 +627,26 @@ export async function resolveDecisionReview(
       if (item.kind === "sleep" && item.label === name) return { ...item, wakeAt: at };
       return item;
     });
-    const updated: JournalRun = { ...run, entries, wakeAt: at };
-    await store.put(updated);
+    return { ...run, entries, wakeAt: at };
+  });
+  if (claimed === "missing") return { ok: false, status: 404 };
+  if (typeof claimed === "object") {
+    const retryAfterSeconds = leaseRetryAfterSeconds(claimed.leaseExpiresAt, at);
+    if (retryAfterSeconds > DECISION_RETRY_CAP_SECONDS) {
+      return { ok: false, status: 503, reason: "outage" };
+    }
+    return { ok: false, status: 409, reason: "lease", retryAfterSeconds };
+  }
+  if (stop) {
+    await store.releaseLease?.(parsed.runId, token);
+    return stop;
+  }
+  try {
+    const run = await store.get(parsed.runId);
+    if (!run) return { ok: false, status: 404 };
+    const entry = run.entries.find((item) => item.kind === "step" && item.name === name);
+    if (!entry || entry.kind !== "step") return { ok: false, status: 404 };
+    const current = entry.value as DecisionReviewRecord;
     for (const [question, value] of Object.entries(input.values)) {
       const label = {
         decision: parsed.name,
@@ -704,7 +710,10 @@ function valuesMatchQuestions(
 function valueMatchesQuestion(question: AiDecisionQuestion, value: unknown): boolean {
   if (question.kind === "boolean") return typeof value === "boolean";
   if (question.kind === "choice") {
-    return typeof value === "string" && Object.prototype.hasOwnProperty.call(question.options, value);
+    return (
+      typeof value === "string" &&
+      (value === "none_of_these" || Object.prototype.hasOwnProperty.call(question.options, value))
+    );
   }
   return typeof value === "string" && question.levels.includes(value);
 }

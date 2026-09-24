@@ -1796,16 +1796,29 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
       `ai.decision("${decisionName}"): declare exactly one of review or onUncertain: "abstain"`,
     );
   }
-  const autonomy = objectProp(opts, "autonomy");
-  if (autonomy?.type === "ObjectExpression" && objectProp(autonomy, "audit") === undefined) {
-    throw new Error(`ai.decision("${decisionName}"): autonomy requires audit`);
+  const autonomyNode = objectProp(opts, "autonomy");
+  let autonomy: AiDecision["autonomy"];
+  if (autonomyNode?.type === "ObjectExpression") {
+    if (objectProp(autonomyNode, "audit") === undefined) {
+      throw new Error(`ai.decision("${decisionName}"): autonomy requires audit`);
+    }
+    const maxError = numberProp(autonomyNode, "maxError");
+    const audit = numberProp(autonomyNode, "audit");
+    const risk = numberProp(autonomyNode, "risk");
+    if (maxError === undefined || audit === undefined) {
+      throw new Error(`ai.decision("${decisionName}"): autonomy requires maxError and audit`);
+    }
+    autonomy = { maxError, audit, ...(risk !== undefined ? { risk } : {}) };
   }
+  const evals = stringProp(opts, "evals");
   const decision: AiDecision = {
     mode: abstain ? "abstain" : "review",
     questions: questionNames,
     ...(hasReview ? { review: decisionReviewName(objectProp(opts, "review"), scope) } : {}),
     ...(stringProp(opts, "model") ? { model: stringProp(opts, "model") } : {}),
     driverId: stringProp(opts, "driverId") === "typesafe" ? "typesafe" : "openrouter",
+    ...(evals !== undefined ? { evals } : {}),
+    ...(autonomy !== undefined ? { autonomy } : {}),
   };
   scope.ai.decisions = scope.ai.decisions ?? {};
   scope.ai.decisions[decisionName] = decision;

@@ -10,7 +10,13 @@ import type {
   DecisionDriftRecord,
   DecisionLabelStore,
 } from "../../../kernel/decision-label-store.ts";
-import { binomialCdf, decisionLabels, getDecisionLock, type DecisionLabel } from "./certificate.ts";
+import {
+  binomialCdf,
+  decisionLabels,
+  getDecisionLock,
+  type DecisionCandidate,
+  type DecisionLabel,
+} from "./certificate.ts";
 
 /** Rolling window for audit drift. Labels older than this are ignored. */
 export const DECISION_DRIFT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -98,6 +104,37 @@ export function persistDecisionLabel(label: DecisionLabel, at?: number): void {
       },
     );
   writes = writes.then(write, write);
+}
+
+/**
+ * Write a candidate onto the journal driver.
+ *
+ * @param decision - Decision name
+ * @param entry - Fitted lock entry
+ */
+export async function persistDecisionCandidate(
+  decision: string,
+  entry: DecisionCandidate,
+): Promise<void> {
+  await store?.putCandidate(decision, entry);
+}
+
+/**
+ * Read one candidate from the journal driver.
+ *
+ * @param decision - Decision name
+ */
+export async function loadDecisionCandidate(
+  decision: string,
+): Promise<DecisionCandidate | undefined> {
+  return store?.getCandidate(decision);
+}
+
+/**
+ * Decision names that have a candidate on the journal driver.
+ */
+export async function listDecisionCandidates(): Promise<readonly string[]> {
+  return (await store?.listCandidates()) ?? [];
 }
 
 /**

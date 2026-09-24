@@ -711,18 +711,22 @@ svg[hidden] { display: none !important; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .rail-nav {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  max-height: 45%;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--line);
 }
+.routes-check { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .rail-sec-label {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   height: 2.5rem;
   margin: 0;
-  padding: 0 .5rem;
+  padding: 0 .25rem 0 .5rem;
   flex-shrink: 0;
   border-bottom: 1px solid var(--line);
   font-size: 10px;
@@ -731,13 +735,15 @@ svg[hidden] { display: none !important; }
   text-transform: uppercase;
   color: var(--mute);
 }
+.routes-check:not(:checked) ~ .rail-list { display: none; }
+.routes-check:not(:checked) ~ .rail-sec-label { border-bottom: 0; }
+.routes-check:checked ~ .rail-sec-label .routes-expand { display: none; }
+.routes-check:not(:checked) ~ .rail-sec-label .routes-collapse { display: none; }
 .rail-dock {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  max-height: 55%;
+  flex: 1;
   min-height: 0;
-  border-top: 1px solid var(--line);
 }
 .rail-dock-strip {
   justify-content: flex-start;
@@ -815,6 +821,7 @@ svg[hidden] { display: none !important; }
   flex-direction: column;
   min-height: 0;
 }
+.rail-acc-body[hidden] { display: none; }
 .kv-editor {
   display: flex;
   flex-direction: column;
@@ -872,6 +879,22 @@ svg[hidden] { display: none !important; }
   color: var(--mute);
 }
 .auth-field .kv-val { flex: 1; }
+.auth-field .kv-val::-ms-reveal { display: none; }
+.auth-reveal {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+}
+.auth-reveal:hover { color: var(--ink); background: var(--hover); }
+.auth-reveal .eye-shut { display: none; }
+.auth-reveal[aria-pressed="true"] .eye-open { display: none; }
+.auth-reveal[aria-pressed="true"] .eye-shut { display: block; }
 .auth-in {
   display: inline-flex;
   align-items: stretch;
@@ -880,18 +903,69 @@ svg[hidden] { display: none !important; }
 }
 .auth-pane[hidden] { display: none; }
 .global-pop {
-  position: absolute;
-  z-index: 4;
-  top: 2.5rem;
-  right: 0;
-  width: 22rem;
-  max-height: min(70%, 24rem);
-  overflow: auto;
+  display: flex;
+  align-items: stretch;
+  height: 2.5rem;
+  flex-shrink: 0;
   background: var(--field);
   border-bottom: 1px solid var(--line);
-  border-left: 1px solid var(--line);
 }
 .global-pop[hidden] { display: none; }
+.global-line {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+}
+.global-line[hidden] { display: none; }
+.global-pop .auth-editor,
+.global-pop .auth-pane:not([hidden]) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+}
+.global-pop .body-mode-strip { margin: 0; border-right: 1px solid var(--line); }
+.global-pop .auth-pane[hidden],
+.global-pop .kv-empty[hidden] { display: none; }
+.global-pop .auth-field {
+  flex: 1;
+  height: auto;
+  min-width: 8rem;
+  border-bottom: 0;
+}
+.global-pop .auth-lab {
+  width: auto;
+  max-width: none;
+  padding: 0 .75rem;
+  color: color-mix(in oklab, var(--mute) 80%, transparent);
+}
+.global-pop .kv-empty {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  margin: 0;
+  padding: 0 .75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.global-pop .kv-editor,
+.global-pop .kv-rows {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  max-height: none;
+  align-items: stretch;
+  overflow-x: auto;
+}
+.global-pop .kv-row {
+  flex: 1 0 18rem;
+  height: auto;
+  border-bottom: 0;
+  border-right: 1px solid var(--line);
+}
+.global-pop .kv-row:last-child { border-right: 0; }
 .body-mode-strip {
   display: inline-flex;
   align-items: stretch;
@@ -1110,11 +1184,10 @@ pre {
       >${compact ? "Raw" : "Pretty"}</a>
     </header>
     <div class="global-pop" id="json-code-global-panel" data-slot="json-code-global-panel" data-pane="auth" hidden>
-      <p class="rail-sec-label" data-slot="json-code-global-label">Global auth</p>
-      <div data-global-pane="auth" data-auth-scope="global">
+      <div class="global-line" data-global-pane="auth" data-auth-scope="global">
         ${authEditorHtml("global")}
       </div>
-      <div data-global-pane="headers" hidden>
+      <div class="global-line" data-global-pane="headers" hidden>
         <div class="kv-editor">
           <div class="kv-rows" data-slot="json-code-kv-rows" data-kv="headers-global"></div>
         </div>
@@ -1141,6 +1214,7 @@ pre {
   <script>
   (() => {
     const HEADERS_KEY = "oke:json-code:headers";
+    const HEADERS_MODE_KEY = "oke:json-code:headers-mode";
     const HEADERS_GLOBAL_KEY = "oke:json-code:headers-global";
     const AUTH_KEY = "oke:json-code:auth";
     const AUTH_GLOBAL_KEY = "oke:json-code:auth-global";
@@ -1548,6 +1622,9 @@ pre {
       if (!sessionStorage.getItem(HEADERS_KEY)) {
         savePairs(HEADERS_KEY, [{ key: "accept", value: ACCEPT }]);
       }
+      if (sessionStorage.getItem(HEADERS_MODE_KEY) !== "custom") {
+        sessionStorage.setItem(HEADERS_MODE_KEY, "inherit");
+      }
       if (!sessionStorage.getItem(HEADERS_GLOBAL_KEY)) savePairs(HEADERS_GLOBAL_KEY, []);
       if (!sessionStorage.getItem(AUTH_KEY)) sessionStorage.setItem(AUTH_KEY, JSON.stringify(emptyAuth()));
       if (!sessionStorage.getItem(AUTH_GLOBAL_KEY)) sessionStorage.setItem(AUTH_GLOBAL_KEY, JSON.stringify(emptyAuth()));
@@ -1589,7 +1666,7 @@ pre {
     }
 
     function emptyAuth() {
-      return { type: "none", token: "", username: "", password: "", key: "", value: "", in: "header" };
+      return { type: "none", token: "", username: "", password: "", key: "", value: "", in: "header", mode: "inherit" };
     }
 
     function authStorageKey(scope) {
@@ -1611,6 +1688,7 @@ pre {
           key: typeof parsed.key === "string" ? parsed.key : "",
           value: typeof parsed.value === "string" ? parsed.value : "",
           in: parsed.in === "query" ? "query" : "header",
+          mode: parsed.mode === "custom" ? "custom" : "inherit",
         };
       } catch {
         return emptyAuth();
@@ -1627,6 +1705,8 @@ pre {
         return input ? input.value : "";
       };
       const inBtn = root.querySelector("[data-auth-in].is-on");
+      const modeBtn = root.querySelector("[data-auth-mode].is-on");
+      const mode = modeBtn && modeBtn.getAttribute("data-auth-mode") === "custom" ? "custom" : "inherit";
       return {
         type: type === "bearer" || type === "basic" || type === "apikey" ? type : "none",
         token: field("token"),
@@ -1635,6 +1715,7 @@ pre {
         key: field("key"),
         value: field("value"),
         in: inBtn && inBtn.getAttribute("data-auth-in") === "query" ? "query" : "header",
+        mode,
       };
     }
 
@@ -1661,6 +1742,14 @@ pre {
           btn.classList.toggle("is-on", on);
           btn.setAttribute("aria-pressed", on ? "true" : "false");
         }
+        const mode = auth.mode === "custom" ? "custom" : "inherit";
+        for (const btn of root.querySelectorAll("[data-auth-mode]")) {
+          const on = btn.getAttribute("data-auth-mode") === mode;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        const custom = root.querySelector("[data-auth-custom]");
+        if (custom) custom.hidden = mode !== "custom";
       }
       if (scope === "global") {
         const btn = document.querySelector("[data-slot=json-code-global-auth]");
@@ -1689,16 +1778,34 @@ pre {
       paintAuth(scope, auth);
     }
 
+    function storedAuth(auth) {
+      return auth;
+    }
+
+    function forgetSecretsOnReload() {
+      try {
+        const nav = performance.getEntriesByType("navigation")[0];
+        if (!nav || nav.type !== "reload") return;
+        const mark = String(nav.startTime);
+        if (sessionStorage.getItem("oke:json-code:reload-seen") === mark) return;
+        sessionStorage.setItem("oke:json-code:reload-seen", mark);
+        for (const key of [AUTH_KEY, AUTH_GLOBAL_KEY]) {
+          const auth = loadAuth(key);
+          sessionStorage.setItem(key, JSON.stringify({ ...auth, token: "", password: "", value: "" }));
+        }
+      } catch {}
+    }
+
     function persistAuth(scope) {
       const auth = readAuth(scope);
-      sessionStorage.setItem(authStorageKey(scope), JSON.stringify(auth));
+      sessionStorage.setItem(authStorageKey(scope), JSON.stringify(storedAuth(auth)));
       paintAuth(scope, auth);
     }
 
     function effectiveAuth() {
-      const request = loadAuth(AUTH_KEY);
-      if (request.type !== "none") return request;
-      return loadAuth(AUTH_GLOBAL_KEY);
+      const request = readAuth("request");
+      if (request.mode === "custom") return request;
+      return readAuth("global");
     }
 
     function basicAuthorization(user, pass) {
@@ -1706,6 +1813,23 @@ pre {
       let bin = "";
       for (const b of bytes) bin += String.fromCharCode(b);
       return "Basic " + btoa(bin);
+    }
+
+    function headersMode() {
+      return sessionStorage.getItem(HEADERS_MODE_KEY) === "custom" ? "custom" : "inherit";
+    }
+
+    function paintHeadersMode(mode) {
+      const next = mode === "custom" ? "custom" : "inherit";
+      const root = document.querySelector('[data-rail-section="headers"]');
+      if (!root) return;
+      for (const btn of root.querySelectorAll("[data-headers-mode]")) {
+        const on = btn.getAttribute("data-headers-mode") === next;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      const custom = root.querySelector("[data-headers-custom]");
+      if (custom) custom.hidden = next !== "custom";
     }
 
     function applyHeaderPairs(headers, pairs) {
@@ -1719,7 +1843,7 @@ pre {
     function requestHeaders(contentType) {
       const headers = { accept: ACCEPT };
       applyHeaderPairs(headers, loadPairs(HEADERS_GLOBAL_KEY));
-      applyHeaderPairs(headers, loadPairs(HEADERS_KEY));
+      if (headersMode() === "custom") applyHeaderPairs(headers, loadPairs(HEADERS_KEY));
       const auth = effectiveAuth();
       if (auth.type === "bearer" && auth.token.trim()) {
         headers.authorization = "Bearer " + auth.token.trim();
@@ -1889,6 +2013,7 @@ pre {
 
     function resetOptions() {
       savePairs(HEADERS_KEY, [{ key: "accept", value: ACCEPT }]);
+      sessionStorage.setItem(HEADERS_MODE_KEY, "inherit");
       sessionStorage.setItem(AUTH_KEY, JSON.stringify(emptyAuth()));
       const pairs = [];
       for (const [key, value] of new URLSearchParams(location.search)) pairs.push({ key, value });
@@ -1901,6 +2026,7 @@ pre {
         savePairs(PATH_KEY, pathNames(template).map((n) => ({ key: n, value: "" })));
       }
       for (const kind of ["cookies", "headers", "query", "path", "body"]) renderKv(kind);
+      paintHeadersMode("inherit");
       fillAuth("request");
       syncBodyMode("form");
       syncPathChapter();
@@ -1914,7 +2040,9 @@ pre {
     }
 
     ensureSeeds();
+    forgetSecretsOnReload();
     for (const kind of ["cookies", "headers", "headers-global", "query", "path", "body"]) renderKv(kind);
+    paintHeadersMode(headersMode());
     fillAuth("request");
     fillAuth("global");
     syncBodyMode(bodyMode());
@@ -1935,6 +2063,45 @@ pre {
           sessionStorage.setItem(BODY_JSON_KEY, bodyRaw.value);
         }
         syncBodyMode(mode);
+      });
+    }
+    for (const el of document.querySelectorAll("[data-auth-reveal]")) {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const field = el.closest(".auth-field");
+        const input = field ? field.querySelector("input") : null;
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        el.setAttribute("aria-pressed", show ? "true" : "false");
+        el.setAttribute("aria-label", show ? "Hide secret" : "Show secret");
+      });
+    }
+    for (const el of document.querySelectorAll("[data-headers-mode]")) {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const mode = el.getAttribute("data-headers-mode") === "custom" ? "custom" : "inherit";
+        sessionStorage.setItem(HEADERS_MODE_KEY, mode);
+        paintHeadersMode(mode);
+        if (mode === "custom") renderKv("headers");
+      });
+    }
+    for (const el of document.querySelectorAll("[data-auth-mode]")) {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const root = el.closest("[data-auth-scope]");
+        if (!root) return;
+        for (const btn of root.querySelectorAll("[data-auth-mode]")) {
+          const on = btn === el;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        const custom = root.querySelector("[data-auth-custom]");
+        if (custom) custom.hidden = el.getAttribute("data-auth-mode") !== "custom";
+        persistAuth(root.getAttribute("data-auth-scope") || "request");
       });
     }
     for (const el of document.querySelectorAll("[data-auth-type]")) {
@@ -1993,6 +2160,7 @@ pre {
     }
 
     function closeGlobal() {
+      persistAuth("global");
       if (globalPop) globalPop.hidden = true;
       if (globalAuthBtn) globalAuthBtn.setAttribute("aria-expanded", "false");
       if (globalHeadersBtn) globalHeadersBtn.setAttribute("aria-expanded", "false");
@@ -2007,8 +2175,6 @@ pre {
       }
       globalPop.hidden = false;
       globalPop.setAttribute("data-pane", pane);
-      const label = document.querySelector("[data-slot=json-code-global-label]");
-      if (label) label.textContent = pane === "headers" ? "Global headers" : "Global auth";
       const authPane = globalPop.querySelector('[data-global-pane="auth"]');
       const headersPane = globalPop.querySelector('[data-global-pane="headers"]');
       if (authPane) authPane.hidden = pane !== "auth";
@@ -2305,28 +2471,33 @@ function authSwitchHtml(): string {
   return `<span class="body-mode-strip" role="group" aria-label="Authorization">${opt("none", "No")}${opt("bearer", "Bearer")}${opt("basic", "Basic")}${opt("apikey", "API")}</span>`;
 }
 
+const AUTH_EYE = `<svg class="eye-open" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="1.5"/></svg><svg class="eye-shut" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 4.5 21 19.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9.2 6.9A11 11 0 0 1 12 6.5c6 0 9.5 5.5 9.5 5.5a17 17 0 0 1-3.4 3.7M6.1 8.2C3.9 9.7 2.5 12 2.5 12S6 17.5 12 17.5c1.1 0 2.1-.2 3.1-.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
+/** Masked credential input. The value stays for this tab; a refresh clears it. */
+function secretInput(name: string, placeholder: string): string {
+  return `<input class="kv-val" type="password" data-auth-field="${name}" spellcheck="false" autocomplete="off" placeholder="${placeholder}" /><button type="button" class="auth-reveal" data-auth-reveal aria-pressed="false" aria-label="Show secret">${AUTH_EYE}</button>`;
+}
+
 function authEditorHtml(scope: "request" | "global"): string {
   const none =
     scope === "global"
       ? "No global credentials. Each request uses its own Authorization."
-      : "No credentials on this request. Global credentials apply when they are set.";
+      : "No credentials on this request.";
   const switchRow =
-    scope === "global"
-      ? `<div class="strip">${authSwitchHtml()}</div>`
-      : "";
+    scope === "global" ? authSwitchHtml() : `<div class="strip">${authSwitchHtml()}</div>`;
   return `<div class="auth-editor" data-slot="json-code-auth-editor">
     ${switchRow}
     <p class="kv-empty" data-auth-pane="none">${none}</p>
     <div class="auth-pane" data-auth-pane="bearer" hidden>
-      <label class="auth-field"><span class="auth-lab">Token</span><input class="kv-val" data-auth-field="token" spellcheck="false" autocomplete="off" placeholder="Token" /></label>
+      <label class="auth-field"><span class="auth-lab">Token</span>${secretInput("token", "Token")}</label>
     </div>
     <div class="auth-pane" data-auth-pane="basic" hidden>
       <label class="auth-field"><span class="auth-lab">Username</span><input class="kv-val" data-auth-field="username" spellcheck="false" autocomplete="off" placeholder="Username" /></label>
-      <label class="auth-field"><span class="auth-lab">Password</span><input class="kv-val" data-auth-field="password" spellcheck="false" autocomplete="off" placeholder="Password" /></label>
+      <label class="auth-field"><span class="auth-lab">Password</span>${secretInput("password", "Password")}</label>
     </div>
     <div class="auth-pane" data-auth-pane="apikey" hidden>
       <label class="auth-field"><span class="auth-lab">Key</span><input class="kv-val" data-auth-field="key" spellcheck="false" autocomplete="off" placeholder="X-Api-Key" /></label>
-      <label class="auth-field"><span class="auth-lab">Value</span><input class="kv-val" data-auth-field="value" spellcheck="false" autocomplete="off" placeholder="Value" /></label>
+      <label class="auth-field"><span class="auth-lab">Value</span>${secretInput("value", "Value")}</label>
       <div class="auth-field">
         <span class="auth-lab">Add to</span>
         <span class="auth-in" role="group" aria-label="API key location">
@@ -2359,10 +2530,6 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5.5 15.5 12 9 18.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </label>
   </header>
-  <div class="rail-nav" data-rail-section="routes">
-    <p class="rail-sec-label">Routes</p>
-    <ul class="rail-list">${groups}</ul>
-  </div>
   <div class="rail-dock" data-slot="json-code-request-dock">
     <div class="strip rail-dock-strip">
       <span class="head">${play}<span>Request</span></span>
@@ -2396,15 +2563,42 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
         </div>
       </details>
       ${kvSection("cookies", "Cookies")}
-      ${kvSection("headers", "Headers")}
+      <details class="rail-acc" data-rail-section="headers">
+        <summary class="rail-acc-sum">
+          ${chev}<span>Headers</span>
+          <span class="grow"></span>
+          <span class="body-mode-strip" role="group" aria-label="Request headers">
+            <button type="button" class="token is-on" data-headers-mode="inherit" aria-pressed="true">Inherit</button>
+            <button type="button" class="token" data-headers-mode="custom" aria-pressed="false">Custom</button>
+          </span>
+        </summary>
+        <div class="rail-acc-body" data-headers-custom hidden>
+          <div class="kv-editor">
+            <div class="kv-rows" data-slot="json-code-kv-rows" data-kv="headers"></div>
+          </div>
+        </div>
+      </details>
       <details class="rail-acc" data-rail-section="auth" data-auth-scope="request">
-        <summary class="rail-acc-sum">${chev}<span>Authorization</span><span class="grow"></span>${authSwitchHtml()}</summary>
-        <div class="rail-acc-body">
+        <summary class="rail-acc-sum">${chev}<span>Auth</span><span class="grow"></span><span class="body-mode-strip" role="group" aria-label="Request auth"><button type="button" class="token is-on" data-auth-mode="inherit" aria-pressed="true">Inherit</button><button type="button" class="token" data-auth-mode="custom" aria-pressed="false">Custom</button></span></summary>
+        <div class="rail-acc-body" data-auth-custom hidden>
           ${authEditorHtml("request")}
         </div>
       </details>
       ${kvSection("path", "Path")}
     </div>
+  </div>
+  <div class="rail-nav" data-rail-section="routes">
+    <input class="routes-check" type="checkbox" id="json-code-routes" checked>
+    <p class="rail-sec-label">
+      <span>Routes</span>
+      <label class="copy routes-collapse" for="json-code-routes" aria-label="Collapse routes" title="Collapse routes">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9.5 12 15.5 18 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </label>
+      <label class="copy routes-expand" for="json-code-routes" aria-label="Expand routes" title="Expand routes">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 14.5 12 8.5 18 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </label>
+    </p>
+    <ul class="rail-list">${groups}</ul>
   </div>
 </aside>
 <label class="rail-thin" for="json-code-rail" aria-label="Expand request" title="Expand request">
