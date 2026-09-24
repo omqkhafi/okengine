@@ -5,6 +5,7 @@ import {
   buildRlsIdentityPreludeSql,
   emitPgPolicySource,
   formatPolicyRole,
+  OKE_PG_STAT_STATEMENTS_SQL,
   OKE_RLS_HELPER_STATEMENTS,
   OKE_RLS_ROLE,
   parseSqlPolicySpec,
@@ -147,6 +148,36 @@ describe("OKE_RLS_HELPER_STATEMENTS", () => {
     expect(hasScope).toBeDefined();
     expect(hasScope).toContain("jsonb_exists(");
     expect(hasScope).not.toMatch(/jsonb\s+\?/);
+  });
+
+  test("initial oke SQL creates pg_stat_statements before helpers", async () => {
+    const ran: string[] = [];
+    const { installOkeRlsHelpers } = await import("./pg-rls.ts");
+    await installOkeRlsHelpers(async (sql) => {
+      ran.push(sql);
+      if (sql.startsWith("CREATE EXTENSION")) return;
+      if (sql.includes("pg_vault") || sql.includes("vault.")) {
+        throw new Error("stop before vault attach");
+      }
+    }).catch(() => undefined);
+    expect(ran[0]).toBe(OKE_PG_STAT_STATEMENTS_SQL);
+    expect(ran[1]).toBe(OKE_RLS_HELPER_STATEMENTS[0]);
+  });
+
+  test("a rejected pg_stat_statements create still installs helpers", async () => {
+    const ran: string[] = [];
+    const { installOkeRlsHelpers } = await import("./pg-rls.ts");
+    await installOkeRlsHelpers(async (sql) => {
+      ran.push(sql);
+      if (sql.startsWith("CREATE EXTENSION")) {
+        throw new Error('extension "pg_stat_statements" is not available');
+      }
+      if (sql.includes("CREATE OR REPLACE FUNCTION oke.gate")) {
+        throw new Error("stop");
+      }
+    }).catch(() => undefined);
+    expect(ran[0]).toBe(OKE_PG_STAT_STATEMENTS_SQL);
+    expect(ran.some((sql) => sql.includes("CREATE SCHEMA IF NOT EXISTS oke"))).toBe(true);
   });
 
   test("pins search_path to public so schema oke is not the table home", () => {

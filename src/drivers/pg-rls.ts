@@ -136,11 +136,26 @@ $oke_app_search_path$`,
 export const OKE_RLS_HELPER_SQL = `${OKE_RLS_HELPER_STATEMENTS.join(";\n")};`;
 
 /**
+ * Enable query telemetry on postgres. Preload is still required
+ * (`shared_preload_libraries=pg_stat_statements`). PGlite and Cockroach
+ * reject this; callers swallow that failure so the rest of the oke SQL runs.
+ */
+export const OKE_PG_STAT_STATEMENTS_SQL = "CREATE EXTENSION IF NOT EXISTS pg_stat_statements";
+
+/**
  * Install `oke.*` helpers one statement at a time.
+ *
+ * `pg_stat_statements` is created first when the engine allows it, so Store
+ * performance does not depend on a later manual `CREATE EXTENSION`.
  *
  * @param exec - Statement runner
  */
 export async function installOkeRlsHelpers(exec: (sql: string) => Promise<unknown>): Promise<void> {
+  try {
+    await exec(OKE_PG_STAT_STATEMENTS_SQL);
+  } catch {
+    // Not preloaded, or this engine has no pg_stat_statements (pglite, cockroach).
+  }
   for (const stmt of OKE_RLS_HELPER_STATEMENTS) {
     await exec(stmt);
   }

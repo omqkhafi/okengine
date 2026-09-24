@@ -106,11 +106,11 @@ Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exha
   Recreate `store-sql` after a recipe change — the data volume can stay.
 </Callout>
 
-| Step    | What you do                                                       |
-| ------- | ----------------------------------------------------------------- |
-| Preload | Recipe already sets `shared_preload_libraries=pg_stat_statements` |
-| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`               |
-| Console | Store → SQL band → **Performance**                                |
+| Step    | What you do                                                                 |
+| ------- | --------------------------------------------------------------------------- |
+| Preload | Recipe already sets `shared_preload_libraries=pg_stat_statements`           |
+| Create  | `oke db push` runs `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`      |
+| Console | Store → SQL band → **Performance**                                          |
 
 Default `postgres:18-alpine` does **not** ship `hypopg` / `index_advisor`. Pin the
 opt-in image when you want Suggest indexes:
@@ -137,8 +137,8 @@ set. Re-run `oke dev` so the stack writes `.env.local`, or export
 <Accordion title="PgStatStatementsNotPreloaded">
 
 The Console Performance view needs the library preloaded **and** the extension
-created. Recreate `store-sql` so the new `command` applies, then run
-`CREATE EXTENSION IF NOT EXISTS pg_stat_statements`.
+created. Recreate `store-sql` so the new `command` applies, then run `oke db push`
+(or open Performance again — it creates the extension when preload is already on).
 
 Existing clusters that started before this recipe change keep the old
 postmaster flags until recreate.

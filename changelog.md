@@ -123,6 +123,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Store
 
+- Store → Performance creates `pg_stat_statements` with the initial oke SQL
+  (`oke db push` and the first SQL session). A missing view is no longer
+  reported as an unsupported driver. Preload is still required. Memory, PGlite,
+  and Cockroach still say telemetry is unavailable.
 - Store → Performance no longer prints `[object Object]` when Postgres throws a
   plain object. A missing `pg_stat_statements` relation stays createable. Memory,
   PGlite, and Cockroach still say telemetry is unavailable, and the sentence

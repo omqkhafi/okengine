@@ -212,9 +212,28 @@ export function engineErrorText(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   if (err && typeof err === "object") {
-    const record = err as { message?: unknown; code?: unknown };
+    const record = err as {
+      message?: unknown;
+      code?: unknown;
+      errno?: unknown;
+      error?: unknown;
+    };
     if (typeof record.message === "string" && record.message.trim().length > 0) {
       return record.message;
+    }
+    const nested = record.error;
+    if (nested && typeof nested === "object") {
+      const inner = nested as { message?: unknown; data?: unknown };
+      if (typeof inner.message === "string" && inner.message.trim().length > 0) {
+        return inner.message;
+      }
+      if (inner.data && typeof inner.data === "object" && "sqlstate" in inner.data) {
+        const sqlstate = (inner.data as { sqlstate?: unknown }).sqlstate;
+        if (typeof sqlstate === "string" && sqlstate.length > 0) return sqlstate;
+      }
+    }
+    if (typeof record.errno === "string" && /^[0-9A-Z]{5}$/.test(record.errno)) {
+      return record.errno;
     }
     if (typeof record.code === "string" && record.code.trim().length > 0) {
       return record.code;
@@ -223,6 +242,30 @@ export function engineErrorText(err: unknown): string {
   }
   if (err == null) return "";
   return String(err);
+}
+
+/**
+ * SQLSTATE from a Bun.SQL error, a plain object, or a thrown flow failure.
+ *
+ * @param err - Driver / SQL failure
+ */
+function sqlStateOf(err: unknown): string {
+  if (!err || typeof err !== "object") return "";
+  const record = err as { code?: unknown; errno?: unknown; error?: unknown };
+  if (typeof record.code === "string" && /^[0-9A-Z]{5}$/.test(record.code)) return record.code;
+  if (typeof record.errno === "string" && /^[0-9A-Z]{5}$/.test(record.errno)) return record.errno;
+  const nested = record.error;
+  if (nested && typeof nested === "object" && "data" in nested) {
+    const data = (nested as { data?: unknown }).data;
+    if (data && typeof data === "object" && "sqlstate" in data) {
+      const sqlstate = (data as { sqlstate?: unknown }).sqlstate;
+      if (typeof sqlstate === "string") return sqlstate;
+    }
+  }
+  if (err instanceof Error && typeof err.cause === "object" && err.cause) {
+    return sqlStateOf(err.cause);
+  }
+  return "";
 }
 
 /**
@@ -248,13 +291,22 @@ export function classifyPgStatStatementsError(err: unknown): StoreSqlStatsError 
   ) {
     return new StoreSqlStatsError(PG_STAT_STATEMENTS_UNSUPPORTED, message);
   }
+  const state = sqlStateOf(err);
+  // 42P01 undefined_table — the view is missing until CREATE EXTENSION.
+  // Domain DDL off rewrites that into OKE1110 before this classifier runs.
   if (
+    state === "42P01" ||
+    (err instanceof Error && err.name === "OkeError" && "code" in err && err.code === 1110) ||
     lower.includes("does not exist") ||
     lower.includes("undefined_table") ||
+    lower.includes("domain table not found") ||
     lower.includes("unknown function") ||
     lower.includes("index_advisor")
   ) {
-    return new StoreSqlStatsError(PG_STAT_STATEMENTS_NOT_CREATED, message);
+    return new StoreSqlStatsError(
+      PG_STAT_STATEMENTS_NOT_CREATED,
+      message.length > 0 ? message : "relation pg_stat_statements does not exist",
+    );
   }
   return new StoreSqlStatsError(PG_STAT_STATEMENTS_UNSUPPORTED, message);
 }
@@ -426,28 +478,25 @@ async function readStatStatements(
     if (classified.code === PG_STAT_STATEMENTS_UNSUPPORTED) {
       try {
         return await handle.raw(STATS_SQL_LEGACY);
+      } catch {
+        // Missing view often arrives as a wrapped flow failure with no
+        // "does not exist" text. Create the extension, then read again.
+      }
+    }
+    await tryCreateStatStatements(handle);
+    try {
+      return await handle.raw(STATS_SQL);
+    } catch (retry) {
+      const again = classifyPgStatStatementsError(retry);
+      if (again.code === PG_STAT_STATEMENTS_NOT_PRELOADED) throw again;
+      try {
+        return await handle.raw(STATS_SQL_LEGACY);
       } catch (legacyErr) {
         const legacy = classifyPgStatStatementsError(legacyErr);
-        if (legacy.code === PG_STAT_STATEMENTS_NOT_CREATED) {
-          await tryCreateStatStatements(handle);
-          try {
-            return await handle.raw(STATS_SQL);
-          } catch {
-            return await handle.raw(STATS_SQL_LEGACY);
-          }
-        }
-        throw legacy;
+        if (legacy.code === PG_STAT_STATEMENTS_NOT_PRELOADED) throw legacy;
+        throw legacy.message.length > 0 ? legacy : classified;
       }
     }
-    if (classified.code === PG_STAT_STATEMENTS_NOT_CREATED) {
-      await tryCreateStatStatements(handle);
-      try {
-        return await handle.raw(STATS_SQL);
-      } catch {
-        return await handle.raw(STATS_SQL_LEGACY);
-      }
-    }
-    throw classified;
   }
 }
 

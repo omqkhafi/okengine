@@ -75,6 +75,27 @@ describe("classifyPgStatStatementsError", () => {
     expect(err.message).not.toBe("[object Object]");
   });
 
+  test("SQLSTATE 42P01 on errno is not-created", () => {
+    expect(
+      classifyPgStatStatementsError({
+        name: "PostgresError",
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        errno: "42P01",
+        message: "",
+      }).code,
+    ).toBe(PG_STAT_STATEMENTS_NOT_CREATED);
+  });
+
+  test("a thrown DatabaseError flow failure with sqlstate 42P01 is not-created", () => {
+    const err = classifyPgStatStatementsError({
+      data: null,
+      error: { code: "DatabaseError", data: { reason: "unknown", sqlstate: "42P01" } },
+    });
+    expect(err.code).toBe(PG_STAT_STATEMENTS_NOT_CREATED);
+    expect(err.message).not.toBe("[object Object]");
+    expect(err.message.length).toBeGreaterThan(0);
+  });
+
   test("plain object with only a code does not stringify the object", () => {
     const err = classifyPgStatStatementsError({ code: "ERR_POSTGRES_CONNECTION_CLOSED" });
     expect(err.code).toBe(PG_STAT_STATEMENTS_UNSUPPORTED);
