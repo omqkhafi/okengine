@@ -123,6 +123,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `fx.decide` journals the projected answer and reads the resolved review once after wake. A second call in the same run gets its own review id. `none_of_these` is not auto. A boolean value follows the calibrated probability. Pending reviews stamp `fx.tenant`. A missing provider secret is a config error, resolved through the secret capability.
+- Resolving a decision checks the declared review Gate. The reviewer is the authenticated operator, and every open question must be a valid option. The tenant must match the parked row. Uncertain reviews record propensity 1; audit rows record the audit rate.
+- `oke eval --certify` calls the provider, fits a calibrator per question, and keeps a threshold only when an exact binomial Learn-then-Test passes. The lockfile is loaded from the app root at boot. `oke decide promote` merges that one decision into the existing lockfile.
+- Decision labels live in a tenant-scoped table at the app root. The candidate job reads every tenant. Drift is a one-sided binomial on persisted audit labels and writes one app-level suspension flag. A change emits `oke/decision/drift`.
+- The decision candidate route requires an operator gate and is bound before the HTTP gate posture check. An unauthenticated request is 401 or 403.
+- Decision HTTP retries only 429 and 529, and honors `Retry-After`. The breaker counts network errors, timeouts, 5xx, and 529. A 4xx request error and an abort leave it closed.
+- Compiling a decision rejects more than 254 choice options, an author `none_of_these`, a score outside 2–10 levels, and a duplicate name. The review gate keeps its real name.
+- Budget measurement spawns `process.execPath` instead of a `bun` binary on `PATH`.
 - `drivers.store.sql` `pool.max` sizes the Bun.SQL pool. Unset stays 8. A
   different max does not reuse a pool opened at another size. `pool.min` is not
   applied. `replicas` receive read-only flows, each on its own pool at that max.
