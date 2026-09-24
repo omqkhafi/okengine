@@ -7,12 +7,14 @@ import { flow } from "../../../kernel/flow.ts";
 import type { Binding } from "../../../kernel/on.ts";
 import { http } from "../../../kernel/triggers.ts";
 import type { Manifest } from "../../../manifest/types.ts";
+import { aiDecisionRegistry } from "../../../kernel/element-registries.ts";
 import {
   aggregateDecisionCandidate,
   decisionDriftSuspended,
   getDecisionCandidate,
   setDecisionDrift,
 } from "./certificate.ts";
+import { certifyLabels } from "./certify.ts";
 
 /** Signal the drift monitor emits. The emit is declared on that flow. */
 export const DECISION_DRIFT_SIGNAL = "oke/decision/drift";
@@ -41,7 +43,17 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     plane: "operator",
     effects: { writes: ["kv:oke-decision-candidate"] },
     do: async () => {
-      for (const name of names) aggregateDecisionCandidate(name);
+      for (const name of names) {
+        const decl = aiDecisionRegistry.find((item) => item.name === name);
+        aggregateDecisionCandidate(name, (rows) =>
+          certifyLabels({
+            model: decl?.model ?? "",
+            maxError: decl?.autonomy?.maxError ?? 0.05,
+            ask: decl?.ask ?? {},
+            labels: rows,
+          }),
+        );
+      }
       return { ok: true };
     },
   });

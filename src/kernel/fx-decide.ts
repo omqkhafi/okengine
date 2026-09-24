@@ -79,6 +79,9 @@ export interface DecisionReviewRecord {
   readonly reason?: DecisionUncertainty;
   /** Question ids that are not auto. Resolve must answer each of them. */
   readonly open?: readonly string[];
+  readonly model?: string;
+  readonly scores?: Readonly<Record<string, number>>;
+  readonly modelValues?: Readonly<Record<string, unknown>>;
 }
 
 /** Result of {@link resolveDecisionReview}. */
@@ -492,6 +495,11 @@ function pendingRecord(
     open: Object.entries(view.questions)
       .filter(([, question]) => question.uncertain)
       .map(([id]) => id),
+    ...(view.meta.model !== undefined ? { model: view.meta.model } : {}),
+    scores: Object.fromEntries(Object.entries(view.questions).map(([id, question]) => [id, question.p])),
+    modelValues: Object.fromEntries(
+      Object.entries(view.questions).map(([id, question]) => [id, question.value]),
+    ),
     ...(view.reason !== undefined ? { reason: view.reason } : {}),
   };
 }
@@ -609,6 +617,9 @@ export async function resolveDecisionReview(
         reviewer: input.reviewer,
         ...(current.locale !== undefined ? { locale: current.locale } : {}),
         ...(current.tenant !== null ? { tenant: current.tenant } : {}),
+        ...(current.model !== undefined ? { model: current.model } : {}),
+        ...(current.scores?.[question] !== undefined ? { score: current.scores[question] } : {}),
+        loss: current.modelValues?.[question] === value ? 0 : 1,
       });
     }
     return { ok: true };

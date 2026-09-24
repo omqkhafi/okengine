@@ -1594,6 +1594,8 @@ export function oke(options: OkeOptions): OkeApp {
     // Built-in hybrid search — auto-register durable embed CDC flows when the
     // Manifest declares any `.embed()` column (writer flows stay embed-free).
     await ensureSearchEmbedFlows(overrides?.manifest ?? options.manifest);
+    const { loadDecisionLockfile } = await import("../elements/ai/decisions/certificate.ts");
+    await loadDecisionLockfile(process.cwd());
     await ensureDecisionFlows(overrides?.manifest ?? options.manifest);
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {

@@ -4,7 +4,12 @@
  */
 
 import { resolve } from "node:path";
-import { lockFromCandidate, type DecisionLockfile } from "../elements/ai/decisions/certificate.ts";
+import {
+  DECISION_LOCK_FILENAME,
+  lockFromCandidate,
+  parseDecisionLockfile,
+  type DecisionLockfile,
+} from "../elements/ai/decisions/certificate.ts";
 
 /** Options for {@link promoteDecision}. */
 export interface PromoteDecisionOptions {
@@ -36,8 +41,13 @@ export async function promoteDecision(options: PromoteDecisionOptions): Promise<
     throw new Error(`oke decide promote: ${res.status} from ${url}`);
   }
   const candidate: unknown = await res.json();
-  const next = lockFromCandidate(options.name, candidate, options.current);
-  const path = resolve(options.lockPath ?? "oke-decisions.lock.json");
+  const path = resolve(options.lockPath ?? DECISION_LOCK_FILENAME);
+  let current = options.current;
+  if (!current) {
+    const file = Bun.file(path);
+    if (await file.exists()) current = parseDecisionLockfile(await file.json());
+  }
+  const next = lockFromCandidate(options.name, candidate, current);
   await Bun.write(path, `${JSON.stringify(next, null, 2)}\n`);
   return next;
 }

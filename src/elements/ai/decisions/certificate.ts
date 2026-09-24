@@ -67,14 +67,21 @@ export interface DecisionLabel {
   readonly reviewer: string;
   readonly locale?: string;
   readonly tenant?: string;
+  readonly model?: string;
+  /** Calibrated confidence used by Learn-then-Test. */
+  readonly score?: number;
+  /** 1 when the label disagrees with the model, else 0. */
+  readonly loss?: number;
 }
 
-/** App-wide candidate. Counts only — promote does not recompute a certificate. */
+/** App-wide candidate. A full lock entry, not a count. */
 export interface DecisionCandidate {
-  readonly decision: string;
-  readonly model?: string;
-  readonly counts: Readonly<Record<string, number>>;
+  readonly model: string;
+  readonly questions: DecisionLockEntry["questions"];
 }
+
+/** Lockfile name at the app project root. */
+export const DECISION_LOCK_FILENAME = "oke-decisions.lock.json";
 
 const labels: DecisionLabel[] = [];
 let lockfile: DecisionLockfile | undefined;
@@ -187,25 +194,47 @@ export function calibrateBoolean(
 }
 
 /**
- * Learn-then-Test for one risk. Returns the lowest threshold whose
- * Hoeffding upper bound stays within `maxError`, or null when none does.
+ * One-sided exact binomial cdf, `P(X ≤ k)` for `X ~ Binomial(n, p)`.
+ *
+ * @param k - Observed errors
+ * @param n - Accepted labels
+ * @param p - Boundary error rate
+ */
+export function binomialCdf(k: number, n: number, p: number): number {
+  if (n <= 0) return 1;
+  if (p <= 0) return k >= 0 ? 1 : 0;
+  if (p >= 1) return k >= n ? 1 : 0;
+  const errors = Math.max(0, Math.min(n, k));
+  let term = Math.pow(1 - p, n);
+  let sum = term;
+  for (let i = 0; i < errors; i++) {
+    term *= ((n - i) / (i + 1)) * (p / (1 - p));
+    sum += term;
+  }
+  return Math.min(1, sum);
+}
+
+/**
+ * Learn-then-Test. Scans thresholds from strict to loose and stops at the
+ * first exact binomial test that fails. Too few labels returns null.
  *
  * @param rows - Score and 0/1 loss
  * @param maxError - Risk cap
+ * @param delta - Test level. Default `0.1`
  */
 export function learnThenTest(
   rows: readonly { readonly score: number; readonly loss: number }[],
   maxError: number,
+  delta = 0.1,
 ): number | null {
+  if (rows.length === 0) return null;
   const thresholds = [...new Set(rows.map((row) => row.score))].sort((a, b) => b - a);
   let chosen: number | null = null;
   for (const threshold of thresholds) {
     const accepted = rows.filter((row) => row.score >= threshold);
-    if (accepted.length === 0) continue;
-    const risk = accepted.reduce((sum, row) => sum + row.loss, 0) / accepted.length;
-    const bound = risk + Math.sqrt(Math.log(2 / 0.05) / (2 * accepted.length));
-    if (bound <= maxError) chosen = threshold;
-    else break;
+    const errors = accepted.reduce((sum, row) => sum + (row.loss > 0 ? 1 : 0), 0);
+    if (binomialCdf(errors, accepted.length, maxError) > delta) break;
+    chosen = threshold;
   }
   return chosen;
 }
@@ -220,18 +249,20 @@ export function recordDecisionLabel(label: DecisionLabel): void {
 }
 
 /**
- * Sum labels into one app-wide candidate. Counts only.
+ * Build one lock entry from stored labels. The same fit and test as certify.
  *
  * @param decision - Decision name
+ * @param fit - Turns that decision's labels into a lock entry
  */
-export function aggregateDecisionCandidate(decision: string): DecisionCandidate {
-  const counts: Record<string, number> = {};
-  for (const label of labels) {
-    if (label.decision !== decision) continue;
-    const key = label.locale ? `${label.question}:${label.locale}` : label.question;
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  const candidate: DecisionCandidate = { decision, counts };
+export function aggregateDecisionCandidate(
+  decision: string,
+  fit: (rows: readonly DecisionLabel[]) => DecisionCandidate = () => ({
+    model: "",
+    questions: {},
+  }),
+): DecisionCandidate {
+  const rows = labels.filter((label) => label.decision === decision);
+  const candidate = fit(rows);
   candidates.set(decision, candidate);
   return candidate;
 }
@@ -257,10 +288,57 @@ export function lockFromCandidate(
   candidate: unknown,
   current: DecisionLockfile | undefined,
 ): DecisionLockfile {
-  if (!candidate || typeof candidate !== "object") {
-    throw new TypeError("promote: candidate is not an object");
+  const entry = parseDecisionLockEntry(candidate);
+  if (!entry) throw new TypeError("promote: candidate is not a lock entry");
+  return { decisions: { ...(current?.decisions ?? {}), [name]: entry } };
+}
+
+/**
+ * Accept a lock entry with a model and a questions map.
+ *
+ * @param body - Candidate or file slot
+ */
+export function parseDecisionLockEntry(body: unknown): DecisionLockEntry | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const record = body as Record<string, unknown>;
+  if (typeof record.model !== "string") return undefined;
+  if (!record.questions || typeof record.questions !== "object" || Array.isArray(record.questions)) {
+    return undefined;
   }
-  const decisions = { ...(current?.decisions ?? {}) };
-  decisions[name] = candidate as DecisionLockEntry;
-  return { decisions };
+  return { model: record.model, questions: record.questions as DecisionLockEntry["questions"] };
+}
+
+/**
+ * Accept a lockfile object.
+ *
+ * @param body - Parsed JSON
+ */
+export function parseDecisionLockfile(body: unknown): DecisionLockfile | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const decisions = (body as { decisions?: unknown }).decisions;
+  if (!decisions || typeof decisions !== "object" || Array.isArray(decisions)) return undefined;
+  const next: Record<string, DecisionLockEntry> = {};
+  for (const [name, entry] of Object.entries(decisions)) {
+    const parsed = parseDecisionLockEntry(entry);
+    if (!parsed) return undefined;
+    next[name] = parsed;
+  }
+  return { decisions: next };
+}
+
+/**
+ * Read `oke-decisions.lock.json` from an app root and install it.
+ * A missing file clears the in-memory lock.
+ *
+ * @param root - Directory that holds the app config
+ */
+export async function loadDecisionLockfile(root: string): Promise<DecisionLockfile | undefined> {
+  const file = Bun.file(`${root}/${DECISION_LOCK_FILENAME}`);
+  if (!(await file.exists())) {
+    setDecisionLock(undefined);
+    return undefined;
+  }
+  const parsed = parseDecisionLockfile(await file.json());
+  setDecisionLock(parsed);
+  return parsed;
 }

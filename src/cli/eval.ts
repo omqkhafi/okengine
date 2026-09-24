@@ -4,6 +4,7 @@
 
 import { resolve } from "node:path";
 import { parseEvalJsonl, runPromptEvals, type EvalCase } from "../elements/ai/eval.ts";
+import type { DecisionResponse } from "../elements/ai/decisions/provider.ts";
 import type { Manifest } from "../manifest/types.ts";
 
 /** Options for {@link runOkeEval}. */
@@ -122,36 +123,67 @@ Run prompt eval sets declared in the Manifest. Fails CI on regression.
  * @param options - Manifest path
  */
 export async function runOkeCertify(
-  options: { readonly manifestPath?: string } = {},
+  options: {
+    readonly manifestPath?: string;
+    readonly manifest?: Manifest;
+    readonly root?: string;
+    readonly evaluate?: (input: unknown) => Promise<DecisionResponse>;
+  } = {},
 ): Promise<number> {
   const { certifySeed } = await import("../elements/ai/decisions/certify.ts");
-  const path = resolve(options.manifestPath ?? "oke.manifest.json");
-  const file = Bun.file(path);
-  if (!(await file.exists())) {
-    console.error(`oke eval: manifest not found: ${path}`);
-    return 1;
+  const { aiDecisionRegistry } = await import("../kernel/element-registries.ts");
+  const { DECISION_LOCK_FILENAME, parseDecisionLockfile } = await import(
+    "../elements/ai/decisions/certificate.ts"
+  );
+  let manifest = options.manifest;
+  if (!manifest) {
+    const path = resolve(options.manifestPath ?? "oke.manifest.json");
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      console.error(`oke eval: manifest not found: ${path}`);
+      return 1;
+    }
+    manifest = (await file.json()) as Manifest;
   }
-  const manifest = (await file.json()) as Manifest;
   const decisions = manifest.ai?.decisions ?? {};
   const names = Object.keys(decisions);
   if (names.length === 0) {
     process.stdout.write("oke eval: no decisions declared\n");
     return 0;
   }
+  const evaluate = options.evaluate;
+  if (!evaluate) {
+    console.error("oke eval: decision provider is not wired");
+    return 1;
+  }
+  const root = resolve(options.root ?? ".");
+  const lockPath = resolve(root, DECISION_LOCK_FILENAME);
+  const existingFile = Bun.file(lockPath);
+  const current = (await existingFile.exists())
+    ? parseDecisionLockfile(await existingFile.json())
+    : undefined;
+  const next = { decisions: { ...(current?.decisions ?? {}) } };
   for (const name of names) {
     const decision = decisions[name];
     if (!decision?.evals) {
       process.stdout.write(`oke eval: skip ${name} (no evals)\n`);
       continue;
     }
+    const decl = aiDecisionRegistry.find((item) => item.name === name);
+    if (!decl) {
+      console.error(`oke eval: decision "${name}" is not loaded`);
+      return 1;
+    }
     const text = await Bun.file(resolve(decision.evals)).text();
-    const certificate = certifySeed({
-      name,
+    next.decisions[name] = await certifySeed({
       model: decision.model ?? "",
       maxError: decision.autonomy?.maxError ?? 0.05,
       jsonl: text,
+      ask: decl.ask,
+      evaluate,
     });
-    process.stdout.write(`${JSON.stringify({ [name]: certificate })}\n`);
+    process.stdout.write(`${JSON.stringify({ [name]: next.decisions[name] })}\n`);
   }
+  await Bun.write(lockPath, `${JSON.stringify(next, null, 2)}\n`);
   return 0;
 }
