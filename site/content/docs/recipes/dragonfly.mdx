@@ -1,13 +1,14 @@
 ---
 title: "Dragonfly"
-description: "Multi-threaded Redis-wire runtime — OKE_STORE_KV_PASSWORD, memlock ulimit, no maxmemory-policy flag."
+description: "Default store.kv image — multi-threaded Redis-wire runtime, memlock ulimit, OKE_STORE_KV_PASSWORD."
 icon: "Zap"
 source: "docs/spec/unified-theory.md"
 ---
 
-Dragonfly is a multi-threaded, memory-efficient reimplementation of the Redis protocol —
-same `redis://` wire format, different engine. Slots behind the same `redis` driver with
-zero Flow changes.
+Dragonfly is the default `store.kv` image in `dev` and `prod` — a multi-threaded,
+memory-efficient reimplementation of the Redis protocol. Same `redis://` wire format,
+same `redis` driver, zero Flow changes. Pin Redis or Valkey when you want those engines
+instead.
 
 <Callout title="The one rule">
   Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store` behaves
@@ -23,7 +24,7 @@ zero Flow changes.
 
 ```typescript title="oke.config.ts"
 images: {
-  "store.kv": "docker.dragonflydb.io/dragonflydb/dragonfly",
+  "store.kv": "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0",
 },
 ```
 

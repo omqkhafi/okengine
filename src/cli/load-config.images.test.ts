@@ -54,7 +54,7 @@ describe("defaultImagesFromConfig", () => {
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
       pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
-      "store.kv": "redis:8-alpine",
+      "store.kv": "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0",
     });
   });
 
@@ -129,7 +129,7 @@ describe("resolveImages", () => {
       },
     });
     expect(images["store.sql"]).toBe("postgres:18-alpine");
-    expect(images["store.kv"]).toBe("redis:8-alpine");
+    expect(images["store.kv"]).toBe("docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0");
     expect(images["store.kv.durable"]).toBeUndefined();
   });
 });

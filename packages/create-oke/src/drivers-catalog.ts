@@ -226,7 +226,7 @@ export function aiDriverForProvider(provider: string): string {
 export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.sql": "postgres:18-alpine",
   pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
-  "store.kv": "redis:8-alpine",
+  "store.kv": "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0",
   "store.files": "rustfs/rustfs:1.0.0",
   "channel.email": "axllent/mailpit:v1.31.2",
   "store.index": "getmeili/meilisearch:v1.54",

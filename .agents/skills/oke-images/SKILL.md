@@ -24,7 +24,7 @@ Companion to [oke-deps](../oke-deps/SKILL.md) (npm) and [oke-ship](../oke-ship/S
 | Role            | Current source of truth                                              | Pin style       |
 | --------------- | -------------------------------------------------------------------- | --------------- |
 | `store.sql`     | `postgres:18-alpine`                                                 | floating family |
-| `store.kv`      | `redis:8-alpine`                                                     | floating family |
+| `store.kv`      | `docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0`                 | exact patch     |
 | `store.files`   | `rustfs/rustfs:…`                                                    | exact patch     |
 | `store.index`   | `getmeili/meilisearch:v…`                                            | minor           |
 | `channel.email` | `axllent/mailpit:v…`                                                 | exact patch     |
@@ -59,7 +59,7 @@ Task:
 | “update images” / “all”                          | all versioned default pins in the catalog                          |
 | named image (`rustfs`, `mailpit`, `meilisearch`) | that pin only, everywhere it appears                               |
 | “AI images” / llama / Ollama / vLLM / SGLang     | **Refuse** — no Compose AI recipes; point to OpenRouter / BYO URL  |
-| “vendor” / Cockroach / Yugabyte / Dragonfly      | optional recipe docs + matcher fixtures — **not** in the default   |
+| “vendor” / Cockroach / Yugabyte / Valkey         | optional recipe docs + matcher fixtures — **not** the default pin  |
 | “majors” / “family bump”                         | floating tags may move (`postgres:18` → `19`) — only if they asked |
 
 Do **not** bump unrelated pins when a name is given.

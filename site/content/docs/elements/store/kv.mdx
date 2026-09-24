@@ -546,7 +546,7 @@ writes (`set` · `delete`). Declare the same refs when you hand-write
 
 | Driver                                       | Runs as                          | Best for                           |
 | -------------------------------------------- | -------------------------------- | ---------------------------------- |
-| `redis`                                      | Docker Redis / Valkey-compatible | Dev + prod default                 |
+| `redis`                                      | Dragonfly by default (Redis-wire) | Dev + prod default                 |
 | `memory`                                     | Process map                      | Test default                       |
 | Durable (`postgres` / `pglite` via `oke_kv`) | Shared SQL URL                   | Namespaces that must outlive Redis |
 

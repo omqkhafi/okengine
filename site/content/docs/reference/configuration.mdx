@@ -152,7 +152,7 @@ Nested pins by element role — vendor choice lives here, never in driver ids:
 images: {
   store: {
     sql: "postgres:18-alpine",
-    kv: "redis:8-alpine",
+    kv: "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0",
     files: "rustfs/rustfs:1.0.0",
   },
   channel: { email: "axllent/mailpit:v1.31.2" },
@@ -163,7 +163,7 @@ images: {
 
 Omitted image keys mean no container for that role. When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog — see [Store](/docs/elements/store#multiple-environments).
 
-For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays `redis`.
+For `store.kv`, pin Dragonfly (default), Redis, or Valkey — driver id stays `redis`.
 `{ durable: true }` KV lives in SQL (`oke_kv` on `DATABASE_URL`), not a second Redis image.
 
 Compose does not manage AI inference — [OpenRouter](/docs/recipes/openrouter) or BYO

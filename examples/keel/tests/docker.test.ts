@@ -12,7 +12,7 @@ import { deriveInfrastructure, writeDerivedFiles } from "../../../src/docker/ind
 const IMAGES = {
   "store.sql": "postgres:18-alpine",
   pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
-  "store.kv": "redis:8-alpine",
+  "store.kv": "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0",
   "store.files": "rustfs/rustfs:1.0.0",
   "store.index": "getmeili/meilisearch:v1.54",
   "channel.email": "axllent/mailpit:v1.31.2",
@@ -42,7 +42,7 @@ describe("keel docker derive", () => {
     expect(yml).toContain("postgres:18-alpine");
     expect(yml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.59");
     expect(yml).toContain("# pgdog — connection pooler");
-    expect(yml).toContain("redis:8-alpine");
+    expect(yml).toContain("docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0");
     expect(yml).toContain("rustfs/rustfs:1.0.0");
     expect(yml).toContain("axllent/mailpit:v1.31.2");
     expect(yml).toContain("getmeili/meilisearch:v1.54");

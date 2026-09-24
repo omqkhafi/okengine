@@ -106,6 +106,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
   effect. Shorter runs still list each effect. Expanding a lane opens the
   individual events.
 
+#### Dev, Keel & create-oke
+
+- Default `store.kv` image is Dragonfly 2.0
+  (`docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0`, was `redis:8-alpine`).
+  Driver id stays `redis`. Pin `redis:8-alpine` to keep Redis Open Source.
+  The recipe sets `memlock: -1` and does not pass `--maxmemory-policy`.
+
 #### Console — Units & Call API
 
 - Call API is a full-height rail on the right of the flow contract. The

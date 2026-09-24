@@ -1,13 +1,13 @@
 ---
 title: "Redis"
-description: "Default store.kv image — OKE_STORE_KV_PASSWORD, maxmemory policy, ephemeral data, REDIS_URL."
+description: "Opt-in store.kv image — OKE_STORE_KV_PASSWORD, maxmemory policy, ephemeral data, REDIS_URL."
 icon: "Zap"
 source: "docs/spec/unified-theory.md"
 ---
 
-Redis is the default `store.kv` image in `dev` and `prod`. `oke docker` matches image
-references containing `redis` or `keydb` and derives a password-required server — no
-unauthenticated instance.
+Redis is an opt-in `store.kv` image. The default pin is [Dragonfly](/docs/recipes/dragonfly).
+`oke docker` matches image references containing `redis` or `keydb` and derives a
+password-required server — no unauthenticated instance.
 
 <Callout title="The one rule">
   The driver id stays `redis` for every Redis-wire image — Redis, Valkey, Dragonfly, or a managed

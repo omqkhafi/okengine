@@ -1,7 +1,8 @@
 /**
- * Dragonfly image recipe — Redis-wire-compatible, multi-threaded alternative.
+ * Dragonfly image recipe — default `store.kv` pin.
  *
- * Peer of Redis / Valkey via `images["store.kv"]` (driver id stays `redis`).
+ * Redis-wire-compatible and multi-threaded. Peer of Redis / Valkey via
+ * `images["store.kv"]` (driver id stays `redis`).
  * Official image: `docker.dragonflydb.io/dragonflydb/dragonfly`.
  */
 

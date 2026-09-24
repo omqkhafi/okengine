@@ -1,5 +1,5 @@
 /**
- * Redis image recipe — default `store.kv` pin (`redis:*`).
+ * Redis image recipe — opt-in `store.kv` pin (`redis:*`).
  *
  * Valkey and Dragonfly are separate recipes — same `redis` driver /
  * `redis://` URL, different binaries. Pin via `images["store.kv"]`.

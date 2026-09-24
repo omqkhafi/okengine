@@ -385,7 +385,7 @@ async function writeScaffoldCompose(targetDir: string): Promise<string[]> {
 }
 
 /**
- * Minimal committed-style single-file compose with postgres + redis healthchecks.
+ * Minimal committed-style single-file compose with postgres + Dragonfly healthchecks.
  *
  * @param targetDir - Project root
  */
@@ -465,27 +465,28 @@ services:
 
   # store.kv — Redis
   store-kv:
-    image: redis:8-alpine
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0
     ports:
       - "127.0.0.1:6379:6379"
     networks:
       - oke
     env_file:
       - ../.env.local
+    environment:
+      HEALTHCHECK_PORT: "6379"
     command:
       - sh
       - -c
-      - exec redis-server --requirepass "$$OKE_STORE_KV_PASSWORD"
+      - exec dragonfly --requirepass "$$OKE_STORE_KV_PASSWORD" --maxmemory "$${OKE_STORE_KV_MAXMEMORY:-0}"
     healthcheck:
       test:
         - CMD
-        - redis-cli
-        - -a
-        - \${OKE_STORE_KV_PASSWORD}
-        - ping
+        - /usr/local/bin/healthcheck.sh
       interval: 5s
       timeout: 3s
       retries: 10
+    ulimits:
+      memlock: -1
     deploy:
       resources:
         limits:

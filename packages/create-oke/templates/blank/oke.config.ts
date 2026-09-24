@@ -21,7 +21,7 @@ export default defineConfig({
   images: {
     store: {
       sql: "postgres:18-alpine",
-      kv: "redis:8-alpine",
+      kv: "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0",
       files: "rustfs/rustfs:1.0.0",
     },
     channel: {

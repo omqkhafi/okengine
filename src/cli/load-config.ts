@@ -16,7 +16,7 @@ import type { Manifest } from "../manifest/types.ts";
 const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
 const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
 const DEFAULT_PGDOG_IMAGE = "ghcr.io/pgdogdev/pgdog:v0.1.59";
-const DEFAULT_KV_IMAGE = "redis:8-alpine";
+const DEFAULT_KV_IMAGE = "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0";
 
 /**
  * Prefer `dev` then `prod` for a driver map (compose infra ≈ production).
