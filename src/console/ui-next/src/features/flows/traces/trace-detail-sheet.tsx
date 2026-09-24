@@ -304,7 +304,12 @@ export function TraceDetailSheet({
       >
         {run && trigger ? (
           <>
-            <SheetHeader className="gap-1.5 border-b border-border/60 px-2 py-2 pr-12">
+            <SheetHeader
+              className={cn(
+                "gap-1.5 border-b border-border/60 px-2 py-2",
+                nav && nav.index >= 0 && onSelectRun ? "pr-28" : "pr-12",
+              )}
+            >
               <div className="flex items-start gap-2">
                 <span className="mt-0.5 text-muted-foreground" title={trigger.label} aria-hidden>
                   <HugeiconsIcon icon={trigger.icon} className={EXPLORER_ICON_CLASS} />
@@ -354,7 +359,7 @@ export function TraceDetailSheet({
                 </div>
                 {nav && nav.index >= 0 && onSelectRun ? (
                   <div
-                    className="flex shrink-0 items-center self-start"
+                    className="absolute top-3 right-12 flex items-center"
                     data-slot="trace-sheet-nav"
                     role="group"
                     aria-label="Trace navigation"
@@ -365,7 +370,7 @@ export function TraceDetailSheet({
                           <button
                             {...props}
                             type="button"
-                            className="inline-flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
+                            className="inline-flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
                             aria-label="Previous trace"
                             data-slot="trace-sheet-previous"
                             disabled={nav.previousId === null}
@@ -386,7 +391,7 @@ export function TraceDetailSheet({
                           <button
                             {...props}
                             type="button"
-                            className="inline-flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
+                            className="inline-flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
                             aria-label="Next trace"
                             data-slot="trace-sheet-next"
                             disabled={nav.nextId === null}
