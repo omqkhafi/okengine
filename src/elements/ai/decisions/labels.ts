@@ -1,57 +1,55 @@
 /**
- * Persisted decision labels and the app-level drift flag.
- * One SQLite table at the app root, shared by every instance.
+ * Decision labels and the app drift flag on the journal driver.
+ * Boot opens the store only when the app declares decisions.
  */
 
-import { Database } from "bun:sqlite";
-import { binomialCdf, decisionLabels, type DecisionLabel } from "./certificate.ts";
+import type { JournalStore } from "../../../kernel/journal.ts";
+import type { DecisionLabelStore } from "../../../kernel/decision-label-store.ts";
+import {
+  binomialCdf,
+  decisionLabels,
+  getDecisionLock,
+  type DecisionLabel,
+} from "./certificate.ts";
 
-/** System table for review and audit labels. */
-export const DECISION_LABEL_TABLE = "oke_decision_labels";
+/** Rolling window for audit drift. Labels older than this are ignored. */
+export const DECISION_DRIFT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** One-row table for the app drift flag. */
-export const DECISION_DRIFT_TABLE = "oke_decision_drift";
-
-let db: Database | undefined;
+let store: DecisionLabelStore | undefined;
+const mirror: DecisionLabel[] = [];
+let writes: Promise<void> = Promise.resolve();
 
 /**
- * Open the label store at an app root and load the drift flag.
+ * Bind the journal's decision store and load the drift flag.
  *
- * @param root - Directory that holds the app config
+ * @param journal - Journal that owns the label table
  * @param setDrift - Install the loaded flag
  */
-export function openDecisionLabelStore(root: string, setDrift: (suspended: boolean) => void): void {
-  db?.close();
-  db = new Database(`${root}/oke-decisions.labels.sqlite`, { create: true });
-  db.run(`create table if not exists ${DECISION_LABEL_TABLE} (
-    decision_id text not null,
-    question text not null,
-    value text not null,
-    propensity real not null,
-    reviewer text not null,
-    locale text,
-    model text,
-    tenant text,
-    score real,
-    loss integer,
-    at integer not null
-  )`);
-  db.run(`create table if not exists ${DECISION_DRIFT_TABLE} (
-    id integer primary key,
-    suspended integer not null
-  )`);
-  const row = db.query(`select suspended from ${DECISION_DRIFT_TABLE} where id = 1`).get() as
-    | { suspended: number }
-    | null;
-  setDrift(row?.suspended === 1);
+export async function openDecisionLabelStore(
+  journal: JournalStore,
+  setDrift: (suspended: boolean) => void,
+): Promise<void> {
+  await writes;
+  store = journal.decisions;
+  mirror.length = 0;
+  if (!store) return;
+  mirror.push(...(await store.list()));
+  setDrift(await store.drift());
 }
 
 /**
- * Close the label store. Tests use this.
+ * Wait until label and drift writes have reached the journal driver.
+ */
+export function flushDecisionLabels(): Promise<void> {
+  return writes;
+}
+
+/**
+ * Drop the bound store. Tests use this.
  */
 export function closeDecisionLabelStore(): void {
-  db?.close();
-  db = undefined;
+  store = undefined;
+  mirror.length = 0;
 }
 
 /**
@@ -61,95 +59,58 @@ export function closeDecisionLabelStore(): void {
  * @param at - Epoch ms
  */
 export function persistDecisionLabel(label: DecisionLabel, at = Date.now()): void {
-  if (!db) return;
-  db.run(
-    `insert into ${DECISION_LABEL_TABLE}
-      (decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      label.decision,
-      label.question,
-      JSON.stringify(label.value),
-      label.propensity,
-      label.reviewer,
-      label.locale ?? null,
-      label.model ?? null,
-      label.tenant ?? null,
-      label.score ?? null,
-      label.loss ?? null,
-      at,
-    ],
-  );
+  const row = { ...label, at };
+  mirror.push(row);
+  if (!store) return;
+  const target = store;
+  writes = writes.then(() => target.insert(row, at));
 }
 
 /**
  * Labels for one decision. Omit `tenant` to read every tenant.
+ * Reads the journal mirror when one is open, otherwise in-memory review labels.
  *
  * @param decision - Decision name
  * @param tenant - Tenant filter
  */
 export function loadDecisionLabels(decision?: string, tenant?: string | null): DecisionLabel[] {
-  if (!db) {
-    return decisionLabels().filter((label) => {
-      if (decision !== undefined && label.decision !== decision) return false;
-      if (tenant !== undefined && (label.tenant ?? null) !== tenant) return false;
-      return true;
-    });
-  }
-  const clauses: string[] = [];
-  const args: (string | null)[] = [];
-  if (decision !== undefined) {
-    clauses.push("decision_id = ?");
-    args.push(decision);
-  }
-  if (tenant !== undefined) {
-    clauses.push("tenant is ?");
-    args.push(tenant);
-  }
-  const where = clauses.length > 0 ? `where ${clauses.join(" and ")}` : "";
-  const rows = db
-    .query(
-      `select decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss
-       from ${DECISION_LABEL_TABLE} ${where}`,
-    )
-    .all(...args) as {
-    decision_id: string;
-    question: string;
-    value: string;
-    propensity: number;
-    reviewer: string;
-    locale: string | null;
-    model: string | null;
-    tenant: string | null;
-    score: number | null;
-    loss: number | null;
-  }[];
-  return rows.map((row) => ({
-    decision: row.decision_id,
-    question: row.question,
-    value: JSON.parse(row.value) as unknown,
-    propensity: row.propensity,
-    reviewer: row.reviewer,
-    ...(row.locale !== null ? { locale: row.locale } : {}),
-    ...(row.model !== null ? { model: row.model } : {}),
-    ...(row.tenant !== null ? { tenant: row.tenant } : {}),
-    ...(row.score !== null ? { score: row.score } : {}),
-    ...(row.loss !== null ? { loss: row.loss } : {}),
-  }));
+  const source = store ? mirror : decisionLabels();
+  return source.filter((label) => {
+    if (decision !== undefined && label.decision !== decision) return false;
+    if (tenant !== undefined && (label.tenant ?? null) !== tenant) return false;
+    return true;
+  });
 }
 
 /**
- * Compare persisted audit labels to the certified error cap.
- * Audit rows are the ones whose propensity is the audit rate, below 1.
+ * Compare audit labels for the pinned model to the certified error cap.
+ * Only labels since the certificate, inside the rolling window, count.
+ * One-sided exact binomial. A single correct label does not suspend.
  *
- * @param maxError - Certified risk
- * @param delta - Test level
+ * @param options - Cap, pinned model, and certificate time
  */
-export function auditDriftExceeded(maxError: number, delta = 0.1): boolean {
-  const audits = loadDecisionLabels().filter((label) => label.propensity < 1 && label.loss !== undefined);
+export function auditDriftExceeded(options: {
+  readonly maxError: number;
+  readonly delta?: number;
+  readonly model: string;
+  readonly since: number;
+  readonly now?: number;
+  readonly windowMs?: number;
+  readonly labels: readonly DecisionLabel[];
+}): boolean {
+  const delta = options.delta ?? 0.1;
+  const now = options.now ?? Date.now();
+  const windowMs = options.windowMs ?? DECISION_DRIFT_WINDOW_MS;
+  const floor = Math.max(options.since, now - windowMs);
+  const audits = options.labels.filter((label) => {
+    if (!(label.propensity < 1) || label.loss === undefined) return false;
+    if (label.model !== options.model) return false;
+    const at = label.at ?? 0;
+    return at >= floor;
+  });
   if (audits.length === 0) return false;
   const errors = audits.filter((label) => (label.loss ?? 0) > 0).length;
-  const tail = 1 - binomialCdf(errors - 1, audits.length, maxError);
+  const tail = 1 - binomialCdf(errors - 1, audits.length, options.maxError);
   return tail <= delta;
 }
 
@@ -159,10 +120,18 @@ export function auditDriftExceeded(maxError: number, delta = 0.1): boolean {
  * @param suspended - Drift detected
  */
 export function persistDecisionDrift(suspended: boolean): void {
-  if (!db) return;
-  db.run(
-    `insert into ${DECISION_DRIFT_TABLE} (id, suspended) values (1, ?)
-     on conflict(id) do update set suspended = excluded.suspended`,
-    [suspended ? 1 : 0],
-  );
+  if (!store) return;
+  const target = store;
+  writes = writes.then(() => target.setDrift(suspended));
+}
+
+/**
+ * Pinned model and certificate time for one decision, when a lock exists.
+ *
+ * @param name - Decision name
+ */
+export function pinnedDecision(name: string): { readonly model: string; readonly since: number } | undefined {
+  const entry = getDecisionLock()?.decisions[name];
+  if (!entry) return undefined;
+  return { model: entry.model, since: entry.certifiedAt ?? 0 };
 }

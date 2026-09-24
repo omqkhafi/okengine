@@ -48,6 +48,8 @@ export async function promoteDecision(options: PromoteDecisionOptions): Promise<
     if (await file.exists()) current = parseDecisionLockfile(await file.json());
   }
   const next = lockFromCandidate(options.name, candidate, current);
+  const { persistDecisionDrift } = await import("../elements/ai/decisions/labels.ts");
+  persistDecisionDrift(false);
   await Bun.write(path, `${JSON.stringify(next, null, 2)}\n`);
   return next;
 }

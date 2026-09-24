@@ -67,14 +67,20 @@ function noteSuccess(key: string): void {
 
 const REQUEST_STATUSES = new Set([400, 401, 402, 403, 404, 422]);
 
-function retryAfterMs(res: Response, now = Date.now()): number {
+/** Waits longer than this take the outage path. */
+const RETRY_CAP_MS = 60_000;
+
+function retryAfterMs(res: Response, now = Date.now()): number | "outage" {
   const header = res.headers.get("retry-after");
   if (!header) return 250;
   const seconds = Number(header);
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
-  const when = Date.parse(header);
-  if (Number.isFinite(when)) return Math.max(0, when - now);
-  return 250;
+  const ms = Number.isFinite(seconds) && seconds >= 0
+    ? seconds * 1000
+    : Number.isFinite(Date.parse(header))
+      ? Math.max(0, Date.parse(header) - now)
+      : 250;
+  if (ms > RETRY_CAP_MS) return "outage";
+  return ms;
 }
 
 function abortError(signal: AbortSignal): Error {
@@ -184,8 +190,10 @@ export async function decisionHttp(options: DecisionHttpOptions): Promise<Decisi
       }
       if (res.status === 429) {
         lastError = new Error(`decision HTTP ${res.status}`);
+        const wait = retryAfterMs(res);
+        if (wait === "outage") throw new DecisionOutageError(`decision HTTP ${res.status}`);
         if (attempt < attempts) {
-          await waitForRetry(retryAfterMs(res), parent);
+          await waitForRetry(wait, parent);
           continue;
         }
         throw new DecisionOutageError(`decision HTTP ${res.status}`);
@@ -193,8 +201,10 @@ export async function decisionHttp(options: DecisionHttpOptions): Promise<Decisi
       if (res.status === 529 || res.status >= 500) {
         noteFailure(options.breakerKey, Date.now());
         lastError = new Error(`decision HTTP ${res.status}`);
+        const wait = retryAfterMs(res);
+        if (wait === "outage") throw new DecisionOutageError(`decision HTTP ${res.status}`);
         if (res.status === 529 && attempt < attempts) {
-          await waitForRetry(retryAfterMs(res), parent);
+          await waitForRetry(wait, parent);
           continue;
         }
         throw new DecisionOutageError(`decision HTTP ${res.status}`);

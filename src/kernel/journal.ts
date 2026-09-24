@@ -10,6 +10,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { okid } from "../okid.ts";
+import type { DecisionLabelStore } from "./decision-label-store.ts";
 import type { IdempotencyStore } from "./idempotency-store.ts";
 import { JournalSuspend } from "./journal-suspend.ts";
 import { lazyRequire } from "./lazy-require.ts";
@@ -161,6 +162,13 @@ function loadIdempotencyStore(): typeof import("./idempotency-store.ts") {
   return lazyRequire(import.meta.dir, ["idempotency", "store"].join("-"));
 }
 
+/**
+ * Load the decision-label table without a static import.
+ */
+function loadDecisionLabelStore(): typeof import("./decision-label-store.ts") {
+  return lazyRequire(import.meta.dir, ["decision", "label", "store"].join("-"));
+}
+
 /** Persistence backend for journal runs. */
 export interface JournalStore extends Partial<JournalLeaseStore> {
   /**
@@ -168,6 +176,11 @@ export interface JournalStore extends Partial<JournalLeaseStore> {
    * only implements run `get` / `put`.
    */
   readonly idempotency?: IdempotencyStore;
+  /**
+   * Decision labels and the drift flag on this same driver. Opened only when
+   * the app declares decisions.
+   */
+  readonly decisions?: DecisionLabelStore;
   /**
    * Load a run by id.
    *
@@ -306,6 +319,11 @@ export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalS
       Object.defineProperty(this, "idempotency", { value: created });
       return created;
     },
+    get decisions(): DecisionLabelStore {
+      const created = loadDecisionLabelStore().createMemoryDecisionLabelStore();
+      Object.defineProperty(this, "decisions", { value: created });
+      return created;
+    },
   };
 }
 
@@ -357,6 +375,13 @@ export function createFileJournalStore(path: string): JournalStore {
         `${dirname(path)}/idempotency.json`,
       );
       Object.defineProperty(this, "idempotency", { value: created });
+      return created;
+    },
+    get decisions(): DecisionLabelStore {
+      const created = loadDecisionLabelStore().createFileDecisionLabelStore(
+        `${dirname(path)}/decision-labels.json`,
+      );
+      Object.defineProperty(this, "decisions", { value: created });
       return created;
     },
   };

@@ -118,6 +118,8 @@ export interface AiDecisionAutonomy {
   readonly maxError: number;
   /** Audit sample rate in `[0, 1]`. Required whenever autonomy is set. */
   readonly audit: number;
+  /** Learn-then-Test family-wise level. Default `0.1`. */
+  readonly risk?: number;
 }
 
 /** Options for {@link ai.decision}. Exactly one of `review` and `onUncertain` is required. */
@@ -603,7 +605,8 @@ export function buildDecisionDecl(name: string, options: AiDecisionOptions): AiD
     }
   }
   const review = typeof options.review === "string" ? options.review : options.review?.name;
-  const model = typeof options.model === "string" ? options.model : options.model?.name;
+  const model =
+    typeof options.model === "string" ? options.model : (options.model?.model ?? options.model?.name);
   return {
     kind: "decision",
     name,

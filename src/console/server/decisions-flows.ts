@@ -67,7 +67,7 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
     plane: "operator",
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
-      return { rows: await loadDecisionQueue(state.journalStore, Date.now(), fx.tenant.id) };
+      return { rows: await loadDecisionQueue(state.journalStore, Date.now()) };
     },
   });
   const resolve = flow("console.decisions.resolve", {
@@ -83,7 +83,17 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
       const result = await resolveDecisionReview(
         store,
         input.id,
-        { values: input.values, reviewer, tenantId: fx.tenant.id },
+        {
+          values: input.values,
+          reviewer,
+          tenantId: fx.tenant.id,
+          plane: "operator",
+          auth: {
+            userId: fx.auth.userId,
+            scopes: fx.auth.scopes,
+            verified: fx.auth.verified,
+          },
+        },
         Date.now,
         input.labelOnly === true,
       );
@@ -96,6 +106,7 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
           issues: [{ message: "review values do not match the open questions", path: ["values"] }],
         });
       }
+      if (result.status === 503) return fx.fail.serviceUnavailable();
       if (result.status === 403) return fx.fail.forbidden();
       if (result.status === 409) return fx.fail.conflict();
       return fx.fail.notFound();

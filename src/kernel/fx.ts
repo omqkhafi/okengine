@@ -2022,7 +2022,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         runId: options.runId,
         tenantId: tenant.id,
         getSecret: async (secretName) => {
-          const value = await gated("secret", secretName, async () => secrets[secretName]);
+          const value = await gatedSecret(secretName, async () => secrets[secretName]);
           return typeof value === "string" && value.length > 0 ? value : undefined;
         },
         decision,

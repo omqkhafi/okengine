@@ -3,6 +3,7 @@
  */
 
 import { aiDecisionRegistry, gateRegistry } from "./element-registries.ts";
+import type { GatePolicyContext } from "../elements/gate/declare.ts";
 import type { AiDecisionDecl, AiDecisionQuestion } from "../elements/ai/declare.ts";
 import {
   DecisionConfigError,
@@ -38,6 +39,24 @@ import {
   type JournalStore,
 } from "./journal.ts";
 import { leaseRetryAfterSeconds } from "../elements/ai/approval.ts";
+
+/** Retry-After above this is an outage, not a wait. */
+export const DECISION_RETRY_CAP_SECONDS = 60;
+
+let decisionAllow:
+  | ((names: readonly string[], ctx: GatePolicyContext) => Promise<boolean>)
+  | undefined;
+
+/**
+ * Install the booted gate runtime. Resolve uses the same `allow` path as approvals.
+ *
+ * @param allow - `gates.allow`, or undefined in tests that build a runtime from the registry
+ */
+export function setDecisionGateAllow(
+  allow: ((names: readonly string[], ctx: GatePolicyContext) => Promise<boolean>) | undefined,
+): void {
+  decisionAllow = allow;
+}
 
 /** Capability gate used by {@link runFxDecide}. */
 export type DecideGated = (
@@ -82,6 +101,7 @@ export interface DecisionReviewRecord {
   readonly open?: readonly string[];
   readonly model?: string;
   readonly scores?: Readonly<Record<string, number>>;
+  readonly raws?: Readonly<Record<string, unknown>>;
   readonly modelValues?: Readonly<Record<string, unknown>>;
 }
 
@@ -91,6 +111,7 @@ export type DecisionReviewResult =
   | { readonly ok: false; readonly status: 404 }
   | { readonly ok: false; readonly status: 403 }
   | { readonly ok: false; readonly status: 422 }
+  | { readonly ok: false; readonly status: 503; readonly reason: "outage" }
   | { readonly ok: false; readonly status: 409; readonly reason: "resolved" }
   | {
       readonly ok: false;
@@ -345,7 +366,7 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
       reason = locale ? "uncertified-locale" : "missing-lock";
     } else if (slice && questionHash(question) !== slice.hash) {
       questionAuto = false;
-      reason = "stale-hash";
+      reason = reason ?? "stale-hash";
     } else if (slice && calibrated.p < slice.threshold) {
       questionAuto = false;
       reason = reason ?? "low-confidence";
@@ -498,6 +519,7 @@ function pendingRecord(
       .map(([id]) => id),
     ...(view.meta.model !== undefined ? { model: view.meta.model } : {}),
     scores: Object.fromEntries(Object.entries(view.questions).map(([id, question]) => [id, question.p])),
+    raws: Object.fromEntries(Object.entries(view.questions).map(([id, question]) => [id, question.raw])),
     modelValues: Object.fromEntries(
       Object.entries(view.questions).map(([id, question]) => [id, question.value]),
     ),
@@ -565,6 +587,10 @@ export async function resolveDecisionReview(
     readonly values: Readonly<Record<string, unknown>>;
     readonly reviewer: string;
     readonly tenantId?: string | null;
+    /** Operator plane resolves every tenant. The row keeps its tenant stamp. */
+    readonly plane?: "user" | "operator";
+    /** Resolver auth. The review gate sees this, not an empty principal. */
+    readonly auth?: GatePolicyContext["auth"];
   },
   now: () => number = Date.now,
   labelOnly = false,
@@ -573,18 +599,22 @@ export async function resolveDecisionReview(
   if (!parsed || typeof store.acquireLease !== "function") return { ok: false, status: 404 };
   const decl = aiDecisionRegistry.find((item) => item.name === parsed.name);
   if (!decl) return { ok: false, status: 404 };
-  if (!(await reviewGateAllows(decl.review, input.reviewer))) return { ok: false, status: 403 };
+  if (!(await reviewGateAllows(decl.review, input))) return { ok: false, status: 403 };
   const name = decisionStepName(id, labelOnly);
   const token = crypto.randomUUID();
   const at = now();
   const claimed = await store.acquireLease(parsed.runId, token, at, JOURNAL_DEFAULT_LEASE_MS);
   if (!claimed) {
     const held = await store.get(parsed.runId);
+    const retryAfterSeconds = leaseRetryAfterSeconds(held?.leaseExpiresAt, at);
+    if (retryAfterSeconds > DECISION_RETRY_CAP_SECONDS) {
+      return { ok: false, status: 503, reason: "outage" };
+    }
     return {
       ok: false,
       status: 409,
       reason: "lease",
-      retryAfterSeconds: leaseRetryAfterSeconds(held?.leaseExpiresAt, at),
+      retryAfterSeconds,
     };
   }
   try {
@@ -594,7 +624,9 @@ export async function resolveDecisionReview(
     if (!entry || entry.kind !== "step") return { ok: false, status: 404 };
     const current = entry.value as DecisionReviewRecord;
     if (current.status !== "pending") return { ok: false, status: 409, reason: "resolved" };
-    if ((input.tenantId ?? null) !== current.tenant) return { ok: false, status: 403 };
+    if (input.plane !== "operator" && (input.tenantId ?? null) !== current.tenant) {
+      return { ok: false, status: 403 };
+    }
     if (!valuesMatchQuestions(decl, current, input.values)) return { ok: false, status: 422 };
     const next: DecisionReviewRecord = {
       ...current,
@@ -620,7 +652,9 @@ export async function resolveDecisionReview(
         ...(current.tenant !== null ? { tenant: current.tenant } : {}),
         ...(current.model !== undefined ? { model: current.model } : {}),
         ...(current.scores?.[question] !== undefined ? { score: current.scores[question] } : {}),
+        ...(current.raws?.[question] !== undefined ? { raw: current.raws[question] } : {}),
         loss: current.modelValues?.[question] === value ? 0 : 1,
+        at,
       };
       recordDecisionLabel(label);
       persistDecisionLabel(label, at);
@@ -631,14 +665,23 @@ export async function resolveDecisionReview(
   }
 }
 
-async function reviewGateAllows(gateName: string | undefined, reviewer: string): Promise<boolean> {
+async function reviewGateAllows(
+  gateName: string | undefined,
+  input: {
+    readonly reviewer: string;
+    readonly auth?: GatePolicyContext["auth"];
+    readonly tenantId?: string | null;
+  },
+): Promise<boolean> {
   if (!gateName) return true;
-  const gate = gateRegistry.find((item) => item.name === gateName);
-  if (!gate || gate.kind !== "policy") return false;
-  return gate.check({
-    auth: { userId: null, scopes: new Set() },
-    operator: { id: reviewer },
-  });
+  const ctx: GatePolicyContext = {
+    auth: input.auth ?? { userId: null, scopes: new Set<string>() },
+    operator: { id: input.reviewer },
+    ...(input.tenantId ? { meta: { tenant: input.tenantId } } : {}),
+  };
+  if (decisionAllow) return decisionAllow([gateName], ctx);
+  const { createGateRuntime } = await import("../elements/gate/runtime.ts");
+  return createGateRuntime({ gates: gateRegistry }).allow([gateName], ctx);
 }
 
 function valuesMatchQuestions(
@@ -646,7 +689,7 @@ function valuesMatchQuestions(
   current: DecisionReviewRecord,
   values: Readonly<Record<string, unknown>>,
 ): boolean {
-  const open = current.open ?? Object.keys(decl.ask);
+  const open = current.labelOnly ? Object.keys(decl.ask) : (current.open ?? Object.keys(decl.ask));
   const keys = Object.keys(values);
   if (keys.length !== open.length) return false;
   for (const key of keys) {

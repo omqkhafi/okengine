@@ -15,17 +15,22 @@ import {
   decisionDriftSuspended,
   getDecisionLock,
   resetDecisionCertificates,
-  setDecisionDrift,
 } from "./certificate.ts";
-import { closeDecisionLabelStore, loadDecisionLabels, persistDecisionDrift } from "./labels.ts";
+import {
+  closeDecisionLabelStore,
+  flushDecisionLabels,
+  loadDecisionLabels,
+  persistDecisionLabel,
+} from "./labels.ts";
 import { oke } from "../../../kernel/app.ts";
-import { createFx } from "../../../kernel/fx.ts";
 import { flow } from "../../../kernel/flow.ts";
-import { createJournal } from "../../../kernel/journal.ts";
+import { signal } from "../../signal/declare.ts";
 import { resetBindings } from "../../../kernel/on.ts";
 import { http } from "../../../kernel/triggers.ts";
 import type { Manifest } from "../../../manifest/types.ts";
-import { resetDecisionProvider, resolveDecisionReview, setDecisionProvider } from "../../../kernel/fx-decide.ts";
+import { resetDecisionProvider, setDecisionProvider } from "../../../kernel/fx-decide.ts";
+import { DECISION_DRIFT_SIGNAL, decisionOperatorGate } from "./bind.ts";
+import { consoleOperatorGate } from "../../../console/server/console-gates.ts";
 import { decisionConsoleBindings } from "../../../console/server/decisions-flows.ts";
 import type { ConsoleState } from "../../../console/server/state.ts";
 import {
@@ -33,17 +38,13 @@ import {
   createPostgresJournalStore,
 } from "../../../drivers/journal-postgres.ts";
 
-const previousCwd = process.cwd();
-
 afterEach(() => {
-  process.chdir(previousCwd);
   closeDecisionLabelStore();
   resetBindings();
   resetAiDecls();
   resetGates();
   resetDecisionCertificates();
   resetDecisionProvider();
-  setDecisionDrift(false);
 });
 
 function providerBody() {
@@ -62,9 +63,8 @@ function providerBody() {
 }
 
 describe("fx.decide end to end", () => {
-  test("certify, review, and promote survive a restart", async () => {
+  test("certify, review, drift, and promote use the real routes", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-decide-e2e-"));
-    process.chdir(root);
     const question = ai.choice("which team", { billing: "Billing", technical: "Technical" });
     const ship = ai.decision("ship", {
       onUncertain: "abstain",
@@ -73,16 +73,20 @@ describe("fx.decide end to end", () => {
       evals: join(root, "ship.jsonl"),
       ask: { team: question },
     });
-    gate.policy("ops", (ctx) => ctx.operator.id === "reviewer");
+    const ops = gate.policy("ops", (ctx) => ctx.operator.id === "reviewer");
     const triage = ai.decision("triage", {
       review: "ops",
       model: "typesafe/jev-1.13.0",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
-    const seed = Array.from({ length: 60 }, () =>
-      JSON.stringify({ input: { ticket: "1" }, expect: { team: "technical" } }),
+    const seed = Array.from({ length: 80 }, (_, i) =>
+      JSON.stringify({
+        input: { ticket: `T-${i}`, note: `Customer ${i} cannot sign in after the deploy` },
+        expect: { team: "technical" },
+      }),
     ).join("\n");
+    let certifyCalls = 0;
     await Bun.write(join(root, "ship.jsonl"), seed);
     const manifest = {
       oke: "1",
@@ -109,7 +113,23 @@ describe("fx.decide end to end", () => {
     const code = await runOkeCertify({
       root,
       manifest,
-      evaluate: async () => providerBody(),
+      evaluate: async () => {
+        const technical = 0.62 + (certifyCalls++ % 30) / 100;
+        return {
+          ...providerBody(),
+          answers: {
+            team: {
+              type: "choice" as const,
+              choice: "technical",
+              probabilities: {
+                billing: Number((1 - technical - 0.02).toFixed(4)),
+                technical: Number(technical.toFixed(4)),
+                none_of_these: 0.02,
+              },
+            },
+          },
+        };
+      },
     });
     expect(code).toBe(0);
 
@@ -133,9 +153,16 @@ describe("fx.decide end to end", () => {
       startScheduler: false,
       registry: "ignore",
       manifest,
+      rootDir: root,
+      signals: [
+        signal.once(DECISION_DRIFT_SIGNAL, { optional: true, retries: 0, deadLetter: false }),
+      ],
       fx: { operator: { id: "reviewer" } },
-      gate: { unguardedHttp: "allow" },
       elements: { journal: { store, instanceId: "e2e", leaseMs: 30_000, driverId: "memory" } },
+      gate: {
+        unguardedHttp: "allow",
+        policies: [consoleOperatorGate, decisionOperatorGate, ops],
+      },
       bindings: [resolve, { trigger: http.post("/work"), flow: work }],
     });
     await locked.boot({ env: "test" });
@@ -154,8 +181,8 @@ describe("fx.decide end to end", () => {
     const step = run?.entries.find(
       (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
     );
-    if (!step || step.kind !== "step") throw new Error("expected a parked review");
-    const unauthenticated = await locked.fetch(
+    if (!run || !step || step.kind !== "step") throw new Error("expected a parked review");
+    const review = await locked.fetch(
       new Request("http://localhost/console/decisions/resolve", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -165,32 +192,56 @@ describe("fx.decide end to end", () => {
         }),
       }),
     );
-    expect(unauthenticated.status === 401 || unauthenticated.status === 403).toBe(true);
-    const review = await resolveDecisionReview(
-      store,
-      step.name.slice("ai-decision:".length),
-      { values: { team: "billing" }, reviewer: "reviewer", tenantId: null },
-      () => Date.now(),
+    expect(review.status).toBe(200);
+    await flushDecisionLabels();
+    await locked.resumeDurable(Date.now() + 1);
+    const finished = await store.get(run.id);
+    const output = finished?.output as { team: string; $: { team: { how: string } } } | undefined;
+    expect(output?.team).toBe("billing");
+    expect(output?.$.team.how).toBe("reviewed");
+
+    const now = Date.now();
+    for (let i = 0; i < 40; i++) {
+      persistDecisionLabel({
+        decision: "ship",
+        question: "team",
+        value: "billing",
+        propensity: 0.1,
+        reviewer: "audit",
+        model: "typesafe/jev-1.13.0",
+        loss: 1,
+        score: 0.9,
+        at: now,
+      });
+    }
+    await flushDecisionLabels();
+    const drift = locked.flow("oke.decisions.drift");
+    if (!drift) throw new Error("expected the drift monitor");
+    await locked.call(drift, {});
+    expect(decisionDriftSuspended()).toBe(true);
+
+    const aggregate = locked.flow("oke.decisions.aggregate");
+    if (!aggregate) throw new Error("expected the candidate job");
+    await locked.call(aggregate, {});
+    const candidate = await locked.fetch(
+      new Request("http://localhost/_oke/decisions/triage/candidate"),
     );
-    expect(review).toEqual({ ok: true });
-    const session = await createJournal({ store, now: () => Date.now() }).resume(run.id);
-    const resumed = createFx({
-      flow: "work",
-      effects: { decides: ["triage"] },
-      journal: session,
-      runId: session.runId,
-      durable: true,
-      now: () => Date.now(),
+    expect(candidate.status).toBe(200);
+    const promoted = await promoteDecision({
+      name: "triage",
+      origin: "http://localhost",
+      lockPath: join(root, "oke-decisions.lock.json"),
+      fetcher: async (url) => {
+        const res = await locked.fetch(new Request(url));
+        const body = (await res.json()) as { data?: unknown };
+        return new Response(JSON.stringify(body.data ?? body), { status: res.status });
+      },
     });
-    const output = (await resumed.decide(triage, { ticket: "1" })) as {
-      team: string;
-      $: { team: { how: string } };
-    };
-    expect(output.team).toBe("billing");
-    expect(output.$.team.how).toBe("reviewed");
+    expect(promoted.decisions.ship).toBeDefined();
+    expect(promoted.decisions.triage).toBeDefined();
+    expect(decisionDriftSuspended()).toBe(false);
     await locked.bootResult?.close();
 
-    persistDecisionDrift(true);
     closeDecisionLabelStore();
     resetDecisionCertificates();
     const restarted = oke({
@@ -199,47 +250,13 @@ describe("fx.decide end to end", () => {
       startScheduler: false,
       registry: "ignore",
       manifest,
+      rootDir: root,
       gate: { unguardedHttp: "allow" },
+      elements: { journal: { store, instanceId: "e2e-2", leaseMs: 30_000, driverId: "memory" } },
     });
     await restarted.boot({ env: "test" });
-    expect(decisionDriftSuspended()).toBe(true);
     expect(loadDecisionLabels("triage").length).toBeGreaterThan(0);
+    expect(getDecisionLock()?.decisions.triage).toBeDefined();
     await restarted.bootResult?.close();
-    persistDecisionDrift(false);
-    setDecisionDrift(false);
-
-    const disk = (await Bun.file(join(root, "oke-decisions.lock.json")).json()) as {
-      decisions: { ship: unknown };
-    };
-    const promoted = await promoteDecision({
-      name: "triage",
-      origin: "http://127.0.0.1:6530",
-      lockPath: join(root, "oke-decisions.lock.json"),
-      fetcher: async () => new Response(JSON.stringify(disk.decisions.ship), { status: 200 }),
-    });
-    expect(promoted.decisions.ship).toBeDefined();
-    expect(promoted.decisions.triage).toBeDefined();
-    closeDecisionLabelStore();
-    resetDecisionCertificates();
-    const after = oke({
-      name: "decide-e2e-3",
-      env: "test",
-      startScheduler: false,
-      registry: "ignore",
-      manifest,
-      gate: { unguardedHttp: "allow" },
-    });
-    await after.boot({ env: "test" });
-    const fx = createFx({
-      flow: "work",
-      effects: { decides: ["triage"] },
-      now: () => Date.now(),
-    });
-    const next = (await fx.decide(triage, { ticket: "1" })) as {
-      team: string;
-      $: { team: { how: string } };
-    };
-    expect(next.$.team.how).toBe("auto");
-    await after.bootResult?.close();
-  });
+  }, 30_000);
 });

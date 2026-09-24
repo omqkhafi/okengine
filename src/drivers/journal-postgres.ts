@@ -21,6 +21,10 @@ import {
   IDEM_SELECT_SQL,
 } from "../kernel/idempotency-store.ts";
 import {
+  createPostgresDecisionLabelStore,
+  type DecisionLabelStore,
+} from "../kernel/decision-label-store.ts";
+import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
   type JournalLeaseStore,
@@ -606,6 +610,25 @@ export type PostgresJournalStore = JournalStore &
   };
 
 /**
+ * Open decision tables on first use so a journal without decisions stays empty.
+ *
+ * @param sql - Journal SQL client
+ */
+function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
+  let pending: Promise<DecisionLabelStore> | undefined;
+  const ready = (): Promise<DecisionLabelStore> => {
+    pending ??= createPostgresDecisionLabelStore(sql);
+    return pending;
+  };
+  return {
+    insert: (label, at) => ready().then((store) => store.insert(label, at)),
+    list: (decision, tenant) => ready().then((store) => store.list(decision, tenant)),
+    drift: () => ready().then((store) => store.drift()),
+    setDrift: (suspended) => ready().then((store) => store.setDrift(suspended)),
+  };
+}
+
+/**
  * Open a postgres-backed JournalStore (multi-host durable-run coordination).
  *
  * @param options - URL / injected sql / Bun.SQL client
@@ -625,6 +648,7 @@ export async function createPostgresJournalStore(
   const store: PostgresJournalStore = {
     sql,
     idempotency: createPostgresIdempotencyStore(sql),
+    decisions: lazyDecisionLabels(sql),
     async get(runId) {
       const rows = await sql.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [runId]);
       if (!rows[0]) return undefined;

@@ -8,6 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ai, resetAiDecls } from "../../ai.ts";
 import {
+  binomialCdf,
+  calibrateBoolean,
   decisionDriftSuspended,
   learnThenTest,
   loadDecisionLockfile,
@@ -81,13 +83,36 @@ async function run(
 }
 
 describe("decision certificates", () => {
-  test("Learn-then-Test keeps the safe threshold", () => {
+  test("Learn-then-Test keeps the loosest passing threshold on a fixed grid", () => {
     const rows = [
       ...Array.from({ length: 50 }, () => ({ score: 0.9, loss: 0 })),
       ...Array.from({ length: 10 }, () => ({ score: 0.2, loss: 1 })),
     ];
-    expect(learnThenTest(rows, 0.05)).toBe(0.9);
-    expect(learnThenTest([{ score: 0.99, loss: 1 }], 0.05)).toBeNull();
+    expect(learnThenTest(rows, 0.05)).toBe(0.5);
+    const correct = Array.from({ length: 500 }, (_, i) => ({
+      score: 0.5 + (i % 50) / 100,
+      loss: 0,
+    }));
+    expect(learnThenTest(correct, 0.05)).toBe(0.5);
+    const bad = Array.from({ length: 1000 }, (_, i) => ({
+      score: 0.99,
+      loss: i < 75 ? 1 : 0,
+    }));
+    expect(learnThenTest(bad, 0.05)).toBeNull();
+  });
+
+  test("binomial cdf is zero below zero and stable at n = 20000", () => {
+    expect(binomialCdf(-1, 10, 0.5)).toBe(0);
+    expect(Number.isFinite(binomialCdf(0, 20000, 0.5))).toBe(true);
+    expect(binomialCdf(20000, 20000, 0.5)).toBe(1);
+    expect(binomialCdf(10000, 20000, 0.5)).toBeGreaterThan(0.4);
+    expect(binomialCdf(10000, 20000, 0.5)).toBeLessThan(0.6);
+  });
+
+  test("beta calibration with a = b = 1 and c = 0 is the identity", () => {
+    const calibrator = { kind: "beta" as const, a: 1, b: 1, c: 0 };
+    expect(calibrateBoolean(0.2, calibrator)).toBeCloseTo(0.2, 6);
+    expect(calibrateBoolean(0.8, calibrator)).toBeCloseTo(0.8, 6);
   });
 
   test("missing lock, stale hash, version mismatch, locale, and drift abstain", async () => {

@@ -533,7 +533,7 @@ export interface AiDecision {
   driverId?: "openrouter" | "typesafe";
   questions: string[];
   evals?: string;
-  autonomy?: { maxError: number; audit: number };
+  autonomy?: { maxError: number; audit: number; risk?: number };
 }
 
 /** Per-table metadata on a Manifest {@link Plugin}. */

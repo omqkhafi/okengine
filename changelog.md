@@ -26,6 +26,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `durable: true`. The run parks until `fx.agent.approve`, `fx.agent.deny`, or the
   timeout (default `24h`, then deny). The first resolution wins; a later one is
   HTTP 409. Approve can replace the tool args. Resume replays the tool output.
+- `ai.decision` is experimental in 0.23. Autonomy is statistically certified only after
+  a real-data pilot. A seed file does not grant that certification.
 - `ai.decision` and `fx.decide` run one provider request for every question.
   `how` is `auto`, `reviewed`, or `abstained`. `audited` is a flag on an auto
   value, not a `how`. Review and `onUncertain: "abstain"` are exclusive. A
@@ -36,10 +38,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Agent events document the AG-UI stream: `fx.json.stream(fx.run(..., { stream: true }))`, the event fields, tool-approval interrupts, and `okengine/client/agent`.
 - Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
 - Agents document tool approval: `approval`, `gate`, `timeout`, and `durable: true`.
-- Decisions document `fx.decide`, `how`, the `audited` flag, `oke decide promote`,
-  and `oke eval --certify`. The lockfile sits next to the app config.
+- Decisions document the full loop: a real review gate, emit-then-decide, the `$` result,
+  the learning → candidate → certified → suspended lifecycle, Console review, and
+  `oke eval --certify` / `oke decide promote`.
 
 #### Console — Flows & traces
 
@@ -134,6 +138,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `fx.decide` reads the provider key through the non-journaling secret path, so a replay
+  sees a rotated key and the journal does not store it. Learn-then-Test uses a fixed
+  threshold grid and a Bonferroni exact binomial test. Audit drift counts only labels for
+  the pinned model since the certificate. Labels and the drift flag live on the journal
+  driver, created only when the app declares decisions. The lockfile loads from the app
+  root. `oke eval --certify` uses the app provider and pins the resolved model version.
+  An operator resolves every tenant; a tenant reviewer sees only their own. `Retry-After`
+  above 60 seconds takes the outage path.
 - `fx.decide` journals the projected answer and reads the resolved review once after wake. A second call in the same run gets its own review id. `none_of_these` is not auto. A boolean value follows the calibrated probability. Pending reviews stamp `fx.tenant`. A missing provider secret is a config error, resolved through the secret capability.
 - Resolving a decision checks the declared review Gate. The reviewer is the authenticated operator, and every open question must be a valid option. The tenant must match the parked row. Uncertain reviews record propensity 1; audit rows record the audit rate.
 - `oke eval --certify` calls the provider, fits a calibrator per question, and keeps a threshold only when an exact binomial Learn-then-Test passes. The lockfile is loaded from the app root at boot. `oke decide promote` merges that one decision into the existing lockfile.

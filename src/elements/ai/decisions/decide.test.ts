@@ -26,8 +26,14 @@ import {
   readDecisionReview,
   resetDecisionProvider,
   resolveDecisionReview,
+  setDecisionGateAllow,
   setDecisionProvider,
 } from "../../../kernel/fx-decide.ts";
+import {
+  loadDecisionLabels,
+  openDecisionLabelStore,
+  closeDecisionLabelStore,
+} from "./labels.ts";
 
 afterEach(() => {
   resetBindings();
@@ -35,6 +41,8 @@ afterEach(() => {
   resetDecisionCertificates();
   resetDecisionProvider();
   resetGates();
+  setDecisionGateAllow(undefined);
+  closeDecisionLabelStore();
 });
 
 function choice() {
@@ -503,6 +511,256 @@ describe("fx.decide", () => {
     );
     if (!step || step.kind !== "step") throw new Error("expected a parked decision");
     expect((step.value as { tenant: string }).tenant).toBe("acme");
+  });
+
+  test("the provider key is not journaled and rotation is read on replay", async () => {
+    const secrets: Record<string, string> = { OPENROUTER_API_KEY: "key-v1" };
+    const seen: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_url: unknown, init?: { headers?: { authorization?: string } }) => {
+      seen.push(init?.headers?.authorization ?? "");
+      return new Response(
+        JSON.stringify({
+          model: "typesafe/jev-1.13.0",
+          answers: {
+            team: {
+              type: "choice",
+              probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
+            },
+          },
+          usage: {},
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    try {
+      const question = choice();
+      const decl = ai.decision("triage", {
+        onUncertain: "abstain",
+        model: "typesafe/jev-1.13",
+        autonomy: { maxError: 0.05, audit: 0 },
+        ask: { team: question },
+      });
+      setDecisionLock({
+        decisions: {
+          triage: {
+            model: "typesafe/jev-1.13.0",
+            questions: {
+              team: {
+                "": {
+                  hash: questionHash(question),
+                  calibrator: { kind: "temperature" as const, t: 1 },
+                  threshold: 0.5,
+                },
+              },
+            },
+          },
+        },
+      });
+      const store = createMemoryJournalStore();
+      const session = await createJournal({ store, now: () => 1 }).start("run", {});
+      const fx = createFx({
+        flow: "run",
+        effects: { decides: ["triage"], secrets: ["OPENROUTER_API_KEY"] },
+        journal: session,
+        runId: session.runId,
+        secrets,
+        now: () => 1,
+      });
+      await fx.decide(decl, { ticket: "1" });
+      expect(seen).toEqual(["Bearer key-v1"]);
+      expect(JSON.stringify(session.run.entries)).not.toContain("key-v1");
+      session.run.entries = session.run.entries.filter(
+        (entry) =>
+          !(
+            entry.kind === "effect" &&
+            (entry.effectKind === "decide" ||
+              entry.effectKind === "decide-provider" ||
+              entry.effectKind === "decide-view")
+          ),
+      );
+      secrets.OPENROUTER_API_KEY = "key-v2";
+      session.rewind();
+      await fx.decide(decl, { ticket: "1" });
+      expect(seen[1]).toBe("Bearer key-v2");
+      expect(JSON.stringify(session.run.entries)).not.toContain("key-v2");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test("an audit resolve writes one label per question", async () => {
+    provider();
+    gate.policy("ops", (ctx) => ctx.operator.id === "reviewer");
+    const team = choice();
+    const urgent = ai.boolean("urgent");
+    const decl = ai.decision("triage", {
+      onUncertain: "abstain",
+      autonomy: { maxError: 0.05, audit: 1 },
+      ask: { team, urgent },
+    });
+    setDecisionLock({
+      decisions: {
+        triage: {
+          model: "typesafe/jev-1.13.0",
+          questions: {
+            team: {
+              "": {
+                hash: questionHash(team),
+                calibrator: { kind: "temperature" as const, t: 1 },
+                threshold: 0.5,
+              },
+            },
+            urgent: {
+              "": {
+                hash: questionHash(urgent),
+                calibrator: { kind: "platt" as const, a: 1, b: 0 },
+                threshold: 0.5,
+              },
+            },
+          },
+        },
+      },
+    });
+    const store = createMemoryJournalStore();
+    await openDecisionLabelStore(store, () => undefined);
+    const session = await createJournal({ store, now: () => 1 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      now: () => 1,
+    });
+    setDecisionProvider(async () => ({
+      model: "typesafe/jev-1.13.0",
+      answers: {
+        team: {
+          type: "choice",
+          probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
+        },
+        urgent: { type: "noul", noul: 0.2 },
+      },
+      usage: {},
+    }));
+    await fx.decide(decl, {});
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision-label:"),
+    );
+    if (!step || step.kind !== "step") throw new Error("expected an audit row");
+    const id = step.name.slice("ai-decision-label:".length);
+    expect(
+      await resolveDecisionReview(
+        store,
+        id,
+        { values: { team: "technical" }, reviewer: "reviewer", tenantId: null },
+        () => 1,
+        true,
+      ),
+    ).toEqual({ ok: false, status: 422 });
+    expect(
+      await resolveDecisionReview(
+        store,
+        id,
+        { values: { team: "technical", urgent: false }, reviewer: "reviewer", tenantId: null },
+        () => 1,
+        true,
+      ),
+    ).toEqual({ ok: true });
+    const labels = loadDecisionLabels("triage");
+    expect(labels.map((label) => label.question).sort()).toEqual(["team", "urgent"]);
+    expect(labels.every((label) => label.raw !== undefined)).toBe(true);
+  });
+
+  test("an operator resolves another tenant and a tenant reviewer cannot", async () => {
+    provider();
+    gate.policy("ops", (ctx) => ctx.auth.userId === "ada" && ctx.operator.id === "reviewer");
+    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const session = await createJournal({ store, now: () => 1 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      tenant: { id: "acme" },
+      now: () => 1,
+    });
+    try {
+      await fx.decide(decl, {});
+    } catch (err) {
+      if (!isJournalSuspend(err)) throw err;
+    }
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    if (!step || step.kind !== "step") throw new Error("expected a parked decision");
+    const id = step.name.slice("ai-decision:".length);
+    const auth = { userId: "ada", scopes: new Set<string>() };
+    expect(
+      await resolveDecisionReview(store, id, {
+        values: { team: "billing" },
+        reviewer: "reviewer",
+        tenantId: "other",
+        auth,
+      }),
+    ).toEqual({ ok: false, status: 403 });
+    expect(
+      await resolveDecisionReview(store, id, {
+        values: { team: "billing" },
+        reviewer: "reviewer",
+        tenantId: null,
+        plane: "operator",
+        auth,
+      }),
+    ).toEqual({ ok: true });
+    expect((step.value as { tenant: string }).tenant).toBe("acme");
+  });
+
+  test("outage is not overwritten by a stale hash", async () => {
+    setDecisionProvider(async () => {
+      throw new DecisionOutageError("down");
+    });
+    const question = choice();
+    const decl = ai.decision("triage", { review: "ops", ask: { team: question } });
+    setDecisionLock({
+      decisions: {
+        triage: {
+          model: "typesafe/jev-1.13.0",
+          questions: {
+            team: {
+              "": {
+                hash: "stale",
+                calibrator: { kind: "temperature" as const, t: 1 },
+                threshold: 0.5,
+              },
+            },
+          },
+        },
+      },
+    });
+    const store = createMemoryJournalStore();
+    const session = await createJournal({ store, now: () => 1 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      now: () => 1,
+    });
+    try {
+      await fx.decide(decl, {});
+    } catch (err) {
+      if (!isJournalSuspend(err)) throw err;
+    }
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    expect((step && step.kind === "step" ? step.value : undefined) as { reason?: string }).toMatchObject({
+      reason: "outage",
+    });
   });
 
   test("a missing secret is a config error", async () => {

@@ -1595,12 +1595,21 @@ export function oke(options: OkeOptions): OkeApp {
     // Built-in hybrid search — auto-register durable embed CDC flows when the
     // Manifest declares any `.embed()` column (writer flows stay embed-free).
     await ensureSearchEmbedFlows(overrides?.manifest ?? options.manifest);
-    const { loadDecisionLockfile, setDecisionDrift } = await import(
-      "../elements/ai/decisions/certificate.ts"
-    );
-    const { openDecisionLabelStore } = await import("../elements/ai/decisions/labels.ts");
-    await loadDecisionLockfile(process.cwd());
-    openDecisionLabelStore(process.cwd(), setDecisionDrift);
+    const decisionManifest = overrides?.manifest ?? options.manifest;
+    const declaredDecisions = decisionManifest?.ai?.decisions;
+    if (declaredDecisions && Object.keys(declaredDecisions).length > 0) {
+      const { loadDecisionLockfile, setDecisionDrift } = await import(
+        "../elements/ai/decisions/certificate.ts"
+      );
+      const { openDecisionLabelStore } = await import("../elements/ai/decisions/labels.ts");
+      const { setDecisionGateAllow } = await import("./fx-decide.ts");
+      const root = overrides?.rootDir ?? options.rootDir ?? process.env["OKE_ROOT_DIR"];
+      if (root) await loadDecisionLockfile(root);
+      if (result.journal && result.journal.store.decisions) {
+        await openDecisionLabelStore(result.journal.store, setDecisionDrift);
+      }
+      if (result.gate) setDecisionGateAllow((names, ctx) => result.gate!.allow(names, ctx));
+    }
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");

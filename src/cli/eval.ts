@@ -151,11 +151,7 @@ export async function runOkeCertify(
     process.stdout.write("oke eval: no decisions declared\n");
     return 0;
   }
-  const evaluate = options.evaluate;
-  if (!evaluate) {
-    console.error("oke eval: decision provider is not wired");
-    return 1;
-  }
+  const injected = options.evaluate;
   const root = resolve(options.root ?? ".");
   const lockPath = resolve(root, DECISION_LOCK_FILENAME);
   const existingFile = Bun.file(lockPath);
@@ -175,9 +171,11 @@ export async function runOkeCertify(
       return 1;
     }
     const text = await Bun.file(resolve(decision.evals)).text();
+    const evaluate = injected ?? (await providerForDecision(decl));
     next.decisions[name] = await certifySeed({
-      model: decision.model ?? "",
+      model: decl.model ?? decision.model ?? "",
       maxError: decision.autonomy?.maxError ?? 0.05,
+      delta: decision.autonomy?.risk ?? decl.autonomy?.risk ?? 0.1,
       jsonl: text,
       ask: decl.ask,
       evaluate,
@@ -185,5 +183,58 @@ export async function runOkeCertify(
     process.stdout.write(`${JSON.stringify({ [name]: next.decisions[name] })}\n`);
   }
   await Bun.write(lockPath, `${JSON.stringify(next, null, 2)}\n`);
+  const { setDecisionDrift } = await import("../elements/ai/decisions/certificate.ts");
+  const { persistDecisionDrift } = await import("../elements/ai/decisions/labels.ts");
+  setDecisionDrift(false);
+  persistDecisionDrift(false);
   return 0;
+}
+
+async function providerForDecision(
+  decl: import("../elements/ai/declare.ts").AiDecisionDecl,
+): Promise<(input: unknown) => Promise<DecisionResponse>> {
+  const typesafe = decl.driverId === "typesafe";
+  const keyName = typesafe ? "TYPESAFE_API_KEY" : "OPENROUTER_API_KEY";
+  const apiKey = process.env[keyName];
+  if (!apiKey) throw new Error(`oke eval: secret "${keyName}" is not configured`);
+  const { createTypesafeDecisionProvider, TYPESAFE_JEV_MODEL } = await import(
+    "../elements/ai/decisions/typesafe.ts"
+  );
+  const { createOpenRouterDecisionProvider, OPENROUTER_JEV_MODEL } = await import(
+    "../elements/ai/decisions/openrouter.ts"
+  );
+  const provider = typesafe
+    ? createTypesafeDecisionProvider(apiKey)
+    : createOpenRouterDecisionProvider(apiKey);
+  const model = decl.model ?? (typesafe ? TYPESAFE_JEV_MODEL : OPENROUTER_JEV_MODEL);
+  return (input) =>
+    provider.evaluate({
+      model,
+      state: input,
+      questions: wireFromDecl(decl),
+    });
+}
+
+function wireFromDecl(
+  decl: import("../elements/ai/declare.ts").AiDecisionDecl,
+): import("../elements/ai/decisions/provider.ts").DecisionRequest["questions"] {
+  const questions: Record<string, import("../elements/ai/decisions/provider.ts").WireQuestion> = {};
+  for (const [id, question] of Object.entries(decl.ask)) {
+    if (question.kind === "choice") {
+      questions[id] = {
+        type: "choice",
+        instructions: question.instructions,
+        criteria: { ...question.options, none_of_these: null },
+      };
+    } else if (question.kind === "score") {
+      questions[id] = { type: "score", instructions: question.instructions, criteria: question.levels };
+    } else {
+      questions[id] = {
+        type: "noul",
+        instructions: question.instructions,
+        ...(question.criteria !== undefined ? { criteria: question.criteria } : {}),
+      };
+    }
+  }
+  return questions;
 }

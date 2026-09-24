@@ -53,6 +53,8 @@ interface FitRow {
   readonly labelIndex: number;
   readonly noul?: number;
   readonly booleanLabel?: boolean;
+  /** Inverse propensity. Audit rows count more than a full review. */
+  readonly weight: number;
 }
 
 /**
@@ -71,8 +73,10 @@ export async function certifySeed(options: {
 }): Promise<DecisionLockEntry> {
   const cases = parseDecisionSeed(options.jsonl);
   const buckets = new Map<string, FitRow[]>();
+  let resolved = options.model;
   for (const row of cases) {
     const response = await options.evaluate(row.input);
+    if (response.model) resolved = response.model;
     const locale = row.locale ?? "";
     for (const [id, expected] of Object.entries(row.expect)) {
       const question = options.ask[id];
@@ -86,7 +90,14 @@ export async function certifySeed(options: {
       buckets.set(key, list);
     }
   }
-  return entryFromBuckets(options.model, options.ask, buckets, options.maxError, options.delta ?? 0.1);
+  const entry = entryFromBuckets(
+    resolved,
+    options.ask,
+    buckets,
+    options.maxError,
+    options.delta ?? 0.1,
+  );
+  return { ...entry, certifiedAt: Date.now() };
 }
 
 /**
@@ -103,7 +114,8 @@ export function certifyLabels(options: {
 }): DecisionLockEntry {
   const groups = new Map<string, DecisionLabel[]>();
   for (const label of options.labels) {
-    if (label.score === undefined) continue;
+    if (label.raw === undefined) continue;
+    if (options.model && label.model !== options.model) continue;
     const key = `${label.question}\0${label.locale ?? ""}`;
     const list = groups.get(key) ?? [];
     list.push(label);
@@ -118,19 +130,17 @@ export function certifyLabels(options: {
     const locale = key.slice(split + 1);
     const question = options.ask[id];
     if (!question) continue;
-    const scored = rows.map((row) => ({ score: row.score ?? 0, loss: row.loss ?? 0 }));
-    const threshold = learnThenTest(scored, options.maxError, delta);
-    if (threshold === null) continue;
+    const fitted = rows.flatMap((row) => {
+      const fit = fitRow(question, row.raw, row.value);
+      return fit ? [{ ...fit, weight: propensityWeight(row.propensity) }] : [];
+    });
+    const slice = sliceFromRows(question, fitted, options.maxError, delta);
+    if (!slice) continue;
     const bucket = questions[id] ?? {};
-    bucket[locale] = {
-      hash: questionHash(question),
-      calibrator: question.kind === "boolean" ? { kind: "platt", a: 1, b: 0 } : { kind: "temperature", t: 1 },
-      threshold,
-      metrics: { labels: rows.length, maxError: options.maxError, delta },
-    };
+    bucket[locale] = slice;
     questions[id] = bucket;
   }
-  return { model, questions };
+  return { model, certifiedAt: Date.now(), questions };
 }
 
 function entryFromBuckets(
@@ -189,7 +199,7 @@ function fitTemperature(rows: readonly FitRow[]): number {
     let nll = 0;
     for (const row of rows) {
       const scaled = applyTemperature(row.probs, t);
-      nll -= Math.log(Math.max(scaled[row.labelIndex] ?? 1e-12, 1e-12));
+      nll -= row.weight * Math.log(Math.max(scaled[row.labelIndex] ?? 1e-12, 1e-12));
     }
     if (nll < best) {
       best = nll;
@@ -207,7 +217,9 @@ function fitPlatt(rows: readonly FitRow[]): DecisionCalibrator {
       for (const row of rows) {
         const p = platt(row.noul ?? 0.5, a, b);
         const y = row.booleanLabel ? 1 : 0;
-        nll -= y * Math.log(Math.max(p, 1e-12)) + (1 - y) * Math.log(Math.max(1 - p, 1e-12));
+        nll -=
+          row.weight *
+          (y * Math.log(Math.max(p, 1e-12)) + (1 - y) * Math.log(Math.max(1 - p, 1e-12)));
       }
       if (nll < best.nll) best = { a, b, nll };
     }
@@ -244,7 +256,13 @@ function fitRow(question: AiDecisionQuestion, answer: unknown, expected: unknown
   const record = answer && typeof answer === "object" ? (answer as Record<string, unknown>) : {};
   if (question.kind === "boolean") {
     if (typeof expected !== "boolean") return undefined;
-    return { probs: [], labelIndex: expected ? 1 : 0, noul: typeof record.noul === "number" ? record.noul : 0, booleanLabel: expected };
+    return {
+      probs: [],
+      labelIndex: expected ? 1 : 0,
+      noul: typeof record.noul === "number" ? record.noul : 0,
+      booleanLabel: expected,
+      weight: 1,
+    };
   }
   const keys = question.kind === "choice" ? [...Object.keys(question.options), "none_of_these"] : [...question.levels];
   const labelIndex = keys.indexOf(String(expected));
@@ -257,6 +275,11 @@ function fitRow(question: AiDecisionQuestion, answer: unknown, expected: unknown
     }
     return Array.isArray(raw) && typeof raw[index] === "number" ? raw[index] : 0;
   });
-  return { probs, labelIndex };
+  return { probs, labelIndex, weight: 1 };
+}
+
+function propensityWeight(propensity: number): number {
+  if (!(propensity > 0)) return 1;
+  return 1 / propensity;
 }
 

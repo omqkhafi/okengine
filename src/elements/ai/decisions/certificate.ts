@@ -40,6 +40,8 @@ export interface DecisionCertSlice {
 /** One decision inside `oke-decisions.lock.json`. */
 export interface DecisionLockEntry {
   readonly model: string;
+  /** Epoch ms the certificate was written. Drift counts labels after this. */
+  readonly certifiedAt?: number;
   readonly questions: Readonly<Record<string, Readonly<Record<string, DecisionCertSlice>>>>;
 }
 
@@ -70,8 +72,12 @@ export interface DecisionLabel {
   readonly model?: string;
   /** Calibrated confidence used by Learn-then-Test. */
   readonly score?: number;
+  /** Raw provider distribution the candidate fits. */
+  readonly raw?: unknown;
   /** 1 when the label disagrees with the model, else 0. */
   readonly loss?: number;
+  /** Epoch ms the label was written. */
+  readonly at?: number;
 }
 
 /** App-wide candidate. A full lock entry, not a count. */
@@ -186,11 +192,9 @@ export function calibrateBoolean(
   }
   const a = calibrator.a;
   const b = calibrator.b;
-  if (calibrator.c !== undefined) {
-    const ratio = Math.pow(1 - p, b) / Math.pow(Math.max(p, 1e-12), a);
-    return 1 / (1 + Math.exp(-calibrator.c * ratio));
-  }
-  return (a * p) / (a * p + b * (1 - p) || 1);
+  const c = calibrator.c ?? 0;
+  const ratio = Math.pow(Math.max(1 - p, 1e-12), b) / Math.pow(Math.max(p, 1e-12), a);
+  return 1 / (1 + Math.exp(-c) * ratio);
 }
 
 /**
@@ -200,27 +204,68 @@ export function calibrateBoolean(
  * @param n - Accepted labels
  * @param p - Boundary error rate
  */
-export function binomialCdf(k: number, n: number, p: number): number {
-  if (n <= 0) return 1;
-  if (p <= 0) return k >= 0 ? 1 : 0;
-  if (p >= 1) return k >= n ? 1 : 0;
-  const errors = Math.max(0, Math.min(n, k));
-  let term = Math.pow(1 - p, n);
-  let sum = term;
-  for (let i = 0; i < errors; i++) {
-    term *= ((n - i) / (i + 1)) * (p / (1 - p));
-    sum += term;
-  }
-  return Math.min(1, sum);
+/** Fixed Learn-then-Test grid: 0.50 through 0.99, step 0.01. */
+export const LEARN_THEN_TEST_GRID: readonly number[] = Array.from({ length: 50 }, (_, i) =>
+  (50 + i) / 100,
+);
+
+const LANCZOS = [
+  0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+  -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
+  1.5056327351493116e-7,
+] as const;
+
+/**
+ * Log-gamma via Lanczos. Used so a binomial cdf at n = 20000 does not overflow.
+ *
+ * @param z - Positive argument
+ */
+function lgamma(z: number): number {
+  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z);
+  let x = LANCZOS[0];
+  const shifted = z - 1;
+  for (let i = 1; i < LANCZOS.length; i++) x += LANCZOS[i]! / (shifted + i);
+  const t = shifted + 7.5;
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(x);
 }
 
 /**
- * Learn-then-Test. Scans thresholds from strict to loose and stops at the
- * first exact binomial test that fails. Too few labels returns null.
+ * One-sided exact binomial cdf, `P(X ≤ k)` for `X ~ Binomial(n, p)`.
+ * `k < 0` is 0. The sum is in log space.
+ *
+ * @param k - Observed errors
+ * @param n - Accepted labels
+ * @param p - Boundary error rate
+ */
+export function binomialCdf(k: number, n: number, p: number): number {
+  if (k < 0) return 0;
+  if (n <= 0) return 1;
+  if (p <= 0) return 1;
+  if (p >= 1) return k >= n ? 1 : 0;
+  if (k >= n) return 1;
+  const last = Math.floor(k);
+  let logTerm = n * Math.log(1 - p);
+  let maxLog = logTerm;
+  const logs = [logTerm];
+  for (let i = 0; i < last; i++) {
+    logTerm += Math.log(n - i) - Math.log(i + 1) + Math.log(p) - Math.log(1 - p);
+    logs.push(logTerm);
+    if (logTerm > maxLog) maxLog = logTerm;
+  }
+  let sum = 0;
+  for (const logP of logs) sum += Math.exp(logP - maxLog);
+  const total = Math.exp(maxLog) * sum;
+  return Math.min(1, Number.isFinite(total) ? total : 0);
+}
+
+/**
+ * Learn-then-Test on a fixed threshold grid. Each threshold is an exact
+ * one-sided binomial test at δ/m (Bonferroni). The loosest passing threshold
+ * wins. A grid with no pass returns null.
  *
  * @param rows - Score and 0/1 loss
  * @param maxError - Risk cap
- * @param delta - Test level. Default `0.1`
+ * @param delta - Family-wise level. Default `0.1` (`autonomy.risk`)
  */
 export function learnThenTest(
   rows: readonly { readonly score: number; readonly loss: number }[],
@@ -228,13 +273,16 @@ export function learnThenTest(
   delta = 0.1,
 ): number | null {
   if (rows.length === 0) return null;
-  const thresholds = [...new Set(rows.map((row) => row.score))].sort((a, b) => b - a);
+  const m = LEARN_THEN_TEST_GRID.length;
+  const alpha = delta / m;
   let chosen: number | null = null;
-  for (const threshold of thresholds) {
+  for (const threshold of LEARN_THEN_TEST_GRID) {
     const accepted = rows.filter((row) => row.score >= threshold);
+    if (accepted.length === 0) continue;
     const errors = accepted.reduce((sum, row) => sum + (row.loss > 0 ? 1 : 0), 0);
-    if (binomialCdf(errors, accepted.length, maxError) > delta) break;
-    chosen = threshold;
+    const pValue = 1 - binomialCdf(errors - 1, accepted.length, maxError);
+    if (pValue <= alpha) continue;
+    if (chosen === null || threshold < chosen) chosen = threshold;
   }
   return chosen;
 }
@@ -290,6 +338,7 @@ export function lockFromCandidate(
 ): DecisionLockfile {
   const entry = parseDecisionLockEntry(candidate);
   if (!entry) throw new TypeError("promote: candidate is not a lock entry");
+  setDecisionDrift(false);
   return { decisions: { ...(current?.decisions ?? {}), [name]: entry } };
 }
 
@@ -305,7 +354,11 @@ export function parseDecisionLockEntry(body: unknown): DecisionLockEntry | undef
   if (!record.questions || typeof record.questions !== "object" || Array.isArray(record.questions)) {
     return undefined;
   }
-  return { model: record.model, questions: record.questions as DecisionLockEntry["questions"] };
+  return {
+    model: record.model,
+    ...(typeof record.certifiedAt === "number" ? { certifiedAt: record.certifiedAt } : {}),
+    questions: record.questions as DecisionLockEntry["questions"],
+  };
 }
 
 /**

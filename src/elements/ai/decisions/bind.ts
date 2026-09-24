@@ -16,10 +16,21 @@ import {
   setDecisionDrift,
 } from "./certificate.ts";
 import { certifyLabels } from "./certify.ts";
-import { auditDriftExceeded, loadDecisionLabels, persistDecisionDrift } from "./labels.ts";
+import {
+  auditDriftExceeded,
+  loadDecisionLabels,
+  persistDecisionDrift,
+  pinnedDecision,
+} from "./labels.ts";
 
 /** Signal the drift monitor emits. The emit is declared on that flow. */
 export const DECISION_DRIFT_SIGNAL = "oke/decision/drift";
+
+/** Operator gate on the candidate route. */
+export const decisionOperatorGate = gate.policy(
+  "oke.decisions.operator",
+  (ctx) => ctx.operator.id !== null,
+);
 
 /**
  * True when any decision carries an autonomy block.
@@ -47,11 +58,13 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     do: async () => {
       for (const name of names) {
         const decl = aiDecisionRegistry.find((item) => item.name === name);
+        const pinned = pinnedDecision(name);
         const rows = loadDecisionLabels(name);
         aggregateDecisionCandidate(name, () =>
           certifyLabels({
-            model: decl?.model ?? "",
+            model: pinned?.model ?? decl?.model ?? "",
             maxError: decl?.autonomy?.maxError ?? 0.05,
+            delta: decl?.autonomy?.risk ?? 0.1,
             ask: decl?.ask ?? {},
             labels: rows,
           }),
@@ -69,11 +82,22 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     plane: "operator",
     effects: { emits: [DECISION_DRIFT_SIGNAL] },
     do: async (_input, fx) => {
-      const caps = Object.values(manifest.ai?.decisions ?? {})
-        .map((decision) => decision.autonomy?.maxError)
-        .filter((value): value is number => typeof value === "number");
-      const maxError = caps.length > 0 ? Math.min(...caps) : 0.05;
-      const next = auditDriftExceeded(maxError);
+      let next = false;
+      for (const [name, decision] of Object.entries(manifest.ai?.decisions ?? {})) {
+        const pinned = pinnedDecision(name);
+        if (!pinned) continue;
+        const exceeded = auditDriftExceeded({
+          maxError: decision.autonomy?.maxError ?? 0.05,
+          delta: decision.autonomy?.risk ?? 0.1,
+          model: pinned.model,
+          since: pinned.since,
+          labels: loadDecisionLabels(name),
+        });
+        if (exceeded) {
+          next = true;
+          break;
+        }
+      }
       const prev = decisionDriftSuspended();
       if (next === prev) return { suspended: prev };
       setDecisionDrift(next);
@@ -87,7 +111,6 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     flow: drift,
   });
 
-  const operatorGate = gate.policy("oke.decisions.operator", (ctx) => ctx.operator.id !== null);
   const candidate = flow("oke.decisions.candidate", {
     plane: "operator",
     do: async (input: { name?: string }, fx) => {
@@ -99,7 +122,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     },
   });
   adopt({
-    trigger: http.get("/_oke/decisions/:name/candidate").gate(operatorGate),
+    trigger: http.get("/_oke/decisions/:name/candidate").gate(decisionOperatorGate),
     flow: candidate,
   });
 }
