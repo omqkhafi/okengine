@@ -73,6 +73,7 @@
     "./client": "./src/client/index.ts",
     "./client/auth": "./src/client/auth.ts",
     "./client/explain": "./src/client/explain.ts",
+    "./client/agent": "./src/client/agent.ts",
     "./client-react": "./src/client-react/index.ts",
     "./test": "./src/test/index.ts",
     "./testing": {

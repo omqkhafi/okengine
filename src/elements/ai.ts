@@ -40,6 +40,9 @@ export {
 } from "./ai/errors.ts";
 export type { AiErrorFields } from "./ai/errors.ts";
 
+export type { AgentEventEmit, AgUiEvent, AgUiUsage } from "./ai/events.ts";
+export { createEventQueue, emitAssistantText } from "./ai/events.ts";
+
 export {
   createAiRuntime,
   parsePromptRef,

@@ -35,6 +35,12 @@ import {
   resolveTimeoutMs,
 } from "./errors.ts";
 import {
+  createEventQueue,
+  emitAssistantText,
+  type AgentEventEmit,
+  type AgUiEvent,
+} from "./events.ts";
+import {
   AiSchemaValidationError,
   coerceModelObject,
   promptOutJsonSchema,
@@ -300,6 +306,8 @@ export interface AiAskOptions {
    * Falls back to runtime `callFlow` when omitted.
    */
   readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
+  /** Yield AG-UI events instead of returning the validated object. */
+  readonly stream?: boolean;
 }
 
 /** Agent run options. */
@@ -350,6 +358,14 @@ export interface AiRuntime {
    */
   ask(prompt: string, input?: unknown, opts?: AiAskOptions): Promise<Record<string, unknown>>;
   /**
+   * Ask and yield AG-UI events. Tool-less asks still throw on budget inside the stream.
+   *
+   * @param prompt - Prompt name
+   * @param input - Prompt input
+   * @param opts - via / tools / callTool
+   */
+  streamAsk(prompt: string, input?: unknown, opts?: AiAskOptions): AsyncIterable<AgUiEvent>;
+  /**
    * Run a bounded agent; tool calls that fail gates are denied + recorded.
    *
    * @param agent - Agent name
@@ -367,6 +383,13 @@ export interface AiRuntime {
     readonly output?: unknown;
     readonly cost: number;
   }>;
+  /**
+   * Run an agent and yield AG-UI events.
+   *
+   * @param agent - Agent name
+   * @param options - Message + auth context
+   */
+  streamAgent(agent: string, options: AiAgentRunOptions): AsyncIterable<AgUiEvent>;
   /**
    * Stream model tokens (real driver stream; fails loud if unsupported).
    *
@@ -638,6 +661,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly auth?: GatePolicyContext["auth"];
     readonly operator?: GatePolicyContext["operator"];
     readonly meta?: GatePolicyContext["meta"];
+    readonly emit?: AgentEventEmit;
   }): Promise<{
     readonly output: unknown;
     readonly text: string;
@@ -669,6 +693,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     let lastText = "";
     let lastRaw: unknown = {};
     let lastToolResult: unknown;
+    let messageSeq = 0;
 
     const capHit = (): boolean =>
       opts.maxCostPerRun !== undefined && cost >= opts.maxCostPerRun;
@@ -704,6 +729,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         stopReason = "budget";
         return finish();
       }
+      const stepName = `step-${steps + 1}`;
+      opts.emit?.({ type: "STEP_STARTED", stepName });
       let result: Awaited<ReturnType<AiModelClient["complete"]>>;
       try {
         result = await opts.client.complete({
@@ -733,14 +760,18 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       addUsageTokens(tokens, result.usage);
       lastText = result.text;
       lastRaw = result.raw !== undefined ? result.raw : result.text;
+      const messageId = `m-${++messageSeq}`;
+      emitAssistantText(opts.emit ?? (() => undefined), messageId, result.text);
       if (capHit()) {
         budgetExceeded = true;
         stopReason = "budget";
+        opts.emit?.({ type: "STEP_FINISHED", stepName });
         return finish();
       }
 
       const toolCalls = result.toolCalls;
       if (!toolCalls || toolCalls.length === 0) {
+        opts.emit?.({ type: "STEP_FINISHED", stepName });
         stopReason = "completed";
         return finish();
       }
@@ -754,6 +785,18 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       for (const tc of toolCalls) {
         if (steps >= opts.maxSteps) break;
         steps++;
+        opts.emit?.({
+          type: "TOOL_CALL_START",
+          toolCallId: tc.id,
+          toolCallName: tc.name,
+          parentMessageId: messageId,
+        });
+        opts.emit?.({
+          type: "TOOL_CALL_ARGS",
+          toolCallId: tc.id,
+          delta: JSON.stringify(tc.arguments ?? {}),
+        });
+        opts.emit?.({ type: "TOOL_CALL_END", toolCallId: tc.id });
         let toolResult: unknown;
         try {
           toolResult = await dispatchTool({
@@ -773,6 +816,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           if (err instanceof AgentLoopHalt) throw err;
           const reason =
             err instanceof Error && err.name === "AbortError" ? "aborted" : "denied";
+          opts.emit?.({
+            type: "TOOL_CALL_RESULT",
+            messageId: `m-${++messageSeq}`,
+            toolCallId: tc.id,
+            content: err instanceof Error ? err.message : String(err),
+            role: "tool",
+          });
           throw new AgentLoopHalt(reason, err, {
             trail,
             denials: runDenials,
@@ -782,6 +832,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           });
         }
         lastToolResult = toolResult;
+        opts.emit?.({
+          type: "TOOL_CALL_RESULT",
+          messageId: `m-${++messageSeq}`,
+          toolCallId: tc.id,
+          content: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult ?? null),
+          role: "tool",
+        });
         messages.push({
           role: "tool",
           content: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult ?? null),
@@ -791,9 +848,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         if (capHit()) {
           budgetExceeded = true;
           stopReason = "budget";
+          opts.emit?.({ type: "STEP_FINISHED", stepName });
           return finish();
         }
       }
+      opts.emit?.({ type: "STEP_FINISHED", stepName });
     }
 
     return finish();
@@ -1125,6 +1184,150 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         }
         throw err;
       }
+    },
+
+    streamAsk(prompt, input, opts) {
+      const queue = createEventQueue();
+      const runId = `ask-${++runSeq}`;
+      const signal = currentAbortSignal();
+      void (async () => {
+        try {
+          queue.emit({ type: "RUN_STARTED", threadId: "default", runId });
+          const tools = opts?.tools ?? [];
+          if (tools.length > 0) {
+            const pin = parsePromptRef(prompt);
+            const decl = prompts.get(pin.name) ?? prompts.get(prompt);
+            if (!decl) throw new Error(`ai: unknown prompt "${prompt}"`);
+            const via =
+              opts?.via ?? decl.via ?? (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
+            const modelName = via[0];
+            if (!modelName) throw new Error(`ai: no model for prompt "${prompt}"`);
+            const client = await clientFor(modelName);
+            const loop = await toolLoop({
+              client,
+              modelName,
+              messages: [{ role: "user", content: askUserContent(input, decl.out) }],
+              tools,
+              maxSteps: opts?.maxSteps ?? AI_DEFAULT_MAX_STEPS,
+              agentLabel: prompt,
+              callTool: opts?.callTool,
+              emit: queue.emit,
+              signal,
+            });
+            queue.emit({
+              type: "RUN_FINISHED",
+              threadId: "default",
+              runId,
+              result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
+              ...(tokenFields(loop).inputTokens !== undefined ||
+              tokenFields(loop).outputTokens !== undefined
+                ? { usage: [tokenFields(loop)] }
+                : {}),
+            });
+          } else {
+            const output = await runtime.ask(prompt, input, opts);
+            emitAssistantText(queue.emit, "m-1", JSON.stringify(output));
+            const spent = journal.at(-1)?.cost ?? 0;
+            queue.emit({
+              type: "RUN_FINISHED",
+              threadId: "default",
+              runId,
+              result: { cost: spent, stopReason: "completed", output },
+            });
+          }
+          queue.finish();
+        } catch (err) {
+          queue.emit({
+            type: "RUN_ERROR",
+            message: err instanceof Error ? err.message : String(err),
+            ...(err instanceof Error && err.name !== "Error" ? { code: err.name } : {}),
+          });
+          queue.finish();
+        }
+      })();
+      return queue.events;
+    },
+
+    streamAgent(agent, runOpts) {
+      const queue = createEventQueue();
+      const runId = `agent-run-${++runSeq}`;
+      const signal = currentAbortSignal();
+      void (async () => {
+        try {
+          queue.emit({ type: "RUN_STARTED", threadId: "default", runId });
+          const decl = agents.get(agent);
+          if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
+          const maxSteps = decl.maxSteps ?? AI_DEFAULT_MAX_STEPS;
+          const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
+          const client = await clientFor(modelName);
+          const started = now();
+          const loop = await toolLoop({
+            client,
+            modelName,
+            messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
+            tools: decl.tools,
+            maxSteps,
+            ...(decl.budget?.maxCostPerRun !== undefined
+              ? { maxCostPerRun: decl.budget.maxCostPerRun }
+              : {}),
+            agentLabel: agent,
+            callTool: runOpts.callTool,
+            auth: runOpts.auth,
+            operator: runOpts.operator,
+            meta: runOpts.meta,
+            emit: queue.emit,
+            signal,
+          });
+          const record: AgentRunRecord = {
+            id: runId,
+            agent,
+            message: runOpts.message,
+            ok: loop.stopReason === "completed" && loop.denials.length === 0,
+            stopReason: loop.stopReason,
+            steps: loop.steps,
+            trail: loop.trail,
+            denials: loop.denials,
+            output: loop.output,
+            at: started,
+            cost: loop.cost,
+          };
+          pushObservability(agentRuns, record);
+          const usage = tokenFields(loop);
+          queue.emit({
+            type: "RUN_FINISHED",
+            threadId: "default",
+            runId,
+            result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
+            ...(usage.inputTokens !== undefined || usage.outputTokens !== undefined
+              ? { usage: [usage] }
+              : {}),
+          });
+          queue.finish();
+        } catch (err) {
+          if (err instanceof AgentLoopHalt) {
+            pushObservability(agentRuns, {
+              id: runId,
+              agent,
+              message: runOpts.message,
+              ok: false,
+              stopReason: err.stopReason,
+              steps: err.steps,
+              trail: err.trail,
+              denials: err.denials,
+              output: err.output,
+              at: now(),
+              cost: err.cost,
+            });
+          }
+          queue.emit({
+            type: "RUN_ERROR",
+            message: err instanceof Error ? err.message : String(err),
+            ...(err instanceof Error && err.name !== "Error" ? { code: err.name } : {}),
+          });
+          queue.finish();
+        }
+      })();
+      return queue.events;
     },
 
     async *stream(model, streamOpts) {

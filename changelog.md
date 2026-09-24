@@ -38,13 +38,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Units & Call API
 
-- Flows folders can be pinned. The pin on a folder row keeps that unit at
-  the top of its trigger band and stays in this browser.
+- Flows folders can be pinned. Hovering a folder row swaps its flow count
+  for a pin. Pinning keeps that unit at the top of its trigger band and stays
+  in this browser. A pinned row shows the pin until hover, which brings the
+  count back.
 
 ### ♻️ Changed
 
 #### Runtime
 
+- `fx.run(agent, input, { stream: true })` and tool-using `fx.ask(..., { stream: true })`
+  yield AG-UI events. Pipe them through `fx.json.stream`. Parse with
+  `okengine/client/agent` (not the core client). Subagent notices are `CUSTOM`.
 - `fx.run` reports `stopReason`: `completed`, `max_steps`, `budget`, `denied`, or
   `aborted`. Hitting `maxSteps` is not a normal completion. `denied` is set only
   when a deny ends the run.

@@ -39,6 +39,7 @@ import type { DeadLetter, SignalEmitOptions } from "../drivers/signal-types.ts";
 import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
+import type { AgUiEvent } from "../elements/ai/events.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import type { ApiKeyStore } from "../auth/api-keys.ts";
 import type { FxAuthIdentity, FxAuthKeyMethods } from "./fx-auth-keys.ts";
@@ -62,7 +63,7 @@ import {
   touchDryRunStore,
 } from "./dry-run.ts";
 import type { FailFn } from "./errors.ts";
-import { abortError, currentAbortSignal, linkAbort } from "./abort-scope.ts";
+import { abortError, currentAbortSignal, linkAbort, withAbortSignal } from "./abort-scope.ts";
 import type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 import { maskRedactedDeep, Redacted } from "./redacted.ts";
 import type { JournalSession, JournalStepOptions } from "./journal.ts";
@@ -394,6 +395,8 @@ export interface FxAskOptions {
   readonly tools?: readonly NamedRef[];
   /** Bound on tool invocations (default 6). */
   readonly maxSteps?: number;
+  /** Yield AG-UI events instead of resolving to the validated object. */
+  readonly stream?: boolean;
 }
 
 /** Options for {@link Fx.search}. */
@@ -781,6 +784,11 @@ export interface Fx {
    * @param opts - Model routing opts
    */
   ask(prompt: NamedRef, input?: unknown, opts?: FxAskOptions): Promise<Record<string, unknown>>;
+  ask(
+    prompt: NamedRef,
+    input: unknown,
+    opts: FxAskOptions & { readonly stream: true },
+  ): AsyncIterable<AgUiEvent>;
   /**
    * Embed text via a named model (records `embed` — distinct from `ask`).
    * Returns the vector; does not write an index.
@@ -815,6 +823,11 @@ export interface Fx {
    * @param input - Agent input (`{ message }` or string)
    */
   run(agent: NamedRef, input?: unknown): Promise<unknown>;
+  run(
+    agent: NamedRef,
+    input: unknown,
+    opts: { readonly stream: true },
+  ): AsyncIterable<AgUiEvent>;
   /**
    * Stream model tokens (records `ask`). Returns an async iterable of chunks.
    *
@@ -1817,6 +1830,35 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     ask(prompt, input, opts) {
       const name = resolveName(prompt);
+      if (opts?.stream) {
+        return (async function* () {
+          await gated("ask", name, async () => undefined);
+          if (isDryRun()) {
+            recordWouldHaveFired("ask", name);
+            return;
+          }
+          if (!options.aiRuntime) {
+            throw new Error(`fx.ask: AI runtime is not configured for prompt "${name}"`);
+          }
+          const local = new AbortController();
+          const unlink = linkAbort(currentAbortSignal(), local);
+          try {
+            const events = await withAbortSignal(local.signal, () =>
+              options.aiRuntime!.streamAsk(name, input, {
+                via: opts.via?.map(resolveName),
+                ...(opts.timeout !== undefined ? { timeout: opts.timeout } : {}),
+                tools: opts.tools?.map(resolveName),
+                maxSteps: opts.maxSteps,
+                callTool: (tool, toolInput) => fx.call(tool, toolInput),
+              }),
+            );
+            yield* events;
+          } finally {
+            unlink();
+            if (!local.signal.aborted) local.abort();
+          }
+        })();
+      }
       return gated(
         "ask",
         name,
@@ -1890,16 +1932,43 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     fetch(url, init) {
       return loadFxFetch().runFxFetch(gated, url, init);
     },
-    run(agent, input) {
+    run(agent, input, opts?: { readonly stream?: boolean }) {
       const name = resolveName(agent);
+      const message =
+        typeof input === "string"
+          ? input
+          : input && typeof input === "object" && "message" in input
+            ? String((input as { message: unknown }).message)
+            : JSON.stringify(input ?? {});
+      if (opts?.stream) {
+        return (async function* () {
+          await gated("ask", name, async () => undefined);
+          if (!options.aiRuntime) {
+            throw new Error(`fx.run: AI runtime is not configured for agent "${name}"`);
+          }
+          const local = new AbortController();
+          const unlink = linkAbort(currentAbortSignal(), local);
+          try {
+            const events = await withAbortSignal(local.signal, () =>
+              options.aiRuntime!.streamAgent(name, {
+                message,
+                auth: {
+                  userId: auth.userId,
+                  scopes: auth.scopes,
+                  verified: auth.verified,
+                },
+                callTool: (tool, toolInput) => fx.call(tool, toolInput),
+              }),
+            );
+            yield* events;
+          } finally {
+            unlink();
+            if (!local.signal.aborted) local.abort();
+          }
+        })();
+      }
       return gated("ask", name, async () => {
         if (options.aiRuntime) {
-          const message =
-            typeof input === "string"
-              ? input
-              : input && typeof input === "object" && "message" in input
-                ? String((input as { message: unknown }).message)
-                : JSON.stringify(input ?? {});
           return options.aiRuntime.runAgent(name, {
             message,
             auth: {

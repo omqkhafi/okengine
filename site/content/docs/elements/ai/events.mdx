@@ -1,0 +1,83 @@
+---
+title: "Events"
+description: "Stream an agent run as AG-UI events over SSE with fx.json.stream."
+icon: "Radio"
+source: "docs/spec/unified-theory.md"
+---
+
+An agent stream is the same run as `fx.run`, delivered as events a chat UI can render while
+the model is still working. Text, tool calls, and the finish reason arrive as server-sent
+events.
+
+For a support reply that should show tokens and tool calls in the browser — return
+`fx.json.stream` from the Flow.
+
+<Callout title="The one rule">
+  `return fx.json.stream(fx.run(agent, { message }, { stream: true }))`. `stream` is the third
+  argument, not a field on the message. `fx.stream` stays plain text.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Run and stream
+
+```typescript
+return fx.json.stream(fx.run(support, { message: "Refund order 14" }, { stream: true }));
+```
+
+The response is `text/event-stream`. Each `data:` frame is one JSON event.
+
+</Step>
+
+<Step>
+### Read the events
+
+Core names match AG-UI: `RUN_STARTED`, `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`,
+`TEXT_MESSAGE_END`, `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT`,
+`STEP_STARTED`, `STEP_FINISHED`, `RUN_FINISHED`, `RUN_ERROR`.
+
+</Step>
+
+<Step>
+### Finish payload
+
+`RUN_FINISHED.usage` is token counts when the model reported them. `cost` and `stopReason`
+are on `result`. Parse frames with `okengine/client/agent` — that import stays off
+`okengine/client`.
+
+</Step>
+
+</Steps>
+
+## Subagent notices
+
+A child agent is `CUSTOM` with `name` `oke.subagent.started`, `oke.subagent.finished`, or
+`oke.subagent.error`. `okengine/client/agent` also exposes `subagent.started`,
+`subagent.finished`, and `subagent.error`.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="The stream ended on RUN_ERROR">
+  The `message` is the failure (`aborted`, an unknown tool, or a prompt budget throw).
+  Disconnecting the request aborts the model call.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Agents](/docs/elements/ai/agents) — `fx.run`, `stopReason`, tools
+- [Prompts](/docs/elements/ai/prompts) — tool-less `fx.ask` still throws on budget
+
+## Next
+
+<Cards>
+  <Card title="Agents" description="Bounded tool loops." href="/docs/elements/ai/agents" />
+  <Card title="MCP" description="External tool servers." href="/docs/elements/ai/mcp" />
+  <Card title="AI" description="Element overview." href="/docs/elements/ai" />
+</Cards>
