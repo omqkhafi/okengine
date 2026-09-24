@@ -16,7 +16,7 @@ import {
   Timer01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { tracesReplay, type RunRow } from "@/client.ts";
+import { tracesReplay, type RunEffect, type RunRow } from "@/client.ts";
 import {
   AnimatePresence,
   animate,
@@ -29,6 +29,7 @@ import {
 import {
   EXPLORER_CHEVRON_CLASS,
   EXPLORER_COUNT_CLASS,
+  EXPLORER_GROUP_ROW_CLASS,
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
   EXPLORER_RAIL_ACTIVE_CLASS,
@@ -70,6 +71,7 @@ import { executeTraceReplay } from "./trace-actions.ts";
 import { traceGateInfos } from "./trace-gates.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
 import { playbackDurationMs } from "./replay-playback.ts";
+import { traceIsDense, traceLanes, type TraceLane } from "./trace-lanes.ts";
 import { waterfallBars, type WaterfallBar } from "./waterfall-bars.ts";
 import {
   mapToViewport,
@@ -132,6 +134,8 @@ export function TraceDetailSheet({
     () => (run ? waterfallBars(run.effects, run.startedAt, run.durationMs) : []),
     [run],
   );
+  const dense = traceIsDense(bars.length);
+  const lanes = useMemo(() => (dense ? traceLanes(bars) : []), [dense, bars]);
   const gaps = useMemo(() => (run ? waterfallGaps(bars, run.durationMs) : []), [run, bars]);
   const requestMeta = useMemo(
     () =>
@@ -151,6 +155,7 @@ export function TraceDetailSheet({
   const [zoom, setZoom] = useState(1);
   const [viewStart, setViewStart] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [openLanes, setOpenLanes] = useState<ReadonlySet<string>>(() => new Set());
 
   const progress = useMotionValue(0);
   // Hero duration counter — counts up on open, tracks the playhead on Replay.
@@ -176,6 +181,7 @@ export function TraceDetailSheet({
     setZoom(1);
     setViewStart(0);
     setPlaying(false);
+    setOpenLanes(new Set());
     progress.set(0);
     if (!run) return;
     if (reduceMotion) {
@@ -219,6 +225,18 @@ export function TraceDetailSheet({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playbackKey]);
+
+  useEffect(() => {
+    if (focusEffectIndex == null) return;
+    const lane = lanes.find((item) => item.bars.some((bar) => bar.index === focusEffectIndex));
+    if (!lane || lane.bars.length < 2) return;
+    setOpenLanes((prev) => {
+      if (prev.has(lane.key)) return prev;
+      const next = new Set(prev);
+      next.add(lane.key);
+      return next;
+    });
+  }, [focusEffectIndex, lanes]);
 
   const onReplay = async (e: MouseEvent) => {
     e.stopPropagation();
@@ -335,7 +353,14 @@ export function TraceDetailSheet({
 
               <section className={sectionClassName} data-slot="trace-waterfall">
                 <div className={EXPLORER_STRIP_CLASS}>
-                  <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Waterfall</h3>
+                  <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center gap-2 px-2")}>
+                    Waterfall
+                    {dense ? (
+                      <span className={EXPLORER_COUNT_CLASS}>
+                        {lanes.length} {lanes.length === 1 ? "lane" : "lanes"}
+                      </span>
+                    ) : null}
+                  </h3>
                   <div
                     className="ml-auto flex h-full items-stretch"
                     data-slot="trace-waterfall-zoom"
@@ -414,21 +439,44 @@ export function TraceDetailSheet({
                       }
                       focusIndex={focusEffectIndex}
                     />
-                    {bars.map((bar) => (
-                      <WaterfallBarRow
-                        key={bar.index}
-                        bar={bar}
-                        view={view}
-                        dimmed={hoverIndex !== null && hoverIndex !== bar.index}
-                        focused={focusEffectIndex === bar.index}
-                        progress={progress}
-                        playing={playing}
-                        onHover={setHoverIndex}
-                        onSelect={(index) =>
-                          onFocusEffectChange?.(focusEffectIndex === index ? null : index)
-                        }
-                      />
-                    ))}
+                    {dense ? (
+                      <div
+                        className="flex max-h-72 flex-col overflow-y-auto"
+                        data-slot="trace-waterfall-lanes"
+                      >
+                        {lanes.map((lane) => (
+                          <WaterfallLaneRow
+                            key={lane.key}
+                            lane={lane}
+                            view={view}
+                            hoverIndex={hoverIndex}
+                            focusIndex={focusEffectIndex}
+                            progress={progress}
+                            playing={playing}
+                            onHover={setHoverIndex}
+                            onSelect={(index) =>
+                              onFocusEffectChange?.(focusEffectIndex === index ? null : index)
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      bars.map((bar) => (
+                        <WaterfallBarRow
+                          key={bar.index}
+                          bar={bar}
+                          view={view}
+                          dimmed={hoverIndex !== null && hoverIndex !== bar.index}
+                          focused={focusEffectIndex === bar.index}
+                          progress={progress}
+                          playing={playing}
+                          onHover={setHoverIndex}
+                          onSelect={(index) =>
+                            onFocusEffectChange?.(focusEffectIndex === index ? null : index)
+                          }
+                        />
+                      ))
+                    )}
                     {playing ? (
                       <motion.div
                         className="pointer-events-none absolute top-4 bottom-0 w-px bg-foreground/70"
@@ -475,69 +523,47 @@ export function TraceDetailSheet({
                   </div>
                   <CollapsibleContent>
                     <ul className="flex flex-col" data-slot="trace-events">
-                      {run.effects.map((effect, index) => {
-                        const bar = bars[index];
-                        const focused = focusEffectIndex === index;
-                        return (
-                          <li
-                            key={`${effect.kind}:${effect.resource}:${index}`}
-                            data-slot="trace-event-row"
-                            data-index={index}
-                            data-focused={focused ? "true" : "false"}
-                            data-external={effect.external ? "true" : undefined}
-                            className={cn(
-                              EXPLORER_ROW_CLASS,
-                              "cursor-pointer flex-col items-stretch gap-1 text-[11px]",
-                              focused && EXPLORER_ROW_SELECTED_CLASS,
-                              hoverIndex === index && !focused && "bg-muted/50",
-                            )}
-                            onClick={() =>
-                              onFocusEffectChange?.(focusEffectIndex === index ? null : index)
-                            }
-                            onMouseEnter={() => setHoverIndex(index)}
-                            onMouseLeave={() => setHoverIndex(null)}
-                          >
-                            <span
-                              aria-hidden
-                              className={cn(
-                                EXPLORER_RAIL_CLASS,
-                                focused && EXPLORER_RAIL_ACTIVE_CLASS,
-                              )}
+                      {dense
+                        ? lanes.map((lane) => (
+                            <EventLane
+                              key={lane.key}
+                              lane={lane}
+                              effects={run.effects}
+                              open={openLanes.has(lane.key)}
+                              onToggle={() =>
+                                setOpenLanes((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(lane.key)) next.delete(lane.key);
+                                  else next.add(lane.key);
+                                  return next;
+                                })
+                              }
+                              focusIndex={focusEffectIndex}
+                              hoverIndex={hoverIndex}
+                              progress={progress}
+                              playing={playing}
+                              onHover={setHoverIndex}
+                              onSelect={(index) =>
+                                onFocusEffectChange?.(focusEffectIndex === index ? null : index)
+                              }
                             />
-                            <div className="flex items-center gap-2">
-                              <EffectKindGlyph kind={effect.kind} resource={effect.resource} />
-                              <span className="w-[4.5rem] shrink-0 font-medium text-foreground/90">
-                                {effectEventLabel(effect)}
-                              </span>
-                              <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-                                {effect.resource}
-                                {effect.external
-                                  ? ` · ↗ ${effect.external.host}${effect.external.kind ? ` (${effect.external.kind})` : ""}`
-                                  : ""}
-                              </span>
-                              <span className="shrink-0 tabular-nums text-muted-foreground">
-                                {formatDuration(effect.duration)}
-                              </span>
-                            </div>
-                            {bar ? (
-                              <div
-                                className="relative ml-7 h-1.5 w-[calc(100%-1.75rem)] rounded-full bg-muted/70"
-                                data-slot="trace-event-bar-track"
-                                aria-hidden
-                              >
-                                <PlaybackBarFill
-                                  bar={bar}
-                                  left={bar.offsetRatio}
-                                  width={bar.widthRatio}
-                                  progress={progress}
-                                  playing={playing}
-                                  slot="trace-event-bar"
-                                />
-                              </div>
-                            ) : null}
-                          </li>
-                        );
-                      })}
+                          ))
+                        : run.effects.map((effect, index) => (
+                            <EventRow
+                              key={`${effect.kind}:${effect.resource}:${index}`}
+                              effect={effect}
+                              index={index}
+                              bar={bars[index]}
+                              focused={focusEffectIndex === index}
+                              hovered={hoverIndex === index}
+                              progress={progress}
+                              playing={playing}
+                              onHover={setHoverIndex}
+                              onSelect={(next) =>
+                                onFocusEffectChange?.(focusEffectIndex === next ? null : next)
+                              }
+                            />
+                          ))}
                     </ul>
                   </CollapsibleContent>
                 </Collapsible>
@@ -570,6 +596,184 @@ export function TraceDetailSheet({
  *
  * @param props - Effect kind
  */
+function effectExternalSuffix(external: WaterfallBar["external"]): string {
+  if (!external) return "";
+  return ` · ↗ ${external.host}${external.kind ? ` (${external.kind})` : ""}`;
+}
+
+/**
+ * One effect row in Event Details — shared by flat runs and expanded lanes.
+ */
+function EventRow({
+  effect,
+  index,
+  bar,
+  focused,
+  hovered,
+  progress,
+  playing,
+  onHover,
+  onSelect,
+}: {
+  readonly effect: RunEffect;
+  readonly index: number;
+  readonly bar: WaterfallBar | undefined;
+  readonly focused: boolean;
+  readonly hovered: boolean;
+  readonly progress: MotionValue<number>;
+  readonly playing: boolean;
+  readonly onHover: (index: number | null) => void;
+  readonly onSelect: (index: number) => void;
+}): JSX.Element {
+  return (
+    <li
+      data-slot="trace-event-row"
+      data-index={index}
+      data-focused={focused ? "true" : "false"}
+      data-external={effect.external ? "true" : undefined}
+      className={cn(
+        EXPLORER_ROW_CLASS,
+        "cursor-pointer flex-col items-stretch gap-1 text-[11px]",
+        focused && EXPLORER_ROW_SELECTED_CLASS,
+        hovered && !focused && "bg-muted/50",
+      )}
+      onClick={() => onSelect(index)}
+      onMouseEnter={() => onHover(index)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <span
+        aria-hidden
+        className={cn(EXPLORER_RAIL_CLASS, focused && EXPLORER_RAIL_ACTIVE_CLASS)}
+      />
+      <div className="flex items-center gap-2">
+        <EffectKindGlyph kind={effect.kind} resource={effect.resource} />
+        <span className="w-[4.5rem] shrink-0 font-medium text-foreground/90">
+          {effectEventLabel(effect)}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
+          {effect.resource}
+          {effectExternalSuffix(effect.external)}
+        </span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {formatDuration(effect.duration)}
+        </span>
+      </div>
+      {bar ? (
+        <div
+          className="relative ml-7 h-1.5 w-[calc(100%-1.75rem)] rounded-full bg-muted/70"
+          data-slot="trace-event-bar-track"
+          aria-hidden
+        >
+          <PlaybackBarFill
+            bar={bar}
+            left={bar.offsetRatio}
+            width={bar.widthRatio}
+            progress={progress}
+            playing={playing}
+            slot="trace-event-bar"
+          />
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * Dense event list — one row per repeated operation, expanded to the ledger.
+ */
+function EventLane({
+  lane,
+  effects,
+  open,
+  onToggle,
+  focusIndex,
+  hoverIndex,
+  progress,
+  playing,
+  onHover,
+  onSelect,
+}: {
+  readonly lane: TraceLane;
+  readonly effects: readonly RunEffect[];
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  readonly focusIndex: number | null;
+  readonly hoverIndex: number | null;
+  readonly progress: MotionValue<number>;
+  readonly playing: boolean;
+  readonly onHover: (index: number | null) => void;
+  readonly onSelect: (index: number) => void;
+}): JSX.Element | null {
+  const only = lane.bars.length === 1 ? lane.bars[0] : undefined;
+  if (only) {
+    const effect = effects[only.index];
+    if (!effect) return null;
+    return (
+      <EventRow
+        effect={effect}
+        index={only.index}
+        bar={only}
+        focused={focusIndex === only.index}
+        hovered={hoverIndex === only.index}
+        progress={progress}
+        playing={playing}
+        onHover={onHover}
+        onSelect={onSelect}
+      />
+    );
+  }
+
+  const focused = focusIndex !== null && lane.bars.some((bar) => bar.index === focusIndex);
+  return (
+    <li data-slot="trace-event-lane" data-open={open ? "true" : "false"}>
+      <button
+        type="button"
+        className={cn(EXPLORER_GROUP_ROW_CLASS, focused && EXPLORER_ROW_SELECTED_CLASS)}
+        onClick={onToggle}
+      >
+        <HugeiconsIcon
+          icon={ArrowDown01Icon}
+          className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
+        />
+        <EffectKindGlyph kind={lane.kind} resource={lane.resource} />
+        <span className="w-[4.5rem] shrink-0 font-medium text-foreground/90">
+          {effectEventLabel(lane)}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
+          {lane.resource}
+          {effectExternalSuffix(lane.external)}
+        </span>
+        <span className={EXPLORER_COUNT_CLASS}>×{lane.bars.length}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {formatDuration(lane.totalDurationMs)}
+        </span>
+      </button>
+      {open ? (
+        <ul className="max-h-64 overflow-y-auto" data-slot="trace-event-lane-items">
+          {lane.bars.map((bar) => {
+            const effect = effects[bar.index];
+            if (!effect) return null;
+            return (
+              <EventRow
+                key={bar.index}
+                effect={effect}
+                index={bar.index}
+                bar={bar}
+                focused={focusIndex === bar.index}
+                hovered={hoverIndex === bar.index}
+                progress={progress}
+                playing={playing}
+                onHover={onHover}
+                onSelect={onSelect}
+              />
+            );
+          })}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
 function EffectKindGlyph({
   kind,
   resource,
@@ -893,6 +1097,109 @@ function GapSegment({
         Idle · {formatDuration(gap.durationMs)} — no effects recorded
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * One labeled timeline for every occurrence of the same kind and resource.
+ */
+function WaterfallLaneRow({
+  lane,
+  view,
+  hoverIndex,
+  focusIndex,
+  progress,
+  playing,
+  onHover,
+  onSelect,
+}: {
+  readonly lane: TraceLane;
+  readonly view: TimelineView;
+  readonly hoverIndex: number | null;
+  readonly focusIndex: number | null;
+  readonly progress: MotionValue<number>;
+  readonly playing: boolean;
+  readonly onHover: (index: number | null) => void;
+  readonly onSelect?: (index: number) => void;
+}): JSX.Element {
+  const hot =
+    (hoverIndex !== null && lane.bars.some((bar) => bar.index === hoverIndex)) ||
+    (focusIndex !== null && lane.bars.some((bar) => bar.index === focusIndex));
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1 border-b border-border/60 px-2 py-1.5 last:border-b-0",
+        hot && "bg-muted/50",
+      )}
+      data-slot="trace-waterfall-lane"
+    >
+      <div className="flex items-center gap-2 text-[11px]">
+        <EffectKindGlyph kind={lane.kind} resource={lane.resource} />
+        <span className="w-[4.5rem] shrink-0 font-medium text-foreground/90">
+          {effectEventLabel(lane)}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
+          {lane.resource}
+          {effectExternalSuffix(lane.external)}
+        </span>
+        <span className={EXPLORER_COUNT_CLASS}>×{lane.bars.length}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {formatDuration(lane.totalDurationMs)}
+        </span>
+      </div>
+      <div
+        className="relative ml-7 h-2 w-[calc(100%-1.75rem)] rounded-full bg-muted/70"
+        data-slot="trace-waterfall-lane-track"
+      >
+        {lane.bars.map((bar) => {
+          const mapped = mapToViewport(bar.offsetRatio, bar.widthRatio, view);
+          if (!mapped || mapped.width <= 0) return null;
+          const focused = focusIndex === bar.index;
+          return (
+            <Tooltip key={bar.index}>
+              <TooltipTrigger
+                render={(props) => (
+                  <div
+                    {...props}
+                    className="absolute inset-y-0 cursor-pointer"
+                    style={{
+                      left: `${mapped.left * 100}%`,
+                      width: `${Math.max(mapped.width * 100, 0.4)}%`,
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect?.(bar.index);
+                    }}
+                    onMouseEnter={(event) => {
+                      props.onMouseEnter?.(event);
+                      onHover(bar.index);
+                    }}
+                    onMouseLeave={(event) => {
+                      props.onMouseLeave?.(event);
+                      onHover(null);
+                    }}
+                  >
+                    <PlaybackBarFill
+                      bar={bar}
+                      left={0}
+                      width={1}
+                      progress={progress}
+                      playing={playing}
+                      dimmed={hoverIndex !== null && hoverIndex !== bar.index && !focused}
+                      focused={focused}
+                      slot="trace-waterfall-bar"
+                    />
+                  </div>
+                )}
+              />
+              <TooltipContent side="top" className="max-w-xs font-mono text-[11px]">
+                {waterfallBarTooltip(bar)}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

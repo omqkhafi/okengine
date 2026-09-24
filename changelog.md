@@ -32,6 +32,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
 
+### ♻️ Changed
+
+#### Console — Flows & traces
+
+- Long traces group the waterfall and event list by kind and resource. A run
+  with hundreds of repeated sends and writes shows one lane per operation,
+  with every occurrence on that timeline, instead of one empty track per
+  effect. Shorter runs still list each effect. Expanding a lane opens the
+  individual events.
+
 ### 🐛 Fixed
 
 #### Console — Flows & traces
