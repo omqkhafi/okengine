@@ -99,7 +99,8 @@ export async function* readAgentEvents(
       sawFrame = true;
       if (frame.id) lastEventId = frame.id;
       if (frame.event) yield frame.event;
-      if (frame.event?.type === "RUN_FINISHED" || frame.event?.type === "RUN_ERROR") return;
+      if (frame.event?.type === "RUN_ERROR") return;
+      if (frame.event?.type === "RUN_FINISHED" && frame.event.outcome?.type !== "interrupt") return;
     }
     if (!sawFrame || init?.signal?.aborted) return;
   }

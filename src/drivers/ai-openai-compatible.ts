@@ -393,10 +393,16 @@ function preconnectFetch(fetchFn: typeof fetch, url: string): void {
   if (typeof preconnect !== "function") return;
   try {
     preconnect(url);
-  } catch {
-    // Warmup is optional. A bad port or an unsupported URL must not block the call.
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (process.env.NODE_ENV !== "production" && !preconnectWarned) {
+      preconnectWarned = true;
+      console.warn(`openai-compatible: preconnect failed for ${url}: ${message}`);
+    }
   }
 }
+
+let preconnectWarned = false;
 
 function abortAsError(reason?: unknown): Error {
   if (reason instanceof Error) return reason;

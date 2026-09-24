@@ -50,11 +50,7 @@ export interface AgentEventLog {
   read(runId: string, afterSeq: number): Promise<readonly StoredAgentEvent[]>;
   /** Delete finished runs older than `ttlMs`. Returns how many runs were removed. */
   sweep(now: number, ttlMs?: number): Promise<number>;
-  subscribe(
-    runId: string,
-    afterSeq: number,
-    signal?: AbortSignal,
-  ): AsyncIterable<StoredAgentEvent>;
+  subscribe(runId: string, afterSeq: number, signal?: AbortSignal): AsyncIterable<StoredAgentEvent>;
 }
 
 interface RunBucket {
@@ -89,7 +85,11 @@ export function createMemoryAgentEventLog(): AgentEventLog {
     if (run.rows.length >= AGENT_EVENT_CAP && event.type !== "RUN_FINISHED") {
       if (event.type !== "CUSTOM" && !run.truncated) {
         run.truncated = true;
-        push(run, { type: "CUSTOM", name: "oke.events.truncated", value: { runId: run.header.runId } });
+        push(run, {
+          type: "CUSTOM",
+          name: "oke.events.truncated",
+          value: { runId: run.header.runId },
+        });
       }
       if (event.type === "CUSTOM" && event.name === "oke.events.truncated") return undefined;
       if (
@@ -148,7 +148,9 @@ export function createMemoryAgentEventLog(): AgentEventLog {
       const structural = !DELTA_TYPES.has(event.type);
       if (structural) {
         flushPending(run);
-        if (event.type === "RUN_FINISHED") run.header = { ...run.header, finishedAt: now };
+        if (event.type === "RUN_FINISHED" && event.outcome?.type !== "interrupt") {
+          run.header = { ...run.header, finishedAt: now };
+        }
         return storeStructural(run, event);
       }
       if (run.rows.length >= AGENT_EVENT_CAP) {
@@ -233,7 +235,8 @@ export function createMemoryAgentEventLog(): AgentEventLog {
                 yield row;
               }
               if (done || signal?.aborted) return;
-              if (run.header.finishedAt !== undefined && last >= (run.rows.at(-1)?.seq ?? 0)) return;
+              if (run.header.finishedAt !== undefined && last >= (run.rows.at(-1)?.seq ?? 0))
+                return;
               await new Promise<void>((resolve) => {
                 wake = resolve;
               });

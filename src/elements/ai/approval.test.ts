@@ -17,6 +17,7 @@ import {
 } from "../../drivers/journal-postgres.ts";
 import { parseApprovalId, readAgentApproval, resolveAgentApproval } from "./approval.ts";
 import { createGateRuntime, gate } from "../gate.ts";
+import { getAgentEventLog } from "./run-events.ts";
 
 const apps: OkeApp[] = [];
 
@@ -129,9 +130,11 @@ describe("durable tool approval", () => {
       now,
     );
     expect(approved).toEqual({ ok: true });
-    expect(
-      await resolveAgentApproval(store, id, { decision: "deny", tenant: null }, now),
-    ).toEqual({ ok: false, status: 409, reason: "resolved" });
+    expect(await resolveAgentApproval(store, id, { decision: "deny", tenant: null }, now)).toEqual({
+      ok: false,
+      status: 409,
+      reason: "resolved",
+    });
 
     const resumed = await journal.resume(session.runId);
     const result = await aiRuntime.runAgent("support", {
@@ -238,7 +241,11 @@ describe("durable tool approval", () => {
       operator: { id: null },
     };
     expect(
-      await aiRuntime.resolveApproval(parkedId(session), { decision: "approve", tenant: null }, ctx),
+      await aiRuntime.resolveApproval(
+        parkedId(session),
+        { decision: "approve", tenant: null },
+        ctx,
+      ),
     ).toEqual({
       ok: false,
       status: 403,
@@ -512,6 +519,166 @@ describe("approval http", () => {
       stopReason: "completed",
       output: { denied: true, reason: "timeout" },
     });
+  }, 20_000);
+
+  test("follow the run after approve, resume Last-Event-ID, and reject another tenant or gate", async () => {
+    const calls: unknown[] = [];
+    const store = createMemoryJournalStore();
+    let allow = true;
+    const ops = gate.policy("ops", () => allow);
+    const aiRuntime = createAiRuntime({
+      journalStore: store,
+      models: [ai.model("smart")],
+      gates: createGateRuntime({ gates: [ops] }),
+      agents: [
+        ai.agent("support", {
+          model: "smart",
+          maxSteps: 4,
+          tools: [{ name: "refund", approval: true, gate: "public", timeout: "1h" }],
+        }),
+      ],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete(opts) {
+            if (opts.messages.some((message) => message.role === "tool")) {
+              return {
+                text: "Refunded.",
+                raw: {},
+                model: "smart",
+                driverId: "mock",
+                usage: { inputTokens: 2, outputTokens: 1, cost: 0 },
+              };
+            }
+            return {
+              text: "Checking.",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "tc1", name: "refund", arguments: { amount: 10 } }],
+            };
+          },
+        },
+      },
+    });
+    const refund = flow("refund", {
+      do: async (input) => {
+        calls.push(input);
+        return { refunded: true };
+      },
+    });
+    const assist: Binding = {
+      trigger: http.post("/assist").gate(ops),
+      flow: flow("assist", {
+        durable: true,
+        effects: { asks: ["support"], calls: ["refund"] },
+        do: (_input, fx) =>
+          fx.json.stream(fx.run("support", { message: "refund" }, { stream: true })),
+      }) as AnyFlowDef,
+    };
+    resetBindings();
+    const app = oke({
+      name: "approval-follow",
+      env: "test",
+      startScheduler: false,
+      registry: "ignore",
+      gate: { unguardedHttp: "allow", policies: [ops] },
+      bindings: [assist, { trigger: http.post("/refund").public(), flow: refund as AnyFlowDef }],
+      elements: {
+        journal: { store, instanceId: "approval-follow", leaseMs: 30_000, driverId: "memory" },
+        ai: aiRuntime,
+      },
+    });
+    await app.boot({ env: "test" });
+    apps.push(app);
+
+    const parked = await app.fetch(
+      new Request("http://localhost/assist", { method: "POST", body: "{}" }),
+    );
+    expect(parked.status).toBe(200);
+    const first = await parked.text();
+    const started = first.match(/"runId":"([^"]+)"/);
+    const runId = started?.[1];
+    if (!runId) throw new Error("expected RUN_STARTED runId");
+    const interrupt = first.match(/"id":"([^"]+)"/);
+    const approval = interrupt?.[1];
+    if (!approval) throw new Error("expected an approval id");
+
+    const follow = await app.fetch(new Request(`http://localhost/agent/runs/${runId}/events`));
+    expect(follow.status).toBe(200);
+    const reader = follow.body?.getReader();
+    if (!reader) throw new Error("expected a follow body");
+    const decoder = new TextDecoder();
+    let buffered = "";
+    let lastId = "0";
+    const seen = new Set<string>();
+    while (!buffered.includes("TOOL_CALL_START") && buffered.length < 100_000) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffered += decoder.decode(chunk.value, { stream: true });
+    }
+    for (const frame of buffered.split("\n\n")) {
+      const id = frame
+        .split("\n")
+        .find((line) => line.startsWith("id:"))
+        ?.slice(3)
+        .trim();
+      if (id) {
+        seen.add(id);
+        lastId = id;
+      }
+    }
+    await reader.cancel();
+
+    await getAgentEventLog()?.open({
+      runId: "other-tenant",
+      threadId: "t",
+      tenant: "acme",
+      gate: null,
+    });
+    const foreign = await app.fetch(new Request("http://localhost/agent/runs/other-tenant/events"));
+    expect(foreign.status).toBe(404);
+
+    allow = false;
+    const denied = await app.fetch(new Request(`http://localhost/agent/runs/${runId}/events`));
+    expect(denied.status).toBe(403);
+    allow = true;
+
+    const resumed = app.fetch(
+      new Request(`http://localhost/agent/runs/${runId}/events`, {
+        headers: { "last-event-id": lastId },
+      }),
+    );
+    const ok = await app.fetch(
+      new Request("http://localhost/agent/approvals/approve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: approval }),
+      }),
+    );
+    expect(ok.status).toBe(200);
+    await app.resumeDurable(Date.now() + 1000);
+    const rest = await (await resumed).text();
+    expect(rest).toContain("RUN_FINISHED");
+    expect(rest).toContain("refunded");
+    for (const frame of rest.split("\n\n")) {
+      const id = frame
+        .split("\n")
+        .find((line) => line.startsWith("id:"))
+        ?.slice(3)
+        .trim();
+      if (!id) continue;
+      expect(seen.has(id)).toBe(false);
+      const seq = Number(id);
+      expect(seq).toBeGreaterThan(Number(lastId));
+      seen.add(id);
+    }
+    const seqs = [...seen].map(Number).sort((a, b) => a - b);
+    for (let i = 1; i < seqs.length; i++) {
+      expect(seqs[i]).toBe((seqs[i - 1] ?? 0) + 1);
+    }
+    expect(calls).toEqual([{ amount: 10 }]);
   }, 20_000);
 });
 

@@ -163,6 +163,7 @@ async function* frames(
 ): AsyncIterable<unknown> {
   for await (const row of log.subscribe(runId, afterSeq)) {
     yield sseFrame(row.event, String(row.seq));
-    if (row.event.type === "RUN_FINISHED" || row.event.type === "RUN_ERROR") return;
+    if (row.event.type === "RUN_ERROR") return;
+    if (row.event.type === "RUN_FINISHED" && row.event.outcome?.type !== "interrupt") return;
   }
 }

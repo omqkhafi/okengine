@@ -39,7 +39,8 @@ describe.skipIf(apiKey === undefined)("openrouter agent stream live", () => {
     const messages = [
       {
         role: "user" as const,
-        content: "Call the tool orders_get with id 14. Do not answer in prose.",
+        content:
+          "Call orders_get with id 14 and note set to exactly: alpha bravo charlie delta echo foxtrot golf hotel india juliet. No prose.",
       },
     ];
     const tools = [
@@ -48,8 +49,11 @@ describe.skipIf(apiKey === undefined)("openrouter agent stream live", () => {
         description: "Look up an order",
         parameters: {
           type: "object",
-          properties: { id: { type: "string" } },
-          required: ["id"],
+          properties: {
+            id: { type: "string" },
+            note: { type: "string" },
+          },
+          required: ["id", "note"],
         },
       },
     ];
@@ -61,10 +65,12 @@ describe.skipIf(apiKey === undefined)("openrouter agent stream live", () => {
     }
     expect(name).toBe("orders_get");
     expect(streamedArgs.length).toBeGreaterThan(1);
-    const assembled = JSON.parse(streamedArgs.join("")) as { id?: string };
+    const assembled = JSON.parse(streamedArgs.join("")) as { id?: string; note?: string };
     expect(assembled.id).toBe("14");
+    expect(typeof assembled.note).toBe("string");
     const completed = await client.complete({ messages, tools, model: "openrouter/free" });
-    expect(completed.toolCalls?.[0]?.name).toBe("orders_get");
-    expect(completed.toolCalls?.[0]?.arguments).toMatchObject({ id: "14" });
-  });
+    const call = completed.toolCalls?.[0];
+    expect(call?.name).toBe(name);
+    expect(call?.arguments).toEqual(assembled);
+  }, 60_000);
 });

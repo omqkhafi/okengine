@@ -198,7 +198,9 @@ Approving or denying does not continue this SSE response. Follow the run to see 
 
 ## Follow a run
 
-`GET /agent/runs/:runId/events` is `text/event-stream`. Each frame has an `id`. Send that id as `Last-Event-ID` to resume. The route checks the same gate and tenant as the Flow that started the run.
+`GET /agent/runs/:runId/events` is `text/event-stream`. Each frame has an `id`. Send that id as `Last-Event-ID` to resume without gaps or duplicates. The route checks the same gate and tenant as the Flow that started the run. Another tenant, or a gate that denies the caller, is rejected.
+
+An approval interrupt does not end this follow. The stream stays open through the interrupt and continues to the terminal `RUN_FINISHED`. The first run stream still closes after the interrupt. Disconnect, then resume with the last id you received.
 
 The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB) and stores structural events one by one. At the cap, text deltas stop, one `CUSTOM` event named `oke.events.truncated` is stored, and `RUN_FINISHED` is still stored. A finished run's events are deleted after 24 hours.
 

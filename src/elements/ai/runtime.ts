@@ -992,8 +992,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       opts.emit?.({ type: "STEP_STARTED", stepName });
       let result: Awaited<ReturnType<AiModelClient["complete"]>>;
       let streamedLive = false;
+      let executed = false;
       try {
         const produce = async () => {
+          executed = true;
           const turn = await readModelTurn(
             opts.client,
             {
@@ -1032,10 +1034,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       addUsageTokens(tokens, result.usage);
       lastText = result.text;
       lastRaw = result.raw !== undefined ? result.raw : result.text;
-      const messageId = streamedLive ? "" : `m-${++messageSeq}`;
-      const emittedText = streamedLive
-        ? false
-        : emitAssistantText(opts.emit ?? (() => undefined), messageId, result.text);
+      const replayed = opts.journal !== undefined && !executed;
+      const messageId = streamedLive || replayed ? "" : `m-${++messageSeq}`;
+      const emittedText =
+        streamedLive || replayed
+          ? false
+          : emitAssistantText(opts.emit ?? (() => undefined), messageId, result.text);
       if (capHit()) {
         budgetExceeded = true;
         stopReason = "budget";
@@ -1060,7 +1064,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         if (steps >= opts.maxSteps) break;
         steps++;
         const callId = tc.id.length > 0 ? tc.id : `${opts.agentLabel}:${steps}:${index}`;
-        if (!streamedLive) {
+        if (!streamedLive && !replayed) {
           opts.emit?.({
             type: "TOOL_CALL_START",
             toolCallId: callId,
@@ -1667,19 +1671,15 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
 
     streamAgent(agent, runOpts) {
       const queue = createEventQueue();
-      const runId = runOpts.runId ?? `agent-run-${++runSeq}`;
+      const runId = runOpts.journal?.runId ?? runOpts.runId ?? `agent-run-${++runSeq}`;
       const signal = currentAbortSignal();
       const threadId = runOpts.threadId ?? okid();
+      let skipLoggedStart = false;
       if (runOpts.journal) {
-        void eventLog.open({
-          runId,
-          threadId,
-          tenant: runOpts.tenantId ?? null,
-          gate: runOpts.gate ?? null,
-        });
         const inner = queue.emit.bind(queue);
         queue.emit = (event) => {
           inner(event);
+          if (skipLoggedStart && event.type === "RUN_STARTED") return;
           void eventLog.append(runId, event, now());
         };
       }
@@ -1693,7 +1693,16 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       void result.catch(() => undefined);
       void (async () => {
         try {
-          const threadId = runOpts.threadId ?? okid();
+          if (runOpts.journal) {
+            await eventLog.open({
+              runId,
+              threadId,
+              tenant: runOpts.tenantId ?? null,
+              gate: runOpts.gate ?? null,
+            });
+            const prior = await eventLog.read(runId, 0);
+            skipLoggedStart = prior.some((row) => row.event.type === "RUN_STARTED");
+          }
           queue.emit({ type: "RUN_STARTED", threadId, runId });
           const decl = agents.get(agent);
           if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
