@@ -5,10 +5,9 @@ icon: "Zap"
 source: "docs/spec/unified-theory.md"
 ---
 
-Dragonfly is the default `store.kv` image in `dev` and `prod` — a multi-threaded,
-memory-efficient reimplementation of the Redis protocol. Same `redis://` wire format,
-same `redis` driver, zero Flow changes. Pin Redis or Valkey when you want those engines
-instead.
+Dragonfly is the default `store.kv` image in `dev` and `prod`: a multi-threaded Redis-protocol engine.
+Same `redis://` wire format and the same `redis` driver, so Flows do not change.
+Pin Redis or Valkey when you want those engines instead.
 
 <Callout title="The one rule">
   Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store` behaves

@@ -1,20 +1,17 @@
 ---
 title: "Events"
-description: "Stream an agent run as AG-UI events over SSE with fx.json.stream."
+description: "Stream an agent run to a chat UI as AG-UI events over server-sent events."
 icon: "Radio"
 source: "docs/spec/unified-theory.md"
 ---
 
-An agent stream is the same run as `fx.run`, delivered as events a chat UI can render while
-the model is still working. Text, tool calls, and the finish reason arrive as server-sent
-events.
+An agent stream is the same tool loop as `fx.run`, delivered while the model is still working. A support chat shows tokens, tool calls, and a finish reason as server-sent events.
 
-For a support reply that should show tokens and tool calls in the browser — return
-`fx.json.stream` from the Flow.
+Return `fx.json.stream` from the HTTP Flow. Parse the frames with `okengine/client/agent`.
 
 <Callout title="The one rule">
-  `return fx.json.stream(fx.run(agent, { message }, { stream: true }))`. `stream` is the third
-  argument, not a field on the message. `fx.stream` stays plain text.
+  `return fx.json.stream(fx.run(agent, input, { stream: true }))`. `stream` is the third argument.
+  `fx.stream` yields plain text from a model, not these events.
 </Callout>
 
 ## Quick start
@@ -22,63 +19,310 @@ For a support reply that should show tokens and tool calls in the browser — re
 <Steps>
 
 <Step>
-### Run and stream
+### Declare the agent
 
-```typescript
-return fx.json.stream(fx.run(support, { message: "Refund order 14" }, { stream: true }));
+```typescript title="src/core/ai.ts"
+import { ai } from "okengine";
+
+export const smart = ai.model("smart", {
+  provider: "openrouter",
+  model: "openrouter/free",
+});
+
+export const support = ai.agent("support", {
+  model: smart,
+  tools: ["orders.get"],
+  maxSteps: 4,
+});
 ```
 
-The response is `text/event-stream`. Each `data:` frame is one JSON event. `threadId`
-defaults to the run id. Pass `{ stream: true, threadId }` to set it.
+</Step>
+
+<Step>
+### Stream it from HTTP
+
+```typescript title="src/flows/support/assist.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { support } from "@/core/ai";
+
+export const assist = on(
+  http.post({ in: z.object({ message: z.string().min(1) }) }).public(),
+  flow({
+    do: ({ message }, fx) =>
+      fx.json.stream(fx.run(support, { message }, { stream: true })),
+  }),
+);
+```
+
+The response is `text/event-stream`. `threadId` defaults to this run's id. Pass `{ stream: true, threadId }` to set it.
 
 </Step>
 
 <Step>
-### Read the events
+### Read the frames
 
-Core names match AG-UI: `RUN_STARTED`, `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`,
-`TEXT_MESSAGE_END`, `TOOL_CALL_START`, `TOOL_CALL_ARGS`, `TOOL_CALL_END`, `TOOL_CALL_RESULT`,
-`STEP_STARTED`, `STEP_FINISHED`, `RUN_FINISHED`, `RUN_ERROR`.
+```bash
+curl -N -X POST http://localhost:6530/support/assist \
+  -H "content-type: application/json" \
+  -d '{"message":"Where is order 14?"}'
+```
+
+Each `data:` line is one JSON event. A text reply with no tool call looks like this (ids vary):
+
+```text
+data: {"type":"RUN_STARTED","threadId":"agent-run-1","runId":"agent-run-1"}
+
+data: {"type":"STEP_STARTED","stepName":"step-1"}
+
+data: {"type":"TEXT_MESSAGE_START","messageId":"m-1","role":"assistant"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"m-1","delta":"Order 14 is open."}
+
+data: {"type":"TEXT_MESSAGE_END","messageId":"m-1"}
+
+data: {"type":"STEP_FINISHED","stepName":"step-1"}
+
+data: {"type":"RUN_FINISHED","threadId":"agent-run-1","runId":"agent-run-1","result":{"cost":0.01,"stopReason":"completed","output":"Order 14 is open."},"usage":[{"inputTokens":3,"outputTokens":2}]}
+
+data: [DONE]
+```
+
+`usage` is present only when the model reported token counts. `cost` and `stopReason` are on `result`, not on `usage`.
 
 </Step>
 
 <Step>
-### Finish payload
+### Parse with the client
 
-`RUN_FINISHED.usage` is token counts when the model reported them. `cost` and `stopReason`
-are on `result`. Parse frames with `okengine/client/agent` — that import stays off
-`okengine/client`.
+```typescript
+import { readAgentEvents } from "okengine/client/agent";
+
+const response = await fetch("http://localhost:6530/support/assist", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ message: "Where is order 14?" }),
+});
+
+for await (const event of readAgentEvents(response)) {
+  if (event.type === "TEXT_MESSAGE_CONTENT") process.stdout.write(event.delta);
+}
+```
+
+Import `okengine/client/agent`. That module stays off `okengine/client`.
 
 </Step>
 
 </Steps>
 
-## Subagent notices
+## Event reference
 
-A child agent is `CUSTOM` with `name` `oke.subagent.started`, `oke.subagent.finished`, or
-`oke.subagent.error`. `okengine/client/agent` also exposes `subagent.started`,
-`subagent.finished`, and `subagent.error`.
+Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
+
+| Type | Fields | When it fires |
+| --- | --- | --- |
+| `RUN_STARTED` | `threadId`, `runId` | The run begins. `threadId` is the option you passed, or the run id. |
+| `STEP_STARTED` | `stepName` | One model call starts. Names are `step-1`, `step-2`, … |
+| `TEXT_MESSAGE_START` | `messageId`, `role` | Assistant text is about to arrive. `role` is `assistant`. Empty text is skipped. |
+| `TEXT_MESSAGE_CONTENT` | `messageId`, `delta` | The full assistant text for that step, in one frame. |
+| `TEXT_MESSAGE_END` | `messageId` | That text message is complete. |
+| `TOOL_CALL_START` | `toolCallId`, `toolCallName`, `parentMessageId` | The model named a tool. `parentMessageId` is the assistant message just emitted. |
+| `TOOL_CALL_ARGS` | `toolCallId`, `delta` | The tool arguments as one JSON string. |
+| `TOOL_CALL_END` | `toolCallId` | Arguments are complete. The tool has not run yet. |
+| `TOOL_CALL_RESULT` | `messageId`, `toolCallId`, `content`, `role` | The tool returned. `role` is `tool`. `content` is a string. |
+| `STEP_FINISHED` | `stepName` | That model step is done, including its tool calls. |
+| `RUN_FINISHED` | `threadId`, `runId`, `result?`, `usage?`, `outcome?` | The loop stopped, or a tool is waiting for approval. |
+| `RUN_ERROR` | `message`, `code?` | The run failed and did not finish. `code` is the error name when it is not `Error`. |
+| `CUSTOM` | `name`, `value` | A nested agent started, finished, or failed. |
+
+`RUN_FINISHED.result` is `{ cost, stopReason, output }`. `cost` is the sum of model-reported spend for this run. `output` is the last tool result, or the last model payload when no tool ran.
+
+`RUN_FINISHED.usage` is a one-element array, `{ inputTokens?, outputTokens? }`, and only when those numbers came from the model. Counts are never invented.
+
+`messageId` values are `m-1`, `m-2`, … inside the run. A missing provider tool-call id becomes `agent:step:index`.
+
+## Tool approval
+
+A tool with `approval` and `gate` parks a durable Flow. The stream emits `RUN_FINISHED` and then the response ends. The browser does not stay open for the rest of the run.
+
+```json
+{
+  "type": "RUN_FINISHED",
+  "threadId": "agent-run-1",
+  "runId": "agent-run-1",
+  "outcome": {
+    "type": "interrupt",
+    "interrupts": [
+      {
+        "id": "YWdlbnQtcnVuLTEuY2FsbF8x",
+        "reason": "approval",
+        "payload": { "tool": "refund", "args": { "amount": 10 } }
+      }
+    ]
+  }
+}
+```
+
+Show `payload.tool` and `payload.args`. Keep `id`. That id is the only handle for the decision.
+
+Resolve it from a Flow, or from the built-in routes. The routes are public so the request can arrive. The tool's gate is checked on the call. A denying gate is 403. A missing id, or a tenant that does not match the park, is 404.
+
+```typescript
+await fx.agent.approve(id, { args: { amount: 4 } });
+await fx.agent.deny(id, { reason: "over the limit" });
+```
+
+```bash
+curl -X POST http://localhost:6530/agent/approvals/approve \
+  -H "content-type: application/json" \
+  -d '{"id":"YWdlbnQtcnVuLTEuY2FsbF8x","args":{"amount":4}}'
+```
+
+```bash
+curl -X POST http://localhost:6530/agent/approvals/deny \
+  -H "content-type: application/json" \
+  -d '{"id":"YWdlbnQtcnVuLTEuY2FsbF8x","reason":"over the limit"}'
+```
+
+`args` replaces the tool input. `reason` is what the model sees after a deny. The first decision wins. The default wait is `24h`, then the tool is denied with reason `timeout`.
+
+| Outcome | HTTP | What you do |
+| --- | --- | --- |
+| `{ ok: true }` | 200 `{ "data": { "ok": true }, "error": null }` | The journal sleep wakes now. |
+| Already resolved | 409 `Conflict`. No `Retry-After`. Message: `That value is already in use.` | Stop. Do not retry. |
+| Lease held | 409 `JournalLeaseBusy` with `Retry-After`. Message: `This run is locked by another worker. Retry after the given delay.` | Retry after the delay. |
+
+Approving or denying does not continue this SSE response. The scheduler resumes the durable run in the background and replays the tool once.
+
+## Patterns
+
+<Tabs items={["One message", "History", "Thread id", "Subagents"]}>
+
+<Tab value="One message">
+
+A string and `{ message }` are the same turn. Passing both throws `fx.run: pass message or messages, not both`.
+
+```typescript
+return fx.json.stream(fx.run(support, "Where is order 14?", { stream: true }));
+```
+
+</Tab>
+
+<Tab value="History">
+
+`messages` is the prior thread. Roles are `system`, `user`, `assistant`, and `tool`.
+
+```typescript
+return fx.json.stream(
+  fx.run(
+    support,
+    {
+      messages: [
+        { role: "user", content: "Where is order 14?" },
+        { role: "assistant", content: "Looking it up." },
+        { role: "user", content: "Refund it." },
+      ],
+    },
+    { stream: true },
+  ),
+);
+```
+
+</Tab>
+
+<Tab value="Thread id">
+
+Set `threadId` when the chat already has an id. Otherwise it is the run id (`agent-run-1`, …).
+
+```typescript
+return fx.json.stream(
+  fx.run(support, { message }, { stream: true, threadId: chatId }),
+);
+```
+
+`RUN_STARTED` and `RUN_FINISHED` both carry that `threadId`.
+
+</Tab>
+
+<Tab value="Subagents">
+
+A tool that names another agent emits `CUSTOM` on the parent stream. `okengine/client/agent` also returns typed names.
+
+| `CUSTOM.name` | Parsed `type` | `value` |
+| --- | --- | --- |
+| `oke.subagent.started` | `subagent.started` | `runId`, `parentToolCallId?` |
+| `oke.subagent.finished` | `subagent.finished` | `runId`, `parentToolCallId?` |
+| `oke.subagent.error` | `subagent.error` | `runId`, `parentToolCallId?` |
+
+Any other `CUSTOM` name stays `CUSTOM`. Nesting stops at `maxDepth` (default 3).
+
+</Tab>
+
+</Tabs>
+
+## Text stream or event stream
+
+| Call | What each SSE `data:` frame is |
+| --- | --- |
+| `fx.json.stream(fx.stream(model, { prompt }))` | A JSON string of plain text (`"Hel"`, `"lo"`). |
+| `fx.json.stream(fx.run(agent, input, { stream: true }))` | One AG-UI event object. |
+
+`fx.stream` is the model text iterator. `fx.json.stream` is the SSE carrier. Agent UIs use the second row.
+
+## Abort and stop reasons
+
+Disconnecting the HTTP client aborts the in-flight model call. The run records `stopReason` `aborted`. If the frame is still written, it is `RUN_ERROR` with `message` `aborted` and `code` `AbortError`.
+
+`result.stopReason` on a normal `RUN_FINISHED`:
+
+| `stopReason` | Meaning |
+| --- | --- |
+| `completed` | The model stopped calling tools. A gate denial fed back to the model stays `completed`. |
+| `max_steps` | The loop hit `maxSteps` (default 6). |
+| `budget` | Spend reached `budget.maxCostPerRun`. The trail so far is the output. This does not throw. |
+
+`denied` (unknown tool) and `aborted` arrive as `RUN_ERROR`, not as `result.stopReason`. A thrown tool fails the stream with no `RUN_ERROR` frame. The recorded reason is `error`.
 
 ## Troubleshooting
 
 <Accordions>
 
-<Accordion title="The stream ended on RUN_ERROR">
-  The `message` is the failure (`aborted`, an unknown tool, or a prompt budget throw).
-  Disconnecting the request aborts the model call.
+<Accordion title='ai: flow "assist" must set durable: true to run agent "support"'>
+  The tool has `approval`, and the Flow is not durable. The stream errors with `AiDurableRequiredError`. Set `durable: true` on that Flow. A false `approval` predicate does not park.
+</Accordion>
+
+<Accordion title='RUN_ERROR: ai: model requested unknown tool "refund"'>
+  The model called a tool that is not on `ai.agent({ tools })`. `code` is `AgentLoopHalt`. Add the Flow name to `tools`, or stop offering it in the prompt.
+</Accordion>
+
+<Accordion title="RUN_FINISHED stopReason is budget">
+  `result.stopReason` is `budget` and `result.cost` is the spend so far. Raise `budget.maxCostPerRun`, or treat the partial `output` as the reply. A prompt's `maxCostPerCall` is different: `fx.ask` throws `ai: prompt "…" exceeded maxCostPerCall …` (`AiBudgetExceededError`).
+</Accordion>
+
+<Accordion title="The client disconnected">
+  The model call aborts. You may see `RUN_ERROR` with message `aborted` and code `AbortError`, or only a closed socket. The recorded `stopReason` is `aborted`.
+</Accordion>
+
+<Accordion title="A frame is not one of the core types">
+  `readAgentEvents` yields `CUSTOM` unchanged when `name` is not `oke.subagent.started`, `oke.subagent.finished`, or `oke.subagent.error`. Those three become `subagent.started`, `subagent.finished`, and `subagent.error`. An object with no `type` is skipped. `data: [DONE]` ends the body and is not an event.
+</Accordion>
+
+<Accordion title="Conflict or JournalLeaseBusy">
+  A second approve or deny after the decision is stored is `Conflict`. Do not retry it. A lost race while another worker holds the run is `JournalLeaseBusy` with `Retry-After`. Retry only that code.
 </Accordion>
 
 </Accordions>
 
 ## Learn more
 
-- [Agents](/docs/elements/ai/agents) — `fx.run`, `stopReason`, tools
-- [Prompts](/docs/elements/ai/prompts) — tool-less `fx.ask` still throws on budget
+- [Agents](/docs/elements/ai/agents) — `fx.run`, tools, `maxSteps`, and approval
+- [Prompts](/docs/elements/ai/prompts) — tool-less `fx.ask` still throws on `maxCostPerCall`
+- [MCP](/docs/elements/ai/mcp) — external tools in the same loop
 
 ## Next
 
 <Cards>
-  <Card title="Agents" description="Bounded tool loops." href="/docs/elements/ai/agents" />
-  <Card title="MCP" description="External tool servers." href="/docs/elements/ai/mcp" />
-  <Card title="AI" description="Element overview." href="/docs/elements/ai" />
+  <Card title="Agents" description="Bounded tool loops with fx.run." href="/docs/elements/ai/agents" />
+  <Card title="Decisions" description="One calibrated choice, with a person when it cannot auto." href="/docs/elements/ai/decide" />
+  <Card title="AI" description="Models, prompts, agents, and decisions." href="/docs/elements/ai" />
 </Cards>
