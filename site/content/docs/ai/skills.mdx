@@ -23,7 +23,7 @@ Contributor-only skills in the same tree (not required for app authors):
 
 ## AGENTS.md — the root contract
 
-Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, and peers) read at session start. It is deliberately short and absolute: every backend behavior is a Flow (`on(Trigger) → Effects`), there are eight elements bound to one contract, all world access goes through `fx`, drivers are named after protocols, and the ports/budgets are fixed. Its closing rule is the one that keeps agents honest: **if the documentation is silent, stop and ask** — never invent the API.
+Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, and peers) read at session start. It is deliberately short and absolute: every backend behavior is a Flow (`on(Trigger) → Effects`), there are eight elements bound to one contract, all world access goes through `fx`, drivers are named after protocols, and the ports/budgets are fixed. The AI section separates `fx.ask`, `fx.run`, and `fx.decide`: tool approvals need `durable: true` and a human resolve, streams follow `GET /agent/runs/:runId/events`, and autonomy comes only from `oke-decisions.lock.json`. Its closing rule is the one that keeps agents honest: **if the documentation is silent, stop and ask** — never invent the API.
 
 ## Skills — installable know-how
 

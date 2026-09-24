@@ -42,6 +42,10 @@ export interface StoredAgentEvent {
 export interface AgentRunHeader {
   readonly runId: string;
   readonly threadId: string;
+  /** Agent that opened the run. Absent on logs written before this field. */
+  readonly agent?: string;
+  /** Parent agent run, when this run is a nested tool. */
+  readonly parentRunId?: string;
   readonly tenant: string | null;
   /** Every non-public gate on the calling Flow. */
   readonly gates: readonly string[];

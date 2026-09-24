@@ -14,6 +14,7 @@ Quick reminders (details live in `AGENTS.md`):
 - Invoke contracts on exposures (`http.*` / `call` / `mcp.tool`); emit schemas on Signal/Channel; Flow is `do` only
 - One law. Eight elements. One contract.
 - All world access goes through `fx`
+- AI: `fx.ask` (prompt, repair, budgets) vs `fx.run` (agent, `maxSteps`, `maxCostPerRun`, `stopReason`) vs `fx.decide`. Tool `approval` needs `durable: true`; resolve in the Console or the approval routes, never from MCP. Stream with `fx.json.stream(fx.run(agent, input, { stream: true }))` and follow `GET /agent/runs/:runId/events` (`Last-Event-ID`); client `okengine/client/agent`, React `useAgentRun`. `fx.decide` is exactly one of `review` or `onUncertain: "abstain"`; review only in a durable non-HTTP Flow; autonomy needs `{ maxError, audit }` and comes only from `oke-decisions.lock.json`.
 - Ports: Backend `6530` · Console `6533` · app MCP `6535` · docs MCP `6536`
 
 Machine-readable docs:

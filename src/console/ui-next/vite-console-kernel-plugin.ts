@@ -15,7 +15,7 @@
 import type { Plugin, ViteDevServer } from "vite";
 import { isPortInUse } from "../../cli/ports.ts";
 import { CONSOLE_PORT } from "../../runtime/types.ts";
-import { serveConsole, type ConsoleServerHandle } from "../server/serve.ts";
+import type { ConsoleServerHandle } from "../server/serve.ts";
 import {
   isConsoleFresh,
   isConsoleKernelSkipped,
@@ -29,6 +29,21 @@ import {
   UI_NEXT_SEED_VAULT_LAYERS,
   uiNextSeededSummary,
 } from "./ui-next-seed.ts";
+
+/**
+ * Load a Console module from its source file.
+ *
+ * Vite bundles this plugin into a config chunk. A literal `import()` is
+ * inlined there, and Bun `import.meta.dir` then points at that chunk, so
+ * `lazyRequire` looks for `aot.js` beside the chunk. A variable specifier
+ * stays out of the bundle and keeps the real source directory.
+ *
+ * @param relativePath - Path relative to this plugin file
+ */
+async function importSource<T>(relativePath: string): Promise<T> {
+  const href = new URL(relativePath, import.meta.url).href;
+  return (await import(href)) as T;
+}
 
 /** Vite SPA URL for ui-next (proxies `/console` → kernel :6533). */
 const UI_NEXT_DEV_URL = "http://127.0.0.1:6537";
@@ -78,6 +93,7 @@ function printConsoleNextBanner(
 export function okeConsoleKernelPlugin(): Plugin {
   let handle: ConsoleServerHandle | null = null;
   let stopping = false;
+  let parkedStop: (() => Promise<void>) | null = null;
 
   const stop = (): void => {
     if (stopping || !handle) return;
@@ -87,6 +103,8 @@ export function okeConsoleKernelPlugin(): Plugin {
     } catch {
       // ignore
     }
+    void parkedStop?.();
+    parkedStop = null;
     handle = null;
   };
 
@@ -133,6 +151,15 @@ export function okeConsoleKernelPlugin(): Plugin {
 
       const operators = fresh ? undefined : (await seedUiNextDevOperator()).store;
 
+      const parked = seeded
+        ? await importSource<typeof import("./seed-parked-approval.ts")>(
+            "./seed-parked-approval.ts",
+          ).then((mod) => mod.bootParkedApproval())
+        : null;
+      if (parked) parkedStop = () => parked.stop();
+
+      const { serveConsole } =
+        await importSource<typeof import("../server/serve.ts")>("../server/serve.ts");
       handle = await serveConsole({
         port,
         hostname,
@@ -142,10 +169,21 @@ export function okeConsoleKernelPlugin(): Plugin {
         env: "test",
         secret: process.env.OKE_CONSOLE_SECRET ?? "oke-console-next-dev-secret",
         ...(operators ? { operators } : {}),
+        ...(parked ? { journalStore: parked.store } : {}),
         ...(seeded
           ? { manifest: UI_NEXT_SEEDED_MANIFEST, vaultLayerSeed: UI_NEXT_SEED_VAULT_LAYERS }
           : {}),
       });
+      if (parked) {
+        handle.console.state.forwardAgent = (request) => parked.fetch(request);
+        handle.console.state.afterAgentApproval = () => parked.resume();
+        if (parked.log) {
+          const { setAgentEventLog } = await importSource<
+            typeof import("../../elements/ai/run-events.ts")
+          >("../../elements/ai/run-events.ts");
+          setAgentEventLog(parked.log);
+        }
+      }
 
       if (seeded) {
         const runs = handle.console.app.bootResult?.runs;
@@ -154,7 +192,8 @@ export function okeConsoleKernelPlugin(): Plugin {
         }
         await appendUiNextSeedRun(runs);
         if (handle.console.state.storeRuntime) {
-          const { seedUiNextStoreData } = await import("./ui-next-seed.ts");
+          const { seedUiNextStoreData } =
+            await importSource<typeof import("./ui-next-seed.ts")>("./ui-next-seed.ts");
           await seedUiNextStoreData(handle.console.state.storeRuntime);
         }
         // Same thin host substitute as the Playwright fixture — Replay hits
@@ -162,7 +201,8 @@ export function okeConsoleKernelPlugin(): Plugin {
         handle.console.state.replayTrace = async ({ event, dryRun }) => ({
           output: { replayed: event.id, dryRun, input: event.input ?? null },
         });
-        const { bootUiNextSeedInvoke } = await import("./seed-invoke-host.ts");
+        const { bootUiNextSeedInvoke } =
+          await importSource<typeof import("./seed-invoke-host.ts")>("./seed-invoke-host.ts");
         const seedInvoke = await bootUiNextSeedInvoke({
           ...(handle.console.state.storeRuntime
             ? { storeRuntime: handle.console.state.storeRuntime }

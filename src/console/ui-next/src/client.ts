@@ -713,6 +713,102 @@ export async function aiList(): Promise<ConsoleApiResult<AiListPayload>> {
   return consoleFetch<AiListPayload>("/console/ai");
 }
 
+/** Why an agent run stopped. */
+export type AgentStopReason = "completed" | "max_steps" | "budget" | "denied" | "aborted" | "error";
+
+/** One agent run on `GET /console/ai/runs`. */
+export type AgentRunRow = {
+  readonly id: string;
+  readonly agent: string;
+  readonly status: "running" | "finished" | "error" | "interrupted";
+  readonly stopReason?: AgentStopReason;
+  readonly error?: string;
+  readonly steps: number;
+  readonly cost: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly threadId?: string;
+  readonly startedAt: number;
+  readonly finishedAt?: number;
+  readonly parentRunId?: string;
+  readonly tenant: string | null;
+  readonly message: string;
+  readonly trail: readonly {
+    readonly tool: string;
+    readonly status: "ok" | "denied" | "pending";
+    readonly approver?: string;
+    readonly denial: { readonly gate: string; readonly reason: string } | null;
+    readonly at: number;
+  }[];
+  readonly denials: readonly { readonly tool: string; readonly gate: string; readonly reason: string }[];
+  readonly repairs: readonly { readonly prompt: string; readonly at: number; readonly attempts: number }[];
+  readonly children: readonly {
+    readonly id: string;
+    readonly agent: string;
+    readonly status: AgentRunRow["status"];
+    readonly parentRunId?: string;
+  }[];
+};
+
+/** One pending tool approval. */
+export type AgentApprovalRow = {
+  readonly id: string;
+  readonly agent: string;
+  readonly tool: string;
+  readonly args: unknown;
+  readonly requestedAt: number;
+  readonly ageMs: number;
+  readonly gate: string;
+  readonly tenant: string | null;
+  readonly runId: string;
+};
+
+/**
+ * GET /console/ai/runs — agent runs, trails, and the subagent tree.
+ */
+export async function agentRunsList(): Promise<ConsoleApiResult<{ runs: readonly AgentRunRow[] }>> {
+  return consoleFetch<{ runs: readonly AgentRunRow[] }>("/console/ai/runs");
+}
+
+/**
+ * POST /console/ai/approvals/approve — optional edited args must already be JSON.
+ *
+ * @param body - Approval id and optional replacement args
+ */
+export async function agentApprovalApprove(body: {
+  readonly id: string;
+  readonly args?: unknown;
+}): Promise<ConsoleApiResult<{ ok: true }>> {
+  return consoleFetch<{ ok: true }>("/console/ai/approvals/approve", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/ai/approvals/deny.
+ *
+ * @param body - Approval id and optional reason
+ */
+export async function agentApprovalDeny(body: {
+  readonly id: string;
+  readonly reason?: string;
+}): Promise<ConsoleApiResult<{ ok: true }>> {
+  return consoleFetch<{ ok: true }>("/console/ai/approvals/deny", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * GET /console/ai/approvals — pending tool approvals.
+ */
+export async function agentApprovalsList(): Promise<
+  ConsoleApiResult<{ rows: readonly AgentApprovalRow[] }>
+> {
+  return consoleFetch<{ rows: readonly AgentApprovalRow[] }>("/console/ai/approvals");
+}
+
 /** One decision on `GET /console/decisions`. */
 export type DecisionListRow = {
   readonly name: string;

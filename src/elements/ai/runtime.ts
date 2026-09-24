@@ -190,6 +190,14 @@ export interface AgentRunRecord {
   readonly parentRunId?: string;
   /** Message when {@link stopReason} is `error`. */
   readonly error?: string;
+  /** AG-UI thread, when the run opened a follow log. */
+  readonly threadId?: string;
+  /** Epoch ms the run finished. Absent while it is still open. */
+  readonly finishedAt?: number;
+  /** Driver-reported input tokens. Omitted when the driver did not supply them. */
+  readonly inputTokens?: number;
+  /** Driver-reported output tokens. Omitted when the driver did not supply them. */
+  readonly outputTokens?: number;
 }
 
 /** Fallback attempt for model routing (`via` chains). */
@@ -553,11 +561,14 @@ async function allocateAgentRunId(agent: string, runOpts: AiAgentRunOptions): Pr
 function agentLogHeader(
   runId: string,
   threadId: string,
+  agent: string,
   runOpts: AiAgentRunOptions,
 ): AgentRunHeader {
   return {
     runId,
     threadId,
+    agent,
+    ...(runOpts.parentRunId !== undefined ? { parentRunId: runOpts.parentRunId } : {}),
     tenant: runOpts.tenantId ?? null,
     gates: runOpts.gates ?? [],
     userId: runOpts.userId ?? runOpts.auth?.userId ?? null,
@@ -835,6 +846,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const id = approvalId(opts.journal.runId, toolCallId);
       const record: AgentApprovalRecord = {
         status: "pending",
+        agent: agentLabel,
         tool: capability,
         args,
         gate: approval.gate,
@@ -1579,7 +1591,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const started = now();
       const runId = await allocateAgentRunId(agent, runOpts);
       const threadId = runOpts.threadId ?? okid();
-      const logHeader = agentLogHeader(runId, threadId, runOpts);
+      const logHeader = agentLogHeader(runId, threadId, agent, runOpts);
       const safeAppend = async (event: AgUiEvent): Promise<void> => {
         try {
           await eventLog.append(runId, event, now());
@@ -1615,7 +1627,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           denials: partial.denials,
           output: partial.output,
           at: started,
+          finishedAt: now(),
+          threadId,
           cost: partial.cost,
+          ...(loopTokens.inputTokens !== undefined ? { inputTokens: loopTokens.inputTokens } : {}),
+          ...(loopTokens.outputTokens !== undefined
+            ? { outputTokens: loopTokens.outputTokens }
+            : {}),
         };
         pushObservability(agentRuns, record);
         return {
@@ -1686,6 +1704,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             threadId,
             runId,
             result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
+            ...(loopTokens.inputTokens !== undefined || loopTokens.outputTokens !== undefined
+              ? { usage: [tokenFields(loopTokens)] }
+              : {}),
           });
         }
         return settled;
@@ -1719,7 +1740,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               type: "RUN_FINISHED",
               threadId,
               runId,
-              result: { cost: err.cost, stopReason: err.stopReason, output: err.output },
+              result: {
+                cost: err.cost,
+                stopReason: err.stopReason,
+                output: err.output,
+              },
+              ...(loopTokens.inputTokens !== undefined || loopTokens.outputTokens !== undefined
+                ? { usage: [tokenFields(loopTokens)] }
+                : {}),
             });
           }
           return result;
@@ -1842,7 +1870,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         try {
           if (runOpts.journal) {
             runId = await allocateAgentRunId(agent, runOpts);
-            await eventLog.open(agentLogHeader(runId, threadId, runOpts));
+            await eventLog.open(agentLogHeader(runId, threadId, agent, runOpts));
             const prior = await eventLog.read(runId, 0);
             skipLoggedStart = prior.some((row) => row.event.type === "RUN_STARTED");
           } else {

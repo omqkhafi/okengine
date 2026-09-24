@@ -82,6 +82,15 @@ export default defineConfig(({ command }) => {
           changeOrigin: true,
           ws: true,
         },
+        "/agent": {
+          // `oke dev` serves follow on the app (:6530). An explicit
+          // `OKE_CONSOLE_PROXY` is the Console kernel, which forwards `/agent`.
+          target:
+            attachToOkeDev && process.env["OKE_CONSOLE_PROXY"] === undefined
+              ? "http://127.0.0.1:6530"
+              : consoleProxy,
+          changeOrigin: true,
+        },
       },
     },
   };

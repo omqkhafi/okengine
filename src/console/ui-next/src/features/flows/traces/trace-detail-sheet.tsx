@@ -59,6 +59,7 @@ import { useManifest } from "../data/use-manifest.ts";
 import { NODE_ACCENT } from "../graph/flow-graph-theme.ts";
 import { effectBarColor, effectKindIcon, type RunEffectKind } from "./effect-kind.ts";
 import {
+  effectAiHref,
   effectEventLabel,
   effectSummaryChips,
   type EffectSummaryChip,
@@ -704,6 +705,22 @@ function effectExternalSuffix(external: WaterfallBar["external"]): string {
 /**
  * One effect row in Event Details — shared by flat runs and expanded lanes.
  */
+function EffectResource({
+  effect,
+}: {
+  readonly effect: Pick<RunEffect, "kind" | "resource">;
+}): JSX.Element {
+  const manifest = useManifest();
+  const agents = new Set(Object.keys(manifest.data?.ai?.agents ?? {}));
+  const href = effectAiHref(effect, agents);
+  if (!href) return <>{effect.resource}</>;
+  return (
+    <a href={href} data-slot="trace-effect-link" onClick={(event) => event.stopPropagation()}>
+      {effect.resource}
+    </a>
+  );
+}
+
 function EventRow({
   effect,
   index,
@@ -751,7 +768,7 @@ function EventRow({
           {effectEventLabel(effect)}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-          {effect.resource}
+          <EffectResource effect={effect} />
           {effectExternalSuffix(effect.external)}
         </span>
         <span className="shrink-0 tabular-nums text-muted-foreground">
@@ -840,7 +857,7 @@ function EventLane({
           {effectEventLabel(lane)}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-          {lane.resource}
+          <EffectResource effect={lane} />
           {effectExternalSuffix(lane.external)}
         </span>
         <span className={EXPLORER_COUNT_CLASS}>×{lane.bars.length}</span>
@@ -1239,7 +1256,7 @@ function WaterfallLaneRow({
           {effectEventLabel(lane)}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-          {lane.resource}
+          <EffectResource effect={lane} />
           {effectExternalSuffix(lane.external)}
         </span>
         <span className={EXPLORER_COUNT_CLASS}>×{lane.bars.length}</span>

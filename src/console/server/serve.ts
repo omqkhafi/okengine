@@ -202,6 +202,10 @@ export async function serveConsole(
 
     const authed = withCookieAuth(request);
 
+    if (url.pathname.startsWith("/agent/") && handle.state.forwardAgent) {
+      return handle.state.forwardAgent(request);
+    }
+
     if (url.pathname.startsWith("/console/")) {
       const response = await runWithDevSurface("Console", () => handle.app.fetch(authed));
       const withCookies = await attachSessionCookies(authed, response);

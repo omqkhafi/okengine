@@ -22,6 +22,7 @@ import { eventHasIrreversible, runReplay } from "../../cli/replay.ts";
 import { createRunsRuntime } from "../../runs/runtime.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
+import { agentConsoleBindings } from "./ai-runs-flows.ts";
 import { decisionConsoleBindings } from "./decisions-flows.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
 import { clearClaimCodeArtifact, verifyClaimCode } from "./claim.ts";
@@ -925,7 +926,8 @@ const AiListOut = z.object({
       agent: z.string(),
       message: z.string(),
       ok: z.boolean(),
-      stopReason: z.enum(["completed", "max_steps", "budget", "denied", "aborted"]),
+      stopReason: z.enum(["completed", "max_steps", "budget", "denied", "aborted", "error"]),
+      error: z.string().optional(),
       steps: z.number(),
       cost: z.number(),
       at: z.number(),
@@ -2393,6 +2395,7 @@ export function createConsoleBindings(state: ConsoleState): {
       channelSendTest,
     ),
     ...decisionConsoleBindings(state),
+    ...agentConsoleBindings(state),
   ];
 
   return {

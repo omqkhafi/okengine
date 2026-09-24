@@ -11,7 +11,7 @@ import {
 } from "../lib/window-stats.ts";
 
 /** Right-pane mode on `/observability`. */
-export type ObservabilityView = "metrics" | "query";
+export type ObservabilityView = "metrics" | "query" | "ai";
 
 /** Search params for `/observability`. */
 export interface ObservabilitySearch {
@@ -20,6 +20,7 @@ export interface ObservabilitySearch {
   readonly error?: string;
   readonly q?: string;
   readonly view?: ObservabilityView;
+  readonly agentRun?: string;
 }
 
 /**
@@ -33,13 +34,16 @@ export function validateObservabilitySearch(search: Record<string, unknown>): Ob
   const error =
     typeof search.error === "string" && search.error.length > 0 ? search.error : undefined;
   const q = typeof search.q === "string" && search.q.length > 0 ? search.q : undefined;
-  const view = search.view === "query" ? "query" : undefined;
+  const view = search.view === "query" || search.view === "ai" ? search.view : undefined;
+  const agentRun =
+    typeof search.agentRun === "string" && search.agentRun.length > 0 ? search.agentRun : undefined;
   return {
     ...(run !== undefined ? { run } : {}),
     ...(window !== DEFAULT_OBSERVABILITY_WINDOW ? { window } : {}),
     ...(error !== undefined ? { error } : {}),
     ...(q !== undefined ? { q } : {}),
     ...(view !== undefined ? { view } : {}),
+    ...(agentRun !== undefined ? { agentRun } : {}),
   };
 }
 
@@ -54,7 +58,9 @@ export function useObservabilitySelection() {
   const window = parseObservabilityWindow(search.window);
   const selectedErrorKey = typeof search.error === "string" ? search.error : null;
   const query = typeof search.q === "string" ? search.q : "";
-  const view: ObservabilityView = search.view === "query" ? "query" : "metrics";
+  const view: ObservabilityView =
+    search.view === "query" || search.view === "ai" ? search.view : "metrics";
+  const agentRunId = typeof search.agentRun === "string" ? search.agentRun : null;
 
   const patch = useCallback(
     (next: Partial<ObservabilitySearch>) => {
@@ -106,16 +112,25 @@ export function useObservabilitySelection() {
     [patch],
   );
 
+  const setAgentRun = useCallback(
+    (run: string | null) => {
+      patch({ agentRun: run ?? undefined, view: "ai" });
+    },
+    [patch],
+  );
+
   return {
     selectedRunId,
     window,
     selectedErrorKey,
     query,
     view,
+    agentRunId,
     setSelectedRun,
     setWindow,
     setSelectedError,
     setQuery,
     setView,
+    setAgentRun,
   };
 }

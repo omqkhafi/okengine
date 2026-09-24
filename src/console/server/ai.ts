@@ -161,7 +161,11 @@ export interface ProjectAiOptions {
  */
 export function createManifestAiRuntime(
   manifest: Manifest | null,
-  options: { readonly now?: () => number } = {},
+  options: {
+    readonly now?: () => number;
+    readonly journalStore?: import("../../kernel/journal.ts").JournalStore | null;
+    readonly eventLog?: import("../../elements/ai/run-events.ts").AgentEventLog;
+  } = {},
 ): AiRuntime {
   const models = Object.entries(manifest?.ai?.models ?? {}).map(([name, m]) =>
     ai.model(name, {
@@ -203,6 +207,8 @@ export function createManifestAiRuntime(
     defaultDriver: mockAiDriver,
     effectsForFlow: (flowName) => effectsForFlowFromManifest(manifest, flowName),
     now: options.now,
+    ...(options.journalStore ? { journalStore: options.journalStore } : {}),
+    ...(options.eventLog ? { eventLog: options.eventLog } : {}),
   });
 }
 

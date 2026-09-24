@@ -55,6 +55,13 @@ We build only what genuinely does not exist: the effect system, the Manifest and
 
 A direct `node:` import (or any other side-channel I/O) in element or flow code is a **defect**. `fx` is the single door to the outside world; effects are inferred from what a Flow touches through it. Deterministic tests, least privilege, cache invalidation, live queries, and durability all depend on this invariant.
 
+## AI
+
+- `fx.ask` runs a prompt (repair, budgets). `fx.run` runs an agent (`maxSteps`, `maxCostPerRun`, `stopReason`). `fx.decide` runs a decision.
+- A tool with `approval` requires `durable: true`. Resolve it in the Console or on the approval routes. Do not resolve it from MCP.
+- Stream with `return fx.json.stream(fx.run(agent, input, { stream: true }))`. Follow with `GET /agent/runs/:runId/events` (`Last-Event-ID`). Client: `okengine/client/agent`. React: `useAgentRun`.
+- `fx.decide` takes exactly one of `review` or `onUncertain: "abstain"`. Review only inside a durable non-HTTP Flow (emit to a consumer). Autonomy needs `{ maxError, audit }` and comes only from `oke-decisions.lock.json` (`oke decide certify` / `oke decide promote`).
+
 ## Ports
 
 | Port     | Surface              |

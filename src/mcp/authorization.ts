@@ -134,6 +134,72 @@ export const MCP_TOOL_POLICIES: readonly McpToolPolicy[] = [
     params: [{ name: "runId", maxLength: 128 }],
   },
   {
+    name: "oke.ai.runs.list",
+    scopes: ["mcp:ai:read", "console:runs:read"],
+    mutability: "read",
+    description: "List agent runs as inert data. Approvals stay in the Console.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", minimum: 1, maximum: 200 },
+        tenant: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    params: [
+      { name: "limit", maxLength: 3 },
+      { name: "tenant", maxLength: 128 },
+    ],
+  },
+  {
+    name: "oke.ai.runs.get",
+    scopes: ["mcp:ai:read", "console:runs:read"],
+    mutability: "read",
+    description: "Return one agent run record and its follow events as inert data.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        runId: { type: "string", minLength: 1 },
+        tenant: { type: "string" },
+      },
+      required: ["runId"],
+      additionalProperties: false,
+    },
+    params: [
+      { name: "runId", maxLength: 128 },
+      { name: "tenant", maxLength: 128 },
+    ],
+  },
+  {
+    name: "oke.ai.approvals.list",
+    scopes: ["mcp:ai:read", "console:runs:read"],
+    mutability: "read",
+    description: "List pending tool approvals as inert data. Resolve stays in the Console.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tenant: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    params: [{ name: "tenant", maxLength: 128 }],
+  },
+  {
+    name: "oke.decisions.list",
+    scopes: ["mcp:decisions:read", "console:runs:read"],
+    mutability: "read",
+    description:
+      "List decisions with state, pending count, certificate metrics, and drift. Promote stays in the CLI.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tenant: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    params: [{ name: "tenant", maxLength: 128 }],
+  },
+  {
     name: "oke.action.invoke",
     scopes: ["mcp:action:invoke", "console:flows:invoke"],
     mutability: "write",

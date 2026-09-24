@@ -43,11 +43,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   The OpenRouter decisions endpoint is alpha on the provider side.
 - Drift is one flag per decision. Promote and recertify clear only that decision. The monitor emits the decisions that failed. Console reads that flag.
 - `oke decide labels <name> --export` writes reviewed labels as seed JSONL for the caller's tenant, grouped by review id. Only declared `in` fields are copied. Secret and redacted fields are masked when the label is written. The command prints that the file contains production data.
+- App MCP on `:6535` lists agent runs (`oke.ai.runs.list`, `oke.ai.runs.get` with the follow events), pending approvals (`oke.ai.approvals.list`), and decisions (`oke.decisions.list`: state, pending count, certificate metrics, drift). The scopes match the traces tools: one of `mcp:ai:read` or `mcp:decisions:read`, or `console:runs:read`. A `tenant` argument drops every other tenant. There is no resolve or promote tool.
 
 #### Docs
 
 - `fx.run(..., { stream: true })` streams each model turn when the driver implements `stream`. `mock`, `anthropic`, and `openai-compatible` emit text deltas and tool-call argument deltas. `bedrock` and `vertex` stay reserved. The assembled turn is journaled, so a durable replay does not call the model. The default `threadId` is a unique id.
-- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under every gate on the Flow and the starting principal. An operator may follow. No gate runtime denies a gated run. An approval interrupt does not end the follow. The log lives on the journal driver, keyed by the agent run id. The lease holder is the only writer. Past 5,000 rows, deltas stop and one `oke.events.truncated` event is stored. Structural events, interrupts, and the terminal frames stay. The scheduler deletes finished logs after 24 hours and closes an unfinished run after 7 days.
+- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under every gate on the Flow and the starting principal. An operator may follow. No gate runtime denies a gated run. An approval interrupt does not end the follow. The log lives on the journal driver, keyed by the agent run id. The header stores the agent and, for a nested run, `parentRunId`. The lease holder is the only writer. Past 5,000 rows, deltas stop and one `oke.events.truncated` event is stored. Structural events, interrupts, and the terminal frames stay. The scheduler deletes finished logs after 24 hours and closes an unfinished run after 7 days.
 - A failed `fetch.preconnect` is ignored. `anthropic` and `openai-compatible` share that guard.
 - `okengine/client/agent` follows a run with `Last-Event-ID`, and `approve` / `deny` retry `JournalLeaseBusy` and surface `Conflict`. `okengine/client-react` exports `useAgentRun`. Neither module is on the `okengine/client` graph.
 - `ai.decision` score levels and a whole question held in a same-file const are checked at compile time. An unresolved name fails the build.
@@ -61,6 +62,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `oke eval --certify` / `oke decide promote`.
 - Decisions and agent events match the lockfile root, per-question abstain, the operator
   resolve route, the label counts, and a stream that ends with `[DONE]`.
+- The MCP page lists `oke.ai.runs.list`, `oke.ai.runs.get`, `oke.ai.approvals.list`, and `oke.decisions.list`, and says resolve and promote stay human. Skills mentions the AI section of `AGENTS.md`.
 
 #### Console — Flows & traces
 
@@ -84,6 +86,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
 - Flows has a Decisions link and a review queue at `/flows/decisions`. Each decision is `learning`, `candidate ready`, `certified`, or `suspended` from its own drift flag and the lockfile. A candidate row shows fit metrics and `oke decide promote <name>`. The queue shows age. The resolve form accepts only declared options and levels. An unanswered boolean is invalid. An audit row submits `labelOnly`. A second resolve is Conflict. A lease collision waits for `Retry-After`. Label and drift write failures are listed. The sidebar stays six modules.
+- Ask, decide, and agent call rows in a trace link to the AI runs view or the decision.
+
+#### Console — Observability
+
+- Observability has an AI tab. Agent runs show agent, status, stop reason (including error), steps, cost, tokens, thread id, and start. The detail shows the tool trail, the approver, denials, repair attempts, and child runs via `parentRunId`. Follow reads `GET /agent/runs/:runId/events` and resumes with `Last-Event-ID`. The agent and parent run id are on the follow-log header. When the in-memory ledger is on the app runtime, the trail is the journal approval step.
+- The same tab lists pending tool approvals: agent, tool, args, age, gate, and tenant. Approve accepts optional edited JSON args. Deny takes a reason. The first resolve wins (`Conflict`). A held lease returns `JournalLeaseBusy` and `Retry-After`. The run detail links to the queue.
+
+#### Dev, Keel & create-oke
+
+- `AGENTS.md`, the `oke` skill, and the create-oke `AGENTS.md` state the AI rules: `fx.ask` / `fx.run` / `fx.decide`, durable tool approval, the follow stream, and lockfile autonomy.
+- When `OKE_CONSOLE_PROXY` is set, the Console dev server sends `/agent` to that kernel. `oke dev` still sends follow to the app on `:6530`.
+- `dev:console` loads the kernel from source. Vite's config bundle was making Bun `import.meta.dir` point at a temp chunk, so the parked approval could not boot.
 
 #### Console — Units & Call API
 
@@ -157,6 +171,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
   contract header ends with the same collapse control as the flows tree.
 
 ### 🐛 Fixed
+
+#### Console — Units & Call API
+
+- Call API query and body fields drop a column when the rail is too narrow
+  for a name and its type hint. The last column sits flush with the right edge.
 
 #### Console — Store
 

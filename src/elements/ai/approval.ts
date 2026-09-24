@@ -32,6 +32,8 @@ export class AiDurableRequiredError extends Error {
 /** Persisted approval decision. */
 export interface AgentApprovalRecord {
   status: "pending" | "approved" | "denied";
+  /** Agent that requested the tool. Absent on rows written before this field. */
+  readonly agent?: string;
   readonly tool: string;
   readonly args: unknown;
   readonly gate: string;

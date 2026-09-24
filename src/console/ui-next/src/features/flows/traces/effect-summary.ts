@@ -188,6 +188,26 @@ export function isMcpResource(resource: string): boolean {
   return parseMcpToolRef(resource) !== null;
 }
 
+/**
+ * Where an ask, decide, or agent call row opens.
+ *
+ * @param effect - Effect kind and resource
+ * @param agents - Declared agent names. A `call` links only when it names one.
+ */
+export function effectAiHref(
+  effect: Pick<RunEffect, "kind" | "resource">,
+  agents: ReadonlySet<string>,
+): string | null {
+  const name = effect.resource.split("@")[0] ?? effect.resource;
+  if (effect.kind === "decide") {
+    return `/flows/decisions?decision=${encodeURIComponent(name)}`;
+  }
+  if (effect.kind === "ask" || (effect.kind === "call" && agents.has(name))) {
+    return `/observability?view=ai&q=${encodeURIComponent(name)}`;
+  }
+  return null;
+}
+
 export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): string {
   if (isComputedCacheKey(effect.resource)) {
     return "Cache read";

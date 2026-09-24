@@ -349,6 +349,15 @@ export interface ConsoleState {
   vaultLayerSeed: VaultLayerSeed | null;
   /** Durable journal for rotation blast radius + Clock waiting-on. */
   journalStore: JournalStore | null;
+  /**
+   * Called after a tool approval is written. The seeded app resumes the
+   * parked run so the follow log can emit `RUN_FINISHED`.
+   */
+  afterAgentApproval?: () => Promise<void>;
+  /**
+   * Forwards `GET /agent/runs/:runId/events` to the app that owns the log.
+   */
+  forwardAgent?: (request: Request) => Promise<Response>;
   /** Host fleet registry (read-only). Null until bound or confirmed absent. */
   instanceStore: InstanceStore | null;
   /** Host `oke_crons` for fleet lease join (not Console's memory clock). */

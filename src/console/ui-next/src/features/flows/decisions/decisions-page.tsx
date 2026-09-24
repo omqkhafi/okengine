@@ -2,7 +2,7 @@
  * Decisions list and review queue. A Flows route, not a sidebar module.
  */
 
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import {
   decisionList,
@@ -40,6 +40,7 @@ export function DecisionsPage(): JSX.Element {
   const [failures, setFailures] = useState<readonly DecisionLabelFailure[]>([]);
   const [rows, setRows] = useState<readonly DecisionQueueRow[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const selected = (useSearch({ strict: false }) as { decision?: string }).decision;
   const [values, setValues] = useState<Record<string, Record<string, string>>>({});
 
   const reload = useCallback(async () => {
@@ -113,6 +114,7 @@ export function DecisionsPage(): JSX.Element {
             className={EXPLORER_ROW_CLASS}
             data-state={decisionStateLabel(decision.state)}
             data-decision={decision.name}
+            data-selected={selected === decision.name ? "true" : "false"}
           >
             <span className="min-w-0 flex-1 truncate">{decision.name}</span>
             <span className={EXPLORER_COUNT_CLASS}>{decisionStateLabel(decision.state)}</span>

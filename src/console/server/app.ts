@@ -15,6 +15,7 @@ import {
 } from "../../runs/index.ts";
 import { piiFieldNamesFromManifest } from "./runs-pii.ts";
 import { runConsoleRunsQuery } from "./runs-query.ts";
+import { getAgentEventLog } from "../../elements/ai/run-events.ts";
 import { createManifestAiRuntime } from "./ai.ts";
 import { CONSOLE_GATES } from "./console-gates.ts";
 import { createConsoleBindings } from "./flows.ts";
@@ -364,7 +365,15 @@ export function bindManifestAiRuntime(state: ConsoleState): void {
       Object.keys(state.manifest.ai.agents ?? {}).length > 0 ||
       Object.keys(state.manifest.ai.models ?? {}).length > 0);
   if (!hasAi) return;
-  bindAiRuntime(state, createManifestAiRuntime(state.manifest, { now: state.now }));
+  const eventLog = getAgentEventLog();
+  bindAiRuntime(
+    state,
+    createManifestAiRuntime(state.manifest, {
+      now: state.now,
+      ...(state.journalStore ? { journalStore: state.journalStore } : {}),
+      ...(eventLog ? { eventLog } : {}),
+    }),
+  );
 }
 
 /**

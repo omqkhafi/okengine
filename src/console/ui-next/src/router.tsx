@@ -110,6 +110,13 @@ const flowsRoute = createRoute({
 const decisionsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/flows/decisions",
+  validateSearch: (search: Record<string, unknown>) => {
+    const decision =
+      typeof search.decision === "string" && search.decision.length > 0
+        ? search.decision
+        : undefined;
+    return { ...(decision !== undefined ? { decision } : {}) };
+  },
   component: lazyRouteComponent(
     () => import("./features/flows/decisions/decisions-page.tsx"),
     "DecisionsPage",

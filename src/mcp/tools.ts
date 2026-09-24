@@ -22,6 +22,16 @@ export interface McpContext {
   readonly getManifest: () => Manifest | null;
   /** List runs/traces (already operator-scoped by the provider). */
   readonly listRuns: () => Promise<readonly WideEvent[]>;
+  /** Agent runs for `oke.ai.runs.*`. Absent providers return an empty list. */
+  readonly listAgentRuns?: () => Promise<readonly unknown[]>;
+  /** One agent run plus follow events. */
+  readonly getAgentRun?: (
+    runId: string,
+  ) => Promise<{ readonly run: unknown; readonly events: readonly unknown[] } | undefined>;
+  /** Pending tool approvals. Resolve is not an MCP tool. */
+  readonly listApprovals?: () => Promise<readonly unknown[]>;
+  /** Decision catalogue: state, pending count, metrics, drift. */
+  readonly listDecisions?: (tenant?: string) => Promise<readonly unknown[]>;
   /**
    * Safe invoke adapter. Called only after confirmation. Must NOT receive
    * the caller's Bearer token — capabilities are passed as structured input.
@@ -144,6 +154,14 @@ export function createToolRuntime(
           return tracesList(ctx, args);
         case "oke.traces.get":
           return tracesGet(ctx, args);
+        case "oke.ai.runs.list":
+          return aiRunsList(ctx, args);
+        case "oke.ai.runs.get":
+          return aiRunsGet(ctx, args);
+        case "oke.ai.approvals.list":
+          return aiApprovalsList(ctx, args);
+        case "oke.decisions.list":
+          return decisionsList(ctx, args);
         case "oke.action.confirm":
           return actionConfirm(confirm, requester, args);
         case "oke.action.invoke":
@@ -241,6 +259,61 @@ async function tracesGet(ctx: McpContext, args: Record<string, unknown>): Promis
   }
   // Provenance `store-record` marks user-supplied fields as untrusted.
   return okData(freezeData({ run: projectRun(run) }), "store-record");
+}
+
+function tenantArg(args: Record<string, unknown>): string | undefined {
+  return typeof args.tenant === "string" && args.tenant.length > 0 ? args.tenant : undefined;
+}
+
+function sameTenant(row: unknown, tenant: string | undefined): boolean {
+  if (!tenant) return true;
+  if (!row || typeof row !== "object") return false;
+  return (row as { tenant?: unknown }).tenant === tenant;
+}
+
+async function aiRunsList(ctx: McpContext, args: Record<string, unknown>): Promise<ToolCallResult> {
+  const limit =
+    typeof args.limit === "number" && Number.isFinite(args.limit)
+      ? Math.min(200, Math.max(1, Math.floor(args.limit)))
+      : 50;
+  const tenant = tenantArg(args);
+  const all = (await ctx.listAgentRuns?.()) ?? [];
+  const runs = all.filter((row) => sameTenant(row, tenant)).slice(0, limit);
+  return okData(freezeData({ runs }), "trace");
+}
+
+async function aiRunsGet(ctx: McpContext, args: Record<string, unknown>): Promise<ToolCallResult> {
+  const runId = String(args.runId ?? "");
+  const tenant = tenantArg(args);
+  const found = await ctx.getAgentRun?.(runId);
+  if (!found || !sameTenant(found.run, tenant)) {
+    return {
+      ok: false,
+      code: "not-found",
+      message: `unknown run: ${runId}`,
+      data: asData({ runId }, "error"),
+    };
+  }
+  return okData(freezeData({ run: found.run, events: found.events }), "store-record");
+}
+
+async function aiApprovalsList(
+  ctx: McpContext,
+  args: Record<string, unknown>,
+): Promise<ToolCallResult> {
+  const tenant = tenantArg(args);
+  const all = (await ctx.listApprovals?.()) ?? [];
+  const rows = all.filter((row) => sameTenant(row, tenant));
+  return okData(freezeData({ rows }), "store-record");
+}
+
+async function decisionsList(
+  ctx: McpContext,
+  args: Record<string, unknown>,
+): Promise<ToolCallResult> {
+  const tenant = tenantArg(args);
+  const decisions = (await ctx.listDecisions?.(tenant)) ?? [];
+  return okData(freezeData({ decisions }), "manifest");
 }
 
 function actionConfirm(

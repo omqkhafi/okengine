@@ -6,6 +6,7 @@ import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import { aiDecisionRegistry } from "../../kernel/element-registries.ts";
 import {
+  decisionDriftNames,
   decisionDriftSuspended,
   getDecisionLock,
   type DecisionCandidate,
@@ -138,6 +139,43 @@ export function projectDecisionQueue(
     }
   }
   return rows.sort((a, b) => b.ageMs - a.ageMs);
+}
+
+/** One decision on the read-only MCP list. */
+export interface McpDecisionRow {
+  readonly name: string;
+  readonly state: DecisionListState;
+  readonly pending: number;
+  readonly metrics?: Readonly<Record<string, number>>;
+  readonly drift: boolean;
+}
+
+/**
+ * Decision rows for `oke.decisions.list`: lockfile state, pending reviews,
+ * certificate or candidate metrics, and drift.
+ *
+ * @param manifest - App manifest
+ * @param pendingByName - Pending review counts
+ * @param metrics - Candidate or certificate metrics
+ */
+export function projectMcpDecisions(
+  manifest: Manifest | null | undefined,
+  pendingByName: Readonly<Record<string, number>> = {},
+  metrics: Readonly<Record<string, Readonly<Record<string, number>>>> = {},
+): McpDecisionRow[] {
+  const drifted = new Set(decisionDriftNames());
+  return projectDecisionList(
+    manifest,
+    getDecisionLock(),
+    new Set(Object.keys(metrics)),
+    metrics,
+  ).map((row) => ({
+    name: row.name,
+    state: row.state,
+    pending: pendingByName[row.name] ?? 0,
+    ...((row.metrics ?? metrics[row.name]) ? { metrics: row.metrics ?? metrics[row.name] } : {}),
+    drift: drifted.has(row.name) || row.state === "suspended",
+  }));
 }
 
 /**

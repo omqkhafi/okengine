@@ -26,6 +26,7 @@ import { useClockList } from "./data/use-clock-list.ts";
 import { useInstancesList } from "./data/use-instances-list.ts";
 import { useSignalsList } from "./data/use-signals-list.ts";
 import { AiRail } from "./detail/ai-rail.tsx";
+import { AiRunsPanel } from "./detail/ai-runs.tsx";
 import { InstanceFleetSheet } from "./detail/instance-fleet-sheet.tsx";
 import { MetricsPanel } from "./detail/metrics-panel.tsx";
 import { RunsQueryPanel } from "./query/runs-query-panel.tsx";
@@ -57,11 +58,13 @@ export function ObservabilityPage(): JSX.Element {
     selectedErrorKey,
     query,
     view,
+    agentRunId,
     setSelectedRun,
     setWindow,
     setSelectedError,
     setQuery,
     setView,
+    setAgentRun,
   } = useObservabilitySelection();
   const [fleetOpen, setFleetOpen] = useState(false);
   const start = useExplorerStartPanel();
@@ -202,9 +205,25 @@ export function ObservabilityPage(): JSX.Element {
               >
                 SQL
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "ai"}
+                className={cn(
+                  EXPLORER_STRIP_TOKEN_CLASS,
+                  "font-semibold tracking-[0.08em] uppercase",
+                  view === "ai" ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+                )}
+                onClick={() => setView("ai")}
+                data-slot="observability-view-ai"
+              >
+                AI
+              </button>
             </div>
             {view === "query" ? (
               <RunsQueryPanel />
+            ) : view === "ai" ? (
+              <AiRunsPanel agentRunId={agentRunId} query={query} onSelectRun={setAgentRun} />
             ) : (
               <>
                 <AiRail ai={ai.data} asks={asks} tokens={tokens} />

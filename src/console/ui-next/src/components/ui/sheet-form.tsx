@@ -309,8 +309,24 @@ export interface SheetGridProps {
   readonly children: ReactNode;
 }
 
+/** Minimum track so a name plus optional, range, and type badges fit. */
+const SHEET_GRID_MIN = "17rem";
+
+/**
+ * Equal columns that fill the row. Drops a column when a track would be
+ * narrower than {@link SHEET_GRID_MIN}. `columns` is the widest the row goes.
+ */
+function sheetGridTracks(max: 2 | 3 | 4): string {
+  const floor = `${100 / max}%`;
+  return `repeat(auto-fit, minmax(min(100%, max(${SHEET_GRID_MIN}, ${floor})), 1fr))`;
+}
+
 /**
  * Field grid — equal columns that fill the row; drops as the dock narrows.
+ *
+ * Each track stays at least 17rem so a name and its badges fit. The cap
+ * (`columns`) is the widest the row will go. The trailing rule is clipped
+ * so the last column sits flush with the right edge.
  *
  * @param props - Fields + optional column cap
  */
@@ -318,22 +334,15 @@ export function SheetGrid({ columns = 4, children }: SheetGridProps): JSX.Elemen
   const count = Children.count(children);
   const max = Math.min(columns, count) as 1 | 2 | 3 | 4;
   return (
-    <div className="@container w-full min-w-0 max-w-full">
+    <div className="w-full min-w-0 max-w-full overflow-hidden">
       <div
         className={cn(
           "grid w-full min-w-0 grid-cols-1",
-          max >= 2 && "@min-[18rem]:grid-cols-2",
-          max >= 3 && "@min-[26rem]:grid-cols-3",
-          max >= 4 && "@min-[34rem]:grid-cols-4",
-          "[&>*]:min-w-0 [&>*]:border-r [&>*]:border-border/50",
-          max >= 2 && "@min-[18rem]:[&>*:nth-child(2n)]:border-r-0",
-          max >= 3 &&
-            "@min-[26rem]:[&>*:nth-child(2n)]:border-r @min-[26rem]:[&>*:nth-child(3n)]:border-r-0",
-          max >= 4 &&
-            "@min-[34rem]:[&>*:nth-child(2n)]:border-r @min-[34rem]:[&>*:nth-child(3n)]:border-r @min-[34rem]:[&>*:nth-child(4n)]:border-r-0",
-          max < 2 && "[&>*]:border-r-0",
-          "[&>*:last-child]:border-r-0",
+          max >= 2 && "-mr-px w-[calc(100%+1px)]",
+          "[&>*]:min-w-0",
+          max >= 2 && "[&>*]:border-r [&>*]:border-border/50",
         )}
+        style={max >= 2 ? { gridTemplateColumns: sheetGridTracks(max) } : undefined}
       >
         {children}
       </div>
