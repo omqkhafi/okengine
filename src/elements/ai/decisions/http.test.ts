@@ -25,7 +25,7 @@ describe("decision fixtures", () => {
   test("typesafe and openrouter bodies parse", () => {
     expect(parseDecisionResponse(typesafeResponse).model).toBe("jev-1.13.0");
     expect(parseDecisionResponse(openrouterResponse).provider).toBe("TypeSafe");
-    expect(parseDecisionResponse(openrouterResponse).usage.cost).toBe(0.00001);
+    expect(parseDecisionResponse(openrouterResponse).usage.cost).toBe(0.000016128);
   });
 });
 

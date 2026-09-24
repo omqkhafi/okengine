@@ -372,6 +372,147 @@ describe("approval http", () => {
     await app.resumeDurable(Date.now() + 1000);
     expect(calls).toEqual([{ amount: 4 }]);
   }, 20_000);
+
+  test("streamed approve, deny, and timeout park sleeping then resume the real output", async () => {
+    const calls: unknown[] = [];
+    const store = createMemoryJournalStore();
+    const ops = gate.policy("ops", () => true);
+    const aiRuntime = createAiRuntime({
+      journalStore: store,
+      models: [ai.model("smart")],
+      gates: createGateRuntime({ gates: [ops] }),
+      agents: [
+        ai.agent("support", {
+          model: "smart",
+          maxSteps: 4,
+          tools: [{ name: "refund", approval: true, gate: "ops", timeout: "1h" }],
+        }),
+      ],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete(opts) {
+            if (opts.messages.some((message) => message.role === "tool")) {
+              return { text: "done", raw: {}, model: "smart", driverId: "mock" };
+            }
+            return {
+              text: "",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "tc1", name: "refund", arguments: { amount: 10 } }],
+            };
+          },
+        },
+      },
+    });
+    const refund = flow("refund", {
+      do: async (input) => {
+        calls.push(input);
+        return { refunded: true };
+      },
+    });
+    const assist: Binding = {
+      trigger: http.post("/assist"),
+      flow: flow("assist", {
+        durable: true,
+        effects: { asks: ["support"], calls: ["refund"] },
+        do: (_input, fx) =>
+          fx.json.stream(fx.run("support", { message: "refund" }, { stream: true })),
+      }) as AnyFlowDef,
+    };
+    const boot = async (name: string) => {
+      resetBindings();
+      const app = oke({
+        name,
+        env: "test",
+        startScheduler: false,
+        registry: "ignore",
+        gate: { unguardedHttp: "allow", policies: [ops] },
+        bindings: [assist, { trigger: http.post("/refund"), flow: refund as AnyFlowDef }],
+        elements: {
+          journal: { store, instanceId: name, leaseMs: 30_000, driverId: "memory" },
+          ai: aiRuntime,
+        },
+      });
+      await app.boot({ env: "test" });
+      apps.push(app);
+      return app;
+    };
+
+    const parkStream = async (app: OkeApp) => {
+      const parked = await app.fetch(
+        new Request("http://localhost/assist", { method: "POST", body: "{}" }),
+      );
+      expect(parked.status).toBe(200);
+      const body = await parked.text();
+      expect(body).toContain('"type":"interrupt"');
+      expect(body).toContain("data: [DONE]");
+      const run = (await store.list()).find(
+        (item) => item.flow === "assist" && item.status === "sleeping",
+      );
+      if (!run) throw new Error("expected a parked run");
+      expect(run.status).toBe("sleeping");
+      expect(typeof run.wakeAt).toBe("number");
+      const step = run.entries.find(
+        (entry) => entry.kind === "step" && entry.name.startsWith("ai-approval:"),
+      );
+      if (!step || step.kind !== "step") throw new Error("expected a pending approval");
+      return { run, id: step.name.slice("ai-approval:".length) };
+    };
+
+    const app = await boot("approval-stream");
+    const approved = await parkStream(app);
+    const ok = await app.fetch(
+      new Request("http://localhost/agent/approvals/approve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: approved.id }),
+      }),
+    );
+    expect(ok.status).toBe(200);
+    await app.resumeDurable(Date.now() + 1000);
+    expect(calls).toEqual([{ amount: 10 }]);
+    const finished = await store.get(approved.run.id);
+    expect(finished?.status).toBe("completed");
+    expect(finished?.output).toMatchObject({
+      stopReason: "completed",
+      output: { refunded: true },
+    });
+    expect(finished?.output).not.toEqual({ streamed: true });
+
+    calls.length = 0;
+    const denyApp = await boot("approval-stream-deny");
+    const denied = await parkStream(denyApp);
+    const no = await denyApp.fetch(
+      new Request("http://localhost/agent/approvals/deny", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: denied.id, reason: "over the limit" }),
+      }),
+    );
+    expect(no.status).toBe(200);
+    await denyApp.resumeDurable(Date.now() + 1000);
+    expect(calls).toEqual([]);
+    const deniedRun = await store.get(denied.run.id);
+    expect(deniedRun?.status).toBe("completed");
+    expect(deniedRun?.output).toMatchObject({
+      stopReason: "completed",
+      output: { denied: true, reason: "over the limit" },
+    });
+
+    const timeoutApp = await boot("approval-stream-timeout");
+    const timed = await parkStream(timeoutApp);
+    await timeoutApp.resumeDurable(Date.now() + 60 * 60 * 1000 + 1000);
+    expect(calls).toEqual([]);
+    const timedRun = await store.get(timed.run.id);
+    expect(timedRun?.status).toBe("completed");
+    expect(timedRun?.output).toMatchObject({
+      stopReason: "completed",
+      output: { denied: true, reason: "timeout" },
+    });
+  }, 20_000);
 });
 
 describe("approval ids", () => {

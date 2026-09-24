@@ -2313,6 +2313,14 @@ export function oke(options: OkeOptions): OkeApp {
         : durationMs;
       if (journalSession) {
         inflightRuns.delete(journalSession.runId);
+        const parked = streamOut?.parked;
+        if (parked) {
+          ctx.state.sleeping = {
+            wakeAt: parked.wakeAt,
+            label: parked.label,
+            runId: journalSession.runId,
+          };
+        }
         const sleeping = ctx.state.sleeping as
           | { readonly wakeAt: number; readonly label: string; readonly runId: string }
           | undefined;
@@ -2333,6 +2341,8 @@ export function oke(options: OkeOptions): OkeApp {
             fx,
             error: terminalErr,
           });
+        } else if (parked && sleeping) {
+          await journalSession.commit("sleeping", { wakeAt: sleeping.wakeAt });
         } else if (!sleeping) {
           await journalSession.commit("completed", {
             output: streamOut ? { streamed: true } : result.output,

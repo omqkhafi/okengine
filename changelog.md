@@ -94,9 +94,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Browser JSON page colors the status, latency, cache, and auth marks, and the
+  request verb (GET green, POST sky, PUT amber, PATCH violet, DELETE rose).
+  Params, Body, Cookies, Headers, Auth, and Path each carry a colored icon.
+  Fields, JSON, Auth, and Headers on the strips do too.
 - Browser JSON page puts Params, Body, Cookies, Headers, Auth, and Path above
   the route list. Routes stays pinned to the bottom of the Request rail, and
   its header ends with a control that collapses the list downward.
+- Browser JSON page opens the response as fields: status, response headers,
+  and a body that expands objects and arrays. A collapsed row shows a short
+  preview (`id: ENG-12`, `5 items`). Fields and JSON sit on the response header.
+  JSON swaps only the body; status and response headers stay.
+  Credential response headers render as `[redacted]`.
 - `fx.run` accepts `{ messages }` (user, assistant, and tool turns) as well as one
   `message`. Passing both throws. Thread storage stays in the app.
 - `fx.run(agent, input, { stream: true })` and tool-using `fx.ask(..., { stream: true })`
@@ -153,6 +162,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- A streamed agent approval inside a durable Flow ends the run as `sleeping` with its wake time. The interrupt frame and `data: [DONE]` go out first. Resume stores the agent result on that run. A tool error puts its message on `RUN_FINISHED.result.error`. `AiDurableRequiredError` ends the stream with `RUN_ERROR` and `data: [DONE]`.
+- OpenRouter resolves `typesafe/jev-1.13` to `typesafe/jev-1.13-20260917`. A score answer's `probabilities` are keyed by index, and `legend` names each index. Those indexes map onto the declared levels.
 - Browser JSON page Auth keeps the token, password, and API key value when the
   Auth row closes. A refresh or a closed tab still drops those secrets.
 - The compiler writes `autonomy` (`maxError`, `audit`, `risk`) and `evals` onto `manifest.ai.decisions`. `oke eval --certify` loads the app entry, then writes `oke-decisions.lock.json` under `OKE_ROOT_DIR` (the same root as `oke decide promote`).

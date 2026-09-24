@@ -11,6 +11,7 @@ import { failureCodeOf, rebindUndosFromDo, runCompensationPhase } from "../../ke
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { createFxContext, type CreateFxOptions, type Fx } from "../../kernel/fx.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
+import { isJsonStreamResult } from "../../kernel/json-result.ts";
 import {
   createJournal,
   isJournalSuspend,
@@ -142,7 +143,32 @@ export async function runDurable<O = unknown>(
       session.rewind();
       return options.flow.do(options.input as never, fx);
     };
-    const output = await (options.flow.retry ? fxRetry(run, options.flow.retry) : run());
+    const produced = await (options.flow.retry ? fxRetry(run, options.flow.retry) : run());
+    if (isJsonStreamResult(produced)) {
+      try {
+        for await (const chunk of produced.chunks) {
+          void chunk;
+        }
+      } catch (err) {
+        if (isJournalSuspend(err)) {
+          return {
+            status: "sleeping",
+            runId: session.runId,
+            wakeAt: err.wakeAt,
+            label: err.label,
+          };
+        }
+        throw err;
+      }
+      const settled = await produced.result;
+      await session.commit("completed", { output: settled });
+      return {
+        status: "completed",
+        runId: session.runId,
+        output: settled as O,
+      };
+    }
+    const output = produced;
     if (isFlowFailure(output)) {
       await runCompensationPhase({
         flow: options.flow,

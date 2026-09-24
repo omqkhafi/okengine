@@ -8,7 +8,7 @@ source: "docs/spec/unified-theory.md"
 A decision picks labels for one piece of work: which queue a ticket belongs in, and whether it needs a person today. One request asks every question. The result records whether the model or a person supplied each value.
 
 <Callout title="Experimental">
-  `ai.decision` is experimental. A lockfile grants an automatic answer only after labels exist. A seed file can print a certificate. It is not a production pilot.
+  `ai.decision` is experimental. A promoted lockfile applies after restart. Drift is one flag for the whole app. Score levels, or a whole question held in a variable, skip compile checks. Choice options in a variable fail to compile. A seed file can print a certificate. It is not a production pilot.
 </Callout>
 
 <Callout title="The one rule">
@@ -28,7 +28,7 @@ model is not allowed to.
 ```typescript title="src/core/ai.ts"
 import { ai, gate } from "okengine";
 
-export const ops = gate.policy("ops", ({ auth }) => auth.scopes.has("ops"));
+export const ops = gate.policy("ops", ({ operator }) => operator.id !== null);
 
 export const triage = ai.decision("triage", {
   review: ops,
@@ -94,13 +94,13 @@ export const route = on(
 <Step>
 ### Resolve it in Console
 
-The park waits until someone who passes the `ops` gate submits every open question. Console on port 6533 does that as an operator: the route sends the signed-in operator and that session's auth scopes into the review gate. The gate must allow them. An operator may resolve any tenant. A user-plane caller whose tenant does not match the park is 403.
+The park waits until someone who passes the `ops` gate submits every open question. Console on port 6533 does that as an operator: the route sends the signed-in operator and that session's auth scopes into the review gate. The gate must allow that operator. An operator may resolve any tenant.
 
 Open `/flows/decisions`, or POST the review id from the queue:
 
 ```bash
 curl -X POST http://127.0.0.1:6533/console/decisions/resolve \
-  -H "authorization: Bearer $OKE_OPERATOR_AUTHORIZATION" \
+  -H "Authorization: $OKE_OPERATOR_AUTHORIZATION" \
   -H "content-type: application/json" \
   -d '{"id":"<review id>","values":{"team":"billing","urgent":false}}'
 ```
@@ -113,7 +113,7 @@ The consumer then returns. Each question is a top-level field. `$` records how i
   "urgent": false,
   "$": {
     "meta": {
-      "model": "typesafe/jev-1.13",
+      "model": "typesafe/jev-1.13-20260917",
       "provider": "openrouter",
       "usage": { "inputTokens": 120, "outputTokens": 40 }
     },
@@ -156,7 +156,7 @@ learning  --labels-->  candidate  --promote-->  certified
 | --- | --- | --- |
 | `learning` | No lockfile entry and no candidate. | Reviews and audit labels accumulate. |
 | `candidate` | The clock has built a candidate from those labels. Counts are not the grant. | `oke decide promote` fetches it. |
-| `certified` | `oke-decisions.lock.json` has this decision. | The runtime may return `auto` under that certificate. |
+| `certified` | `oke-decisions.lock.json` has this decision, and the declaration sets `autonomy`. A lock entry is ignored without `autonomy`. | The runtime may return `auto` under that certificate. |
 | `suspended` | Drift: audit labels since certification, inside 7 days, for the pinned model, failed the error cap. The monitor emitted `oke/decision/drift`. | The next boot, once the lockfile's `certifiedAt` is newer than that flag. |
 
 The runtime never raises a threshold and never invents a certificate. Missing lock, a stale
@@ -172,13 +172,13 @@ the row out.
 An audit row is a label only. The original Flow already returned. A review row is the park:
 submitting it wakes the consumer.
 
-The review gate must allow the caller. Console resolve runs on the operator plane: it passes the signed-in operator id and the session auth into the gate, and it may resolve any tenant. A user-plane caller whose tenant does not match the park is 403.
+The review gate must allow the caller. Console resolve runs on the operator plane: it passes the signed-in operator id and the session auth into the gate, and it may resolve any tenant. A gate that checks `operator.id` matches that call.
 
 A review body must include every question that was not `auto`. An audit row (`labelOnly: true`) must include every question, including ones that were already `auto`. A choice may be `none_of_these`. A partial body is 422: `review values do not match the open questions`.
 
 ```bash
 curl -X POST http://127.0.0.1:6533/console/decisions/resolve \
-  -H "authorization: Bearer $OKE_OPERATOR_AUTHORIZATION" \
+  -H "Authorization: $OKE_OPERATOR_AUTHORIZATION" \
   -H "content-type: application/json" \
   -d '{"id":"<audit id>","labelOnly":true,"values":{"team":"billing","urgent":true}}'
 ```
@@ -226,8 +226,8 @@ A seed file is JSONL. `expect` is the label for each question. `locale` is optio
 {"id":"t2","input":{"text":"The app crashes on save"},"expect":{"team":"technical","urgent":false},"locale":"en"}
 ```
 
-Point `evals` at that file, then certify. The command loads the app the same way boot does, so the decision is in the registry. Prompt evals do not run when the flag is present.
-It prints one JSON line per decision and writes `oke-decisions.lock.json` in the app root (`OKE_ROOT_DIR`, or `rootDir`), not in the shell's current directory. Boot reads that same file. Declared decisions without a project root fail at boot.
+Point `evals` at that file, then certify. Run `oke build` first. `oke eval --certify` reads `oke.manifest.json` from the app root. Prompt evals do not run when the flag is present.
+It writes `oke-decisions.lock.json` in that root (`OKE_ROOT_DIR`, or `rootDir`), not in the shell's current directory. Boot reads that same file. Declared decisions without a project root fail at boot.
 
 `how: "auto"` is what the Flow sees after that file is loaded and the question clears its threshold:
 
@@ -239,10 +239,6 @@ It prints one JSON line per decision and writes `oke-decisions.lock.json` in the
 OKE_ROOT_DIR=/srv/app oke eval --certify
 ```
 
-```text
-{"triage":{"model":"typesafe/jev-1.13","certifiedAt":1710000000000,"questions":{"team":{"":{"hash":"…","calibrator":{"kind":"temperature","t":1.2},"threshold":0.8,"metrics":{"labels":122,"accepted":122,"errors":0,"maxError":0.05,"delta":0.1}}}}}}
-```
-
 The empty-string key is the slice used when `locale` is absent. A locale function gets its
 own key. `hash` is the question text and options. Edit the question and the hash no longer
 matches: the runtime stops returning `auto` until you certify again.
@@ -251,7 +247,7 @@ matches: the runtime stops returning `auto` until you certify again.
 {
   "decisions": {
     "triage": {
-      "model": "typesafe/jev-1.13",
+      "model": "typesafe/jev-1.13-20260917",
       "certifiedAt": 1710000000000,
       "questions": {
         "team": {
@@ -268,7 +264,7 @@ matches: the runtime stops returning `auto` until you certify again.
 }
 ```
 
-After production labels exist, the clock stores a candidate on the journal. Any instance can serve it, including after a restart. Promote fetches it. It does not recompute the certificate. Other decisions already in the file stay. This decision's slot is replaced. The running process keeps the old drift flag. The next boot with this lockfile clears it when the new `certifiedAt` is newer than the flag.
+After production labels exist, the clock stores a candidate on the journal. It survives a restart only when that journal is a file or Postgres. A memory journal drops it when the process exits. Promote fetches it. It does not recompute the certificate. Other decisions already in the file stay. This decision's slot is replaced. The running process keeps the old drift flag. The next boot with this lockfile clears it when the new `certifiedAt` is newer than the flag.
 
 ```bash
 OKE_ORIGIN=http://127.0.0.1:6530 \
@@ -373,7 +369,7 @@ An empty value throws `DecisionConfigError`.
 
 | `driverId` | Default model | Secret |
 | --- | --- | --- |
-| `openrouter` | `typesafe/jev-1.13` | `OPENROUTER_API_KEY` |
+| `openrouter` | `typesafe/jev-1.13` (the response `model` is a dated pin, currently `typesafe/jev-1.13-20260917`) | `OPENROUTER_API_KEY` |
 | `typesafe` | `jev-1.13.0` | `TYPESAFE_API_KEY` |
 
 The deadline defaults to 30 seconds. `400`, `401`, `402`, `403`, `404`, and `422` throw `DecisionRequestError` and leave the breaker closed.
@@ -445,7 +441,7 @@ An open breaker is an outage: review parks, abstain returns `null`.
 
 ## Learn more
 
-- [Agents](/docs/elements/ai/agents) — tool approval uses the same 409 split
+- [Events](/docs/elements/ai/events) — tool approval uses the same 409 split
 - [Gate](/docs/elements/gate) — the policy on `review`
 - [fx](/docs/reference/fx) — `fx.decide` effect row
 - [CLI](/docs/reference/cli) — `oke decide promote` and `oke eval --certify`

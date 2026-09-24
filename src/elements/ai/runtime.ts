@@ -1013,7 +1013,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       lastText = result.text;
       lastRaw = result.raw !== undefined ? result.raw : result.text;
       const messageId = `m-${++messageSeq}`;
-      emitAssistantText(opts.emit ?? (() => undefined), messageId, result.text);
+      const emittedText = emitAssistantText(
+        opts.emit ?? (() => undefined),
+        messageId,
+        result.text,
+      );
       if (capHit()) {
         budgetExceeded = true;
         stopReason = "budget";
@@ -1042,7 +1046,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           type: "TOOL_CALL_START",
           toolCallId: callId,
           toolCallName: tc.name,
-          parentMessageId: messageId,
+          ...(emittedText ? { parentMessageId: messageId } : {}),
         });
         opts.emit?.({
           type: "TOOL_CALL_ARGS",
@@ -1629,6 +1633,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const queue = createEventQueue();
       const runId = `agent-run-${++runSeq}`;
       const signal = currentAbortSignal();
+      let resolveResult: (value: unknown) => void = () => undefined;
+      let rejectResult: (err: unknown) => void = () => undefined;
+      const result = new Promise<unknown>((resolve, reject) => {
+        resolveResult = resolve;
+        rejectResult = reject;
+      });
+      // HTTP drains the iterator and may never await `result`.
+      void result.catch(() => undefined);
       void (async () => {
         try {
           const threadId = runOpts.threadId ?? runId;
@@ -1682,6 +1694,18 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           };
           pushObservability(agentRuns, record);
           const usage = tokenFields(loop);
+          const settled = {
+            ok: record.ok,
+            stopReason: record.stopReason,
+            steps: record.steps,
+            denials: record.denials,
+            trail: record.trail,
+            output: record.output,
+            cost: record.cost,
+            ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+            ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
+          };
+          resolveResult(settled);
           queue.emit({
             type: "RUN_FINISHED",
             threadId,
@@ -1694,11 +1718,18 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           queue.finish();
         } catch (err) {
           if (isJournalSuspend(err)) {
-            queue.finish();
+            rejectResult(err);
+            queue.finish(err);
             return;
           }
           if (err instanceof AiDurableRequiredError) {
-            queue.finish(err);
+            queue.emit({
+              type: "RUN_ERROR",
+              message: err.message,
+              code: err.name,
+            });
+            rejectResult(err);
+            queue.finish();
             return;
           }
           if (err instanceof AgentLoopHalt) {
@@ -1718,25 +1749,43 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               cost: err.cost,
             });
             if (err.stopReason === "error") {
+              const settled = {
+                ok: false,
+                stopReason: err.stopReason,
+                error: message,
+                steps: err.steps,
+                denials: err.denials,
+                trail: err.trail,
+                output: err.output,
+                cost: err.cost,
+              };
+              resolveResult(settled);
               queue.emit({
                 type: "RUN_FINISHED",
                 threadId: runOpts.threadId ?? runId,
                 runId,
-                result: { cost: err.cost, stopReason: "error", output: err.output },
+                result: {
+                  cost: err.cost,
+                  stopReason: "error",
+                  output: err.output,
+                  error: message,
+                },
               });
               queue.finish();
               return;
             }
           }
+          const message = err instanceof Error ? err.message : String(err);
+          rejectResult(err);
           queue.emit({
             type: "RUN_ERROR",
-            message: err instanceof Error ? err.message : String(err),
+            message,
             ...(err instanceof Error && err.name !== "Error" ? { code: err.name } : {}),
           });
           queue.finish();
         }
       })();
-      return queue.events;
+      return Object.assign(queue.events, { result });
     },
 
     async *stream(model, streamOpts) {

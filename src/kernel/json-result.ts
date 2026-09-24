@@ -28,6 +28,16 @@ export interface JsonStreamResult {
   ready?: () => Promise<void>;
   /** Set by the kernel to commit journal / Runs after the stream settles. */
   finalize?: () => Promise<void>;
+  /**
+   * Agent result once a streamed `fx.run` settles.
+   * Absent for text and live streams.
+   */
+  result?: Promise<unknown>;
+  /**
+   * Set when iteration parked a durable run, after `[DONE]` is queued.
+   * Finalize commits the journal as sleeping from this.
+   */
+  parked?: { wakeAt: number; label: string };
 }
 
 /**

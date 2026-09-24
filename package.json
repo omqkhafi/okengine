@@ -111,7 +111,7 @@
     "fmt": "oxfmt",
     "format": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "test": "bun test --pass-with-no-tests",
+    "test": "bun test --pass-with-no-tests --path-ignore-patterns '**/*.live.test.ts'",
     "test:coverage": "bun test --coverage --pass-with-no-tests",
     "test:console:smoke": "bunx playwright test tests/console/smoke.spec.ts",
     "test:console:setup": "bunx playwright test --config playwright.ui-next.config.ts",

@@ -118,8 +118,11 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain("Ready");
     expect(html).not.toContain('data-slot="json-code-auth-switch"');
     expect(html).toContain('data-slot="json-code-view-toggle"');
-    expect(html).toContain('href="/?raw=1"');
-    expect(html).toContain(">Pretty</a>");
+    expect(html).toContain('data-view="fields"');
+    expect(html).toContain('data-slot="json-code-fields"');
+    expect(html).toContain(">Fields</button>");
+    expect(html).toContain(">JSON</button>");
+    expect(html).not.toContain(">Pretty</button>");
     expect(html).not.toContain(">Raw</a>");
     expect(html).not.toContain(">Console</a>");
     expect(html).not.toContain("</script><script>alert(1)</script>");
@@ -128,6 +131,28 @@ describe("renderJsonCodeBlockHtml", () => {
 
   test("escapeHtml covers markup", () => {
     expect(escapeHtml(`<&"`)).toBe("&lt;&amp;&quot;");
+  });
+
+  test("response fields preview nested values and redact credential headers", () => {
+    const html = renderJsonCodeBlockHtml({
+      json: JSON.stringify({ data: [{ id: "ENG-12", n: 2 }], error: null }),
+      status: 200,
+      method: "GET",
+      path: "/views",
+      app: "keel",
+      rawHref: "/views?raw=1",
+      prettyHref: "/views",
+      headers: { "content-type": "application/json", authorization: "Bearer secret" },
+    });
+    expect(html).toContain('data-slot="json-code-response"');
+    expect(html).toContain('data-slot="json-code-response-status"');
+    expect(html).toContain('data-slot="json-code-response-headers"');
+    expect(html).toContain("id: ENG-12 · n: 2");
+    expect(html).toContain(">1 item<");
+    expect(html).toContain("application/json");
+    expect(html).toContain("[redacted]");
+    expect(html).not.toContain("Bearer secret");
+    expect(html).toContain(">OK<");
   });
 
   test("renders latency next to the status", () => {
@@ -239,16 +264,16 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain("data-headers-custom");
     expect(html).toContain("oke:json-code:headers-mode");
     expect(html).toContain("function headersMode");
-    const headersAt = html.indexOf('data-rail-section="headers"');
-    const authAt = html.indexOf('data-rail-section="auth"');
+    const headersAt = html.indexOf('<details class="rail-acc" data-rail-section="headers"');
+    const authAt = html.indexOf('<details class="rail-acc" data-rail-section="auth"');
     expect(html.slice(headersAt, authAt)).toContain('data-headers-mode="inherit"');
     expect(html.slice(authAt)).toContain('data-auth-mode="inherit"');
     expect(html).not.toContain("function resolveBearer");
-    expect(html.indexOf('data-rail-section="headers"')).toBeLessThan(
-      html.indexOf('data-rail-section="auth"'),
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="headers"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="auth"'),
     );
-    expect(html.indexOf('data-rail-section="auth"')).toBeLessThan(
-      html.indexOf('data-rail-section="path"'),
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="auth"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="path"'),
     );
     expect(html).toContain(">Auth</span>");
     expect(html).toContain('data-auth-type="none"');
@@ -541,10 +566,10 @@ describe("asBrowserJsonCodeBlock — HTTP", () => {
     expect(raw.headers.get("content-type")).toContain("text/html");
     const html = await raw.text();
     expect(html).toContain('data-view="raw"');
+    expect(html).toContain('data-code-view="raw"');
     expect(html).toContain('data-slot="json-code-view-toggle"');
-    expect(html).toContain('href="/health"');
-    expect(html).toContain(">Raw</a>");
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain(">JSON</button>");
+    expect(html).toContain('data-response-view="json" aria-pressed="true"');
     expect(html).toContain("&quot;ok&quot;:true");
 
     const forced = await app.fetch(

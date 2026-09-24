@@ -57,6 +57,46 @@ describe("fx.run messages", () => {
 });
 
 describe("agent event stream", () => {
+  test("a non-durable approval ends with RUN_ERROR then the iterator ends", async () => {
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [
+        ai.agent("support", {
+          model: "smart",
+          tools: [{ name: "refund", approval: true, gate: "public" }],
+        }),
+      ],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return {
+              text: "",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "c1", name: "refund", arguments: { amount: 10 } }],
+            };
+          },
+        },
+      },
+    });
+    const seen: AgUiEvent[] = [];
+    for await (const event of runtime.streamAgent("support", {
+      message: "refund",
+      flow: "assist",
+    })) {
+      seen.push(event);
+    }
+    const last = seen.at(-1);
+    expect(last?.type).toBe("RUN_ERROR");
+    if (last?.type === "RUN_ERROR") {
+      expect(last.code).toBe("AiDurableRequiredError");
+      expect(last.message).toContain("durable: true");
+    }
+  });
+
   test("a thrown tool ends with RUN_FINISHED stopReason error", async () => {
     const runtime = createAiRuntime({
       models: [ai.model("smart")],
@@ -88,6 +128,7 @@ describe("agent event stream", () => {
     expect(finished?.type).toBe("RUN_FINISHED");
     if (finished?.type === "RUN_FINISHED") {
       expect(finished.result?.stopReason).toBe("error");
+      expect(finished.result?.error).toBe("provider said no");
     }
   });
 

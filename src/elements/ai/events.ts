@@ -56,6 +56,8 @@ export type AgUiEvent =
         readonly cost: number;
         readonly stopReason: string;
         readonly output?: unknown;
+        /** Present when `stopReason` is `error`. */
+        readonly error?: string;
       };
       readonly usage?: readonly AgUiUsage[];
       readonly outcome?: {
@@ -125,10 +127,12 @@ export function createEventQueue(): {
  * @param emit - Stream sink
  * @param messageId - AG-UI message id
  * @param text - Full assistant text for this step
+ * @returns Whether a message was emitted (`false` for empty text)
  */
-export function emitAssistantText(emit: AgentEventEmit, messageId: string, text: string): void {
-  if (!text) return;
+export function emitAssistantText(emit: AgentEventEmit, messageId: string, text: string): boolean {
+  if (!text) return false;
   emit({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
   emit({ type: "TEXT_MESSAGE_CONTENT", messageId, delta: text });
   emit({ type: "TEXT_MESSAGE_END", messageId });
+  return true;
 }

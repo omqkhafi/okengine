@@ -55,7 +55,7 @@ export const assist = on(
 );
 ```
 
-The response is `text/event-stream`. Pass `threadId` when the chat already has an id. The default is this process's run id (`agent-run-1`, …), so two processes do not share a thread.
+The response is `text/event-stream`. Pass your own `threadId`. The default is this process's run id (`agent-run-1`, …). Those ids collide across processes and after a restart.
 
 </Step>
 
@@ -126,7 +126,7 @@ Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
 | `TEXT_MESSAGE_START` | `messageId`, `role` | Assistant text is about to arrive. `role` is `assistant`. Empty text is skipped. |
 | `TEXT_MESSAGE_CONTENT` | `messageId`, `delta` | The full assistant text for that step, in one frame. |
 | `TEXT_MESSAGE_END` | `messageId` | That text message is complete. |
-| `TOOL_CALL_START` | `toolCallId`, `toolCallName`, `parentMessageId` | The model named a tool. `parentMessageId` is the assistant message just emitted. |
+| `TOOL_CALL_START` | `toolCallId`, `toolCallName`, `parentMessageId?` | The model named a tool. `parentMessageId` is set when that step emitted assistant text. |
 | `TOOL_CALL_ARGS` | `toolCallId`, `delta` | The tool arguments as one JSON string. |
 | `TOOL_CALL_END` | `toolCallId` | Arguments are complete. The tool has not run yet. |
 | `TOOL_CALL_RESULT` | `messageId`, `toolCallId`, `content`, `role` | The tool returned. `role` is `tool`. `content` is a string. |
@@ -154,7 +154,7 @@ A tool with `approval` and `gate` parks a durable Flow. The stream emits `RUN_FI
     "type": "interrupt",
     "interrupts": [
       {
-        "id": "YWdlbnQtcnVuLTEuY2FsbF8x",
+        "id": "VjFTdEdYUjhfWjVqZEhpNkItbXlULmNhbGxfMQ",
         "reason": "approval",
         "payload": { "tool": "refund", "args": { "amount": 10 } }
       }
@@ -162,6 +162,8 @@ A tool with `approval` and `gate` parks a durable Flow. The stream emits `RUN_FI
   }
 }
 ```
+
+`id` is base64url of `<durable Flow run id>.<tool call id>`. The example decodes to `V1StGXR8_Z5jdHi6B-myT.call_1`. `V1StGXR8_Z5jdHi6B-myT` is the journal run id, not `agent-run-1`. `runId` on the frame is the agent stream id.
 
 Show `payload.tool` and `payload.args`. Keep `id`. That id is the only handle for the decision.
 
@@ -175,13 +177,13 @@ await fx.agent.deny(id, { reason: "over the limit" });
 ```bash
 curl -X POST http://localhost:6530/agent/approvals/approve \
   -H "content-type: application/json" \
-  -d '{"id":"YWdlbnQtcnVuLTEuY2FsbF8x","args":{"amount":4}}'
+  -d '{"id":"VjFTdEdYUjhfWjVqZEhpNkItbXlULmNhbGxfMQ","args":{"amount":4}}'
 ```
 
 ```bash
 curl -X POST http://localhost:6530/agent/approvals/deny \
   -H "content-type: application/json" \
-  -d '{"id":"YWdlbnQtcnVuLTEuY2FsbF8x","reason":"over the limit"}'
+  -d '{"id":"VjFTdEdYUjhfWjVqZEhpNkItbXlULmNhbGxfMQ","reason":"over the limit"}'
 ```
 
 `args` replaces the tool input. `reason` is what the model sees after a deny. The first decision wins. The default wait is `24h`, then the tool is denied with reason `timeout`.
@@ -192,7 +194,7 @@ curl -X POST http://localhost:6530/agent/approvals/deny \
 | Already resolved | 409 `Conflict`. No `Retry-After`. Message: `That value is already in use.` | Stop. Do not retry. |
 | Lease held | 409 `JournalLeaseBusy` with `Retry-After`. Message: `This run is locked by another worker. Retry after the given delay.` | Retry after the delay. |
 
-Approving or denying does not continue this SSE response. The scheduler resumes the durable run in the background and replays the tool once. Decode the approval id to get the run id, then read that run's `output` after it finishes. That is the resumed result. This stream will not yield it.
+Approving or denying does not continue this SSE response. The scheduler resumes the durable run in the background and replays the tool once. Decode the approval id. The prefix before the first `.` is the durable Flow run id. After that run's status is `completed`, its journal `output` is the agent result (`stopReason`, `output`, `cost`, and the trail). It is not `{ streamed: true }`. This stream will not yield it.
 
 ## Patterns
 
@@ -232,7 +234,7 @@ return fx.json.stream(
 
 <Tab value="Thread id">
 
-Pass `threadId`. Otherwise each process mints its own (`agent-run-1`, …) and a restart starts over.
+Pass `threadId`. The default ids (`agent-run-1`, …) collide across processes and after a restart.
 
 ```typescript
 return fx.json.stream(
@@ -287,7 +289,7 @@ Disconnecting the HTTP client aborts the in-flight model call. The run records `
 
 <Accordions>
 
-<Accordion title='ai: flow "assist" must set durable: true to run agent "support"'>
+<Accordion title='ai: flow "support.assist" must set durable: true to run agent "support"'>
   The tool has `approval`, and the Flow is not durable. The message names that Flow: `ai: flow "support.assist" must set durable: true to run agent "support"`. Set `durable: true`. A false `approval` predicate does not park.
 </Accordion>
 

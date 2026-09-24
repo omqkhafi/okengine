@@ -191,7 +191,6 @@ export async function runOkeCertify(
       ask: decl.ask,
       evaluate,
     });
-    process.stdout.write(`${JSON.stringify({ [name]: next.decisions[name] })}\n`);
   }
   await Bun.write(lockPath, `${JSON.stringify(next, null, 2)}\n`);
   const { setDecisionDrift } = await import("../elements/ai/decisions/certificate.ts");

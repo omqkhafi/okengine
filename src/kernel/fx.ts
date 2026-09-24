@@ -2047,7 +2047,8 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(agent);
       const turn = agentTurn(input);
       if (opts?.stream) {
-        return (async function* () {
+        let inner: { readonly result?: Promise<unknown> } | undefined;
+        const gen = (async function* () {
           await gated("ask", name, async () => undefined);
           if (!options.aiRuntime) {
             throw new Error(`fx.run: AI runtime is not configured for agent "${name}"`);
@@ -2073,12 +2074,20 @@ export function createFxContext(options: CreateFxOptions): FxContext {
                 },
               }),
             );
+            inner = events as AsyncIterable<AgUiEvent> & { readonly result?: Promise<unknown> };
             yield* events;
           } finally {
             unlink();
             if (!local.signal.aborted) local.abort();
           }
         })();
+        Object.defineProperty(gen, "result", {
+          enumerable: true,
+          get() {
+            return inner?.result;
+          },
+        });
+        return gen;
       }
       return gated("ask", name, async () => {
         if (options.aiRuntime) {
@@ -2171,12 +2180,22 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       with: jsonWith,
       withQuery: jsonWithQuery,
       stream(chunks) {
-        return {
+        const carrier = {
           [jsonResultBrand]: true,
           kind: "stream" as const,
           status: 200 as const,
           chunks,
         };
+        Object.defineProperty(carrier, "result", {
+          enumerable: true,
+          get() {
+            if (chunks && typeof chunks === "object" && "result" in chunks) {
+              return (chunks as { readonly result?: Promise<unknown> }).result;
+            }
+            return undefined;
+          },
+        });
+        return carrier;
       },
     },
     async step<T>(name: string, fn: () => T | Promise<T>, opts?: StepOptions<T>): Promise<T> {

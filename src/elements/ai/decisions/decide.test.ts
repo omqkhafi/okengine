@@ -872,6 +872,33 @@ describe("fx.decide", () => {
     });
   });
 
+  test("a score answer keyed by index maps onto the declared levels", async () => {
+    setDecisionProvider(async () => ({
+      model: "typesafe/jev-1.13-20260917",
+      provider: "TypeSafe",
+      answers: {
+        severity: {
+          type: "score",
+          score: 1.82,
+          legend: { "0": "low", "1": "medium", "2": "high" },
+          probabilities: { "0": 0.01, "1": 0.16, "2": 0.83 },
+          confidence: 0.73,
+        },
+      },
+      usage: {},
+    }));
+    const decl = ai.decision("severity", {
+      onUncertain: "abstain",
+      ask: { severity: ai.score("How severe is this?", ["low", "medium", "high"]) },
+    });
+    const fx = createFx({ flow: "run", effects: { decides: ["severity"] } });
+    const result = (await fx.decide(decl, { ticket: "Checkout is blank after Pay." })) as {
+      $: { severity: { p: number; raw: unknown } };
+    };
+    expect(result.$.severity.p).toBeCloseTo(0.83);
+    expect(result.$.severity.raw).toEqual({ "0": 0.01, "1": 0.16, "2": 0.83 });
+  });
+
   test("a missing secret is a config error", async () => {
     const decl = ai.decision("triage", { onUncertain: "abstain", ask: { team: choice() } });
     const fx = createFx({

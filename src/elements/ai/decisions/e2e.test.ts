@@ -66,6 +66,8 @@ function providerBody() {
 
 describe("fx.decide end to end", () => {
   test("boot without a project root fails when decisions are declared", async () => {
+    const previousRoot = process.env["OKE_ROOT_DIR"];
+    delete process.env["OKE_ROOT_DIR"];
     const manifest = await extractFromSources({
       "src/flows/run.ts": `
         ai.decision("triage", {
@@ -81,7 +83,12 @@ describe("fx.decide end to end", () => {
       registry: "ignore",
       manifest,
     });
-    await expect(app.boot({ env: "test" })).rejects.toThrow(/rootDir/);
+    try {
+      await expect(app.boot({ env: "test" })).rejects.toThrow(/rootDir/);
+    } finally {
+      if (previousRoot === undefined) delete process.env["OKE_ROOT_DIR"];
+      else process.env["OKE_ROOT_DIR"] = previousRoot;
+    }
   });
 
   test("certify, review, drift, and promote use the real routes", async () => {

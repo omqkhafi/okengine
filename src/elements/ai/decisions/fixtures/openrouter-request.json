@@ -11,9 +11,14 @@
         "none_of_these": "None of the listed options fit"
       }
     },
+    "severity": {
+      "type": "score",
+      "instructions": "How severe is this?",
+      "criteria": ["low", "medium", "high"]
+    },
     "urgent": {
       "type": "noul",
-      "instructions": "Does this convey urgency?"
+      "instructions": "Does this need a person today?"
     }
   }
 }

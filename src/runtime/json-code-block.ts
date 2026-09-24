@@ -2,6 +2,7 @@
  * Browser GET → traces-language JSON page. Clients still get the envelope.
  */
 
+import { HTTP_FRAME_REDACTED, sensitiveHeader } from "../kernel/http-frame.ts";
 import { CONSOLE_PORT } from "./types.ts";
 
 /** One highlighted JSON span. */
@@ -32,6 +33,11 @@ export interface JsonCodeBlockRenderOptions {
   readonly cache?: JsonCodeCache;
   /** Auth principal that handled the request (traces language). */
   readonly auth?: JsonCodeAuth;
+  /**
+   * Response headers for the Fields view. Credential names are shown as
+   * `[redacted]`. Omit `content-length` — the page replaces the body.
+   */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /** Wide-event cache dimension on the browser JSON page. */
@@ -481,6 +487,243 @@ export function jsonCodeLatencyTone(ms: number): JsonCodeLatencyTone {
   return "critical";
 }
 
+/** Scalar or container kind for one response field. */
+type ResponseFieldKind = "string" | "number" | "boolean" | "null" | "object" | "array";
+
+/** One expandable row in the response Fields view. */
+interface ResponseFieldRow {
+  readonly key: string;
+  /** Path from the JSON root, for copy. */
+  readonly path: readonly (string | number)[];
+  readonly display: string;
+  readonly kind: ResponseFieldKind;
+  readonly children: readonly ResponseFieldRow[] | null;
+}
+
+const PREVIEW_FIELDS = 3;
+const PREVIEW_SCALAR_MAX = 42;
+
+const STATUS_REASON: Readonly<Record<number, string>> = {
+  200: "OK",
+  201: "Created",
+  202: "Accepted",
+  204: "No Content",
+  301: "Moved",
+  302: "Found",
+  304: "Not Modified",
+  400: "Bad Request",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "Not Found",
+  405: "Method Not Allowed",
+  409: "Conflict",
+  415: "Unsupported Media Type",
+  422: "Unprocessable Content",
+  429: "Too Many Requests",
+  500: "Internal Server Error",
+  502: "Bad Gateway",
+  503: "Service Unavailable",
+};
+
+const FIELD_CHEV = `<span class="chev" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 9.5 12 15.5 18 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+const FIELD_COPY = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 16V5.5A1.5 1.5 0 0 1 6.5 4H16" stroke="currentColor" stroke-width="1.5"/></svg>`;
+
+/**
+ * Project a JSON value into field rows. Scalars and empty containers return null.
+ *
+ * @param value - Parsed response body or header map
+ * @param path - Path from the root
+ */
+function responseFieldRows(
+  value: unknown,
+  path: readonly (string | number)[] = [],
+): readonly ResponseFieldRow[] | null {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    return value.map((item, index) => projectResponseField(String(index), item, [...path, index]));
+  }
+  if (value === null || typeof value !== "object") return null;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) return null;
+  return entries.map(([key, item]) => projectResponseField(key, item, [...path, key]));
+}
+
+/**
+ * Short shape label for a body or container (`2 fields`, `5 items`).
+ *
+ * @param value - Parsed JSON value
+ */
+function responseShapeHint(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    return `${value.length} ${value.length === 1 ? "item" : "items"}`;
+  }
+  if (value !== null && typeof value === "object") {
+    const n = Object.keys(value).length;
+    return `${n} ${n === 1 ? "field" : "fields"}`;
+  }
+  return null;
+}
+
+/**
+ * Compact byte size of the serialized body.
+ *
+ * @param json - Serialized JSON text
+ */
+function responseByteLabel(json: string): string {
+  const bytes = new TextEncoder().encode(json).length;
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+/**
+ * Fields / JSON control for the response header. Same pair as Console traces.
+ *
+ * @param hasFields - Whether the body can open as rows
+ * @param compact - Compact JSON is the code view
+ */
+function responseViewToggleHtml(hasFields: boolean, compact: boolean): string {
+  if (!hasFields) return "";
+  const fieldsOn = !compact;
+  const token = (view: "fields" | "json", label: string, icon: string, on: boolean) =>
+    `<button type="button" class="token${on ? " is-on" : ""}" data-response-view="${view}" aria-pressed="${on ? "true" : "false"}"><span class="tok-ico">${icon}</span>${label}</button>`;
+  return `<span class="view-toggle" role="group" aria-label="Response view" data-slot="json-code-view-toggle">${token("fields", "Fields", GLYPH.list, fieldsOn)}${token("json", "JSON", GLYPH.braces, !fieldsOn)}</span>`;
+}
+
+/**
+ * Status, response headers, and an expandable body — the Console response frame.
+ *
+ * @param options - Envelope + headers
+ * @param rows - Projected body rows
+ * @param value - Parsed body
+ * @param bodyJson - Highlighted body, shown when the header is on JSON
+ */
+function responsePaneHtml(
+  options: JsonCodeBlockRenderOptions,
+  rows: readonly ResponseFieldRow[],
+  value: unknown,
+  bodyJson: string,
+): string {
+  const tone = options.status >= 500 ? "err" : options.status >= 400 ? "warn" : "ok";
+  const reason = STATUS_REASON[options.status] ?? "";
+  const hint = [responseShapeHint(value), responseByteLabel(options.json)].filter(Boolean).join(" · ");
+  const headers = jsonCodeResponseHeaders(options.headers);
+  const headerRows = responseFieldRows(headers);
+  const headerBlock =
+    headerRows && headerRows.length > 0
+      ? `<details class="resp-block" open><summary class="resp-label">${FIELD_CHEV}<span>Headers</span><span class="resp-hint">${headerRows.length} ${headerRows.length === 1 ? "field" : "fields"}</span></summary><ul class="fields" data-slot="json-code-response-headers">${fieldListHtml(headerRows)}</ul></details>`
+      : "";
+  return `<div class="resp" data-slot="json-code-response"><div class="resp-frame"><div class="resp-rail resp-${tone}" data-slot="json-code-response-rail"></div><div class="resp-main"><div class="resp-status" data-slot="json-code-response-status"><span class="resp-code ${tone}">${options.status}</span>${reason ? `<span class="resp-reason">${escapeHtml(reason)}</span>` : ""}</div>${headerBlock}<div class="resp-body" data-slot="json-code-response-body"><div class="resp-label"><span>Body</span>${hint ? `<span class="resp-hint">${escapeHtml(hint)}</span>` : ""}</div><ul class="fields" data-slot="json-code-fields">${fieldListHtml(rows)}</ul><pre>${bodyJson}</pre></div></div></div></div>`;
+}
+
+/**
+ * Redacted response headers for the Fields view.
+ *
+ * @param headers - Outgoing response headers, before the page replaces the body
+ */
+export function jsonCodeResponseHeaders(
+  headers: Headers | Readonly<Record<string, string>> | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const write = (key: string, value: string): void => {
+    const name = key.toLowerCase();
+    if (name === "content-length") return;
+    out[name] = sensitiveHeader(name) ? HTTP_FRAME_REDACTED : value;
+  };
+  if (headers instanceof Headers) {
+    headers.forEach((value, key) => {
+      write(key, value);
+    });
+    return out;
+  }
+  if (headers) {
+    for (const [key, value] of Object.entries(headers)) write(key, value);
+  }
+  return out;
+}
+
+function projectResponseField(
+  key: string,
+  value: unknown,
+  path: readonly (string | number)[],
+): ResponseFieldRow {
+  return {
+    key,
+    path,
+    display: formatResponseField(value),
+    kind: responseFieldKind(value),
+    children: responseFieldRows(value, path),
+  };
+}
+
+function responseFieldKind(value: unknown): ResponseFieldKind {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  switch (typeof value) {
+    case "string":
+      return "string";
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    case "object":
+      return "object";
+    default:
+      return "string";
+  }
+}
+
+function formatResponseField(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    return `${value.length} ${value.length === 1 ? "item" : "items"}`;
+  }
+  if (typeof value === "object") return objectPreview(value as Record<string, unknown>);
+  return typeof value;
+}
+
+/** Up to three short scalar fields, otherwise a count. */
+function objectPreview(value: Record<string, unknown>): string {
+  const keys = Object.keys(value);
+  if (keys.length === 0) return "{}";
+  const bits: string[] = [];
+  for (const [key, item] of Object.entries(value)) {
+    if (bits.length >= PREVIEW_FIELDS) break;
+    if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") continue;
+    const text = typeof item === "string" ? item : String(item);
+    if (text.length === 0 || text.length > PREVIEW_SCALAR_MAX) continue;
+    bits.push(`${key}: ${text}`);
+  }
+  if (bits.length > 0) return bits.join(" · ");
+  return `${keys.length} ${keys.length === 1 ? "field" : "fields"}`;
+}
+
+function fieldListHtml(rows: readonly ResponseFieldRow[]): string {
+  return rows.map((row) => fieldRowHtml(row)).join("");
+}
+
+function fieldRowHtml(row: ResponseFieldRow): string {
+  const depth = Math.max(0, row.path.length - 1);
+  const tone =
+    row.kind === "string" ? " s" : row.kind === "number" ? " m" : row.kind === "boolean" ? " l" : "";
+  const copy = `<button type="button" class="field-copy" data-field-copy="${escapeHtml(JSON.stringify(row.path))}" aria-label="Copy ${escapeHtml(row.key)}">${FIELD_COPY}</button>`;
+  const label = `<span class="field-key">${escapeHtml(row.key)}</span><span class="field-val${tone}${row.kind === "null" ? " is-null" : ""}">${escapeHtml(row.display)}</span><span class="field-kind">${row.kind}</span>`;
+  if (row.children) {
+    return `<li class="field" data-slot="json-code-field" data-kind="${row.kind}"><details><summary class="field-row" style="--depth:${depth}">${FIELD_CHEV}${label}</summary><ul class="field-kids">${fieldListHtml(row.children)}</ul></details>${copy}</li>`;
+  }
+  return `<li class="field" data-slot="json-code-field" data-kind="${row.kind}"><div class="field-row" style="--depth:${depth}"><span class="chev" aria-hidden="true"></span>${label}</div>${copy}</li>`;
+}
+
+function parseJsonValue(json: string): unknown {
+  try {
+    return JSON.parse(json) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Full-bleed traces-language page for one JSON envelope.
  *
@@ -488,6 +731,10 @@ export function jsonCodeLatencyTone(ms: number): JsonCodeLatencyTone {
  */
 export function renderJsonCodeBlockHtml(options: JsonCodeBlockRenderOptions): string {
   const compact = options.compact === true;
+  const parsed = parseJsonValue(options.json);
+  const fieldRows = parsed === undefined ? null : responseFieldRows(parsed);
+  const hasFields = fieldRows !== null && fieldRows.length > 0;
+  const view = compact ? "raw" : hasFields ? "fields" : "pretty";
   const code = formatJson(options.json, compact);
   const tokens = tokenizeJson(code);
   const lines = splitTokenLines(tokens);
@@ -500,6 +747,8 @@ export function renderJsonCodeBlockHtml(options: JsonCodeBlockRenderOptions): st
       return `<span class="ln"><span class="n">${n}</span><span class="c${compact ? " wrap" : ""}">${inner}</span></span>`;
     })
     .join("");
+  const responseHtml =
+    hasFields && fieldRows ? responsePaneHtml(options, fieldRows, parsed, rows) : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -548,6 +797,21 @@ export function renderJsonCodeBlockHtml(options: JsonCodeBlockRenderOptions): st
   .cache-hit { color: oklch(0.685 0.169 237.323); }
   .cache-miss { color: oklch(0.666 0.179 58.318); }
   .auth-user, .auth-key, .auth-operator { color: oklch(0.685 0.169 237.323); }
+  .st-ok, .meth-get, .meth-query, .icon.meth-get, .icon.meth-query { color: oklch(0.55 0.14 163); }
+  .st-info, .meth-post, .icon.meth-post { color: oklch(0.5 0.12 230); }
+  .st-warn, .meth-put, .icon.meth-put { color: oklch(0.55 0.14 75); }
+  .meth-patch, .icon.meth-patch { color: oklch(0.48 0.16 300); }
+  .st-err, .meth-delete, .icon.meth-delete { color: oklch(0.55 0.2 22); }
+  .rail-acc[data-rail-section="query"] { --sec: oklch(0.5 0.12 230); }
+  .rail-acc[data-rail-section="body"] { --sec: oklch(0.55 0.14 75); }
+  .rail-acc[data-rail-section="cookies"] { --sec: oklch(0.55 0.14 55); }
+  .rail-acc[data-rail-section="headers"] { --sec: oklch(0.48 0.16 300); }
+  .rail-acc[data-rail-section="auth"] { --sec: oklch(0.48 0.12 175); }
+  .rail-acc[data-rail-section="path"] { --sec: oklch(0.48 0.12 250); }
+  .token[data-slot="json-code-global-auth"] .tok-ico { color: oklch(0.48 0.12 175); }
+  .token[data-slot="json-code-global-headers"] .tok-ico { color: oklch(0.48 0.16 300); }
+  .view-toggle .token.is-on[data-response-view="fields"] .tok-ico { color: oklch(0.5 0.12 230); }
+  .view-toggle .token.is-on[data-response-view="json"] .tok-ico { color: oklch(0.55 0.14 75); }
 }
 * { box-sizing: border-box; }
 html, body {
@@ -582,6 +846,7 @@ body {
 .count {
   display: inline-flex;
   align-items: center;
+  gap: .3rem;
   padding: 0 .5rem;
   font-size: 10px;
   font-weight: 500;
@@ -604,6 +869,35 @@ body {
 .auth-user, .auth-key, .auth-operator { color: oklch(0.746 0.16 232.661); }
 .auth-public { color: var(--mute); }
 .auth-none { color: color-mix(in oklab, var(--mute) 40%, transparent); }
+.st-ok { color: var(--ready); }
+.st-info { color: oklch(0.746 0.16 232.661); }
+.st-warn { color: oklch(0.828 0.189 84.429); }
+.st-err { color: var(--fail); }
+.meth-get, .meth-query { color: var(--ready); }
+.meth-post { color: oklch(0.746 0.16 232.661); }
+.meth-put { color: oklch(0.828 0.189 84.429); }
+.meth-patch { color: oklch(0.78 0.14 300); }
+.meth-delete { color: var(--fail); }
+.meth-head, .meth-options, .meth-other { color: var(--mute); }
+.verb { font-weight: 600; }
+.file-path { color: var(--ink); }
+.kind { color: var(--str); }
+.tok-ico, .sec-ico {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.rail-acc[data-rail-section="query"] { --sec: oklch(0.746 0.16 232.661); }
+.rail-acc[data-rail-section="body"] { --sec: oklch(0.828 0.189 84.429); }
+.rail-acc[data-rail-section="cookies"] { --sec: oklch(0.75 0.16 55); }
+.rail-acc[data-rail-section="headers"] { --sec: oklch(0.78 0.13 300); }
+.rail-acc[data-rail-section="auth"] { --sec: oklch(0.765 0.15 175); }
+.rail-acc[data-rail-section="path"] { --sec: oklch(0.78 0.09 250); }
+.sec-ico { color: var(--sec, var(--mute)); }
+.token[data-slot="json-code-global-auth"] .tok-ico { color: oklch(0.765 0.15 175); }
+.token[data-slot="json-code-global-headers"] .tok-ico { color: oklch(0.78 0.13 300); }
+.view-toggle .token.is-on[data-response-view="fields"] .tok-ico { color: oklch(0.746 0.16 232.661); }
+.view-toggle .token.is-on[data-response-view="json"] .tok-ico { color: oklch(0.828 0.189 84.429); }
 .auth-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -617,6 +911,7 @@ body {
   padding: 0 .5rem;
   font-size: 10px;
   font-weight: 500;
+  gap: .3rem;
   letter-spacing: .08em;
   text-transform: uppercase;
   text-decoration: none;
@@ -630,6 +925,9 @@ body {
 }
 .token:hover { background: var(--hover); color: var(--ink); }
 .token.is-on { color: var(--ink); }
+.token[aria-expanded="true"] { color: var(--ink); }
+.rail-acc .token.is-on { color: var(--sec, var(--ink)); }
+.rail-acc[open] > .rail-acc-sum .sec-ico { color: var(--sec); }
 .sep {
   width: 1px;
   align-self: stretch;
@@ -643,9 +941,15 @@ body {
   width: 2rem;
   color: var(--mute);
 }
+.icon.meth-get, .icon.meth-query { color: var(--ready); }
+.icon.meth-post { color: oklch(0.746 0.16 232.661); }
+.icon.meth-put { color: oklch(0.828 0.189 84.429); }
+.icon.meth-patch { color: oklch(0.78 0.14 300); }
+.icon.meth-delete { color: var(--fail); }
 .file {
   display: inline-flex;
   align-items: center;
+  gap: .4rem;
   min-width: 0;
   padding-right: .5rem;
   overflow: hidden;
@@ -692,6 +996,97 @@ body {
 svg[hidden] { display: none !important; }
 .body { display: flex; flex: 1; min-height: 0; }
 .view { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.page[data-view="fields"] .resp-body > pre { display: none; }
+.page:not([data-view="fields"]) .resp-body > .fields { display: none; }
+.view-toggle { display: inline-flex; align-items: stretch; height: 100%; }
+.resp { min-height: 100%; }
+.resp-frame { display: flex; min-height: 100%; }
+.resp-rail { width: 2px; flex-shrink: 0; }
+.resp-rail.ok { background: var(--ready); }
+.resp-rail.warn { background: oklch(0.8 0.12 80); }
+.resp-rail.err { background: var(--fail); }
+.resp-main { flex: 1; min-width: 0; }
+.resp-status { display: flex; align-items: baseline; gap: .5rem; padding: .5rem .625rem; }
+.resp-code { font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.resp-code.ok { color: var(--ready); }
+.resp-code.warn { color: oklch(0.8 0.12 80); }
+.resp-code.err { color: var(--fail); }
+.resp-reason { font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
+.resp-label {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  min-height: 2rem;
+  padding: 0 .5rem;
+  border-top: 1px solid var(--line);
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mute);
+  cursor: pointer;
+}
+.resp-label::-webkit-details-marker { display: none; }
+.resp-hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: color-mix(in oklab, var(--mute) 80%, transparent);
+}
+.resp-block { border: 0; }
+.fields, .field-kids { margin: 0; padding: 0; list-style: none; }
+.field { position: relative; border-bottom: 1px solid var(--line); }
+.field-row {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .375rem 2rem .375rem calc(.625rem + var(--depth, 0) * .875rem);
+}
+.field-row:hover { background: var(--hover); }
+summary.field-row { cursor: pointer; }
+summary.field-row::-webkit-details-marker { display: none; }
+details:not([open]) > summary .chev { transform: rotate(-90deg); }
+.field-key {
+  width: 7.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--key);
+}
+.field-val {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink);
+}
+.field-val.is-null { color: var(--mute); font-style: italic; }
+.field-kind {
+  flex-shrink: 0;
+  margin-top: .15rem;
+  font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--mute) 70%, transparent);
+}
+.field-copy {
+  position: absolute;
+  top: .15rem;
+  right: .15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  opacity: 0;
+}
+.field:hover > .field-copy, .field:focus-within > .field-copy { opacity: 1; }
+.field-copy:hover { color: var(--ink); }
 .rail-check { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .rail {
   display: flex;
@@ -1110,6 +1505,12 @@ details:not(.rail-acc):not([open]) .chev { transform: rotate(-90deg); }
   text-transform: uppercase;
   color: color-mix(in oklab, var(--mute) 70%, transparent);
 }
+.leaf[data-method="GET"] .leaf-type,
+.leaf[data-method="QUERY"] .leaf-type { color: var(--ready); }
+.leaf[data-method="POST"] .leaf-type { color: oklch(0.746 0.16 232.661); }
+.leaf[data-method="PUT"] .leaf-type { color: oklch(0.828 0.189 84.429); }
+.leaf[data-method="PATCH"] .leaf-type { color: oklch(0.78 0.14 300); }
+.leaf[data-method="DELETE"] .leaf-type { color: var(--fail); }
 .rail-thin {
   display: none;
   width: 1.75rem;
@@ -1134,6 +1535,12 @@ details:not(.rail-acc):not([open]) .chev { transform: rotate(-90deg); }
 .rail-check:not(:checked) ~ .rail-thin { display: flex; }
 @media (prefers-color-scheme: light) {
   .leaf.is-on { background: oklch(0.967 0.001 286.375 / 0.7); }
+  .leaf[data-method="GET"] .leaf-type,
+  .leaf[data-method="QUERY"] .leaf-type { color: oklch(0.55 0.14 163); }
+  .leaf[data-method="POST"] .leaf-type { color: oklch(0.5 0.12 230); }
+  .leaf[data-method="PUT"] .leaf-type { color: oklch(0.55 0.14 75); }
+  .leaf[data-method="PATCH"] .leaf-type { color: oklch(0.48 0.16 300); }
+  .leaf[data-method="DELETE"] .leaf-type { color: oklch(0.55 0.2 22); }
 }
 pre {
   margin: 0;
@@ -1163,25 +1570,16 @@ pre {
 </style>
 </head>
 <body>
-  <main class="page" data-slot="json-code-block" data-state="complete" data-view="${compact ? "raw" : "pretty"}" data-status="${options.status}" data-method="${escapeHtml(options.method)}" data-path="${escapeHtml(options.path)}">
+  <main class="page" data-slot="json-code-block" data-state="complete" data-view="${view}" data-code-view="${compact ? "raw" : "pretty"}" data-status="${options.status}" data-method="${escapeHtml(options.method)}" data-path="${escapeHtml(options.path)}">
     <header class="strip">
       <span class="title">${escapeHtml(options.app)}</span>
-      <span class="count">${options.status}</span>
+      <span class="count st-${statusTone(options.status)}" data-slot="json-code-status">${GLYPH.dot}${options.status}</span>
       ${latencyHtml(options.latencyMs)}
       ${cacheHtml(options.cache)}
       ${authHtml(options.auth)}
       <span class="grow"></span>
-      <button type="button" class="token" data-slot="json-code-global-auth" aria-expanded="false" aria-controls="json-code-global-panel" title="Global authentication">Auth</button>
-      <button type="button" class="token" data-slot="json-code-global-headers" aria-expanded="false" aria-controls="json-code-global-panel" title="Global headers">Headers</button>
-      <span class="sep" aria-hidden="true"></span>
-      <a
-        class="token is-on"
-        data-nav
-        data-slot="json-code-view-toggle"
-        href="${escapeHtml(compact ? options.prettyHref : options.rawHref)}"
-        aria-pressed="${compact ? "true" : "false"}"
-        title="${compact ? "Show pretty JSON" : "Show compact JSON"}"
-      >${compact ? "Raw" : "Pretty"}</a>
+      <button type="button" class="token" data-slot="json-code-global-auth" aria-expanded="false" aria-controls="json-code-global-panel" title="Global authentication"><span class="tok-ico">${GLYPH.key}</span>Auth</button>
+      <button type="button" class="token" data-slot="json-code-global-headers" aria-expanded="false" aria-controls="json-code-global-panel" title="Global headers"><span class="tok-ico">${GLYPH.list}</span>Headers</button>
     </header>
     <div class="global-pop" id="json-code-global-panel" data-slot="json-code-global-panel" data-pane="auth" hidden>
       <div class="global-line" data-global-pane="auth" data-auth-scope="global">
@@ -1194,25 +1592,64 @@ pre {
       </div>
     </div>
     <header class="strip">
-      <span class="icon" aria-hidden="true">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7.2L19 8.2V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 7 20V3.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M14 3.5V8h5" stroke="currentColor" stroke-width="1.5"/></svg>
-      </span>
-      <span class="file">${escapeHtml(title)}</span>
-      <span class="head">json</span>
+      <span class="icon meth meth-${methodTone(options.method)}" data-slot="json-code-method-icon" aria-hidden="true">${methodGlyph(options.method)}</span>
+      <span class="file"><span class="verb meth-${methodTone(options.method)}" data-slot="json-code-method">${escapeHtml(options.method)}</span><span class="file-path" data-slot="json-code-path">${escapeHtml(options.path)}</span></span>
+      <span class="head kind">json</span>
       <span class="state">${ok ? "Ready" : options.status}</span>
+      ${responseViewToggleHtml(hasFields, compact)}
       <button class="copy" type="button" data-slot="json-code-copy" aria-label="Copy code" title="Copy code">
         <svg data-copy width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 16V5.5A1.5 1.5 0 0 1 6.5 4H16" stroke="currentColor" stroke-width="1.5"/></svg>
         <svg data-done hidden width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5 9.2 17 19 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </header>
     <div class="body">
-      <div class="view"><pre>${rows}</pre></div>
+      <div class="view">${responseHtml || `<pre>${rows}</pre>`}</div>
       ${navHtml(options.nav)}
     </div>
   </main>
   <textarea id="payload" hidden>${escapeHtml(code)}</textarea>
   <script>
   (() => {
+    const METHOD_GLYPH = ${JSON.stringify({
+      get: GLYPH.eye,
+      query: GLYPH.search,
+      post: GLYPH.plus,
+      put: GLYPH.pencil,
+      patch: GLYPH.pencil,
+      delete: GLYPH.trash,
+      head: GLYPH.file,
+      options: GLYPH.sliders,
+      other: GLYPH.file,
+    })};
+    function methodToneName(method) {
+      switch (String(method || "").toUpperCase()) {
+        case "GET": return "get";
+        case "QUERY": return "query";
+        case "POST": return "post";
+        case "PUT": return "put";
+        case "PATCH": return "patch";
+        case "DELETE": return "delete";
+        case "HEAD": return "head";
+        case "OPTIONS": return "options";
+        default: return "other";
+      }
+    }
+    function paintRequestLine(method, path) {
+      const tone = methodToneName(method);
+      const verb = document.querySelector("[data-slot=json-code-method]");
+      const icon = document.querySelector("[data-slot=json-code-method-icon]");
+      const pathEl = document.querySelector("[data-slot=json-code-path]");
+      if (verb) {
+        verb.textContent = method;
+        verb.className = "verb meth-" + tone;
+      }
+      if (icon) {
+        icon.className = "icon meth meth-" + tone;
+        icon.innerHTML = METHOD_GLYPH[tone] || METHOD_GLYPH.other;
+      }
+      if (pathEl) pathEl.textContent = path;
+    }
+
     const HEADERS_KEY = "oke:json-code:headers";
     const HEADERS_MODE_KEY = "oke:json-code:headers-mode";
     const HEADERS_GLOBAL_KEY = "oke:json-code:headers-global";
@@ -1241,6 +1678,35 @@ pre {
     const bodyModeBtns = document.querySelectorAll("[data-slot=json-code-body-mode]");
     const btn = document.querySelector("[data-slot=json-code-copy]");
     const payload = document.getElementById("payload");
+    document.querySelectorAll("[data-response-view]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const next = el.getAttribute("data-response-view");
+        if (!next || !page) return;
+        page.setAttribute(
+          "data-view",
+          next === "fields" ? "fields" : page.getAttribute("data-code-view") || "pretty",
+        );
+        document.querySelectorAll("[data-response-view]").forEach((other) => {
+          const on = other.getAttribute("data-response-view") === next;
+          other.classList.toggle("is-on", on);
+          other.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      });
+    });
+    document.addEventListener("click", (event) => {
+      const copy = event.target instanceof Element ? event.target.closest("[data-field-copy]") : null;
+      if (!copy || !payload) return;
+      event.preventDefault();
+      event.stopPropagation();
+      let value;
+      try {
+        const path = JSON.parse(copy.getAttribute("data-field-copy") || "[]");
+        value = JSON.parse(payload.value);
+        for (const seg of path) value = value == null ? value : value[seg];
+      } catch { return; }
+      const text = typeof value === "string" ? value : JSON.stringify(value);
+      navigator.clipboard.writeText(text).catch(() => {});
+    });
     const copyIcon = btn?.querySelector("[data-copy]");
     const doneIcon = btn?.querySelector("[data-done]");
     if (!page || !sendBtn) return;
@@ -2213,8 +2679,7 @@ pre {
       leaf.classList.add("is-on");
       const method = (leaf.getAttribute("data-method") || currentMethod()).toUpperCase();
       const path = leaf.getAttribute("data-path") || leaf.getAttribute("data-param-template") || currentPath();
-      const file = document.querySelector(".file");
-      if (file) file.textContent = method + " " + path;
+      paintRequestLine(method, path);
       const title = document.querySelector("title");
       if (title) {
         const app = page.querySelector(".title")?.textContent || "";
@@ -2379,6 +2844,7 @@ export async function asBrowserJsonCodeBlock(
     latencyMs,
     cache,
     auth,
+    headers: jsonCodeResponseHeaders(response.headers),
   });
   const headers = new Headers(response.headers);
   headers.set("content-type", "text/html; charset=utf-8");
@@ -2389,11 +2855,121 @@ export async function asBrowserJsonCodeBlock(
   return new Response(html, { status: response.status, headers });
 }
 
+/** Stroke icon, 14px, currentColor. */
+function glyph(body: string, size = 14): string {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${body}</svg>`;
+}
+
+const GLYPH = {
+  clock: glyph(
+    `<circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4.5l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
+  ),
+  dot: glyph(`<circle cx="12" cy="12" r="3.25" fill="currentColor"/>`, 12),
+  eye: glyph(
+    `<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.25" stroke="currentColor" stroke-width="1.5"/>`,
+  ),
+  plus: glyph(
+    `<path d="M12 5.5v13M5.5 12h13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`,
+  ),
+  pencil: glyph(
+    `<path d="M4 16.5V20h3.5L19 8.5 15.5 5 4 16.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`,
+  ),
+  trash: glyph(
+    `<path d="M5 7.5h14M9.5 7.5V5.5h5v2M8 7.5l.7 12h6.6L16 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ),
+  file: glyph(
+    `<path d="M7 3.5h7.2L19 8.2V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 7 20V3.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M14 3.5V8h5" stroke="currentColor" stroke-width="1.5"/>`,
+  ),
+  sliders: glyph(
+    `<path d="M4 8h16M4 16h16M9 6v4M16 14v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
+  ),
+  search: glyph(
+    `<circle cx="11" cy="11" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M15.5 15.5 19.5 19.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
+  ),
+  braces: glyph(
+    `<path d="M9 5.5c-1.6 0-2.5 1-2.5 2.6v2.2c0 1-.5 1.5-1.7 1.7 1.2.2 1.7.7 1.7 1.7v2.2c0 1.6.9 2.6 2.5 2.6M15 5.5c1.6 0 2.5 1 2.5 2.6v2.2c0 1 .5 1.5 1.7 1.7-1.2.2-1.7.7-1.7 1.7v2.2c0 1.6-.9 2.6-2.5 2.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
+  ),
+  cookie: glyph(
+    `<circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="10" r=".9" fill="currentColor"/><circle cx="14" cy="9.5" r=".9" fill="currentColor"/><circle cx="13" cy="14" r=".9" fill="currentColor"/>`,
+  ),
+  list: glyph(
+    `<path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`,
+  ),
+  key: glyph(
+    `<circle cx="8" cy="14" r="3.25" stroke="currentColor" stroke-width="1.5"/><path d="M11 12.2 19 4.5M16.2 4.5H19V7.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ),
+  route: glyph(
+    `<path d="M5 19V7.5A2 2 0 0 1 7 5.5h5M12 5.5 15.5 9 12 12.5M15 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ),
+} as const;
+
+/** Accent class for an HTTP method. Matches Console traces. */
+function methodTone(method: string): string {
+  switch (method.toUpperCase()) {
+    case "GET":
+      return "get";
+    case "QUERY":
+      return "query";
+    case "POST":
+      return "post";
+    case "PUT":
+      return "put";
+    case "PATCH":
+      return "patch";
+    case "DELETE":
+      return "delete";
+    case "HEAD":
+      return "head";
+    case "OPTIONS":
+      return "options";
+    default:
+      return "other";
+  }
+}
+
+/** Glyph for an HTTP method. */
+function methodGlyph(method: string): string {
+  switch (method.toUpperCase()) {
+    case "GET":
+      return GLYPH.eye;
+    case "QUERY":
+      return GLYPH.search;
+    case "POST":
+      return GLYPH.plus;
+    case "PUT":
+    case "PATCH":
+      return GLYPH.pencil;
+    case "DELETE":
+      return GLYPH.trash;
+    case "OPTIONS":
+      return GLYPH.sliders;
+    default:
+      return GLYPH.file;
+  }
+}
+
+const SECTION_GLYPH: Readonly<Record<string, string>> = {
+  query: GLYPH.sliders,
+  body: GLYPH.braces,
+  cookies: GLYPH.cookie,
+  headers: GLYPH.list,
+  auth: GLYPH.key,
+  path: GLYPH.route,
+};
+
+/** Status accent: ok, redirect, client error, server error. */
+function statusTone(status: number): "ok" | "info" | "warn" | "err" {
+  if (status >= 500) return "err";
+  if (status >= 400) return "warn";
+  if (status >= 300) return "info";
+  return "ok";
+}
+
 function latencyHtml(ms: number | undefined): string {
   if (ms === undefined) return "";
   const tone = jsonCodeLatencyTone(ms);
   const label = formatJsonCodeLatency(ms);
-  return `<span class="count lat-${tone}" data-slot="json-code-latency" data-tone="${tone}" title="Latency">${escapeHtml(label)}</span>`;
+  return `<span class="count lat-${tone}" data-slot="json-code-latency" data-tone="${tone}" title="Latency">${GLYPH.clock}${escapeHtml(label)}</span>`;
 }
 
 const CACHE_MARK: Readonly<
@@ -2515,7 +3091,7 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
   const play = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5.5v13l11-6.5L8 5.5Z" fill="currentColor"/></svg>`;
   const kvSection = (kind: string, label: string) =>
     `<details class="rail-acc" data-rail-section="${kind}">
-  <summary class="rail-acc-sum">${chev}<span>${label}</span></summary>
+  <summary class="rail-acc-sum">${chev}<span class="sec-ico">${SECTION_GLYPH[kind] ?? ""}</span><span>${label}</span></summary>
   <div class="rail-acc-body">
     <div class="kv-editor">
       <div class="kv-rows" data-slot="json-code-kv-rows" data-kv="${kind}"></div>
@@ -2542,7 +3118,7 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
       ${kvSection("query", "Params")}
       <details class="rail-acc" data-rail-section="body">
         <summary class="rail-acc-sum">
-          ${chev}<span>Body</span>
+          ${chev}<span class="sec-ico">${SECTION_GLYPH.body}</span><span>Body</span>
           <span class="grow"></span>
           <span class="body-mode-strip" role="group" aria-label="Body format">
             <button type="button" class="token is-on" data-slot="json-code-body-mode" data-mode="form" aria-pressed="true">Form</button>
@@ -2565,7 +3141,7 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
       ${kvSection("cookies", "Cookies")}
       <details class="rail-acc" data-rail-section="headers">
         <summary class="rail-acc-sum">
-          ${chev}<span>Headers</span>
+          ${chev}<span class="sec-ico">${SECTION_GLYPH.headers}</span><span>Headers</span>
           <span class="grow"></span>
           <span class="body-mode-strip" role="group" aria-label="Request headers">
             <button type="button" class="token is-on" data-headers-mode="inherit" aria-pressed="true">Inherit</button>
@@ -2579,7 +3155,7 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
         </div>
       </details>
       <details class="rail-acc" data-rail-section="auth" data-auth-scope="request">
-        <summary class="rail-acc-sum">${chev}<span>Auth</span><span class="grow"></span><span class="body-mode-strip" role="group" aria-label="Request auth"><button type="button" class="token is-on" data-auth-mode="inherit" aria-pressed="true">Inherit</button><button type="button" class="token" data-auth-mode="custom" aria-pressed="false">Custom</button></span></summary>
+        <summary class="rail-acc-sum">${chev}<span class="sec-ico">${SECTION_GLYPH.auth}</span><span>Auth</span><span class="grow"></span><span class="body-mode-strip" role="group" aria-label="Request auth"><button type="button" class="token is-on" data-auth-mode="inherit" aria-pressed="true">Inherit</button><button type="button" class="token" data-auth-mode="custom" aria-pressed="false">Custom</button></span></summary>
         <div class="rail-acc-body" data-auth-custom hidden>
           ${authEditorHtml("request")}
         </div>

@@ -133,6 +133,24 @@ export async function encodeExecuteResult(result: {
   return encodeSuccess(result.output);
 }
 
+/**
+ * Durable park thrown from a streamed agent after the interrupt frame.
+ *
+ * Duck-typed so this encoder does not import the journal module.
+ *
+ * @param err - Value thrown by the chunk iterator
+ */
+function isStreamPark(err: unknown): err is { readonly wakeAt: number; readonly label: string } {
+  return (
+    err instanceof Error &&
+    err.name === "JournalSuspend" &&
+    "wakeAt" in err &&
+    typeof err.wakeAt === "number" &&
+    "label" in err &&
+    typeof err.label === "string"
+  );
+}
+
 function encodeSseStream(carrier: JsonStreamResult): Response {
   const encoder = new TextEncoder();
   let finalized = false;
@@ -156,7 +174,13 @@ function encodeSseStream(carrier: JsonStreamResult): Response {
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       } catch (err) {
-        controller.error(err);
+        if (isStreamPark(err)) {
+          carrier.parked = { wakeAt: err.wakeAt, label: err.label };
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        } else {
+          controller.error(err);
+        }
       } finally {
         await finish();
       }

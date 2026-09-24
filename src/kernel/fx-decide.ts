@@ -468,10 +468,16 @@ function probabilityList(
         : [];
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const record = raw as Record<string, unknown>;
-    return {
-      keys,
-      values: keys.map((key) => (typeof record[key] === "number" ? record[key] : 0)),
-    };
+    const named = keys.map((key) => (typeof record[key] === "number" ? record[key] : 0));
+    const namedHit = named.some((value) => value > 0);
+    if (!namedHit && question.kind === "score") {
+      const indexed = keys.map((_, index) => {
+        const value = record[String(index)];
+        return typeof value === "number" ? value : 0;
+      });
+      if (indexed.some((value) => value > 0)) return { keys, values: indexed };
+    }
+    return { keys, values: named };
   }
   if (Array.isArray(raw)) {
     return { keys, values: keys.map((_, i) => (typeof raw[i] === "number" ? raw[i] : 0)) };
