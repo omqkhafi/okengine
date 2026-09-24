@@ -15,6 +15,7 @@ import {
   setDecisionDrift,
 } from "./certificate.ts";
 import { certifyLabels } from "./certify.ts";
+import { auditDriftExceeded, loadDecisionLabels, persistDecisionDrift } from "./labels.ts";
 
 /** Signal the drift monitor emits. The emit is declared on that flow. */
 export const DECISION_DRIFT_SIGNAL = "oke/decision/drift";
@@ -45,7 +46,8 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     do: async () => {
       for (const name of names) {
         const decl = aiDecisionRegistry.find((item) => item.name === name);
-        aggregateDecisionCandidate(name, (rows) =>
+        const rows = loadDecisionLabels(name);
+        aggregateDecisionCandidate(name, () =>
           certifyLabels({
             model: decl?.model ?? "",
             maxError: decl?.autonomy?.maxError ?? 0.05,
@@ -66,9 +68,17 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     plane: "operator",
     effects: { emits: [DECISION_DRIFT_SIGNAL] },
     do: async (_input, fx) => {
-      if (!decisionDriftSuspended()) return { suspended: false };
-      await fx.emit({ name: DECISION_DRIFT_SIGNAL }, { suspended: true });
-      return { suspended: true };
+      const caps = Object.values(manifest.ai?.decisions ?? {})
+        .map((decision) => decision.autonomy?.maxError)
+        .filter((value): value is number => typeof value === "number");
+      const maxError = caps.length > 0 ? Math.min(...caps) : 0.05;
+      const next = auditDriftExceeded(maxError);
+      const prev = decisionDriftSuspended();
+      if (next === prev) return { suspended: prev };
+      setDecisionDrift(next);
+      persistDecisionDrift(next);
+      await fx.emit({ name: DECISION_DRIFT_SIGNAL }, { suspended: next });
+      return { suspended: next };
     },
   });
   adopt({

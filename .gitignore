@@ -88,3 +88,7 @@ src/bench/results/
 # Local HyperFrames compositions (promo / explainer drafts — not the product)
 /video/
 
+# Decision lock and label store written at an app root
+oke-decisions.lock.json
+oke-decisions.labels.sqlite
+

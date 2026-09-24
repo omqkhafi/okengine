@@ -29,6 +29,7 @@ import {
   type DecisionCertSlice,
   type DecisionUncertainty,
 } from "../elements/ai/decisions/certificate.ts";
+import { persistDecisionLabel } from "../elements/ai/decisions/labels.ts";
 import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
@@ -609,7 +610,7 @@ export async function resolveDecisionReview(
     const updated: JournalRun = { ...run, entries, wakeAt: at };
     await store.put(updated);
     for (const [question, value] of Object.entries(input.values)) {
-      recordDecisionLabel({
+      const label = {
         decision: parsed.name,
         question,
         value,
@@ -620,7 +621,9 @@ export async function resolveDecisionReview(
         ...(current.model !== undefined ? { model: current.model } : {}),
         ...(current.scores?.[question] !== undefined ? { score: current.scores[question] } : {}),
         loss: current.modelValues?.[question] === value ? 0 : 1,
-      });
+      };
+      recordDecisionLabel(label);
+      persistDecisionLabel(label, at);
     }
     return { ok: true };
   } finally {
