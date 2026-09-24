@@ -4,7 +4,15 @@
  */
 
 import type { AiDecisionQuestion } from "../declare.ts";
-import { applyTemperature, learnThenTest, questionHash, type DecisionCalibrator, type DecisionCertSlice, type DecisionLabel, type DecisionLockEntry } from "./certificate.ts";
+import {
+  applyTemperature,
+  learnThenTest,
+  questionHash,
+  type DecisionCalibrator,
+  type DecisionCertSlice,
+  type DecisionLabel,
+  type DecisionLockEntry,
+} from "./certificate.ts";
 import type { DecisionResponse } from "./provider.ts";
 
 /** One seed row. */
@@ -239,7 +247,11 @@ function scoreFit(
   calibrator: DecisionCalibrator,
 ): { readonly score: number; readonly loss: number } {
   if (question.kind === "boolean" && calibrator.kind !== "temperature") {
-    const p = platt(row.noul ?? 0.5, calibrator.kind === "platt" ? calibrator.a : 1, calibrator.kind === "platt" ? calibrator.b : 0);
+    const p = platt(
+      row.noul ?? 0.5,
+      calibrator.kind === "platt" ? calibrator.a : 1,
+      calibrator.kind === "platt" ? calibrator.b : 0,
+    );
     const predicted = p >= 0.5;
     return { score: Math.max(p, 1 - p), loss: predicted === row.booleanLabel ? 0 : 1 };
   }
@@ -252,7 +264,22 @@ function scoreFit(
   return { score: scaled[best] ?? 0, loss: best === row.labelIndex ? 0 : 1 };
 }
 
-function fitRow(question: AiDecisionQuestion, answer: unknown, expected: unknown): FitRow | undefined {
+/**
+ * Provider answers wrap the distribution in `probabilities`.
+ * A stored label writes that same distribution as `raw`.
+ *
+ * @param record - Answer or stored raw
+ */
+function storedDistribution(record: Record<string, unknown>): unknown {
+  if (record.probabilities !== undefined) return record.probabilities;
+  return record;
+}
+
+function fitRow(
+  question: AiDecisionQuestion,
+  answer: unknown,
+  expected: unknown,
+): FitRow | undefined {
   const record = answer && typeof answer === "object" ? (answer as Record<string, unknown>) : {};
   if (question.kind === "boolean") {
     if (typeof expected !== "boolean") return undefined;
@@ -264,10 +291,13 @@ function fitRow(question: AiDecisionQuestion, answer: unknown, expected: unknown
       weight: 1,
     };
   }
-  const keys = question.kind === "choice" ? [...Object.keys(question.options), "none_of_these"] : [...question.levels];
+  const keys =
+    question.kind === "choice"
+      ? [...Object.keys(question.options), "none_of_these"]
+      : [...question.levels];
   const labelIndex = keys.indexOf(String(expected));
   if (labelIndex < 0) return undefined;
-  const raw = record.probabilities;
+  const raw = storedDistribution(record);
   const probs = keys.map((key, index) => {
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
       const value = (raw as Record<string, unknown>)[key];
@@ -282,4 +312,3 @@ function propensityWeight(propensity: number): number {
   if (!(propensity > 0)) return 1;
   return 1 / propensity;
 }
-

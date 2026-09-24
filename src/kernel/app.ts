@@ -1129,9 +1129,8 @@ export function oke(options: OkeOptions): OkeApp {
    */
   async function ensureDecisionFlows(manifest: BootOptions["manifest"] | undefined): Promise<void> {
     if (decisionFlowsBound || !manifest) return;
-    const { bindDecisionFlows, manifestHasDecisionAutonomy } = await import(
-      "../elements/ai/decisions/bind.ts"
-    );
+    const { bindDecisionFlows, manifestHasDecisionAutonomy } =
+      await import("../elements/ai/decisions/bind.ts");
     if (!manifestHasDecisionAutonomy(manifest)) {
       decisionFlowsBound = true;
       return;
@@ -1598,13 +1597,17 @@ export function oke(options: OkeOptions): OkeApp {
     const decisionManifest = overrides?.manifest ?? options.manifest;
     const declaredDecisions = decisionManifest?.ai?.decisions;
     if (declaredDecisions && Object.keys(declaredDecisions).length > 0) {
-      const { loadDecisionLockfile, setDecisionDrift } = await import(
-        "../elements/ai/decisions/certificate.ts"
-      );
+      const { loadDecisionLockfile, setDecisionDrift } =
+        await import("../elements/ai/decisions/certificate.ts");
       const { openDecisionLabelStore } = await import("../elements/ai/decisions/labels.ts");
       const { setDecisionGateAllow } = await import("./fx-decide.ts");
       const root = overrides?.rootDir ?? options.rootDir ?? process.env["OKE_ROOT_DIR"];
-      if (root) await loadDecisionLockfile(root);
+      if (!root) {
+        throw new Error(
+          "oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset, so the decision lockfile cannot load.",
+        );
+      }
+      await loadDecisionLockfile(root);
       if (result.journal && result.journal.store.decisions) {
         await openDecisionLabelStore(result.journal.store, setDecisionDrift);
       }

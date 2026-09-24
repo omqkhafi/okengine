@@ -18,6 +18,28 @@ export interface DecisionLabelSql {
   exec(sql: string, params?: readonly unknown[]): Promise<{ changes: number }>;
 }
 
+/**
+ * App drift flag plus the certificate time it was raised against.
+ * A later lockfile certificate (`certifiedAt` newer than this) ignores the flag.
+ */
+export interface DecisionDriftRecord {
+  readonly suspended: boolean;
+  /** Epoch ms of the certificate that was current when the flag was written. */
+  readonly certifiedAt: number;
+}
+
+/** Thrown when the postgres label store cannot open or query. */
+export class DecisionLabelStoreError extends Error {
+  /**
+   * @param message - What failed
+   * @param options - Underlying driver error
+   */
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "DecisionLabelStoreError";
+  }
+}
+
 /** Persistence for review labels and the app drift flag. */
 export interface DecisionLabelStore {
   insert(label: DecisionLabel, at: number): Promise<void>;
@@ -28,10 +50,10 @@ export interface DecisionLabelStore {
    * @param tenant - Tenant filter
    */
   list(decision?: string, tenant?: string | null): Promise<DecisionLabel[]>;
-  /** App-level suspension flag. */
-  drift(): Promise<boolean>;
+  /** App-level suspension flag and the certificate time it belongs to. */
+  drift(): Promise<DecisionDriftRecord>;
   /** Persist the app-level suspension flag. */
-  setDrift(suspended: boolean): Promise<void>;
+  setDrift(record: DecisionDriftRecord): Promise<void>;
 }
 
 interface StoredLabel extends DecisionLabel {
@@ -43,7 +65,7 @@ interface StoredLabel extends DecisionLabel {
  */
 export function createMemoryDecisionLabelStore(): DecisionLabelStore {
   const rows: StoredLabel[] = [];
-  let suspended = false;
+  let driftRecord: DecisionDriftRecord = { suspended: false, certifiedAt: 0 };
   return {
     async insert(label, at) {
       rows.push({ ...label, at });
@@ -55,10 +77,10 @@ export function createMemoryDecisionLabelStore(): DecisionLabelStore {
         .map(toLabel);
     },
     async drift() {
-      return suspended;
+      return driftRecord;
     },
     async setDrift(next) {
-      suspended = next;
+      driftRecord = next;
     },
   };
 }
@@ -70,20 +92,34 @@ export function createMemoryDecisionLabelStore(): DecisionLabelStore {
  */
 export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
   let rows: StoredLabel[] | undefined;
-  let suspended = false;
+  let driftRecord: DecisionDriftRecord = { suspended: false, certifiedAt: 0 };
   const load = async (): Promise<void> => {
     if (rows) return;
     rows = [];
     const file = Bun.file(path);
     if (await file.exists()) {
-      const raw = (await file.json()) as { rows?: StoredLabel[]; suspended?: boolean };
+      const raw = (await file.json()) as {
+        rows?: StoredLabel[];
+        suspended?: boolean;
+        certifiedAt?: number;
+      };
       rows = raw.rows ?? [];
-      suspended = raw.suspended === true;
+      driftRecord = {
+        suspended: raw.suspended === true,
+        certifiedAt: typeof raw.certifiedAt === "number" ? raw.certifiedAt : 0,
+      };
     }
   };
   const flush = async (): Promise<void> => {
     await mkdir(dirname(path), { recursive: true });
-    await Bun.write(path, JSON.stringify({ rows, suspended }));
+    await Bun.write(
+      path,
+      JSON.stringify({
+        rows,
+        suspended: driftRecord.suspended,
+        certifiedAt: driftRecord.certifiedAt,
+      }),
+    );
   };
   return {
     async insert(label, at) {
@@ -100,57 +136,68 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
     },
     async drift() {
       await load();
-      return suspended;
+      return driftRecord;
     },
     async setDrift(next) {
       await load();
-      suspended = next;
+      driftRecord = next;
       await flush();
     },
   };
 }
 
-const memoryBySql = new WeakMap<DecisionLabelSql, DecisionLabelStore>();
-
 /**
  * Postgres label store on the journal connection. Creates the tables.
- * A SQL fake that cannot read the table keeps an in-memory store on that client.
+ * A failed init or query throws {@link DecisionLabelStoreError}.
  *
  * @param sql - Journal SQL client
  */
 export async function createPostgresDecisionLabelStore(
   sql: DecisionLabelSql,
 ): Promise<DecisionLabelStore> {
-  const cached = memoryBySql.get(sql);
-  if (cached) return cached;
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_labels (
-    decision_id TEXT NOT NULL,
-    question TEXT NOT NULL,
-    value TEXT NOT NULL,
-    propensity DOUBLE PRECISION NOT NULL,
-    reviewer TEXT NOT NULL,
-    locale TEXT,
-    model TEXT,
-    tenant TEXT,
-    score DOUBLE PRECISION,
-    loss INTEGER,
-    raw TEXT,
-    at BIGINT NOT NULL
-  )`);
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_drift (
-    id INTEGER PRIMARY KEY,
-    suspended INTEGER NOT NULL
-  )`);
   try {
-    await sql.query(`SELECT decision_id FROM oke_decision_labels WHERE decision_id = ?`, [""]);
-  } catch {
-    const memory = createMemoryDecisionLabelStore();
-    memoryBySql.set(sql, memory);
-    return memory;
+    await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_labels (
+      decision_id TEXT NOT NULL,
+      question TEXT NOT NULL,
+      value TEXT NOT NULL,
+      propensity DOUBLE PRECISION NOT NULL,
+      reviewer TEXT NOT NULL,
+      locale TEXT,
+      model TEXT,
+      tenant TEXT,
+      score DOUBLE PRECISION,
+      loss INTEGER,
+      raw TEXT,
+      at BIGINT NOT NULL
+    )`);
+    await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_drift (
+      id INTEGER PRIMARY KEY,
+      suspended INTEGER NOT NULL,
+      certified_at BIGINT NOT NULL
+    )`);
+  } catch (cause) {
+    throw new DecisionLabelStoreError("decision label store failed to open", { cause });
   }
-  const store: DecisionLabelStore = {
+  const query = async (
+    statement: string,
+    params?: readonly unknown[],
+  ): Promise<Record<string, unknown>[]> => {
+    try {
+      return await sql.query(statement, params);
+    } catch (cause) {
+      throw new DecisionLabelStoreError("decision label store query failed", { cause });
+    }
+  };
+  const exec = async (statement: string, params?: readonly unknown[]): Promise<void> => {
+    try {
+      await sql.exec(statement, params);
+    } catch (cause) {
+      throw new DecisionLabelStoreError("decision label store query failed", { cause });
+    }
+  };
+  return {
     async insert(label, at) {
-      await sql.exec(
+      await exec(
         `INSERT INTO oke_decision_labels
           (decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -182,7 +229,7 @@ export async function createPostgresDecisionLabelStore(
         args.push(tenant);
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-      const found = await sql.query(
+      const found = await query(
         `SELECT decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at
          FROM oke_decision_labels ${where}`,
         args,
@@ -203,19 +250,22 @@ export async function createPostgresDecisionLabelStore(
       }));
     },
     async drift() {
-      const rows = await sql.query(`SELECT suspended FROM oke_decision_drift WHERE id = 1`);
-      return Number(rows[0]?.suspended) === 1;
+      const rows = await query(
+        `SELECT suspended, certified_at FROM oke_decision_drift WHERE id = 1`,
+      );
+      return {
+        suspended: Number(rows[0]?.suspended) === 1,
+        certifiedAt: Number(rows[0]?.certified_at ?? 0),
+      };
     },
     async setDrift(next) {
-      await sql.exec(
-        `INSERT INTO oke_decision_drift (id, suspended) VALUES (1, ?)
-         ON CONFLICT (id) DO UPDATE SET suspended = excluded.suspended`,
-        [next ? 1 : 0],
+      await exec(
+        `INSERT INTO oke_decision_drift (id, suspended, certified_at) VALUES (1, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET suspended = excluded.suspended, certified_at = excluded.certified_at`,
+        [next.suspended ? 1 : 0, next.certifiedAt],
       );
     },
   };
-  memoryBySql.set(sql, store);
-  return store;
 }
 
 function toLabel(row: StoredLabel): DecisionLabel {

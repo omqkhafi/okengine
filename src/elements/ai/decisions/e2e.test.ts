@@ -14,6 +14,7 @@ import { gate, resetGates } from "../../gate/declare.ts";
 import {
   decisionDriftSuspended,
   getDecisionLock,
+  loadDecisionLockfile,
   resetDecisionCertificates,
 } from "./certificate.ts";
 import {
@@ -63,6 +64,25 @@ function providerBody() {
 }
 
 describe("fx.decide end to end", () => {
+  test("boot without a project root fails when decisions are declared", async () => {
+    const app = oke({
+      name: "decide-no-root",
+      env: "test",
+      startScheduler: false,
+      registry: "ignore",
+      manifest: {
+        oke: "1",
+        app: "decide-no-root",
+        ai: {
+          decisions: {
+            triage: { mode: "abstain", questions: ["team"] },
+          },
+        },
+      } as unknown as Manifest,
+    });
+    await expect(app.boot({ env: "test" })).rejects.toThrow(/rootDir/);
+  });
+
   test("certify, review, drift, and promote use the real routes", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-decide-e2e-"));
     const question = ai.choice("which team", { billing: "Billing", technical: "Technical" });
@@ -80,7 +100,13 @@ describe("fx.decide end to end", () => {
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
-    const seed = Array.from({ length: 80 }, (_, i) =>
+    const route = ai.decision("route", {
+      review: "ops",
+      model: "typesafe/jev-1.13.0",
+      autonomy: { maxError: 0.05, audit: 0 },
+      ask: { team: question },
+    });
+    const seed = Array.from({ length: 200 }, (_, i) =>
       JSON.stringify({
         input: { ticket: `T-${i}`, note: `Customer ${i} cannot sign in after the deploy` },
         expect: { team: "technical" },
@@ -101,6 +127,13 @@ describe("fx.decide end to end", () => {
             autonomy: { maxError: 0.05, audit: 0 },
           },
           triage: {
+            mode: "review",
+            questions: ["team"],
+            review: "ops",
+            model: "typesafe/jev-1.13.0",
+            autonomy: { maxError: 0.05, audit: 0 },
+          },
+          route: {
             mode: "review",
             questions: ["team"],
             review: "ops",
@@ -134,7 +167,8 @@ describe("fx.decide end to end", () => {
     expect(code).toBe(0);
 
     setDecisionProvider(async () => providerBody());
-    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const sql = createPostgresJournalFake();
+    const store = await createPostgresJournalStore({ sql });
     const consoleState = { journalStore: store, manifest } as ConsoleState;
     const resolve = decisionConsoleBindings(consoleState).find(
       (binding) => binding.flow.name === "console.decisions.resolve",
@@ -142,9 +176,11 @@ describe("fx.decide end to end", () => {
     if (!resolve) throw new Error("expected the console resolve route");
     const work = flow("work", {
       durable: true,
-      effects: { decides: ["ship", "triage"] },
-      do: async (input: { which: "ship" | "triage" }, fx) =>
-        fx.decide(input.which === "ship" ? ship : triage, { ticket: "1" }),
+      effects: { decides: ["ship", "triage", "route"] },
+      do: async (input: { which: "ship" | "triage" | "route" }, fx) =>
+        fx.decide(input.which === "ship" ? ship : input.which === "route" ? route : triage, {
+          ticket: "1",
+        }),
     });
 
     const locked = oke({
@@ -223,12 +259,74 @@ describe("fx.decide end to end", () => {
     const aggregate = locked.flow("oke.decisions.aggregate");
     if (!aggregate) throw new Error("expected the candidate job");
     await locked.call(aggregate, {});
-    const candidate = await locked.fetch(
+    const thin = await locked.fetch(
       new Request("http://localhost/_oke/decisions/triage/candidate"),
     );
+    expect(thin.status).toBe(200);
+    const thinBody = (await thin.json()) as {
+      data?: { questions?: Record<string, unknown> };
+      questions?: Record<string, unknown>;
+    };
+    const thinQuestions = thinBody.data?.questions ?? thinBody.questions ?? {};
+    expect(thinQuestions.team).toBeUndefined();
+    await locked.call(work, { which: "triage" });
+    const still = (await store.list()).filter((item) =>
+      item.entries.some(
+        (entry) =>
+          entry.kind === "step" &&
+          entry.name.startsWith("ai-decision:") &&
+          (entry.value as { status?: string }).status === "pending",
+      ),
+    );
+    expect(still.length).toBeGreaterThan(0);
+
+    for (let i = 0; i < 160; i++) {
+      await locked.call(work, { which: "route" });
+      const parked = (await store.list()).find((item) =>
+        item.entries.some(
+          (entry) =>
+            entry.kind === "step" &&
+            entry.name.startsWith("ai-decision:") &&
+            (entry.value as { status?: string }).status === "pending",
+        ),
+      );
+      const parkedStep = parked?.entries.find(
+        (entry) =>
+          entry.kind === "step" &&
+          entry.name.startsWith("ai-decision:") &&
+          (entry.value as { status?: string }).status === "pending",
+      );
+      if (!parked || !parkedStep || parkedStep.kind !== "step") {
+        throw new Error("expected a parked route review");
+      }
+      const agreed = await locked.fetch(
+        new Request("http://localhost/console/decisions/resolve", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: parkedStep.name.slice("ai-decision:".length),
+            values: { team: "technical" },
+          }),
+        }),
+      );
+      expect(agreed.status).toBe(200);
+      await flushDecisionLabels();
+      await locked.resumeDurable(Date.now() + 1);
+    }
+
+    await locked.call(aggregate, {});
+    const candidate = await locked.fetch(
+      new Request("http://localhost/_oke/decisions/route/candidate"),
+    );
     expect(candidate.status).toBe(200);
+    const candidateBody = (await candidate.json()) as {
+      data?: { questions?: { team?: Record<string, unknown> } };
+      questions?: { team?: Record<string, unknown> };
+    };
+    const routeQuestions = candidateBody.data?.questions ?? candidateBody.questions;
+    expect(routeQuestions?.team?.[""]).toBeDefined();
     const promoted = await promoteDecision({
-      name: "triage",
+      name: "route",
       origin: "http://localhost",
       lockPath: join(root, "oke-decisions.lock.json"),
       fetcher: async (url) => {
@@ -238,12 +336,20 @@ describe("fx.decide end to end", () => {
       },
     });
     expect(promoted.decisions.ship).toBeDefined();
-    expect(promoted.decisions.triage).toBeDefined();
+    expect(promoted.decisions.route?.questions.team?.[""]).toBeDefined();
     expect(decisionDriftSuspended()).toBe(false);
+    await loadDecisionLockfile(root);
+    const after = (await locked.call(work, { which: "route" })) as {
+      team: string;
+      $: { team: { how: string } };
+    };
+    expect(after.team).toBe("technical");
+    expect(after.$.team.how).toBe("auto");
     await locked.bootResult?.close();
 
     closeDecisionLabelStore();
     resetDecisionCertificates();
+    const restartedStore = await createPostgresJournalStore({ sql });
     const restarted = oke({
       name: "decide-e2e-2",
       env: "test",
@@ -251,12 +357,33 @@ describe("fx.decide end to end", () => {
       registry: "ignore",
       manifest,
       rootDir: root,
-      gate: { unguardedHttp: "allow" },
-      elements: { journal: { store, instanceId: "e2e-2", leaseMs: 30_000, driverId: "memory" } },
+      fx: { operator: { id: "reviewer" } },
+      signals: [
+        signal.once(DECISION_DRIFT_SIGNAL, { optional: true, retries: 0, deadLetter: false }),
+      ],
+      gate: {
+        unguardedHttp: "allow",
+        policies: [consoleOperatorGate, decisionOperatorGate, ops],
+      },
+      elements: {
+        journal: {
+          store: restartedStore,
+          instanceId: "e2e-2",
+          leaseMs: 30_000,
+          driverId: "memory",
+        },
+      },
+      bindings: [{ trigger: http.post("/work"), flow: work }],
     });
     await restarted.boot({ env: "test" });
-    expect(loadDecisionLabels("triage").length).toBeGreaterThan(0);
-    expect(getDecisionLock()?.decisions.triage).toBeDefined();
+    expect((await loadDecisionLabels("route")).length).toBeGreaterThan(0);
+    expect(getDecisionLock()?.decisions.route?.questions.team?.[""]).toBeDefined();
+    expect(decisionDriftSuspended()).toBe(false);
+    const restartedAuto = (await restarted.call(work, { which: "route" })) as {
+      team: string;
+      $: { team: { how: string } };
+    };
+    expect(restartedAuto.$.team.how).toBe("auto");
     await restarted.bootResult?.close();
-  }, 30_000);
+  }, 60_000);
 });

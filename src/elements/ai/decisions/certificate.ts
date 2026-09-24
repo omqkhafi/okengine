@@ -205,8 +205,9 @@ export function calibrateBoolean(
  * @param p - Boundary error rate
  */
 /** Fixed Learn-then-Test grid: 0.50 through 0.99, step 0.01. */
-export const LEARN_THEN_TEST_GRID: readonly number[] = Array.from({ length: 50 }, (_, i) =>
-  (50 + i) / 100,
+export const LEARN_THEN_TEST_GRID: readonly number[] = Array.from(
+  { length: 50 },
+  (_, i) => (50 + i) / 100,
 );
 
 const LANCZOS = [
@@ -259,9 +260,9 @@ export function binomialCdf(k: number, n: number, p: number): number {
 }
 
 /**
- * Learn-then-Test on a fixed threshold grid. Each threshold is an exact
- * one-sided binomial test at δ/m (Bonferroni). The loosest passing threshold
- * wins. A grid with no pass returns null.
+ * Learn-then-Test on a fixed threshold grid. A threshold passes only when
+ * the error count is low under Binomial(n, maxError): `binomialCdf(errors, n, maxError) ≤ δ/m`
+ * (Bonferroni). The loosest passing threshold wins. A grid with no pass returns null.
  *
  * @param rows - Score and 0/1 loss
  * @param maxError - Risk cap
@@ -280,8 +281,8 @@ export function learnThenTest(
     const accepted = rows.filter((row) => row.score >= threshold);
     if (accepted.length === 0) continue;
     const errors = accepted.reduce((sum, row) => sum + (row.loss > 0 ? 1 : 0), 0);
-    const pValue = 1 - binomialCdf(errors - 1, accepted.length, maxError);
-    if (pValue <= alpha) continue;
+    const pValue = binomialCdf(errors, accepted.length, maxError);
+    if (pValue > alpha) continue;
     if (chosen === null || threshold < chosen) chosen = threshold;
   }
   return chosen;
@@ -351,7 +352,11 @@ export function parseDecisionLockEntry(body: unknown): DecisionLockEntry | undef
   if (!body || typeof body !== "object") return undefined;
   const record = body as Record<string, unknown>;
   if (typeof record.model !== "string") return undefined;
-  if (!record.questions || typeof record.questions !== "object" || Array.isArray(record.questions)) {
+  if (
+    !record.questions ||
+    typeof record.questions !== "object" ||
+    Array.isArray(record.questions)
+  ) {
     return undefined;
   }
   return {

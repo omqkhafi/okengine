@@ -59,7 +59,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
       for (const name of names) {
         const decl = aiDecisionRegistry.find((item) => item.name === name);
         const pinned = pinnedDecision(name);
-        const rows = loadDecisionLabels(name);
+        const rows = await loadDecisionLabels(name);
         aggregateDecisionCandidate(name, () =>
           certifyLabels({
             model: pinned?.model ?? decl?.model ?? "",
@@ -83,6 +83,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     effects: { emits: [DECISION_DRIFT_SIGNAL] },
     do: async (_input, fx) => {
       let next = false;
+      let certifiedAt = 0;
       for (const [name, decision] of Object.entries(manifest.ai?.decisions ?? {})) {
         const pinned = pinnedDecision(name);
         if (!pinned) continue;
@@ -91,17 +92,18 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
           delta: decision.autonomy?.risk ?? 0.1,
           model: pinned.model,
           since: pinned.since,
-          labels: loadDecisionLabels(name),
+          labels: await loadDecisionLabels(name),
         });
         if (exceeded) {
           next = true;
+          certifiedAt = pinned.since;
           break;
         }
       }
       const prev = decisionDriftSuspended();
       if (next === prev) return { suspended: prev };
       setDecisionDrift(next);
-      persistDecisionDrift(next);
+      persistDecisionDrift(next, certifiedAt);
       await fx.emit({ name: DECISION_DRIFT_SIGNAL }, { suspended: next });
       return { suspended: next };
     },

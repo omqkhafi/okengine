@@ -3,6 +3,9 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ai, resetAiDecls } from "../../ai.ts";
 import { gate, resetGates } from "../../gate/declare.ts";
 import { oke } from "../../../kernel/app.ts";
@@ -30,6 +33,7 @@ import {
   setDecisionProvider,
 } from "../../../kernel/fx-decide.ts";
 import {
+  flushDecisionLabels,
   loadDecisionLabels,
   openDecisionLabelStore,
   closeDecisionLabelStore,
@@ -238,6 +242,7 @@ describe("fx.decide", () => {
         },
       },
     } as unknown as Manifest;
+    const root = await mkdtemp(join(tmpdir(), "oke-decide-boot-"));
     const app = oke({
       name: "decide-boot",
       env: "test",
@@ -245,6 +250,7 @@ describe("fx.decide", () => {
       registry: "ignore",
       gate: { unguardedHttp: "allow" },
       manifest,
+      rootDir: root,
     });
     await app.boot({ env: "test" });
     const res = await app.fetch(new Request("http://localhost/_oke/decisions/triage/candidate"));
@@ -667,7 +673,8 @@ describe("fx.decide", () => {
         true,
       ),
     ).toEqual({ ok: true });
-    const labels = loadDecisionLabels("triage");
+    await flushDecisionLabels();
+    const labels = await loadDecisionLabels("triage");
     expect(labels.map((label) => label.question).sort()).toEqual(["team", "urgent"]);
     expect(labels.every((label) => label.raw !== undefined)).toBe(true);
   });
@@ -758,7 +765,9 @@ describe("fx.decide", () => {
     const step = session.run.entries.find(
       (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
     );
-    expect((step && step.kind === "step" ? step.value : undefined) as { reason?: string }).toMatchObject({
+    expect(
+      (step && step.kind === "step" ? step.value : undefined) as { reason?: string },
+    ).toMatchObject({
       reason: "outage",
     });
   });

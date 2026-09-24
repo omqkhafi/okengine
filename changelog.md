@@ -138,6 +138,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Learn-then-Test certifies a threshold only when the error count is low under
+  `maxError`. Choice and score candidates read the stored label distribution.
+  The postgres label store throws if it cannot open or query, and candidate and
+  drift jobs read labels at run time. One failed label insert does not drop the
+  next write. A drift flag stores the certificate time it was raised against; a
+  newer lockfile certificate ignores it. Boot fails when decisions are declared
+  and `rootDir` / `OKE_ROOT_DIR` is unset. `review: someVar` compiles to the
+  gate's declared name. Choice options must be an object literal.
 - `fx.decide` reads the provider key through the non-journaling secret path, so a replay
   sees a rotated key and the journal does not store it. Learn-then-Test uses a fixed
   threshold grid and a Bonferroni exact binomial test. Audit drift counts only labels for

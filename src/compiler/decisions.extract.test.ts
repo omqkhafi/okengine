@@ -74,4 +74,35 @@ describe("ai.decision extract", () => {
     });
     expect(manifest.ai?.decisions?.triage?.review).toBe("ops");
   });
+
+  test("review resolves a variable to the gate's declared name", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/run.ts": `
+        const someVar = gate.policy("ops", () => true);
+        const triage = ai.decision("triage", {
+          review: someVar,
+          ask: { team: ai.choice("which", { a: "A", b: "B" }) },
+        });
+        on(signal.once("job"), flow("run", {
+          durable: true,
+          do: async (input, fx) => fx.decide(triage, input),
+        }));
+      `,
+    });
+    expect(manifest.ai?.decisions?.triage?.review).toBe("ops");
+  });
+
+  test("choice options passed through a variable fail to compile", async () => {
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `
+          const options = { a: "A", b: "B" };
+          ai.decision("triage", {
+            onUncertain: "abstain",
+            ask: { team: ai.choice("which", options) },
+          });
+        `,
+      }),
+    ).rejects.toThrow(/object literal/);
+  });
 });

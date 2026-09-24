@@ -1703,10 +1703,13 @@ function assertDecisionPlacement(flowName: string, flow: Flow, scope: ProjectSco
   }
 }
 
-function decisionReviewName(node: AstNode | undefined): string {
+function decisionReviewName(node: AstNode | undefined, scope: ProjectScope): string {
   const literal = stringArg(node);
   if (literal) return literal;
-  if (node?.type === "Identifier") return (node as Identifier).name;
+  if (node?.type === "Identifier") {
+    const name = (node as Identifier).name;
+    return scope.gateIds.get(name) ?? name;
+  }
   if (node?.type === "CallExpression") {
     const arg = stringArg((node as CallExpression).arguments[0]);
     if (arg) return arg;
@@ -1720,7 +1723,11 @@ function decisionReviewName(node: AstNode | undefined): string {
   throw new Error("ai.decision: review gate name could not be resolved");
 }
 
-function assertDecisionQuestion(decisionName: string, key: string, value: AstNode | undefined): void {
+function assertDecisionQuestion(
+  decisionName: string,
+  key: string,
+  value: AstNode | undefined,
+): void {
   if (!value || value.type !== "CallExpression") return;
   const callee = (value as CallExpression).callee;
   const member = callee as AstNode & { property?: AstNode };
@@ -1731,7 +1738,11 @@ function assertDecisionQuestion(decisionName: string, key: string, value: AstNod
   const args = (value as CallExpression).arguments;
   if (fn === "choice") {
     const options = args[1];
-    if (!options || options.type !== "ObjectExpression") return;
+    if (!options || options.type !== "ObjectExpression") {
+      throw new Error(
+        `ai.decision("${decisionName}"): choice "${key}" options must be an object literal`,
+      );
+    }
     const keys = objectProperties(options)
       .map((prop) => propKey(prop))
       .filter((name): name is string => typeof name === "string");
@@ -1739,7 +1750,9 @@ function assertDecisionQuestion(decisionName: string, key: string, value: AstNod
       throw new Error(`ai.decision("${decisionName}"): choice "${key}" must not set none_of_these`);
     }
     if (keys.length > 254) {
-      throw new Error(`ai.decision("${decisionName}"): choice "${key}" has ${keys.length} options; max 254`);
+      throw new Error(
+        `ai.decision("${decisionName}"): choice "${key}" has ${keys.length} options; max 254`,
+      );
     }
   }
   if (fn === "score") {
@@ -1790,7 +1803,7 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
   const decision: AiDecision = {
     mode: abstain ? "abstain" : "review",
     questions: questionNames,
-    ...(hasReview ? { review: decisionReviewName(objectProp(opts, "review")) } : {}),
+    ...(hasReview ? { review: decisionReviewName(objectProp(opts, "review"), scope) } : {}),
     ...(stringProp(opts, "model") ? { model: stringProp(opts, "model") } : {}),
     driverId: stringProp(opts, "driverId") === "typesafe" ? "typesafe" : "openrouter",
   };

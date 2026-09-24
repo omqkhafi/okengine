@@ -4,19 +4,16 @@
  */
 
 import type { JournalStore } from "../../../kernel/journal.ts";
-import type { DecisionLabelStore } from "../../../kernel/decision-label-store.ts";
-import {
-  binomialCdf,
-  decisionLabels,
-  getDecisionLock,
-  type DecisionLabel,
-} from "./certificate.ts";
+import type {
+  DecisionDriftRecord,
+  DecisionLabelStore,
+} from "../../../kernel/decision-label-store.ts";
+import { binomialCdf, decisionLabels, getDecisionLock, type DecisionLabel } from "./certificate.ts";
 
 /** Rolling window for audit drift. Labels older than this are ignored. */
 export const DECISION_DRIFT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 let store: DecisionLabelStore | undefined;
-const mirror: DecisionLabel[] = [];
 let writes: Promise<void> = Promise.resolve();
 
 /**
@@ -31,10 +28,9 @@ export async function openDecisionLabelStore(
 ): Promise<void> {
   await writes;
   store = journal.decisions;
-  mirror.length = 0;
   if (!store) return;
-  mirror.push(...(await store.list()));
-  setDrift(await store.drift());
+  const flag = await store.drift();
+  setDrift(flag.suspended && newestCertificateAt() <= flag.certifiedAt);
 }
 
 /**
@@ -49,7 +45,6 @@ export function flushDecisionLabels(): Promise<void> {
  */
 export function closeDecisionLabelStore(): void {
   store = undefined;
-  mirror.length = 0;
 }
 
 /**
@@ -60,10 +55,14 @@ export function closeDecisionLabelStore(): void {
  */
 export function persistDecisionLabel(label: DecisionLabel, at = Date.now()): void {
   const row = { ...label, at };
-  mirror.push(row);
   if (!store) return;
   const target = store;
-  writes = writes.then(() => target.insert(row, at));
+  const write = (): Promise<void> =>
+    target.insert(row, at).then(
+      () => undefined,
+      () => undefined,
+    );
+  writes = writes.then(write, write);
 }
 
 /**
@@ -73,9 +72,12 @@ export function persistDecisionLabel(label: DecisionLabel, at = Date.now()): voi
  * @param decision - Decision name
  * @param tenant - Tenant filter
  */
-export function loadDecisionLabels(decision?: string, tenant?: string | null): DecisionLabel[] {
-  const source = store ? mirror : decisionLabels();
-  return source.filter((label) => {
+export async function loadDecisionLabels(
+  decision?: string,
+  tenant?: string | null,
+): Promise<DecisionLabel[]> {
+  if (store) return store.list(decision, tenant);
+  return decisionLabels().filter((label) => {
     if (decision !== undefined && label.decision !== decision) return false;
     if (tenant !== undefined && (label.tenant ?? null) !== tenant) return false;
     return true;
@@ -119,10 +121,29 @@ export function auditDriftExceeded(options: {
  *
  * @param suspended - Drift detected
  */
-export function persistDecisionDrift(suspended: boolean): void {
+export function persistDecisionDrift(suspended: boolean, certifiedAt = 0): void {
   if (!store) return;
   const target = store;
-  writes = writes.then(() => target.setDrift(suspended));
+  const record: DecisionDriftRecord = { suspended, certifiedAt };
+  const write = (): Promise<void> =>
+    target.setDrift(record).then(
+      () => undefined,
+      () => undefined,
+    );
+  writes = writes.then(write, write);
+}
+
+/**
+ * Newest certificate time in the loaded lockfile. `0` when none is stamped.
+ */
+function newestCertificateAt(): number {
+  const decisions = getDecisionLock()?.decisions ?? {};
+  let newest = 0;
+  for (const entry of Object.values(decisions)) {
+    const at = entry.certifiedAt ?? 0;
+    if (at > newest) newest = at;
+  }
+  return newest;
 }
 
 /**
@@ -130,7 +151,9 @@ export function persistDecisionDrift(suspended: boolean): void {
  *
  * @param name - Decision name
  */
-export function pinnedDecision(name: string): { readonly model: string; readonly since: number } | undefined {
+export function pinnedDecision(
+  name: string,
+): { readonly model: string; readonly since: number } | undefined {
   const entry = getDecisionLock()?.decisions[name];
   if (!entry) return undefined;
   return { model: entry.model, since: entry.certifiedAt ?? 0 };

@@ -18,7 +18,7 @@ import {
   setDecisionDrift,
   setDecisionLock,
 } from "./certificate.ts";
-import { certifySeed } from "./certify.ts";
+import { certifyLabels, certifySeed } from "./certify.ts";
 import { runOkeCertify } from "../../../cli/eval.ts";
 import { promoteDecision } from "../../../cli/decide.ts";
 import { createFx } from "../../../kernel/fx.ts";
@@ -83,22 +83,24 @@ async function run(
 }
 
 describe("decision certificates", () => {
-  test("Learn-then-Test keeps the loosest passing threshold on a fixed grid", () => {
-    const rows = [
-      ...Array.from({ length: 50 }, () => ({ score: 0.9, loss: 0 })),
-      ...Array.from({ length: 10 }, () => ({ score: 0.2, loss: 1 })),
-    ];
-    expect(learnThenTest(rows, 0.05)).toBe(0.5);
+  test("Learn-then-Test certifies only a low error rate, at the loosest passing threshold", () => {
+    expect(learnThenTest([{ score: 0.99, loss: 0 }], 0.05)).toBeNull();
+    expect(learnThenTest([{ score: 0.99, loss: 1 }], 0.05)).toBeNull();
+    const forty = Array.from({ length: 40 }, (_, i) => ({
+      score: 0.99,
+      loss: i < 3 ? 1 : 0,
+    }));
+    expect(learnThenTest(forty, 0.05)).toBeNull();
+    const noisy = Array.from({ length: 2000 }, (_, i) => ({
+      score: 0.99,
+      loss: i < 150 ? 1 : 0,
+    }));
+    expect(learnThenTest(noisy, 0.05)).toBeNull();
     const correct = Array.from({ length: 500 }, (_, i) => ({
       score: 0.5 + (i % 50) / 100,
       loss: 0,
     }));
     expect(learnThenTest(correct, 0.05)).toBe(0.5);
-    const bad = Array.from({ length: 1000 }, (_, i) => ({
-      score: 0.99,
-      loss: i < 75 ? 1 : 0,
-    }));
-    expect(learnThenTest(bad, 0.05)).toBeNull();
   });
 
   test("binomial cdf is zero below zero and stable at n = 20000", () => {
@@ -154,10 +156,7 @@ describe("decision certificates", () => {
     expect(written.decisions.triage).toEqual(candidate);
     const disk = JSON.parse(await readFile(lockPath, "utf8")) as { decisions: { triage: unknown } };
     expect(disk.decisions.triage).toEqual(candidate);
-    await Bun.write(
-      lockPath,
-      `${JSON.stringify({ decisions: { other: candidate } })}\n`,
-    );
+    await Bun.write(lockPath, `${JSON.stringify({ decisions: { other: candidate } })}\n`);
     const merged = await promoteDecision({
       name: "triage",
       origin: "http://127.0.0.1:6530",
@@ -177,7 +176,7 @@ describe("decision certificates", () => {
       evals: "seed.jsonl",
       ask: { team: question },
     });
-    const seed = Array.from({ length: 60 }, () =>
+    const seed = Array.from({ length: 160 }, () =>
       JSON.stringify({
         input: { ticket: "1" },
         expect: { team: "technical" },
@@ -234,5 +233,59 @@ describe("decision certificates", () => {
     expect(code).toBe(0);
     const loaded = await loadDecisionLockfile(dir);
     expect(loaded?.decisions.triage?.questions.team?.[""]?.hash).toBe(questionHash(question));
+  });
+
+  test("one seed row does not certify a slice", async () => {
+    const question = ai.choice("which team", { billing: "Billing", technical: "Technical" });
+    const entry = await certifySeed({
+      model: "typesafe/jev-1.13.0",
+      maxError: 0.05,
+      jsonl: JSON.stringify({ input: { ticket: "1" }, expect: { team: "technical" } }),
+      ask: { team: question },
+      evaluate: async () => ({
+        model: "typesafe/jev-1.13.0",
+        answers: {
+          team: {
+            type: "choice",
+            probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
+          },
+        },
+        usage: {},
+      }),
+    });
+    expect(entry.questions.team).toBeUndefined();
+  });
+
+  test("choice and score labels certify from the stored distribution", () => {
+    const choice = ai.choice("which team", { billing: "Billing", technical: "Technical" });
+    const score = ai.score("how sure", ["low", "high"]);
+    const labels = Array.from({ length: 160 }, () => [
+      {
+        decision: "triage",
+        question: "team",
+        value: "technical",
+        propensity: 1,
+        reviewer: "a",
+        model: "typesafe/jev-1.13.0",
+        raw: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
+      },
+      {
+        decision: "triage",
+        question: "rank",
+        value: "high",
+        propensity: 1,
+        reviewer: "a",
+        model: "typesafe/jev-1.13.0",
+        raw: { low: 0.08, high: 0.92 },
+      },
+    ]).flat();
+    const entry = certifyLabels({
+      model: "typesafe/jev-1.13.0",
+      maxError: 0.05,
+      ask: { team: choice, rank: score },
+      labels,
+    });
+    expect(entry.questions.team?.[""]?.threshold).toBeGreaterThan(0);
+    expect(entry.questions.rank?.[""]?.threshold).toBeGreaterThan(0);
   });
 });

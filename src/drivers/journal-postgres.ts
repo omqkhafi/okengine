@@ -261,9 +261,28 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     created_at: number;
     expires_at: number;
   };
-  type State = { rows: JournalDbRow[]; idem: IdemDbRow[] };
+  type LabelDbRow = {
+    decision_id: string;
+    question: string;
+    value: string;
+    propensity: number;
+    reviewer: string;
+    locale: string | null;
+    model: string | null;
+    tenant: string | null;
+    score: number | null;
+    loss: number | null;
+    raw: string | null;
+    at: number;
+  };
+  type State = {
+    rows: JournalDbRow[];
+    idem: IdemDbRow[];
+    labels: LabelDbRow[];
+    drift: { suspended: number; certified_at: number } | null;
+  };
 
-  let committed: State = { rows: [], idem: [] };
+  let committed: State = { rows: [], idem: [], labels: [], drift: null };
   let active: { state: State; locked: Set<string>; done: boolean } | null = null;
   /** Run ids held by other active transactions (SKIP LOCKED). */
   const heldByTxn = new Set<string>();
@@ -278,6 +297,8 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     return {
       rows: s.rows.map((r) => ({ ...r })),
       idem: s.idem.map((r) => ({ ...r })),
+      labels: s.labels.map((r) => ({ ...r })),
+      drift: s.drift ? { ...s.drift } : null,
     };
   }
 
@@ -378,6 +399,24 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         return state.idem
           .filter((row) => idemPk(row, params))
           .map((row) => ({ ...row }) as Record<string, unknown>);
+      }
+
+      if (/FROM\s+oke_decision_labels/i.test(text)) {
+        let labels = state.labels;
+        let arg = 0;
+        if (/decision_id\s*=\s*\?/i.test(text)) {
+          const id = String(params[arg++] ?? "");
+          labels = labels.filter((row) => row.decision_id === id);
+        }
+        if (/tenant\s+IS\s+\?/i.test(text)) {
+          const tenant = params[arg] ?? null;
+          labels = labels.filter((row) => row.tenant === tenant);
+        }
+        return labels.map((row) => ({ ...row }));
+      }
+
+      if (/FROM\s+oke_decision_drift/i.test(text)) {
+        return state.drift ? [{ ...state.drift }] : [];
       }
 
       throw new Error(`postgres journal fake: unsupported query: ${sql}`);
@@ -543,6 +582,32 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         row.run_id = String(params[0]);
         return { changes: 1 };
       }
+      if (/^INSERT\s+INTO\s+oke_decision_labels\b/i.test(text)) {
+        state.labels.push({
+          decision_id: String(params[0]),
+          question: String(params[1]),
+          value: String(params[2]),
+          propensity: Number(params[3]),
+          reviewer: String(params[4]),
+          locale: params[5] === null || params[5] === undefined ? null : String(params[5]),
+          model: params[6] === null || params[6] === undefined ? null : String(params[6]),
+          tenant: params[7] === null || params[7] === undefined ? null : String(params[7]),
+          score: params[8] === null || params[8] === undefined ? null : Number(params[8]),
+          loss: params[9] === null || params[9] === undefined ? null : Number(params[9]),
+          raw: params[10] === null || params[10] === undefined ? null : String(params[10]),
+          at: Number(params[11]),
+        });
+        return { changes: 1 };
+      }
+
+      if (/^INSERT\s+INTO\s+oke_decision_drift\b/i.test(text)) {
+        state.drift = {
+          suspended: Number(params[0]),
+          certified_at: Number(params[1] ?? 0),
+        };
+        return { changes: 1 };
+      }
+
       if (text === IDEM_FORFEIT_SQL) {
         const row = state.idem.find(
           (candidate) =>
@@ -624,7 +689,7 @@ function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
     insert: (label, at) => ready().then((store) => store.insert(label, at)),
     list: (decision, tenant) => ready().then((store) => store.list(decision, tenant)),
     drift: () => ready().then((store) => store.drift()),
-    setDrift: (suspended) => ready().then((store) => store.setDrift(suspended)),
+    setDrift: (record) => ready().then((store) => store.setDrift(record)),
   };
 }
 

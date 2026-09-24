@@ -158,7 +158,7 @@ learning  --labels-->  candidate  --promote-->  certified
 | `learning` | No lockfile entry and no candidate. | Reviews and audit labels accumulate. |
 | `candidate` | The clock has built a candidate from those labels. Counts are not the grant. | `oke decide promote` fetches it. |
 | `certified` | `oke-decisions.lock.json` has this decision. | The runtime may return `auto` under that certificate. |
-| `suspended` | The drift monitor raised the app flag and emitted `oke/decision/drift`. | Promote, or a later monitor pass that clears the flag. |
+| `suspended` | The drift monitor raised the app flag and emitted `oke/decision/drift`. | Boot with a lockfile certificate newer than that flag. The monitor can also clear it. |
 
 The runtime never raises a threshold and never invents a certificate. Missing lock, a stale
 question, a model version mismatch, an uncertified locale, low confidence, drift, and an
@@ -208,7 +208,8 @@ score use a temperature. Yes/no uses a curve fit on the provider score. The lock
 that fit next to the question.
 
 **The test**, once: for each confidence cutoff from 0.50 to 0.99, count mistakes on labels that cleared it.
-A binomial test asks whether that error rate is still under `maxError`. The loosest cutoff that passes is the threshold.
+A binomial test passes only when those mistakes are few enough to show the error rate is under `maxError`.
+The loosest cutoff that passes is the threshold.
 If none pass, that question cannot return `auto`.
 
 A seed file is JSONL. `expect` is the label for each question. `locale` is optional.
@@ -220,7 +221,8 @@ A seed file is JSONL. `expect` is the label for each question. `locale` is optio
 
 Point `evals` at that file, then certify. Prompt evals do not run when the flag is present.
 The command prints one JSON line per decision and writes `oke-decisions.lock.json` next to
-the app config.
+the app config. Boot reads that file from `rootDir` or `OKE_ROOT_DIR`. Declared decisions
+without a project root fail at boot.
 
 ```bash
 oke eval --certify
