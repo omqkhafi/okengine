@@ -18,19 +18,19 @@ describe("flattenImagesConfig", () => {
           sql: "postgres:18-alpine",
           kv: "redis:8-alpine",
           files: "rustfs/rustfs:1.0.0",
-          index: "getmeili/meilisearch:v1.53",
+          index: "getmeili/meilisearch:v1.54",
         },
-        channel: { email: "axllent/mailpit:v1.31.1" },
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+        channel: { email: "axllent/mailpit:v1.31.2" },
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
         proxy: "caddy:2-alpine",
       }),
     ).toEqual({
       "store.sql": "postgres:18-alpine",
       "store.kv": "redis:8-alpine",
       "store.files": "rustfs/rustfs:1.0.0",
-      "store.index": "getmeili/meilisearch:v1.53",
-      "channel.email": "axllent/mailpit:v1.31.1",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      "store.index": "getmeili/meilisearch:v1.54",
+      "channel.email": "axllent/mailpit:v1.31.2",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
       proxy: "caddy:2-alpine",
     });
   });
@@ -53,7 +53,7 @@ describe("defaultImagesFromConfig", () => {
     });
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
       "store.kv": "redis:8-alpine",
     });
   });
@@ -68,7 +68,7 @@ describe("defaultImagesFromConfig", () => {
       },
     });
     expect(images["store.sql"]).toBe("pgvector/pgvector:pg17");
-    expect(images.pgdog).toBe("ghcr.io/pgdogdev/pgdog:v0.1.57");
+    expect(images.pgdog).toBe("ghcr.io/pgdogdev/pgdog:v0.1.59");
   });
 
   test("clock postgres alone pulls store.sql image", () => {
@@ -79,7 +79,7 @@ describe("defaultImagesFromConfig", () => {
     });
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
     });
   });
 
@@ -91,7 +91,7 @@ describe("defaultImagesFromConfig", () => {
     });
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
     });
   });
 

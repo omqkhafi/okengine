@@ -8,6 +8,7 @@ import {
   SITE_APPLICATION_CATEGORY,
   SITE_DESCRIPTION,
   SITE_NAME,
+  SITE_LICENSE_URL,
   SITE_OFFER,
   SITE_SAME_AS,
   SITE_URL,
@@ -39,6 +40,8 @@ describe("SoftwareApplication JSON-LD", () => {
       price: "0",
       priceCurrency: "USD",
     });
+    expect(parsed.license).toBe(SITE_LICENSE_URL);
+    expect(parsed.license).toBe("https://www.apache.org/licenses/LICENSE-2.0");
   });
 
   test("sameAs lists only live profiles (GitHub, npm, JSR, X, Discord) — not Wikipedia/Wikidata/LinkedIn", () => {

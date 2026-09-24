@@ -476,7 +476,9 @@ export function createJournalSlot(): {
         return undefined;
       }
       const value = Reflect.get(session, prop, receiver);
-      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(session) : value;
+      return typeof value === "function"
+        ? (value as (...args: unknown[]) => unknown).bind(session)
+        : value;
     },
   });
   return { slot, facade };

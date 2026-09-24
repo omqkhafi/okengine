@@ -2104,10 +2104,7 @@ function registerFlow(args: {
   const stream = boolProp(opts, "stream") === true;
   const live = typeof liveFromTrigger === "string";
   const canHonor =
-    httpMethod !== "GET" &&
-    !stream &&
-    !live &&
-    (inferred.usesRaw || hasMutatingEffects(effects));
+    httpMethod !== "GET" && !stream && !live && (inferred.usesRaw || hasMutatingEffects(effects));
   if (idempotencyRequired(idempotencyOption) && !canHonor) {
     throw new Error(
       `flow "${name}" sets idempotency required, but the header would be ignored (read-only, GET, stream, or live).`,

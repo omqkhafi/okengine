@@ -125,7 +125,7 @@ export const TAGLINE =
 
 /** Full positioning sentence from unified-theory §3 (docs that need the long form). */
 export const POSITIONING =
-  "OKE is a backend programming model where behavior is expressed as Flows, effects are captured through fx, and the compiler turns that model into a versioned Manifest that powers the rest of the backend — pure TypeScript, Web-Standards portable, MIT-licensed, self-hostable with zero cloud lock-in.";
+  "OKE is a backend programming model where behavior is expressed as Flows, effects are captured through fx, and the compiler turns that model into a versioned Manifest that powers the rest of the backend — pure TypeScript, Web-Standards portable, Apache-2.0-licensed, self-hostable with zero cloud lock-in.";
 
 /** Published `okengine` version (injected from the monorepo root package.json). */
 export const OKE_VERSION = process.env.NEXT_PUBLIC_OKE_VERSION ?? "0.0.0";

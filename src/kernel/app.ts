@@ -2145,9 +2145,12 @@ export function oke(options: OkeOptions): OkeApp {
               }
             }
 
-            const timer = setInterval(() => {
-              void idemStore.renew(scope, claimToken, now() + leaseMs);
-            }, Math.max(5, Math.floor(leaseMs / 3)));
+            const timer = setInterval(
+              () => {
+                void idemStore.renew(scope, claimToken, now() + leaseMs);
+              },
+              Math.max(5, Math.floor(leaseMs / 3)),
+            );
             if (typeof timer === "object" && timer !== null && "unref" in timer) timer.unref();
 
             const storeEncoded = async (encoded: {

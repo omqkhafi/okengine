@@ -63,7 +63,9 @@ interface FileFx {
   readonly exports: Map<string, LocalExport | Reexport>;
 }
 
-const INTRINSIC_SOURCES: Readonly<Record<string, Readonly<Record<string, "liveQuery" | "applySearchEmbedCdc">>>> = {
+const INTRINSIC_SOURCES: Readonly<
+  Record<string, Readonly<Record<string, "liveQuery" | "applySearchEmbedCdc">>>
+> = {
   okengine: { liveQuery: "liveQuery" },
   "okengine/store": { liveQuery: "liveQuery", applySearchEmbedCdc: "applySearchEmbedCdc" },
 };

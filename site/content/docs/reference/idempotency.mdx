@@ -47,10 +47,7 @@ your own retries, or `false` to send none.
 
 ```typescript
 await api.payments.charge({ amount: 1000 });
-await api.payments.charge(
-  { amount: 1000 },
-  { idempotencyKey: "checkout-attempt-9f3a2c" },
-);
+await api.payments.charge({ amount: 1000 }, { idempotencyKey: "checkout-attempt-9f3a2c" });
 ```
 
 </Step>
@@ -70,22 +67,22 @@ returns that stored response and sets `Idempotent-Replayed: true`. The client co
 
 All of these are required. Otherwise the header is ignored.
 
-| Check | Honored when |
-| ----- | ------------ |
-| Entry | HTTP, and the method is not GET. RPC counts. `fx.call` has no request, so it does not. |
+| Check   | Honored when                                                                                                                        |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Entry   | HTTP, and the method is not GET. RPC counts. `fx.call` has no request, so it does not.                                              |
 | Effects | Inferred effects include a write, emit, send, call, fetch, ask, or embed — or the flow uses `fx.raw`. Secrets alone do not qualify. |
-| Shape | Not `stream`, and not a live SSE feed. |
-| Option | Omitted or `{ ttl }` is `auto` (header optional). `"required"` or `{ required: true }` demands the header. `false` ignores it. |
+| Shape   | Not `stream`, and not a live SSE feed.                                                                                              |
+| Option  | Omitted or `{ ttl }` is `auto` (header optional). `"required"` or `{ required: true }` demands the header. `false` ignores it.      |
 
 `QUERY` is not GET. It qualifies when the rest of the row matches.
 
-| Option | Meaning |
-| ------ | ------- |
-| omitted | `auto` when the flow qualifies. Default TTL `24h`. |
-| `"required"` | Missing header is `400 IdempotencyKeyMissing`. |
-| `{ ttl: "1h" }` | `auto`, with that TTL. `ms`, `s`, `m`, `h`, or `d`. |
-| `{ required: true, ttl: "1h" }` | Required, with that TTL. |
-| `false` | Header ignored. |
+| Option                          | Meaning                                             |
+| ------------------------------- | --------------------------------------------------- |
+| omitted                         | `auto` when the flow qualifies. Default TTL `24h`.  |
+| `"required"`                    | Missing header is `400 IdempotencyKeyMissing`.      |
+| `{ ttl: "1h" }`                 | `auto`, with that TTL. `ms`, `s`, `m`, `h`, or `d`. |
+| `{ required: true, ttl: "1h" }` | Required, with that TTL.                            |
+| `false`                         | Header ignored.                                     |
 
 An unparseable TTL, or `required` on a flow that cannot honor the header, fails extract.
 
@@ -101,12 +98,12 @@ and the validated input. The same key with a different payload is `422 Idempoten
 The claim happens after the gate and after input validation. A `401`, `403`, or validation
 failure stores nothing, so the same key can still succeed.
 
-| Row | Response |
-| --- | -------- |
-| No row, or the TTL has passed | `do` runs. The response is stored until the TTL. |
-| Same payload, completed | Stored status, body, `content-type`, and `location`, plus `Idempotent-Replayed: true`. |
-| Same payload, still running | `409 IdempotencyInProgress` and `Retry-After` (seconds until the lease, at least 1). |
-| Different payload | `422 IdempotencyKeyReused`. |
+| Row                           | Response                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| No row, or the TTL has passed | `do` runs. The response is stored until the TTL.                                       |
+| Same payload, completed       | Stored status, body, `content-type`, and `location`, plus `Idempotent-Replayed: true`. |
+| Same payload, still running   | `409 IdempotencyInProgress` and `Retry-After` (seconds until the lease, at least 1).   |
+| Different payload             | `422 IdempotencyKeyReused`.                                                            |
 
 A stream, an SSE body, or a raw `Response` that is not a buffered JSON envelope is not stored.
 The live response is returned and the row is deleted.
@@ -120,10 +117,10 @@ A new key is required. A declared `fx.fail(...)` is stored as that failure, not 
 The in-progress lease is 30 seconds and is renewed while `do` runs. A disconnect does not cancel
 a claimed `do`. The lease is what notices a crash.
 
-| Flow | After the lease expires |
-| ---- | ----------------------- |
-| Not durable | The next request with the same key runs `do` again. That is at-least-once. |
-| Durable | The next request resumes that journal run. Completed steps are not run again. |
+| Flow        | After the lease expires                                                       |
+| ----------- | ----------------------------------------------------------------------------- |
+| Not durable | The next request with the same key runs `do` again. That is at-least-once.    |
+| Durable     | The next request resumes that journal run. Completed steps are not run again. |
 
 A durable sleep stores the `204` and parks the journal run. A retry replays the `204`. The
 scheduler continues the run.
@@ -177,8 +174,16 @@ Wait for `Retry-After`, then send the same key. The client does this when `retry
 ## Next
 
 <Cards>
-  <Card title="Calling" description="Client retry and Idempotency-Key." href="/docs/client/calling" />
-  <Card title="Errors" description="Statuses for the four idempotency codes." href="/docs/reference/errors" />
+  <Card
+    title="Calling"
+    description="Client retry and Idempotency-Key."
+    href="/docs/client/calling"
+  />
+  <Card
+    title="Errors"
+    description="Statuses for the four idempotency codes."
+    href="/docs/reference/errors"
+  />
   <Card
     title="The Architecture"
     description="One retry runs once. Two submits are two calls."

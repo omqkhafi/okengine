@@ -50,11 +50,11 @@ describe("webhook audit sink", () => {
     const inits: RequestInit[] = [];
     const sink = createAuditSink("webhook", {
       webhookUrl: "https://audit.example/hook",
-      fetch: async (_url, init) => {
+      fetch: (async (_url, init) => {
         inits.push(init ?? {});
         bodies.push(String(init?.body ?? ""));
         return new Response(null, { status: 204 });
-      },
+      }) as typeof fetch,
     });
 
     await sink.append(ENTRY);
@@ -82,7 +82,7 @@ describe("webhook audit sink", () => {
   test("a non-2xx response rejects without echoing the body", async () => {
     const sink = createAuditSink("webhook", {
       webhookUrl: "https://audit.example/hook",
-      fetch: async () => new Response(SECRET, { status: 502 }),
+      fetch: (async () => new Response(SECRET, { status: 502 })) as unknown as typeof fetch,
     });
     const failure = await sink.append(ENTRY).catch((err: unknown) => err);
     expect(isVaultError(failure, "BACKEND_ERROR")).toBe(true);
@@ -108,7 +108,7 @@ describe("non-db audit commands", () => {
       const adapter = createBuiltinVaultAdapter({
         db: sqlConnectionAsExec(sql),
         audit: { sink: "webhook", webhookUrl: "https://audit.example/hook" },
-        fetch: async () => new Response(null, { status: 500 }),
+        fetch: (async () => new Response(null, { status: 500 })) as unknown as typeof fetch,
       });
       const failure = await adapter.verifyAudit().catch((err: unknown) => err);
       expect(isVaultError(failure, "UNSUPPORTED")).toBe(true);

@@ -384,19 +384,19 @@ See [Store](/docs/elements/store) for the list query language. Handwritten lists
 
 ## Options
 
-| Option          | Type                                           | Default            | Meaning                                                        |
-| --------------- | ---------------------------------------------- | ------------------ | -------------------------------------------------------------- |
-| `fetch`         | `(input, init?) => Promise<Response>`          | `globalThis.fetch` | Inject a fetch implementation                                  |
-| `headers`       | `Record<string, string>` \| pairs \| `() => …` | —                  | Static headers, or a getter per request                        |
-| `timeout`       | `number` (ms)                                  | —                  | Abort after this many milliseconds                             |
-| `retry.retries` | `number`                                       | `0`                | Extra attempts after the first. With `retry` set, a call retries when it is GET/QUERY or it carries an idempotency key. |
-| `retry.delay`   | `number` (ms)                                  | `50`               | Initial backoff delay                                          |
-| `retry.backoff` | `number`                                       | `2`                | Multiplier after each retry                                    |
-| `auth.getToken` | `() => string \| null \| …`                    | —                  | Bearer access token (or null) — see [Auth](/docs/client/auth)  |
-| `auth.refresh`  | `() => Promise<string \| null \| …>`           | —                  | Runs once on HTTP 401, then the request retries                |
-| `$routes`       | `ClientRouteMap`                               | —                  | Runtime map from `app.$routes` (REST when method+path present) |
-| `routes`        | `Record<"unit.flow", { method, path }>`        | —                  | Flat REST table; wins over flattening `$routes`                |
-| `idempotencyKey` | `string` \| `false`                           | 21-character key   | `Idempotency-Key` on this call. `false` sends no header. Omitted on GET. |
+| Option           | Type                                           | Default            | Meaning                                                                                                                 |
+| ---------------- | ---------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `fetch`          | `(input, init?) => Promise<Response>`          | `globalThis.fetch` | Inject a fetch implementation                                                                                           |
+| `headers`        | `Record<string, string>` \| pairs \| `() => …` | —                  | Static headers, or a getter per request                                                                                 |
+| `timeout`        | `number` (ms)                                  | —                  | Abort after this many milliseconds                                                                                      |
+| `retry.retries`  | `number`                                       | `0`                | Extra attempts after the first. With `retry` set, a call retries when it is GET/QUERY or it carries an idempotency key. |
+| `retry.delay`    | `number` (ms)                                  | `50`               | Initial backoff delay                                                                                                   |
+| `retry.backoff`  | `number`                                       | `2`                | Multiplier after each retry                                                                                             |
+| `auth.getToken`  | `() => string \| null \| …`                    | —                  | Bearer access token (or null) — see [Auth](/docs/client/auth)                                                           |
+| `auth.refresh`   | `() => Promise<string \| null \| …>`           | —                  | Runs once on HTTP 401, then the request retries                                                                         |
+| `$routes`        | `ClientRouteMap`                               | —                  | Runtime map from `app.$routes` (REST when method+path present)                                                          |
+| `routes`         | `Record<"unit.flow", { method, path }>`        | —                  | Flat REST table; wins over flattening `$routes`                                                                         |
+| `idempotencyKey` | `string` \| `false`                            | 21-character key   | `Idempotency-Key` on this call. `false` sends no header. Omitted on GET.                                                |
 
 With `retry` configured, a call retries when it is GET/QUERY or it carries an
 idempotency key (automatic on every non-GET call). `idempotencyKey: false` runs

@@ -120,7 +120,7 @@ describe("idempotency store", () => {
       ttlMs: 5_000,
     });
     expect(first.kind).toBe("claimed");
-    await idem.complete(scope, "t1", { status: 200, body: "{\"data\":1}" });
+    await idem.complete(scope, "t1", { status: 200, body: '{"data":1}' });
     const again = await idem.claim({
       scope,
       fingerprint: "aaa",
@@ -223,16 +223,11 @@ describe("HTTP idempotency", () => {
     expect(invalid.status).toBe(422);
     const denied = await app.fetch(post({ n: 1 }));
     expect(denied.status).toBe(401);
-    const allowed = await app.execute(
-      binding.flow,
-      { n: 1 },
-      binding.trigger,
-      {
-        request: post({ n: 1 }),
-        validated: true,
-        principal: { plane: "user", userId: "u1", scopes: new Set(), verified: true },
-      },
-    );
+    const allowed = await app.execute(binding.flow, { n: 1 }, binding.trigger, {
+      request: post({ n: 1 }),
+      validated: true,
+      principal: { plane: "user", userId: "u1", scopes: new Set(), verified: true },
+    });
     expect(allowed.failure).toBeUndefined();
     expect(allowed.output).toEqual({ n: 1 });
     expect(runs).toBe(1);
@@ -522,9 +517,11 @@ describe("HTTP idempotency", () => {
       timeout: 300,
       routes: { "pay.charge": { method: "POST", path: "/charge" } },
       fetch: (input, init) => {
-        const pending = app.fetch(new Request(input, init));
+        const href =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const pending = app.fetch(new Request(href, init));
         const signal = init?.signal;
-        if (signal === undefined) return pending;
+        if (signal == null) return pending;
         return new Promise((resolve, reject) => {
           pending.then((res) => {
             if (res.status === 409) release();

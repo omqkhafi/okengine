@@ -56,9 +56,7 @@ export function buildClientDescriptor(
         ...(stamp.stream === true ? { stream: true as const } : {}),
         ...(stamp.matchKey !== undefined ? { matchKey: stamp.matchKey } : {}),
         ...(stamp.gates !== undefined && stamp.gates.length > 0 ? { gates: stamp.gates } : {}),
-        ...(def?.resolvedIdempotency !== undefined
-          ? { idempotency: def.resolvedIdempotency }
-          : {}),
+        ...(def?.resolvedIdempotency !== undefined ? { idempotency: def.resolvedIdempotency } : {}),
       };
     }
     out[unit] = unitOut;

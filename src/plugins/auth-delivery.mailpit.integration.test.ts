@@ -18,7 +18,7 @@ import { otp } from "./otp.ts";
 import { magicLink } from "./magic-link.ts";
 
 const SECRET = "test-secret-at-least-16";
-const MAILPIT_IMAGE = "axllent/mailpit:v1.31.1";
+const MAILPIT_IMAGE = "axllent/mailpit:v1.31.2";
 
 afterEach(() => {
   resetBindings();

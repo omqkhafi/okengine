@@ -2,7 +2,7 @@
   "name": "create-oke",
   "version": "0.22.0",
   "description": "Scaffold an okengine app — bunx create-oke@latest <name>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/omqkhafi/okengine.git",
@@ -12,6 +12,8 @@
     "create-oke": "src/index.ts"
   },
   "files": [
+    "LICENSE",
+    "NOTICE",
     "src",
     "templates"
   ],
@@ -25,7 +27,7 @@
     "test": "bun test src"
   },
   "dependencies": {
-    "@clack/prompts": "^1.8.0"
+    "@clack/prompts": "^1.8.1"
   },
   "devDependencies": {
     "@types/bun": "latest",

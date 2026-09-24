@@ -725,8 +725,7 @@ export async function mintCapabilities(
     manifest === undefined &&
     flows.some(
       (f) =>
-        f.effects === undefined ||
-        (f.idempotency !== false && f.resolvedIdempotency === undefined),
+        f.effects === undefined || (f.idempotency !== false && f.resolvedIdempotency === undefined),
     );
   if (needsManifest) {
     const rootDir = options.rootDir ?? process.env["OKE_ROOT_DIR"];

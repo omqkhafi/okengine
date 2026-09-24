@@ -202,7 +202,6 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   const chains = collectFxChains(options, opaque, userIdRoots, intrinsics);
 
   for (const { call, chain } of chains) {
-
     if (chain.rootMethod === "raw") {
       usesRaw = true;
       continue;
@@ -1082,7 +1081,7 @@ function sqlRefFromArg(
 function embedModelsFromColumns(arg: AstNode | undefined): string[] | null {
   if (!arg) return null;
   const node = unwrapValue(arg);
-  if (node.type !== "ArrayExpression") return null;
+  if (!node || node.type !== "ArrayExpression") return null;
   const elements = (node as AstNode & { elements?: readonly (AstNode | null)[] }).elements ?? [];
   const models: string[] = [];
   for (const element of elements) {
@@ -1137,7 +1136,7 @@ function collectDirect(
     const init = (node as AstNode & { init?: AstNode | null }).init;
     if (!name || !init) return;
     const value = unwrapValue(init);
-    if (isFunctionNode(value)) {
+    if (value && isFunctionNode(value)) {
       locals.set(name, value);
       return;
     }
@@ -1148,7 +1147,7 @@ function collectDirect(
 
 function aliasFromInit(init: AstNode, aliases: ReadonlyMap<string, ChainAlias>): ChainAlias | null {
   const node = unwrapValue(init);
-  if (node.type !== "CallExpression") return null;
+  if (!node || node.type !== "CallExpression") return null;
   const chain = chainFromCall(node as CallExpression, aliases);
   if (!chain || chain.rootMethod !== "store") return null;
   // `const rows = await fx.store(db).select().from(table)` is the query
@@ -1178,7 +1177,10 @@ function expressionIsAwaited(node: AstNode): boolean {
   return false;
 }
 
-function chainFromCall(call: CallExpression, aliases: ReadonlyMap<string, ChainAlias>): FxChain | null {
+function chainFromCall(
+  call: CallExpression,
+  aliases: ReadonlyMap<string, ChainAlias>,
+): FxChain | null {
   const direct = fxMemberChain(call);
   if (direct) return direct;
 
@@ -1400,7 +1402,7 @@ function walkStatement(stmt: AstNode, visit: (node: AstNode) => void): void {
     const handler = (stmt as AstNode & { handler?: AstNode }).handler;
     const finalizer = (stmt as AstNode & { finalizer?: AstNode }).finalizer;
     if (block) walkStatement(block, visit);
-    const handlerBody = (handler as AstNode & { body?: AstNode } | undefined)?.body;
+    const handlerBody = (handler as (AstNode & { body?: AstNode }) | undefined)?.body;
     if (handlerBody) walkStatement(handlerBody, visit);
     if (finalizer) walkStatement(finalizer, visit);
     return;
@@ -1457,9 +1459,5 @@ function unwrapValueNode(node: AstNode | undefined): AstNode | undefined {
 }
 
 function isAstNode(value: unknown): value is AstNode {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as AstNode).type === "string"
-  );
+  return typeof value === "object" && value !== null && typeof (value as AstNode).type === "string";
 }

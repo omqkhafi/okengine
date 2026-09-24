@@ -191,10 +191,17 @@ describe.skipIf(!PUBLISH_GATE)("npm pack includes Console SPA", () => {
 describe.skipIf(!PUBLISH_GATE)("jsr publish --dry-run", () => {
   for (const pkg of PACKAGES) {
     test(`${pkg.name}: bunx jsr publish --dry-run`, async () => {
+      // The npm `jsr` wrapper downloads a Deno zip via fetch. That transfer
+      // stalls here; an installed Deno binary is the same publish CLI.
+      const deno = Bun.which("deno");
       const proc = Bun.spawn(["bunx", "jsr", "publish", "--dry-run", "--allow-dirty"], {
         cwd: pkg.dir,
         stdout: "pipe",
         stderr: "pipe",
+        env: {
+          ...process.env,
+          ...(deno !== null ? { DENO_BIN_PATH: deno } : {}),
+        },
       });
       const [stdout, stderr, code] = await Promise.all([
         new Response(proc.stdout).text(),

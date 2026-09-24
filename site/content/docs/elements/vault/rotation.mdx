@@ -211,11 +211,11 @@ Builtin encrypted store:
 
 ## Audit sinks
 
-| `vault.audit.sink` | Recorded as | `oke vault audit` |
-| ------------------ | ----------- | ----------------- |
-| `db` (default) | SQL hash chain | list, verify, purge |
-| `stdout` | One secret-free JSON line | Refused |
-| `webhook` | POST of that JSON to `webhookUrl` | Refused |
+| `vault.audit.sink` | Recorded as                       | `oke vault audit`   |
+| ------------------ | --------------------------------- | ------------------- |
+| `db` (default)     | SQL hash chain                    | list, verify, purge |
+| `stdout`           | One secret-free JSON line         | Refused             |
+| `webhook`          | POST of that JSON to `webhookUrl` | Refused             |
 
 `webhookUrl` must be an absolute `http:` or `https:` URL. The POST uses `redirect: "error"` and a 5 second timeout. A failed delivery does not undo the vault write. `audit.enabled: false` records nothing. The body never contains a secret value.
 

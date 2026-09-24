@@ -490,7 +490,8 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       }
       if (text === IDEM_RECLAIM_SQL) {
         const row = state.idem.find(
-          (candidate) => idemPk(candidate, params, 2) && candidate.claim_token === String(params[6]),
+          (candidate) =>
+            idemPk(candidate, params, 2) && candidate.claim_token === String(params[6]),
         );
         if (row === undefined || row.status !== "in_progress") return { changes: 0 };
         row.claim_token = String(params[0]);
@@ -499,7 +500,8 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       }
       if (text === IDEM_COMPLETE_SQL) {
         const row = state.idem.find(
-          (candidate) => idemPk(candidate, params, 4) && candidate.claim_token === String(params[8]),
+          (candidate) =>
+            idemPk(candidate, params, 4) && candidate.claim_token === String(params[8]),
         );
         if (row === undefined) return { changes: 0 };
         row.status = "completed";
@@ -530,7 +532,8 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       }
       if (text === IDEM_ATTACH_SQL) {
         const row = state.idem.find(
-          (candidate) => idemPk(candidate, params, 1) && candidate.claim_token === String(params[5]),
+          (candidate) =>
+            idemPk(candidate, params, 1) && candidate.claim_token === String(params[5]),
         );
         if (row === undefined) return { changes: 0 };
         row.run_id = String(params[0]);

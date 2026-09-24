@@ -11,7 +11,7 @@ networks:
 services:
   # channel.email — Mailpit (SMTP + UI)
   channel-email:
-    image: "axllent/mailpit:v1.31.1"
+    image: "axllent/mailpit:v1.31.2"
     ports:
       - "20850:1025"
       - "21850:8025"
@@ -29,7 +29,7 @@ services:
 
   # pgdog — connection pooler (in front of Postgres)
   pgdog:
-    image: "ghcr.io/pgdogdev/pgdog:v0.1.57"
+    image: "ghcr.io/pgdogdev/pgdog:v0.1.59"
     ports:
       - "24850:6432"
     networks:
@@ -81,7 +81,7 @@ services:
 
   # store.index — search index
   store-index:
-    image: "getmeili/meilisearch:v1.53"
+    image: "getmeili/meilisearch:v1.54"
     ports:
       - "8550:7700"
     networks:

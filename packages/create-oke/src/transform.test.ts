@@ -108,7 +108,7 @@ describe("applyCreateAnswers images", () => {
 
   test("index meilisearch pins store.index image without comment leakage", () => {
     const next = applyCreateAnswers(templateConfig(), defaultsWithIndex("meilisearch"));
-    expect(next).toMatch(/images:\s*\{\s*store:\s*\{[^}]*\bindex: "getmeili\/meilisearch:v1.53"/s);
+    expect(next).toMatch(/images:\s*\{\s*store:\s*\{[^}]*\bindex: "getmeili\/meilisearch:v1.54"/s);
     expect(next).not.toMatch(/images:\s*\{[^}]*\btest:\s*"memory"/s);
   });
 });
@@ -204,7 +204,7 @@ describe("upsertAiDrivers", () => {
     expect(config.drivers?.ai).toEqual(localAiPins);
     expect(config.drivers?.channel?.ai).toBeUndefined();
     // Sparse templates omit drivers.channel — images.channel stays a string pin.
-    expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.31.1");
+    expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.31.2");
     expect(config.images?.ai).toBeUndefined();
   });
 

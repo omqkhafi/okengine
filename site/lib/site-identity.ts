@@ -75,7 +75,7 @@ export const SITE_SAME_AS: readonly string[] = [
 export const SITE_APPLICATION_CATEGORY = "DeveloperApplication" as const;
 
 /**
- * Offer for MIT / self-hosted software: free, no paid SKU.
+ * Offer for Apache-2.0 / self-hosted software: free, no paid SKU.
  * `priceCurrency` is ISO 4217 (USD) as required by schema.org Offer.
  */
 export const SITE_OFFER = {
@@ -84,9 +84,12 @@ export const SITE_OFFER = {
   priceCurrency: "USD",
 } as const;
 
+/** Canonical license URL for JSON-LD `license` (Apache License 2.0). */
+export const SITE_LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0";
+
 /**
  * SoftwareApplication JSON-LD for the homepage. Identity fields come from site
- * metadata; category/offer reflect the real MIT self-hosted model.
+ * metadata; category/offer reflect the real Apache-2.0 self-hosted model.
  */
 export function softwareApplicationJsonLd(): {
   readonly "@context": "https://schema.org";
@@ -96,6 +99,7 @@ export function softwareApplicationJsonLd(): {
   readonly url: string;
   readonly applicationCategory: typeof SITE_APPLICATION_CATEGORY;
   readonly offers: typeof SITE_OFFER;
+  readonly license: typeof SITE_LICENSE_URL;
   readonly sameAs: readonly string[];
 } {
   return {
@@ -106,6 +110,7 @@ export function softwareApplicationJsonLd(): {
     url: SITE_URL,
     applicationCategory: SITE_APPLICATION_CATEGORY,
     offers: SITE_OFFER,
+    license: SITE_LICENSE_URL,
     sameAs: SITE_SAME_AS,
   };
 }

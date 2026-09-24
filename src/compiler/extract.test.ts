@@ -116,9 +116,9 @@ describe("extractManifest — fx.raw", () => {
         flow("pay.read", { idempotency: "required", do: async () => ({ ok: true }) }),
       );
     `;
-    await expect(
-      extractFromSources({ "src/flows/pay.ts": requiredGet }),
-    ).rejects.toThrow(/header would be ignored/);
+    await expect(extractFromSources({ "src/flows/pay.ts": requiredGet })).rejects.toThrow(
+      /header would be ignored/,
+    );
 
     const badTtl = `
       import { on, flow, http, store, field } from "okengine";
@@ -135,7 +135,9 @@ describe("extractManifest — fx.raw", () => {
         }),
       );
     `;
-    await expect(extractFromSources({ "src/flows/pay.ts": badTtl })).rejects.toThrow(/not a duration/);
+    await expect(extractFromSources({ "src/flows/pay.ts": badTtl })).rejects.toThrow(
+      /not a duration/,
+    );
   });
 });
 

@@ -377,7 +377,10 @@ export function mintIdempotencyKey(): string | undefined {
  * @param method - HTTP method, already uppercased
  * @param opt - Per-call override
  */
-function resolveIdempotencyKey(method: string, opt: string | false | undefined): string | undefined {
+function resolveIdempotencyKey(
+  method: string,
+  opt: string | false | undefined,
+): string | undefined {
   if (opt === false) return undefined;
   if (typeof opt === "string") return opt;
   if (method === "GET") return undefined;

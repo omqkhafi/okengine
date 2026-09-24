@@ -162,6 +162,7 @@ describe("SoftwareApplication JSON-LD", () => {
         "@type",
         "applicationCategory",
         "description",
+        "license",
         "name",
         "offers",
         "sameAs",

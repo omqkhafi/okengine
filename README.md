@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/okengine"><img alt="npm" src="https://shieldcn.dev/npm/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://jsr.io/@omqkhafi/okengine"><img alt="JSR" src="https://shieldcn.dev/jsr/@omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
-  <a href="https://opensource.org/licenses/MIT"><img alt="MIT" src="https://shieldcn.dev/npm/license/okengine.svg?size=sm&variant=outline" /></a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="Apache-2.0" src="https://shieldcn.dev/npm/license/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://bun.sh"><img alt="Bun >=1.4.2" src="https://shieldcn.dev/badge/Bun-%3E%3D1.4.2.svg?logo=bun&size=sm&variant=outline" /></a>
   <a href="https://github.com/omqkhafi/okengine/actions"><img alt="CI" src="https://shieldcn.dev/github/ci/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
   <a href="https://github.com/omqkhafi/okengine/commits"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
@@ -154,4 +154,4 @@ Store apps sync schema with `oke db push|generate|migrate` (local `oke dev` auto
 
 ## License
 
-Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine). [MIT](https://opensource.org/licenses/MIT).
+Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine). [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0).

@@ -215,6 +215,8 @@ function compileSqlNode(node: unknown): CompiledNode {
 
   // Group level: only structural parens and ` and ` / ` or ` separators may
   // appear next to nested conditions — anything else is a loud failure.
+  // `1.0.0-rc.5-5935859` glues the parens onto the separator (`"(("`,
+  // `") and ("`, `"))`).
   let joiner: "AND" | "OR" | undefined;
   for (const chunk of chunks) {
     if (isDrizzleSql(chunk)) continue;
@@ -222,14 +224,13 @@ function compileSqlNode(node: unknown): CompiledNode {
     if (text === undefined) {
       throw new TypeError("sql where: unsupported mixed condition");
     }
-    const token = text.trim().toLowerCase();
-    if (token === "" || token === "(" || token === ")") continue;
-    if (token === "and" || token === "or") {
-      const next = token.toUpperCase() as "AND" | "OR";
-      if (joiner !== undefined && joiner !== next) {
+    const sep = groupSeparator(text);
+    if (sep === "skip") continue;
+    if (sep === "AND" || sep === "OR") {
+      if (joiner !== undefined && joiner !== sep) {
         throw new TypeError("sql where: mixed AND/OR at one level — parenthesize explicitly");
       }
-      joiner = next;
+      joiner = sep;
       continue;
     }
     throw new TypeError(`sql where: unsupported fragment ${JSON.stringify(text)}`);
@@ -329,6 +330,22 @@ function compileLeaf(chunks: readonly unknown[]): CompiledNode {
   };
 }
 
+/**
+ * Classify a group-level string chunk.
+ *
+ * Empty or parenthesis-only text is structural. `and` / `or` may sit inside
+ * the parentheses (`") and ("`). Anything else is not a separator.
+ *
+ * @param text - Raw `StringChunk` text
+ */
+function groupSeparator(text: string): "skip" | "AND" | "OR" | undefined {
+  const token = text.trim().toLowerCase().replace(/[()]/g, "").trim();
+  if (token === "") return "skip";
+  if (token === "and") return "AND";
+  if (token === "or") return "OR";
+  return undefined;
+}
+
 function chunksOf(node: unknown): readonly unknown[] {
   return (node as { queryChunks: unknown[] }).queryChunks;
 }
@@ -353,7 +370,7 @@ function isStringChunk(chunk: object): boolean {
 /**
  * Joined text of a Drizzle `StringChunk`.
  *
- * drizzle-orm `1.0.0-rc.5-169397b` stores `value` as a `string`. Earlier
+ * drizzle-orm `1.0.0-rc.5-5935859` stores `value` as a `string`. Earlier
  * snapshots (and the synthetic chunks in `resource.ts`) store `string[]`.
  */
 function chunkText(chunk: unknown): string | undefined {

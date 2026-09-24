@@ -14,7 +14,7 @@ const MEASURED: ReadonlyArray<{ readonly id: string; readonly label: string }> =
 ];
 
 /** Package contract from `package.json` — engine, licence, published version. */
-const CONTRACT: ReadonlyArray<string> = ["Bun ≥ 1.4.2", "MIT", `v${OKE_VERSION}`];
+const CONTRACT: ReadonlyArray<string> = ["Bun ≥ 1.4.2", "Apache-2.0", `v${OKE_VERSION}`];
 
 /**
  * Facts group for {@link HeroRail} — measured budgets, then the contract.

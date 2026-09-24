@@ -126,7 +126,7 @@ describe("otp() provider mode boot", () => {
     const requestIds: string[] = [];
     const verifications = createVerificationStore();
     const driver = mockOtpSmsDriver();
-    const transport = driver.smsTransport as SmsOtpTransport;
+    const transport = driver.smsTransport as unknown as SmsOtpTransport;
     const original = transport.sendOtp.bind(transport);
     transport.sendOtp = async (opts) => {
       requestIds.push(opts.requestId);
@@ -176,6 +176,9 @@ describe("otp() provider mode boot", () => {
     const secondId = second?.value.slice("provider:".length);
     expect(secondId).toBeDefined();
     expect(secondId).not.toBe(firstId);
+    if (firstId === undefined || secondId === undefined) {
+      throw new Error("expected provider request ids");
+    }
     expect(requestIds).toEqual([firstId, secondId]);
     expect(findActiveVerification(verifications, `otp:${phone}`, now)?.sealedOtp).toBeNull();
 

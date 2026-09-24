@@ -608,7 +608,7 @@ describe("scaffold structure", () => {
         };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
-        expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.4");
+        expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.5");
         expect(pkg.dependencies["oxc-parser"]).toBe("^0.149.0");
         expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
         expect(pkg.scripts.typecheck).toContain("tsc --noEmit");

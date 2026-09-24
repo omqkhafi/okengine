@@ -161,8 +161,8 @@ on(
 Read `fx.principal` for audit — it does not copy into `fx.auth`.
 
 <Callout>
-  Gates never consult `fx.principal`. `return fx.fail(...)` is a `FlowFailure`; an unhandled
-  `throw` rethrows. The same rules apply to `app.call`.
+  Gates never consult `fx.principal`. `return fx.fail(...)` is a `FlowFailure`; an unhandled `throw`
+  rethrows. The same rules apply to `app.call`.
 </Callout>
 
 ## Concurrency and retry
@@ -228,8 +228,8 @@ contact a provider. Bodies live on `.template({ catalog })` (`{{field}}`, not IC
 
 ## Outbound HTTP
 
-| Signature              | Records                     | Notes                                                                     |
-| ---------------------- | --------------------------- | ------------------------------------------------------------------------- |
+| Signature              | Records                     | Notes                                                                      |
+| ---------------------- | --------------------------- | -------------------------------------------------------------------------- |
 | `fx.fetch(url, init?)` | `fetch` on the URL hostname | Stamps `external: { host, kind: "third-party" }`. Aborts with `fx.signal`. |
 
 Declare hosts in `effects.fetches` (e.g. `["api.stripe.com"]`). Prefer `fx.step`; use

@@ -108,18 +108,18 @@ const { data } = await api.auth.verifyOtp({
 
 ## Modes
 
-|                      | Provider mode                 | App mode                                      |
-| -------------------- | ----------------------------- | --------------------------------------------- |
-| Config               | `otp({ mode: "provider" })`   | `otp({ mode: "app", channels: [...] })`       |
-| Who owns the code    | Provider (Verify API)         | Your app                                      |
-| Delivery             | `fx.sendOtp` / `fx.verifyOtp` | `fx.deliverOtp` (Channel templates)           |
-| Channels             | SMS only                      | `sms` · `whatsapp` · `email` (declared order) |
-| Resend                 | SMS only, new provider code   | Same code, any declared channel               |
-| `exposeDevOtp`       | Forbidden                     | Optional (default off)                        |
+|                   | Provider mode                 | App mode                                      |
+| ----------------- | ----------------------------- | --------------------------------------------- |
+| Config            | `otp({ mode: "provider" })`   | `otp({ mode: "app", channels: [...] })`       |
+| Who owns the code | Provider (Verify API)         | Your app                                      |
+| Delivery          | `fx.sendOtp` / `fx.verifyOtp` | `fx.deliverOtp` (Channel templates)           |
+| Channels          | SMS only                      | `sms` · `whatsapp` · `email` (declared order) |
+| Resend            | SMS only, new provider code   | Same code, any declared channel               |
+| `exposeDevOtp`    | Forbidden                     | Optional (default off)                        |
 
 <Callout type="warn" title="Provider mode limitation">
-  A provider resend is a new SMS code (`resendCooldownMs`, default 60s). The code never reaches
-  OKE, so SMS → email for the same code needs `mode: "app"`.
+  A provider resend is a new SMS code (`resendCooldownMs`, default 60s). The code never reaches OKE,
+  so SMS → email for the same code needs `mode: "app"`.
 </Callout>
 
 ### Provider mode setup
@@ -154,26 +154,26 @@ Override copy with `oke({ channel.catalog })` or `.channelCatalog(…)` (later l
 
 ## Options
 
-| Option             | Type                             | Default                    | Meaning                             |
-| ------------------ | -------------------------------- | -------------------------- | ----------------------------------- |
-| `mode`             | `"provider" \| "app"`            | required                   | Delivery mechanism — no auto        |
-| `channels`         | `("sms"\|"whatsapp"\|"email")[]` | required in app mode       | Build-time preferred order          |
-| `ttlMs`            | `number`                         | 10m                        | Challenge lifetime                  |
+| Option             | Type                             | Default                    | Meaning                              |
+| ------------------ | -------------------------------- | -------------------------- | ------------------------------------ |
+| `mode`             | `"provider" \| "app"`            | required                   | Delivery mechanism — no auto         |
+| `channels`         | `("sms"\|"whatsapp"\|"email")[]` | required in app mode       | Build-time preferred order           |
+| `ttlMs`            | `number`                         | 10m                        | Challenge lifetime                   |
 | `resendCooldownMs` | `number`                         | 60s                        | Spacing between resends (both modes) |
-| `exposeDevOtp`     | `boolean`                        | `false`                    | App mode only — raw OTP in response |
-| `from`             | `string`                         | `OKE <no-reply@oke.local>` | Email template From                 |
-| `secret`           | `string`                         | active\*                   | Auth secret (\*from `gate.auth`)    |
-| `sessions`         | `SessionStore`                   | active\*                   | Session store                       |
-| `identities`       | `IdentityStore`                  | new                        | Email → user                        |
-| `phones`           | `PhoneStore`                     | new                        | Phone → user                        |
-| `verifications`    | `VerificationStore`              | new                        | Challenge store                     |
+| `exposeDevOtp`     | `boolean`                        | `false`                    | App mode only — raw OTP in response  |
+| `from`             | `string`                         | `OKE <no-reply@oke.local>` | Email template From                  |
+| `secret`           | `string`                         | active\*                   | Auth secret (\*from `gate.auth`)     |
+| `sessions`         | `SessionStore`                   | active\*                   | Session store                        |
+| `identities`       | `IdentityStore`                  | new                        | Email → user                         |
+| `phones`           | `PhoneStore`                     | new                        | Phone → user                         |
+| `verifications`    | `VerificationStore`              | new                        | Challenge store                      |
 
 ## Surfaces
 
-| Flow              | Path                     | Gate                     | Mode          |
-| ----------------- | ------------------------ | ------------------------ | ------------- |
-| `auth.requestOtp` | `POST /auth/otp/request` | `gate.public` + otp rate | both          |
-| `auth.verifyOtp`  | `POST /auth/otp/verify`  | `gate.public` + otp rate | both          |
+| Flow              | Path                     | Gate                     | Mode                      |
+| ----------------- | ------------------------ | ------------------------ | ------------------------- |
+| `auth.requestOtp` | `POST /auth/otp/request` | `gate.public` + otp rate | both                      |
+| `auth.verifyOtp`  | `POST /auth/otp/verify`  | `gate.public` + otp rate | both                      |
 | `auth.resendOtp`  | `POST /auth/otp/resend`  | `gate.public` + otp rate | both (provider: SMS only) |
 
 ## Troubleshooting

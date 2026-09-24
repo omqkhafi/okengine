@@ -11,8 +11,8 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "../..");
 
-/** Forbidden peer name — split so this file does not match itself. */
-const FORBIDDEN_HONO = ["Ho", "no"].join("");
+/** Word-boundary router peer — `-F` false-positives on `Honored` / `canHonor`. */
+const FORBIDDEN_HONO = ["\\b", "Ho", "no", "\\b"].join("");
 /** Forbidden peer name. */
 const FORBIDDEN_ELYSIA = ["Ely", "sia"].join("");
 /** Forbidden peer name (covers Enc + ore.ts). */
@@ -104,7 +104,7 @@ function assertZeroGitGrepRegex(pattern: string, ignorePrefixes: readonly string
 
 describe("named competitor mention removal gate", () => {
   test("tracked tree has zero mentions of the thin multi-runtime router peer", () => {
-    assertZeroGitGrepFixed(FORBIDDEN_HONO);
+    assertZeroGitGrepRegex(FORBIDDEN_HONO);
   });
 
   test("tracked tree has zero mentions of the Bun-first peer framework", () => {

@@ -237,7 +237,11 @@ export function createPostgresIdempotencyStore(sql: IdempotencySql): Idempotency
     renew(scope, token, leaseExpiresAt) {
       return exclusive(async () => {
         if (!held.has(token)) return false;
-        const result = await sql.exec(IDEM_RENEW_SQL, [leaseExpiresAt, ...scopeParams(scope), token]);
+        const result = await sql.exec(IDEM_RENEW_SQL, [
+          leaseExpiresAt,
+          ...scopeParams(scope),
+          token,
+        ]);
         return result.changes > 0;
       });
     },
@@ -344,7 +348,8 @@ function createMapStoreAsync(
           return { kind: "claimed" as const, row: cloneRow(row) };
         }
         if (decision.op === "mismatch") return { kind: "mismatch" as const };
-        if (decision.op === "replay") return { kind: "replay" as const, row: cloneRow(decision.row) };
+        if (decision.op === "replay")
+          return { kind: "replay" as const, row: cloneRow(decision.row) };
         if (decision.op === "busy") {
           return { kind: "in_progress" as const, retryAfterSeconds: decision.retryAfterSeconds };
         }
@@ -392,7 +397,8 @@ function createMapStoreAsync(
         if (!held.has(token)) return false;
         const map = await load();
         const row = map.get(scopeKey(scope));
-        if (row === undefined || row.claimToken !== token || row.status !== "in_progress") return false;
+        if (row === undefined || row.claimToken !== token || row.status !== "in_progress")
+          return false;
         row.leaseExpiresAt = leaseExpiresAt;
         await flush(map);
         return true;
@@ -413,7 +419,8 @@ function createMapStoreAsync(
         const map = await load();
         const row = map.get(scopeKey(scope));
         held.delete(token);
-        if (row === undefined || row.claimToken !== token || row.status !== "in_progress") return false;
+        if (row === undefined || row.claimToken !== token || row.status !== "in_progress")
+          return false;
         row.claimToken = crypto.randomUUID();
         row.leaseExpiresAt = 0;
         await flush(map);
@@ -558,7 +565,10 @@ function rowKey(row: IdempotencyScope): string {
 }
 
 function cloneRow(row: IdempotencyRow): IdempotencyRow {
-  return { ...row, ...(row.responseHeaders ? { responseHeaders: { ...row.responseHeaders } } : {}) };
+  return {
+    ...row,
+    ...(row.responseHeaders ? { responseHeaders: { ...row.responseHeaders } } : {}),
+  };
 }
 
 function purgeMap(map: Map<string, IdempotencyRow>, now: number): void {

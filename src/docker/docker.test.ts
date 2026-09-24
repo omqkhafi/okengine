@@ -358,12 +358,12 @@ describe("image recipes", () => {
   });
 
   test("pgdog matches the official image and waits on store-sql", () => {
-    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.57").id).toBe("pgdog");
+    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.59").id).toBe("pgdog");
     expect(pgdog.match("ghcr.io/pgdogdev/pgdog:main")).toBe(true);
     const applied = pgdog.apply({
       role: "pgdog",
       serviceName: "pgdog",
-      image: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      image: "ghcr.io/pgdogdev/pgdog:v0.1.59",
       port: 6432,
       hostPort: 6432,
       credentials: fixedCreds["store.sql"],
@@ -402,11 +402,11 @@ describe("image recipes", () => {
   });
 
   test("meilisearch matches the official image and emits a http URL", () => {
-    expect(recipeFor("getmeili/meilisearch:v1.53").id).toBe("meilisearch");
+    expect(recipeFor("getmeili/meilisearch:v1.54").id).toBe("meilisearch");
     const spec: ServiceSpec = {
       role: "store.index",
       serviceName: "store-index",
-      image: "getmeili/meilisearch:v1.53",
+      image: "getmeili/meilisearch:v1.54",
       port: 7700,
       hostPort: 7700,
       credentials: { user: "oke", password: "meili-master-key", database: "oke" },
@@ -604,8 +604,8 @@ describe("deriveInfrastructure", () => {
   test("compose YAML spaces services and adds role comments", () => {
     const result = deriveInfrastructure({
       images: {
-        "channel.email": "axllent/mailpit:v1.31.1",
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+        "channel.email": "axllent/mailpit:v1.31.2",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
         "store.sql": "postgres:16",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
@@ -726,7 +726,7 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:18-alpine",
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
       prod: true,
@@ -741,7 +741,7 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_STORE_SQL_URL).toContain(":5432/");
 
     const pgdogYml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.57");
+    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.59");
     expect(pgdogYml).toContain("store-sql");
     expect(pgdogYml).toContain("service_healthy");
     expect(pgdogYml).not.toContain(fixedCreds["store.sql"].password);
@@ -809,14 +809,14 @@ describe("deriveInfrastructure", () => {
 
   test("store.index meilisearch emits its own URL + master key env", () => {
     const result = deriveInfrastructure({
-      images: { "store.index": "getmeili/meilisearch:v1.53" },
+      images: { "store.index": "getmeili/meilisearch:v1.54" },
       credentials: {
         "store.index": { user: "oke", password: "meili-master-key", database: "oke" },
       },
       app: "skyport",
     });
     const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(yml).toContain("getmeili/meilisearch:v1.53");
+    expect(yml).toContain("getmeili/meilisearch:v1.54");
     expect(yml).toContain("${OKE_STORE_INDEX_KEY}");
     expect(yml).toContain("meili_data");
     expect(yml).not.toContain("meili-master-key");
@@ -831,7 +831,7 @@ describe("deriveInfrastructure", () => {
         "store.sql": "postgres:18-alpine",
         "store.kv": "redis:8-alpine",
         "store.files": "rustfs/rustfs:1.0.0",
-        "channel.email": "axllent/mailpit:v1.31.1",
+        "channel.email": "axllent/mailpit:v1.31.2",
       },
       credentials: {
         ...fixedCreds,
@@ -874,7 +874,7 @@ describe("deriveInfrastructure", () => {
     const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
     const result = deriveInfrastructure({
       images: {
-        "channel.email": "axllent/mailpit:v1.31.1",
+        "channel.email": "axllent/mailpit:v1.31.2",
         "store.files": "rustfs/rustfs:1.0.0",
       },
       instanceId: id,
@@ -913,7 +913,7 @@ describe("deriveInfrastructure", () => {
     const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
     const rows = resolveStack({
       images: {
-        "channel.email": "axllent/mailpit:v1.31.1",
+        "channel.email": "axllent/mailpit:v1.31.2",
         "store.files": "rustfs/rustfs:1.0.0",
       },
       instanceId: id,

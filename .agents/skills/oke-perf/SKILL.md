@@ -61,10 +61,10 @@ Compare `budgets[].value` by `id` against `/tmp/oke-budgets-before.json`. Ignore
 
 Flag a row when any of these is true:
 
-| Rule | Threshold |
-| --- | --- |
-| Gate failed | `ok: false` on the new snapshot |
-| Bytes grew | growth ≥ max(256, 2% of the committed value) |
+| Rule              | Threshold                                      |
+| ----------------- | ---------------------------------------------- |
+| Gate failed       | `ok: false` on the new snapshot                |
+| Bytes grew        | growth ≥ max(256, 2% of the committed value)   |
 | Milliseconds grew | growth ≥ max(1 ms, 25% of the committed value) |
 
 A drop is an improvement. Name it in the report. Do not bisect it.
@@ -83,15 +83,15 @@ If that commit is `HEAD`, the drift is in the working tree. Read the diff. Do no
 
 Bisect with the **one probe** for that id, not `bun run budgets`. `git bisect run` must exit 0 at or below the committed value plus the flag threshold, and exit 1 above it.
 
-| Id | Probe |
-| --- | --- |
-| `coldStartMedianMs` | `measureColdStartMedianMs` from `src/release/measure.ts` |
-| `kernelEdgeGzipBytes` | `measureKernelEdgeGzipBytes` |
-| `clientGzipBytes` | `measureClientGzipBytes` |
-| `consoleInitialGzipBytes` | `measureConsoleInitialGzipBytes` |
-| `routingP99Ms` | `measureRoutingP99Ms` |
-| `httpPingGzipBytes` / `httpPingRawBytes` | `measureHttpPingAppBytes` |
-| `export:*` | `measureExportGzipBytes` on that export's entry (`resolveExportBudgetTargets` in `src/release/exports.ts`) |
+| Id                                       | Probe                                                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `coldStartMedianMs`                      | `measureColdStartMedianMs` from `src/release/measure.ts`                                                   |
+| `kernelEdgeGzipBytes`                    | `measureKernelEdgeGzipBytes`                                                                               |
+| `clientGzipBytes`                        | `measureClientGzipBytes`                                                                                   |
+| `consoleInitialGzipBytes`                | `measureConsoleInitialGzipBytes`                                                                           |
+| `routingP99Ms`                           | `measureRoutingP99Ms`                                                                                      |
+| `httpPingGzipBytes` / `httpPingRawBytes` | `measureHttpPingAppBytes`                                                                                  |
+| `export:*`                               | `measureExportGzipBytes` on that export's entry (`resolveExportBudgetTargets` in `src/release/exports.ts`) |
 
 ```bash
 git bisect start HEAD <good>
@@ -104,11 +104,11 @@ Name the first bad commit in the report. `git bisect reset` when finished.
 
 Use a pattern that already exists. Do not add a helper, and do not raise a cap in `src/release/limits.ts`.
 
-| Drift | Pattern | Where it already lives |
-| --- | --- | --- |
-| Heavy module on a cold path (`zod`, hybrid-search runtime, a new barrel) | `lazyRequire` with a **computed** stem so `Bun.build` cannot inline the target | `src/kernel/lazy-require.ts`. Callers: `loadClientDescriptor` in `src/kernel/app.ts`, `loadSearchRuntime` in `src/elements/store/sql-session.ts` |
-| A burst of filesystem events doing the same work | `createDebouncedRunner` | `src/cli/db-auto-push.ts`, used from `src/cli/dev.ts` |
-| The same object computed again on an unchanged reference | Memoize (a `WeakMap` keyed by object identity when the input is a schema or flow object) | `schemaTsCache` in `src/kernel/client-descriptor.ts` |
+| Drift                                                                    | Pattern                                                                                  | Where it already lives                                                                                                                           |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Heavy module on a cold path (`zod`, hybrid-search runtime, a new barrel) | `lazyRequire` with a **computed** stem so `Bun.build` cannot inline the target           | `src/kernel/lazy-require.ts`. Callers: `loadClientDescriptor` in `src/kernel/app.ts`, `loadSearchRuntime` in `src/elements/store/sql-session.ts` |
+| A burst of filesystem events doing the same work                         | `createDebouncedRunner`                                                                  | `src/cli/db-auto-push.ts`, used from `src/cli/dev.ts`                                                                                            |
+| The same object computed again on an unchanged reference                 | Memoize (a `WeakMap` keyed by object identity when the input is a schema or flow object) | `schemaTsCache` in `src/kernel/client-descriptor.ts`                                                                                             |
 
 Match the surrounding code. A static `import()` string is still on the graph — the stem has to be computed, the way those callers do it.
 
@@ -136,11 +136,11 @@ Leave a post-fix snapshot in the tree when a real fix changed the numbers. Do no
 
 When the drift was a class of bug the gates did not name, add the guard beside the ones that already exist. Do not invent a second list.
 
-| What drifted | Add it here |
-| --- | --- |
-| A heavy module on the `okengine/http` static graph | One entry in `HTTP_STATIC_GRAPH_FORBIDDEN` (`src/release/http-graph.ts`) |
-| An absolute sample that can double and still pass its cap | Already covered by `absoluteRegressionCeiling` in `src/release/measure.ts` — no new gate |
-| A new entry graph or a new timing that those two do not see | A test next to `src/release/http-graph.test.ts`, using the same forbidden-list shape |
+| What drifted                                                | Add it here                                                                              |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| A heavy module on the `okengine/http` static graph          | One entry in `HTTP_STATIC_GRAPH_FORBIDDEN` (`src/release/http-graph.ts`)                 |
+| An absolute sample that can double and still pass its cap   | Already covered by `absoluteRegressionCeiling` in `src/release/measure.ts` — no new gate |
+| A new entry graph or a new timing that those two do not see | A test next to `src/release/http-graph.test.ts`, using the same forbidden-list shape     |
 
 ## Done
 

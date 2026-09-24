@@ -25,11 +25,7 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
 }[] = [
   {
     heading: "Understand",
-    slugs: [
-      "understand/the-architecture",
-      "understand/routing",
-      "understand/try-it",
-    ],
+    slugs: ["understand/the-architecture", "understand/routing", "understand/try-it"],
   },
   {
     heading: "Elements",

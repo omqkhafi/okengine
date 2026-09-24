@@ -71,21 +71,21 @@ describe("ImagesConfig nesting — recipe coverage", () => {
         image: "rustfs/rustfs:1.0.0",
       },
       {
-        images: { store: { index: "getmeili/meilisearch:v1.53" } },
+        images: { store: { index: "getmeili/meilisearch:v1.54" } },
         role: "store.index",
-        image: "getmeili/meilisearch:v1.53",
+        image: "getmeili/meilisearch:v1.54",
       },
       // channel.email
       {
-        images: { channel: { email: "axllent/mailpit:v1.31.1" } },
+        images: { channel: { email: "axllent/mailpit:v1.31.2" } },
         role: "channel.email",
-        image: "axllent/mailpit:v1.31.1",
+        image: "axllent/mailpit:v1.31.2",
       },
       // ai role: no compose recipes (BYO OKE_AI_URL) — not covered here
       {
-        images: { pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57" },
+        images: { pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59" },
         role: "pgdog",
-        image: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+        image: "ghcr.io/pgdogdev/pgdog:v0.1.59",
       },
       { images: { proxy: "caddy:2-alpine" }, role: "proxy", image: "caddy:2-alpine" },
       { images: { proxy: "traefik:v3.1" }, role: "proxy", image: "traefik:v3.1" },
@@ -108,11 +108,11 @@ describe("ImagesConfig nesting — compose output parity", () => {
   test("nested config derives byte-identical output to its flat-shape equivalent", () => {
     const flatImages: Readonly<Record<string, string>> = {
       "store.sql": "postgres:18-alpine",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
       "store.kv": "redis:8-alpine",
       "store.files": "rustfs/rustfs:1.0.0",
-      "store.index": "getmeili/meilisearch:v1.53",
-      "channel.email": "axllent/mailpit:v1.31.1",
+      "store.index": "getmeili/meilisearch:v1.54",
+      "channel.email": "axllent/mailpit:v1.31.2",
     };
 
     const nestedImages: ImagesConfig = {
@@ -120,10 +120,10 @@ describe("ImagesConfig nesting — compose output parity", () => {
         sql: "postgres:18-alpine",
         kv: "redis:8-alpine",
         files: "rustfs/rustfs:1.0.0",
-        index: "getmeili/meilisearch:v1.53",
+        index: "getmeili/meilisearch:v1.54",
       },
-      channel: { email: "axllent/mailpit:v1.31.1" },
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+      channel: { email: "axllent/mailpit:v1.31.2" },
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
     };
 
     // Same nested→flat set, written in a different field order — proves the

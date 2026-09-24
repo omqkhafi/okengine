@@ -163,7 +163,7 @@ describe("deriveInfrastructure instanceId", () => {
     const n = instancePortOffset(id);
     const result = deriveInfrastructure({
       images: {
-        "channel.email": "axllent/mailpit:v1.31.1",
+        "channel.email": "axllent/mailpit:v1.31.2",
         "store.files": "rustfs/rustfs:1.0.0",
       },
       app: `dev-${id}`,

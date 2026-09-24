@@ -68,15 +68,51 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Runtime
+
+- Dependency refresh: Console and tooling patches and minors (`zod` `^4.6.5`,
+  TanStack Query `^5.103.2`, Router `^1.170.39`, oxlint `^1.85.0`, motion
+  `^13.4.2`, and the matching CodeMirror, DuckDB, and Happy DOM releases).
+  Drizzle `rc5` moves to `1.0.0-rc.5-5935859` for both orm and kit. The SQL
+  condition compiler accepts the new `and()` / `or()` wrappers (`"(("`,
+  `") and ("`).
 - `fx.fetch`, Meilisearch, and remote Vault HTTP abort with the ambient
   `fx.signal` (`fx.race` / `fx.all`). An effect that has not started throws
   `AbortError`. SQL, Redis, and an in-flight sently Channel send still finish.
+
+#### Dev, Keel & create-oke
+
+- Compose pins: Mailpit `v1.31.2`, PgDog `v0.1.59`, Meilisearch `v1.54`.
+  A Meilisearch minor can need a dump and restore. create-oke, templates, and
+  Keel follow the same zod / DuckDB / `@clack/prompts` bumps, and the same
+  Drizzle `rc5` hash.
+- okengine and create-oke are licensed under Apache-2.0.
+
+#### Docs
+
+- Docs site dependencies: `next` `16.3.6`, fumadocs `16.15.13` (core and
+  `@fumadocs/base-ui` paired), `fumadocs-mdx` `15.4.3`, `lucide-react` `^1.48.0`.
+  Tenancy and Reference sidebar icons use `Building` and `BookBookmark`
+  (`Building2` and `BookMarked` left the Lucide icon map). Recipe and
+  configuration examples use the new Mailpit, PgDog, and Meilisearch pins.
 - Landing hero rail no longer shows the client gzip cell — cold start and
   routing p99 stay; package size stays in budgets / CI, not the stage strip.
 - [Routing](/docs/understand/routing) moved from Flow into Understand
   (Architecture → Routing → Try it).
 
 ### 🐛 Fixed
+
+#### Runtime
+
+- Typecheck stays green on current Bun `fetch` (`preconnect`) and stricter
+  `AstNode` narrowing in effect inference, vault audit tests, the idempotency
+  client test, and OTP provider resend.
+- Scaffold tests expect `@duckdb/node-api` `^1.5.5-r.5`. The competitor-name
+  gate matches the router peer on a word boundary so `Honored` / `canHonor` are
+  not hits. The JSR dry-run uses an installed Deno binary when one is on
+  `PATH`, so the npm wrapper does not stall downloading its own.
+
+#### Docs
 
 - README quick start puts the health contract on `http.get({ out: HealthOut })`,
   matching the create-oke starter. `out` stays on the exposure; the Flow is `do`.

@@ -2,7 +2,7 @@
   "name": "@omqkhafi/okengine",
   "version": "0.22.0",
   "description": "One law. Eight elements. One contract. The backend model stays small; operational surfaces are derived from it instead of maintained separately.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
@@ -27,6 +27,8 @@
   },
   "publish": {
     "include": [
+      "LICENSE",
+      "NOTICE",
       "src",
       "manifest.v1.schema.json",
       "AGENTS.md",

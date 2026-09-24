@@ -30,9 +30,9 @@ Prefer importing catalog / recipe constants over a second string literal.
 | Image                             | Style                         | Example              | Probe                                       |
 | --------------------------------- | ----------------------------- | -------------------- | ------------------------------------------- |
 | RustFS                            | exact patch, no `v`           | `1.0.0`              | `rustfs/rustfs` GitHub + Hub                |
-| Mailpit                           | exact patch, `v` prefix       | `v1.31.1`            | `axllent/mailpit`                           |
-| PgDog                             | exact patch, `v` prefix       | `v0.1.57`            | `pgdogdev/pgdog` + `ghcr.io/pgdogdev/pgdog` |
-| Meilisearch                       | **minor** (`v1.53`, not `.1`) | `v1.53`              | `meilisearch/meilisearch` — Hub has `v1.53` |
+| Mailpit                           | exact patch, `v` prefix       | `v1.31.2`            | `axllent/mailpit`                           |
+| PgDog                             | exact patch, `v` prefix       | `v0.1.59`            | `pgdogdev/pgdog` + `ghcr.io/pgdogdev/pgdog` |
+| Meilisearch                       | **minor** (`v1.54`, not `.1`) | `v1.54`              | `meilisearch/meilisearch` — Hub has `v1.54` |
 | Traefik                           | **minor**                     | `v3.7`               | `traefik/traefik` — not `v3.7.10`           |
 | nginx                             | **minor** alpine (mainline)   | `1.31-alpine`        | Hub `library/nginx`                         |
 | Postgres / Redis / Caddy / Valkey | floating family               | `postgres:18-alpine` | leave                                       |

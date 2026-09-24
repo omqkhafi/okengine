@@ -32,11 +32,11 @@ export default defineConfig({
       sql: "postgres:18-alpine",
       kv: "redis:8-alpine",
       files: "rustfs/rustfs:1.0.0",
-      index: "getmeili/meilisearch:v1.53",
+      index: "getmeili/meilisearch:v1.54",
     },
-    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.57",
+    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.59",
     channel: {
-      email: "axllent/mailpit:v1.31.1",
+      email: "axllent/mailpit:v1.31.2",
     },
     // No images.ai — Compose does not manage inference (OpenRouter / BYO URL).
   },
