@@ -156,6 +156,9 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
       };
       if (opts.temperature !== undefined) body.temperature = opts.temperature;
       if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
+      if (opts.responseFormat !== undefined) {
+        body.response_format = wireOpenaiResponseFormat(opts.responseFormat);
+      }
       if (opts.tools !== undefined && opts.tools.length > 0) {
         body.tools = opts.tools.map((t) => ({
           type: "function",

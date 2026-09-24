@@ -450,14 +450,22 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       }
 
       if (/FROM\s+oke_agent_run\b/i.test(text)) {
+        if (!/WHERE/i.test(text)) return state.agentRuns.map((row) => ({ ...row }));
         const id = String(params[0] ?? "");
         return state.agentRuns.filter((row) => row.run_id === id).map((row) => ({ ...row }));
       }
 
       if (/FROM\s+oke_agent_event\b/i.test(text)) {
         const id = String(params[0] ?? "");
+        if (/MAX\s*\(\s*seq\s*\)/i.test(text)) {
+          const max = state.agentEvents
+            .filter((row) => row.run_id === id)
+            .reduce((highest, row) => Math.max(highest, row.seq), 0);
+          return [{ max_seq: max }];
+        }
+        const after = /seq\s*>\s*\?/i.test(text) ? Number(params[1] ?? 0) : 0;
         return state.agentEvents
-          .filter((row) => row.run_id === id)
+          .filter((row) => row.run_id === id && row.seq > after)
           .sort((a, b) => a.seq - b.seq)
           .map((row) => ({ ...row }));
       }
@@ -689,7 +697,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         const runId = String(params[0]);
         const seq = Number(params[1]);
         if (state.agentEvents.some((row) => row.run_id === runId && row.seq === seq)) {
-          return { changes: 0 };
+          throw new Error(`duplicate key value violates unique constraint "oke_agent_event_pkey"`);
         }
         state.agentEvents.push({ run_id: runId, seq, event: String(params[2]) });
         return { changes: 1 };
@@ -810,6 +818,9 @@ function lazyAgentEvents(sql: PostgresJournalSql): AgentEventStore {
   };
   return {
     read: (runId) => ready().then((store) => store.read(runId)),
+    readAfter: (runId, afterSeq) => ready().then((store) => store.readAfter(runId, afterSeq)),
+    maxSeq: (runId) => ready().then((store) => store.maxSeq(runId)),
+    listHeaders: () => ready().then((store) => store.listHeaders()),
     writeHeader: (header) => ready().then((store) => store.writeHeader(header)),
     append: (runId, row) => ready().then((store) => store.append(runId, row)),
     remove: (runId) => ready().then((store) => store.remove(runId)),

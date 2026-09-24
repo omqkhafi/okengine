@@ -11,11 +11,17 @@
 import type { AgentEventStore } from "../../kernel/agent-event-store.ts";
 import type { AgUiEvent } from "./events.ts";
 
-/** Persisted rows kept for one run before only terminal rows remain. */
-export const AGENT_EVENT_CAP = 48;
+/** Stored rows per run before deltas stop. Structural events still land. */
+export const AGENT_EVENT_CAP = 5_000;
 
 /** Default lifetime of a finished run's events. */
 export const AGENT_EVENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Unfinished runs older than this are closed with `RUN_ERROR` and removed. */
+export const AGENT_EVENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Name of the one notice stored when deltas stop. */
+export const AGENT_EVENTS_TRUNCATED = "oke.events.truncated";
 
 /** Flush a coalesced delta after this many milliseconds. */
 const FLUSH_MS = 100;
@@ -40,6 +46,8 @@ export interface AgentRunHeader {
   readonly userId: string | null;
   /** Starting operator id. Null when the caller was not an operator. */
   readonly operatorId: string | null;
+  /** Epoch ms the run was opened. */
+  readonly openedAt?: number;
   readonly finishedAt?: number;
 }
 
@@ -56,7 +64,7 @@ export interface AgentEventLog {
   flush(runId: string, now: number): Promise<number | undefined>;
   read(runId: string, afterSeq: number): Promise<readonly StoredAgentEvent[]>;
   /** Delete finished runs older than `ttlMs`. Returns how many runs were removed. */
-  sweep(now: number, ttlMs?: number): Promise<number>;
+  sweep(now: number, ttlMs?: number, maxAgeMs?: number): Promise<number>;
   subscribe(runId: string, afterSeq: number, signal?: AbortSignal): AsyncIterable<StoredAgentEvent>;
   /** Live subscribers still attached to one run. */
   listenerCount(runId: string): number;
@@ -66,9 +74,18 @@ interface RunBucket {
   header: AgentRunHeader;
   rows: StoredAgentEvent[];
   nextSeq: number;
+  /** Deltas have already produced the one truncation notice. */
+  truncated: boolean;
   pending?: { event: AgUiEvent; chars: number; since: number };
   timer?: ReturnType<typeof setTimeout>;
   listeners: Set<(row: StoredAgentEvent | undefined) => void>;
+}
+
+/** Cap, TTL, and the age after which an unfinished run is closed. */
+export interface AgentEventLogOptions {
+  readonly cap?: number;
+  readonly ttlMs?: number;
+  readonly maxAgeMs?: number;
 }
 
 const DELTA_TYPES = new Set(["TEXT_MESSAGE_CONTENT", "TOOL_CALL_ARGS"]);
@@ -76,32 +93,76 @@ const DELTA_TYPES = new Set(["TEXT_MESSAGE_CONTENT", "TOOL_CALL_ARGS"]);
 /**
  * Event log. Pass a journal {@link AgentEventStore} so rows survive restart.
  *
+ * Appends for one run are serialized. The opener reads `MAX(seq)` before
+ * writing. Past {@link AGENT_EVENT_CAP}, deltas stop and one
+ * `oke.events.truncated` is stored. Structural events, interrupts, and the
+ * terminal frames stay. History a follower can resume from is not trimmed.
+ *
  * @param store - Durable rows. Omit for a process-local log.
- * @param ttlMs - Default sweep lifetime. The scheduler passes this through.
+ * @param options - Cap, TTL, and max age. A number is the TTL.
  */
-export function createMemoryAgentEventLog(store?: AgentEventStore, ttlMs = AGENT_EVENT_TTL_MS): AgentEventLog {
+export function createMemoryAgentEventLog(
+  store?: AgentEventStore,
+  options: number | AgentEventLogOptions = AGENT_EVENT_TTL_MS,
+): AgentEventLog {
+  const opts: AgentEventLogOptions = typeof options === "number" ? { ttlMs: options } : options;
+  const cap = opts.cap ?? AGENT_EVENT_CAP;
+  const defaultTtl = opts.ttlMs ?? AGENT_EVENT_TTL_MS;
+  const defaultMaxAge = opts.maxAgeMs ?? AGENT_EVENT_MAX_AGE_MS;
   const runs = new Map<string, RunBucket>();
+  const queues = new Map<string, Promise<unknown>>();
 
   const bucket = (runId: string): RunBucket | undefined => runs.get(runId);
 
-  const kept = (event: AgUiEvent): boolean =>
-    event.type === "RUN_FINISHED" || event.type === "RUN_ERROR";
+  const serialized = <T>(runId: string, fn: () => Promise<T>): Promise<T> => {
+    const prev = queues.get(runId) ?? Promise.resolve();
+    const job = prev.then(fn, fn);
+    queues.set(
+      runId,
+      job.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return job;
+  };
 
-  const trim = (run: RunBucket): void => {
-    if (run.rows.length <= AGENT_EVENT_CAP) return;
-    run.rows = run.rows.filter((row) => kept(row.event)).slice(-AGENT_EVENT_CAP);
+  const terminal = (event: AgUiEvent): boolean =>
+    event.type === "RUN_ERROR" ||
+    (event.type === "RUN_FINISHED" && event.outcome?.type !== "interrupt");
+
+  const keepPastCap = (event: AgUiEvent): boolean => {
+    if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") return true;
+    if (event.type === "CUSTOM" && event.name === AGENT_EVENTS_TRUNCATED) return true;
+    return !DELTA_TYPES.has(event.type);
   };
 
   const push = async (run: RunBucket, event: AgUiEvent): Promise<number> => {
     const seq = run.nextSeq++;
     const row: StoredAgentEvent = { seq, event };
     run.rows.push(row);
-    trim(run);
-    if (store && run.rows.some((stored) => stored.seq === seq)) {
-      await store.append(run.header.runId, row);
-    }
+    await store?.append(run.header.runId, row);
     for (const listener of run.listeners) listener(row);
     return seq;
+  };
+
+  const noteTruncation = async (run: RunBucket): Promise<number | undefined> => {
+    if (run.truncated) return undefined;
+    run.truncated = true;
+    return push(run, {
+      type: "CUSTOM",
+      name: AGENT_EVENTS_TRUNCATED,
+      value: { cap },
+    });
+  };
+
+  const accept = async (run: RunBucket, event: AgUiEvent): Promise<number | undefined> => {
+    const delta = DELTA_TYPES.has(event.type);
+    if (run.rows.length >= cap && delta && !keepPastCap(event)) {
+      return noteTruncation(run);
+    }
+    if (run.rows.length >= cap && !keepPastCap(event)) return undefined;
+    return push(run, event);
   };
 
   const clearTimer = (run: RunBucket): void => {
@@ -115,97 +176,133 @@ export function createMemoryAgentEventLog(store?: AgentEventStore, ttlMs = AGENT
     const pending = run.pending;
     run.pending = undefined;
     if (!pending) return undefined;
-    return push(run, pending.event);
+    return accept(run, pending.event);
   };
 
   const armTimer = (run: RunBucket): void => {
     if (run.timer) return;
     run.timer = setTimeout(() => {
       run.timer = undefined;
-      void flushPending(run);
+      void serialized(run.header.runId, () => flushPending(run).then(() => undefined));
     }, FLUSH_MS);
+  };
+
+  const drop = async (runId: string): Promise<void> => {
+    const run = runs.get(runId);
+    if (run) {
+      clearTimer(run);
+      runs.delete(runId);
+      for (const listener of run.listeners) listener(undefined);
+    }
+    await store?.remove(runId);
   };
 
   return {
     async open(header) {
-      if (runs.has(header.runId)) return;
-      const loaded = await store?.read(header.runId);
-      if (loaded) {
-        const rows = loaded.rows.map((row) => ({
-          seq: row.seq,
-          event: row.event as AgUiEvent,
-        }));
-        const nextSeq = rows.reduce((max, row) => Math.max(max, row.seq), 0) + 1;
+      await serialized(header.runId, async () => {
+        if (runs.has(header.runId)) return;
+        const max = (await store?.maxSeq(header.runId)) ?? 0;
+        if (max > 0) {
+          const existing = (await store?.listHeaders())?.find(
+            (item) => item.runId === header.runId,
+          );
+          runs.set(header.runId, {
+            header: (existing ?? header) as AgentRunHeader,
+            rows: [],
+            nextSeq: max + 1,
+            truncated: max >= cap,
+            listeners: new Set(),
+          });
+          return;
+        }
+        const opened: AgentRunHeader = { ...header, openedAt: header.openedAt ?? Date.now() };
         runs.set(header.runId, {
-          header: loaded.header as AgentRunHeader,
-          rows,
-          nextSeq,
+          header: opened,
+          rows: [],
+          nextSeq: 1,
+          truncated: false,
           listeners: new Set(),
         });
-        return;
-      }
-      runs.set(header.runId, {
-        header,
-        rows: [],
-        nextSeq: 1,
-        listeners: new Set(),
+        await store?.writeHeader(opened);
       });
-      await store?.writeHeader(header);
     },
     async header(runId) {
-      return bucket(runId)?.header ?? ((await store?.read(runId))?.header as AgentRunHeader | undefined);
+      const live = bucket(runId)?.header;
+      if (live) return live;
+      const listed = await store?.listHeaders();
+      return listed?.find((item) => item.runId === runId) as AgentRunHeader | undefined;
     },
     async append(runId, event, now) {
-      const run = bucket(runId);
-      if (!run) return undefined;
-      const structural = !DELTA_TYPES.has(event.type);
-      if (structural) {
+      return serialized(runId, async () => {
+        const run = bucket(runId);
+        if (!run) return undefined;
+        const structural = !DELTA_TYPES.has(event.type);
+        if (structural) {
+          await flushPending(run);
+          if (terminal(event)) {
+            run.header = { ...run.header, finishedAt: now };
+            await store?.writeHeader(run.header);
+          }
+          return accept(run, event);
+        }
+        const pending = run.pending;
+        if (pending && sameDelta(pending.event, event)) {
+          pending.event = mergeDelta(pending.event, event);
+          pending.chars += deltaSize(event);
+          if (pending.chars >= FLUSH_CHARS || now - pending.since >= FLUSH_MS) {
+            return flushPending(run);
+          }
+          armTimer(run);
+          return undefined;
+        }
         await flushPending(run);
-        if (
-          event.type === "RUN_ERROR" ||
-          (event.type === "RUN_FINISHED" && event.outcome?.type !== "interrupt")
-        ) {
-          run.header = { ...run.header, finishedAt: now };
-          await store?.writeHeader(run.header);
-        }
-        return push(run, event);
-      }
-      const pending = run.pending;
-      if (pending && sameDelta(pending.event, event)) {
-        pending.event = mergeDelta(pending.event, event);
-        pending.chars += deltaSize(event);
-        if (pending.chars >= FLUSH_CHARS || now - pending.since >= FLUSH_MS) {
-          return flushPending(run);
-        }
+        run.pending = { event, chars: deltaSize(event), since: now };
+        if (deltaSize(event) >= FLUSH_CHARS) return flushPending(run);
         armTimer(run);
         return undefined;
-      }
-      await flushPending(run);
-      run.pending = { event, chars: deltaSize(event), since: now };
-      if (deltaSize(event) >= FLUSH_CHARS) return flushPending(run);
-      armTimer(run);
-      return undefined;
+      });
     },
     async flush(runId, _now) {
-      const run = bucket(runId);
-      if (!run) return undefined;
-      return flushPending(run);
+      return serialized(runId, async () => {
+        const run = bucket(runId);
+        if (!run) return undefined;
+        return flushPending(run);
+      });
     },
     async read(runId, afterSeq) {
-      const run = (await loadBucket(runs, store, runId)) ?? bucket(runId);
+      if (store) {
+        const rows = await store.readAfter(runId, afterSeq);
+        return rows.map((row) => ({ seq: row.seq, event: row.event as AgUiEvent }));
+      }
+      const run = bucket(runId);
       if (!run) return [];
       return run.rows.filter((row) => row.seq > afterSeq);
     },
-    async sweep(now, ttl = ttlMs) {
+    async sweep(now, ttl = defaultTtl, maxAge = defaultMaxAge) {
+      const headers = store
+        ? await store.listHeaders()
+        : [...runs.values()].map((run) => run.header);
       let removed = 0;
-      const seen = new Set<string>();
-      for (const [runId, run] of runs) {
-        seen.add(runId);
-        if (run.header.finishedAt !== undefined && now - run.header.finishedAt >= ttl) {
-          clearTimer(run);
-          runs.delete(runId);
-          await store?.remove(runId);
-          for (const listener of run.listeners) listener(undefined);
+      for (const header of headers) {
+        const finished = header.finishedAt;
+        if (finished !== undefined && now - finished >= ttl) {
+          await drop(header.runId);
+          removed++;
+          continue;
+        }
+        const opened = header.openedAt;
+        if (finished === undefined && opened !== undefined && now - opened >= maxAge) {
+          if (!runs.has(header.runId)) await this.open(header as AgentRunHeader);
+          await this.append(
+            header.runId,
+            {
+              type: "RUN_ERROR",
+              message: "agent events: run exceeded max age",
+              code: "AgentEventMaxAge",
+            },
+            now,
+          );
+          await drop(header.runId);
           removed++;
         }
       }
@@ -215,12 +312,25 @@ export function createMemoryAgentEventLog(store?: AgentEventStore, ttlMs = AGENT
       const run = bucket(runId);
       return {
         async *[Symbol.asyncIterator]() {
-          const live = run ?? (await loadBucket(runs, store, runId));
-          if (!live) return;
-          for (const row of live.rows) {
-            if (row.seq > afterSeq) yield row;
+          if (!run && !store) return;
+          let last = afterSeq;
+          if (store) {
+            for (const row of await store.readAfter(runId, afterSeq)) {
+              last = row.seq;
+              yield { seq: row.seq, event: row.event as AgUiEvent };
+            }
+          } else if (run) {
+            for (const row of run.rows) {
+              if (row.seq <= afterSeq) continue;
+              last = row.seq;
+              yield row;
+            }
           }
-          let last = live.rows.at(-1)?.seq ?? afterSeq;
+          if (!run) {
+            const known = (await store?.listHeaders())?.some((item) => item.runId === runId);
+            if (!known && last === afterSeq) return;
+          }
+          const live = run;
           const queue: StoredAgentEvent[] = [];
           let wake: (() => void) | undefined;
           let done = false;
@@ -232,22 +342,34 @@ export function createMemoryAgentEventLog(store?: AgentEventStore, ttlMs = AGENT
             }
             wake?.();
           };
-          live.listeners.add(listener);
+          live?.listeners.add(listener);
           const onAbort = (): void => {
             done = true;
             wake?.();
           };
           signal?.addEventListener("abort", onAbort, { once: true });
-          const poll = store
-            ? setInterval(() => {
-                void store.read(runId).then((loaded) => {
-                  if (!loaded) return;
-                  for (const row of loaded.rows) {
-                    if (row.seq > last) listener({ seq: row.seq, event: row.event as AgUiEvent });
-                  }
-                });
-              }, 200)
-            : undefined;
+          let delay = 200;
+          let poll: ReturnType<typeof setTimeout> | undefined;
+          const schedule = (): void => {
+            if (!store || done) return;
+            poll = setTimeout(() => {
+              void store.readAfter(runId, last).then((rows) => {
+                if (rows.length === 0) delay = Math.min(delay * 2, 2_000);
+                else delay = 200;
+                for (const row of rows) {
+                  listener({ seq: row.seq, event: row.event as AgUiEvent });
+                }
+                const liveHeader = bucket(runId)?.header;
+                if (liveHeader?.finishedAt !== undefined && rows.length === 0) {
+                  done = true;
+                  wake?.();
+                  return;
+                }
+                schedule();
+              });
+            }, delay);
+          };
+          schedule();
           try {
             if (signal?.aborted) return;
             for (;;) {
@@ -258,14 +380,14 @@ export function createMemoryAgentEventLog(store?: AgentEventStore, ttlMs = AGENT
                 yield row;
               }
               if (done || signal?.aborted) return;
-              if (live.header.finishedAt !== undefined && last >= (live.rows.at(-1)?.seq ?? 0)) return;
+              if (live?.header.finishedAt !== undefined && queue.length === 0) return;
               await new Promise<void>((resolve) => {
                 wake = resolve;
               });
             }
           } finally {
-            if (poll) clearInterval(poll);
-            live.listeners.delete(listener);
+            if (poll) clearTimeout(poll);
+            live?.listeners.delete(listener);
             signal?.removeEventListener("abort", onAbort);
           }
         },
@@ -275,26 +397,6 @@ export function createMemoryAgentEventLog(store?: AgentEventStore, ttlMs = AGENT
       return bucket(runId)?.listeners.size ?? 0;
     },
   };
-}
-
-async function loadBucket(
-  runs: Map<string, RunBucket>,
-  store: AgentEventStore | undefined,
-  runId: string,
-): Promise<RunBucket | undefined> {
-  const existing = runs.get(runId);
-  if (existing) return existing;
-  const loaded = await store?.read(runId);
-  if (!loaded) return undefined;
-  const rows = loaded.rows.map((row) => ({ seq: row.seq, event: row.event as AgUiEvent }));
-  const bucket: RunBucket = {
-    header: loaded.header as AgentRunHeader,
-    rows,
-    nextSeq: rows.reduce((max, row) => Math.max(max, row.seq), 0) + 1,
-    listeners: new Set(),
-  };
-  runs.set(runId, bucket);
-  return bucket;
 }
 
 function deltaSize(event: AgUiEvent): number {

@@ -5,12 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  approve,
-  deny,
-  readAgentEvents,
-  type ParsedAgentEvent,
-} from "../client/agent.ts";
+import { approve, deny, readAgentEvents, type ParsedAgentEvent } from "../client/agent.ts";
 
 /** Pending tool approval from a `RUN_FINISHED` interrupt. */
 export interface AgentPendingApproval {
@@ -47,8 +42,8 @@ export interface UseAgentRunOptions {
 /**
  * Send one message and keep the events, the text so far, and a pending approval.
  *
- * After an interrupt, the hook follows with `Last-Event-ID`. Approve and deny
- * follow again until the terminal `RUN_FINISHED`. Unmount aborts the stream.
+ * After an interrupt, the hook follows once with `Last-Event-ID`. Approve and
+ * deny post the decision and leave that follow in place. Unmount aborts it.
  *
  * @param options - Send, approve, deny, and follow URLs
  */
@@ -60,6 +55,8 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
   const lastId = useRef<string | undefined>(undefined);
   const runIdRef = useRef<string | undefined>(undefined);
   const seenInterrupt = useRef<string | undefined>(undefined);
+  const followedRun = useRef<string | undefined>(undefined);
+  const followTask = useRef<Promise<void> | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
 
   useEffect(() => {
@@ -117,6 +114,7 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
           setPending(null);
           setStatus(event.type === "RUN_ERROR" ? "error" : "done");
           if (event.type === "RUN_FINISHED") runIdRef.current = event.runId;
+          return undefined;
         }
       }
       return followed;
@@ -126,6 +124,8 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
 
   const followUntilDone = useCallback(
     async (runId: string) => {
+      if (followedRun.current === runId) return;
+      followedRun.current = runId;
       await consume(options.followUrl(runId), lastId.current);
     },
     [consume, options.followUrl],
@@ -139,6 +139,7 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
       setPending(null);
       lastId.current = undefined;
       seenInterrupt.current = undefined;
+      followedRun.current = undefined;
       const fetcher = options.fetch ?? fetch;
       const response = await fetcher(options.sendUrl, {
         method: "POST",
@@ -147,7 +148,7 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
         signal: abortRef.current?.signal,
       });
       const runId = await consume(response);
-      if (runId) await followUntilDone(runId);
+      if (runId) followTask.current = followUntilDone(runId);
     },
     [consume, followUntilDone, options.fetch, options.headers, options.sendUrl],
   );
@@ -160,10 +161,8 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
         headers: options.headers,
       });
       setStatus("streaming");
-      const runId = runIdRef.current;
-      if (runId) await followUntilDone(runId);
     },
-    [followUntilDone, options.approveUrl, options.fetch, options.headers, pending],
+    [options.approveUrl, options.fetch, options.headers, pending],
   );
 
   const denyPending = useCallback(
@@ -174,10 +173,8 @@ export function useAgentRun(options: UseAgentRunOptions): AgentRunState {
         headers: options.headers,
       });
       setStatus("streaming");
-      const runId = runIdRef.current;
-      if (runId) await followUntilDone(runId);
     },
-    [followUntilDone, options.denyUrl, options.fetch, options.headers, pending],
+    [options.denyUrl, options.fetch, options.headers, pending],
   );
 
   return {

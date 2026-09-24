@@ -54,7 +54,12 @@ import {
   type AgUiEvent,
 } from "./events.ts";
 import { readModelTurn } from "./stream-turn.ts";
-import { createMemoryAgentEventLog, setAgentEventLog, type AgentEventLog, type AgentRunHeader } from "./run-events.ts";
+import {
+  createMemoryAgentEventLog,
+  setAgentEventLog,
+  type AgentEventLog,
+  type AgentRunHeader,
+} from "./run-events.ts";
 import { setAgentFollowGates } from "./approval-http.ts";
 import { okid } from "../../okid.ts";
 import {
@@ -516,7 +521,7 @@ function agentMessages(runOpts: AiAgentRunOptions): AiMessage[] {
   return [{ role: "user", content: promptContentFromInput(runOpts.message ?? "") }];
 }
 
-const agentRunSlots = new WeakMap<JournalSession, number>();
+const agentRunSlots = new WeakMap<JournalSession, { epoch: number; slot: number }>();
 
 /**
  * Run id for one agent invocation. A durable Flow journals the id so two
@@ -529,8 +534,10 @@ async function allocateAgentRunId(agent: string, runOpts: AiAgentRunOptions): Pr
   if (runOpts.runId) return runOpts.runId;
   const journal = runOpts.journal;
   if (!journal) return okid();
-  const next = (agentRunSlots.get(journal) ?? 0) + 1;
-  agentRunSlots.set(journal, next);
+  const epoch = journal.epoch;
+  const prev = agentRunSlots.get(journal);
+  const next = prev && prev.epoch === epoch ? prev.slot + 1 : 1;
+  agentRunSlots.set(journal, { epoch, slot: next });
   const stored = await journal.effect("ask", `oke.agent.run.${agent}.${next}`, () => okid());
   return typeof stored === "string" ? stored : okid();
 }
@@ -593,8 +600,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   for (const m of options.models ?? []) models.set(m.name, m);
 
   const clients = new Map<string, AiModelClient>(Object.entries(options.clients ?? {}));
-  const eventLog =
-    options.eventLog ?? createMemoryAgentEventLog(options.journalStore?.agentEvents);
+  const eventLog = options.eventLog ?? createMemoryAgentEventLog(options.journalStore?.agentEvents);
   setAgentEventLog(eventLog);
   setAgentFollowGates(options.gates);
   const mcpClient: McpClient = createMcpClient({
@@ -1584,6 +1590,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         };
       };
       let loopTokens: { inputTokens?: number; outputTokens?: number } = {};
+      let appendChain: Promise<unknown> = Promise.resolve();
 
       try {
         const loop = await toolLoop({
@@ -1610,7 +1617,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           ...(runOpts.journal !== undefined
             ? {
                 emit: (event: AgUiEvent) => {
-                  void eventLog.append(runId, event, now());
+                  appendChain = appendChain.then(() => eventLog.append(runId, event, now()));
                 },
               }
             : {}),
@@ -1619,6 +1626,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
           ...(decl.approvals !== undefined ? { approvals: decl.approvals } : {}),
         });
+        await appendChain;
         loopTokens = tokenFields(loop);
         const settled = remember({
           ok: loop.stopReason === "completed" && loop.denials.length === 0,
@@ -1769,11 +1777,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const threadId = runOpts.threadId ?? okid();
       let skipLoggedStart = false;
       let runId = runOpts.runId ?? "";
+      let appendChain: Promise<unknown> = Promise.resolve();
       const emit: AgentEventEmit = (event) => {
         queue.emit(event);
         if (!runOpts.journal) return;
         if (skipLoggedStart && event.type === "RUN_STARTED") return;
-        void eventLog.append(runId, event, now());
+        appendChain = appendChain.then(() => eventLog.append(runId, event, now()));
       };
       let resolveResult: (value: unknown) => void = () => undefined;
       let rejectResult: (err: unknown) => void = () => undefined;
@@ -1855,6 +1864,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
           };
           resolveResult(settled);
+          await appendChain;
           emit({
             type: "RUN_FINISHED",
             threadId,
@@ -1864,9 +1874,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               ? { usage: [usage] }
               : {}),
           });
+          await appendChain;
           queue.finish();
         } catch (err) {
           if (isJournalSuspend(err)) {
+            await appendChain;
             rejectResult(err);
             queue.finish(err);
             return;
@@ -1877,6 +1889,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               message: err.message,
               code: err.name,
             });
+            await appendChain;
             rejectResult(err);
             queue.finish();
             return;
@@ -1909,9 +1922,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 cost: err.cost,
               };
               resolveResult(settled);
+              await appendChain;
               emit({
                 type: "RUN_FINISHED",
-                threadId: runOpts.threadId ?? okid(),
+                threadId,
                 runId,
                 result: {
                   cost: err.cost,
@@ -1920,6 +1934,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                   error: message,
                 },
               });
+              await appendChain;
               queue.finish();
               return;
             }
@@ -1931,6 +1946,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             message,
             ...(err instanceof Error && err.name !== "Error" ? { code: err.name } : {}),
           });
+          await appendChain;
           queue.finish();
         }
       })();

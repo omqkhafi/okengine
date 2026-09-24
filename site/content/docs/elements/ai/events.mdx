@@ -202,7 +202,9 @@ Approving or denying does not continue this SSE response. Follow the run to see 
 
 An approval interrupt does not end this follow. The stream stays open through the interrupt and continues to the terminal `RUN_FINISHED`. The first run stream still closes after the interrupt. Disconnect, then resume with the last id you received.
 
-The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB, including a timer) and stores structural events one by one. Past the cap, only `RUN_FINISHED`, `RUN_ERROR`, and interrupts remain. A finished run's events are deleted after 24 hours by the scheduler. The log is stored on the journal driver and keyed by the agent run id. A follower must be the starting principal or an operator, and must pass every gate on the Flow.
+The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB, including a timer) and stores structural events one by one. The instance that holds the journal lease is the only writer. It reads the highest seq before it appends, and a repeated seq is an error. Followers read `seq` greater than the last id, not the whole run.
+
+The log keeps 5,000 rows per run. Past that, deltas stop and one `CUSTOM` event named `oke.events.truncated` is stored. Structural events, approval interrupts, `RUN_FINISHED`, and `RUN_ERROR` are still stored. Earlier rows stay, so a follower can resume and seq numbers do not skip. A finished run's events are deleted after 24 hours. An unfinished run older than 7 days is closed with `RUN_ERROR` and deleted. The scheduler reads the store, not the process that opened the run. The log is stored on the journal driver and keyed by the agent run id. `flow.retry` keeps that id. A follower must be the starting principal or an operator, and must pass every gate on the Flow.
 
 ```typescript
 import { approve, deny, readAgentEvents } from "okengine/client/agent";
@@ -214,7 +216,7 @@ for await (const event of readAgentEvents(`http://localhost:6530/agent/runs/${ru
 }
 ```
 
-`approve` and `deny` retry `JournalLeaseBusy` and throw `Conflict` when the decision is already stored. `useAgentRun` from `okengine/client-react` sends the message, keeps the text so far, and follows after an interrupt.
+`approve` and `deny` retry `JournalLeaseBusy` and throw `Conflict` when the decision is already stored. `useAgentRun` from `okengine/client-react` sends the message, keeps the text so far, and follows once after an interrupt. Approve and deny do not open a second follow.
 
 ## Patterns
 

@@ -45,6 +45,29 @@ describe("openai-compatible SSE stream", () => {
       if (chunk.text) parts.push(chunk.text);
     }
     expect(parts.join("")).toBe("Hello");
+    const bodies: unknown[] = [];
+    const formatFetch = Object.assign(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+      },
+      { preconnect: () => {} },
+    ) as typeof fetch;
+    const formatted = await openOpenaiCompatible({
+      apiKey: "sk-test",
+      baseUrl: "https://example.test/v1",
+      fetch: formatFetch,
+    });
+    for await (const _chunk of formatted.stream!({
+      messages: [{ role: "user", content: "hi" }],
+      responseFormat: {
+        type: "json_schema",
+        json_schema: { name: "out", schema: { type: "object" } },
+      },
+    })) {
+      // drain
+    }
+    expect(bodies[0]).toMatchObject({ response_format: { type: "json_object" } });
 
     const ac = new AbortController();
     const iter = client.stream!({
@@ -68,6 +91,7 @@ describe("anthropic messages stream", () => {
       'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"id\\":"}}',
       'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\"14\\"}"}}',
       'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":6}}',
+      'data: {"type":"message_stop"}',
       "",
     ].join("\n");
     const fetchFn = Object.assign(

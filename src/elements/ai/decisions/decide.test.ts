@@ -3,6 +3,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { z } from "zod";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -226,6 +227,41 @@ describe("fx.decide", () => {
       await resolveDecisionReview(store, id, { values: { team: "billing" }, reviewer: "c" }, now),
     ).toEqual({ ok: false, status: 409, reason: "resolved" });
     expect((await readDecisionReview(store, id))?.status).toBe("reviewed");
+  });
+
+  test("the parked review masks secret input and keeps the rest", async () => {
+    provider();
+    const decl = ai.decision("triage", {
+      review: "ops",
+      in: z.object({
+        ticket: z.string(),
+        token: z.string().describe("secret"),
+      }),
+      ask: { team: choice() },
+    });
+    const store = createMemoryJournalStore();
+    const session = await createJournal({ store, now: () => 1 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      now: () => 1,
+    });
+    try {
+      await fx.decide(decl, { ticket: "14", token: "sekret" });
+    } catch (err) {
+      if (!isJournalSuspend(err)) throw err;
+    }
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    if (!step || step.kind !== "step") throw new Error("expected a parked decision");
+    expect((step.value as { input?: unknown }).input).toEqual({
+      ticket: "14",
+      token: "[redacted]",
+    });
   });
 
   test("boot registers the candidate route when a decision has autonomy", async () => {
@@ -488,7 +524,12 @@ describe("fx.decide", () => {
     if (!step || step.kind !== "step") throw new Error("expected a parked decision");
     const id = step.name.slice("ai-decision:".length);
     expect(
-      await resolveDecisionReview(store, id, { values: { team: "none_of_these" }, reviewer: "a" }, () => 1),
+      await resolveDecisionReview(
+        store,
+        id,
+        { values: { team: "none_of_these" }, reviewer: "a" },
+        () => 1,
+      ),
     ).toEqual({ ok: true });
     const resumed = await journal.resume(session.runId);
     const again = createFx({

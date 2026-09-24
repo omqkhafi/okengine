@@ -195,7 +195,7 @@ async function executeDecide(options: FxDecideInput, name: string): Promise<unkn
     if (view.audited && options.journal) {
       const id = reviewId(options.journal.runId, ordinal, name);
       await options.journal.step(decisionStepName(id, true), () =>
-        pendingRecord(options, view, true),
+        pendingRecord(options, view, true, decl),
       );
     }
     return materialize(view);
@@ -207,7 +207,7 @@ async function executeDecide(options: FxDecideInput, name: string): Promise<unkn
   const id = reviewId(options.journal.runId, ordinal, name);
   const step = decisionStepName(id, false);
   const stored = (await options.journal.step(step, () =>
-    pendingRecord(options, view, false),
+    pendingRecord(options, view, false, decl),
   )) as DecisionReviewRecord;
   if (stored.status === "pending") {
     await options.journal.sleep(step, "876000h", () => 876000 * 60 * 60 * 1000);
@@ -513,6 +513,7 @@ function pendingRecord(
   options: FxDecideInput,
   view: JournaledView,
   labelOnly: boolean,
+  decl: AiDecisionDecl,
 ): DecisionReviewRecord {
   return {
     status: "pending",
@@ -535,7 +536,7 @@ function pendingRecord(
       Object.entries(view.questions).map(([id, question]) => [id, question.value]),
     ),
     ...(view.reason !== undefined ? { reason: view.reason } : {}),
-    input: options.input,
+    input: maskDecisionInput(options.input, decisionExportFields(decl.inputSchema)),
   };
 }
 

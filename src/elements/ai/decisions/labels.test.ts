@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { createFileJournalStore, createMemoryJournalStore } from "../../../kernel/journal.ts";
 import {
   DecisionLabelStoreError,
+  createFileDecisionLabelStore,
   createPostgresDecisionLabelStore,
   setDeclaredDriftDecisions,
 } from "../../../kernel/decision-label-store.ts";
@@ -258,5 +259,24 @@ describe("decision labels", () => {
     } finally {
       await db.close();
     }
+  });
+
+  test("a file store copies a legacy star flag onto every declared decision", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oke-drift-"));
+    const path = join(root, "decision-labels.json");
+    await Bun.write(
+      path,
+      JSON.stringify({
+        rows: [],
+        drifts: { "*": { suspended: true, certifiedAt: 4 } },
+      }),
+    );
+    setDeclaredDriftDecisions(["triage", "ship"]);
+    const store = createFileDecisionLabelStore(path);
+    expect(await store.drift()).toEqual({
+      triage: { suspended: true, certifiedAt: 4 },
+      ship: { suspended: true, certifiedAt: 4 },
+    });
+    setDeclaredDriftDecisions([]);
   });
 });

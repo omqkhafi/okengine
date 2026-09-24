@@ -446,7 +446,9 @@ export function createFileJournalStore(path: string): JournalStore {
       return created;
     },
     get agentEvents(): import("./agent-event-store.ts").AgentEventStore {
-      const created = loadAgentEventStore().createFileAgentEventStore(`${path}.events.json`);
+      const created = loadAgentEventStore().createFileAgentEventStore(
+        `${dirname(path)}/agent-events`,
+      );
       Object.defineProperty(this, "agentEvents", { value: created });
       return created;
     },
@@ -523,6 +525,11 @@ export interface JournalSession {
    * instead of treating the cursor as past them. Clears the in-memory undo stack
    * so frames re-bind on the next walk.
    */
+  /**
+   * Increments on {@link JournalSession.rewind}. Agent run ids key off this
+   * so `flow.retry` replays the same id.
+   */
+  readonly epoch: number;
   rewind(): void;
   /** Registered per-step undos in persist/replay order (LIFO compensate). */
   undoStack(): readonly JournalUndoFrame[];
@@ -562,6 +569,7 @@ export function createJournalSlot(): {
       const session = slot.session;
       if (!session) {
         if (prop === "runId") return "";
+        if (prop === "epoch") return 0;
         if (prop === "stampTenant") return async () => undefined;
         if (prop === "rewind") return () => undefined;
         return undefined;
@@ -607,6 +615,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
   function openSession(run: JournalRun, leased: boolean): JournalSession {
     /** Next entry index to consume on replay. */
     let cursor = 0;
+    let epoch = 0;
     let leaseHeld = leased;
     let registrationPass = false;
     let undoExecution = false;
@@ -756,9 +765,13 @@ export function createJournal(options: CreateJournalOptions): Journal {
         await persist();
         return value;
       },
+      get epoch() {
+        return epoch;
+      },
       rewind() {
         cursor = 0;
         undos.length = 0;
+        epoch += 1;
       },
       undoStack() {
         return undos;

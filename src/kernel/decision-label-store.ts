@@ -140,8 +140,18 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
       rows = raw.rows ?? [];
       candidates = raw.candidates ?? {};
       driftFlags = raw.drifts ?? {};
-      if (raw.suspended === true && Object.keys(driftFlags).length === 0) {
-        driftFlags = { "*": { suspended: true, certifiedAt: raw.certifiedAt ?? 0 } };
+      const legacy =
+        driftFlags["*"] ??
+        (raw.suspended === true && Object.keys(driftFlags).length === 0
+          ? { suspended: true as const, certifiedAt: raw.certifiedAt ?? 0 }
+          : undefined);
+      if (legacy?.suspended) {
+        delete driftFlags["*"];
+        for (const name of declaredDriftDecisions) {
+          driftFlags[name] = { suspended: legacy.suspended, certifiedAt: legacy.certifiedAt };
+        }
+        await mkdir(dirname(path), { recursive: true });
+        await Bun.write(path, JSON.stringify({ rows, candidates, drifts: driftFlags }));
       }
     }
   };

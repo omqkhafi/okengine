@@ -53,7 +53,7 @@ export function exportDecisionLabels(options: {
   const kept = options.labels.filter((label) => (label.tenant ?? null) === tenant);
   const groups = new Map<string, DecisionLabel[]>();
   for (const label of kept) {
-    const key = label.reviewId ?? `${label.question}:${label.at ?? 0}:${label.reviewer}`;
+    const key = label.reviewId ?? looseGroupKey(label, options.fields);
     const group = groups.get(key);
     if (group) group.push(label);
     else groups.set(key, [label]);
@@ -70,6 +70,26 @@ export function exportDecisionLabels(options: {
     lines.push(JSON.stringify(row));
   }
   return { ok: true, lines: lines.length > 0 ? `${lines.join("\n")}\n` : "" };
+}
+
+/**
+ * Labels with no review id group by decision, the non-secret input, reviewer, and time.
+ *
+ * @param label - Stored label
+ * @param fields - Declared `in` fields
+ */
+function looseGroupKey(label: DecisionLabel, fields: DecisionExportFields): string {
+  const source =
+    label.input && typeof label.input === "object" && !Array.isArray(label.input)
+      ? (label.input as Record<string, unknown>)
+      : {};
+  const secret = new Set(fields.secretFields);
+  const picked: Record<string, unknown> = {};
+  for (const name of fields.fields) {
+    if (secret.has(name)) continue;
+    if (Object.prototype.hasOwnProperty.call(source, name)) picked[name] = source[name];
+  }
+  return `${label.decision}:${JSON.stringify(picked)}:${label.reviewer}:${label.at ?? 0}`;
 }
 
 /** Printed by `oke decide labels --export`. The file itself is only JSONL. */

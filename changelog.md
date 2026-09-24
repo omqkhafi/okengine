@@ -47,7 +47,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 #### Docs
 
 - `fx.run(..., { stream: true })` streams each model turn when the driver implements `stream`. `mock`, `anthropic`, and `openai-compatible` emit text deltas and tool-call argument deltas. `bedrock` and `vertex` stay reserved. The assembled turn is journaled, so a durable replay does not call the model. The default `threadId` is a unique id.
-- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under every gate on the Flow and the starting principal. An operator may follow. No gate runtime denies a gated run. An approval interrupt does not end the follow. The log lives on the journal driver, keyed by the agent run id. Past the cap only `RUN_FINISHED`, `RUN_ERROR`, and interrupts remain. The scheduler deletes finished logs after 24 hours.
+- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under every gate on the Flow and the starting principal. An operator may follow. No gate runtime denies a gated run. An approval interrupt does not end the follow. The log lives on the journal driver, keyed by the agent run id. The lease holder is the only writer. Past 5,000 rows, deltas stop and one `oke.events.truncated` event is stored. Structural events, interrupts, and the terminal frames stay. The scheduler deletes finished logs after 24 hours and closes an unfinished run after 7 days.
 - A failed `fetch.preconnect` is ignored. `anthropic` and `openai-compatible` share that guard.
 - `okengine/client/agent` follows a run with `Last-Event-ID`, and `approve` / `deny` retry `JournalLeaseBusy` and surface `Conflict`. `okengine/client-react` exports `useAgentRun`. Neither module is on the `okengine/client` graph.
 - `ai.decision` score levels and a whole question held in a same-file const are checked at compile time. An unresolved name fails the build.
@@ -167,8 +167,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
   PGlite, and Cockroach still say telemetry is unavailable, and the sentence
   names the driver.
 
+#### Console — Flows & traces
+
+- The flows page links to Decisions.
+
 #### Runtime
 
+- Agent run events append in emit order on one queue per run. A repeated seq is an error. Followers read `seq` greater than the last id. The file journal appends one JSONL file per run. `flow.retry` keeps the agent run id. `useAgentRun` follows a run once; approve and deny do not open another follow, and text is not replayed.
+- `openai-compatible` streams send `response_format` the same way `complete` does. A tool error's `RUN_FINISHED` keeps the run's `threadId`.
+- Decision label export groups rows that have no review id by decision, non-secret input, reviewer, and time. A file journal copies a legacy `*` drift flag onto every declared decision. The journal review record masks secret and redacted fields; the reviewer still sees the other input.
 - Browser JSON page replays a direct visit that came back `401` when a Bearer, Basic, or API key is already stored. The address-bar load cannot send that secret; the replay uses the same headers as Send, once per credential set, so a rejected token stays on screen.
 - A streamed agent approval inside a durable Flow ends the run as `sleeping` with its wake time. The interrupt frame and `data: [DONE]` go out first. Resume stores the agent result on that run. A tool error puts its message on `RUN_FINISHED.result.error`. `AiDurableRequiredError` ends the stream with `RUN_ERROR` and `data: [DONE]`.
 - OpenRouter resolves `typesafe/jev-1.13` to `typesafe/jev-1.13-20260917`. A score answer's `probabilities` are keyed by index, and `legend` names each index. Those indexes map onto the declared levels.

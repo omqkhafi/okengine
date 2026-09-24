@@ -218,10 +218,9 @@ describe("agent event stream", () => {
     }
     expect(calls).toBe(1);
     const content = seen.filter((event) => event.type === "TEXT_MESSAGE_CONTENT");
-    expect(content.map((event) => (event.type === "TEXT_MESSAGE_CONTENT" ? event.delta : ""))).toEqual([
-      "Look",
-      "ing.",
-    ]);
+    expect(
+      content.map((event) => (event.type === "TEXT_MESSAGE_CONTENT" ? event.delta : "")),
+    ).toEqual(["Look", "ing."]);
     const args = seen.filter((event) => event.type === "TOOL_CALL_ARGS");
     expect(args.map((event) => (event.type === "TOOL_CALL_ARGS" ? event.delta : "")).join("")).toBe(
       '{"id":"14"}',
@@ -240,6 +239,37 @@ describe("agent event stream", () => {
       // replay
     }
     expect(calls).toBe(1);
+  });
+
+  test("flow.retry keeps the agent run id", async () => {
+    const client = {
+      driverId: "mock" as const,
+      model: "smart",
+      async complete() {
+        return { text: "ok", model: "smart", driverId: "mock" as const };
+      },
+      async *stream() {
+        yield { text: "ok" };
+      },
+    };
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [ai.agent("support", { model: "smart", maxSteps: 1 })],
+      clients: { smart: client },
+    });
+    const journal = createJournal({ store: createMemoryJournalStore() });
+    const session = await journal.start("assist", {});
+    const ids: string[] = [];
+    for await (const event of runtime.streamAgent("support", { message: "hi", journal: session })) {
+      if (event.type === "RUN_STARTED") ids.push(event.runId);
+    }
+    session.rewind();
+    for await (const event of runtime.streamAgent("support", { message: "hi", journal: session })) {
+      if (event.type === "RUN_STARTED") ids.push(event.runId);
+    }
+    const first = ids[0];
+    if (!first) throw new Error("missing run id");
+    expect(ids).toEqual([first, first]);
   });
 });
 
@@ -264,9 +294,9 @@ describe("okengine/client import graph", () => {
   test("the core client entry does not import client/agent", () => {
     const root = resolve(import.meta.dir, "../../client");
     const files = walk(resolve(root, "index.ts"));
-    expect(files.some((file) => file.endsWith(`${"/client/agent.ts"}`) || file.endsWith("/agent.ts"))).toBe(
-      false,
-    );
+    expect(
+      files.some((file) => file.endsWith(`${"/client/agent.ts"}`) || file.endsWith("/agent.ts")),
+    ).toBe(false);
     const budget = readFileSync(resolve(root, "budget-entry.ts"), "utf8");
     expect(budget).not.toContain("client/agent");
     expect(budget).not.toContain("./agent");

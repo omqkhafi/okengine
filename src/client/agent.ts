@@ -83,7 +83,7 @@ export async function* readAgentEvents(
   init?: AgentFollowInit,
 ): AsyncIterable<ParsedAgentEvent> {
   if (source instanceof Response) {
-    yield* readAgentEventResponse(source);
+    yield* readAgentEventResponse(source, init);
     return;
   }
   const fetcher = init?.fetch ?? fetch;
@@ -115,7 +115,8 @@ export async function* readAgentEvents(
         }
         if (frame.event) yield frame.event;
         if (frame.event?.type === "RUN_ERROR") return;
-        if (frame.event?.type === "RUN_FINISHED" && frame.event.outcome?.type !== "interrupt") return;
+        if (frame.event?.type === "RUN_FINISHED" && frame.event.outcome?.type !== "interrupt")
+          return;
       }
     } catch (err) {
       if (init?.signal?.aborted) return;
@@ -182,8 +183,12 @@ export interface AgentFollowInit {
   trace?(message: string): void;
 }
 
-async function* readAgentEventResponse(response: Response): AsyncIterable<ParsedAgentEvent> {
-  for await (const frame of readAgentEventFrames(response)) {
+async function* readAgentEventResponse(
+  response: Response,
+  init?: AgentFollowInit,
+): AsyncIterable<ParsedAgentEvent> {
+  for await (const frame of readAgentEventFrames(response, init?.trace)) {
+    if (frame.id) init?.onId?.(frame.id);
     if (frame.event) yield frame.event;
   }
 }
