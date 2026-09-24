@@ -40,6 +40,10 @@ export const builtinEn = {
       cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
       fix: "Add \"{resource}\" to this flow''s effects.embeds.",
     },
+    "1010": {
+      cause: 'Flow "{flow}" decides "{resource}" without declaring it.',
+      fix: "Add \"{resource}\" to this flow''s effects.decides.",
+    },
     "1240": {
       cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
       fix: "Add on({resource}, …) or mark the signal '{'optional: true'}'.",
@@ -90,6 +94,7 @@ export const builtinEn = {
     IdempotencyKeyInvalid: "Idempotency-Key must be 16–255 printable ASCII characters.",
     IdempotencyKeyReused: "This Idempotency-Key was already used with a different request.",
     IdempotencyInProgress: "This Idempotency-Key is still running. Retry after the given delay.",
+    JournalLeaseBusy: "This run is locked by another worker. Retry after the given delay.",
     InvalidQuery: "The query is not valid.",
     UnsupportedMediaType: "That content type is not supported.",
     AuthFailed: "Authentication failed.",

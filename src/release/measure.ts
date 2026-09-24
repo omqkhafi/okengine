@@ -316,20 +316,45 @@ process.stdout.write(String(Bun.gzipSync(new Uint8Array(raw)).byteLength));
  * first download when a shared chunk loads with it.
  */
 export async function measureClientGzipBytes(): Promise<number> {
-  const entry = `${import.meta.dir}/../client/budget-entry.ts`;
-  const result = await Bun.build({
-    entrypoints: [entry],
-    minify: true,
-    target: "browser",
-    format: "esm",
+  const entry = resolve(ROOT, "src/client/budget-entry.ts");
+  // `bun test` sets NODE_ENV=test. An in-process Bun.build then inlines that
+  // and the gzip drifts from `bun run budgets`. Spawn once, production, so
+  // both callers share this number.
+  const probe = `
+const result = await Bun.build({
+  entrypoints: ${JSON.stringify([entry])},
+  minify: true,
+  target: "browser",
+  format: "esm",
+});
+if (!result.success) {
+  console.error(result.logs.map(String).join("\\n"));
+  process.exit(1);
+}
+const artifact = result.outputs[0];
+if (!artifact) { console.error("no output"); process.exit(1); }
+const raw = await artifact.arrayBuffer();
+process.stdout.write(String(Bun.gzipSync(new Uint8Array(raw)).byteLength));
+`;
+  const proc = Bun.spawn(["bun", "-e", probe], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, NODE_ENV: "production" },
   });
-  if (!result.success) {
-    throw new Error(`client build failed:\n${result.logs.map(String).join("\n")}`);
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`client build failed:\n${stderr || stdout}`);
   }
-  const artifact = result.outputs[0];
-  if (!artifact) throw new Error("client build produced no output");
-  const raw = await artifact.arrayBuffer();
-  return Bun.gzipSync(new Uint8Array(raw)).byteLength;
+  const n = Number(stdout.trim());
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`client measure produced ${stdout}`);
+  }
+  return n;
 }
 
 /**

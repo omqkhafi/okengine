@@ -16,6 +16,12 @@
 export { ai, listAiDecls, resetAiDecls } from "./ai/declare.ts";
 export type {
   AiAgentDecl,
+  AiBooleanQuestion,
+  AiChoiceQuestion,
+  AiDecisionDecl,
+  AiDecisionOptions,
+  AiDecisionQuestion,
+  AiScoreQuestion,
   AiAgentApprovalDecl,
   AiAgentOptions,
   AiAgentToolOptions,

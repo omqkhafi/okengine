@@ -26,11 +26,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `durable: true`. The run parks until `fx.agent.approve`, `fx.agent.deny`, or the
   timeout (default `24h`, then deny). The first resolution wins; a later one is
   HTTP 409. Approve can replace the tool args. Resume replays the tool output.
+- `ai.decision` and `fx.decide` run one provider request for every question.
+  `how` is `auto`, `reviewed`, or `abstained`. `audited` is a flag on an auto
+  value, not a `how`. Review and `onUncertain: "abstain"` are exclusive. A
+  review parks with no default timeout. An HTTP trigger cannot review.
+  Autonomy comes only from `oke-decisions.lock.json` next to the app config.
+  `oke decide promote` fetches the operator candidate. `oke eval --certify`
+  builds a certificate from the seed file and does not run prompt evals.
 
 #### Docs
 
 - Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
 - Agents document tool approval: `approval`, `gate`, `timeout`, and `durable: true`.
+- Decisions document `fx.decide`, `how`, the `audited` flag, `oke decide promote`,
+  and `oke eval --certify`. The lockfile sits next to the app config.
 
 #### Console — Flows & traces
 
@@ -53,6 +62,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   has one (`Chrome 131`, `curl 8.7`). Expanding the strip lists the client
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
+- Flows has a Decisions list and review queue at `/flows/decisions`. The queue
+  shows how long a row has been waiting. Resolving a row uses the same lease
+  as tool approval. An audit row is a label only. The list state follows the
+  lockfile and the app drift flag. The sidebar stays six modules.
 
 #### Console — Units & Call API
 
@@ -75,6 +88,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   set only when a deny ends the run. A thrown tool is `error` and still rejects.
 - `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
   result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
+- Kernel edge gzip is 13209 bytes (was 13132). The `decide` effect kind sits on
+  the edge graph. The 17 kB cap is unchanged. Client gzip stays 5218.
 - Repeated identical `fx.ask` calls outside a durable run reach the model. Replay
   stays on that run's journal. Console keeps the newest 500 ask journal entries
   and agent runs.
@@ -99,7 +114,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Agent tool approval resolves under the journal lease (`get` one run, compare-and-set,
   `put`). Two instances cannot both win, and the winning write keeps the run's other
-  entries. The approval id is `${runId}.${toolCallId}` (base64url).
+  entries. The approval id is `${runId}.${toolCallId}` (base64url). A finished approval
+  is `Conflict` (HTTP 409, no retry). A held lease is `JournalLeaseBusy` (HTTP 409)
+  with `Retry-After`; the client waits and retries that code only.
 
 #### Console — Flows & traces
 
@@ -113,6 +130,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Client gzip is one measure. `bun test` was building with `NODE_ENV=test` (~5323) while `budgets.json` recorded the production build (5194). The probe now spawns with `NODE_ENV=production`.
 - `oke dev` soft reload disposes the previous app generation. Each save was
   leaving that boot's scheduler and Bun.SQL pool open, so one process held
   dozens of connections against PgDog's pool of 20. Console login and clock

@@ -38,6 +38,7 @@ import type { SignalDecl, SignalRuntime } from "../elements/signal.ts";
 import type { DeadLetter, SignalEmitOptions } from "../drivers/signal-types.ts";
 import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
+import type { AgentApprovalResolveResult } from "../elements/ai/approval.ts";
 import type { AiRuntime } from "../elements/ai.ts";
 import type { AgUiEvent } from "../elements/ai/events.ts";
 import type { AiMessage } from "../drivers/ai-types.ts";
@@ -139,6 +140,10 @@ function agentTurn(input: unknown): { message?: string; messages?: readonly AiMe
 }
 
 /** `fx.fetch` — keep host parsing + dry-run stub off cold edge / Store-only graphs. */
+function loadFxDecide(): typeof import("./fx-decide.ts") {
+  return lazyRequire(import.meta.dir, ["fx", "decide"].join("-"));
+}
+
 function loadFxFetch(): typeof import("./fx-fetch.ts") {
   return lazyRequire(import.meta.dir, ["fx", "fetch"].join("-"));
 }
@@ -840,6 +845,11 @@ export interface Fx {
    */
   fetch(url: string | URL, init?: RequestInit): Promise<Response>;
   /**
+   * Run one declared decision. `$` carries `how` and `audited`.
+   * Abstain mode makes each question value `T | null`.
+   */
+  decide<T>(decision: { name: string }, input: unknown): Promise<T>;
+  /**
    * Resolve a pending agent tool approval (records nothing until the tool runs).
    *
    * First resolution wins. A later call returns a conflict failure.
@@ -849,18 +859,12 @@ export interface Fx {
      * @param id - Approval id from the interrupt
      * @param opts - Optional replacement args
      */
-    approve(
-      id: string,
-      opts?: { readonly args?: unknown },
-    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 }>;
+    approve(id: string, opts?: { readonly args?: unknown }): Promise<AgentApprovalResolveResult>;
     /**
      * @param id - Approval id from the interrupt
      * @param opts - Denial reason fed back to the model
      */
-    deny(
-      id: string,
-      opts?: { readonly reason?: string },
-    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 }>;
+    deny(id: string, opts?: { readonly reason?: string }): Promise<AgentApprovalResolveResult>;
   };
   /**
    * Run a bounded AI agent (records `ask`).
@@ -1729,7 +1733,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       readonly args?: unknown;
       readonly reason?: string;
     },
-  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 }> {
+  ): Promise<AgentApprovalResolveResult> {
     const runtime = options.aiRuntime;
     if (!runtime?.resolveApproval) return { ok: false, status: 404 };
     const approver = auth.userId ?? operator.id;
@@ -2008,6 +2012,17 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     fetch(url, init) {
       return loadFxFetch().runFxFetch(gated, url, init);
+    },
+    decide<T>(decision: { name: string }, input: unknown) {
+      return loadFxDecide().runFxDecide({
+        gated,
+        journal: options.journal,
+        signal: currentAbortSignal(),
+        now,
+        runId: options.runId,
+        decision,
+        input,
+      }) as Promise<T>;
     },
     agent: {
       approve(id, opts) {

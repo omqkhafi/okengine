@@ -22,6 +22,7 @@ import { eventHasIrreversible, runReplay } from "../../cli/replay.ts";
 import { createRunsRuntime } from "../../runs/runtime.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
+import { decisionConsoleBindings } from "./decisions-flows.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
 import { clearClaimCodeArtifact, verifyClaimCode } from "./claim.ts";
 import { maskPiiValue, maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
@@ -93,7 +94,7 @@ const ManifestOut = z.object({
 });
 
 const EffectEntryOut = z.object({
-  kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call", "fetch"]),
+  kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call", "fetch", "decide"]),
   resource: z.string(),
   timestamp: z.number(),
   duration: z.number(),
@@ -932,6 +933,7 @@ const AiListOut = z.object({
                 "secret",
                 "call",
                 "fetch",
+                "decide",
               ]),
               resource: z.string(),
             }),
@@ -2378,6 +2380,7 @@ export function createConsoleBindings(state: ConsoleState): {
       }),
       channelSendTest,
     ),
+    ...decisionConsoleBindings(state),
   ];
 
   return {

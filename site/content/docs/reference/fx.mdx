@@ -246,6 +246,7 @@ elements.
 | `fx.run(agent, input?)`                               | `ask`                     | Agent result                                                                                             |
 | `fx.stream(model, { prompt?, data?, via? })`          | `ask`                     | `AsyncIterable<string>` — real driver stream; cancels via ambient `fx.signal` (HTTP disconnect included) |
 | `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                                             |
+| `fx.decide(decision, input)`                          | `decide`                  | `$.<question>.how` is `auto`, `reviewed`, or `abstained`. `audited` is a boolean flag, not a `how`. Abstain makes the value `null`. |
 
 AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them. `tools` are Flow refs — each model tool call goes through `fx.call` (same capability and Runs path).
 

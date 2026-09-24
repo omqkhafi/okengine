@@ -16,6 +16,7 @@
 
 import type {
   AiAgentDecl,
+  AiDecisionDecl,
   AiEmbedDecl,
   AiMcpServerDecl,
   AiModelDecl,
@@ -52,3 +53,5 @@ export const aiEmbedRegistry: AiEmbedDecl[] = [];
 export const aiAgentRegistry: AiAgentDecl[] = [];
 /** `ai.mcpServer` declarations since the last reset. */
 export const aiMcpServerRegistry: AiMcpServerDecl[] = [];
+/** `ai.decision` declarations since the last reset. */
+export const aiDecisionRegistry: AiDecisionDecl[] = [];

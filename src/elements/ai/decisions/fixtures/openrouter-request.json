@@ -1,0 +1,19 @@
+{
+  "model": "typesafe/jev-1.13",
+  "state": { "ticket": "Checkout is blank after Pay." },
+  "questions": {
+    "team": {
+      "type": "choice",
+      "instructions": "Which team should own this ticket?",
+      "criteria": {
+        "billing": "Payments and refunds",
+        "technical": "Bugs and outages",
+        "none_of_these": "None of the listed options fit"
+      }
+    },
+    "urgent": {
+      "type": "noul",
+      "instructions": "Does this convey urgency?"
+    }
+  }
+}

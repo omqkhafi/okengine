@@ -270,6 +270,8 @@ const OKE_ERROR_ROWS = {
   UNDECLARED_FETCH: { code: 1008, domain: "kernel" },
   /** Flow embeds via a model not listed in `effects.embeds`. */
   UNDECLARED_EMBED: { code: 1009, domain: "kernel" },
+  /** Flow decides a decision not listed in `effects.decides`. */
+  UNDECLARED_DECIDE: { code: 1010, domain: "kernel" },
   /**
    * Flow has no declared `effects` and no Manifest-derived effects were
    * available to stamp at boot (dev+compose / prod — never a silent open token).

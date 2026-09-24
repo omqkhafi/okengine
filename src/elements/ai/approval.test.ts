@@ -131,7 +131,7 @@ describe("durable tool approval", () => {
     expect(approved).toEqual({ ok: true });
     expect(
       await resolveAgentApproval(store, id, { decision: "deny", tenant: null }, now),
-    ).toEqual({ ok: false, status: 409 });
+    ).toEqual({ ok: false, status: 409, reason: "resolved" });
 
     const resumed = await journal.resume(session.runId);
     const result = await aiRuntime.runAgent("support", {
@@ -363,6 +363,9 @@ describe("approval http", () => {
       }),
     );
     expect(conflict.status).toBe(409);
+    expect(conflict.headers.get("retry-after")).toBeNull();
+    const conflictBody = (await conflict.json()) as { error: { code: string } };
+    expect(conflictBody.error.code).toBe("Conflict");
 
     await app.resumeDurable(Date.now() + 1000);
     expect(calls).toEqual([{ amount: 4 }]);
@@ -412,7 +415,7 @@ describe("approval ids", () => {
     const wins = [left, right].filter((result) => result.ok);
     const lost = [left, right].filter((result) => !result.ok);
     expect(wins).toHaveLength(1);
-    expect(lost).toEqual([{ ok: false, status: 409 }]);
+    expect(lost).toEqual([{ ok: false, status: 409, reason: "lease", retryAfterSeconds: 30 }]);
     const row = await store.get(session.runId);
     expect(row?.entries.some((entry) => entry.kind === "step" && entry.name === "keep-me")).toBe(
       true,

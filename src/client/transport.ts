@@ -104,7 +104,8 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
             const seconds = Number(res.headers.get("retry-after"));
             const wait = seconds > 0 ? seconds * 1000 : delay;
             const structured = await decodeIfEnvelope(res);
-            if (structured?.error?.code === "IdempotencyInProgress") {
+            const code = structured?.error?.code;
+            if (code === "IdempotencyInProgress" || code === "JournalLeaseBusy") {
               await sleep(wait);
               delay *= backoff;
               attempt += 1;

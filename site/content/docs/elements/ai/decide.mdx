@@ -1,0 +1,175 @@
+---
+title: "Decisions"
+description: "One model call that returns a calibrated choice, score, or yes/no, and waits for a person when it is not allowed to decide alone."
+icon: "Scale"
+source: "docs/spec/unified-theory.md"
+---
+
+A decision is how a Flow picks a label — which queue a ticket belongs in, how urgent it is —
+and records whether the model or a person supplied the value.
+
+<Callout title="The one rule">
+  Declare exactly one of `review` or `onUncertain: "abstain"`. Call it with `fx.decide`.
+  The lockfile is the only thing that lets a value return as `auto`.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Declare the questions
+
+```typescript title="src/core/ai.ts"
+import { ai, gate } from "okengine";
+
+export const ops = gate.policy("ops", () => true);
+
+export const triage = ai.decision("triage", {
+  review: ops,
+  ask: {
+    team: ai.choice("Which team owns this ticket?", {
+      billing: "Billing",
+      technical: "Technical",
+    }),
+    urgent: ai.boolean("Does this need a person today?"),
+  },
+});
+```
+
+`ai.choice` accepts at most 254 options. `none_of_these` is added on the wire.
+`ai.score` needs 2–10 levels. Question ids `meta` and `$` are reserved.
+
+</Step>
+
+<Step>
+### Decide from a durable Flow
+
+```typescript title="src/flows/support/triage.ts"
+import { on, flow, signal } from "okengine";
+import { triage } from "@/core/ai";
+
+const ticket = signal.broadcast("ticket.opened");
+
+export const route = on(
+  ticket,
+  flow("route-ticket", {
+    durable: true,
+    do: async (input, fx) => {
+      const decision = await fx.decide(triage, input);
+      return decision;
+    },
+  }),
+);
+```
+
+A review decision on an HTTP trigger fails to compile, even when the Flow is durable.
+A park would answer 204. Emit a signal and decide in a consumer.
+
+</Step>
+
+<Step>
+### Read `how`
+
+Each question value sits next to `$.<question>.how`:
+
+| `how` | Value |
+| --- | --- |
+| `auto` | The calibrated answer. The lockfile allowed it. |
+| `reviewed` | The review gate supplied it. |
+| `abstained` | `null`. The Flow did not park. |
+
+`$.<question>.audited: true` means the auto value was also queued for a label.
+The caller already returned. Audit is not a `how`.
+
+</Step>
+
+</Steps>
+
+## Declaration
+
+| Option | Required | Meaning |
+| --- | --- | --- |
+| `ask` | yes | Named `ai.choice`, `ai.score`, or `ai.boolean` questions. One request sends all of them. |
+| `review` | one of these | Non-auto paths park until this gate resolves them. The Flow must be `durable: true`. No default timeout. |
+| `onUncertain` | one of these | `"abstain"` returns `null` and does not park. Allowed on a Flow that is not durable. |
+| `autonomy` | no | `{ maxError, audit }`. `audit` is a sample rate from 0 to 1. Omitting `audit` fails to compile. |
+| `model` | no | An `ai.model` handle, or a model id. Default OpenRouter model is `typesafe/jev-1.13`. |
+| `driverId` | no | `"openrouter"` (default) or `"typesafe"`. TypeSafe pins `jev-1.13.0` and reads `TYPESAFE_API_KEY`. |
+| `locale` | no | `(input) => string`. Absent means one certificate slice. |
+| `evals` | no | Seed JSONL path, same role as a prompt's `evals`. |
+
+Boolean questions are `noul` on the wire. The provider `confidence` field is not the autonomy grant.
+
+## When it does not auto
+
+These paths are not auto: low confidence, a missing or stale certificate, a model version
+mismatch, an uncertified locale, drift, and a provider outage.
+
+| Mode | What the Flow gets |
+| --- | --- |
+| `review` | The run waits. `how` becomes `reviewed` when the gate resolves it. |
+| `abstain` | The question value is `null` and `how` is `abstained`. |
+
+An open circuit breaker is an outage, so it takes that same path. The breaker opens on
+network errors, timeouts, 5xx, and 529. `401`, `402`, and `422` throw and leave it closed.
+`429` and `529` retry and honor `Retry-After`.
+
+## Certificates
+
+`oke-decisions.lock.json` lives next to the app's OKE config, not inside the framework repo.
+Each decision pins the resolved model version. Each question, and each locale slice, stores
+the question hash, the calibrator, and the Learn-then-Test threshold at `maxError`.
+
+The runtime never raises autonomy. Only the lockfile grants `auto`.
+
+When any decision sets `autonomy`, boot registers two operator Flows:
+
+- A clock job that sums label counts into one app-wide candidate. It writes counts only.
+- A drift monitor that sets one app-level suspension flag and emits `oke/decision/drift`.
+
+`oke decide promote <name>` fetches that candidate from the operator endpoint and writes
+the lockfile. It does not recompute the certificate.
+
+`oke eval --certify` reads the seed file (`{ id?, input, expect, locale? }`) and prints a
+certificate. Prompt evals are unchanged when the flag is absent.
+
+A label stores the value, propensity, reviewer, and locale. The write happens when a review
+resolves, including an audit review. Declare that write on the reviewer Flow.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='declare exactly one of review or onUncertain: "abstain"'>
+  The decision named both, or neither. Keep one. `autonomy` does not replace either.
+</Accordion>
+
+<Accordion title="review cannot run in HTTP flow">
+  Cause: `a park answers 204. fx.emit a signal and decide in a consumer.` Move `fx.decide`
+  to a signal or clock Flow with `durable: true`.
+</Accordion>
+
+<Accordion title="must set durable: true to review">
+  A review parks the journal. Abstain mode is the path that can run without `durable`.
+</Accordion>
+
+<Accordion title="Conflict or JournalLeaseBusy">
+  A second resolve after the review is finished is `Conflict`. A lost race is
+  `JournalLeaseBusy` with `Retry-After`. Retry only the lease code.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Agents](/docs/elements/ai/agents) — tool approval uses the same lease
+- [fx](/docs/reference/fx) — `fx.decide` effect row
+- [CLI](/docs/reference/cli) — `oke decide promote` and `oke eval --certify`
+
+## Next
+
+<Cards>
+  <Card title="Agents" description="Bounded tool loops with fx.run." href="/docs/elements/ai/agents" />
+  <Card title="Prompts" description="Versioned asks with fx.ask." href="/docs/elements/ai/prompts" />
+</Cards>

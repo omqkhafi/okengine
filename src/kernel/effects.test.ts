@@ -21,9 +21,10 @@ describe("effects — reversibility tiers", () => {
       secret: "capability",
       call: "portal",
       fetch: "irreversible",
+      decide: "irreversible",
     };
 
-    expect(EFFECT_KIND_TIERS).toHaveLength(9);
+    expect(EFFECT_KIND_TIERS).toHaveLength(10);
     for (const { kind, reversibility } of EFFECT_KIND_TIERS) {
       expect(reversibility).toBe(expected[kind]);
       expect(reversibilityOf(kind)).toBe(expected[kind]);

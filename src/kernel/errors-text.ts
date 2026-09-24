@@ -52,6 +52,10 @@ export const OKE_ERROR_TEXT: Readonly<Record<string, OkeErrorText>> = {
     cause: 'Flow "{flow}" embeds with "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.embeds.',
   },
+  UNDECLARED_DECIDE: {
+    cause: 'Flow "{flow}" decides "{resource}" without declaring it.',
+    fix: 'Add "{resource}" to this flow\'s effects.decides.',
+  },
   NO_EFFECTS_DECLARED: {
     cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.{extract}',
     fix:

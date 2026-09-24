@@ -5,7 +5,7 @@
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 13132,
+      "value": 13209,
       "limit": 17408,
       "unit": "bytes",
       "gate": "absolute",
@@ -15,7 +15,7 @@
     {
       "id": "clientGzipBytes",
       "label": "Client runtime",
-      "value": 5194,
+      "value": 5218,
       "limit": 6144,
       "unit": "bytes",
       "gate": "absolute",

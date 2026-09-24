@@ -28,6 +28,7 @@ import { SearchConfigError } from "../elements/store/search-errors.ts";
 import type {
   Ai,
   AiAgent,
+  AiDecision,
   AiMcpServer,
   AiModel,
   AiPrompt,
@@ -257,11 +258,18 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
   if (Object.keys(gates).length > 0) manifest.gates = gates;
   if (Object.keys(vault).length > 0) manifest.vault = vault;
   if (Object.keys(channels).length > 0) manifest.channels = channels;
-  if (scope.ai.models || scope.ai.prompts || scope.ai.agents || scope.ai.mcpServers) {
+  if (
+    scope.ai.models ||
+    scope.ai.prompts ||
+    scope.ai.agents ||
+    scope.ai.decisions ||
+    scope.ai.mcpServers
+  ) {
     manifest.ai = {
       ...(scope.ai.models ? { models: sortRecord(scope.ai.models) } : {}),
       ...(scope.ai.prompts ? { prompts: sortRecord(scope.ai.prompts) } : {}),
       ...(scope.ai.agents ? { agents: sortRecord(scope.ai.agents) } : {}),
+      ...(scope.ai.decisions ? { decisions: sortRecord(scope.ai.decisions) } : {}),
       ...(scope.ai.mcpServers ? { mcpServers: sortRecord(scope.ai.mcpServers) } : {}),
     };
   }
@@ -1429,6 +1437,10 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       collectAgent(call, program, scope);
     }
 
+    if (obj === "ai" && prop === "decision") {
+      collectDecision(call, program, scope);
+    }
+
     if (obj === "ai" && prop === "mcpServer") {
       collectMcpServer(call, program, scope);
     }
@@ -1669,6 +1681,72 @@ function agentToolEntry(
   if (!raw) return undefined;
   const name = scope.flowExports.get(raw) ?? scope.bindings.get(raw)?.ref ?? raw;
   return { name, approval: false };
+}
+
+function assertDecisionPlacement(flowName: string, flow: Flow, scope: ProjectScope): void {
+  const names = flow.effects?.decides ?? [];
+  if (names.length === 0) return;
+  const http = flow.trigger !== undefined && "http" in flow.trigger;
+  for (const decisionName of names) {
+    const decision = scope.ai.decisions?.[decisionName];
+    if (!decision || decision.mode !== "review") continue;
+    if (http) {
+      throw new Error(
+        `ai.decision("${decisionName}") review cannot run in HTTP flow "${flowName}" — a park answers 204. fx.emit a signal and decide in a consumer.`,
+      );
+    }
+    if (flow.durable !== true) {
+      throw new Error(
+        `ai.decision("${decisionName}"): flow "${flowName}" must set durable: true to review`,
+      );
+    }
+  }
+}
+
+function collectDecision(call: CallExpression, program: AstNode, scope: ProjectScope): void {
+  const decisionName = stringArg(call.arguments[0]);
+  const opts = objectArg(call.arguments[1]);
+  if (!decisionName || !opts) return;
+  const ask = objectProp(opts, "ask");
+  const questionNames =
+    ask?.type === "ObjectExpression"
+      ? objectProperties(ask)
+          .map((prop) => propKey(prop))
+          .filter((name): name is string => typeof name === "string" && name.length > 0)
+      : [];
+  if (questionNames.length === 0) {
+    throw new Error(`ai.decision("${decisionName}"): ask is empty`);
+  }
+  for (const key of questionNames) {
+    if (key === "meta" || key === "$") {
+      throw new Error(`ai.decision("${decisionName}"): question id "${key}" is reserved`);
+    }
+  }
+  const hasReview = objectProp(opts, "review") !== undefined;
+  const uncertain = stringProp(opts, "onUncertain");
+  const abstain = uncertain === "abstain";
+  if (hasReview === abstain) {
+    throw new Error(
+      `ai.decision("${decisionName}"): declare exactly one of review or onUncertain: "abstain"`,
+    );
+  }
+  const autonomy = objectProp(opts, "autonomy");
+  if (autonomy?.type === "ObjectExpression" && objectProp(autonomy, "audit") === undefined) {
+    throw new Error(`ai.decision("${decisionName}"): autonomy requires audit`);
+  }
+  const decision: AiDecision = {
+    mode: abstain ? "abstain" : "review",
+    questions: questionNames,
+    ...(hasReview ? { review: stringProp(opts, "review") ?? "review" } : {}),
+    ...(stringProp(opts, "model") ? { model: stringProp(opts, "model") } : {}),
+    driverId: stringProp(opts, "driverId") === "typesafe" ? "typesafe" : "openrouter",
+  };
+  scope.ai.decisions = scope.ai.decisions ?? {};
+  scope.ai.decisions[decisionName] = decision;
+  const bindingName = enclosingConstName(call, program);
+  if (bindingName) {
+    scope.bindings.set(bindingName, { kind: "decision", ref: decisionName });
+  }
 }
 
 function collectAgent(call: CallExpression, program: AstNode, scope: ProjectScope): void {
@@ -2047,6 +2125,7 @@ function registerFlow(args: {
   flow.source = `${args.file.path}:${line}`;
 
   if (boolProp(opts, "durable")) flow.durable = true;
+  assertDecisionPlacement(name, flow, args.scope);
   if (typeof liveFromTrigger === "string") {
     flow.live = liveFromTrigger;
     // Manual live surface — `.live(tableBinding)` on the trigger. Synthesize
@@ -2945,6 +3024,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   const secrets = stringArrayProp(node, "secrets");
   const calls = stringArrayProp(node, "calls");
   const fetches = stringArrayProp(node, "fetches");
+  const decides = stringArrayProp(node, "decides");
   if (reads) effects.reads = reads as Effects["reads"];
   if (writes) effects.writes = writes as Effects["writes"];
   if (emits) effects.emits = emits;
@@ -2954,6 +3034,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   if (secrets) effects.secrets = secrets;
   if (calls) effects.calls = calls;
   if (fetches) effects.fetches = fetches;
+  if (decides) effects.decides = decides;
   return effects;
 }
 

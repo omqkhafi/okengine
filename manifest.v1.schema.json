@@ -186,6 +186,12 @@
           "items": { "$ref": "#/$defs/FlowRef" },
           "uniqueItems": true
         }
+        ,
+        "decides": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
       }
     },
     "HttpTrigger": {
@@ -692,6 +698,32 @@
         "budget": { "$ref": "#/$defs/AiPromptBudget" }
       }
     },
+    "AiDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "questions"],
+      "properties": {
+        "mode": { "enum": ["review", "abstain"] },
+        "review": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "driverId": { "enum": ["openrouter", "typesafe"] },
+        "questions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "evals": { "type": "string", "minLength": 1 },
+        "autonomy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxError", "audit"],
+          "properties": {
+            "maxError": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            "audit": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
     "Ai": {
       "type": "object",
       "additionalProperties": false,
@@ -710,6 +742,12 @@
           "type": "object",
           "propertyNames": { "type": "string", "minLength": 1 },
           "additionalProperties": { "$ref": "#/$defs/AiAgent" }
+        }
+        ,
+        "decisions": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/AiDecision" }
         }
       }
     },

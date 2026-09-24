@@ -25,6 +25,7 @@ export const BUILTIN_ERROR_STATUS = {
   IdempotencyKeyInvalid: 400,
   IdempotencyKeyReused: 422,
   IdempotencyInProgress: 409,
+  JournalLeaseBusy: 409,
 } as const;
 
 /** Built-in error code (including `DatabaseError`). */
@@ -94,6 +95,7 @@ export type BuiltinErrorMap = {
   readonly IdempotencyKeyInvalid: Record<string, never>;
   readonly IdempotencyKeyReused: Record<string, never>;
   readonly IdempotencyInProgress: { readonly retryAfter?: number };
+  readonly JournalLeaseBusy: { readonly retryAfter?: number };
 };
 
 /**

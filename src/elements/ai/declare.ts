@@ -6,6 +6,7 @@
 
 import {
   aiAgentRegistry,
+  aiDecisionRegistry,
   aiEmbedRegistry,
   aiMcpServerRegistry,
   aiModelRegistry,
@@ -86,6 +87,67 @@ export interface AiAgentToolOptions {
   readonly gate?: { readonly name: string } | string;
   /** How long to wait before a deny. Default `24h`. */
   readonly timeout?: string;
+}
+
+/** One choice question. `none_of_these` is injected on the wire. */
+export interface AiChoiceQuestion {
+  readonly kind: "choice";
+  readonly instructions: string;
+  readonly options: Readonly<Record<string, string | null>>;
+}
+
+/** One ordered score question. */
+export interface AiScoreQuestion {
+  readonly kind: "score";
+  readonly instructions: string;
+  readonly levels: readonly string[];
+}
+
+/** One yes/no question. The wire type is `noul`. */
+export interface AiBooleanQuestion {
+  readonly kind: "boolean";
+  readonly instructions: string;
+  readonly criteria?: { readonly true?: string; readonly false?: string };
+}
+
+/** A question inside `ai.decision({ ask })`. */
+export type AiDecisionQuestion = AiChoiceQuestion | AiScoreQuestion | AiBooleanQuestion;
+
+/** Autonomy grant. Present only in the lockfile's certificate. */
+export interface AiDecisionAutonomy {
+  readonly maxError: number;
+  /** Audit sample rate in `[0, 1]`. Required whenever autonomy is set. */
+  readonly audit: number;
+}
+
+/** Options for {@link ai.decision}. Exactly one of `review` and `onUncertain` is required. */
+export interface AiDecisionOptions {
+  readonly model?: AiModelDecl | string;
+  readonly in?: unknown;
+  readonly ask: Readonly<Record<string, AiDecisionQuestion>>;
+  readonly autonomy?: AiDecisionAutonomy;
+  readonly review?: { readonly name: string } | string;
+  readonly onUncertain?: "abstain";
+  readonly locale?: (input: unknown) => string | undefined;
+  readonly evals?: string;
+  /** `openrouter` (default) or `typesafe`. */
+  readonly driverId?: "openrouter" | "typesafe";
+  readonly timeout?: AiTimeout;
+}
+
+/** Declared decision handle. */
+export interface AiDecisionDecl {
+  readonly kind: "decision";
+  readonly name: string;
+  readonly ask: Readonly<Record<string, AiDecisionQuestion>>;
+  readonly mode: "review" | "abstain";
+  readonly review?: string;
+  readonly model?: string;
+  readonly driverId: "openrouter" | "typesafe";
+  readonly autonomy?: AiDecisionAutonomy;
+  readonly evals?: string;
+  readonly timeout?: AiTimeout;
+  readonly locale?: (input: unknown) => string | undefined;
 }
 
 /** Options for {@link ai.agent}. */
@@ -250,6 +312,37 @@ export interface AiNamespace {
    */
   agent(name: string, options?: AiAgentOptions): AiAgentDecl;
   /**
+   * Declare a decision. Exactly one of `review` and `onUncertain: "abstain"`.
+   *
+   * @param name - Decision id
+   * @param options - Questions, mode, and optional autonomy
+   */
+  decision(name: string, options: AiDecisionOptions): AiDecisionDecl;
+  /**
+   * A choice question. `none_of_these` is added when the request is built.
+   *
+   * @param instructions - What to decide
+   * @param options - At most 254 author options
+   */
+  choice(instructions: string, options: Readonly<Record<string, string | null>>): AiChoiceQuestion;
+  /**
+   * An ordered score question.
+   *
+   * @param instructions - What to rate
+   * @param levels - 2–10 level descriptions, low to high
+   */
+  score(instructions: string, levels: readonly string[]): AiScoreQuestion;
+  /**
+   * A yes/no question. Sent as `noul`.
+   *
+   * @param instructions - The yes/no question
+   * @param criteria - Optional true/false descriptions
+   */
+  boolean(
+    instructions: string,
+    criteria?: { readonly true?: string; readonly false?: string },
+  ): AiBooleanQuestion;
+  /**
    * Declare an external MCP server whose allowlisted tools join `fx.call`.
    *
    * @param name - Server id (`github`, `linear`, …)
@@ -266,6 +359,7 @@ export function listAiDecls(): {
   readonly prompts: readonly AiPromptDecl[];
   readonly embeds: readonly AiEmbedDecl[];
   readonly agents: readonly AiAgentDecl[];
+  readonly decisions: readonly AiDecisionDecl[];
   readonly mcpServers: readonly AiMcpServerDecl[];
 } {
   return {
@@ -273,6 +367,7 @@ export function listAiDecls(): {
     prompts: aiPromptRegistry.slice(),
     embeds: aiEmbedRegistry.slice(),
     agents: aiAgentRegistry.slice(),
+    decisions: aiDecisionRegistry.slice(),
     mcpServers: aiMcpServerRegistry.slice(),
   };
 }
@@ -285,6 +380,7 @@ export function resetAiDecls(): void {
   aiPromptRegistry.length = 0;
   aiEmbedRegistry.length = 0;
   aiAgentRegistry.length = 0;
+  aiDecisionRegistry.length = 0;
   aiMcpServerRegistry.length = 0;
 }
 
@@ -401,6 +497,27 @@ export const ai: AiNamespace = {
     return decl;
   },
 
+  decision(name: string, options: AiDecisionOptions): AiDecisionDecl {
+    const decl = buildDecisionDecl(name, options);
+    aiDecisionRegistry.push(decl);
+    return decl;
+  },
+
+  choice(instructions: string, options: Readonly<Record<string, string | null>>): AiChoiceQuestion {
+    return { kind: "choice", instructions, options };
+  },
+
+  score(instructions: string, levels: readonly string[]): AiScoreQuestion {
+    return { kind: "score", instructions, levels };
+  },
+
+  boolean(
+    instructions: string,
+    criteria?: { readonly true?: string; readonly false?: string },
+  ): AiBooleanQuestion {
+    return { kind: "boolean", instructions, ...(criteria !== undefined ? { criteria } : {}) };
+  },
+
   /**
    * Declare an external MCP server whose allowlisted tools join `fx.call`.
    *
@@ -442,3 +559,62 @@ export const ai: AiNamespace = {
     return decl;
   },
 };
+
+/**
+ * Validate a decision and return the registered shape.
+ *
+ * @param name - Decision id
+ * @param options - Author options
+ */
+export function buildDecisionDecl(name: string, options: AiDecisionOptions): AiDecisionDecl {
+  if (!name) throw new TypeError("ai.decision: name is required");
+  const keys = Object.keys(options.ask ?? {});
+  if (keys.length === 0) throw new TypeError(`ai.decision("${name}"): ask is empty`);
+  const hasReview = options.review !== undefined;
+  const abstain = options.onUncertain === "abstain";
+  if (hasReview === abstain) {
+    throw new TypeError(
+      `ai.decision("${name}"): declare exactly one of review or onUncertain: "abstain"`,
+    );
+  }
+  if (options.autonomy !== undefined && options.autonomy.audit === undefined) {
+    throw new TypeError(`ai.decision("${name}"): autonomy requires audit`);
+  }
+  for (const key of keys) {
+    if (key === "meta" || key === "$") {
+      throw new TypeError(`ai.decision("${name}"): question id "${key}" is reserved`);
+    }
+    const question = options.ask[key];
+    if (!question) continue;
+    if (question.kind === "choice") {
+      const count = Object.keys(question.options).length;
+      if (count > 254) {
+        throw new TypeError(`ai.decision("${name}"): choice "${key}" has ${count} options; max 254`);
+      }
+      if (Object.prototype.hasOwnProperty.call(question.options, "none_of_these")) {
+        throw new TypeError(`ai.decision("${name}"): choice "${key}" must not set none_of_these`);
+      }
+    }
+    if (question.kind === "score") {
+      const count = question.levels.length;
+      if (count < 2 || count > 10) {
+        throw new TypeError(`ai.decision("${name}"): score "${key}" needs 2–10 levels`);
+      }
+    }
+  }
+  const review = typeof options.review === "string" ? options.review : options.review?.name;
+  const model = typeof options.model === "string" ? options.model : options.model?.name;
+  return {
+    kind: "decision",
+    name,
+    ask: options.ask,
+    mode: abstain ? "abstain" : "review",
+    ...(review !== undefined ? { review } : {}),
+    ...(model !== undefined ? { model } : {}),
+    driverId: options.driverId ?? "openrouter",
+    ...(options.autonomy !== undefined ? { autonomy: options.autonomy } : {}),
+    ...(options.evals !== undefined ? { evals: options.evals } : {}),
+    ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+    ...(options.locale !== undefined ? { locale: options.locale } : {}),
+  };
+}

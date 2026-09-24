@@ -525,7 +525,17 @@ export interface ConsoleLiveRun {
 
 /** Effect entry on a live run row. */
 export interface ConsoleLiveRunEffect {
-  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "embed" | "secret" | "call" | "fetch";
+  readonly kind:
+    | "read"
+    | "write"
+    | "emit"
+    | "send"
+    | "ask"
+    | "embed"
+    | "secret"
+    | "call"
+    | "fetch"
+    | "decide";
   readonly resource: string;
   readonly timestamp: number;
   readonly duration: number;

@@ -107,6 +107,15 @@ const flowsRoute = createRoute({
   component: lazyRouteComponent(() => import("./features/units/units-page.tsx"), "UnitsPage"),
 });
 
+const decisionsRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/flows/decisions",
+  component: lazyRouteComponent(
+    () => import("./features/flows/decisions/decisions-page.tsx"),
+    "DecisionsPage",
+  ),
+});
+
 const storeRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/store",
@@ -152,6 +161,7 @@ const routeTree = rootRoute.addChildren([
   authenticatedRoute.addChildren([
     overviewRoute,
     flowsRoute,
+    decisionsRoute,
     storeRoute,
     vaultRoute,
     accessRoute,

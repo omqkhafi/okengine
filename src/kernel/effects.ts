@@ -17,7 +17,8 @@ export type EffectKind =
   | "embed"
   | "secret"
   | "call"
-  | "fetch";
+  | "fetch"
+  | "decide";
 
 /**
  * Reversibility tier — console §9.1 ranking, applied to all effect kinds.
@@ -92,6 +93,7 @@ const TIER_BY_KIND: Readonly<Record<EffectKind, ReversibilityTier>> = {
   secret: "capability",
   call: "portal",
   fetch: "irreversible",
+  decide: "irreversible",
 };
 
 /**

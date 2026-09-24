@@ -16,6 +16,7 @@ import { dbCli } from "./db.ts";
 import { devCli } from "./dev.ts";
 import { doctorCli } from "./doctor.ts";
 import { dockerCli } from "./docker.ts";
+import { decideCli } from "./decide.ts";
 import { evalCli } from "./eval.ts";
 import { EXIT_CODE_HELP, EXIT_OK, EXIT_USAGE } from "./exit.ts";
 import { gatesListCli } from "./gates-list.ts";
@@ -115,6 +116,10 @@ if (cmd === "build") {
 
 if (cmd === "eval") {
   process.exit(await evalCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "decide") {
+  process.exit(await decideCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "ai") {

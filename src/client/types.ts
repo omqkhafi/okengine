@@ -264,7 +264,7 @@ export interface ClientOptions {
    * A call retries when it is `GET` or `QUERY`, or when it carries an
    * idempotency key. Keys are sent automatically on every non-GET call.
    * `idempotencyKey: false` runs once unless that call passes `{ retry: true }`.
-   * `409 IdempotencyInProgress` waits for `Retry-After` and counts as an attempt.
+   * `409 IdempotencyInProgress` and `409 JournalLeaseBusy` wait for `Retry-After` and count as an attempt.
    */
   readonly retry?: {
     /** Extra attempts after the first (default 0). */

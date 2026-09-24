@@ -246,6 +246,26 @@ describe("transport — retry", () => {
     expect(n).toBe(3);
   });
 
+  test("JournalLeaseBusy waits for Retry-After", async () => {
+    let n = 0;
+    const api = createClient<PingApp>("http://app.test", {
+      retry: { retries: 1, delay: 1, backoff: 1 },
+      fetch: async () => {
+        n += 1;
+        if (n === 1) {
+          return Response.json(
+            { data: null, error: { code: "JournalLeaseBusy", data: { retryAfter: 1 } } },
+            { status: 409, headers: { "retry-after": "0.01" } },
+          );
+        }
+        return Response.json({ data: { ok: true }, error: null });
+      },
+    });
+    const result = await api.sys.ping();
+    expect(result.error).toBeNull();
+    expect(n).toBe(2);
+  });
+
   test("other 409 envelopes are not retried", async () => {
     let n = 0;
     const api = createClient<PingApp>("http://app.test", {

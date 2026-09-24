@@ -1,0 +1,116 @@
+/**
+ * Operator routes for the decisions list and the review queue.
+ */
+
+import { z } from "zod";
+import { journalLeaseBusyResponse } from "../../elements/ai/approval.ts";
+import { resolveDecisionReview } from "../../kernel/fx-decide.ts";
+import { fail, flow, http, type Binding } from "../../kernel/index.ts";
+import { bindHttp } from "./bind.ts";
+import type { ConsoleState } from "./state.ts";
+import { loadDecisionQueue, projectDecisionList } from "./decisions.ts";
+
+const AuthFailed = z.object({});
+
+const DecisionListOut = z.object({
+  decisions: z.array(
+    z.object({
+      name: z.string(),
+      state: z.enum(["learning", "candidate", "certified", "suspended"]),
+      mode: z.enum(["review", "abstain"]),
+      model: z.string().optional(),
+    }),
+  ),
+  suspended: z.boolean(),
+});
+
+const DecisionQueueOut = z.object({
+  rows: z.array(
+    z.object({
+      id: z.string(),
+      decision: z.string(),
+      requestedAt: z.number(),
+      ageMs: z.number(),
+      labelOnly: z.boolean(),
+      status: z.enum(["pending", "reviewed"]),
+    }),
+  ),
+});
+
+const DecisionResolveIn = z.object({
+  id: z.string().min(1),
+  values: z.record(z.string(), z.unknown()),
+  reviewer: z.string().min(1),
+  labelOnly: z.boolean().optional(),
+});
+
+const DecisionResolveOut = z.object({ ok: z.literal(true) });
+
+/**
+ * List, queue, and resolve bindings.
+ *
+ * @param state - Console state
+ */
+export function decisionConsoleBindings(state: ConsoleState): Binding[] {
+  const list = flow("console.decisions.list", {
+    plane: "operator",
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const { decisionDriftSuspended, getDecisionLock } =
+        await import("../../elements/ai/decisions/certificate.ts");
+      return {
+        decisions: projectDecisionList(state.manifest, getDecisionLock()),
+        suspended: decisionDriftSuspended(),
+      };
+    },
+  });
+  const queue = flow("console.decisions.queue", {
+    plane: "operator",
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return { rows: await loadDecisionQueue(state.journalStore, Date.now()) };
+    },
+  });
+  const resolve = flow("console.decisions.resolve", {
+    plane: "operator",
+    do: async (
+      input: { id: string; values: Record<string, unknown>; reviewer: string; labelOnly?: boolean },
+      fx,
+    ) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const store = state.journalStore;
+      if (!store) return fx.fail.notFound();
+      const result = await resolveDecisionReview(
+        store,
+        input.id,
+        { values: input.values, reviewer: input.reviewer },
+        Date.now,
+        input.labelOnly === true,
+      );
+      if (result.ok) return { ok: true as const };
+      if (result.status === 409 && result.reason === "lease") {
+        return journalLeaseBusyResponse(result.retryAfterSeconds);
+      }
+      if (result.status === 409) return fx.fail.conflict();
+      return fx.fail.notFound();
+    },
+  });
+  return [
+    bindHttp(
+      http.get("/console/decisions", { out: DecisionListOut, errors: { AuthFailed } }),
+      list,
+    ),
+    bindHttp(
+      http.get("/console/decisions/queue", { out: DecisionQueueOut, errors: { AuthFailed } }),
+      queue,
+    ),
+    bindHttp(
+      http.post("/console/decisions/resolve", {
+        in: DecisionResolveIn,
+        out: DecisionResolveOut,
+        errors: { AuthFailed },
+      }),
+      resolve,
+    ),
+  ];
+}

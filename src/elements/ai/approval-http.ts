@@ -10,6 +10,7 @@ import type { Fx } from "../../kernel/fx.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
 import type { StandardSchemaV1 } from "../../validation/standard-schema.ts";
+import { journalLeaseBusyResponse } from "./approval.ts";
 
 /** Body the approve route accepts. `args` replaces the tool input. */
 const approveIn: StandardSchemaV1<{ id: string; args?: unknown }> = {
@@ -63,9 +64,21 @@ const denyIn: StandardSchemaV1<{ id: string; reason?: string }> = {
  */
 function approvalHttpResult(
   fx: Fx,
-  result: { readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 },
+  result:
+    | { readonly ok: true }
+    | { readonly ok: false; readonly status: 403 | 404 }
+    | { readonly ok: false; readonly status: 409; readonly reason: "resolved" }
+    | {
+        readonly ok: false;
+        readonly status: 409;
+        readonly reason: "lease";
+        readonly retryAfterSeconds: number;
+      },
 ): unknown {
   if (result.ok) return { ok: true };
+  if (result.status === 409 && result.reason === "lease") {
+    return journalLeaseBusyResponse(result.retryAfterSeconds);
+  }
   if (result.status === 409) return fx.fail.conflict();
   if (result.status === 403) return fx.fail.forbidden();
   return fx.fail.notFound();

@@ -230,6 +230,7 @@ export function elementsOfRun(run: RunRow): readonly OkeElement[] {
         break;
       case "ask":
       case "embed":
+      case "decide":
         out.add("ai");
         break;
       case "secret":

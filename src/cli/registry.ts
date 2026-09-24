@@ -550,7 +550,41 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     name: "eval",
     summary: "prompt eval sets (CI gate)",
     leaf: true,
-    flags: [MANIFEST, HELP],
+    flags: [
+      MANIFEST,
+      {
+        long: "--certify",
+        takesValue: false,
+        summary: "Build a decision certificate from the seed file",
+      },
+      HELP,
+    ],
+  },
+  {
+    name: "decide",
+    summary: "promote a decision certificate",
+    subcommands: [
+      {
+        name: "promote",
+        summary: "Fetch the operator candidate and write the app lockfile",
+        positionals: "<name>",
+        flags: [
+          {
+            long: "--origin",
+            takesValue: true,
+            valueName: "url",
+            summary: "App origin that serves the candidate",
+          },
+          {
+            long: "--lock",
+            takesValue: true,
+            valueName: "path",
+            summary: "Lockfile path (default oke-decisions.lock.json)",
+          },
+          HELP,
+        ],
+      },
+    ],
   },
   {
     name: "ai",

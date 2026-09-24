@@ -96,17 +96,62 @@ export async function runOkeEval(options: OkeEvalOptions = {}): Promise<number> 
  */
 export async function evalCli(args: string[]): Promise<number> {
   let manifestPath: string | undefined;
+  let certify = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--manifest" || a === "-m") {
       manifestPath = args[++i];
+    } else if (a === "--certify") {
+      certify = true;
     } else if (a === "--help" || a === "-h") {
-      console.log(`oke eval [--manifest oke.manifest.json]
+      console.log(`oke eval [--manifest oke.manifest.json] [--certify]
 
 Run prompt eval sets declared in the Manifest. Fails CI on regression.
+--certify builds a decision certificate from each decision seed file.
 `);
       return 0;
     }
   }
+  if (certify) return runOkeCertify({ manifestPath });
   return runOkeEval({ manifestPath });
+}
+
+/**
+ * Build certificates from decision seed files. Prompt evals are not run.
+ *
+ * @param options - Manifest path
+ */
+export async function runOkeCertify(
+  options: { readonly manifestPath?: string } = {},
+): Promise<number> {
+  const { certifySeed } = await import("../elements/ai/decisions/certify.ts");
+  const path = resolve(options.manifestPath ?? "oke.manifest.json");
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    console.error(`oke eval: manifest not found: ${path}`);
+    return 1;
+  }
+  const manifest = (await file.json()) as Manifest;
+  const decisions = manifest.ai?.decisions ?? {};
+  const names = Object.keys(decisions);
+  if (names.length === 0) {
+    process.stdout.write("oke eval: no decisions declared\n");
+    return 0;
+  }
+  for (const name of names) {
+    const decision = decisions[name];
+    if (!decision?.evals) {
+      process.stdout.write(`oke eval: skip ${name} (no evals)\n`);
+      continue;
+    }
+    const text = await Bun.file(resolve(decision.evals)).text();
+    const certificate = certifySeed({
+      name,
+      model: decision.model ?? "",
+      maxError: decision.autonomy?.maxError ?? 0.05,
+      jsonl: text,
+    });
+    process.stdout.write(`${JSON.stringify({ [name]: certificate })}\n`);
+  }
+  return 0;
 }

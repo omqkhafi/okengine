@@ -62,6 +62,7 @@ export interface InferBinding {
     | "template"
     | "flow"
     | "embed"
+    | "decision"
     | "table"
     | "mcp-server"
     | "mcp-tool"
@@ -193,6 +194,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   const secrets = new Set<SecretRef>();
   const calls = new Set<FlowRef>();
   const fetches = new Set<FetchHostRef>();
+  const decides = new Set<string>();
   const steps: string[] = [];
   let usesRaw = false;
 
@@ -279,6 +281,14 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
           if (name) embeds.add(name);
         }
       }
+      continue;
+    }
+
+    if (chain.rootMethod === "decide" && call === chain.rootCall) {
+      const binding = resolveBinding(call.arguments[0], options.bindings);
+      const name =
+        stringArg(call.arguments[0]) ?? (binding?.kind === "decision" ? binding.ref : undefined);
+      if (name) decides.add(name);
       continue;
     }
 
@@ -388,13 +398,14 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
   if (secrets.size > 0) effects.secrets = sortUnique([...secrets]);
   if (calls.size > 0) effects.calls = sortUnique([...calls]);
   if (fetches.size > 0) effects.fetches = sortUnique([...fetches]);
+  if (decides.size > 0) effects.decides = sortUnique([...decides]);
 
   return {
     effects,
     steps,
     usesRaw,
     cacheIneligible: usesRaw && !options.hasExplicitEffects,
-    nondeterministic: asks.size > 0 || embeds.size > 0,
+    nondeterministic: asks.size > 0 || embeds.size > 0 || decides.size > 0,
     readsUserId: userIdRoots.some((node) => containsAuthUserId(node)),
   };
 }
@@ -409,6 +420,7 @@ const EFFECT_KEYS = [
   "secrets",
   "calls",
   "fetches",
+  "decides",
 ] as const satisfies readonly (keyof Effects)[];
 
 /**

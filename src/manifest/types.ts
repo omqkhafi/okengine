@@ -123,6 +123,8 @@ export interface Effects {
    * Hostname only (e.g. `"api.stripe.com"`), never a full URL.
    */
   fetches?: FetchHostRef[];
+  /** Decision refs from `fx.decide` (irreversible, nondeterministic). */
+  decides?: string[];
 }
 
 /** Embedding model ref for `effects.embeds` / `fx.embed` (model name). */
@@ -519,7 +521,19 @@ export interface Ai {
   models?: Record<string, AiModel>;
   prompts?: Record<string, AiPrompt>;
   agents?: Record<string, AiAgent>;
+  decisions?: Record<string, AiDecision>;
   mcpServers?: Record<string, AiMcpServer>;
+}
+
+/** A declared decision. The predicate and locale function stay in author code. */
+export interface AiDecision {
+  mode: "review" | "abstain";
+  review?: string;
+  model?: string;
+  driverId?: "openrouter" | "typesafe";
+  questions: string[];
+  evals?: string;
+  autonomy?: { maxError: number; audit: number };
 }
 
 /** Per-table metadata on a Manifest {@link Plugin}. */

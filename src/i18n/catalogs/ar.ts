@@ -40,6 +40,10 @@ export const builtinAr = {
       cause: 'التدفق "{flow}" يضمّن عبر "{resource}" دون الإعلان عنه.',
       fix: 'أضف "{resource}" إلى effects.embeds لهذا التدفق.',
     },
+    "1010": {
+      cause: 'التدفق "{flow}" يقرر "{resource}" دون الإعلان عنه.',
+      fix: 'أضف "{resource}" إلى effects.decides لهذا التدفق.',
+    },
     "1240": {
       cause: 'التدفق "{flow}" يُصدِر الإشارة "{resource}" بلا مشترك.',
       fix: "أضف on({resource}, …) أو عيّن الإشارة '{'optional: true'}'.",
@@ -90,6 +94,7 @@ export const builtinAr = {
     IdempotencyKeyInvalid: "يجب أن يكون Idempotency-Key من 16 إلى 255 حرفًا ASCII قابلًا للطباعة.",
     IdempotencyKeyReused: "استُخدم Idempotency-Key هذا من قبل مع طلب مختلف.",
     IdempotencyInProgress: "ما زال Idempotency-Key هذا قيد التنفيذ. أعد المحاولة بعد المهلة.",
+    JournalLeaseBusy: "هذا التشغيل مقفل لدى عامل آخر. أعد المحاولة بعد المهلة.",
     InvalidQuery: "الاستعلام غير صالح.",
     UnsupportedMediaType: "نوع المحتوى هذا غير مدعوم.",
     AuthFailed: "فشلت المصادقة.",

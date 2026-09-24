@@ -1119,6 +1119,26 @@ export function oke(options: OkeOptions): OkeApp {
 
   /** Once-per-app: system `_oke_search_embed_*` CDC bindings from Manifest. */
   let searchEmbedFlowsBound = false;
+  let decisionFlowsBound = false;
+
+  /**
+   * Register the decision aggregate, drift monitor, and candidate route
+   * when any decision declares autonomy.
+   *
+   * @param manifest - Boot manifest
+   */
+  async function ensureDecisionFlows(manifest: BootOptions["manifest"] | undefined): Promise<void> {
+    if (decisionFlowsBound || !manifest) return;
+    const { bindDecisionFlows, manifestHasDecisionAutonomy } = await import(
+      "../elements/ai/decisions/bind.ts"
+    );
+    if (!manifestHasDecisionAutonomy(manifest)) {
+      decisionFlowsBound = true;
+      return;
+    }
+    bindDecisionFlows(adoptBinding, manifest);
+    decisionFlowsBound = true;
+  }
   /**
    * Auto-register hybrid-search embed CDC flows when any `.embed()` column
    * exists. Lazy-loads search-bind so edge graphs without search stay lean.
@@ -1574,6 +1594,7 @@ export function oke(options: OkeOptions): OkeApp {
     // Built-in hybrid search — auto-register durable embed CDC flows when the
     // Manifest declares any `.embed()` column (writer flows stay embed-free).
     await ensureSearchEmbedFlows(overrides?.manifest ?? options.manifest);
+    await ensureDecisionFlows(overrides?.manifest ?? options.manifest);
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");

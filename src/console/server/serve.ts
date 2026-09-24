@@ -42,6 +42,7 @@ export const CONSOLE_SPA_PATHS = [
   "/",
   "/overview",
   "/flows",
+  "/flows/decisions",
   "/store",
   "/vault",
   "/observability",

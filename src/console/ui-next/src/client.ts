@@ -331,7 +331,17 @@ export async function gatesList(): Promise<ConsoleApiResult<GatesListPayload>> {
 
 /** Effect entry on a run row (matches server `RunsListOut`). */
 export type RunEffect = {
-  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "embed" | "secret" | "call" | "fetch";
+  readonly kind:
+    | "read"
+    | "write"
+    | "emit"
+    | "send"
+    | "ask"
+    | "embed"
+    | "secret"
+    | "call"
+    | "fetch"
+    | "decide";
   readonly resource: string;
   readonly timestamp: number;
   readonly duration: number;
@@ -701,6 +711,63 @@ export type AiListPayload = {
  */
 export async function aiList(): Promise<ConsoleApiResult<AiListPayload>> {
   return consoleFetch<AiListPayload>("/console/ai");
+}
+
+/** One decision on `GET /console/decisions`. */
+export type DecisionListRow = {
+  readonly name: string;
+  readonly state: "learning" | "candidate" | "certified" | "suspended";
+  readonly mode: "review" | "abstain";
+  readonly model?: string;
+};
+
+/** Decision catalogue plus the app drift flag. */
+export type DecisionListPayload = {
+  readonly decisions: readonly DecisionListRow[];
+  readonly suspended: boolean;
+};
+
+/** One review queue row. `ageMs` is how long it has been waiting. */
+export type DecisionQueueRow = {
+  readonly id: string;
+  readonly decision: string;
+  readonly requestedAt: number;
+  readonly ageMs: number;
+  readonly labelOnly: boolean;
+  readonly status: "pending" | "reviewed";
+};
+
+/**
+ * GET /console/decisions — lockfile state for every declared decision.
+ */
+export async function decisionList(): Promise<ConsoleApiResult<DecisionListPayload>> {
+  return consoleFetch<DecisionListPayload>("/console/decisions");
+}
+
+/**
+ * GET /console/decisions/queue — parked reviews and audit label rows.
+ */
+export async function decisionQueue(): Promise<
+  ConsoleApiResult<{ rows: readonly DecisionQueueRow[] }>
+> {
+  return consoleFetch<{ rows: readonly DecisionQueueRow[] }>("/console/decisions/queue");
+}
+
+/**
+ * POST /console/decisions/resolve — approve a parked review or an audit label.
+ *
+ * @param body - Review id and the value the gate supplies
+ */
+export async function decisionResolve(body: {
+  readonly id: string;
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly reviewer: string;
+  readonly labelOnly?: boolean;
+}): Promise<ConsoleApiResult<{ ok: true }>> {
+  return consoleFetch<{ ok: true }>("/console/decisions/resolve", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 /** Request body for `POST /console/clock/run-now`. */

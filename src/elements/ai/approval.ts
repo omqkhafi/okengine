@@ -4,6 +4,7 @@
  * The pending row is a journal step. The first approve, deny, or timeout wins.
  */
 
+import { fail } from "../../kernel/errors.ts";
 import {
   hasJournalLease,
   JOURNAL_DEFAULT_LEASE_MS,
@@ -53,7 +54,38 @@ export interface AgentApprovalDecision {
 /** Result of resolving one approval. */
 export type AgentApprovalResolveResult =
   | { readonly ok: true }
-  | { readonly ok: false; readonly status: 403 | 404 | 409 };
+  | { readonly ok: false; readonly status: 403 | 404 }
+  | { readonly ok: false; readonly status: 409; readonly reason: "resolved" }
+  | {
+      readonly ok: false;
+      readonly status: 409;
+      readonly reason: "lease";
+      readonly retryAfterSeconds: number;
+    };
+
+/**
+ * HTTP 409 for a run whose lease is held. `Conflict` stays the finished case.
+ *
+ * @param retryAfterSeconds - Seconds until the lease expires
+ */
+export function journalLeaseBusyResponse(retryAfterSeconds: number): Response {
+  const seconds = Math.max(1, Math.ceil(retryAfterSeconds));
+  const failure = fail("JournalLeaseBusy", { retryAfter: seconds });
+  const headers = new Headers();
+  headers.set("retry-after", String(seconds));
+  return Response.json({ data: null, error: failure.error }, { status: 409, headers });
+}
+
+/**
+ * Seconds a caller should wait before retrying a busy lease.
+ *
+ * @param expiresAt - Lease expiry epoch-ms, when the run has one
+ * @param now - Clock used for the attempt
+ */
+export function leaseRetryAfterSeconds(expiresAt: number | undefined, now: number): number {
+  if (expiresAt === undefined) return 1;
+  return Math.max(1, Math.ceil((expiresAt - now) / 1000));
+}
 
 /**
  * Opaque approval id. The run id is the prefix so resolve can `get` one run.
@@ -147,7 +179,15 @@ export async function resolveAgentApproval(
   const token = hold ?? crypto.randomUUID();
   const at = now();
   const claimed = await store.acquireLease(parsed.runId, token, at, JOURNAL_DEFAULT_LEASE_MS);
-  if (!claimed) return { ok: false, status: 409 };
+  if (!claimed) {
+    const held = await store.get(parsed.runId);
+    return {
+      ok: false,
+      status: 409,
+      reason: "lease",
+      retryAfterSeconds: leaseRetryAfterSeconds(held?.leaseExpiresAt, at),
+    };
+  }
   try {
     const run = await store.get(parsed.runId);
     if (!run) return { ok: false, status: 404 };
@@ -157,7 +197,7 @@ export async function resolveAgentApproval(
     if ((decision.tenant ?? null) !== (current.tenant ?? null)) {
       return { ok: false, status: 404 };
     }
-    if (current.status !== "pending") return { ok: false, status: 409 };
+    if (current.status !== "pending") return { ok: false, status: 409, reason: "resolved" };
     const next: AgentApprovalRecord = {
       ...current,
       status: decision.decision === "approve" ? "approved" : "denied",

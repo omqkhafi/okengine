@@ -64,6 +64,7 @@ export const LLMS_PRIMARY_SECTIONS: readonly {
       "elements/ai/models",
       "elements/ai/prompts",
       "elements/ai/agents",
+      "elements/ai/decide",
       "elements/ai/events",
       "elements/ai/mcp",
     ],

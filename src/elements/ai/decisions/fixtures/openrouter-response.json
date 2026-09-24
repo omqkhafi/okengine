@@ -1,0 +1,15 @@
+{
+  "id": "gen-fixture",
+  "model": "typesafe/jev-1.13.0",
+  "provider": "TypeSafe",
+  "answers": {
+    "team": {
+      "type": "choice",
+      "choice": "technical",
+      "probabilities": { "billing": 0.08, "technical": 0.9, "none_of_these": 0.02 },
+      "confidence": 0.85
+    },
+    "urgent": { "type": "noul", "noul": 0.22 }
+  },
+  "usage": { "input_tokens": 180, "output_tokens": 24, "cost": 0.00001 }
+}
