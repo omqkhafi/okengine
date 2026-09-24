@@ -840,17 +840,36 @@ export interface Fx {
    */
   fetch(url: string | URL, init?: RequestInit): Promise<Response>;
   /**
+   * Resolve a pending agent tool approval (records nothing until the tool runs).
+   *
+   * First resolution wins. A later call returns a conflict failure.
+   */
+  readonly agent: {
+    /**
+     * @param id - Approval id from the interrupt
+     * @param opts - Optional replacement args
+     */
+    approve(
+      id: string,
+      opts?: { readonly args?: unknown },
+    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 }>;
+    /**
+     * @param id - Approval id from the interrupt
+     * @param opts - Denial reason fed back to the model
+     */
+    deny(
+      id: string,
+      opts?: { readonly reason?: string },
+    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 }>;
+  };
+  /**
    * Run a bounded AI agent (records `ask`).
    *
    * @param agent - Agent name or handle
-   * @param input - Agent input (`{ message }` or string)
+   * @param input - Agent input (`{ message }`, `{ messages }`, or string)
    */
   run(agent: NamedRef, input?: unknown): Promise<unknown>;
-  run(
-    agent: NamedRef,
-    input: unknown,
-    opts: { readonly stream: true },
-  ): AsyncIterable<AgUiEvent>;
+  run(agent: NamedRef, input: unknown, opts: { readonly stream: true }): AsyncIterable<AgUiEvent>;
   /**
    * Stream model tokens (records `ask`). Returns an async iterable of chunks.
    *
@@ -1699,6 +1718,37 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
   };
 
+  async function resolveAgentDecision(
+    id: string,
+    decision: {
+      readonly decision: "approve" | "deny";
+      readonly args?: unknown;
+      readonly reason?: string;
+    },
+  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: 403 | 404 | 409 }> {
+    const runtime = options.aiRuntime;
+    if (!runtime?.resolveApproval) return { ok: false, status: 404 };
+    const approver = auth.userId ?? operator.id;
+    return runtime.resolveApproval(
+      id,
+      {
+        decision: decision.decision,
+        tenant: tenant.id,
+        ...(decision.args !== undefined ? { args: decision.args } : {}),
+        ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+        ...(approver ? { approver } : {}),
+      },
+      {
+        auth: {
+          userId: auth.userId,
+          scopes: auth.scopes,
+          verified: auth.verified,
+        },
+        operator: { id: operator.id },
+      },
+    );
+  }
+
   const fx: Fx = {
     store: storeHandle,
     runs: runsSurface,
@@ -1955,6 +2005,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     fetch(url, init) {
       return loadFxFetch().runFxFetch(gated, url, init);
     },
+    agent: {
+      approve(id, opts) {
+        return resolveAgentDecision(id, { decision: "approve", args: opts?.args });
+      },
+      deny(id, opts) {
+        return resolveAgentDecision(id, { decision: "deny", reason: opts?.reason });
+      },
+    },
     run(agent, input, opts?: { readonly stream?: boolean }) {
       const name = resolveName(agent);
       const turn = agentTurn(input);
@@ -1970,6 +2028,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             const events = await withAbortSignal(local.signal, () =>
               options.aiRuntime!.streamAgent(name, {
                 ...turn,
+                ...(options.journal ? { journal: options.journal } : {}),
+                ...(options.flow !== undefined ? { flow: options.flow } : {}),
+                tenantId: tenant.id,
                 auth: {
                   userId: auth.userId,
                   scopes: auth.scopes,
@@ -1989,6 +2050,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (options.aiRuntime) {
           return options.aiRuntime.runAgent(name, {
             ...turn,
+            ...(options.journal ? { journal: options.journal } : {}),
+            ...(options.flow !== undefined ? { flow: options.flow } : {}),
+            tenantId: tenant.id,
             auth: {
               userId: auth.userId,
               scopes: auth.scopes,

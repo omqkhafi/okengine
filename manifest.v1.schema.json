@@ -680,6 +680,11 @@
           "items": { "$ref": "#/$defs/FlowRef" },
           "uniqueItems": true
         },
+        "approvals": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "const": true }
+        },
         "maxSteps": { "type": "integer", "minimum": 1 },
         "model": { "type": "string", "minLength": 1 },
         "budget": { "$ref": "#/$defs/AiPromptBudget" }

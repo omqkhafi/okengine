@@ -567,7 +567,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   // 6. AI
   let ai = pre.ai;
   if (needs.ai && !ai) {
-    ai = aiBind!.bindAi(options, gate, now, env, docker, vault);
+    ai = aiBind!.bindAi(options, gate, now, env, docker, vault, journal?.store);
   }
 
   // 7. Runs

@@ -161,7 +161,7 @@ ai.agent("planner", {
 | Option     | Type                                  | Default     | Meaning                      |
 | ---------- | ------------------------------------- | ----------- | ---------------------------- |
 | `model`    | `AiModelDecl` \| `string`             | first model | Logical binding for the loop |
-| `tools`    | Flow / MCP refs                       | `[]`        | Callable via `fx.call`       |
+| `tools`    | Flow ref, MCP ref, or `{ name, approval?, gate?, timeout? }` | `[]` | Callable via `fx.call` |
 | `maxSteps` | `number`                              | `6`         | Hard cap on tool rounds      |
 | `budget`   | `{ maxCostPerCall?, maxCostPerRun? }` | —           | Cost contracts for the run   |
 
@@ -181,6 +181,27 @@ await fx.run(supportAgent, {
   ],
 });
 ```
+
+## Tool approval
+
+<Callout>
+A tool with `approval` parks the run until someone calls `fx.agent.approve` or `fx.agent.deny`. The calling Flow must set `durable: true`. The wait defaults to `24h`, then the model sees `{ denied: true, reason: "timeout" }`.
+</Callout>
+
+```typescript
+const support = ai.agent("support", {
+  tools: [{ name: "billing.refund", approval: true, gate: ops, timeout: "1h" }],
+});
+
+on(http.post("/assist"), flow("assist", {
+  durable: true,
+  do: async (_input, fx) => fx.run(support, { message: "Refund order 14" }),
+}));
+```
+
+`gate` is who may resolve. A function for `approval` waits only when it returns true.
+Approve may replace `args`. A second resolution is HTTP 409. Deny is not `stopReason: "denied"` —
+the model continues with `{ denied: true, reason }`.
 
 ## Agents vs ask-with-tools
 
@@ -209,6 +230,10 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
 <Accordion title='ai: model requested unknown tool "…"'>
   The model emitted a tool name outside the declared `tools` bag. Align names with Flow / MCP refs,
   or tighten instructions in the user `message`.
+</Accordion>
+
+<Accordion title='must set durable: true'>
+  An approval tool cannot wait in memory. Set `durable: true` on the Flow that calls `fx.run`.
 </Accordion>
 
 <Accordion title="OKE1005 on agent runs">

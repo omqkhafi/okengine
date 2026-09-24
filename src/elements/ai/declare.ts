@@ -70,10 +70,26 @@ export interface AiEmbedOptions {
   readonly into?: { readonly name: string; readonly facet?: string } | string;
 }
 
+/** Who may have to approve one agent tool before it runs. */
+export type AiToolApproval =
+  | boolean
+  | ((input: unknown, ctx: { readonly auth?: unknown; readonly tenant?: unknown }) => boolean);
+
+/** One agent tool, optionally held for approval. */
+export interface AiAgentToolOptions {
+  readonly name: string;
+  /** `true` always waits. A function waits only when it returns true. */
+  readonly approval?: AiToolApproval;
+  /** Gate that may approve or deny. Required when {@link approval} is set. */
+  readonly gate?: { readonly name: string } | string;
+  /** How long to wait before a deny. Default `24h`. */
+  readonly timeout?: string;
+}
+
 /** Options for {@link ai.agent}. */
 export interface AiAgentOptions {
   readonly model?: AiModelDecl | string;
-  readonly tools?: readonly ({ readonly name: string } | string)[];
+  readonly tools?: readonly (AiAgentToolOptions | { readonly name: string } | string)[];
   readonly maxSteps?: number;
   readonly budget?: AiBudgetDecl;
 }
@@ -119,11 +135,22 @@ export interface AiEmbedDecl {
   readonly into?: string;
 }
 
+/** Approval held on one tool. The predicate stays in code. */
+export interface AiAgentApprovalDecl {
+  readonly gate: string;
+  readonly timeout: string;
+  readonly when?: (
+    input: unknown,
+    ctx: { readonly auth?: unknown; readonly tenant?: unknown },
+  ) => boolean;
+}
+
 /** Declared agent whose tools are flows. */
 export interface AiAgentDecl {
   readonly kind: "agent";
   readonly name: string;
   readonly tools: readonly string[];
+  readonly approvals?: Readonly<Record<string, AiAgentApprovalDecl>>;
   readonly maxSteps?: number;
   readonly model?: string;
   readonly budget?: AiBudgetDecl;
@@ -184,6 +211,10 @@ export interface AiMcpServerDecl {
  */
 function toolName(tool: { readonly name: string } | string): string {
   return typeof tool === "string" ? tool : tool.name;
+}
+
+function gateName(gate: { readonly name: string } | string): string {
+  return typeof gate === "string" ? gate : gate.name;
 }
 
 /**
@@ -329,10 +360,26 @@ export const ai: AiNamespace = {
    * @param options - Tools / maxSteps / model / budget
    */
   agent(name: string, options: AiAgentOptions = {}): AiAgentDecl {
+    const approvals: Record<string, AiAgentApprovalDecl> = {};
+    for (const tool of options.tools ?? []) {
+      if (typeof tool === "string" || !("approval" in tool) || tool.approval === undefined) {
+        continue;
+      }
+      if (tool.approval === false) continue;
+      if (tool.gate === undefined) {
+        throw new TypeError(`ai.agent("${name}"): tool "${toolName(tool)}" approval requires gate`);
+      }
+      approvals[toolName(tool)] = {
+        gate: gateName(tool.gate),
+        timeout: tool.timeout ?? "24h",
+        ...(typeof tool.approval === "function" ? { when: tool.approval } : {}),
+      };
+    }
     const decl: AiAgentDecl = {
       kind: "agent",
       name,
       tools: (options.tools ?? []).map(toolName),
+      ...(Object.keys(approvals).length > 0 ? { approvals } : {}),
       ...(options.maxSteps !== undefined ? { maxSteps: options.maxSteps } : {}),
       ...(options.budget !== undefined ? { budget: options.budget } : {}),
       ...(typeof options.model === "string"

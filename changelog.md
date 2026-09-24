@@ -14,6 +14,17 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
+#### Runtime
+
+- A tool on `ai.agent` may set `approval` and `gate`. The calling Flow must be
+  `durable: true`. The run parks until `fx.agent.approve`, `fx.agent.deny`, or the
+  timeout (default `24h`, then deny). The first resolution wins; a later one is
+  HTTP 409. Approve can replace the tool args. Resume replays the tool output.
+
+#### Docs
+
+- Agents document tool approval: `approval`, `gate`, `timeout`, and `durable: true`.
+
 #### Console — Flows & traces
 
 - The trace sheet header shows the run id and, when the trace was called

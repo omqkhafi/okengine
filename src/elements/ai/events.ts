@@ -58,6 +58,14 @@ export type AgUiEvent =
         readonly output?: unknown;
       };
       readonly usage?: readonly AgUiUsage[];
+      readonly outcome?: {
+        readonly type: "interrupt";
+        readonly interrupts: readonly {
+          readonly id: string;
+          readonly reason: string;
+          readonly payload?: unknown;
+        }[];
+      };
     }
   | { readonly type: "RUN_ERROR"; readonly message: string; readonly code?: string }
   | { readonly type: "CUSTOM"; readonly name: string; readonly value: unknown };

@@ -14,6 +14,7 @@ import type { AiDriver, AiOpenOptions } from "../../drivers/ai-types.ts";
 import { createAiRuntime, type AiRuntime } from "../../elements/ai.ts";
 import type { GateRuntime } from "../../elements/gate.ts";
 import type { VaultRuntime } from "../../elements/vault.ts";
+import type { JournalStore } from "../journal.ts";
 import type { BootOptions } from "../boot.ts";
 
 /**
@@ -33,6 +34,7 @@ export function bindAi(
   env: ConfigEnv = "test",
   docker = false,
   vault?: VaultRuntime,
+  journalStore?: JournalStore,
 ): AiRuntime {
   const id = resolveAiDriverId(options, env, docker);
   const driver =
@@ -48,6 +50,7 @@ export function bindAi(
     },
     gates: options.ai?.gates ?? gate,
     now,
+    ...(journalStore ? { journalStore } : {}),
   });
 }
 

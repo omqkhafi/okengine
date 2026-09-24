@@ -16,7 +16,10 @@
 export { ai, listAiDecls, resetAiDecls } from "./ai/declare.ts";
 export type {
   AiAgentDecl,
+  AiAgentApprovalDecl,
   AiAgentOptions,
+  AiAgentToolOptions,
+  AiToolApproval,
   AiBudgetDecl,
   AiEmbedDecl,
   AiEmbedOptions,

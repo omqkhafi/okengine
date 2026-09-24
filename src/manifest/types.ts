@@ -487,6 +487,8 @@ export interface AiPrompt {
 /** Bounded agent whose tools are flows. */
 export interface AiAgent {
   tools?: FlowRef[];
+  /** Tools that park for human approval. The predicate stays in author code. */
+  approvals?: Record<string, true>;
   maxSteps?: number;
   model?: string;
   budget?: AiBudget;

@@ -9,6 +9,18 @@
 
 import type { AiDriver, AiMessage, AiModelClient, AiToolDef } from "../../drivers/ai-types.ts";
 import { currentAbortSignal, withAbortSignal } from "../../kernel/abort-scope.ts";
+import type { JournalSession, JournalStore } from "../../kernel/journal.ts";
+import { isJournalSuspend } from "../../kernel/journal-suspend.ts";
+import {
+  AiDurableRequiredError,
+  approvalStepName,
+  approvalTimeoutMs,
+  readAgentApproval,
+  resolveAgentApproval,
+  type AgentApprovalDecision,
+  type AgentApprovalRecord,
+  type AgentApprovalResolveResult,
+} from "./approval.ts";
 import {
   mcpCapabilityRefFromName,
   mcpModelToolName,
@@ -144,6 +156,8 @@ export interface AgentToolStep {
   readonly effects: readonly AgentToolEffect[];
   readonly denial?: AgentDenial;
   readonly at: number;
+  /** Who approved this tool, when a human resolution ran it. */
+  readonly approver?: string;
 }
 
 /** Full agent run recorded on the denial / trail ledger. */
@@ -256,6 +270,8 @@ export interface CreateAiRuntimeOptions {
    * @param input - Tool input
    */
   readonly callFlow?: (name: string, input: unknown) => Promise<unknown>;
+  /** Journal store that holds pending tool approvals. */
+  readonly journalStore?: JournalStore;
   /**
    * Resolve gates required for a tool flow.
    *
@@ -321,6 +337,11 @@ export interface AiAgentRunOptions {
   readonly meta?: GatePolicyContext["meta"];
   /** Host-flow dispatch — must be `fx.call` when wired from fx.run. */
   readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
+  /** Durable journal when the calling Flow is `durable: true`. */
+  readonly journal?: JournalSession;
+  /** Calling flow name, used when approval requires durability. */
+  readonly flow?: string;
+  readonly tenantId?: string | null;
 }
 
 /** Stream options. */
@@ -424,6 +445,18 @@ export interface AiRuntime {
    * @param text - Text to embed
    */
   embedVector(model: string, text: string): Promise<readonly number[]>;
+  /**
+   * Approve or deny a pending tool. First resolution wins.
+   *
+   * @param id - Approval id
+   * @param decision - Approve or deny
+   * @param ctx - Gate context for the tool's gate
+   */
+  resolveApproval(
+    id: string,
+    decision: AgentApprovalDecision,
+    ctx: GatePolicyContext,
+  ): Promise<AgentApprovalResolveResult>;
 }
 
 /**
@@ -593,6 +626,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly trail: AgentToolStep[];
     readonly runDenials: AgentDenial[];
     readonly signal?: AbortSignal;
+    readonly callId?: string;
+    readonly journal?: JournalSession;
+    readonly flow?: string;
+    readonly tenantId?: string | null;
+    readonly approvals?: AiAgentDecl["approvals"];
+    readonly emit?: AgentEventEmit;
   }): Promise<unknown> {
     const {
       tool,
@@ -648,6 +687,85 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       }
     }
 
+    const approval = opts.approvals?.[capability] ?? opts.approvals?.[tool];
+    const needsApproval =
+      approval !== undefined &&
+      (approval.when === undefined || approval.when(args, { auth, tenant: opts.tenantId ?? null }));
+    if (needsApproval) {
+      if (!opts.journal) {
+        throw new AiDurableRequiredError(opts.flow ?? "(unknown)", agentLabel);
+      }
+      const id = opts.callId && opts.callId.length > 0 ? opts.callId : `${now()}-${trail.length}`;
+      const record: AgentApprovalRecord = {
+        status: "pending",
+        tool: capability,
+        args,
+        gate: approval.gate,
+        tenant: opts.tenantId ?? null,
+        requestedAt: now(),
+      };
+      const stored = (await opts.journal.step(
+        approvalStepName(id),
+        () => record,
+      )) as AgentApprovalRecord;
+      let decision = stored;
+      if (decision.status === "pending") {
+        opts.emit?.({
+          type: "RUN_FINISHED",
+          threadId: "default",
+          runId: opts.journal.runId,
+          outcome: {
+            type: "interrupt",
+            interrupts: [{ id, reason: "approval", payload: { tool: capability, args } }],
+          },
+        });
+        await opts.journal.sleep(approvalStepName(id), approval.timeout, () =>
+          approvalTimeoutMs(approval.timeout),
+        );
+        const store = options.journalStore;
+        if (!store) throw new Error("ai: approval resume requires a journal store");
+        decision = (await readAgentApproval(store, id)) ?? decision;
+        if (decision.status === "pending") {
+          const wrote = await resolveAgentApproval(
+            store,
+            id,
+            { decision: "deny", reason: "timeout", tenant: decision.tenant },
+            now,
+          );
+          decision = wrote.ok
+            ? { ...decision, status: "denied", reason: "timeout" }
+            : ((await readAgentApproval(store, id)) ?? decision);
+        }
+      }
+      if (decision.status === "denied") {
+        const denial: AgentDenial = {
+          agent: agentLabel,
+          tool: capability,
+          gate: approval.gate,
+          reason: decision.reason ?? "denied",
+          at: now(),
+        };
+        runDenials.push(denial);
+        denials.push(denial);
+        trail.push({ tool: capability, status: "denied", effects, denial, at: denial.at });
+        return { denied: true, reason: denial.reason };
+      }
+      const toolArgs = decision.editedArgs !== undefined ? decision.editedArgs : args;
+      const output = await opts.journal.effect("call", approvalStepName(id), () => {
+        const call = callTool ?? options.callFlow;
+        if (!call) throw new Error("callFlow not configured");
+        return withAbortSignal(signal ?? currentAbortSignal(), () => call(capability, toolArgs));
+      });
+      trail.push({
+        tool: capability,
+        status: "ok",
+        effects,
+        at: now(),
+        ...(decision.approver !== undefined ? { approver: decision.approver } : {}),
+      });
+      return output;
+    }
+
     const invoke = callTool ?? options.callFlow;
     if (!invoke) {
       const denial: AgentDenial = {
@@ -685,6 +803,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly operator?: GatePolicyContext["operator"];
     readonly meta?: GatePolicyContext["meta"];
     readonly emit?: AgentEventEmit;
+    readonly journal?: JournalSession;
+    readonly flow?: string;
+    readonly tenantId?: string | null;
+    readonly approvals?: AiAgentDecl["approvals"];
   }): Promise<{
     readonly output: unknown;
     readonly text: string;
@@ -718,8 +840,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     let lastToolResult: unknown;
     let messageSeq = 0;
 
-    const capHit = (): boolean =>
-      opts.maxCostPerRun !== undefined && cost >= opts.maxCostPerRun;
+    const capHit = (): boolean => opts.maxCostPerRun !== undefined && cost >= opts.maxCostPerRun;
 
     const finish = () => ({
       output: lastToolResult !== undefined ? lastToolResult : lastRaw,
@@ -756,13 +877,17 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       opts.emit?.({ type: "STEP_STARTED", stepName });
       let result: Awaited<ReturnType<AiModelClient["complete"]>>;
       try {
-        result = await opts.client.complete({
-        model: providerModel,
-        messages,
-        tools: defs.length > 0 ? defs : undefined,
-        responseFormat: opts.responseFormat,
-        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-      });
+        const complete = () =>
+          opts.client.complete({
+            model: providerModel,
+            messages,
+            tools: defs.length > 0 ? defs : undefined,
+            responseFormat: opts.responseFormat,
+            ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+          });
+        result = opts.journal
+          ? await opts.journal.effect("ask", `${opts.agentLabel}:${steps}`, complete)
+          : await complete();
       } catch (err) {
         if (err instanceof AgentLoopHalt) throw err;
         if (err instanceof Error && err.name === "AbortError") {
@@ -823,22 +948,28 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         let toolResult: unknown;
         try {
           toolResult = await dispatchTool({
-          tool: tc.name,
-          args: tc.arguments,
-          agentLabel: opts.agentLabel,
-          allowedTools: allowed,
-          callTool: opts.callTool,
-          auth: opts.auth,
-          operator: opts.operator,
-          meta: opts.meta,
-          trail,
-          runDenials,
-          ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-        });
+            tool: tc.name,
+            args: tc.arguments,
+            agentLabel: opts.agentLabel,
+            allowedTools: allowed,
+            callTool: opts.callTool,
+            auth: opts.auth,
+            operator: opts.operator,
+            meta: opts.meta,
+            trail,
+            runDenials,
+            callId: tc.id,
+            ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+            ...(opts.journal !== undefined ? { journal: opts.journal } : {}),
+            ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
+            ...(opts.tenantId !== undefined ? { tenantId: opts.tenantId } : {}),
+            ...(opts.approvals !== undefined ? { approvals: opts.approvals } : {}),
+            ...(opts.emit !== undefined ? { emit: opts.emit } : {}),
+          });
         } catch (err) {
-          if (err instanceof AgentLoopHalt) throw err;
-          const reason =
-            err instanceof Error && err.name === "AbortError" ? "aborted" : "denied";
+          if (err instanceof AgentLoopHalt || isJournalSuspend(err)) throw err;
+          if (err instanceof AiDurableRequiredError) throw err;
+          const reason = err instanceof Error && err.name === "AbortError" ? "aborted" : "denied";
           opts.emit?.({
             type: "TOOL_CALL_RESULT",
             messageId: `m-${++messageSeq}`,
@@ -1181,6 +1312,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           operator: runOpts.operator,
           meta: runOpts.meta,
           signal: currentAbortSignal(),
+          ...(runOpts.journal !== undefined ? { journal: runOpts.journal } : {}),
+          ...(runOpts.flow !== undefined ? { flow: runOpts.flow } : {}),
+          ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
+          ...(decl.approvals !== undefined ? { approvals: decl.approvals } : {}),
         });
         return remember({
           ok: loop.stopReason === "completed" && loop.denials.length === 0,
@@ -1300,6 +1435,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             meta: runOpts.meta,
             emit: queue.emit,
             signal,
+            ...(runOpts.journal !== undefined ? { journal: runOpts.journal } : {}),
+            ...(runOpts.flow !== undefined ? { flow: runOpts.flow } : {}),
+            ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
+            ...(decl.approvals !== undefined ? { approvals: decl.approvals } : {}),
           });
           const record: AgentRunRecord = {
             id: runId,
@@ -1327,6 +1466,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           });
           queue.finish();
         } catch (err) {
+          if (isJournalSuspend(err) || err instanceof AiDurableRequiredError) {
+            queue.finish(err);
+            return;
+          }
           if (err instanceof AgentLoopHalt) {
             pushObservability(agentRuns, {
               id: runId,
@@ -1413,6 +1556,23 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
       const vector = await this.embedVector(modelName, text);
       await index.upsert(id, vector, { text });
+    },
+
+    async resolveApproval(id, decision, ctx) {
+      const store = options.journalStore;
+      if (!store) return { ok: false, status: 404 };
+      const pending = await readAgentApproval(store, id);
+      if (!pending) return { ok: false, status: 404 };
+      if ((decision.tenant ?? null) !== (pending.tenant ?? null)) {
+        return { ok: false, status: 404 };
+      }
+      if (options.gates) {
+        const allowed = await options.gates.allow([pending.gate], ctx);
+        if (!allowed) return { ok: false, status: 403 };
+      } else if (pending.gate !== "public") {
+        return { ok: false, status: 403 };
+      }
+      return resolveAgentApproval(store, id, decision, now);
     },
 
     async embedVector(modelName, text) {

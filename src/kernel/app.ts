@@ -6,6 +6,7 @@
  * pipeline, and wires `fx.call` to untriggered (and triggered) flows.
  */
 
+import { bindAgentApprovalFlows } from "../elements/ai/approval-http.ts";
 import { compileRoute } from "../compiler/dynamic.ts";
 import type { CompiledRoute } from "../compiler/aot.ts";
 import { encodeExecuteResult, encodeFailure } from "../compiler/response.ts";
@@ -1096,6 +1097,8 @@ export function oke(options: OkeOptions): OkeApp {
   // contribute auth-method Bindings before traffic (plan Phase 2).
   const router: Router<Binding> = smart;
 
+  bindAgentApprovalFlows(adoptBinding);
+
   function adoptBinding(b: Binding): void {
     adopted.push(b);
     registerFlow(b.flow);
@@ -1340,6 +1343,19 @@ export function oke(options: OkeOptions): OkeApp {
             ...durableResumeFx(),
             ...(gateConfig.auth?.tenant ? (loadAppTenant().w(5, gateConfig.auth) as object) : {}),
             ...(existing?.tenant ? { tenant: { id: existing.tenant } } : {}),
+            callHandler: async (name, callInput) => {
+              const target = flowsByName.get(name);
+              if (!target) return undefined;
+              const inner = await execute(
+                target,
+                callInput,
+                { kind: "internal" } satisfies InternalTrigger,
+                { parentId: runId },
+              );
+              if (inner.failure) return inner.failure;
+              if (inner.ctx.error !== undefined) throw inner.ctx.error;
+              return inner.output;
+            },
           },
         });
       } catch (err) {

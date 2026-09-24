@@ -495,6 +495,14 @@ describe("fx — wholesale swap", () => {
       async fetch() {
         return new Response(null, { status: 204 });
       },
+      agent: {
+        async approve() {
+          return { ok: true as const };
+        },
+        async deny() {
+          return { ok: true as const };
+        },
+      },
       async run() {
         return {};
       },

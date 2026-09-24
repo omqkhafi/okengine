@@ -1648,21 +1648,43 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
   }
 }
 
+function agentToolEntry(
+  el: AstNode,
+  scope: ProjectScope,
+): { name: string; approval: boolean } | undefined {
+  if (el.type === "ObjectExpression") {
+    const nameNode = objectProp(el, "name");
+    const raw =
+      (nameNode ? resolveCallTarget(nameNode, scope.bindings) : undefined) ??
+      stringArg(nameNode) ??
+      identifierName(nameNode);
+    if (!raw) return undefined;
+    const name = scope.flowExports.get(raw) ?? scope.bindings.get(raw)?.ref ?? raw;
+    const approvalNode = objectProp(el, "approval");
+    return { name, approval: approvalNode !== undefined && boolProp(el, "approval") !== false };
+  }
+  const resolved = resolveCallTarget(el, scope.bindings);
+  const raw = resolved ?? identifierName(el) ?? stringArg(el);
+  if (!raw) return undefined;
+  const name = scope.flowExports.get(raw) ?? scope.bindings.get(raw)?.ref ?? raw;
+  return { name, approval: false };
+}
+
 function collectAgent(call: CallExpression, scope: ProjectScope): void {
   const agentName = stringArg(call.arguments[0]);
   const opts = objectArg(call.arguments[1]);
   if (!agentName || !opts) return;
   const toolsArr = arrayProp(opts, "tools");
-  const tools = toolsArr
-    ?.map((el) => {
-      const resolved = resolveCallTarget(el, scope.bindings);
-      if (resolved) return resolved;
-      return identifierName(el) ?? stringArg(el);
-    })
-    .filter((x): x is string => typeof x === "string")
-    .map((id) => scope.flowExports.get(id) ?? scope.bindings.get(id)?.ref ?? id);
+  const entries = (toolsArr ?? [])
+    .map((el) => agentToolEntry(el, scope))
+    .filter((entry): entry is { name: string; approval: boolean } => entry !== undefined);
+  const tools = entries.map((entry) => entry.name);
+  const approvals = Object.fromEntries(
+    entries.filter((entry) => entry.approval).map((entry) => [entry.name, true as const]),
+  );
   const agent: AiAgent = {
-    ...(tools && tools.length > 0 ? { tools } : {}),
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(Object.keys(approvals).length > 0 ? { approvals } : {}),
     ...(numberProp(opts, "maxSteps") !== undefined
       ? { maxSteps: numberProp(opts, "maxSteps") }
       : {}),
