@@ -42,6 +42,10 @@ export function FlowsPage() {
 
   const [graphFilter, setGraphFilter] = useState<GraphFilter | null>(null);
   const [focusEffectIndex, setFocusEffectIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setFocusEffectIndex(null);
+  }, [selectedRunId]);
   const [playbackKey, setPlaybackKey] = useState(0);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const playbackTimer = useRef<ReturnType<typeof setInterval> | null>(null);

@@ -16,6 +16,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Flows & traces
 
+- The trace sheet header shows the run id and, when the trace was called
+  from another run, the parent id. Each id copies. Previous and next step
+  through the current list from the open trace (filters included). Overview
+  scrolls that row into view. Observability steps the newest-first buffer.
 - Trace Request and Response Fields expand objects and arrays into nested
   fields. A collapsed row shows a short preview (`id: ENG-12`, `5 items`)
   instead of the raw JSON string. Array bodies use indexed rows.

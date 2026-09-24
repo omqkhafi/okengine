@@ -10,6 +10,7 @@ import {
   ArrowLeft01Icon,
   ArrowReloadHorizontalIcon,
   ArrowRight01Icon,
+  ArrowUp01Icon,
   LeftToRightListBulletIcon,
   MinusSignIcon,
   PlusSignIcon,
@@ -40,6 +41,7 @@ import {
   EXPLORER_STRIP_TOKEN_CLASS,
   SECTION_HEAD_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
+import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -68,6 +70,7 @@ import { durationClassName } from "./duration-tone.ts";
 import { traceRequestMeta } from "./request-meta.ts";
 import { TraceRequestSection } from "./trace-request-section.tsx";
 import { executeTraceReplay } from "./trace-actions.ts";
+import { traceIdentityLines, traceNav } from "./trace-nav.ts";
 import { traceGateInfos } from "./trace-gates.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
 import { playbackDurationMs } from "./replay-playback.ts";
@@ -101,6 +104,13 @@ export type TraceDetailSheetProps = {
   readonly playbackKey?: number;
   /** Called when Replay succeeds so the page can pulse the graph chain. */
   readonly onReplayStart?: () => void;
+  /**
+   * Ordered traces the header can step through. Previous is the row above
+   * the open trace; next is the row below.
+   */
+  readonly navigationRuns?: readonly RunRow[];
+  /** Open another trace from {@link navigationRuns}. */
+  readonly onSelectRun?: (id: string) => void;
 };
 
 const sectionClassName = "border-b border-border/60 last:border-b-0";
@@ -120,6 +130,8 @@ export function TraceDetailSheet({
   onFocusEffectChange,
   playbackKey = 0,
   onReplayStart,
+  navigationRuns,
+  onSelectRun,
 }: TraceDetailSheetProps) {
   const manifest = useManifest();
   const reduceMotion = useReducedMotion();
@@ -137,6 +149,11 @@ export function TraceDetailSheet({
   const dense = traceIsDense(bars.length);
   const lanes = useMemo(() => (dense ? traceLanes(bars) : []), [dense, bars]);
   const gaps = useMemo(() => (run ? waterfallGaps(bars, run.durationMs) : []), [run, bars]);
+  const identity = useMemo(() => (run ? traceIdentityLines(run) : []), [run]);
+  const nav = useMemo(
+    () => (run && navigationRuns ? traceNav(navigationRuns, run.id) : null),
+    [run, navigationRuns],
+  );
   const requestMeta = useMemo(
     () =>
       run
@@ -238,6 +255,12 @@ export function TraceDetailSheet({
     });
   }, [focusEffectIndex, lanes]);
 
+  const stepTo = (id: string | null) => {
+    if (!id || !onSelectRun) return;
+    onFocusEffectChange?.(null);
+    onSelectRun(id);
+  };
+
   const onReplay = async (e: MouseEvent) => {
     e.stopPropagation();
     if (!run || busy) return;
@@ -307,7 +330,79 @@ export function TraceDetailSheet({
                       </>
                     ) : null}
                   </SheetDescription>
+                  <div className="mt-1 flex min-w-0 flex-col gap-0.5" data-slot="trace-sheet-ids">
+                    {identity.map((line) => (
+                      <div
+                        key={line.key}
+                        className="flex min-w-0 items-center gap-1.5"
+                        data-slot="trace-sheet-id"
+                        data-id={line.key}
+                      >
+                        <span className="w-12 shrink-0 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                          {line.label}
+                        </span>
+                        <code
+                          className="min-w-0 truncate font-mono text-[11px] leading-none text-foreground/80"
+                          title={line.value}
+                        >
+                          {line.value}
+                        </code>
+                        <CopyInlineButton value={line.value} label={`Copy ${line.label} ID`} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
+                {nav && nav.index >= 0 && onSelectRun ? (
+                  <div
+                    className="flex shrink-0 items-center self-start"
+                    data-slot="trace-sheet-nav"
+                    role="group"
+                    aria-label="Trace navigation"
+                  >
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={(props) => (
+                          <button
+                            {...props}
+                            type="button"
+                            className="inline-flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
+                            aria-label="Previous trace"
+                            data-slot="trace-sheet-previous"
+                            disabled={nav.previousId === null}
+                            onClick={(event) => {
+                              props.onClick?.(event);
+                              stepTo(nav.previousId);
+                            }}
+                          >
+                            <HugeiconsIcon icon={ArrowUp01Icon} className="size-5" />
+                          </button>
+                        )}
+                      />
+                      <TooltipContent side="bottom">Previous trace</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={(props) => (
+                          <button
+                            {...props}
+                            type="button"
+                            className="inline-flex size-8 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
+                            aria-label="Next trace"
+                            data-slot="trace-sheet-next"
+                            disabled={nav.nextId === null}
+                            onClick={(event) => {
+                              props.onClick?.(event);
+                              stepTo(nav.nextId);
+                            }}
+                          >
+                            <HugeiconsIcon icon={ArrowDown01Icon} className="size-5" />
+                          </button>
+                        )}
+                      />
+                      <TooltipContent side="bottom">Next trace</TooltipContent>
+                    </Tooltip>
+                  </div>
+                ) : null}
               </div>
               <AnimatePresence mode="wait">
                 {hint ? (

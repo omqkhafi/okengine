@@ -2,7 +2,7 @@
  * Scoped Traces pane (start side of the Flow split-view).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert02Icon, FilterHorizontalIcon, Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
@@ -100,6 +100,11 @@ export function TracesPane({
     return filterRunsByGraph(base, graphFilter, manifest);
   }, [runs, filters, graphFilter, manifest]);
 
+  const navigationRuns = useMemo(() => {
+    if (!selectedRunId) return visible;
+    return visible.some((run) => run.id === selectedRunId) ? visible : runs;
+  }, [visible, runs, selectedRunId]);
+
   const selectedRun = useMemo(
     () =>
       selectedRunProp !== undefined
@@ -122,6 +127,13 @@ export function TracesPane({
   const setAdvanced = (advanced: DimensionQuery) => {
     setFilters((prev) => ({ ...prev, advanced }));
   };
+
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!selectedRunId || !listRef.current) return;
+    const row = listRef.current.querySelector(`[data-run-id="${CSS.escape(selectedRunId)}"]`);
+    if (row instanceof HTMLElement) row.scrollIntoView({ block: "nearest" });
+  }, [selectedRunId]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="traces-pane">
@@ -249,7 +261,7 @@ export function TracesPane({
         </AgentDisclosure>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {runs.length === 0 ? (
           <Empty className="border-none">
             <EmptyHeader>
@@ -290,6 +302,8 @@ export function TracesPane({
         onFocusEffectChange={onFocusEffectChange}
         playbackKey={playbackKey}
         onReplayStart={onReplayStart}
+        navigationRuns={navigationRuns}
+        onSelectRun={(id) => onSelect(id)}
       />
     </div>
   );

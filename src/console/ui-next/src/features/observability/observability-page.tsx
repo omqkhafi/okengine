@@ -122,6 +122,10 @@ export function ObservabilityPage(): JSX.Element {
     () => (selectedRunId ? (buffer.find((run) => run.id === selectedRunId) ?? null) : null),
     [buffer, selectedRunId],
   );
+  const navigationRuns = useMemo(
+    () => [...buffer].sort((a, b) => b.startedAt - a.startedAt || a.id.localeCompare(b.id)),
+    [buffer],
+  );
 
   return (
     <div className={EXPLORER_PAGE_CLASS} data-slot="observability-page">
@@ -210,7 +214,12 @@ export function ObservabilityPage(): JSX.Element {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
-      <TraceDetailSheet run={selectedRun} onClose={() => setSelectedRun(null)} />
+      <TraceDetailSheet
+        run={selectedRun}
+        onClose={() => setSelectedRun(null)}
+        navigationRuns={navigationRuns}
+        onSelectRun={setSelectedRun}
+      />
       <InstanceFleetSheet fleet={fleet.data} open={fleetOpen} onClose={() => setFleetOpen(false)} />
     </div>
   );
