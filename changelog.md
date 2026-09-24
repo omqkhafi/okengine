@@ -36,10 +36,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
 
+#### Console — Units & Call API
+
+- Flows folders can be pinned. The pin on a folder row keeps that unit at
+  the top of its trigger band and stays in this browser.
+
 ### ♻️ Changed
 
 #### Runtime
 
+- `fx.run` reports `stopReason`: `completed`, `max_steps`, `budget`, `denied`, or
+  `aborted`. Hitting `maxSteps` is not a normal completion. `denied` is set only
+  when a deny ends the run.
 - `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
   result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
 - Repeated identical `fx.ask` calls outside a durable run reach the model. Replay

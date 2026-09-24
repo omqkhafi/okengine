@@ -77,8 +77,8 @@ when inference does not see `fx.run`.
 <Step>
 ### Bound termination
 
-Default `maxSteps` is **6** when omitted. Hitting the step cap ends the loop. Spending
-`budget.maxCostPerRun` stops the loop and `fx.run` returns the steps already finished.
+Default `maxSteps` is **6**. `stopReason` is `completed`, `max_steps` (`ok: false`), or
+`budget` (partial trail, no throw). A denial fed back to the model stays `completed`.
 
 </Step>
 

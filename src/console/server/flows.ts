@@ -912,6 +912,7 @@ const AiListOut = z.object({
       agent: z.string(),
       message: z.string(),
       ok: z.boolean(),
+      stopReason: z.enum(["completed", "max_steps", "budget", "denied", "aborted"]),
       steps: z.number(),
       cost: z.number(),
       at: z.number(),

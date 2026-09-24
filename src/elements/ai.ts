@@ -51,6 +51,7 @@ export {
 export type {
   AgentDenial,
   AgentRunRecord,
+  AgentStopReason,
   AgentToolEffect,
   AgentToolStep,
   AiAgentRunOptions,

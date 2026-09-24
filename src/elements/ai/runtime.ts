@@ -49,6 +49,37 @@ const AI_SAME_MODEL_RETRY_BACKOFF_MS = 250;
 /** Default bound for tool / agent loops. */
 export const AI_DEFAULT_MAX_STEPS = 6;
 
+/** Thrown inside the tool loop when a deny or abort ends the run. */
+class AgentLoopHalt extends Error {
+  readonly stopReason: "aborted" | "denied";
+  readonly trail: readonly AgentToolStep[];
+  readonly denials: readonly AgentDenial[];
+  readonly steps: number;
+  readonly cost: number;
+  readonly output: unknown;
+
+  constructor(
+    stopReason: "aborted" | "denied",
+    cause: unknown,
+    partial: {
+      readonly trail: readonly AgentToolStep[];
+      readonly denials: readonly AgentDenial[];
+      readonly steps: number;
+      readonly cost: number;
+      readonly output: unknown;
+    },
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = stopReason === "aborted" ? "AbortError" : "AgentLoopHalt";
+    this.stopReason = stopReason;
+    this.trail = partial.trail;
+    this.denials = partial.denials;
+    this.steps = partial.steps;
+    this.cost = partial.cost;
+    this.output = partial.output;
+  }
+}
+
 /** Console observability cap for ask journal entries and agent run records. */
 export const AI_OBSERVABILITY_LIMIT = 500;
 
@@ -78,6 +109,9 @@ export function parsePromptRef(ref: string): {
   if (!/^\d+$/.test(tail)) return { name: ref };
   return { name: ref.slice(0, at), version: Number(tail) };
 }
+
+/** Why an agent loop stopped. A fed-back denial is not `denied`. */
+export type AgentStopReason = "completed" | "max_steps" | "budget" | "denied" | "aborted";
 
 /** Recorded agent tool denial (containment proof — not an error). */
 export interface AgentDenial {
@@ -112,6 +146,7 @@ export interface AgentRunRecord {
   readonly agent: string;
   readonly message: string;
   readonly ok: boolean;
+  readonly stopReason: AgentStopReason;
   readonly steps: number;
   readonly trail: readonly AgentToolStep[];
   readonly denials: readonly AgentDenial[];
@@ -325,6 +360,7 @@ export interface AiRuntime {
     options: AiAgentRunOptions,
   ): Promise<{
     readonly ok: boolean;
+    readonly stopReason: AgentStopReason;
     readonly steps: number;
     readonly denials: readonly AgentDenial[];
     readonly trail: readonly AgentToolStep[];
@@ -612,6 +648,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly steps: number;
     readonly cost: number;
     readonly budgetExceeded: boolean;
+    readonly stopReason: AgentStopReason;
     readonly inputTokens?: number;
     readonly outputTokens?: number;
   }> {
@@ -627,6 +664,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     let steps = 0;
     let cost = 0;
     let budgetExceeded = false;
+    let stopReason: AgentStopReason = "max_steps";
     const tokens: { inputTokens?: number; outputTokens?: number } = {};
     let lastText = "";
     let lastRaw: unknown = {};
@@ -645,22 +683,49 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       steps,
       cost,
       budgetExceeded,
+      stopReason,
       ...tokenFields(tokens),
     });
 
     const providerModel = wireModel(opts.modelName, opts.client);
     while (steps < opts.maxSteps) {
+      if (opts.signal?.aborted) {
+        stopReason = "aborted";
+        throw new AgentLoopHalt("aborted", new Error("aborted"), {
+          trail,
+          denials: runDenials,
+          steps,
+          cost,
+          output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+        });
+      }
       if (capHit()) {
         budgetExceeded = true;
+        stopReason = "budget";
         return finish();
       }
-      const result = await opts.client.complete({
+      let result: Awaited<ReturnType<AiModelClient["complete"]>>;
+      try {
+        result = await opts.client.complete({
         model: providerModel,
         messages,
         tools: defs.length > 0 ? defs : undefined,
         responseFormat: opts.responseFormat,
         ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
+      } catch (err) {
+        if (err instanceof AgentLoopHalt) throw err;
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new AgentLoopHalt("aborted", err, {
+            trail,
+            denials: runDenials,
+            steps,
+            cost,
+            output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+          });
+        }
+        throw err;
+      }
       if (result.external !== undefined) {
         egress.lastExternal = result.external;
       }
@@ -670,11 +735,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       lastRaw = result.raw !== undefined ? result.raw : result.text;
       if (capHit()) {
         budgetExceeded = true;
+        stopReason = "budget";
         return finish();
       }
 
       const toolCalls = result.toolCalls;
       if (!toolCalls || toolCalls.length === 0) {
+        stopReason = "completed";
         return finish();
       }
 
@@ -687,7 +754,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       for (const tc of toolCalls) {
         if (steps >= opts.maxSteps) break;
         steps++;
-        const toolResult = await dispatchTool({
+        let toolResult: unknown;
+        try {
+          toolResult = await dispatchTool({
           tool: tc.name,
           args: tc.arguments,
           agentLabel: opts.agentLabel,
@@ -700,6 +769,18 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           runDenials,
           ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
         });
+        } catch (err) {
+          if (err instanceof AgentLoopHalt) throw err;
+          const reason =
+            err instanceof Error && err.name === "AbortError" ? "aborted" : "denied";
+          throw new AgentLoopHalt(reason, err, {
+            trail,
+            denials: runDenials,
+            steps,
+            cost,
+            output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+          });
+        }
         lastToolResult = toolResult;
         messages.push({
           role: "tool",
@@ -709,6 +790,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         });
         if (capHit()) {
           budgetExceeded = true;
+          stopReason = "budget";
           return finish();
         }
       }
@@ -967,45 +1049,82 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const client = await clientFor(modelName);
       const started = now();
 
-      const loop = await toolLoop({
-        client,
-        modelName,
-        messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
-        tools: decl.tools,
-        maxSteps,
-        ...(decl.budget?.maxCostPerRun !== undefined
-          ? { maxCostPerRun: decl.budget.maxCostPerRun }
-          : {}),
-        agentLabel: agent,
-        callTool: runOpts.callTool,
-        auth: runOpts.auth,
-        operator: runOpts.operator,
-        meta: runOpts.meta,
-        signal: currentAbortSignal(),
-      });
-
-      const record: AgentRunRecord = {
-        id: `agent-run-${++runSeq}`,
-        agent,
-        message: runOpts.message,
-        ok: loop.denials.length === 0 && !loop.budgetExceeded,
-        steps: loop.steps,
-        trail: loop.trail,
-        denials: loop.denials,
-        output: loop.output,
-        at: started,
-        cost: loop.cost,
+      const remember = (partial: {
+        readonly ok: boolean;
+        readonly stopReason: AgentStopReason;
+        readonly steps: number;
+        readonly trail: readonly AgentToolStep[];
+        readonly denials: readonly AgentDenial[];
+        readonly output: unknown;
+        readonly cost: number;
+      }) => {
+        const record: AgentRunRecord = {
+          id: `agent-run-${++runSeq}`,
+          agent,
+          message: runOpts.message,
+          ok: partial.ok,
+          stopReason: partial.stopReason,
+          steps: partial.steps,
+          trail: partial.trail,
+          denials: partial.denials,
+          output: partial.output,
+          at: started,
+          cost: partial.cost,
+        };
+        pushObservability(agentRuns, record);
+        return {
+          ok: record.ok,
+          stopReason: record.stopReason,
+          steps: record.steps,
+          denials: record.denials,
+          trail: record.trail,
+          output: record.output,
+          cost: record.cost,
+        };
       };
-      pushObservability(agentRuns, record);
 
-      return {
-        ok: record.ok,
-        steps: loop.steps,
-        denials: loop.denials,
-        trail: loop.trail,
-        output: loop.output,
-        cost: record.cost,
-      };
+      try {
+        const loop = await toolLoop({
+          client,
+          modelName,
+          messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
+          tools: decl.tools,
+          maxSteps,
+          ...(decl.budget?.maxCostPerRun !== undefined
+            ? { maxCostPerRun: decl.budget.maxCostPerRun }
+            : {}),
+          agentLabel: agent,
+          callTool: runOpts.callTool,
+          auth: runOpts.auth,
+          operator: runOpts.operator,
+          meta: runOpts.meta,
+          signal: currentAbortSignal(),
+        });
+        return remember({
+          ok: loop.stopReason === "completed" && loop.denials.length === 0,
+          stopReason: loop.stopReason,
+          steps: loop.steps,
+          trail: loop.trail,
+          denials: loop.denials,
+          output: loop.output,
+          cost: loop.cost,
+        });
+      } catch (err) {
+        if (err instanceof AgentLoopHalt) {
+          const result = remember({
+            ok: false,
+            stopReason: err.stopReason,
+            steps: err.steps,
+            trail: err.trail,
+            denials: err.denials,
+            output: err.output,
+            cost: err.cost,
+          });
+          if (err.stopReason === "aborted") throw err;
+          return result;
+        }
+        throw err;
+      }
     },
 
     async *stream(model, streamOpts) {

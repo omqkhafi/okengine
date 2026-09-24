@@ -11,6 +11,7 @@ import {
   createAiRuntime,
   type AgentDenial,
   type AgentRunRecord,
+  type AgentStopReason,
   type AgentToolEffect,
   type AiAskOutcome,
   type AiFallbackAttempt,
@@ -94,6 +95,7 @@ export interface AgentRunRow {
   readonly agent: string;
   readonly message: string;
   readonly ok: boolean;
+  readonly stopReason: AgentStopReason;
   readonly steps: number;
   readonly cost: number;
   readonly at: number;
@@ -413,6 +415,7 @@ function projectAgentRuns(runs: readonly AgentRunRecord[]): readonly AgentRunRow
       agent: r.agent,
       message: r.message,
       ok: r.ok,
+      stopReason: r.stopReason,
       steps: r.steps,
       cost: r.cost,
       at: r.at,

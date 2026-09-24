@@ -10,6 +10,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { createMockAiDriver, memoryIndexDriver, mockAiDriver } from "../drivers/index.ts";
+import { withAbortSignal } from "../kernel/abort-scope.ts";
 import { createFx } from "../kernel/fx.ts";
 import { createJournal, createMemoryJournalStore } from "../kernel/journal.ts";
 import {
@@ -134,7 +135,8 @@ describe("agent gate denial is recorded", () => {
       message: "status?",
       auth: { userId: "u1", scopes: new Set(), verified: true },
     });
-    expect(result.ok).toBe(true);
+    expect(result.stopReason).toBe("max_steps");
+    expect(result.ok).toBe(false);
     expect(result.denials).toHaveLength(0);
     expect(result.output).toEqual({ booking: "B1" });
   });
@@ -230,6 +232,7 @@ describe("agent maxCostPerRun", () => {
     expect(calls).toBe(1);
     expect(called).toEqual([]);
     expect(result.ok).toBe(false);
+    expect(result.stopReason).toBe("budget");
     expect(result.cost).toBe(0.8);
   });
 
@@ -273,7 +276,139 @@ describe("agent maxCostPerRun", () => {
     expect(called).toEqual(["orders.get"]);
     expect(calls).toBe(2);
     expect(result.ok).toBe(false);
+    expect(result.stopReason).toBe("budget");
     expect(result.cost).toBeCloseTo(0.8);
+  });
+
+  test("maxSteps is not a normal completion", async () => {
+    const agent = ai.agent("step-cap", {
+      model: "smart",
+      tools: ["orders.get"],
+      maxSteps: 1,
+    });
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return {
+              text: "",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "c1", name: "orders.get", arguments: {} }],
+            };
+          },
+        },
+      },
+      callFlow: async () => ({ ok: true }),
+    });
+    const result = await runtime.runAgent("step-cap", { message: "go" });
+    expect(result.ok).toBe(false);
+    expect(result.stopReason).toBe("max_steps");
+    expect(result.steps).toBe(1);
+  });
+
+  test("a denial fed back to the model does not terminate as denied", async () => {
+    let calls = 0;
+    const member = gate.policy("member", () => false);
+    const agent = ai.agent("deny-continue", {
+      model: "smart",
+      tools: ["orders.refund"],
+      maxSteps: 2,
+    });
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      gates: createGateRuntime({ gates: [member] }),
+      gatesForFlow: () => ["member"],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            calls++;
+            if (calls === 1) {
+              return {
+                text: "",
+                raw: {},
+                model: "smart",
+                driverId: "mock",
+                toolCalls: [{ id: "c1", name: "orders.refund", arguments: {} }],
+              };
+            }
+            return { text: "done", raw: { done: true }, model: "smart", driverId: "mock" };
+          },
+        },
+      },
+      callFlow: async () => ({ ok: true }),
+    });
+    const result = await runtime.runAgent("deny-continue", {
+      message: "refund",
+      auth: { userId: "u1", scopes: new Set(), verified: false },
+    });
+    expect(calls).toBe(2);
+    expect(result.stopReason).toBe("completed");
+    expect(result.denials).toHaveLength(1);
+    expect(result.ok).toBe(false);
+  });
+
+  test("an unknown tool terminates the run as denied", async () => {
+    const agent = ai.agent("unknown-tool", {
+      model: "smart",
+      tools: ["orders.get"],
+      maxSteps: 2,
+    });
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return {
+              text: "",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "c1", name: "nope", arguments: {} }],
+            };
+          },
+        },
+      },
+      callFlow: async () => ({ ok: true }),
+    });
+    const result = await runtime.runAgent("unknown-tool", { message: "go" });
+    expect(result.stopReason).toBe("denied");
+    expect(result.ok).toBe(false);
+    expect(runtime.agentRuns[0]?.stopReason).toBe("denied");
+  });
+
+  test("an aborted run is recorded and then rejected", async () => {
+    const agent = ai.agent("abort-agent", { model: "smart", tools: [], maxSteps: 2 });
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return { text: "ok", raw: {}, model: "smart", driverId: "mock" };
+          },
+        },
+      },
+    });
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(
+      withAbortSignal(ctrl.signal, () => runtime.runAgent("abort-agent", { message: "go" })),
+    ).rejects.toThrow(/aborted/);
+    expect(runtime.agentRuns[0]?.stopReason).toBe("aborted");
   });
 });
 
