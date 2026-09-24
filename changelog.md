@@ -96,9 +96,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Browser JSON page colors the status, latency, cache, and auth marks, and the
   request verb (GET green, POST sky, PUT amber, PATCH violet, DELETE rose).
-  Params, Body, Cookies, Headers, Auth, and Path each carry a colored icon.
+  Params, Path, Body, Cookies, Headers, and Auth each carry a colored icon.
   Fields, JSON, Auth, and Headers on the strips do too.
-- Browser JSON page puts Params, Body, Cookies, Headers, Auth, and Path above
+- Browser JSON page puts Params, Path, Body, Cookies, Headers, and Auth above
   the route list. Routes stays pinned to the bottom of the Request rail, and
   its header ends with a control that collapses the list downward.
 - Browser JSON page opens the response as fields: status, response headers,
@@ -162,6 +162,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Browser JSON page replays a direct visit that came back `401` when a Bearer, Basic, or API key is already stored. The address-bar load cannot send that secret; the replay uses the same headers as Send, once per credential set, so a rejected token stays on screen.
 - A streamed agent approval inside a durable Flow ends the run as `sleeping` with its wake time. The interrupt frame and `data: [DONE]` go out first. Resume stores the agent result on that run. A tool error puts its message on `RUN_FINISHED.result.error`. `AiDurableRequiredError` ends the stream with `RUN_ERROR` and `data: [DONE]`.
 - OpenRouter resolves `typesafe/jev-1.13` to `typesafe/jev-1.13-20260917`. A score answer's `probabilities` are keyed by index, and `legend` names each index. Those indexes map onto the declared levels.
 - Browser JSON page Auth keeps the token, password, and API key value when the

@@ -2505,6 +2505,38 @@ pre {
       return names.every((n) => (stored[n] || "").trim().length > 0);
     }
 
+    function authHasCredentials(auth) {
+      if (auth.type === "bearer") return auth.token.trim().length > 0;
+      if (auth.type === "basic") return Boolean(auth.username || auth.password);
+      if (auth.type === "apikey") return auth.key.trim().length > 0;
+      return false;
+    }
+
+    /** Address-bar loads omit sessionStorage credentials. Replay a 401 once. */
+    function replayStoredAuth() {
+      const status = Number(page.getAttribute("data-status") || "0");
+      if (status !== 401) {
+        try { sessionStorage.removeItem("oke:json-code:auth-replay"); } catch {}
+        return;
+      }
+      const auth = effectiveAuth();
+      if (!authHasCredentials(auth)) return;
+      const method = (page.getAttribute("data-method") || "GET").toUpperCase();
+      const path = page.getAttribute("data-path") || location.pathname;
+      const stamp = [
+        method, path, location.search, auth.type, auth.token, auth.username,
+        auth.password, auth.key, auth.value, auth.in,
+      ].join("\\0");
+      try {
+        if (sessionStorage.getItem("oke:json-code:auth-replay") === stamp) return;
+        sessionStorage.setItem("oke:json-code:auth-replay", stamp);
+      } catch {
+        return;
+      }
+      rememberMethod(method, path);
+      void sendRequest();
+    }
+
     ensureSeeds();
     forgetSecretsOnReload();
     for (const kind of ["cookies", "headers", "headers-global", "query", "path", "body"]) renderKv(kind);
@@ -2513,6 +2545,7 @@ pre {
     fillAuth("global");
     syncBodyMode(bodyMode());
     syncPathChapter();
+    replayStoredAuth();
     const saved = sessionStorage.getItem(SECTION_KEY) || "";
     if (SECTIONS.includes(saved)) openSection(saved);
 
@@ -3116,6 +3149,7 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
     </div>
     <div class="rail-dock-body">
       ${kvSection("query", "Params")}
+      ${kvSection("path", "Path")}
       <details class="rail-acc" data-rail-section="body">
         <summary class="rail-acc-sum">
           ${chev}<span class="sec-ico">${SECTION_GLYPH.body}</span><span>Body</span>
@@ -3160,7 +3194,6 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
           ${authEditorHtml("request")}
         </div>
       </details>
-      ${kvSection("path", "Path")}
     </div>
   </div>
   <div class="rail-nav" data-rail-section="routes">

@@ -272,8 +272,11 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html.indexOf('<details class="rail-acc" data-rail-section="headers"')).toBeLessThan(
       html.indexOf('<details class="rail-acc" data-rail-section="auth"'),
     );
-    expect(html.indexOf('<details class="rail-acc" data-rail-section="auth"')).toBeLessThan(
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="query"')).toBeLessThan(
       html.indexOf('<details class="rail-acc" data-rail-section="path"'),
+    );
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="path"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="body"'),
     );
     expect(html).toContain(">Auth</span>");
     expect(html).toContain('data-auth-type="none"');
@@ -294,6 +297,8 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain("function effectiveAuth");
     expect(html).toContain("function storedAuth");
     expect(html).toContain("function forgetSecretsOnReload");
+    expect(html).toContain("function replayStoredAuth");
+    expect(html).toContain("oke:json-code:auth-replay");
     expect(html).toContain("parsed.token");
     expect(html).toContain('type="password"');
     expect(html).toContain("data-auth-reveal");
@@ -378,11 +383,14 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain('data-rail-section="cookies"');
     expect(html).toContain('data-rail-section="headers"');
     expect(html).toContain('data-rail-section="path"');
-    expect(html.indexOf('data-rail-section="query"')).toBeLessThan(
-      html.indexOf('data-rail-section="body"'),
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="query"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="path"'),
     );
-    expect(html.indexOf('data-rail-section="body"')).toBeLessThan(
-      html.indexOf('data-rail-section="cookies"'),
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="path"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="body"'),
+    );
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="body"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="cookies"'),
     );
     expect(html).toContain('data-method="GET"');
     expect(html).toContain('data-method="POST"');
