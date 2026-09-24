@@ -12,6 +12,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+#### Console — Flows & traces
+
+- Trace Request and Response Fields expand objects and arrays into nested
+  fields. A collapsed row shows a short preview (`id: ENG-12`, `5 items`)
+  instead of the raw JSON string. Array bodies use indexed rows.
+
 ## v0.22.0 — 2026-09-24
 
 ### ✨ Added

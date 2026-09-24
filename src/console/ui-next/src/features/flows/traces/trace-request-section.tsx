@@ -453,7 +453,7 @@ function ViewToggleButton({
 }
 
 /**
- * Interactive key / value table for flat object bodies.
+ * Interactive key / value tree. Objects and arrays expand into child fields.
  *
  * @param props - Projected field rows
  */
@@ -467,39 +467,84 @@ function FieldsTable({
   return (
     <ul data-slot={dataSlot}>
       {rows.map((row) => (
-        <li
-          key={row.key}
-          className={cn(EXPLORER_ROW_CLASS, "group/field items-start")}
-          data-slot="trace-payload-field"
-        >
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-            <span className="w-[7.5rem] shrink-0 truncate font-mono text-[11px] font-medium text-sky-600 dark:text-sky-400">
-              {row.key}
-            </span>
-            <span
-              className={cn(
-                "min-w-0 flex-1 break-all font-mono text-[11px] leading-snug",
-                valueToneClass(row.kind),
-              )}
-              title={row.display}
-            >
-              {row.display}
-            </span>
-          </div>
-          <span className="mt-0.5 shrink-0 font-mono text-[9px] tracking-wide text-muted-foreground uppercase opacity-70">
-            {row.kind}
-          </span>
-          <div className="opacity-0 transition-opacity group-hover/field:opacity-100 group-focus-within/field:opacity-100">
-            <CopyIconButton
-              label={`Copy ${row.key}`}
-              text={fieldCopyText(row.value)}
-              dataSlot="trace-payload-copy-field"
-              bare
-            />
-          </div>
-        </li>
+        <PayloadFieldRow key={row.key} row={row} depth={0} />
       ))}
     </ul>
+  );
+}
+
+/**
+ * One payload field. Containers toggle a nested field list.
+ *
+ * @param props - Row + indent depth
+ */
+function PayloadFieldRow({
+  row,
+  depth,
+}: {
+  readonly row: InputFieldRow;
+  readonly depth: number;
+}): JSX.Element {
+  const expandable = row.children !== null;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <li data-slot="trace-payload-field" data-depth={depth}>
+      <div
+        className={cn(EXPLORER_ROW_CLASS, "group/field items-start")}
+        style={depth > 0 ? { paddingLeft: `${10 + depth * 14}px` } : undefined}
+      >
+        {expandable ? (
+          <button
+            type="button"
+            className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center text-muted-foreground"
+            aria-expanded={open}
+            aria-label={`${open ? "Collapse" : "Expand"} ${row.key}`}
+            data-slot="trace-payload-expand"
+            onClick={() => setOpen((next) => !next)}
+          >
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
+            />
+          </button>
+        ) : (
+          <span className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+          <span className="w-[7.5rem] shrink-0 truncate font-mono text-[11px] font-medium text-sky-600 dark:text-sky-400">
+            {row.key}
+          </span>
+          <span
+            className={cn(
+              "min-w-0 flex-1 break-all font-mono text-[11px] leading-snug",
+              valueToneClass(row.kind),
+            )}
+            title={row.display}
+          >
+            {row.display}
+          </span>
+        </div>
+        <span className="mt-0.5 shrink-0 font-mono text-[9px] tracking-wide text-muted-foreground uppercase opacity-70">
+          {row.kind}
+        </span>
+        <div className="opacity-0 transition-opacity group-hover/field:opacity-100 group-focus-within/field:opacity-100">
+          <CopyIconButton
+            label={`Copy ${row.key}`}
+            text={fieldCopyText(row.value)}
+            dataSlot="trace-payload-copy-field"
+            bare
+          />
+        </div>
+      </div>
+      {expandable && open ? (
+        <ul data-slot="trace-payload-children">
+          {row.children?.map((child) => (
+            <PayloadFieldRow key={child.key} row={child} depth={depth + 1} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 }
 

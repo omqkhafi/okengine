@@ -2,12 +2,12 @@
  * Helpers for rendering run.input in the trace Request section.
  */
 
-/** Scalar / container kind for a top-level input field. */
+/** Scalar / container kind for a payload field. */
 export type InputFieldKind = "string" | "number" | "boolean" | "null" | "object" | "array";
 
-/** One top-level field row for the Fields view. */
+/** One field row in the Fields view, including nested object fields and array items. */
 export type InputFieldRow = {
-  /** Object key. */
+  /** Object key, or array index. */
   readonly key: string;
   /** Raw value (for copy). */
   readonly value: unknown;
@@ -15,25 +15,27 @@ export type InputFieldRow = {
   readonly display: string;
   /** Value kind chip. */
   readonly kind: InputFieldKind;
+  /**
+   * Nested object fields or array items.
+   * `null` for scalars and empty containers — those rows do not expand.
+   */
+  readonly children: readonly InputFieldRow[] | null;
 };
 
 /**
- * Flatten a plain object into field rows. Nested objects/arrays stay as one
- * row with a compact JSON display. Returns `null` when Fields view is not
- * appropriate (arrays, scalars, null).
+ * Project an object or array into field rows. Nested objects and arrays
+ * become expandable child rows. Returns `null` for scalars, `null`, and
+ * empty arrays.
  *
- * @param value - Stored run input
+ * @param value - Stored run input or output
  */
 export function inputFieldRows(value: unknown): readonly InputFieldRow[] | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    return value.map((item, index) => projectField(String(index), item));
   }
-  return Object.entries(value as Record<string, unknown>).map(([key, v]) => ({
-    key,
-    value: v,
-    display: formatFieldDisplay(v),
-    kind: fieldKind(v),
-  }));
+  if (value === null || typeof value !== "object") return null;
+  return Object.entries(value as Record<string, unknown>).map(([key, v]) => projectField(key, v));
 }
 
 /**
@@ -96,13 +98,61 @@ function fieldKind(value: unknown): InputFieldKind {
   }
 }
 
+const PREVIEW_FIELDS = 3;
+const PREVIEW_SCALAR_MAX = 42;
+
+function projectField(key: string, value: unknown): InputFieldRow {
+  return {
+    key,
+    value,
+    display: formatFieldDisplay(value),
+    kind: fieldKind(value),
+    children: childRows(value),
+  };
+}
+
+function childRows(value: unknown): readonly InputFieldRow[] | null {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    return value.map((item, index) => projectField(String(index), item));
+  }
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return null;
+    return entries.map(([key, v]) => projectField(key, v));
+  }
+  return null;
+}
+
 function formatFieldDisplay(value: unknown): string {
   if (value === null) return "null";
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    return `${value.length} ${value.length === 1 ? "item" : "items"}`;
   }
+  if (typeof value === "object") return objectPreview(value as Record<string, unknown>);
+  if (typeof value === "bigint") return value.toString();
+  return typeof value;
+}
+
+/**
+ * Short collapsed preview: up to three short scalar fields, otherwise a count.
+ *
+ * @param value - Plain object
+ */
+function objectPreview(value: Record<string, unknown>): string {
+  const keys = Object.keys(value);
+  if (keys.length === 0) return "{}";
+  const bits: string[] = [];
+  for (const [key, v] of Object.entries(value)) {
+    if (bits.length >= PREVIEW_FIELDS) break;
+    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") continue;
+    const text = typeof v === "string" ? v : String(v);
+    if (text.length === 0 || text.length > PREVIEW_SCALAR_MAX) continue;
+    bits.push(`${key}: ${text}`);
+  }
+  if (bits.length > 0) return bits.join(" · ");
+  return `${keys.length} ${keys.length === 1 ? "field" : "fields"}`;
 }
