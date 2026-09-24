@@ -97,6 +97,38 @@ export const mockAiDriver: AiDriver = {
             break;
           }
         }
+        if (
+          payload &&
+          typeof payload === "object" &&
+          payload !== null &&
+          "__toolCalls" in payload
+        ) {
+          const script = payload as { __toolCalls: readonly AiToolCall[]; text?: string };
+          const text = script.text ?? "";
+          const size = Math.max(1, Math.ceil(text.length / 2) || 1);
+          for (let i = 0; i < text.length; i += size) {
+            yield { text: text.slice(i, i + size) };
+          }
+          for (const [index, tc] of script.__toolCalls.entries()) {
+            const args =
+              typeof tc.arguments === "string" ? tc.arguments : JSON.stringify(tc.arguments ?? {});
+            yield {
+              text: "",
+              toolCall: { index, id: tc.id, name: tc.name, argumentsDelta: "" },
+            };
+            const mid = Math.max(1, Math.ceil(args.length / 2));
+            yield { text: "", toolCall: { index, argumentsDelta: args.slice(0, mid) } };
+            if (mid < args.length) {
+              yield { text: "", toolCall: { index, argumentsDelta: args.slice(mid) } };
+            }
+          }
+          yield {
+            text: "",
+            done: true,
+            usage: { inputTokens: last.length, outputTokens: text.length, cost: 0 },
+          };
+          return;
+        }
         const text = typeof payload === "string" ? payload : JSON.stringify(payload);
         const size = Math.max(1, Math.ceil(text.length / 3));
         for (let i = 0; i < text.length; i += size) {

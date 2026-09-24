@@ -151,9 +151,20 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
         model: resolvedModel,
         messages: opts.messages.map(serializeMessage),
         stream: true,
+        stream_options: { include_usage: true },
       };
       if (opts.temperature !== undefined) body.temperature = opts.temperature;
       if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
+      if (opts.tools !== undefined && opts.tools.length > 0) {
+        body.tools = opts.tools.map((t) => ({
+          type: "function",
+          function: {
+            name: t.name,
+            ...(t.description !== undefined ? { description: t.description } : {}),
+            ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
+          },
+        }));
+      }
 
       const res = await fetchFn(`${baseUrl}/chat/completions`, {
         method: "POST",
@@ -308,17 +319,47 @@ async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerat
       try {
         const chunk = JSON.parse(data) as {
           choices?: readonly {
-            delta?: { content?: string | null };
+            delta?: {
+              content?: string | null;
+              tool_calls?: readonly {
+                index?: number;
+                id?: string;
+                function?: { name?: string; arguments?: string };
+              }[];
+            };
             finish_reason?: string | null;
           }[];
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta.length > 0) {
-          yield { text: delta };
+        const delta = chunk.choices?.[0]?.delta;
+        const content = delta?.content;
+        if (typeof content === "string" && content.length > 0) {
+          yield { text: content };
         }
-        if (chunk.choices?.[0]?.finish_reason) {
-          yield { text: "", done: true };
-          return;
+        for (const call of delta?.tool_calls ?? []) {
+          const args = call.function?.arguments;
+          yield {
+            text: "",
+            toolCall: {
+              index: call.index ?? 0,
+              ...(call.id !== undefined ? { id: call.id } : {}),
+              ...(call.function?.name !== undefined ? { name: call.function.name } : {}),
+              ...(typeof args === "string" ? { argumentsDelta: args } : {}),
+            },
+          };
+        }
+        if (chunk.usage) {
+          yield {
+            text: "",
+            usage: {
+              ...(chunk.usage.prompt_tokens !== undefined
+                ? { inputTokens: chunk.usage.prompt_tokens }
+                : {}),
+              ...(chunk.usage.completion_tokens !== undefined
+                ? { outputTokens: chunk.usage.completion_tokens }
+                : {}),
+            },
+          };
         }
       } catch {
         // ignore malformed SSE lines
@@ -349,8 +390,11 @@ function responseTextStream(res: Response): AsyncIterable<string> {
  */
 function preconnectFetch(fetchFn: typeof fetch, url: string): void {
   const preconnect = (fetchFn as { preconnect?: (href: string) => void }).preconnect;
-  if (typeof preconnect === "function") {
+  if (typeof preconnect !== "function") return;
+  try {
     preconnect(url);
+  } catch {
+    // Warmup is optional. A bad port or an unsupported URL must not block the call.
   }
 }
 

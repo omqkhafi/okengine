@@ -55,7 +55,7 @@ export const assist = on(
 );
 ```
 
-The response is `text/event-stream`. Pass your own `threadId`. The default is this process's run id (`agent-run-1`, …). Those ids collide across processes and after a restart.
+The response is `text/event-stream`. Pass your own `threadId` when the chat already has one. The default is a unique id. It is not a per-process counter.
 
 </Step>
 
@@ -124,10 +124,10 @@ Core names match AG-UI. Subagent notices are `CUSTOM`, not extra types.
 | `RUN_STARTED` | `threadId`, `runId` | The run begins. `threadId` is the option you passed, or the run id. |
 | `STEP_STARTED` | `stepName` | A step starts. `maxSteps` counts tool calls, not model calls. Names are `step-1`, `step-2`, … |
 | `TEXT_MESSAGE_START` | `messageId`, `role` | Assistant text is about to arrive. `role` is `assistant`. Empty text is skipped. |
-| `TEXT_MESSAGE_CONTENT` | `messageId`, `delta` | The full assistant text for that step, in one frame. |
+| `TEXT_MESSAGE_CONTENT` | `messageId`, `delta` | One piece of assistant text. A streaming driver emits one frame per delta. A driver without `stream` emits the whole turn in one frame. |
 | `TEXT_MESSAGE_END` | `messageId` | That text message is complete. |
 | `TOOL_CALL_START` | `toolCallId`, `toolCallName`, `parentMessageId?` | The model named a tool. `parentMessageId` is set when that step emitted assistant text. |
-| `TOOL_CALL_ARGS` | `toolCallId`, `delta` | The tool arguments as one JSON string. |
+| `TOOL_CALL_ARGS` | `toolCallId`, `delta` | One piece of the tool arguments. Streaming drivers emit each args delta. A driver without `stream` emits one JSON string. |
 | `TOOL_CALL_END` | `toolCallId` | Arguments are complete. The tool has not run yet. |
 | `TOOL_CALL_RESULT` | `messageId`, `toolCallId`, `content`, `role` | The tool returned. `role` is `tool`. `content` is a string. |
 | `STEP_FINISHED` | `stepName` | That model step is done, including its tool calls. |
@@ -194,7 +194,25 @@ curl -X POST http://localhost:6530/agent/approvals/deny \
 | Already resolved | 409 `Conflict`. No `Retry-After`. Message: `That value is already in use.` | Stop. Do not retry. |
 | Lease held | 409 `JournalLeaseBusy` with `Retry-After`. Message: `This run is locked by another worker. Retry after the given delay.` | Retry after the delay. |
 
-Approving or denying does not continue this SSE response. The scheduler resumes the durable run in the background and replays the tool once. Decode the approval id. The prefix before the first `.` is the durable Flow run id. After that run's status is `completed`, its journal `output` is the agent result (`stopReason`, `output`, `cost`, and the trail). It is not `{ streamed: true }`. This stream will not yield it.
+Approving or denying does not continue this SSE response. Follow the run to see the rest.
+
+## Follow a run
+
+`GET /agent/runs/:runId/events` is `text/event-stream`. Each frame has an `id`. Send that id as `Last-Event-ID` to resume. The route checks the same gate and tenant as the Flow that started the run.
+
+The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB) and stores structural events one by one. At the cap, text deltas stop, one `CUSTOM` event named `oke.events.truncated` is stored, and `RUN_FINISHED` is still stored. A finished run's events are deleted after 24 hours.
+
+```typescript
+import { approve, deny, readAgentEvents } from "okengine/client/agent";
+
+for await (const event of readAgentEvents(`http://localhost:6530/agent/runs/${runId}/events`)) {
+  if (event.type === "RUN_FINISHED" && event.outcome?.type === "interrupt") {
+    await approve("http://localhost:6530/agent/approvals/approve", event.outcome.interrupts[0]!.id);
+  }
+}
+```
+
+`approve` and `deny` retry `JournalLeaseBusy` and throw `Conflict` when the decision is already stored. `useAgentRun` from `okengine/client-react` sends the message, keeps the text so far, and follows after an interrupt.
 
 ## Patterns
 
@@ -234,7 +252,7 @@ return fx.json.stream(
 
 <Tab value="Thread id">
 
-Pass `threadId`. The default ids (`agent-run-1`, …) collide across processes and after a restart.
+Pass `threadId` when the chat already has one. The default is a unique id.
 
 ```typescript
 return fx.json.stream(
@@ -243,6 +261,8 @@ return fx.json.stream(
 ```
 
 `RUN_STARTED` and `RUN_FINISHED` both carry that `threadId`.
+
+`mock`, `anthropic`, and `openai-compatible` stream tokens and tool-call arguments. `bedrock` and `vertex` are reserved driver ids: boot throws before a call. `fx.stream` uses the same `stream` method, so it works on Anthropic too.
 
 </Tab>
 

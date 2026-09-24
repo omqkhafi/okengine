@@ -7,8 +7,11 @@
 
 import { flow } from "../../kernel/flow.ts";
 import type { Fx } from "../../kernel/fx.ts";
+import { sseFrame } from "../../kernel/fx.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
+import { getAgentEventLog } from "./run-events.ts";
+import type { GateRuntime } from "../gate/runtime.ts";
 import type { StandardSchemaV1 } from "../../validation/standard-schema.ts";
 import { journalLeaseBusyResponse } from "./approval.ts";
 
@@ -112,4 +115,54 @@ export function bindAgentApprovalFlows(adopt: (binding: Binding) => void): void 
       },
     }),
   });
+  adopt({
+    trigger: http.get("/agent/runs/:runId/events").public(),
+    flow: flow("oke.agent.follow", {
+      do: async (input, fx) => followAgentRun(input, fx),
+    }),
+  });
+}
+
+let followGates: GateRuntime | undefined;
+
+/**
+ * Gate runtime the follow route uses. Boot installs the app's gates.
+ *
+ * @param gates - Runtime that checked the calling Flow
+ */
+export function setAgentFollowGates(gates: GateRuntime | undefined): void {
+  followGates = gates;
+}
+
+async function followAgentRun(input: unknown, fx: Fx): Promise<unknown> {
+  const body = (input ?? {}) as { runId?: unknown };
+  const runId = typeof body.runId === "string" ? body.runId : "";
+  const log = getAgentEventLog();
+  if (!log || !runId) return fx.fail.notFound();
+  const header = await log.header(runId);
+  if (!header) return fx.fail.notFound();
+  if ((header.tenant ?? null) !== (fx.tenant.id ?? null)) return fx.fail.notFound();
+  if (header.gate && followGates) {
+    const checks = await followGates.check([header.gate], {
+      auth: fx.auth,
+      operator: fx.operator,
+      tenant: fx.tenant,
+      meta: {},
+    });
+    if (checks.some((check) => check.allowed === false)) return fx.fail.forbidden();
+  }
+  const after = Number(fx.lastEventId ?? "0");
+  const afterSeq = Number.isFinite(after) ? after : 0;
+  return fx.json.stream(frames(log, runId, afterSeq));
+}
+
+async function* frames(
+  log: NonNullable<ReturnType<typeof getAgentEventLog>>,
+  runId: string,
+  afterSeq: number,
+): AsyncIterable<unknown> {
+  for await (const row of log.subscribe(runId, afterSeq)) {
+    yield sseFrame(row.event, String(row.seq));
+    if (row.event.type === "RUN_FINISHED" || row.event.type === "RUN_ERROR") return;
+  }
 }

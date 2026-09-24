@@ -45,7 +45,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
-- Agent events document the AG-UI stream: `fx.json.stream(fx.run(..., { stream: true }))`, the event fields, tool-approval interrupts, and `okengine/client/agent`.
+- `fx.run(..., { stream: true })` streams each model turn when the driver implements `stream`. `mock`, `anthropic`, and `openai-compatible` emit text deltas and tool-call argument deltas. `bedrock` and `vertex` stay reserved. The assembled turn is journaled, so a durable replay does not call the model. The default `threadId` is a unique id.
+- A durable agent run keeps a coalesced event log (text and args flush about every 100 ms or 1 KB). `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under the same gate and tenant. At the cap, further text deltas stop, one `oke.events.truncated` event is stored, and `RUN_FINISHED` is still stored. Finished logs are deleted after 24 hours.
+- `okengine/client/agent` follows a run with `Last-Event-ID`, and `approve` / `deny` retry `JournalLeaseBusy` and surface `Conflict`. `okengine/client-react` exports `useAgentRun`. Neither module is on the `okengine/client` graph.
+- `ai.decision` score levels and a whole question held in a same-file const are checked at compile time. An unresolved name fails the build.
 - Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
 - Agents document tool approval: `approval`, `gate`, `timeout`, and `durable: true`.
 - Decisions name the experimental limits: a promoted lockfile applies on restart,

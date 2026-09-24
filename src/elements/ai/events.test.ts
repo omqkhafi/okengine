@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseAgentEvent } from "../../client/agent.ts";
 import { createFx } from "../../kernel/fx.ts";
+import { createJournal, createMemoryJournalStore } from "../../kernel/journal.ts";
 import { ai, createAiRuntime, type AgUiEvent } from "../ai.ts";
 
 describe("fx.run stream overload", () => {
@@ -173,6 +174,73 @@ describe("agent event stream", () => {
       expect(finished.usage).toEqual([{ inputTokens: 3, outputTokens: 2 }]);
     }
   });
+
+  test("split text and tool-call args arrive in order and replay makes no call", async () => {
+    let calls = 0;
+    const client = {
+      driverId: "mock" as const,
+      model: "smart",
+      async complete() {
+        calls++;
+        return { text: "", model: "smart", driverId: "mock" as const };
+      },
+      async *stream() {
+        calls++;
+        yield { text: "Look" };
+        yield { text: "ing." };
+        yield {
+          text: "",
+          toolCall: { index: 0, id: "c1", name: "orders.get", argumentsDelta: "" },
+        };
+        yield { text: "", toolCall: { index: 0, argumentsDelta: '{"id":' } };
+        yield { text: "", toolCall: { index: 0, argumentsDelta: '"14"}' } };
+        yield {
+          text: "",
+          done: true,
+          usage: { inputTokens: 3, outputTokens: 2, cost: 0.01 },
+        };
+      },
+    };
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [ai.agent("support", { model: "smart", tools: ["orders.get"], maxSteps: 1 })],
+      clients: { smart: client },
+      callFlow: async () => ({ status: "open" }),
+    });
+    const journal = createJournal({ store: createMemoryJournalStore() });
+    const session = await journal.start("assist", { message: "status" });
+    const seen: AgUiEvent[] = [];
+    for await (const event of runtime.streamAgent("support", {
+      message: "status",
+      journal: session,
+    })) {
+      seen.push(event);
+    }
+    expect(calls).toBe(1);
+    const content = seen.filter((event) => event.type === "TEXT_MESSAGE_CONTENT");
+    expect(content.map((event) => (event.type === "TEXT_MESSAGE_CONTENT" ? event.delta : ""))).toEqual([
+      "Look",
+      "ing.",
+    ]);
+    const args = seen.filter((event) => event.type === "TOOL_CALL_ARGS");
+    expect(args.map((event) => (event.type === "TOOL_CALL_ARGS" ? event.delta : "")).join("")).toBe(
+      '{"id":"14"}',
+    );
+    const start = seen.find((event) => event.type === "TOOL_CALL_START");
+    const textStart = seen.find((event) => event.type === "TEXT_MESSAGE_START");
+    expect(start?.type === "TOOL_CALL_START" ? start.parentMessageId : undefined).toBe(
+      textStart?.type === "TEXT_MESSAGE_START" ? textStart.messageId : undefined,
+    );
+    const resumed = await journal.resume(session.runId);
+    if (!resumed) throw new Error("expected a journal resume");
+    for await (const _event of runtime.streamAgent("support", {
+      message: "status",
+      journal: resumed,
+    })) {
+      // replay
+    }
+    expect(calls).toBe(1);
+  });
 });
 
 describe("client agent parser", () => {
@@ -202,6 +270,15 @@ describe("okengine/client import graph", () => {
     const budget = readFileSync(resolve(root, "budget-entry.ts"), "utf8");
     expect(budget).not.toContain("client/agent");
     expect(budget).not.toContain("./agent");
+  });
+
+  test("agent and the react hook do not reach okengine/client", () => {
+    const agent = walk(resolve(import.meta.dir, "../../client/agent.ts"));
+    const hook = walk(resolve(import.meta.dir, "../../client-react/use-agent-run.ts"));
+    const clientIndex = resolve(import.meta.dir, "../../client/index.ts");
+    expect(agent.includes(clientIndex)).toBe(false);
+    expect(hook.includes(clientIndex)).toBe(false);
+    expect(hook.some((file) => file.endsWith("/use-agent-run.ts"))).toBe(true);
   });
 });
 

@@ -11,7 +11,12 @@ export {
   type ResourceStreamOptions,
   type ResourceStreamStop,
 } from "./live-resource.ts";
-export type { LiveRouteContract } from "./use-live-query.ts";
+export {
+  useAgentRun,
+  type AgentPendingApproval,
+  type AgentRunState,
+  type UseAgentRunOptions,
+} from "./use-agent-run.ts";
 export {
   useLiveQuery,
   type UseLiveQueryOptions,

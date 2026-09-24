@@ -1727,15 +1727,21 @@ function assertDecisionQuestion(
   decisionName: string,
   key: string,
   value: AstNode | undefined,
+  program: AstNode,
 ): void {
-  if (!value || value.type !== "CallExpression") return;
-  const callee = (value as CallExpression).callee;
+  const resolved = resolveDecisionExpr(value, program, decisionName, key);
+  if (!resolved || resolved.type !== "CallExpression") {
+    throw new Error(
+      `ai.decision("${decisionName}"): question "${key}" must be ai.choice, ai.score, or ai.boolean`,
+    );
+  }
+  const callee = (resolved as CallExpression).callee;
   const member = callee as AstNode & { property?: AstNode };
   const fn =
     callee.type === "MemberExpression" && member.property?.type === "Identifier"
       ? (member.property as Identifier).name
       : undefined;
-  const args = (value as CallExpression).arguments;
+  const args = (resolved as CallExpression).arguments;
   if (fn === "choice") {
     const options = args[1];
     if (!options || options.type !== "ObjectExpression") {
@@ -1756,13 +1762,61 @@ function assertDecisionQuestion(
     }
   }
   if (fn === "score") {
-    const levels = args[1];
-    if (!levels || levels.type !== "ArrayExpression") return;
+    const levels = resolveScoreLevels(args[1], program, decisionName, key);
     const count = ((levels as AstNode & { elements?: unknown[] }).elements ?? []).length;
     if (count < 2 || count > 10) {
       throw new Error(`ai.decision("${decisionName}"): score "${key}" needs 2–10 levels`);
     }
   }
+}
+
+function resolveDecisionExpr(
+  value: AstNode | undefined,
+  program: AstNode,
+  decisionName: string,
+  key: string,
+): AstNode | undefined {
+  if (!value) return undefined;
+  if (value.type !== "Identifier") return value;
+  const name = (value as Identifier).name;
+  const init = sameFileConstInit(name, program);
+  if (!init) {
+    throw new Error(
+      `ai.decision("${decisionName}"): question "${key}" is "${name}", which is not a same-file const`,
+    );
+  }
+  return init;
+}
+
+function resolveScoreLevels(
+  levels: AstNode | undefined,
+  program: AstNode,
+  decisionName: string,
+  key: string,
+): AstNode {
+  const resolved =
+    levels?.type === "Identifier"
+      ? sameFileConstInit((levels as Identifier).name, program)
+      : levels;
+  if (!resolved || resolved.type !== "ArrayExpression") {
+    const label = levels?.type === "Identifier" ? (levels as Identifier).name : "the levels";
+    throw new Error(
+      `ai.decision("${decisionName}"): score "${key}" levels (${label}) must be an array literal or a same-file const`,
+    );
+  }
+  return resolved;
+}
+
+function sameFileConstInit(name: string, program: AstNode): AstNode | undefined {
+  let found: AstNode | undefined;
+  walk(program, (node) => {
+    if (found || node.type !== "VariableDeclarator") return;
+    const decl = node as AstNode & { id?: AstNode; init?: AstNode };
+    if (decl.id?.type === "Identifier" && (decl.id as Identifier).name === name) {
+      found = decl.init;
+    }
+  });
+  return found;
 }
 
 function collectDecision(call: CallExpression, program: AstNode, scope: ProjectScope): void {
@@ -1783,7 +1837,7 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
     if (key === "meta" || key === "$") {
       throw new Error(`ai.decision("${decisionName}"): question id "${key}" is reserved`);
     }
-    assertDecisionQuestion(decisionName, key, (prop as AstNode & { value?: AstNode }).value);
+    assertDecisionQuestion(decisionName, key, (prop as AstNode & { value?: AstNode }).value, program);
   }
   if (scope.ai.decisions?.[decisionName]) {
     throw new Error(`ai.decision("${decisionName}"): duplicate decision name`);

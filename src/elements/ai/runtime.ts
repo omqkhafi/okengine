@@ -53,6 +53,10 @@ import {
   type AgentEventEmit,
   type AgUiEvent,
 } from "./events.ts";
+import { readModelTurn } from "./stream-turn.ts";
+import { createMemoryAgentEventLog, setAgentEventLog, type AgentEventLog } from "./run-events.ts";
+import { setAgentFollowGates } from "./approval-http.ts";
+import { okid } from "../../okid.ts";
 import {
   AiSchemaValidationError,
   coerceModelObject,
@@ -279,6 +283,8 @@ export interface CreateAiRuntimeOptions {
   readonly callFlow?: (name: string, input: unknown) => Promise<unknown>;
   /** Journal store that holds pending tool approvals. */
   readonly journalStore?: JournalStore;
+  /** Event log for follow / resume. Defaults to an in-memory log. */
+  readonly eventLog?: AgentEventLog;
   /**
    * Resolve gates required for a tool flow.
    *
@@ -359,8 +365,10 @@ export interface AiAgentRunOptions {
   readonly maxCostPerRun?: number;
   /** Record a `call` effect on the host ledger when a child agent starts. */
   readonly recordCall?: (name: string) => void | Promise<void>;
-  /** AG-UI thread. Defaults to the agent run id. */
+  /** AG-UI thread. Defaults to a unique id. */
   readonly threadId?: string;
+  /** Gate that allowed the calling Flow. Null when the Flow is public. */
+  readonly gate?: string | null;
 }
 
 /** Stream options. */
@@ -540,6 +548,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   for (const m of options.models ?? []) models.set(m.name, m);
 
   const clients = new Map<string, AiModelClient>(Object.entries(options.clients ?? {}));
+  const eventLog = options.eventLog ?? createMemoryAgentEventLog();
+  setAgentEventLog(eventLog);
+  setAgentFollowGates(options.gates);
   const mcpClient: McpClient = createMcpClient({
     servers: options.mcpServers,
     ...(options.resolveSecret !== undefined ? { resolveSecret: options.resolveSecret } : {}),
@@ -980,18 +991,27 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const stepName = `step-${steps + 1}`;
       opts.emit?.({ type: "STEP_STARTED", stepName });
       let result: Awaited<ReturnType<AiModelClient["complete"]>>;
+      let streamedLive = false;
       try {
-        const complete = () =>
-          opts.client.complete({
-            model: providerModel,
-            messages,
-            tools: defs.length > 0 ? defs : undefined,
-            responseFormat: opts.responseFormat,
-            ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
-          });
+        const produce = async () => {
+          const turn = await readModelTurn(
+            opts.client,
+            {
+              model: providerModel,
+              messages,
+              tools: defs.length > 0 ? defs : undefined,
+              responseFormat: opts.responseFormat,
+              ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+            },
+            opts.emit,
+            () => `m-${++messageSeq}`,
+          );
+          streamedLive = turn.streamed;
+          return turn.result;
+        };
         result = opts.journal
-          ? await opts.journal.effect("ask", `${opts.agentLabel}:${steps}`, complete)
-          : await complete();
+          ? await opts.journal.effect("ask", `${opts.agentLabel}:${steps}`, produce)
+          : await produce();
       } catch (err) {
         if (err instanceof AgentLoopHalt) throw err;
         if (err instanceof Error && err.name === "AbortError") {
@@ -1012,12 +1032,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       addUsageTokens(tokens, result.usage);
       lastText = result.text;
       lastRaw = result.raw !== undefined ? result.raw : result.text;
-      const messageId = `m-${++messageSeq}`;
-      const emittedText = emitAssistantText(
-        opts.emit ?? (() => undefined),
-        messageId,
-        result.text,
-      );
+      const messageId = streamedLive ? "" : `m-${++messageSeq}`;
+      const emittedText = streamedLive
+        ? false
+        : emitAssistantText(opts.emit ?? (() => undefined), messageId, result.text);
       if (capHit()) {
         budgetExceeded = true;
         stopReason = "budget";
@@ -1042,18 +1060,20 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         if (steps >= opts.maxSteps) break;
         steps++;
         const callId = tc.id.length > 0 ? tc.id : `${opts.agentLabel}:${steps}:${index}`;
-        opts.emit?.({
-          type: "TOOL_CALL_START",
-          toolCallId: callId,
-          toolCallName: tc.name,
-          ...(emittedText ? { parentMessageId: messageId } : {}),
-        });
-        opts.emit?.({
-          type: "TOOL_CALL_ARGS",
-          toolCallId: callId,
-          delta: JSON.stringify(tc.arguments ?? {}),
-        });
-        opts.emit?.({ type: "TOOL_CALL_END", toolCallId: callId });
+        if (!streamedLive) {
+          opts.emit?.({
+            type: "TOOL_CALL_START",
+            toolCallId: callId,
+            toolCallName: tc.name,
+            ...(emittedText ? { parentMessageId: messageId } : {}),
+          });
+          opts.emit?.({
+            type: "TOOL_CALL_ARGS",
+            toolCallId: callId,
+            delta: JSON.stringify(tc.arguments ?? {}),
+          });
+          opts.emit?.({ type: "TOOL_CALL_END", toolCallId: callId });
+        }
         let toolResult: unknown;
         const spend = { cost: 0, inputTokens: 0, outputTokens: 0 };
         try {
@@ -1466,6 +1486,15 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const client = await clientFor(modelName);
       const started = now();
       const runId = runOpts.runId ?? `agent-run-${++runSeq}`;
+      const threadId = runOpts.threadId ?? okid();
+      if (runOpts.journal) {
+        void eventLog.open({
+          runId,
+          threadId,
+          tenant: runOpts.tenantId ?? null,
+          gate: runOpts.gate ?? null,
+        });
+      }
 
       const remember = (partial: {
         readonly ok: boolean;
@@ -1530,7 +1559,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           operator: runOpts.operator,
           meta: runOpts.meta,
           signal: currentAbortSignal(),
-          threadId: runOpts.threadId ?? runId,
+          threadId,
+          ...(runOpts.journal !== undefined
+            ? {
+                emit: (event: AgUiEvent) => {
+                  void eventLog.append(runId, event, now());
+                },
+              }
+            : {}),
           ...(runOpts.journal !== undefined ? { journal: runOpts.journal } : {}),
           ...(runOpts.flow !== undefined ? { flow: runOpts.flow } : {}),
           ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
@@ -1631,8 +1667,22 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
 
     streamAgent(agent, runOpts) {
       const queue = createEventQueue();
-      const runId = `agent-run-${++runSeq}`;
+      const runId = runOpts.runId ?? `agent-run-${++runSeq}`;
       const signal = currentAbortSignal();
+      const threadId = runOpts.threadId ?? okid();
+      if (runOpts.journal) {
+        void eventLog.open({
+          runId,
+          threadId,
+          tenant: runOpts.tenantId ?? null,
+          gate: runOpts.gate ?? null,
+        });
+        const inner = queue.emit.bind(queue);
+        queue.emit = (event) => {
+          inner(event);
+          void eventLog.append(runId, event, now());
+        };
+      }
       let resolveResult: (value: unknown) => void = () => undefined;
       let rejectResult: (err: unknown) => void = () => undefined;
       const result = new Promise<unknown>((resolve, reject) => {
@@ -1643,7 +1693,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       void result.catch(() => undefined);
       void (async () => {
         try {
-          const threadId = runOpts.threadId ?? runId;
+          const threadId = runOpts.threadId ?? okid();
           queue.emit({ type: "RUN_STARTED", threadId, runId });
           const decl = agents.get(agent);
           if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
@@ -1762,7 +1812,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               resolveResult(settled);
               queue.emit({
                 type: "RUN_FINISHED",
-                threadId: runOpts.threadId ?? runId,
+                threadId: runOpts.threadId ?? okid(),
                 runId,
                 result: {
                   cost: err.cost,

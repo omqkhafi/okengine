@@ -907,6 +907,8 @@ export interface Fx {
   t(key: AppMessageKey, values?: MessageValues): string;
   /** Active locale for {@link Fx.t} and default channel sends. */
   readonly locale: string;
+  /** HTTP `Last-Event-ID` on this request, when the client sent one. */
+  readonly lastEventId?: string;
   /** Generate a unique id (OKID). */
   id(): string;
   /** User-plane auth principal. */
@@ -2060,6 +2062,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               options.aiRuntime!.streamAgent(name, {
                 ...turn,
                 ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
+                gate: options.rlsGateNames?.find((name) => name !== "public") ?? null,
                 ...(options.journal ? { journal: options.journal } : {}),
                 ...(options.flow !== undefined ? { flow: options.flow } : {}),
                 tenantId: tenant.id,
@@ -2093,6 +2096,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (options.aiRuntime) {
           return options.aiRuntime.runAgent(name, {
             ...turn,
+            gate: options.rlsGateNames?.find((name) => name !== "public") ?? null,
             ...(options.journal ? { journal: options.journal } : {}),
             ...(options.flow !== undefined ? { flow: options.flow } : {}),
             tenantId: tenant.id,
@@ -2154,6 +2158,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       });
     },
     locale,
+    lastEventId: options.lastEventId,
     id() {
       return okid();
     },

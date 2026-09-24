@@ -72,9 +72,97 @@ export function parseAgentEvent(data: unknown): ParsedAgentEvent | undefined {
 /**
  * Read `data:` frames from an SSE response body.
  *
- * @param response - `text/event-stream` response
+ * Pass a URL to follow a run: the generator reconnects and sends
+ * `Last-Event-ID` from the last frame it yielded.
+ *
+ * @param source - One response, or the follow URL
+ * @param init - Fetch, abort, and a starting event id
  */
-export async function* readAgentEvents(response: Response): AsyncIterable<ParsedAgentEvent> {
+export async function* readAgentEvents(
+  source: Response | string | URL,
+  init?: AgentFollowInit,
+): AsyncIterable<ParsedAgentEvent> {
+  if (source instanceof Response) {
+    yield* readAgentEventResponse(source);
+    return;
+  }
+  const fetcher = init?.fetch ?? fetch;
+  let lastEventId = init?.lastEventId;
+  for (;;) {
+    if (init?.signal?.aborted) return;
+    const headers = new Headers(init?.headers);
+    if (lastEventId) headers.set("last-event-id", lastEventId);
+    const response = await fetcher(source, { headers, signal: init?.signal });
+    if (!response.ok) throw new Error(`agent events: HTTP ${response.status}`);
+    let sawFrame = false;
+    for await (const frame of readAgentEventFrames(response)) {
+      sawFrame = true;
+      if (frame.id) lastEventId = frame.id;
+      if (frame.event) yield frame.event;
+      if (frame.event?.type === "RUN_FINISHED" || frame.event?.type === "RUN_ERROR") return;
+    }
+    if (!sawFrame || init?.signal?.aborted) return;
+  }
+}
+
+/** Options for {@link approve} and {@link deny}. */
+export interface AgentDecisionInit {
+  readonly fetch?: typeof fetch;
+  /** Cap on lease retries. Default 5. */
+  readonly attempts?: number;
+}
+
+/**
+ * Approve a parked tool. Retries `JournalLeaseBusy`. Throws on `Conflict`.
+ *
+ * @param url - Approve route (`/agent/approvals/approve`)
+ * @param id - Approval id
+ * @param args - Replacement tool input
+ * @param init - Fetch override
+ */
+export async function approve(
+  url: string,
+  id: string,
+  args?: unknown,
+  init?: AgentDecisionInit,
+): Promise<void> {
+  await postDecision(url, { id, ...(args !== undefined ? { args } : {}) }, init);
+}
+
+/**
+ * Deny a parked tool. Retries `JournalLeaseBusy`. Throws on `Conflict`.
+ *
+ * @param url - Deny route (`/agent/approvals/deny`)
+ * @param id - Approval id
+ * @param reason - Text the model sees
+ * @param init - Fetch override
+ */
+export async function deny(
+  url: string,
+  id: string,
+  reason?: string,
+  init?: AgentDecisionInit,
+): Promise<void> {
+  await postDecision(url, { id, ...(reason !== undefined ? { reason } : {}) }, init);
+}
+
+/** Follow options for {@link readAgentEvents}. */
+export interface AgentFollowInit {
+  readonly fetch?: typeof fetch;
+  readonly headers?: HeadersInit;
+  readonly signal?: AbortSignal;
+  readonly lastEventId?: string;
+}
+
+async function* readAgentEventResponse(response: Response): AsyncIterable<ParsedAgentEvent> {
+  for await (const frame of readAgentEventFrames(response)) {
+    if (frame.event) yield frame.event;
+  }
+}
+
+async function* readAgentEventFrames(
+  response: Response,
+): AsyncIterable<{ id?: string; event?: ParsedAgentEvent }> {
   const body = response.body;
   if (!body) return;
   const reader = body.getReader();
@@ -87,14 +175,55 @@ export async function* readAgentEvents(response: Response): AsyncIterable<Parsed
     const frames = buffer.split("\n\n");
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      const data = frame
-        .split("\n")
+      const lines = frame.split("\n");
+      const idLine = lines.find((line) => line.startsWith("id:"));
+      const data = lines
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trim())
         .join("\n");
       if (!data || data === "[DONE]") continue;
       const parsed = parseAgentEvent(JSON.parse(data) as unknown);
-      if (parsed) yield parsed;
+      yield {
+        ...(idLine ? { id: idLine.slice(3).trim() } : {}),
+        ...(parsed ? { event: parsed } : {}),
+      };
     }
   }
+}
+
+async function postDecision(
+  url: string,
+  body: { id: string; args?: unknown; reason?: string },
+  init?: AgentDecisionInit,
+): Promise<void> {
+  const fetcher = init?.fetch ?? fetch;
+  const attempts = init?.attempts ?? 5;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const response = await fetcher(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (response.ok) return;
+    const payload = (await response.json().catch(() => ({}))) as {
+      error?: { code?: string };
+    };
+    const code = payload.error?.code;
+    if (response.status === 409 && code === "JournalLeaseBusy") {
+      const retryAfter = Number(response.headers.get("retry-after") ?? "0");
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, retryAfter) * 1000));
+      continue;
+    }
+    if (response.status === 409 && code === "Conflict") {
+      const error = new Error("That value is already in use.");
+      error.name = "Conflict";
+      throw error;
+    }
+    const error = new Error(code ?? `agent decision: HTTP ${response.status}`);
+    error.name = code ?? "Error";
+    throw error;
+  }
+  const error = new Error("This run is locked by another worker. Retry after the given delay.");
+  error.name = "JournalLeaseBusy";
+  throw error;
 }

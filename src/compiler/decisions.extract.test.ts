@@ -124,4 +124,41 @@ describe("ai.decision extract", () => {
       }),
     ).rejects.toThrow(/object literal/);
   });
+
+  test("score levels and a whole question resolve a same-file const", async () => {
+    const manifest = await extractFromSources({
+      "src/flows/run.ts": `
+        const levels = ["low", "high"];
+        const team = ai.choice("which", { a: "A", b: "B" });
+        ai.decision("triage", {
+          onUncertain: "abstain",
+          ask: { team, rank: ai.score("rank", levels) },
+        });
+      `,
+    });
+    expect(manifest.ai?.decisions?.triage?.questions).toEqual(["team", "rank"]);
+  });
+
+  test("an unresolved score or question fails to compile", async () => {
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `
+          ai.decision("triage", {
+            onUncertain: "abstain",
+            ask: { rank: ai.score("rank", missing) },
+          });
+        `,
+      }),
+    ).rejects.toThrow(/same-file const/);
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `
+          ai.decision("triage", {
+            onUncertain: "abstain",
+            ask: { team: missingQuestion },
+          });
+        `,
+      }),
+    ).rejects.toThrow(/not a same-file const/);
+  });
 });

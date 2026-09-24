@@ -66,10 +66,26 @@ export interface AiCompleteResult {
   readonly external?: DriverExternal;
 }
 
+/** One tool-call fragment inside a model stream. */
+export interface AiStreamToolCallDelta {
+  /** Provider index for this call within the turn. */
+  readonly index: number;
+  readonly id?: string;
+  readonly name?: string;
+  /** Partial JSON arguments. Empty when the call is only announced. */
+  readonly argumentsDelta?: string;
+}
+
 /** One streamed token / delta from a model. */
 export interface AiStreamChunk {
   readonly text: string;
   readonly done?: boolean;
+  readonly toolCall?: AiStreamToolCallDelta;
+  readonly usage?: {
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly cost?: number;
+  };
 }
 
 /** Embedding request. */
