@@ -3172,7 +3172,6 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
           </div>
         </div>
       </details>
-      ${kvSection("cookies", "Cookies")}
       <details class="rail-acc" data-rail-section="headers">
         <summary class="rail-acc-sum">
           ${chev}<span class="sec-ico">${SECTION_GLYPH.headers}</span><span>Headers</span>
@@ -3194,6 +3193,7 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
           ${authEditorHtml("request")}
         </div>
       </details>
+      ${kvSection("cookies", "Cookies")}
     </div>
   </div>
   <div class="rail-nav" data-rail-section="routes">

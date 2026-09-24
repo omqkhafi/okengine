@@ -272,6 +272,9 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html.indexOf('<details class="rail-acc" data-rail-section="headers"')).toBeLessThan(
       html.indexOf('<details class="rail-acc" data-rail-section="auth"'),
     );
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="auth"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="cookies"'),
+    );
     expect(html.indexOf('<details class="rail-acc" data-rail-section="query"')).toBeLessThan(
       html.indexOf('<details class="rail-acc" data-rail-section="path"'),
     );
@@ -390,6 +393,9 @@ describe("renderJsonCodeBlockHtml", () => {
       html.indexOf('<details class="rail-acc" data-rail-section="body"'),
     );
     expect(html.indexOf('<details class="rail-acc" data-rail-section="body"')).toBeLessThan(
+      html.indexOf('<details class="rail-acc" data-rail-section="headers"'),
+    );
+    expect(html.indexOf('<details class="rail-acc" data-rail-section="auth"')).toBeLessThan(
       html.indexOf('<details class="rail-acc" data-rail-section="cookies"'),
     );
     expect(html).toContain('data-method="GET"');
