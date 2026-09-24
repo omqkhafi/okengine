@@ -5,10 +5,12 @@
 import { aiDecisionRegistry } from "./element-registries.ts";
 import type { AiDecisionDecl, AiDecisionQuestion } from "../elements/ai/declare.ts";
 import {
+  DecisionConfigError,
   DecisionOutageError,
   type DecisionResponse,
   type WireQuestion,
 } from "../elements/ai/decisions/provider.ts";
+import { parseDurationMs } from "../elements/clock/duration.ts";
 import {
   createOpenRouterDecisionProvider,
   OPENROUTER_JEV_MODEL,
@@ -50,6 +52,13 @@ export interface FxDecideInput {
   readonly signal: AbortSignal;
   readonly now: () => number;
   readonly runId?: string;
+  /** Tenant of the calling flow. Stamped on pending reviews. */
+  readonly tenantId?: string | null;
+  /**
+   * Resolve a secret through the flow's secret capability.
+   * Missing or empty is a config error, not an outage.
+   */
+  readonly getSecret?: (name: string) => Promise<string | undefined>;
   readonly decision: { readonly name: string };
   readonly input: unknown;
 }
@@ -138,24 +147,30 @@ export async function runFxDecide(options: FxDecideInput): Promise<unknown> {
 async function executeDecide(options: FxDecideInput, name: string): Promise<unknown> {
   const decl = aiDecisionRegistry.find((item) => item.name === name);
   if (!decl) throw new Error(`fx.decide: unknown decision "${name}"`);
+  const ordinal = decideOrdinal(options.journal, name);
+  const slot = `${name}#${ordinal}`;
   const recorded = options.journal
-    ? await options.journal.effect("decide-provider", name, () => callAndDraw(decl, options))
-    : await callAndDraw(decl, options);
-  const view = project(decl, options.input, recorded);
+    ? await options.journal.effect("decide-provider", slot, () => callAndDraw(decl, options, ordinal))
+    : await callAndDraw(decl, options, ordinal);
+  const view = options.journal
+    ? ((await options.journal.effect("decide-view", slot, () =>
+        project(decl, options.input, recorded),
+      )) as JournaledView)
+    : project(decl, options.input, recorded);
   if (view.auto) {
-    if (recorded.audited && options.journal) {
-      const id = reviewId(options.journal.runId, name);
+    if (view.audited && options.journal) {
+      const id = reviewId(options.journal.runId, ordinal, name);
       await options.journal.step(decisionStepName(id, true), () =>
         pendingRecord(options, view, true),
       );
     }
-    return view.result;
+    return materialize(view);
   }
-  if (decl.mode === "abstain") return abstain(view);
+  if (decl.mode === "abstain") return materialize(view);
   if (!options.journal) {
     throw new Error(`fx.decide: "${name}" review requires a durable journal`);
   }
-  const id = reviewId(options.journal.runId, name);
+  const id = reviewId(options.journal.runId, ordinal, name);
   const step = decisionStepName(id, false);
   const stored = (await options.journal.step(step, () =>
     pendingRecord(options, view, false),
@@ -163,8 +178,22 @@ async function executeDecide(options: FxDecideInput, name: string): Promise<unkn
   if (stored.status === "pending") {
     await options.journal.sleep(step, "876000h", () => 876000 * 60 * 60 * 1000);
   }
-  const resolved = (await options.journal.step(step, () => stored)) as DecisionReviewRecord;
+  const resolved = readStepRecord(options.journal, step) ?? stored;
   return reviewed(view, resolved.values ?? {});
+}
+
+/** Completed outer `decide` effects for this name. The current call is not stored yet. */
+function decideOrdinal(journal: JournalSession | undefined, name: string): number {
+  if (!journal) return 0;
+  return journal.run.entries.filter(
+    (entry) => entry.kind === "effect" && entry.effectKind === "decide" && entry.resource === name,
+  ).length;
+}
+
+function readStepRecord(journal: JournalSession, step: string): DecisionReviewRecord | undefined {
+  const entry = journal.run.entries.find((item) => item.kind === "step" && item.name === step);
+  if (!entry || entry.kind !== "step") return undefined;
+  return entry.value as DecisionReviewRecord;
 }
 
 interface RecordedCall {
@@ -174,13 +203,17 @@ interface RecordedCall {
   readonly propensity: number;
 }
 
-async function callAndDraw(decl: AiDecisionDecl, options: FxDecideInput): Promise<RecordedCall> {
+async function callAndDraw(
+  decl: AiDecisionDecl,
+  options: FxDecideInput,
+  ordinal: number,
+): Promise<RecordedCall> {
   const rate = decl.autonomy?.audit ?? 0;
-  const seed = `${options.runId ?? options.journal?.runId ?? "run"}:${decl.name}`;
-  const draw = auditDraw(seed, rate);
+  const run = options.runId ?? options.journal?.runId ?? "run";
+  const draw = auditDraw(`${run}:${decl.name}#${ordinal}`, rate);
   try {
     providerCalls += 1;
-    const response = await callProvider(decl, options.input, options.signal);
+    const response = await callProvider(decl, options);
     return { response, outage: false, audited: draw.audited, propensity: draw.propensity };
   } catch (err) {
     if (err instanceof DecisionOutageError) {
@@ -190,27 +223,33 @@ async function callAndDraw(decl: AiDecisionDecl, options: FxDecideInput): Promis
   }
 }
 
-async function callProvider(
-  decl: AiDecisionDecl,
-  input: unknown,
-  signal: AbortSignal,
-): Promise<DecisionResponse> {
-  if (providerOverride) return providerOverride(decl, input, signal);
+async function callProvider(decl: AiDecisionDecl, options: FxDecideInput): Promise<DecisionResponse> {
+  if (providerOverride) return providerOverride(decl, options.input, options.signal);
   const model =
     decl.model ?? (decl.driverId === "typesafe" ? TYPESAFE_JEV_MODEL : OPENROUTER_JEV_MODEL);
   const keyName = decl.driverId === "typesafe" ? "TYPESAFE_API_KEY" : "OPENROUTER_API_KEY";
-  const apiKey = process.env[keyName];
-  if (!apiKey) throw new DecisionOutageError(`${keyName} is not set`);
+  const apiKey = await options.getSecret?.(keyName);
+  if (!apiKey) throw new DecisionConfigError(keyName);
+  const timeoutMs = decisionTimeoutMs(decl.timeout);
   const provider =
     decl.driverId === "typesafe"
-      ? createTypesafeDecisionProvider(apiKey)
-      : createOpenRouterDecisionProvider(apiKey);
+      ? createTypesafeDecisionProvider(apiKey, timeoutMs)
+      : createOpenRouterDecisionProvider(apiKey, timeoutMs);
   return provider.evaluate({
     model,
-    state: input,
+    state: options.input,
     questions: wireQuestions(decl),
-    signal,
+    signal: options.signal,
   });
+}
+
+function decisionTimeoutMs(timeout: AiDecisionDecl["timeout"]): number {
+  if (typeof timeout === "number" && timeout > 0) return timeout;
+  if (typeof timeout === "string") {
+    const parsed = parseDurationMs(timeout);
+    if (parsed > 0) return parsed;
+  }
+  return 30_000;
 }
 
 function wireQuestions(decl: AiDecisionDecl): Record<string, WireQuestion> {
@@ -239,24 +278,33 @@ function wireQuestion(question: AiDecisionQuestion): WireQuestion {
   };
 }
 
-interface Projected {
-  readonly auto: boolean;
-  readonly result: Record<string, unknown>;
-  readonly reason?: DecisionUncertainty;
-  readonly propensity: number;
-  readonly locale?: string;
+/** One question as journaled. Replay returns this; it is not re-projected. */
+interface JournaledQuestion {
+  readonly value: unknown;
+  readonly how: DecisionHow;
+  readonly p: number;
+  readonly raw: unknown;
+  readonly audited?: boolean;
 }
 
-function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): Projected {
-  const locale = decl.locale?.(input);
-  const dollar: Record<string, unknown> = {
-    meta: {
-      model: recorded.response?.model,
-      provider: recorded.response?.provider ?? decl.driverId,
-      usage: recorded.response?.usage ?? {},
-    },
+/** Projection stored on the journal. The live lock is not consulted on replay. */
+interface JournaledView {
+  readonly auto: boolean;
+  readonly reason?: DecisionUncertainty;
+  readonly locale?: string;
+  readonly lockModel?: string;
+  readonly audited: boolean;
+  readonly propensity: number;
+  readonly questions: Readonly<Record<string, JournaledQuestion>>;
+  readonly meta: {
+    readonly model?: string;
+    readonly provider: string;
+    readonly usage: DecisionResponse["usage"] | Record<string, never>;
   };
-  const values: Record<string, unknown> = {};
+}
+
+function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): JournaledView {
+  const locale = decl.locale?.(input);
   let auto = !recorded.outage && !decisionDriftSuspended();
   let reason: DecisionUncertainty | undefined = recorded.outage
     ? "outage"
@@ -273,13 +321,16 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
       reason = "version-mismatch";
     }
   }
+  const questions: Record<string, JournaledQuestion> = {};
   for (const [id, question] of Object.entries(decl.ask)) {
     const slice = sliceFor(lock, id, locale);
     const answer = recorded.response?.answers[id];
     const calibrated = calibrateAnswer(question, answer, slice);
-    let how: DecisionHow = "auto";
     let questionAuto = auto && slice !== undefined && calibrated.p >= (slice?.threshold ?? 1);
-    if (slice === undefined && !reason) {
+    if (calibrated.value === "none_of_these") {
+      questionAuto = false;
+      reason = reason ?? "low-confidence";
+    } else if (slice === undefined && !reason) {
       questionAuto = false;
       reason = locale ? "uncertified-locale" : "missing-lock";
     } else if (slice && questionHash(question) !== slice.hash) {
@@ -289,37 +340,52 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
       questionAuto = false;
       reason = reason ?? "low-confidence";
     }
-    if (!questionAuto) {
-      auto = false;
-      how = decl.mode === "abstain" ? "abstained" : "auto";
-    }
-    values[id] = questionAuto
-      ? calibrated.value
-      : decl.mode === "abstain"
-        ? null
-        : calibrated.value;
-    dollar[id] = {
-      how: questionAuto ? "auto" : decl.mode === "abstain" ? "abstained" : "auto",
+    if (!questionAuto) auto = false;
+    const how: DecisionHow = questionAuto ? "auto" : decl.mode === "abstain" ? "abstained" : "auto";
+    questions[id] = {
+      value: questionAuto || decl.mode !== "abstain" ? calibrated.value : null,
+      how,
       p: calibrated.p,
       raw: calibrated.raw,
       ...(recorded.audited && questionAuto ? { audited: true } : {}),
     };
-    void how;
   }
   if (!auto && decl.mode === "abstain") {
-    for (const id of Object.keys(decl.ask)) {
-      values[id] = null;
-      const slot = dollar[id] as Record<string, unknown>;
-      slot.how = "abstained";
+    for (const id of Object.keys(questions)) {
+      const slot = questions[id];
+      if (!slot) continue;
+      questions[id] = { ...slot, value: null, how: "abstained" };
     }
   }
   return {
     auto,
-    result: { ...values, $: dollar },
     ...(reason !== undefined ? { reason } : {}),
-    propensity: recorded.propensity,
     ...(locale !== undefined ? { locale } : {}),
+    ...(lock?.model !== undefined ? { lockModel: lock.model } : {}),
+    audited: recorded.audited,
+    propensity: recorded.propensity,
+    questions,
+    meta: {
+      model: recorded.response?.model,
+      provider: recorded.response?.provider ?? decl.driverId,
+      usage: recorded.response?.usage ?? {},
+    },
   };
+}
+
+function materialize(view: JournaledView): Record<string, unknown> {
+  const dollar: Record<string, unknown> = { meta: view.meta };
+  const result: Record<string, unknown> = { $: dollar };
+  for (const [id, question] of Object.entries(view.questions)) {
+    result[id] = question.value;
+    dollar[id] = {
+      how: question.how,
+      p: question.p,
+      raw: question.raw,
+      ...(question.audited ? { audited: true } : {}),
+    };
+  }
+  return result;
 }
 
 function sliceFor(
@@ -347,8 +413,9 @@ function calibrateAnswer(
       slice?.calibrator.kind === "platt" || slice?.calibrator.kind === "beta"
         ? slice.calibrator
         : { kind: "platt" as const, a: 1, b: 0 };
-    const p = calibrateBoolean(noul, calibrator);
-    return { value: noul >= 0.5, p, raw: { noul } };
+    const probability = calibrateBoolean(noul, calibrator);
+    const p = Math.max(probability, 1 - probability);
+    return { value: probability >= 0.5, p, raw: { noul } };
   }
   const probs = probabilityList(question, record.probabilities);
   const t = slice?.calibrator.kind === "temperature" ? slice.calibrator.t : 1;
@@ -387,16 +454,12 @@ function probabilityList(
   return { keys, values: keys.map(() => 0) };
 }
 
-function abstain(view: Projected): Record<string, unknown> {
-  return view.result;
-}
-
 function reviewed(
-  view: Projected,
+  view: JournaledView,
   values: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
-  const dollar = { ...(view.result.$ as Record<string, unknown>) };
-  const next: Record<string, unknown> = { $: dollar };
+  const next = materialize(view);
+  const dollar = next.$ as Record<string, unknown>;
   for (const [id, value] of Object.entries(values)) {
     next[id] = value;
     const slot = dollar[id];
@@ -404,31 +467,27 @@ function reviewed(
       dollar[id] = { ...(slot as Record<string, unknown>), how: "reviewed" };
     }
   }
-  for (const [id, value] of Object.entries(view.result)) {
-    if (id === "$" || id in next) continue;
-    next[id] = value;
-  }
   return next;
 }
 
 function pendingRecord(
   options: FxDecideInput,
-  view: Projected,
+  view: JournaledView,
   labelOnly: boolean,
 ): DecisionReviewRecord {
   return {
     status: "pending",
     requestedAt: options.now(),
-    tenant: null,
+    tenant: options.tenantId ?? null,
     ...(view.locale !== undefined ? { locale: view.locale } : {}),
-    propensity: view.propensity,
+    propensity: labelOnly ? view.propensity : 1,
     labelOnly,
     ...(view.reason !== undefined ? { reason: view.reason } : {}),
   };
 }
 
-function reviewId(runId: string, name: string): string {
-  return Buffer.from(`${runId}.${name}`, "utf8").toString("base64url");
+function reviewId(runId: string, ordinal: number, name: string): string {
+  return Buffer.from(`${runId}.${ordinal}.${name}`, "utf8").toString("base64url");
 }
 
 function auditDraw(
@@ -539,12 +598,18 @@ export async function resolveDecisionReview(
   }
 }
 
-function parseReviewId(id: string): { readonly runId: string; readonly name: string } | undefined {
+function parseReviewId(
+  id: string,
+): { readonly runId: string; readonly ordinal: number; readonly name: string } | undefined {
   try {
     const decoded = Buffer.from(id, "base64url").toString("utf8");
-    const dot = decoded.indexOf(".");
-    if (dot <= 0) return undefined;
-    return { runId: decoded.slice(0, dot), name: decoded.slice(dot + 1) };
+    const first = decoded.indexOf(".");
+    const second = first >= 0 ? decoded.indexOf(".", first + 1) : -1;
+    if (first <= 0 || second <= first + 1) return undefined;
+    const ordinal = Number(decoded.slice(first + 1, second));
+    const name = decoded.slice(second + 1);
+    if (!Number.isInteger(ordinal) || ordinal < 0 || !name) return undefined;
+    return { runId: decoded.slice(0, first), ordinal, name };
   } catch {
     return undefined;
   }

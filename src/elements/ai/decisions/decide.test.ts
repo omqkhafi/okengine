@@ -18,6 +18,7 @@ import {
   createPostgresJournalFake,
   createPostgresJournalStore,
 } from "../../../drivers/journal-postgres.ts";
+import { DecisionConfigError, DecisionOutageError } from "./provider.ts";
 import {
   decisionProviderCalls,
   decisionStepName,
@@ -102,6 +103,9 @@ describe("fx.decide", () => {
   });
 
   test("abstain in a non-durable flow returns null and does not park", async () => {
+    setDecisionProvider(async () => {
+      throw new DecisionOutageError("down");
+    });
     const decl = ai.decision("triage", {
       onUncertain: "abstain",
       ask: { team: choice() },
@@ -235,5 +239,219 @@ describe("fx.decide", () => {
     const res = await app.fetch(new Request("http://localhost/_oke/decisions/triage/candidate"));
     expect(res.status).toBeLessThan(500);
     await app.bootResult?.close();
+  });
+
+  test("replay returns the journaled projection after the lock changes", async () => {
+    provider();
+    const question = choice();
+    const decl = ai.decision("triage", {
+      onUncertain: "abstain",
+      autonomy: { maxError: 0.05, audit: 0 },
+      ask: { team: question },
+    });
+    setDecisionLock({
+      decisions: {
+        triage: {
+          model: "typesafe/jev-1.13.0",
+          questions: {
+            team: {
+              "": {
+                hash: questionHash(question),
+                calibrator: { kind: "temperature" as const, t: 1 },
+                threshold: 0.5,
+              },
+            },
+          },
+        },
+      },
+    });
+    const store = createMemoryJournalStore();
+    const session = await createJournal({ store, now: () => 1_000_000 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      now: () => 1_000_000,
+    });
+    const first = (await fx.decide(decl, {})) as { team: string; $: { team: { how: string } } };
+    expect(first.$.team.how).toBe("auto");
+    setDecisionLock(undefined);
+    session.rewind();
+    const second = (await fx.decide(decl, {})) as { team: string; $: { team: { how: string } } };
+    expect(second.team).toBe("technical");
+    expect(second.$.team.how).toBe("auto");
+    expect(decisionProviderCalls()).toBe(1);
+  });
+
+  test("the same decision can park twice in one run", async () => {
+    provider();
+    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const store = createMemoryJournalStore();
+    const journal = createJournal({ store, now: () => 1_000_000 });
+    const session = await journal.start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      now: () => 1_000_000,
+    });
+    const park = async () => {
+      try {
+        await fx.decide(decl, {});
+        return false;
+      } catch (err) {
+        if (!isJournalSuspend(err)) throw err;
+        return true;
+      }
+    };
+    expect(await park()).toBe(true);
+    const first = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    if (!first || first.kind !== "step") throw new Error("expected the first park");
+    await resolveDecisionReview(
+      store,
+      first.name.slice("ai-decision:".length),
+      { values: { team: "billing" }, reviewer: "a" },
+      () => 1_000_000,
+    );
+    const resumed = await journal.resume(session.runId);
+    const again = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: resumed,
+      runId: resumed.runId,
+      durable: true,
+      now: () => 1_000_001,
+    });
+    const done = (await again.decide(decl, {})) as { team: string; $: { team: { how: string } } };
+    expect(done.team).toBe("billing");
+    expect(done.$.team.how).toBe("reviewed");
+    let secondPark = false;
+    try {
+      await again.decide(decl, {});
+    } catch (err) {
+      secondPark = isJournalSuspend(err);
+      if (!secondPark) throw err;
+    }
+    expect(secondPark).toBe(true);
+    const steps = resumed.run.entries.filter(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    expect(steps).toHaveLength(2);
+  });
+
+  test("none_of_these is not auto", async () => {
+    setDecisionProvider(async () => ({
+      model: "typesafe/jev-1.13.0",
+      provider: "openrouter",
+      answers: {
+        team: {
+          type: "choice",
+          choice: "none_of_these",
+          probabilities: { billing: 0.1, technical: 0.1, none_of_these: 0.8 },
+        },
+      },
+      usage: {},
+    }));
+    const question = choice();
+    const decl = ai.decision("triage", {
+      onUncertain: "abstain",
+      autonomy: { maxError: 0.05, audit: 0 },
+      ask: { team: question },
+    });
+    setDecisionLock({
+      decisions: {
+        triage: {
+          model: "typesafe/jev-1.13.0",
+          questions: {
+            team: {
+              "": {
+                hash: questionHash(question),
+                calibrator: { kind: "temperature" as const, t: 1 },
+                threshold: 0.5,
+              },
+            },
+          },
+        },
+      },
+    });
+    const fx = createFx({ flow: "run", effects: { decides: ["triage"] }, now: () => 1 });
+    const result = (await fx.decide(decl, {})) as { team: null; $: { team: { how: string } } };
+    expect(result.team).toBeNull();
+    expect(result.$.team.how).toBe("abstained");
+  });
+
+  test("boolean value follows the calibrated probability", async () => {
+    setDecisionProvider(async () => ({
+      model: "typesafe/jev-1.13.0",
+      provider: "openrouter",
+      answers: { urgent: { type: "noul", noul: 0.2 } },
+      usage: {},
+    }));
+    const question = ai.boolean("urgent?");
+    const decl = ai.decision("triage", {
+      onUncertain: "abstain",
+      autonomy: { maxError: 0.05, audit: 0 },
+      ask: { urgent: question },
+    });
+    setDecisionLock({
+      decisions: {
+        triage: {
+          model: "typesafe/jev-1.13.0",
+          questions: {
+            urgent: {
+              "": {
+                hash: questionHash(question),
+                calibrator: { kind: "platt" as const, a: 1, b: 0 },
+                threshold: 0.5,
+              },
+            },
+          },
+        },
+      },
+    });
+    const fx = createFx({ flow: "run", effects: { decides: ["triage"] }, now: () => 1 });
+    const result = (await fx.decide(decl, {})) as { urgent: boolean };
+    expect(result.urgent).toBe(false);
+  });
+
+  test("pending review stamps the tenant", async () => {
+    provider();
+    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const store = createMemoryJournalStore();
+    const session = await createJournal({ store, now: () => 1 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      tenant: { id: "acme" },
+      now: () => 1,
+    });
+    try {
+      await fx.decide(decl, {});
+    } catch (err) {
+      if (!isJournalSuspend(err)) throw err;
+    }
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    if (!step || step.kind !== "step") throw new Error("expected a parked decision");
+    expect((step.value as { tenant: string }).tenant).toBe("acme");
+  });
+
+  test("a missing secret is a config error", async () => {
+    const decl = ai.decision("triage", { onUncertain: "abstain", ask: { team: choice() } });
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"], secrets: ["OPENROUTER_API_KEY"] },
+      now: () => 1,
+    });
+    await expect(fx.decide(decl, {})).rejects.toBeInstanceOf(DecisionConfigError);
   });
 });

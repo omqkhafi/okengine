@@ -18,11 +18,12 @@ export interface PlattCalibrator {
   readonly b: number;
 }
 
-/** Beta scaling for a boolean `noul` probability. */
+/** Beta scaling for a boolean `noul` probability. `c` is the scale. */
 export interface BetaCalibrator {
   readonly kind: "beta";
   readonly a: number;
   readonly b: number;
+  readonly c?: number;
 }
 
 /** Calibrator stored on one certificate slice. */
@@ -161,7 +162,7 @@ export function applyTemperature(probs: readonly number[], t: number): number[] 
 }
 
 /**
- * Calibrate a boolean probability, then fold it to a confidence.
+ * Calibrated P(true). Confidence is `max(p, 1 - p)` at the call site.
  *
  * @param noul - Provider probability of the true class
  * @param calibrator - Platt or beta
@@ -171,17 +172,18 @@ export function calibrateBoolean(
   calibrator: PlattCalibrator | BetaCalibrator,
 ): number {
   const p = Math.min(1, Math.max(0, noul));
-  let scaled = p;
   if (calibrator.kind === "platt") {
     const logit = Math.log(Math.max(p, 1e-12) / Math.max(1 - p, 1e-12));
     const z = calibrator.a * logit + calibrator.b;
-    scaled = 1 / (1 + Math.exp(-z));
-  } else {
-    const a = calibrator.a;
-    const b = calibrator.b;
-    scaled = (a * p) / (a * p + b * (1 - p) || 1);
+    return 1 / (1 + Math.exp(-z));
   }
-  return Math.max(scaled, 1 - scaled);
+  const a = calibrator.a;
+  const b = calibrator.b;
+  if (calibrator.c !== undefined) {
+    const ratio = Math.pow(1 - p, b) / Math.pow(Math.max(p, 1e-12), a);
+    return 1 / (1 + Math.exp(-calibrator.c * ratio));
+  }
+  return (a * p) / (a * p + b * (1 - p) || 1);
 }
 
 /**

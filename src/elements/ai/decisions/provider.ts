@@ -60,17 +60,33 @@ export interface DecisionProvider {
   evaluate(request: DecisionRequest): Promise<DecisionResponse>;
 }
 
+/** Statuses that are the caller's problem. They do not open the breaker. */
+export type DecisionRequestStatus = 400 | 401 | 402 | 403 | 404 | 422;
+
 /** Auth, billing, or a body the provider rejected. Does not open the breaker. */
 export class DecisionRequestError extends Error {
-  readonly status: 401 | 402 | 422;
+  readonly status: DecisionRequestStatus;
   /**
    * @param status - HTTP status
    * @param message - Provider body, truncated by the caller
    */
-  constructor(status: 401 | 402 | 422, message: string) {
+  constructor(status: DecisionRequestStatus, message: string) {
     super(message);
     this.name = "DecisionRequestError";
     this.status = status;
+  }
+}
+
+/** The decision is missing a configured secret. Not an outage. */
+export class DecisionConfigError extends Error {
+  readonly secret: string;
+  /**
+   * @param secret - Secret contract name
+   */
+  constructor(secret: string) {
+    super(`fx.decide: secret "${secret}" is not configured`);
+    this.name = "DecisionConfigError";
+    this.secret = secret;
   }
 }
 
