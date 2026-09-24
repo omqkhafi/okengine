@@ -9,6 +9,7 @@ import {
   assertAdviseQuery,
   classifyPgStatStatementsError,
   computeStatsKpis,
+  engineErrorText,
   maskLockActivityQuery,
   PG_STAT_STATEMENTS_NOT_CREATED,
   PG_STAT_STATEMENTS_NOT_PRELOADED,
@@ -62,6 +63,31 @@ describe("classifyPgStatStatementsError", () => {
     expect(
       classifyPgStatStatementsError(new Error('relation "pg_stat_statements" does not exist')).code,
     ).toBe(PG_STAT_STATEMENTS_NOT_CREATED);
+  });
+
+  test("Bun.SQL plain object keeps the relation message (not [object Object])", () => {
+    const err = classifyPgStatStatementsError({
+      message: 'relation "pg_stat_statements" does not exist',
+      code: "42P01",
+    });
+    expect(err.code).toBe(PG_STAT_STATEMENTS_NOT_CREATED);
+    expect(err.message).toBe('relation "pg_stat_statements" does not exist');
+    expect(err.message).not.toBe("[object Object]");
+  });
+
+  test("plain object with only a code does not stringify the object", () => {
+    const err = classifyPgStatStatementsError({ code: "ERR_POSTGRES_CONNECTION_CLOSED" });
+    expect(err.code).toBe(PG_STAT_STATEMENTS_UNSUPPORTED);
+    expect(err.message).toBe("ERR_POSTGRES_CONNECTION_CLOSED");
+    expect(engineErrorText({})).toBe("");
+  });
+
+  test("preload wording on a plain object stays not-preloaded", () => {
+    expect(
+      classifyPgStatStatementsError({
+        message: "pg_stat_statements must be loaded via shared_preload_libraries",
+      }).code,
+    ).toBe(PG_STAT_STATEMENTS_NOT_PRELOADED);
   });
 });
 

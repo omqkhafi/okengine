@@ -214,7 +214,18 @@ function formatPct(value: number | null): string {
 
 function errorMessage(error: unknown): string | null {
   if (!error) return null;
-  return error instanceof Error ? error.message : String(error);
+  const text =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? typeof (error as { message?: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : null
+        : typeof error === "string"
+          ? error
+          : null;
+  if (!text || text.trim().length === 0 || text === "[object Object]") return null;
+  return text;
 }
 
 function errorCode(error: unknown): string | null {

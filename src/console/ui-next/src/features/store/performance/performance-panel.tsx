@@ -433,7 +433,20 @@ function fmtCost(value: unknown): string {
 
 function errorMessage(error: unknown): string | null {
   if (!error) return null;
-  return error instanceof Error ? error.message : String(error);
+  const text =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? stringField(error.message)
+        : typeof error === "string"
+          ? error
+          : null;
+  if (!text || text.trim().length === 0 || text === "[object Object]") return null;
+  return text;
+}
+
+function stringField(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
 function errorCode(error: unknown): string | null {

@@ -424,7 +424,9 @@ export interface SqlStoreHandle {
   exists(table: TableHandle | unknown, idOrWhere: string | WhereMap): Promise<boolean>;
   /**
    * Insert when no row matches `matchOn`; never touches an existing match
-   * unless `options.onExisting` is `"update"`.
+   * unless `options.onExisting` is `"update"`. A match that is only the
+   * primary key is one `INSERT … ON CONFLICT` round trip on postgres and
+   * pglite. Memory SQL, and any other predicate, stays a read then a write.
    *
    * @param table - Table
    * @param matchOn - Equality map or Drizzle condition identifying the row
@@ -683,6 +685,101 @@ export function createSqlStoreHandle(
       return coerceCompiledWhere(table, compileWhere(normalizeWhereMap(table, where as WhereMap)));
     }
     return coerceCompiledWhere(table, compileWhere(where));
+  }
+
+  /**
+   * Primary-key equality only. Any other predicate cannot use `ON CONFLICT`.
+   *
+   * @param compiled - Match clause
+   * @param pkCol - Primary key SQL name
+   */
+  function primaryKeyEquality(
+    compiled: ReturnType<typeof compileWhere>,
+    pkCol: string,
+  ): { readonly value: unknown } | undefined {
+    if (compiled.predicates.length !== 1) return undefined;
+    const pred = compiled.predicates[0];
+    if (!pred || pred.op !== "=" || pred.column !== pkCol) return undefined;
+    return { value: pred.value };
+  }
+
+  /**
+   * One round trip: `INSERT … ON CONFLICT (pk)`.
+   *
+   * `DO NOTHING` when the existing row must stay. `DO UPDATE` captures the
+   * pre-image in a CTE so CDC still sees before and after.
+   *
+   * @param table - Table
+   * @param name - SQL table name
+   * @param pkCol - Primary key SQL name
+   * @param pkValue - Bound primary key
+   * @param values - Insert / update payload
+   * @param onExisting - `"update"` rewrites the existing row
+   */
+  async function upsertOnPrimaryKey(
+    table: TableHandle | unknown,
+    name: string,
+    pkCol: string,
+    pkValue: unknown,
+    values: SqlRow,
+    onExisting: "update" | undefined,
+  ): Promise<UpsertResult> {
+    const prepared = prepareInsertRow(table, values);
+    if (!(pkCol in prepared)) prepared[pkCol] = pkValue;
+    const cols = Object.keys(prepared);
+    const colList = cols.map(quoteIdent).join(", ");
+    const placeholders = cols.map(() => "?").join(", ");
+    const params = cols.map((col) => prepared[col]);
+    const quotedPk = quoteIdent(pkCol);
+    const quotedName = quoteIdent(name);
+    const setEntries =
+      onExisting === "update"
+        ? Object.entries(prepareUpdateRow(table, values)).filter(([col]) => col !== pkCol)
+        : [];
+    if (onExisting !== "update" || setEntries.length === 0) {
+      const rows = await query(
+        `INSERT INTO ${quotedName} (${colList}) VALUES (${placeholders})` +
+          ` ON CONFLICT (${quotedPk}) DO NOTHING RETURNING *`,
+        params,
+      );
+      if (rows.length === 0) {
+        return { status: onExisting === "update" ? "changed" : "already-existed" };
+      }
+      notifySqlCdc({
+        tableName: name,
+        op: "insert",
+        before: null,
+        after: toJs(table, rows)[0] ?? null,
+      });
+      return { status: "upserted" };
+    }
+    const setSql = setEntries
+      .map(([col]) => `${quoteIdent(col)} = EXCLUDED.${quoteIdent(col)}`)
+      .join(", ");
+    // The old row is a CTE, then read from an outer SELECT. INSERT …
+    // RETURNING cannot see that CTE on PGlite, so the before image would
+    // be null and an update would look like an insert.
+    const result = await query(
+      `WITH __oke_old AS (` +
+        `SELECT * FROM ${quotedName} WHERE ${quotedPk} = ? FOR UPDATE` +
+        `), __oke_new AS (` +
+        `INSERT INTO ${quotedName} (${colList}) VALUES (${placeholders})` +
+        ` ON CONFLICT (${quotedPk}) DO UPDATE SET ${setSql}` +
+        ` RETURNING *` +
+        `) SELECT (SELECT row_to_json(__oke_old) FROM __oke_old) AS __oke_before_data,` +
+        ` (SELECT row_to_json(__oke_new) FROM __oke_new) AS __oke_after_data`,
+      [pkValue, ...params],
+    );
+    const raw = result[0];
+    const before = raw ? jsonImageToJs(table, raw.__oke_before_data) : null;
+    const after = raw ? jsonImageToJs(table, raw.__oke_after_data) : null;
+    notifySqlCdc({
+      tableName: name,
+      op: before ? "update" : "insert",
+      before,
+      after,
+    });
+    return { status: before ? "changed" : "upserted" };
   }
 
   /**
@@ -1025,6 +1122,19 @@ export function createSqlStoreHandle(
       const compiled = compileTableWhere(table, matchOn);
       if (!compiled.clause) {
         throw new Error("upsert() requires at least one matchOn predicate");
+      }
+      const pkCol = resolvePkColumn(table);
+      const pkMatch = primaryKeyEquality(compiled, pkCol);
+      // Memory SQL has no ON CONFLICT. Postgres and PGlite do.
+      if (pkMatch && connection.driverId !== "memory") {
+        return upsertOnPrimaryKey(
+          table,
+          name,
+          pkCol,
+          pkMatch.value,
+          values,
+          upsertOptions?.onExisting,
+        );
       }
       const found = await query(
         `SELECT 1 AS "ok" FROM ${quoteIdent(name)} WHERE ${compiled.clause} LIMIT 1`,

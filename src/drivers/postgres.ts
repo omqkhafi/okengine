@@ -180,20 +180,36 @@ function guardSharedPostgresClient(raw: PostgresClientLike): PostgresClientLike 
 }
 
 /**
- * One Bun.SQL pool per URL for store / journal / clock / vault / console.
+ * Bun.SQL pool size. Unset, non-finite, or below 1 keeps {@link POSTGRES_POOL_MAX}.
+ * A configured max is not capped — callers that need a larger pool ask for it.
+ *
+ * @param poolMax - Requested `max`
+ */
+function postgresPoolMax(poolMax: number | undefined): number {
+  if (poolMax === undefined || !Number.isFinite(poolMax) || poolMax < 1) return POSTGRES_POOL_MAX;
+  return Math.floor(poolMax);
+}
+
+/**
+ * One Bun.SQL pool per URL and `max` for store / journal / clock / vault / console.
  *
  * Returns a pause-aware client — holders (including fleet store wrappers)
  * fail soft after {@link pauseSharedPostgresClients} instead of reconnecting.
  *
  * @param url - Connection URL
+ * @param poolMax - Bun.SQL `max`. Omitted uses {@link POSTGRES_POOL_MAX}. A
+ * different max is a different pool — a store pin of 20 must not reuse a
+ * pool another subsystem already opened at the default.
  */
-export function sharedPostgresClient(url?: string): PostgresClientLike {
+export function sharedPostgresClient(url?: string, poolMax?: number): PostgresClientLike {
   assertSharedPostgresReady();
-  const key = resolvePostgresUrl(url);
+  const resolved = resolvePostgresUrl(url);
+  const max = postgresPoolMax(poolMax);
+  const key = `${resolved}\0${String(max)}`;
   const clients = sharedClientMap();
   const existing = clients.get(key);
   if (existing) return existing.guarded;
-  const raw = new Bun.SQL(key, { max: POSTGRES_POOL_MAX }) as unknown as PostgresClientLike;
+  const raw = new Bun.SQL(resolved, { max }) as unknown as PostgresClientLike;
   const guarded = guardSharedPostgresClient(raw);
   clients.set(key, { raw, guarded });
   return guarded;
@@ -304,12 +320,13 @@ export async function connectPostgres(options: SqlConnectOptions = {}): Promise<
   // must not share a pooled client — Bun raises ERR_POSTGRES_UNSAFE_TRANSACTION
   // when raw statements interleave with open transaction state on the shared
   // pool. Opt in explicitly; default behavior is unchanged.
-  const dedicated = !injected && options.pool?.max === 1;
+  const requestedMax = options.pool?.max;
+  const dedicated = !injected && requestedMax === 1;
   const client =
     injected ??
     (dedicated
       ? dedicatedPostgresClient(resolvePostgresUrl(options.url))
-      : sharedPostgresClient(options.url));
+      : sharedPostgresClient(options.url, requestedMax));
   return wrapPostgresClient(client, role, {
     shared: injected === undefined && !dedicated,
     ...(options.url !== undefined ? { url: options.url } : {}),

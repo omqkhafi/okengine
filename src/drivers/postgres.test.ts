@@ -38,6 +38,15 @@ describe("toPostgresParams", () => {
 });
 
 describe("closeSharedPostgresClients", () => {
+  test("a different max is a different pool on the same URL", () => {
+    const url = "postgres://127.0.0.1:9/oke-pool-max-shared-test";
+    const small = sharedPostgresClient(url, 8);
+    const large = sharedPostgresClient(url, 20);
+    expect(large).not.toBe(small);
+    expect(sharedPostgresClient(url, 20)).toBe(large);
+    expect(sharedPostgresClient(url)).toBe(small);
+  });
+
   test("drops cached pools so the next checkout is a new client", async () => {
     const url = "postgres://127.0.0.1:9/oke-close-shared-test";
     const first = sharedPostgresClient(url);

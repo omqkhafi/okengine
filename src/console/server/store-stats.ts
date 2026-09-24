@@ -201,13 +201,38 @@ export interface StoreSqlAdviseResult {
 }
 
 /**
+ * Readable text from an `Error` or a Bun.SQL plain-object throw.
+ *
+ * Objects without `message` / `code` stay empty — `String(object)` is
+ * `"[object Object]"` and hides the real failure from the Performance pane.
+ *
+ * @param err - Driver / SQL failure
+ */
+export function engineErrorText(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    const record = err as { message?: unknown; code?: unknown };
+    if (typeof record.message === "string" && record.message.trim().length > 0) {
+      return record.message;
+    }
+    if (typeof record.code === "string" && record.code.trim().length > 0) {
+      return record.code;
+    }
+    return "";
+  }
+  if (err == null) return "";
+  return String(err);
+}
+
+/**
  * Map an engine error to a structured stats code.
  *
  * @param err - Driver / SQL failure
  */
 export function classifyPgStatStatementsError(err: unknown): StoreSqlStatsError {
   if (err instanceof StoreSqlStatsError) return err;
-  const message = err instanceof Error ? err.message : String(err);
+  const message = engineErrorText(err);
   const lower = message.toLowerCase();
   if (
     lower.includes("shared_preload") ||

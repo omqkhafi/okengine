@@ -13,6 +13,7 @@ import {
   resolveIndexDriverId,
   resolveKvDriverId,
   resolveSqlDriverId,
+  sqlBindingForDecl,
 } from "./store.ts";
 
 describe("bindStore driver resolution", () => {
@@ -96,6 +97,31 @@ describe("bindStore driver resolution", () => {
     // kv / files are untouched by the sql-only override.
     expect(resolveKvDriverId(options, "test", false)).toBe("memory");
     expect(resolveKvDriverId(options, "dev", true)).toBe("redis");
+  });
+});
+
+describe("sqlBindingForDecl", () => {
+  test("pool.max and replica URLs land on the binding; min is ignored", () => {
+    const binding = sqlBindingForDecl("db", "postgres://primary/db", {
+      driver: "postgres",
+      pool: { max: 20, min: 2 },
+      replicas: ["postgres://ro-1/db", "postgres://ro-2/db"],
+    });
+    expect(binding).toEqual({
+      name: "db",
+      primary: { url: "postgres://primary/db", pool: { max: 20 } },
+      replicas: [
+        { url: "postgres://ro-1/db", pool: { max: 20 } },
+        { url: "postgres://ro-2/db", pool: { max: 20 } },
+      ],
+    });
+  });
+
+  test("a string pin keeps the URL and omits pool and replicas", () => {
+    expect(sqlBindingForDecl("db", "memory://", "memory")).toEqual({
+      name: "db",
+      primary: { url: "memory://" },
+    });
   });
 });
 

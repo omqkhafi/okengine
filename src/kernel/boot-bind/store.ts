@@ -2,7 +2,14 @@
  * Lazy store binder — loaded only when Store is declared.
  */
 
-import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import {
+  driverRefId,
+  resolveDomainDdlMode,
+  resolveDriverId,
+  resolveDriverRef,
+  type ConfigEnv,
+  type DriverRef,
+} from "../../config/index.ts";
 import {
   STORE_FILES_DEFAULTS,
   STORE_KV_DEFAULTS,
@@ -18,6 +25,7 @@ import { redisDriver } from "../../drivers/redis.ts";
 import { s3Driver } from "../../drivers/s3.ts";
 import type { FilesDriver, IndexDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
 import { createStoreRuntime, type StoreRuntime } from "../../elements/store.ts";
+import type { SqlRuntimeBinding } from "../../elements/store/runtime.ts";
 import type { StoreDecl } from "../../elements/store/declare.ts";
 import { emitBootWarn } from "../../runtime/boot-warn.ts";
 import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runtime
@@ -129,17 +137,15 @@ export function bindStore(
     warnKvMemoryDurable(durableKvDecls.map((d) => d.name));
   }
 
-  const sqlBindings: Record<string, { name: string; primary: { url: string } }> = {};
+  const sqlRef = resolveSqlDriverRef(options, env, docker);
+  const sqlBindings: Record<string, SqlRuntimeBinding> = {};
   const kvBindings: Record<string, { url?: string }> = {};
   const filesBindings: Record<string, { root?: string }> = {};
   const indexBindings: Record<string, { url?: string; apiKey?: string }> = {};
 
   for (const decl of options.stores ?? []) {
     if (isSqlDecl(decl)) {
-      sqlBindings[decl.name] = {
-        name: decl.name,
-        primary: { url: sqlUrl },
-      };
+      sqlBindings[decl.name] = sqlBindingForDecl(decl.name, sqlUrl, sqlRef);
     } else if (isKvDecl(decl)) {
       if (decl.durable === true) {
         kvBindings[decl.name] = {};
@@ -208,6 +214,76 @@ export function resolveSqlDriverId(options: BootOptions, env: ConfigEnv, docker:
   if (docker && fromEnv) return fromEnv;
   // Defaults cover every ConfigEnv key, so this is never undefined.
   return resolveDriverId(options.config?.drivers?.store?.sql, env, STORE_SQL_DEFAULTS)!;
+}
+
+/**
+ * Rich SQL driver ref for the active env. A docker `OKE_SQL_DRIVER` override
+ * that changes the protocol drops `pool` / `replicas` — those belong to the
+ * configured driver, not the override.
+ *
+ * @param options - Boot options
+ * @param env - Active environment
+ * @param docker - Docker mode
+ */
+function resolveSqlDriverRef(
+  options: BootOptions,
+  env: ConfigEnv,
+  docker: boolean,
+): DriverRef | undefined {
+  const configured = resolveDriverRef(options.config?.drivers?.store?.sql, env, STORE_SQL_DEFAULTS);
+  const fromEnv = process.env.OKE_SQL_DRIVER?.trim();
+  if (docker && fromEnv && fromEnv !== driverRefId(configured)) return fromEnv;
+  return configured;
+}
+
+/**
+ * Primary URL plus documented `pool.max` and read-replica URLs.
+ *
+ * `pool.min` is ignored — Bun.SQL has no minimum pool size. Unset `max`
+ * leaves pool sizing to the postgres driver default of 8.
+ *
+ * @param name - Store declaration name
+ * @param url - Primary connection URL
+ * @param ref - Active driver pin (string or rich object)
+ */
+export function sqlBindingForDecl(
+  name: string,
+  url: string,
+  ref: DriverRef | undefined,
+): SqlRuntimeBinding {
+  const max = driverPoolMax(ref);
+  const pool = max !== undefined ? { pool: { max } } : {};
+  const replicas = driverReplicaUrls(ref).map((replicaUrl) => ({
+    url: replicaUrl,
+    ...pool,
+  }));
+  return {
+    name,
+    primary: { url, ...pool },
+    ...(replicas.length > 0 ? { replicas } : {}),
+  };
+}
+
+/**
+ * Positive finite `pool.max` from a rich driver ref.
+ *
+ * @param ref - Driver pin
+ */
+function driverPoolMax(ref: DriverRef | undefined): number | undefined {
+  if (ref === undefined || typeof ref === "string") return undefined;
+  const max = ref.pool?.max;
+  if (typeof max !== "number" || !Number.isFinite(max) || max < 1) return undefined;
+  return Math.floor(max);
+}
+
+/**
+ * Replica connection strings from a rich driver ref. Non-strings are dropped.
+ *
+ * @param ref - Driver pin
+ */
+function driverReplicaUrls(ref: DriverRef | undefined): readonly string[] {
+  if (ref === undefined || typeof ref === "string" || ref.replicas === undefined) return [];
+  return ref.replicas.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
 /**

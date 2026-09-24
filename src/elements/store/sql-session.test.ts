@@ -156,6 +156,56 @@ describe("SqlStoreHandle — upsert", () => {
     expect(row).toEqual({ id: "welcome", title: "Hello", createdAt: 1 });
   });
 
+  test("primary-key insert and update each hit the connection once", async () => {
+    let queries = 0;
+    const counting = {
+      driverId: sharedConn.driverId,
+      role: sharedConn.role,
+      query(sql: string, params?: readonly unknown[]) {
+        queries += 1;
+        return sharedConn.query(sql, params);
+      },
+      exec: (sql: string, params?: readonly unknown[]) => sharedConn.exec(sql, params),
+    } satisfies SqlConnection;
+    const handle = createSqlStoreHandle("sql:app", {
+      connection: counting,
+      classifications: new Map(),
+      routedRole: "primary",
+      domainDdl: "off",
+    });
+
+    queries = 0;
+    const inserted = await handle.upsert(
+      posts,
+      { id: "once" },
+      { id: "once", title: "a", createdAt: 1 },
+    );
+    expect(inserted.status).toBe("upserted");
+    expect(queries).toBe(1);
+
+    queries = 0;
+    const updated = await handle.upsert(
+      posts,
+      { id: "once" },
+      { id: "once", title: "b", createdAt: 2 },
+      { onExisting: "update" },
+    );
+    expect(updated.status).toBe("changed");
+    expect(queries).toBe(1);
+
+    const row = await sharedHandle.findById(posts, "once");
+    expect(row).toEqual({ id: "once", title: "b", createdAt: 2 });
+
+    queries = 0;
+    const other = await handle.upsert(
+      posts,
+      { title: "missing" },
+      { id: "other", title: "missing", createdAt: 3 },
+    );
+    expect(other.status).toBe("upserted");
+    expect(queries).toBe(2);
+  });
+
   test("onExisting update changes matched columns", async () => {
     await sharedHandle.upsert(posts, { id: "n1" }, { id: "n1", title: "one", createdAt: 10 });
     const updated = await sharedHandle.upsert(

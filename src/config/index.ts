@@ -508,12 +508,30 @@ export function resolveDriverId(
   env: ConfigEnv,
   defaults?: EnvDriverMap,
 ): string | undefined {
+  return driverRefId(resolveDriverRef(map, env, defaults));
+}
+
+/**
+ * Resolve the rich driver ref for an env (`pool`, `replicas`, `url`).
+ *
+ * Same merge rules as {@link resolveDriverId}. A string pin has no pool or
+ * replicas. With `defaults`, an unset env key keeps that driver's default
+ * pin rather than a sibling environment.
+ *
+ * @param map - Env → driver map (or bare ref)
+ * @param env - Active environment
+ * @param defaults - Real default map for this specific driver (per-key merge)
+ */
+export function resolveDriverRef(
+  map: EnvDriverInput | undefined,
+  env: ConfigEnv,
+  defaults?: EnvDriverMap,
+): DriverRef | undefined {
   const normalized = normalizeEnvDriverMap(map);
   if (defaults) {
     const merged = mergeEnvDriverMap(normalized, defaults);
-    return driverRefId(merged[env]);
+    return merged[env];
   }
   if (!normalized) return undefined;
-  const ref = normalized[env] ?? normalized.dev ?? normalized.prod ?? normalized.test;
-  return driverRefId(ref);
+  return normalized[env] ?? normalized.dev ?? normalized.prod ?? normalized.test;
 }

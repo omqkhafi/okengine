@@ -46,6 +46,7 @@ import {
   STORE_SQL_LOCKS_POLL_MS,
   STORE_SQL_STATS_PII_GAP,
   StoreSqlStatsError,
+  engineErrorText,
 } from "./store-stats.ts";
 import {
   STORE_KV_STATS_SERVER_WIDE_GAP,
@@ -94,7 +95,18 @@ const ManifestOut = z.object({
 });
 
 const EffectEntryOut = z.object({
-  kind: z.enum(["read", "write", "emit", "send", "ask", "embed", "secret", "call", "fetch", "decide"]),
+  kind: z.enum([
+    "read",
+    "write",
+    "emit",
+    "send",
+    "ask",
+    "embed",
+    "secret",
+    "call",
+    "fetch",
+    "decide",
+  ]),
   resource: z.string(),
   timestamp: z.number(),
   duration: z.number(),
@@ -3515,7 +3527,7 @@ function failStoreSqlStats(err: unknown) {
     return fail("PgStatStatementsUnsupported", { reason: err.message });
   }
   return fail("PgStatStatementsUnsupported", {
-    reason: err instanceof Error ? err.message : String(err),
+    reason: engineErrorText(err),
   });
 }
 

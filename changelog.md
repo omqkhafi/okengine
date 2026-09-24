@@ -88,11 +88,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
   set only when a deny ends the run. A thrown tool is `error` and still rejects.
 - `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
   result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
-- Kernel edge gzip is 13209 bytes (was 13132). The `decide` effect kind sits on
-  the edge graph. The 17 kB cap is unchanged. Client gzip stays 5218.
+- Kernel edge gzip is 13249 bytes (was 13132). The `decide` effect kind and SQL
+  pool / replica binding sit on the edge graph. The 17 kB cap is unchanged.
+  Client gzip stays 5218.
 - Repeated identical `fx.ask` calls outside a durable run reach the model. Replay
   stays on that run's journal. Console keeps the newest 500 ask journal entries
   and agent runs.
+- Primary-key `upsert()` on postgres and pglite is one `INSERT … ON CONFLICT`.
+  An update still records the row before and after. A match on any other column,
+  and the memory driver, still reads and then writes.
 
 #### Console — Flows & traces
 
@@ -110,8 +114,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### 🐛 Fixed
 
+#### Console — Store
+
+- Store → Performance no longer prints `[object Object]` when Postgres throws a
+  plain object. A missing `pg_stat_statements` relation stays createable. Memory,
+  PGlite, and Cockroach still say telemetry is unavailable, and the sentence
+  names the driver.
+
 #### Runtime
 
+- `drivers.store.sql` `pool.max` sizes the Bun.SQL pool. Unset stays 8. A
+  different max does not reuse a pool opened at another size. `pool.min` is not
+  applied. `replicas` receive read-only flows, each on its own pool at that max.
 - Agent tool approval resolves under the journal lease (`get` one run, compare-and-set,
   `put`). Two instances cannot both win, and the winning write keeps the run's other
   entries. The approval id is `${runId}.${toolCallId}` (base64url). A finished approval

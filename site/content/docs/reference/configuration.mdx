@@ -136,11 +136,13 @@ sql: {
 },
 ```
 
-| Field      | Type              | Meaning                                     |
-| ---------- | ----------------- | ------------------------------------------- |
-| `url`      | connection string | Overrides the env-var resolution            |
-| `pool`     | `{ max?, min? }`  | SQL pool sizing                             |
-| `replicas` | `string[]`        | Read-only routing targets (read flows only) |
+| Field      | Type              | Meaning                                                                           |
+| ---------- | ----------------- | --------------------------------------------------------------------------------- |
+| `url`      | connection string | Overrides the env-var resolution                                                  |
+| `pool`     | `{ max?, min? }`  | `max` is the Bun.SQL pool size. Unset keeps 8. `min` is accepted and not applied  |
+| `replicas` | `string[]`        | Read-only flows use these URLs. Each replica opens its own pool at the same `max` |
+
+A store `max` of 20 does not share a pool another part of the process already opened at 8. Writes stay on the primary.
 
 ## images
 
