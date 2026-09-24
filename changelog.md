@@ -41,6 +41,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Agent events document the AG-UI stream: `fx.json.stream(fx.run(..., { stream: true }))`, the event fields, tool-approval interrupts, and `okengine/client/agent`.
 - Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
 - Agents document tool approval: `approval`, `gate`, `timeout`, and `durable: true`.
+- Decisions name the experimental limits: a promoted lockfile applies on restart,
+  one app-wide drift flag, compile-time checks that miss variables, and about 122
+  error-free labels per threshold at δ = 0.1.
 - Decisions document the full loop: a real review gate, emit-then-decide, the `$` result,
   the learning → candidate → certified → suspended lifecycle, Console review, and
   `oke eval --certify` / `oke decide promote`.
@@ -92,7 +95,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   set only when a deny ends the run. A thrown tool is `error` and still rejects.
 - `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
   result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
-- Kernel edge gzip is 13249 bytes (was 13132). The `decide` effect kind and SQL
+- Kernel edge gzip is 13289 bytes (was 13132). The `decide` effect kind and SQL
   pool / replica binding sit on the edge graph. The 17 kB cap is unchanged.
   Client gzip stays 5218.
 - Repeated identical `fx.ask` calls outside a durable run reach the model. Replay
@@ -138,6 +141,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- A decision label keeps the time it was written. A failed label write stays on the
+  trace and the decisions page, and the next write still runs. Postgres matches a
+  null tenant with `IS NOT DISTINCT FROM`. An older drift table gains `certified_at`
+  when the store opens.
 - Learn-then-Test certifies a threshold only when the error count is low under
   `maxError`. Choice and score candidates read the stored label distribution.
   The postgres label store throws if it cannot open or query, and candidate and
@@ -173,6 +180,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Flows & traces
 
+- The decisions page lists a failed label write with the decision, question, and
+  error. The review queue is unchanged.
 - HTTP traces omit the Body panel when the stored payload is empty (`{}`,
   `[]`, or nothing). Query, headers, status, and a body that has fields stay.
 

@@ -408,7 +408,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
           const id = String(params[arg++] ?? "");
           labels = labels.filter((row) => row.decision_id === id);
         }
-        if (/tenant\s+IS\s+\?/i.test(text)) {
+        if (/tenant\s+IS\s+NOT\s+DISTINCT\s+FROM\s+\?/i.test(text)) {
           const tenant = params[arg] ?? null;
           labels = labels.filter((row) => row.tenant === tenant);
         }

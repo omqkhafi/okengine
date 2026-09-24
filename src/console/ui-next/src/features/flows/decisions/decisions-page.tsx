@@ -8,6 +8,7 @@ import {
   decisionList,
   decisionQueue,
   decisionResolve,
+  type DecisionLabelFailure,
   type DecisionListRow,
   type DecisionQueueRow,
 } from "@/client.ts";
@@ -36,6 +37,7 @@ function formatAge(ageMs: number): string {
 export function DecisionsPage(): JSX.Element {
   const [decisions, setDecisions] = useState<readonly DecisionListRow[]>([]);
   const [suspended, setSuspended] = useState(false);
+  const [failures, setFailures] = useState<readonly DecisionLabelFailure[]>([]);
   const [rows, setRows] = useState<readonly DecisionQueueRow[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -44,6 +46,7 @@ export function DecisionsPage(): JSX.Element {
     if (list.data) {
       setDecisions(list.data.decisions);
       setSuspended(list.data.suspended);
+      setFailures(list.data.failures ?? []);
     }
     const queue = await decisionQueue();
     if (queue.data) setRows(queue.data.rows);
@@ -80,6 +83,22 @@ export function DecisionsPage(): JSX.Element {
         <span className={`${SECTION_HEAD_CLASS} px-2.5`}>Decisions</span>
         <span className={EXPLORER_COUNT_CLASS}>{suspended ? "suspended" : "open"}</span>
       </div>
+      {failures.length > 0 ? (
+        <ul>
+          {failures.map((failure) => (
+            <li
+              key={`${failure.at}:${failure.decision}:${failure.question}`}
+              className={EXPLORER_ROW_CLASS}
+              data-slot="decision-label-error"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                {failure.decision} · {failure.question}
+              </span>
+              <span className={EXPLORER_COUNT_CLASS}>{failure.message}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <ul>
         {decisions.map((decision) => (
           <li key={decision.name} className={EXPLORER_ROW_CLASS} data-state={decision.state}>

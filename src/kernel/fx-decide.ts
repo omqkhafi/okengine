@@ -30,7 +30,7 @@ import {
   type DecisionCertSlice,
   type DecisionUncertainty,
 } from "../elements/ai/decisions/certificate.ts";
-import { persistDecisionLabel } from "../elements/ai/decisions/labels.ts";
+import { flushDecisionLabels, persistDecisionLabel } from "../elements/ai/decisions/labels.ts";
 import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
@@ -659,6 +659,7 @@ export async function resolveDecisionReview(
       recordDecisionLabel(label);
       persistDecisionLabel(label, at);
     }
+    await flushDecisionLabels();
     return { ok: true };
   } finally {
     await store.releaseLease?.(parsed.runId, token);

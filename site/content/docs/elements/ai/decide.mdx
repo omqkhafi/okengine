@@ -8,6 +8,11 @@ source: "docs/spec/unified-theory.md"
 <Callout title="Experimental">
   `ai.decision` is experimental. A lockfile grants an automatic answer only after labels exist.
   A seed file can print a certificate. It is not a production pilot.
+
+  - A promoted lockfile takes effect after the app restarts or deploys.
+  - One drift flag covers the app. Recertifying any decision clears it at boot until the monitor raises it again.
+  - Compile-time checks do not see score levels, or a whole question, held in a variable. Runtime still validates them.
+  - Autonomy is statistically certified only after a real-data pilot. At δ = 0.1 that takes at least about 122 accepted, error-free labels per threshold.
 </Callout>
 
 A decision picks labels for one piece of work: which queue a ticket belongs in, and whether it

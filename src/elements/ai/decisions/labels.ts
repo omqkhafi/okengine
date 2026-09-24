@@ -3,7 +3,9 @@
  * Boot opens the store only when the app declares decisions.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { JournalStore } from "../../../kernel/journal.ts";
+import type { RunTelemetry } from "../../../kernel/run-telemetry.ts";
 import type {
   DecisionDriftRecord,
   DecisionLabelStore,
@@ -15,6 +17,35 @@ export const DECISION_DRIFT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 let store: DecisionLabelStore | undefined;
 let writes: Promise<void> = Promise.resolve();
+
+/** Trace log attached to the run that queued the write. */
+const telemetryScope = new AsyncLocalStorage<RunTelemetry>();
+
+/** A failed label write. The chain continues; the error is not dropped. */
+export interface DecisionLabelWriteFailure {
+  readonly decision: string;
+  readonly question: string;
+  readonly message: string;
+  readonly at: number;
+}
+
+const writeFailures: DecisionLabelWriteFailure[] = [];
+
+/**
+ * Recent label-write failures. Console reads this for the decisions page.
+ */
+export function decisionLabelWriteFailures(): readonly DecisionLabelWriteFailure[] {
+  return writeFailures;
+}
+
+/**
+ * Attach this run's telemetry so a failed label write lands on its trace.
+ *
+ * @param telemetry - Collector for the current invocation
+ */
+export function bindDecisionLabelTelemetry(telemetry: RunTelemetry): void {
+  telemetryScope.enterWith(telemetry);
+}
 
 /**
  * Bind the journal's decision store and load the drift flag.
@@ -45,24 +76,54 @@ export function flushDecisionLabels(): Promise<void> {
  */
 export function closeDecisionLabelStore(): void {
   store = undefined;
+  writeFailures.length = 0;
 }
 
 /**
  * Write one label. Tenant scopes the row. The candidate job reads every tenant.
  *
- * @param label - Resolved label
- * @param at - Epoch ms
+ * @param label - Resolved label. `label.at` is the stored time when set.
+ * @param at - Epoch ms used only when `label.at` is absent
  */
-export function persistDecisionLabel(label: DecisionLabel, at = Date.now()): void {
-  const row = { ...label, at };
+export function persistDecisionLabel(label: DecisionLabel, at?: number): void {
+  const stamped = label.at ?? at ?? Date.now();
+  const row = { ...label, at: stamped };
   if (!store) return;
   const target = store;
   const write = (): Promise<void> =>
-    target.insert(row, at).then(
+    target.insert(row, stamped).then(
       () => undefined,
-      () => undefined,
+      (error: unknown) => {
+        noteLabelWriteFailure(row, error);
+      },
     );
   writes = writes.then(write, write);
+}
+
+/**
+ * Record a failed label write on the run trace and for the decisions page.
+ * The returned promise still fulfills so the next write runs.
+ *
+ * @param label - Row that did not persist
+ * @param error - Driver error
+ */
+function noteLabelWriteFailure(label: DecisionLabel, error: unknown): void {
+  const message = error instanceof Error ? error.message : "decision label write failed";
+  const at = Date.now();
+  writeFailures.push({
+    decision: label.decision,
+    question: label.question,
+    message,
+    at,
+  });
+  const telemetry = telemetryScope.getStore();
+  if (!telemetry) return;
+  telemetry.logs.push({
+    level: "error",
+    message: "decision label write failed",
+    data: { decision: label.decision, question: label.question, error: message },
+    at,
+  });
 }
 
 /**

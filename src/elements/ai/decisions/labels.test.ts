@@ -19,6 +19,7 @@ import {
   loadDecisionLabels,
   openDecisionLabelStore,
   persistDecisionDrift,
+  decisionLabelWriteFailures,
   persistDecisionLabel,
 } from "./labels.ts";
 
@@ -52,7 +53,9 @@ describe("decision labels", () => {
     setDecisionDrift(false);
     const second = createFileJournalStore(path);
     await openDecisionLabelStore(second, setDecisionDrift);
-    expect(await loadDecisionLabels("triage", "acme")).toHaveLength(1);
+    const saved = await loadDecisionLabels("triage", "acme");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.at).toBe(1);
     expect(await loadDecisionLabels("triage", "other")).toHaveLength(0);
     expect(await loadDecisionLabels("triage")).toHaveLength(1);
     expect(decisionDriftSuspended()).toBe(true);
@@ -174,6 +177,7 @@ describe("decision labels", () => {
     await flushDecisionLabels();
     const rows = await loadDecisionLabels("triage");
     expect(rows.map((row) => row.value)).toEqual(["b"]);
+    expect(decisionLabelWriteFailures().map((event) => event.message)).toEqual(["insert failed"]);
   });
 
   test("a postgres label store throws when init fails", async () => {
@@ -188,5 +192,46 @@ describe("decision labels", () => {
     await expect(createPostgresDecisionLabelStore(sql)).rejects.toBeInstanceOf(
       DecisionLabelStoreError,
     );
+  });
+
+  test("postgres null tenant matches, and an older drift table gains certified_at", async () => {
+    const { connectPglite } = await import("../../../drivers/pglite.ts");
+    const db = await connectPglite({ url: "memory://decision-labels" });
+    try {
+      await db.exec(`CREATE TABLE oke_decision_drift (
+        id INTEGER PRIMARY KEY,
+        suspended INTEGER NOT NULL
+      )`);
+      await db.exec(`INSERT INTO oke_decision_drift (id, suspended) VALUES (1, 1)`);
+      const store = await createPostgresDecisionLabelStore(db);
+      await store.insert(
+        {
+          decision: "triage",
+          question: "team",
+          value: "billing",
+          propensity: 1,
+          reviewer: "a",
+        },
+        1,
+      );
+      await store.insert(
+        {
+          decision: "triage",
+          question: "team",
+          value: "technical",
+          propensity: 1,
+          reviewer: "a",
+          tenant: "acme",
+        },
+        2,
+      );
+      const unlabeled = await store.list("triage", null);
+      const acme = await store.list("triage", "acme");
+      expect(unlabeled.map((row) => row.value)).toEqual(["billing"]);
+      expect(acme.map((row) => row.value)).toEqual(["technical"]);
+      expect(await store.drift()).toEqual({ suspended: true, certifiedAt: 0 });
+    } finally {
+      await db.close();
+    }
   });
 });

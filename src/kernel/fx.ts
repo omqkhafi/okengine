@@ -72,7 +72,7 @@ import type { JournalSession, JournalStepOptions } from "./journal.ts";
 
 /** Options for {@link Fx.step} — see {@link JournalStepOptions}. */
 export type StepOptions<T> = JournalStepOptions<T>;
-import type { RunTelemetry } from "./run-telemetry.ts";
+import { type RunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
 import type { RunsRow, WideEvent } from "../runs/types.ts";
 import type { RunWindowStats, SloBreach } from "../runs/window.ts";
@@ -1485,6 +1485,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
 
   const aiDisablesCache = options.aiRuntime?.autoCacheDisabled === true;
   const telemetry = options.runTelemetry;
+  if (telemetry) {
+    lazyRequire<{ bindDecisionLabelTelemetry(telemetry: RunTelemetry): void }>(
+      `${import.meta.dir}/../elements/ai/decisions`,
+      "labels",
+    ).bindDecisionLabelTelemetry(telemetry);
+  }
 
   const cache: FxCache = {
     async get<T = unknown>(key: string): Promise<T | undefined> {

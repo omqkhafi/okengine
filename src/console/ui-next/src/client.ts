@@ -721,10 +721,19 @@ export type DecisionListRow = {
   readonly model?: string;
 };
 
-/** Decision catalogue plus the app drift flag. */
+/** One failed label write, shown on the decisions page. */
+export type DecisionLabelFailure = {
+  readonly decision: string;
+  readonly question: string;
+  readonly message: string;
+  readonly at: number;
+};
+
+/** Decision catalogue plus the app drift flag and label-write failures. */
 export type DecisionListPayload = {
   readonly decisions: readonly DecisionListRow[];
   readonly suspended: boolean;
+  readonly failures: readonly DecisionLabelFailure[];
 };
 
 /** One review queue row. `ageMs` is how long it has been waiting. */

@@ -175,6 +175,9 @@ export async function createPostgresDecisionLabelStore(
       suspended INTEGER NOT NULL,
       certified_at BIGINT NOT NULL
     )`);
+    await sql.exec(
+      `ALTER TABLE oke_decision_drift ADD COLUMN IF NOT EXISTS certified_at BIGINT NOT NULL DEFAULT 0`,
+    );
   } catch (cause) {
     throw new DecisionLabelStoreError("decision label store failed to open", { cause });
   }
@@ -225,7 +228,7 @@ export async function createPostgresDecisionLabelStore(
         args.push(decision);
       }
       if (tenant !== undefined) {
-        clauses.push("tenant IS ?");
+        clauses.push("tenant IS NOT DISTINCT FROM ?");
         args.push(tenant);
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";

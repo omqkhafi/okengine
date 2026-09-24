@@ -22,6 +22,14 @@ const DecisionListOut = z.object({
     }),
   ),
   suspended: z.boolean(),
+  failures: z.array(
+    z.object({
+      decision: z.string(),
+      question: z.string(),
+      message: z.string(),
+      at: z.number(),
+    }),
+  ),
 });
 
 const DecisionQueueOut = z.object({
@@ -57,9 +65,11 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const { decisionDriftSuspended, getDecisionLock } =
         await import("../../elements/ai/decisions/certificate.ts");
+      const { decisionLabelWriteFailures } = await import("../../elements/ai/decisions/labels.ts");
       return {
         decisions: projectDecisionList(state.manifest, getDecisionLock()),
         suspended: decisionDriftSuspended(),
+        failures: decisionLabelWriteFailures(),
       };
     },
   });
