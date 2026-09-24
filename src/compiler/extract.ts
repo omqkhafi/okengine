@@ -1494,6 +1494,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
             : {}),
           ...(via && via.length > 0 ? { via } : {}),
           ...(timeout !== undefined ? { timeout } : {}),
+          ...(numberProp(opts, "repair") === 1 ? { repair: 1 as const } : {}),
         };
         scope.ai.prompts = scope.ai.prompts ?? {};
         scope.ai.prompts[promptName] = prompt;

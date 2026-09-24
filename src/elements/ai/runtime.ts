@@ -1178,6 +1178,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
 
       for (const modelName of via) {
         let sameModelTries = 0;
+        let repaired = false;
         let advance = true;
         while (sameModelTries < 2 && advance) {
           sameModelTries++;
@@ -1289,12 +1290,87 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                     at: now(),
                   });
                 }
+                if (decl.repair === 1 && !repaired) {
+                  repaired = true;
+                  const follow = await client.complete({
+                    model: wireModel(modelName, client),
+                    messages: [
+                      { role: "user", content: userContent },
+                      {
+                        role: "assistant",
+                        content: typeof raw === "string" ? raw : JSON.stringify(raw ?? null),
+                      },
+                      {
+                        role: "user",
+                        content: `Schema mismatch: ${err.message}. Reply with JSON only.`,
+                      },
+                    ],
+                    ...(responseFormat !== undefined ? { responseFormat } : {}),
+                    ...(signal !== undefined ? { signal } : {}),
+                  });
+                  const repairCost = follow.usage?.cost ?? 0;
+                  totalCost += repairCost;
+                  addUsageTokens(totalTokens, follow.usage);
+                  attempts.push({
+                    model: modelName,
+                    ok: true,
+                    cost: repairCost,
+                    latencyMs: Math.max(0, now() - attemptStart),
+                    at: now(),
+                  });
+                  assertAskBudget(totalCost);
+                  let repairRaw: unknown =
+                    typeof follow.text === "string" && follow.text.length > 0
+                      ? follow.text
+                      : follow.raw !== undefined
+                        ? follow.raw
+                        : follow.text;
+                  try {
+                    const coerced = coerceModelObject(repairRaw);
+                    const prepared = outExpectsVia(decl.out)
+                      ? { ...coerced, via: modelName }
+                      : coerced;
+                    const validated = validatePromptOut(prompt, version, decl.out, prepared);
+                    const output = { ...validated, via: modelName };
+                    if (journalingForced) {
+                      pushJournal({
+                        prompt,
+                        ...(version !== undefined ? { version } : {}),
+                        input,
+                        output,
+                        attempts: [...attempts],
+                        outcome: "ok",
+                        cost: totalCost,
+                        latencyMs: Math.max(0, now() - started),
+                        at: now(),
+                      });
+                    }
+                    return output;
+                  } catch (again) {
+                    if (again instanceof AiSchemaValidationError && journalingForced) {
+                      pushJournal({
+                        prompt,
+                        ...(version !== undefined ? { version } : {}),
+                        input,
+                        output: coerceModelObject(repairRaw),
+                        attempts: [...attempts],
+                        outcome: "schema_invalid",
+                        cost: totalCost,
+                        latencyMs: Math.max(0, now() - started),
+                        schemaMismatch: again.mismatch,
+                        at: now(),
+                      });
+                    }
+                    throw again;
+                  }
+                }
                 throw err;
               }
               throw err;
             }
           } catch (err) {
             if (err instanceof AiSchemaValidationError) throw err;
+            if (err instanceof Error && err.name === "AiBudgetExceededError") throw err;
             lastError = err instanceof Error ? err.message : String(err);
             attempts.push({
               model: modelName,

@@ -16,6 +16,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `prompt({ repair: 1 })` sends one follow-up when the answer misses `out`. That
+  completion counts toward `maxCostPerCall` and is its own journal entry. `repair: 0`
+  still throws `AiSchemaValidationError`.
 - `ai.agent({ tools })` may include another agent. The child keeps its own step cap.
   Its cost cap is the smaller of its budget and the parent's remaining spend. Nesting
   stops at `maxDepth` (default 3). The child run records `parentRunId`.
@@ -26,6 +29,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Docs
 
+- Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
 - Agents document tool approval: `approval`, `gate`, `timeout`, and `durable: true`.
 
 #### Console — Flows & traces
@@ -97,6 +101,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- `oke dev` soft reload disposes the previous app generation. Each save was
+  leaving that boot's scheduler and Bun.SQL pool open, so one process held
+  dozens of connections against PgDog's pool of 20. Console login and clock
+  flows then waited on checkout (tens of seconds). Restart `oke dev` once
+  to drop pools leaked before this fix.
 - `oke dev` secret prompt keeps the masked API key on one line. Each `*` was
   sent through CLI chrome, so every character printed as its own `│` row.
   The status board also stays still while that prompt owns the cursor.

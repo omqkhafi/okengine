@@ -475,6 +475,8 @@ export interface AiPrompt {
   version?: number;
   evals?: string;
   budget?: AiBudget;
+  /** `1` sends one schema-mismatch follow-up. Default `0`. */
+  repair?: 0 | 1;
   /** Ordered recovery chain of logical model names. */
   via?: string[];
   /** Per-command deadline (`"30s"` or milliseconds). */

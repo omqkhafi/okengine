@@ -129,7 +129,8 @@ smart.prompt("ticket-triage", {
 ```
 
 A tool-less ask still throws `AiBudgetExceededError` at `maxCostPerCall`. An agent run
-returns the partial result when `budget.maxCostPerRun` is spent.
+returns the partial result when `budget.maxCostPerRun` is spent. `repair: 1` sends one
+follow-up with the mismatch; that completion counts toward the cap and is its own journal entry.
 
 </Tab>
 
@@ -161,6 +162,7 @@ Default `maxSteps` is `6`. Tool names also stamp `effects.calls`.
 | `version` | `number`                              | —                | Pin with `fx.ask("name@N")`                                     |
 | `evals`   | `string`                              | —                | Path for `oke eval` JSONL                                       |
 | `budget`  | `{ maxCostPerCall?, maxCostPerRun? }` | —                | Cost contracts                                                  |
+| `repair`  | `0` \| `1`                            | `0`              | One schema-mismatch follow-up; counts toward `maxCostPerCall`   |
 | `via`     | `string[]`                            | `[parent model]` | Recovery chain of logical names                                 |
 | `timeout` | `"30s"` \| ms                         | —                | Ask deadline (not a cost budget)                                |
 | `in`      | Schema                                | —                | Declared / Manifest / doctor — **not** runtime-validated on ask |

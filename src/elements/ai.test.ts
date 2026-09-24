@@ -785,6 +785,169 @@ describe("schema-validation is its own class", () => {
     expect(runtime.journal[0]!.outcome).toBe("schema_invalid");
     expect(runtime.journal[0]!.outcome).not.toBe("provider_error");
   });
+
+  test("repair: 0 throws on the first mismatch", async () => {
+    let calls = 0;
+    const smart = ai.model("smart", { provider: "mock" });
+    const triage = smart.prompt("ticket-triage-norepair", {
+      repair: 0,
+      out: {
+        type: "object",
+        properties: { urgency: { type: "string" }, team: { type: "string" } },
+        required: ["urgency", "team"],
+      },
+    });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: {
+        smart: {
+          driverId: "mock" as const,
+          model: "smart",
+          async complete() {
+            calls++;
+            return {
+              text: JSON.stringify({ urgency: "high" }),
+              model: "smart",
+              driverId: "mock" as const,
+            };
+          },
+        },
+      },
+    });
+    await expect(runtime.ask("ticket-triage-norepair", { subject: "x" })).rejects.toBeInstanceOf(
+      AiSchemaValidationError,
+    );
+    expect(calls).toBe(1);
+  });
+
+  test("repair: 1 follows up once and journals both attempts", async () => {
+    let calls = 0;
+    const smart = ai.model("smart", { provider: "mock" });
+    const triage = smart.prompt("ticket-triage-repair", {
+      repair: 1,
+      out: {
+        type: "object",
+        properties: { urgency: { type: "string" }, team: { type: "string" } },
+        required: ["urgency", "team"],
+      },
+    });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: {
+        smart: {
+          driverId: "mock" as const,
+          model: "smart",
+          async complete(opts: { messages: readonly { role: string; content: string }[] }) {
+            calls++;
+            const last = opts.messages.at(-1)?.content ?? "";
+            if (calls === 1) {
+              return {
+                text: JSON.stringify({ urgency: "high" }),
+                model: "smart",
+                driverId: "mock" as const,
+                usage: { cost: 0.01 },
+              };
+            }
+            expect(last).toContain("Schema mismatch");
+            return {
+              text: JSON.stringify({ urgency: "high", team: "ops" }),
+              model: "smart",
+              driverId: "mock" as const,
+              usage: { cost: 0.01 },
+            };
+          },
+        },
+      },
+    });
+    const output = await runtime.ask("ticket-triage-repair", { subject: "x" });
+    expect(output.team).toBe("ops");
+    expect(calls).toBe(2);
+    expect(runtime.journal.map((entry) => entry.outcome)).toEqual(["schema_invalid", "ok"]);
+  });
+
+  test("a repair that exceeds maxCostPerCall throws and does not return output", async () => {
+    let calls = 0;
+    const smart = ai.model("smart", { provider: "mock" });
+    const triage = smart.prompt("ticket-triage-repair-cap", {
+      repair: 1,
+      budget: { maxCostPerCall: 0.02 },
+      out: {
+        type: "object",
+        properties: { urgency: { type: "string" }, team: { type: "string" } },
+        required: ["urgency", "team"],
+      },
+    });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: {
+        smart: {
+          driverId: "mock" as const,
+          model: "smart",
+          async complete() {
+            calls++;
+            return {
+              text: JSON.stringify(
+                calls === 1 ? { urgency: "high" } : { urgency: "high", team: "ops" },
+              ),
+              model: "smart",
+              driverId: "mock" as const,
+              usage: { cost: calls === 1 ? 0.01 : 0.05 },
+            };
+          },
+        },
+      },
+    });
+    await expect(runtime.ask("ticket-triage-repair-cap", { subject: "x" })).rejects.toThrow(
+      /exceeded maxCostPerCall/,
+    );
+    expect(calls).toBe(2);
+    expect(runtime.journal.map((entry) => entry.outcome)).toEqual([
+      "schema_invalid",
+      "budget_exceeded",
+    ]);
+  });
+
+  test("a second mismatch after repair still throws", async () => {
+    let calls = 0;
+    const smart = ai.model("smart", { provider: "mock" });
+    const triage = smart.prompt("ticket-triage-repair-fail", {
+      repair: 1,
+      out: {
+        type: "object",
+        properties: { urgency: { type: "string" }, team: { type: "string" } },
+        required: ["urgency", "team"],
+      },
+    });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: {
+        smart: {
+          driverId: "mock" as const,
+          model: "smart",
+          async complete() {
+            calls++;
+            return {
+              text: JSON.stringify({ urgency: "high" }),
+              model: "smart",
+              driverId: "mock" as const,
+            };
+          },
+        },
+      },
+    });
+    await expect(runtime.ask("ticket-triage-repair-fail", { subject: "x" })).rejects.toBeInstanceOf(
+      AiSchemaValidationError,
+    );
+    expect(calls).toBe(2);
+    expect(runtime.journal.map((entry) => entry.outcome)).toEqual([
+      "schema_invalid",
+      "schema_invalid",
+    ]);
+  });
 });
 
 describe("agent tool trail carries effects; denials are not errors", () => {

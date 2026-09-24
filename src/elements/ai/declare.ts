@@ -53,6 +53,8 @@ export interface AiPromptOptions {
   readonly version?: number;
   readonly evals?: string;
   readonly budget?: AiBudgetDecl;
+  /** One schema-mismatch retry. Default `0` throws on the first mismatch. */
+  readonly repair?: 0 | 1;
   /**
    * Ordered recovery chain of logical model names for this command.
    * Resolved as `ask.via ?? prompt.via ?? [prompt.model]`.
@@ -122,6 +124,8 @@ export interface AiPromptDecl {
   readonly version?: number;
   readonly evals?: string;
   readonly budget?: AiBudgetDecl;
+  /** One schema-mismatch retry. Default `0`. */
+  readonly repair?: 0 | 1;
   readonly via?: readonly string[];
   readonly timeout?: AiTimeout;
   readonly model?: string;
@@ -324,6 +328,7 @@ export const ai: AiNamespace = {
           ...(promptOpts.version !== undefined ? { version: promptOpts.version } : {}),
           ...(promptOpts.evals !== undefined ? { evals: promptOpts.evals } : {}),
           ...(promptOpts.budget !== undefined ? { budget: promptOpts.budget } : {}),
+          ...(promptOpts.repair !== undefined ? { repair: promptOpts.repair } : {}),
           ...(promptOpts.via !== undefined ? { via: promptOpts.via } : {}),
           ...(promptOpts.timeout !== undefined ? { timeout: promptOpts.timeout } : {}),
           ...(promptOpts.in !== undefined ? { in: promptOpts.in } : {}),
