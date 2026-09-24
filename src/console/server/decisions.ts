@@ -69,7 +69,11 @@ export function projectDecisionList(
  * @param runs - Journal runs
  * @param now - Clock
  */
-export function projectDecisionQueue(runs: readonly JournalRun[], now: number): DecisionQueueRow[] {
+export function projectDecisionQueue(
+  runs: readonly JournalRun[],
+  now: number,
+  tenantId?: string | null,
+): DecisionQueueRow[] {
   const rows: DecisionQueueRow[] = [];
   for (const run of runs) {
     for (const entry of run.entries) {
@@ -81,7 +85,9 @@ export function projectDecisionQueue(runs: readonly JournalRun[], now: number): 
       const value = entry.value as {
         status?: "pending" | "reviewed";
         requestedAt?: number;
+        tenant?: string | null;
       };
+      if (tenantId !== undefined && (value.tenant ?? null) !== tenantId) continue;
       const requestedAt = value.requestedAt ?? entry.at;
       rows.push({
         id,
@@ -105,16 +111,19 @@ export function projectDecisionQueue(runs: readonly JournalRun[], now: number): 
 export async function loadDecisionQueue(
   store: JournalStore | null | undefined,
   now: number,
+  tenantId?: string | null,
 ): Promise<DecisionQueueRow[]> {
   if (!store) return [];
-  return projectDecisionQueue(await store.list(), now);
+  return projectDecisionQueue(await store.list(), now, tenantId);
 }
 
 function decisionNameFromId(id: string): string {
   try {
     const decoded = Buffer.from(id, "base64url").toString("utf8");
-    const dot = decoded.indexOf(".");
-    return dot > 0 ? decoded.slice(dot + 1) : id;
+    const first = decoded.indexOf(".");
+    const second = first >= 0 ? decoded.indexOf(".", first + 1) : -1;
+    if (second > first) return decoded.slice(second + 1);
+    return first > 0 ? decoded.slice(first + 1) : id;
   } catch {
     return id;
   }

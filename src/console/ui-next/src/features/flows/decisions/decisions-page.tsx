@@ -56,7 +56,6 @@ export function DecisionsPage(): JSX.Element {
   async function approve(row: DecisionQueueRow): Promise<void> {
     const result = await decisionResolve({
       id: row.id,
-      reviewer: "operator",
       values: {},
       ...(row.labelOnly ? { labelOnly: true } : {}),
     });

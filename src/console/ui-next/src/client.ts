@@ -761,7 +761,6 @@ export async function decisionQueue(): Promise<
 export async function decisionResolve(body: {
   readonly id: string;
   readonly values: Readonly<Record<string, unknown>>;
-  readonly reviewer: string;
   readonly labelOnly?: boolean;
 }): Promise<ConsoleApiResult<{ ok: true }>> {
   return consoleFetch<{ ok: true }>("/console/decisions/resolve", {

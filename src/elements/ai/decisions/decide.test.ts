@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { ai, resetAiDecls } from "../../ai.ts";
+import { gate, resetGates } from "../../gate/declare.ts";
 import { oke } from "../../../kernel/app.ts";
 import { resetBindings } from "../../../kernel/on.ts";
 import type { Manifest } from "../../../manifest/types.ts";
@@ -33,6 +34,7 @@ afterEach(() => {
   resetAiDecls();
   resetDecisionCertificates();
   resetDecisionProvider();
+  resetGates();
 });
 
 function choice() {
@@ -170,6 +172,7 @@ describe("fx.decide", () => {
 
   test("two concurrent resolves, then a finished review conflicts", async () => {
     provider();
+    gate.policy("ops", (ctx) => ctx.operator.id !== null);
     const decl = ai.decision("triage", {
       review: "ops",
       ask: { team: choice() },
@@ -286,6 +289,7 @@ describe("fx.decide", () => {
 
   test("the same decision can park twice in one run", async () => {
     provider();
+    gate.policy("ops", (ctx) => ctx.operator.id !== null);
     const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
     const store = createMemoryJournalStore();
     const journal = createJournal({ store, now: () => 1_000_000 });
@@ -417,6 +421,62 @@ describe("fx.decide", () => {
     const fx = createFx({ flow: "run", effects: { decides: ["triage"] }, now: () => 1 });
     const result = (await fx.decide(decl, {})) as { urgent: boolean };
     expect(result.urgent).toBe(false);
+  });
+
+  test("resolve checks the gate, the tenant, and every open question", async () => {
+    provider();
+    gate.policy("ops", (ctx) => ctx.operator.id === "reviewer");
+    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const session = await createJournal({ store, now: () => 1 }).start("run", {});
+    const fx = createFx({
+      flow: "run",
+      effects: { decides: ["triage"] },
+      journal: session,
+      runId: session.runId,
+      durable: true,
+      tenant: { id: "acme" },
+      now: () => 1,
+    });
+    try {
+      await fx.decide(decl, {});
+    } catch (err) {
+      if (!isJournalSuspend(err)) throw err;
+    }
+    const step = session.run.entries.find(
+      (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
+    );
+    if (!step || step.kind !== "step") throw new Error("expected a parked decision");
+    const id = step.name.slice("ai-decision:".length);
+    expect((step.value as { propensity: number }).propensity).toBe(1);
+    expect(
+      await resolveDecisionReview(store, id, {
+        values: { team: "billing" },
+        reviewer: "other",
+        tenantId: "acme",
+      }),
+    ).toEqual({ ok: false, status: 403 });
+    expect(
+      await resolveDecisionReview(store, id, {
+        values: { team: "billing" },
+        reviewer: "reviewer",
+        tenantId: "other",
+      }),
+    ).toEqual({ ok: false, status: 403 });
+    expect(
+      await resolveDecisionReview(store, id, {
+        values: { team: "nope", extra: true },
+        reviewer: "reviewer",
+        tenantId: "acme",
+      }),
+    ).toEqual({ ok: false, status: 422 });
+    expect(
+      await resolveDecisionReview(store, id, {
+        values: { team: "billing" },
+        reviewer: "reviewer",
+        tenantId: "acme",
+      }),
+    ).toEqual({ ok: true });
   });
 
   test("pending review stamps the tenant", async () => {

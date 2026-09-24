@@ -2,7 +2,7 @@
  * `fx.decide` — one provider request, journaled. Loaded with `lazyRequire`.
  */
 
-import { aiDecisionRegistry } from "./element-registries.ts";
+import { aiDecisionRegistry, gateRegistry } from "./element-registries.ts";
 import type { AiDecisionDecl, AiDecisionQuestion } from "../elements/ai/declare.ts";
 import {
   DecisionConfigError,
@@ -77,12 +77,16 @@ export interface DecisionReviewRecord {
   readonly values?: Readonly<Record<string, unknown>>;
   readonly reviewer?: string;
   readonly reason?: DecisionUncertainty;
+  /** Question ids that are not auto. Resolve must answer each of them. */
+  readonly open?: readonly string[];
 }
 
 /** Result of {@link resolveDecisionReview}. */
 export type DecisionReviewResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly status: 404 }
+  | { readonly ok: false; readonly status: 403 }
+  | { readonly ok: false; readonly status: 422 }
   | { readonly ok: false; readonly status: 409; readonly reason: "resolved" }
   | {
       readonly ok: false;
@@ -285,6 +289,8 @@ interface JournaledQuestion {
   readonly p: number;
   readonly raw: unknown;
   readonly audited?: boolean;
+  /** True when this question did not clear autonomy. */
+  readonly uncertain: boolean;
 }
 
 /** Projection stored on the journal. The live lock is not consulted on replay. */
@@ -347,6 +353,7 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
       how,
       p: calibrated.p,
       raw: calibrated.raw,
+      uncertain: !questionAuto,
       ...(recorded.audited && questionAuto ? { audited: true } : {}),
     };
   }
@@ -354,7 +361,7 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
     for (const id of Object.keys(questions)) {
       const slot = questions[id];
       if (!slot) continue;
-      questions[id] = { ...slot, value: null, how: "abstained" };
+      questions[id] = { ...slot, value: null, how: "abstained", uncertain: true };
     }
   }
   return {
@@ -482,6 +489,9 @@ function pendingRecord(
     ...(view.locale !== undefined ? { locale: view.locale } : {}),
     propensity: labelOnly ? view.propensity : 1,
     labelOnly,
+    open: Object.entries(view.questions)
+      .filter(([, question]) => question.uncertain)
+      .map(([id]) => id),
     ...(view.reason !== undefined ? { reason: view.reason } : {}),
   };
 }
@@ -542,12 +552,19 @@ export async function readDecisionReview(
 export async function resolveDecisionReview(
   store: JournalStore,
   id: string,
-  input: { readonly values: Readonly<Record<string, unknown>>; readonly reviewer: string },
+  input: {
+    readonly values: Readonly<Record<string, unknown>>;
+    readonly reviewer: string;
+    readonly tenantId?: string | null;
+  },
   now: () => number = Date.now,
   labelOnly = false,
 ): Promise<DecisionReviewResult> {
   const parsed = parseReviewId(id);
   if (!parsed || typeof store.acquireLease !== "function") return { ok: false, status: 404 };
+  const decl = aiDecisionRegistry.find((item) => item.name === parsed.name);
+  if (!decl) return { ok: false, status: 404 };
+  if (!(await reviewGateAllows(decl.review, input.reviewer))) return { ok: false, status: 403 };
   const name = decisionStepName(id, labelOnly);
   const token = crypto.randomUUID();
   const at = now();
@@ -568,6 +585,8 @@ export async function resolveDecisionReview(
     if (!entry || entry.kind !== "step") return { ok: false, status: 404 };
     const current = entry.value as DecisionReviewRecord;
     if (current.status !== "pending") return { ok: false, status: 409, reason: "resolved" };
+    if ((input.tenantId ?? null) !== current.tenant) return { ok: false, status: 403 };
+    if (!valuesMatchQuestions(decl, current, input.values)) return { ok: false, status: 422 };
     const next: DecisionReviewRecord = {
       ...current,
       status: "reviewed",
@@ -596,6 +615,40 @@ export async function resolveDecisionReview(
   } finally {
     await store.releaseLease?.(parsed.runId, token);
   }
+}
+
+async function reviewGateAllows(gateName: string | undefined, reviewer: string): Promise<boolean> {
+  if (!gateName) return true;
+  const gate = gateRegistry.find((item) => item.name === gateName);
+  if (!gate || gate.kind !== "policy") return false;
+  return gate.check({
+    auth: { userId: null, scopes: new Set() },
+    operator: { id: reviewer },
+  });
+}
+
+function valuesMatchQuestions(
+  decl: AiDecisionDecl,
+  current: DecisionReviewRecord,
+  values: Readonly<Record<string, unknown>>,
+): boolean {
+  const open = current.open ?? Object.keys(decl.ask);
+  const keys = Object.keys(values);
+  if (keys.length !== open.length) return false;
+  for (const key of keys) {
+    if (!open.includes(key)) return false;
+    const question = decl.ask[key];
+    if (!question || !valueMatchesQuestion(question, values[key])) return false;
+  }
+  return true;
+}
+
+function valueMatchesQuestion(question: AiDecisionQuestion, value: unknown): boolean {
+  if (question.kind === "boolean") return typeof value === "boolean";
+  if (question.kind === "choice") {
+    return typeof value === "string" && Object.prototype.hasOwnProperty.call(question.options, value);
+  }
+  return typeof value === "string" && question.levels.includes(value);
 }
 
 function parseReviewId(

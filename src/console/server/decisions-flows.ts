@@ -40,7 +40,6 @@ const DecisionQueueOut = z.object({
 const DecisionResolveIn = z.object({
   id: z.string().min(1),
   values: z.record(z.string(), z.unknown()),
-  reviewer: z.string().min(1),
   labelOnly: z.boolean().optional(),
 });
 
@@ -68,22 +67,23 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
     plane: "operator",
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
-      return { rows: await loadDecisionQueue(state.journalStore, Date.now()) };
+      return { rows: await loadDecisionQueue(state.journalStore, Date.now(), fx.tenant.id) };
     },
   });
   const resolve = flow("console.decisions.resolve", {
     plane: "operator",
     do: async (
-      input: { id: string; values: Record<string, unknown>; reviewer: string; labelOnly?: boolean },
+      input: { id: string; values: Record<string, unknown>; labelOnly?: boolean },
       fx,
     ) => {
-      if (!fx.operator.id) return fail("AuthFailed", {});
+      const reviewer = fx.operator.id;
+      if (!reviewer) return fail("Unauthorized", {});
       const store = state.journalStore;
       if (!store) return fx.fail.notFound();
       const result = await resolveDecisionReview(
         store,
         input.id,
-        { values: input.values, reviewer: input.reviewer },
+        { values: input.values, reviewer, tenantId: fx.tenant.id },
         Date.now,
         input.labelOnly === true,
       );
@@ -91,6 +91,12 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
       if (result.status === 409 && result.reason === "lease") {
         return journalLeaseBusyResponse(result.retryAfterSeconds);
       }
+      if (result.status === 422) {
+        return fail("ValidationError", {
+          issues: [{ message: "review values do not match the open questions", path: ["values"] }],
+        });
+      }
+      if (result.status === 403) return fx.fail.forbidden();
       if (result.status === 409) return fx.fail.conflict();
       return fx.fail.notFound();
     },
