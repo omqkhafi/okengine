@@ -8,7 +8,10 @@
  * process restart, resumes from the last seq.
  */
 
-import type { AgentEventStore } from "../../kernel/agent-event-store.ts";
+import {
+  AgentEventDuplicateSeqError,
+  type AgentEventStore,
+} from "../../kernel/agent-event-store.ts";
 import type { AgUiEvent } from "./events.ts";
 
 /** Stored rows per run before deltas stop. Structural events still land. */
@@ -76,6 +79,8 @@ interface RunBucket {
   nextSeq: number;
   /** Deltas have already produced the one truncation notice. */
   truncated: boolean;
+  /** Store is already at the cap, even when this process has no rows yet. */
+  overCap: boolean;
   pending?: { event: AgUiEvent; chars: number; since: number };
   timer?: ReturnType<typeof setTimeout>;
   listeners: Set<(row: StoredAgentEvent | undefined) => void>;
@@ -86,6 +91,11 @@ export interface AgentEventLogOptions {
   readonly cap?: number;
   readonly ttlMs?: number;
   readonly maxAgeMs?: number;
+  /**
+   * Claim the right to close one abandoned run.
+   * False means another instance holds the journal lease.
+   */
+  claim?(runId: string): Promise<boolean>;
 }
 
 const DELTA_TYPES = new Set(["TEXT_MESSAGE_CONTENT", "TOOL_CALL_ARGS"]);
@@ -158,10 +168,11 @@ export function createMemoryAgentEventLog(
 
   const accept = async (run: RunBucket, event: AgUiEvent): Promise<number | undefined> => {
     const delta = DELTA_TYPES.has(event.type);
-    if (run.rows.length >= cap && delta && !keepPastCap(event)) {
+    if (delta && !keepPastCap(event) && (run.truncated || run.overCap || run.rows.length >= cap)) {
+      if (run.truncated) return undefined;
       return noteTruncation(run);
     }
-    if (run.rows.length >= cap && !keepPastCap(event)) return undefined;
+    if ((run.overCap || run.rows.length >= cap) && !keepPastCap(event)) return undefined;
     return push(run, event);
   };
 
@@ -200,17 +211,25 @@ export function createMemoryAgentEventLog(
   return {
     async open(header) {
       await serialized(header.runId, async () => {
-        if (runs.has(header.runId)) return;
         const max = (await store?.maxSeq(header.runId)) ?? 0;
+        const marked = (await store?.truncated(header.runId)) ?? false;
+        const existing = runs.get(header.runId);
+        if (existing) {
+          if (store) {
+            existing.nextSeq = max + 1;
+            if (marked) existing.truncated = true;
+            if (marked || max >= cap) existing.overCap = true;
+          }
+          return;
+        }
         if (max > 0) {
-          const existing = (await store?.listHeaders())?.find(
-            (item) => item.runId === header.runId,
-          );
+          const stored = await store?.readHeader(header.runId);
           runs.set(header.runId, {
-            header: (existing ?? header) as AgentRunHeader,
+            header: (stored ?? header) as AgentRunHeader,
             rows: [],
             nextSeq: max + 1,
-            truncated: max >= cap,
+            truncated: marked,
+            overCap: marked || max >= cap,
             listeners: new Set(),
           });
           return;
@@ -221,6 +240,7 @@ export function createMemoryAgentEventLog(
           rows: [],
           nextSeq: 1,
           truncated: false,
+          overCap: false,
           listeners: new Set(),
         });
         await store?.writeHeader(opened);
@@ -229,8 +249,7 @@ export function createMemoryAgentEventLog(
     async header(runId) {
       const live = bucket(runId)?.header;
       if (live) return live;
-      const listed = await store?.listHeaders();
-      return listed?.find((item) => item.runId === runId) as AgentRunHeader | undefined;
+      return (await store?.readHeader(runId)) as AgentRunHeader | undefined;
     },
     async append(runId, event, now) {
       return serialized(runId, async () => {
@@ -292,18 +311,29 @@ export function createMemoryAgentEventLog(
         }
         const opened = header.openedAt;
         if (finished === undefined && opened !== undefined && now - opened >= maxAge) {
-          if (!runs.has(header.runId)) await this.open(header as AgentRunHeader);
-          await this.append(
-            header.runId,
-            {
-              type: "RUN_ERROR",
-              message: "agent events: run exceeded max age",
-              code: "AgentEventMaxAge",
-            },
-            now,
-          );
-          await drop(header.runId);
-          removed++;
+          const claimed = opts.claim
+            ? await opts.claim(header.runId)
+            : store
+              ? await store.claim(header.runId)
+              : true;
+          if (!claimed) continue;
+          try {
+            if (!runs.has(header.runId)) await this.open(header as AgentRunHeader);
+            await this.append(
+              header.runId,
+              {
+                type: "RUN_ERROR",
+                message: "agent events: run exceeded max age",
+                code: "AgentEventMaxAge",
+              },
+              now,
+            );
+            await drop(header.runId);
+            removed++;
+          } catch (err) {
+            if (err instanceof AgentEventDuplicateSeqError) continue;
+            throw err;
+          }
         }
       }
       return removed;

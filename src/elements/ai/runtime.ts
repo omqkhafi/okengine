@@ -9,7 +9,7 @@
 
 import type { AiDriver, AiMessage, AiModelClient, AiToolDef } from "../../drivers/ai-types.ts";
 import { currentAbortSignal, withAbortSignal } from "../../kernel/abort-scope.ts";
-import type { JournalSession, JournalStore } from "../../kernel/journal.ts";
+import { hasJournalLease, type JournalSession, type JournalStore } from "../../kernel/journal.ts";
 import { isJournalSuspend } from "../../kernel/journal-suspend.ts";
 import {
   AiDurableRequiredError,
@@ -62,6 +62,7 @@ import {
 } from "./run-events.ts";
 import { setAgentFollowGates } from "./approval-http.ts";
 import { okid } from "../../okid.ts";
+import { withSseId } from "../../kernel/sse-id.ts";
 import {
   AiSchemaValidationError,
   coerceModelObject,
@@ -600,7 +601,21 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   for (const m of options.models ?? []) models.set(m.name, m);
 
   const clients = new Map<string, AiModelClient>(Object.entries(options.clients ?? {}));
-  const eventLog = options.eventLog ?? createMemoryAgentEventLog(options.journalStore?.agentEvents);
+  const eventStore = options.journalStore?.agentEvents;
+  const eventLog =
+    options.eventLog ??
+    createMemoryAgentEventLog(eventStore, {
+      claim: async (runId) => {
+        const journal = options.journalStore;
+        if (journal && hasJournalLease(journal)) {
+          const row = await journal.get(runId);
+          if (row) {
+            return journal.acquireLease(runId, "agent-events", Date.now(), 30_000);
+          }
+        }
+        return (await eventStore?.claim(runId)) ?? true;
+      },
+    });
   setAgentEventLog(eventLog);
   setAgentFollowGates(options.gates);
   const mcpClient: McpClient = createMcpClient({
@@ -612,6 +627,27 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   const agentRuns: AgentRunRecord[] = [];
   const journal: AiJournalEntry[] = [];
   const now = options.now ?? (() => Date.now());
+  const noteAppendFailure = (
+    runId: string,
+    agentName: string,
+    label: string,
+    err: unknown,
+  ): void => {
+    const message = err instanceof Error ? err.message : String(err);
+    pushObservability(agentRuns, {
+      id: runId,
+      agent: agentName,
+      message: label,
+      ok: false,
+      stopReason: "error",
+      error: message,
+      steps: 0,
+      trail: [],
+      denials: [],
+      at: now(),
+      cost: 0,
+    });
+  };
   const journalingForced = options.forceJournal !== false;
   let runSeq = 0;
   /** Mutable egress stamp shared by ask / embed / toolLoop. */
@@ -1544,9 +1580,16 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const runId = await allocateAgentRunId(agent, runOpts);
       const threadId = runOpts.threadId ?? okid();
       const logHeader = agentLogHeader(runId, threadId, runOpts);
+      const safeAppend = async (event: AgUiEvent): Promise<void> => {
+        try {
+          await eventLog.append(runId, event, now());
+        } catch (err) {
+          noteAppendFailure(runId, agent, agentMessageLabel(runOpts), err);
+        }
+      };
       if (runOpts.journal) {
         await eventLog.open(logHeader);
-        await eventLog.append(runId, { type: "RUN_STARTED", threadId, runId }, now());
+        await safeAppend({ type: "RUN_STARTED", threadId, runId });
       }
 
       const remember = (partial: {
@@ -1617,7 +1660,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           ...(runOpts.journal !== undefined
             ? {
                 emit: (event: AgUiEvent) => {
-                  appendChain = appendChain.then(() => eventLog.append(runId, event, now()));
+                  appendChain = appendChain.then(() => safeAppend(event));
                 },
               }
             : {}),
@@ -1638,16 +1681,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           cost: loop.cost,
         });
         if (runOpts.journal) {
-          await eventLog.append(
+          await safeAppend({
+            type: "RUN_FINISHED",
+            threadId,
             runId,
-            {
-              type: "RUN_FINISHED",
-              threadId,
-              runId,
-              result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
-            },
-            now(),
-          );
+            result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
+          });
         }
         return settled;
       } catch (err) {
@@ -1667,43 +1706,31 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           if (err.stopReason === "aborted" || err.stopReason === "error") {
             if (runOpts.journal) {
               const cause = err.cause instanceof Error ? err.cause : undefined;
-              await eventLog.append(
-                runId,
-                {
-                  type: "RUN_ERROR",
-                  message: cause?.message ?? String(err.cause),
-                  ...(cause && cause.name !== "Error" ? { code: cause.name } : {}),
-                },
-                now(),
-              );
+              await safeAppend({
+                type: "RUN_ERROR",
+                message: cause?.message ?? String(err.cause),
+                ...(cause && cause.name !== "Error" ? { code: cause.name } : {}),
+              });
             }
             throw err.cause;
           }
           if (runOpts.journal) {
-            await eventLog.append(
+            await safeAppend({
+              type: "RUN_FINISHED",
+              threadId,
               runId,
-              {
-                type: "RUN_FINISHED",
-                threadId,
-                runId,
-                result: { cost: err.cost, stopReason: err.stopReason, output: err.output },
-              },
-              now(),
-            );
+              result: { cost: err.cost, stopReason: err.stopReason, output: err.output },
+            });
           }
           return result;
         }
         if (runOpts.journal) {
           const error = err instanceof Error ? err : undefined;
-          await eventLog.append(
-            runId,
-            {
-              type: "RUN_ERROR",
-              message: error?.message ?? String(err),
-              ...(error && error.name !== "Error" ? { code: error.name } : {}),
-            },
-            now(),
-          );
+          await safeAppend({
+            type: "RUN_ERROR",
+            message: error?.message ?? String(err),
+            ...(error && error.name !== "Error" ? { code: error.name } : {}),
+          });
         }
         throw err;
       }
@@ -1779,10 +1806,23 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       let runId = runOpts.runId ?? "";
       let appendChain: Promise<unknown> = Promise.resolve();
       const emit: AgentEventEmit = (event) => {
-        queue.emit(event);
-        if (!runOpts.journal) return;
-        if (skipLoggedStart && event.type === "RUN_STARTED") return;
-        appendChain = appendChain.then(() => eventLog.append(runId, event, now()));
+        if (!runOpts.journal) {
+          queue.emit(event);
+          return;
+        }
+        if (skipLoggedStart && event.type === "RUN_STARTED") {
+          queue.emit(event);
+          return;
+        }
+        appendChain = appendChain.then(async () => {
+          let seq: number | undefined;
+          try {
+            seq = await eventLog.append(runId, event, now());
+          } catch (err) {
+            noteAppendFailure(runId, agent, agentMessageLabel(runOpts), err);
+          }
+          queue.emit(seq !== undefined ? withSseId(event, String(seq)) : event);
+        });
       };
       let resolveResult: (value: unknown) => void = () => undefined;
       let rejectResult: (err: unknown) => void = () => undefined;
@@ -1793,6 +1833,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       // HTTP drains the iterator and may never await `result`.
       void result.catch(() => undefined);
       void (async () => {
+        let closed = false;
+        const close = (err?: unknown): void => {
+          if (closed) return;
+          closed = true;
+          queue.finish(err);
+        };
         try {
           if (runOpts.journal) {
             runId = await allocateAgentRunId(agent, runOpts);
@@ -1875,12 +1921,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               : {}),
           });
           await appendChain;
-          queue.finish();
+          close();
         } catch (err) {
           if (isJournalSuspend(err)) {
             await appendChain;
             rejectResult(err);
-            queue.finish(err);
+            close(err);
             return;
           }
           if (err instanceof AiDurableRequiredError) {
@@ -1891,7 +1937,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             });
             await appendChain;
             rejectResult(err);
-            queue.finish();
+            close();
             return;
           }
           if (err instanceof AgentLoopHalt) {
@@ -1935,7 +1981,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 },
               });
               await appendChain;
-              queue.finish();
+              close();
               return;
             }
           }
@@ -1947,7 +1993,17 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             ...(err instanceof Error && err.name !== "Error" ? { code: err.name } : {}),
           });
           await appendChain;
-          queue.finish();
+          close();
+        } finally {
+          try {
+            await appendChain;
+          } catch (err) {
+            noteAppendFailure(runId, agent, agentMessageLabel(runOpts), err);
+          }
+          if (!closed) {
+            queue.emit({ type: "RUN_ERROR", message: "agent run ended" });
+            close();
+          }
         }
       })();
       return Object.assign(queue.events, { result });

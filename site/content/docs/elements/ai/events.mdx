@@ -204,7 +204,11 @@ An approval interrupt does not end this follow. The stream stays open through th
 
 The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB, including a timer) and stores structural events one by one. The instance that holds the journal lease is the only writer. It reads the highest seq before it appends, and a repeated seq is an error. Followers read `seq` greater than the last id, not the whole run.
 
-The log keeps 5,000 rows per run. Past that, deltas stop and one `CUSTOM` event named `oke.events.truncated` is stored. Structural events, approval interrupts, `RUN_FINISHED`, and `RUN_ERROR` are still stored. Earlier rows stay, so a follower can resume and seq numbers do not skip. A finished run's events are deleted after 24 hours. An unfinished run older than 7 days is closed with `RUN_ERROR` and deleted. The scheduler reads the store, not the process that opened the run. The log is stored on the journal driver and keyed by the agent run id. `flow.retry` keeps that id. A follower must be the starting principal or an operator, and must pass every gate on the Flow.
+The log keeps 5,000 rows per run. Past that, deltas stop and one `CUSTOM` event named `oke.events.truncated` is stored. Structural events, approval interrupts, `RUN_FINISHED`, and `RUN_ERROR` are still stored. Earlier rows stay, so a follower can resume and seq numbers do not skip. A finished run's events are deleted after 24 hours. An unfinished run older than 7 days is closed with `RUN_ERROR` and deleted. The scheduler reads the store, not the process that opened the run. One instance claims the journal lease before it closes that run. The log is stored on the journal driver and keyed by the agent run id. `flow.retry` keeps that id. A follower must be the starting principal or an operator, and must pass every gate on the Flow.
+
+The file journal is single-process. It is not for large logs. Use the Postgres journal driver in production.
+
+A stored row on the live run stream carries `id:` set to that row's seq. Resume with `Last-Event-ID` so text you already showed is not sent again.
 
 ```typescript
 import { approve, deny, readAgentEvents } from "okengine/client/agent";

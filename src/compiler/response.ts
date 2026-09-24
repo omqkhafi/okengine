@@ -6,6 +6,7 @@
 
 import { fail, type FlowFailure } from "../kernel/errors.ts";
 import type { JsonResult, JsonStreamResult, SseFrame } from "../kernel/fx.ts";
+import { readSseId } from "../kernel/sse-id.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { lazyRequire } from "../kernel/lazy-require.ts";
 
@@ -165,7 +166,7 @@ function encodeSseStream(carrier: JsonStreamResult): Response {
         for await (const chunk of carrier.chunks) {
           const frame = loadFxJson().isSseFrame(chunk)
             ? chunk
-            : { data: chunk as unknown, id: undefined as string | undefined };
+            : { data: chunk as unknown, id: readSseId(chunk) };
           const lines: string[] = [];
           if ("comment" in frame && frame.comment && frame.data === undefined) {
             controller.enqueue(encoder.encode(`: ${frame.comment}\n\n`));

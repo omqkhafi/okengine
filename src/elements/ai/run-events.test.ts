@@ -326,4 +326,66 @@ describe("agent event log", () => {
       await sql.close();
     }
   });
+
+  test("park on A, resume on B, resume on A stores each event once", async () => {
+    const store = createMemoryAgentEventStore();
+    const a = createMemoryAgentEventLog(store);
+    const b = createMemoryAgentEventLog(store);
+    await a.open(header);
+    await a.append("r1", { type: "RUN_STARTED", threadId: "t1", runId: "r1" }, 1);
+    await a.append(
+      "r1",
+      {
+        type: "RUN_FINISHED",
+        threadId: "t1",
+        runId: "r1",
+        outcome: { type: "interrupt", interrupts: [{ id: "ap-1", reason: "approval" }] },
+      },
+      2,
+    );
+    await b.open(header);
+    await b.append("r1", { type: "STEP_STARTED", stepName: "on-b" }, 3);
+    await a.open(header);
+    await a.append("r1", { type: "STEP_STARTED", stepName: "on-a" }, 4);
+    const rows = await store.read("r1");
+    expect(rows?.rows.map((row) => row.seq)).toEqual([1, 2, 3, 4]);
+    expect(new Set(rows?.rows.map((row) => row.seq)).size).toBe(4);
+  });
+
+  test("a new log keeps the truncation marker and drops later deltas", async () => {
+    const store = createMemoryAgentEventStore();
+    const first = createMemoryAgentEventLog(store, { cap: 2 });
+    await first.open(header);
+    await first.append("r1", { type: "STEP_STARTED", stepName: "a" }, 1);
+    await first.append("r1", { type: "STEP_STARTED", stepName: "b" }, 2);
+    await first.append("r1", { type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "x" }, 1_000);
+    await first.flush("r1", 1_000);
+    const second = createMemoryAgentEventLog(store, { cap: 2 });
+    await second.open(header);
+    const seq = await second.append(
+      "r1",
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "y" },
+      2_000,
+    );
+    await second.flush("r1", 2_000);
+    expect(seq).toBeUndefined();
+    const rows = await second.read("r1", 0);
+    expect(rows.some((row) => row.event.type === "TEXT_MESSAGE_CONTENT")).toBe(false);
+    expect(rows.filter((row) => row.event.type === "CUSTOM")).toHaveLength(1);
+  });
+
+  test("two sweeps close an abandoned run once and a duplicate seq is not thrown", async () => {
+    const store = createMemoryAgentEventStore();
+    const opener = createMemoryAgentEventLog(store);
+    await opener.open({ ...header, openedAt: 1 });
+    const a = createMemoryAgentEventLog(store, { maxAgeMs: 10 });
+    const b = createMemoryAgentEventLog(store, { maxAgeMs: 10 });
+    const removed = await Promise.all([
+      a.sweep(100, AGENT_EVENT_TTL_MS, 10),
+      b.sweep(100, AGENT_EVENT_TTL_MS, 10),
+    ]);
+    expect(removed.reduce((sum, count) => sum + count, 0)).toBe(1);
+    expect(await store.read("r1")).toBeUndefined();
+    await expect(b.sweep(100, AGENT_EVENT_TTL_MS, 10)).resolves.toBe(0);
+  });
 });

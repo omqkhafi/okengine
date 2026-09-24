@@ -123,6 +123,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
   set only when a deny ends the run. A thrown tool is `error` and still rejects.
 - `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
   result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
+- Kernel edge gzip is 13590 bytes (was 13289). Stored-row SSE ids are read on
+  the response encoder. The 17 kB cap is unchanged. Client gzip stays 5218.
 - Kernel edge gzip is 13289 bytes (was 13132). The `decide` effect kind and SQL
   pool / replica binding sit on the edge graph. The 17 kB cap is unchanged.
   Client gzip stays 5218.
@@ -173,6 +175,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- A failed agent-event append is recorded on the run and does not stop the stream. The stream still ends with a terminal frame and `data: [DONE]`. Resuming a parked run re-reads the highest seq, including when the same process opens it again. Past the cap, a new process keeps the truncation marker and does not store more deltas. One scheduler claims the close of an abandoned run. The file journal is single-process and is not for large logs.
+- Live agent SSE frames for stored rows send `id:` as that row's seq, so `useAgentRun` does not repeat text after an approval.
 - Agent run events append in emit order on one queue per run. A repeated seq is an error. Followers read `seq` greater than the last id. The file journal appends one JSONL file per run. `flow.retry` keeps the agent run id. `useAgentRun` follows a run once; approve and deny do not open another follow, and text is not replayed.
 - `openai-compatible` streams send `response_format` the same way `complete` does. A tool error's `RUN_FINISHED` keeps the run's `threadId`.
 - Decision label export groups rows that have no review id by decision, non-secret input, reviewer, and time. A file journal copies a legacy `*` drift flag onto every declared decision. The journal review record masks secret and redacted fields; the reviewer still sees the other input.

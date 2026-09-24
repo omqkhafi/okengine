@@ -6,6 +6,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import type { AiMessage } from "../drivers/ai-types.ts";
+import { ai, createAiRuntime } from "../elements/ai.ts";
+import { createGateRuntime, gate } from "../elements/gate.ts";
+import { oke } from "../kernel/app.ts";
+import { flow, resetFlowSeq, type AnyFlowDef } from "../kernel/flow.ts";
+import { createMemoryJournalStore } from "../kernel/journal.ts";
+import { resetBindings, type Binding } from "../kernel/on.ts";
+import { http } from "../kernel/triggers.ts";
 import { useAgentRun, type AgentRunState } from "./use-agent-run.ts";
 
 function frames(rows: readonly { id: string; event: unknown }[]): string {
@@ -140,5 +148,124 @@ describe("useAgentRun", () => {
     expect(view?.text).toBe("Hello");
     expect(follows).toBe(1);
     if (lastEventId !== "3") throw new Error(`last event id ${String(lastEventId)}`);
+  });
+
+  test("a booted app shows the model text once across a real approval", async () => {
+    const calls: unknown[] = [];
+    const store = createMemoryJournalStore();
+    const ops = gate.policy("ops", () => true);
+    const runtime = createAiRuntime({
+      journalStore: store,
+      models: [ai.model("smart")],
+      gates: createGateRuntime({ gates: [ops] }),
+      agents: [
+        ai.agent("support", {
+          model: "smart",
+          maxSteps: 4,
+          tools: [{ name: "refund", approval: true, gate: "ops", timeout: "1h" }],
+        }),
+      ],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return { text: "", raw: {}, model: "smart", driverId: "mock" as const };
+          },
+          async *stream(opts: { messages: readonly AiMessage[] }) {
+            const answered = opts.messages.some((message) => message.role === "tool");
+            if (!answered) {
+              yield { text: "Hello" };
+              yield {
+                text: "",
+                toolCall: { index: 0, id: "tc1", name: "refund", argumentsDelta: "{}" },
+              };
+              yield { text: "", done: true as const };
+              return;
+            }
+            yield { text: "!" };
+            yield { text: "", done: true as const };
+          },
+        },
+      },
+    });
+    const refund = flow("refund", {
+      do: async (input) => {
+        calls.push(input);
+        return { refunded: true };
+      },
+    });
+    const assist: Binding = {
+      trigger: http.post("/assist"),
+      flow: flow("assist", {
+        durable: true,
+        effects: { asks: ["support"], calls: ["refund"] },
+        do: (_input, fx) =>
+          fx.json.stream(fx.run("support", { message: "refund" }, { stream: true })),
+      }) as AnyFlowDef,
+    };
+    resetBindings();
+    const app = oke({
+      name: "use-agent-run",
+      env: "test",
+      startScheduler: false,
+      registry: "ignore",
+      gate: { unguardedHttp: "allow", policies: [ops] },
+      bindings: [assist, { trigger: http.post("/refund"), flow: refund as AnyFlowDef }],
+      elements: {
+        journal: { store, instanceId: "use-agent-run", leaseMs: 30_000, driverId: "memory" },
+        ai: runtime,
+      },
+    });
+    await app.boot({ env: "test" });
+    const fetchFn = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const request = input instanceof Request ? input : new Request(String(input), init);
+        return app.fetch(request);
+      },
+      { preconnect: () => undefined },
+    ) as typeof fetch;
+
+    let view: AgentRunState | undefined;
+    function Probe(): null {
+      const state = useAgentRun({
+        sendUrl: "http://localhost/assist",
+        approveUrl: "http://localhost/agent/approvals/approve",
+        denyUrl: "http://localhost/agent/approvals/deny",
+        followUrl: (runId) => `http://localhost/agent/runs/${runId}/events`,
+        fetch: fetchFn,
+      });
+      useEffect(() => {
+        view = state;
+      });
+      view = state;
+      return null;
+    }
+
+    root = createRoot(happy.document.createElement("div"));
+    await act(async () => {
+      root?.render(createElement(Probe));
+    });
+    await act(async () => {
+      await view?.send("refund");
+    });
+    expect(view?.status).toBe("approval");
+    expect(view?.text).toBe("Hello");
+    await act(async () => {
+      await view?.approve();
+    });
+    await app.resumeDurable(Date.now() + 1000);
+    const start = Date.now();
+    while (view?.text !== "Hello!") {
+      if (Date.now() - start > 3_000) throw new Error(`text stayed ${view?.text}`);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
+    expect(view?.text).toBe("Hello!");
+    expect(calls).toEqual([{}]);
+    await app.bootResult?.close();
+    resetBindings();
+    resetFlowSeq();
   });
 });

@@ -6,9 +6,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseAgentEvent } from "../../client/agent.ts";
+import { createMemoryAgentEventStore } from "../../kernel/agent-event-store.ts";
 import { createFx } from "../../kernel/fx.ts";
 import { createJournal, createMemoryJournalStore } from "../../kernel/journal.ts";
+import { readSseId } from "../../kernel/sse-id.ts";
 import { ai, createAiRuntime, type AgUiEvent } from "../ai.ts";
+import { createMemoryAgentEventLog } from "./run-events.ts";
 
 describe("fx.run stream overload", () => {
   test("stream: true is an async iterable of AG-UI events", async () => {
@@ -270,6 +273,54 @@ describe("agent event stream", () => {
     const first = ids[0];
     if (!first) throw new Error("missing run id");
     expect(ids).toEqual([first, first]);
+  });
+
+  test("a store that fails once still ends the stream", async () => {
+    const store = createMemoryAgentEventStore();
+    let failed = false;
+    const flaky = {
+      ...store,
+      async append(runId: string, row: { seq: number; event: unknown }) {
+        if (!failed) {
+          failed = true;
+          throw new Error("store down");
+        }
+        return store.append(runId, row);
+      },
+    };
+    const runtime = createAiRuntime({
+      eventLog: createMemoryAgentEventLog(flaky),
+      models: [ai.model("smart")],
+      agents: [ai.agent("support", { model: "smart", maxSteps: 1 })],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return { text: "ok", raw: {}, model: "smart", driverId: "mock" as const };
+          },
+          async *stream() {
+            yield { text: "ok" };
+            yield { text: "", done: true as const };
+          },
+        },
+      },
+    });
+    const journal = createJournal({ store: createMemoryJournalStore() });
+    const session = await journal.start("assist", {});
+    const seen: AgUiEvent[] = [];
+    for await (const event of runtime.streamAgent("support", {
+      message: "hi",
+      journal: session,
+    })) {
+      seen.push(event);
+    }
+    expect(seen.at(-1)?.type).toBe("RUN_FINISHED");
+    expect(runtime.agentRuns.some((run) => run.ok === false && run.error === "store down")).toBe(
+      true,
+    );
+    const finished = seen.find((event) => event.type === "RUN_FINISHED");
+    expect(readSseId(finished)).toBeDefined();
   });
 });
 

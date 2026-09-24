@@ -58,6 +58,14 @@ export interface AgentEventStore {
   readAfter(runId: string, afterSeq: number): Promise<readonly AgentEventRowRecord[]>;
   /** Highest stored seq, or 0 when the run has no rows. */
   maxSeq(runId: string): Promise<number>;
+  /** Header for one run, or undefined when it was never opened. */
+  readHeader(runId: string): Promise<AgentEventHeaderRecord | undefined>;
+  /** True when this run already stored `oke.events.truncated`. */
+  truncated(runId: string): Promise<boolean>;
+  /**
+   * Claim the right to close this run. False when another instance already claimed it.
+   */
+  claim(runId: string): Promise<boolean>;
   /** Every header, including runs this process did not open. */
   listHeaders(): Promise<readonly AgentEventHeaderRecord[]>;
   /** Create or replace the header. Existing rows stay. */
@@ -74,6 +82,7 @@ export interface AgentEventStore {
 /** In-memory event store. */
 export function createMemoryAgentEventStore(): AgentEventStore {
   const runs = new Map<string, { header: AgentEventHeaderRecord; rows: AgentEventRowRecord[] }>();
+  const claimed = new Set<string>();
   return {
     async read(runId) {
       const run = runs.get(runId);
@@ -89,6 +98,19 @@ export function createMemoryAgentEventStore(): AgentEventStore {
       const run = runs.get(runId);
       if (!run || run.rows.length === 0) return 0;
       return run.rows.reduce((max, row) => Math.max(max, row.seq), 0);
+    },
+    async readHeader(runId) {
+      return runs.get(runId)?.header;
+    },
+    async truncated(runId) {
+      const run = runs.get(runId);
+      if (!run) return false;
+      return run.rows.some((row) => isTruncationEvent(row.event));
+    },
+    async claim(runId) {
+      if (!runs.has(runId) || claimed.has(runId)) return false;
+      claimed.add(runId);
+      return true;
     },
     async listHeaders() {
       return [...runs.values()].map((run) => run.header);
@@ -123,10 +145,14 @@ interface JsonlLine {
  * Append-only event store. One JSONL file per run, guarded by a write lock.
  * Header updates append a new header line. Rows are never rewritten.
  *
+ * Single-process only. Do not use it for large logs or more than one
+ * process. Production logs belong on the Postgres journal driver.
+ *
  * @param dir - Directory of `{runId}.jsonl` files
  */
 export function createFileAgentEventStore(dir: string): AgentEventStore {
   const locks = new Map<string, Promise<void>>();
+  const claimed = new Set<string>();
 
   const withLock = async <T>(runId: string, fn: () => Promise<T>): Promise<T> => {
     const prev = locks.get(runId) ?? Promise.resolve();
@@ -202,6 +228,22 @@ export function createFileAgentEventStore(dir: string): AgentEventStore {
         return rows.reduce((max, row) => Math.max(max, row.seq), 0);
       });
     },
+    async readHeader(runId) {
+      return withLock(runId, async () => headerOf(await readLines(runId)));
+    },
+    async truncated(runId) {
+      return withLock(runId, async () =>
+        rowsOf(await readLines(runId)).some((row) => isTruncationEvent(row.event)),
+      );
+    },
+    async claim(runId) {
+      return withLock(runId, async () => {
+        if (claimed.has(runId)) return false;
+        if (!headerOf(await readLines(runId))) return false;
+        claimed.add(runId);
+        return true;
+      });
+    },
     async listHeaders() {
       let names: string[] = [];
       try {
@@ -268,6 +310,13 @@ export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise
     return /duplicate key|unique constraint|PRIMARY KEY/i.test(message);
   };
 
+  const readHeader = async (runId: string): Promise<AgentEventHeaderRecord | undefined> => {
+    const headers = await sql.query(`SELECT header FROM oke_agent_run WHERE run_id = ?`, [runId]);
+    const headerRow = headers[0];
+    if (!headerRow) return undefined;
+    return JSON.parse(String(headerRow.header)) as AgentEventHeaderRecord;
+  };
+
   return {
     async read(runId) {
       const headers = await sql.query(`SELECT header FROM oke_agent_run WHERE run_id = ?`, [runId]);
@@ -286,6 +335,26 @@ export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise
         [runId],
       );
       return Number(rows[0]?.max_seq ?? 0);
+    },
+    readHeader,
+    async truncated(runId) {
+      const rows = await sql.query(
+        `SELECT 1 AS hit FROM oke_agent_event WHERE run_id = ? AND event LIKE ? LIMIT 1`,
+        [runId, '%"oke.events.truncated"%'],
+      );
+      return rows.length > 0;
+    },
+    async claim(runId) {
+      const current = await readHeader(runId);
+      if (!current) return false;
+      const record = current as AgentEventHeaderRecord & { sweepClaim?: boolean };
+      if (record.sweepClaim) return false;
+      const next = { ...record, sweepClaim: true };
+      const updated = await sql.exec(
+        `UPDATE oke_agent_run SET header = ? WHERE run_id = ? AND header NOT LIKE ?`,
+        [JSON.stringify(next), runId, '%"sweepClaim":true%'],
+      );
+      return updated.changes === 1;
     },
     async listHeaders() {
       const rows = await sql.query(`SELECT header FROM oke_agent_run`);
@@ -315,6 +384,12 @@ export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise
       await sql.exec(`DELETE FROM oke_agent_run WHERE run_id = ?`, [runId]);
     },
   };
+}
+
+function isTruncationEvent(event: unknown): boolean {
+  if (!event || typeof event !== "object") return false;
+  const row = event as { type?: unknown; name?: unknown };
+  return row.type === "CUSTOM" && row.name === "oke.events.truncated";
 }
 
 async function readAfter(
