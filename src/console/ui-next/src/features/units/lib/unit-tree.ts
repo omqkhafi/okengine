@@ -87,6 +87,88 @@ export function bandUnitTree(groups: readonly UnitGroup[]): readonly UnitTreeBan
   });
 }
 
+/** localStorage key for pinned Units explorer folders. */
+export const PINNED_UNITS_KEY = "oke_units_pinned";
+
+/**
+ * Parse a stored pin list. Empty and duplicate names are dropped; order is kept.
+ *
+ * @param value - JSON from localStorage
+ */
+export function parsePinnedUnits(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || item.length === 0 || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
+}
+
+/**
+ * Load pinned unit folders from localStorage.
+ */
+export function loadPinnedUnits(): readonly string[] {
+  try {
+    if (typeof localStorage === "undefined") return [];
+    const raw = localStorage.getItem(PINNED_UNITS_KEY);
+    if (!raw) return [];
+    return parsePinnedUnits(JSON.parse(raw) as unknown);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist pinned unit folders. Newest pin is first.
+ *
+ * @param pinned - Unit names, newest first
+ */
+export function savePinnedUnits(pinned: readonly string[]): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(PINNED_UNITS_KEY, JSON.stringify(pinned));
+  } catch {
+    // quota / private mode
+  }
+}
+
+/**
+ * Pin or unpin a unit folder. A new pin is placed first.
+ *
+ * @param pinned - Current pins, newest first
+ * @param unit - Unit name to toggle
+ */
+export function togglePinnedUnit(pinned: readonly string[], unit: string): readonly string[] {
+  return pinned.includes(unit) ? pinned.filter((item) => item !== unit) : [unit, ...pinned];
+}
+
+/**
+ * Lift pinned folders to the front of a band. Pin order is newest first;
+ * unpinned folders keep their current order.
+ *
+ * @param groups - Unit folders in one band
+ * @param pinned - Pinned unit names, newest first
+ */
+export function orderPinnedGroups(
+  groups: readonly UnitGroup[],
+  pinned: readonly string[],
+): readonly UnitGroup[] {
+  if (pinned.length === 0 || groups.length < 2) return groups;
+  const rank = new Map(pinned.map((unit, index) => [unit, index]));
+  return groups
+    .map((group, index) => ({ group, index, pin: rank.get(group.unit) }))
+    .sort((a, b) => {
+      if (a.pin !== undefined && b.pin !== undefined) return a.pin - b.pin;
+      if (a.pin !== undefined) return -1;
+      if (b.pin !== undefined) return 1;
+      return a.index - b.index;
+    })
+    .map((row) => row.group);
+}
+
 /**
  * Open-state key for a trigger-kind band in the Units tree.
  *

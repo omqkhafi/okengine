@@ -47,6 +47,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `fx.run` accepts `{ messages }` (user, assistant, and tool turns) as well as one
+  `message`. Passing both throws. Thread storage stays in the app.
 - `fx.run(agent, input, { stream: true })` and tool-using `fx.ask(..., { stream: true })`
   yield AG-UI events. Pipe them through `fx.json.stream`. Parse with
   `okengine/client/agent` (not the core client). Subagent notices are `CUSTOM`.

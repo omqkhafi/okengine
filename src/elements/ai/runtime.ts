@@ -312,7 +312,10 @@ export interface AiAskOptions {
 
 /** Agent run options. */
 export interface AiAgentRunOptions {
-  readonly message: string;
+  /** Single user turn. Mutually exclusive with {@link messages}. */
+  readonly message?: string;
+  /** Prior user, assistant, and tool turns. Mutually exclusive with {@link message}. */
+  readonly messages?: readonly AiMessage[];
   readonly auth?: GatePolicyContext["auth"];
   readonly operator?: GatePolicyContext["operator"];
   readonly meta?: GatePolicyContext["meta"];
@@ -435,11 +438,31 @@ export function promptContentFromInput(input: unknown): string {
 }
 
 /**
- * User message plus a JSON-only contract when `out` is declared.
+ * Initial model messages for an agent run.
  *
- * @param input - Ask input
- * @param out - Prompt output schema
+ * @param runOpts - Single message or a history
  */
+function agentMessages(runOpts: AiAgentRunOptions): AiMessage[] {
+  if (runOpts.message !== undefined && runOpts.messages !== undefined) {
+    throw new TypeError("fx.run: pass message or messages, not both");
+  }
+  if (runOpts.messages !== undefined) return [...runOpts.messages];
+  return [{ role: "user", content: promptContentFromInput(runOpts.message ?? "") }];
+}
+
+/**
+ * Ledger label for a run that may be a history rather than one string.
+ *
+ * @param runOpts - Single message or a history
+ */
+function agentMessageLabel(runOpts: AiAgentRunOptions): string {
+  if (typeof runOpts.message === "string") return runOpts.message;
+  const lastUser = [...(runOpts.messages ?? [])]
+    .reverse()
+    .find((message) => message.role === "user");
+  return lastUser?.content ?? "";
+}
+
 function askUserContent(input: unknown, out: unknown): string {
   const base = promptContentFromInput(input);
   const schema = promptOutJsonSchema(out);
@@ -1120,7 +1143,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         const record: AgentRunRecord = {
           id: `agent-run-${++runSeq}`,
           agent,
-          message: runOpts.message,
+          message: agentMessageLabel(runOpts),
           ok: partial.ok,
           stopReason: partial.stopReason,
           steps: partial.steps,
@@ -1146,7 +1169,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         const loop = await toolLoop({
           client,
           modelName,
-          messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
+          messages: agentMessages(runOpts),
           tools: decl.tools,
           maxSteps,
           ...(decl.budget?.maxCostPerRun !== undefined
@@ -1264,7 +1287,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           const loop = await toolLoop({
             client,
             modelName,
-            messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
+            messages: agentMessages(runOpts),
             tools: decl.tools,
             maxSteps,
             ...(decl.budget?.maxCostPerRun !== undefined
@@ -1281,7 +1304,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           const record: AgentRunRecord = {
             id: runId,
             agent,
-            message: runOpts.message,
+            message: agentMessageLabel(runOpts),
             ok: loop.stopReason === "completed" && loop.denials.length === 0,
             stopReason: loop.stopReason,
             steps: loop.steps,
@@ -1308,7 +1331,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             pushObservability(agentRuns, {
               id: runId,
               agent,
-              message: runOpts.message,
+              message: agentMessageLabel(runOpts),
               ok: false,
               stopReason: err.stopReason,
               steps: err.steps,

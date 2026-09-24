@@ -24,6 +24,38 @@ describe("fx.run stream overload", () => {
   });
 });
 
+describe("fx.run messages", () => {
+  test("history is sent to the model and both fields throw", async () => {
+    let seen = "";
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [ai.agent("support", { model: "smart", tools: [], maxSteps: 1 })],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete(opts) {
+            seen = opts.messages.map((message) => message.content).join("|");
+            return { text: "ok", raw: {}, model: "smart", driverId: "mock" };
+          },
+        },
+      },
+    });
+    const result = await runtime.runAgent("support", {
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "ack" },
+        { role: "user", content: "second" },
+      ],
+    });
+    expect(result.stopReason).toBe("completed");
+    expect(seen).toBe("first|ack|second");
+    await expect(
+      runtime.runAgent("support", { message: "a", messages: [{ role: "user", content: "b" }] }),
+    ).rejects.toThrow(/message or messages/);
+  });
+});
+
 describe("agent event stream", () => {
   test("a tool call yields AG-UI events and RUN_FINISHED.result", async () => {
     const runtime = createAiRuntime({

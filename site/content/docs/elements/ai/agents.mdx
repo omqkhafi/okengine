@@ -167,12 +167,19 @@ ai.agent("planner", {
 
 ## `fx.run` input
 
-Pass a string or `{ message: string }` (and any extra fields your tools need in context). The
-agent declaration does **not** take Zod `in` / `out` — validate on the surrounding Flow.
+Pass a string, `{ message }`, or `{ messages }` (user, assistant, and tool turns). Passing both
+`message` and `messages` throws. History stays in your Store — `fx.run` does not persist it.
 
 ```typescript
 await fx.run(supportAgent, "Summarize open tickets");
 await fx.run(supportAgent, { message: "Summarize open tickets" });
+await fx.run(supportAgent, {
+  messages: [
+    { role: "user", content: "Summarize open tickets" },
+    { role: "assistant", content: "There are 3." },
+    { role: "user", content: "Open the oldest." },
+  ],
+});
 ```
 
 ## Agents vs ask-with-tools

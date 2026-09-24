@@ -84,6 +84,10 @@ export const EXPLORER_ICON_CLASS = "size-3.5 shrink-0";
 export const EXPLORER_BAND_ACTIONS_CLASS =
   "flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/band:opacity-100 group-focus-within/band:opacity-100";
 
+/** Hover-reveal actions on a folder row. Shares a cell with the count. */
+export const EXPLORER_FOLDER_ACTIONS_CLASS =
+  "flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/folder:opacity-100 group-focus-within/folder:opacity-100";
+
 /** Size-5 tinted icon well — detail headers / posture marks. */
 export const EXPLORER_WELL_CLASS =
   "flex size-5 shrink-0 items-center justify-center rounded-md border";

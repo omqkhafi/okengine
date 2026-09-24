@@ -40,6 +40,7 @@ import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.t
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
 import type { AgUiEvent } from "../elements/ai/events.ts";
+import type { AiMessage } from "../drivers/ai-types.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import type { ApiKeyStore } from "../auth/api-keys.ts";
 import type { FxAuthIdentity, FxAuthKeyMethods } from "./fx-auth-keys.ts";
@@ -113,6 +114,28 @@ function loadConcurrency(): typeof import("./concurrency.ts") {
  */
 function loadFxLiveStream(): typeof import("./fx-live-stream.ts") {
   return lazyRequire(import.meta.dir, ["fx", "live", "stream"].join("-"));
+}
+
+/**
+ * Split `fx.run` input into one message or a history.
+ *
+ * @param input - String, `{ message }`, or `{ messages }`
+ */
+function agentTurn(input: unknown): { message?: string; messages?: readonly AiMessage[] } {
+  if (typeof input === "string") return { message: input };
+  if (input && typeof input === "object") {
+    const record = input as { message?: unknown; messages?: unknown };
+    const hasMessage = "message" in record && record.message !== undefined;
+    const hasMessages = "messages" in record && record.messages !== undefined;
+    if (hasMessage && hasMessages) {
+      throw new TypeError("fx.run: pass message or messages, not both");
+    }
+    if (hasMessages && Array.isArray(record.messages)) {
+      return { messages: record.messages as readonly AiMessage[] };
+    }
+    if (hasMessage) return { message: String(record.message) };
+  }
+  return { message: JSON.stringify(input ?? {}) };
 }
 
 /** `fx.fetch` — keep host parsing + dry-run stub off cold edge / Store-only graphs. */
@@ -1934,12 +1957,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     run(agent, input, opts?: { readonly stream?: boolean }) {
       const name = resolveName(agent);
-      const message =
-        typeof input === "string"
-          ? input
-          : input && typeof input === "object" && "message" in input
-            ? String((input as { message: unknown }).message)
-            : JSON.stringify(input ?? {});
+      const turn = agentTurn(input);
       if (opts?.stream) {
         return (async function* () {
           await gated("ask", name, async () => undefined);
@@ -1951,7 +1969,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           try {
             const events = await withAbortSignal(local.signal, () =>
               options.aiRuntime!.streamAgent(name, {
-                message,
+                ...turn,
                 auth: {
                   userId: auth.userId,
                   scopes: auth.scopes,
@@ -1970,7 +1988,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       return gated("ask", name, async () => {
         if (options.aiRuntime) {
           return options.aiRuntime.runAgent(name, {
-            message,
+            ...turn,
             auth: {
               userId: auth.userId,
               scopes: auth.scopes,

@@ -10,6 +10,9 @@ import {
   countActiveFacets,
   filterUnitTree,
   filterUnitsAdvanced,
+  orderPinnedGroups,
+  parsePinnedUnits,
+  togglePinnedUnit,
   unitTreeAncestorKeys,
   unitTreeBandKey,
   unitTreeGroupKey,
@@ -287,6 +290,24 @@ describe("bandUnitTree", () => {
       "unit:internal:orders",
     ]);
     expect(unitTreeAncestorKeys(bands, "missing")).toEqual([]);
+  });
+
+  test("pinned folders rise to the front and toggle in newest-first order", () => {
+    const http = bandUnitTree(TREE)[0]!;
+    expect(parsePinnedUnits(["orders", "", "orders", 1, "billing"])).toEqual(["orders", "billing"]);
+    expect(parsePinnedUnits("orders")).toEqual([]);
+    expect(orderPinnedGroups(http.groups, ["orders"]).map((g) => g.unit)).toEqual([
+      "orders",
+      "billing",
+    ]);
+    expect(orderPinnedGroups(http.groups, []).map((g) => g.unit)).toEqual(["billing", "orders"]);
+    const pinned = togglePinnedUnit(togglePinnedUnit([], "billing"), "orders");
+    expect(pinned).toEqual(["orders", "billing"]);
+    expect(orderPinnedGroups(http.groups, pinned).map((g) => g.unit)).toEqual([
+      "orders",
+      "billing",
+    ]);
+    expect(togglePinnedUnit(pinned, "orders")).toEqual(["billing"]);
   });
 
   test("bands and unit folders default closed unless searching", () => {

@@ -8,6 +8,7 @@ import {
   FilterHorizontalIcon,
   Folder01Icon,
   InternetAntenna03Icon,
+  PinIcon,
   SecurityCheckIcon,
   Timer01Icon,
   UserIcon,
@@ -21,7 +22,9 @@ import {
   EXPLORER_BAND_LABEL_CLASS,
   EXPLORER_CHEVRON_CLASS,
   EXPLORER_COUNT_CLASS,
+  EXPLORER_FOLDER_ACTIONS_CLASS,
   EXPLORER_GROUP_ROW_CLASS,
+  EXPLORER_ICON_BUTTON_BARE_CLASS,
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
   EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
@@ -38,6 +41,7 @@ import { TreeExpandToggle } from "@/components/explorer/tree-expand-toggle.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { HttpMethodBadge } from "@/components/http-method-badge";
 import { httpMethodBadgeClass, httpMethodIcon } from "@/features/flows/traces/http-method.ts";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -54,6 +58,10 @@ import {
   countActiveFacets,
   filterUnitTree,
   filterUnitsAdvanced,
+  loadPinnedUnits,
+  orderPinnedGroups,
+  savePinnedUnits,
+  togglePinnedUnit,
   unitTreeAncestorKeys,
   unitTreeBandKey,
   unitTreeGroupKey,
@@ -90,6 +98,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [facets, setFacets] = useState<UnitTreeFacets>({});
   const [openByKey, setOpenByKey] = useState<Readonly<Record<string, boolean>>>({});
+  const [pinned, setPinned] = useState<readonly string[]>(() => loadPinnedUnits());
 
   const availableKinds = useMemo(() => {
     const present = new Set<FlowTriggerKind>();
@@ -170,6 +179,14 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
       ...prev,
       deliveries: toggleItem(prev.deliveries ?? [], delivery),
     }));
+
+  const togglePin = (unit: string): void => {
+    setPinned((prev) => {
+      const next = togglePinnedUnit(prev, unit);
+      savePinnedUnits(next);
+      return next;
+    });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="units-tree">
@@ -341,6 +358,8 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
                   }
                   selectedFlowId={selectedFlowId}
                   onSelect={onSelect}
+                  pinned={pinned}
+                  onTogglePin={togglePin}
                 />
               );
             })}
@@ -438,6 +457,8 @@ function TriggerBand({
   onGroupOpenChange,
   selectedFlowId,
   onSelect,
+  pinned,
+  onTogglePin,
 }: {
   readonly band: UnitTreeBand;
   readonly open: boolean;
@@ -446,10 +467,13 @@ function TriggerBand({
   readonly onGroupOpenChange: (unit: string, open: boolean) => void;
   readonly selectedFlowId: string | null;
   readonly onSelect: (flowId: string) => void;
+  readonly pinned: readonly string[];
+  readonly onTogglePin: (unit: string) => void;
 }): JSX.Element {
   const kindSpec = FLOW_TRIGGER_KIND_SPECS[band.id];
-  const flowCount = band.groups.reduce((n, g) => n + g.flows.length, 0);
-  const units = band.groups.map((g) => g.unit);
+  const groups = orderPinnedGroups(band.groups, pinned);
+  const flowCount = groups.reduce((n, g) => n + g.flows.length, 0);
+  const units = groups.map((g) => g.unit);
   const unitsOpen = units.length > 0 && units.every((unit) => groupOpen(unit));
 
   const toggleUnits = (): void => {
@@ -501,7 +525,7 @@ function TriggerBand({
         />
         <CollapsibleContent>
           <ul className="flex flex-col">
-            {band.groups.map((g) => (
+            {groups.map((g) => (
               <UnitGroupItem
                 key={`${band.id}:${g.unit}`}
                 group={g}
@@ -509,6 +533,8 @@ function TriggerBand({
                 onOpenChange={(next) => onGroupOpenChange(g.unit, next)}
                 selectedFlowId={selectedFlowId}
                 onSelect={onSelect}
+                pinned={pinned.includes(g.unit)}
+                onTogglePin={() => onTogglePin(g.unit)}
               />
             ))}
           </ul>
@@ -529,30 +555,80 @@ function UnitGroupItem({
   onOpenChange,
   selectedFlowId,
   onSelect,
+  pinned,
+  onTogglePin,
 }: {
   readonly group: UnitGroup;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly selectedFlowId: string | null;
   readonly onSelect: (flowId: string) => void;
+  readonly pinned: boolean;
+  readonly onTogglePin: () => void;
 }): JSX.Element {
+  const pinLabel = pinned ? `Unpin ${group.unit}` : `Pin ${group.unit}`;
   return (
-    <li data-slot="unit-group" data-unit={group.unit}>
+    <li data-slot="unit-group" data-unit={group.unit} data-pinned={pinned ? "true" : undefined}>
       <Collapsible open={open} onOpenChange={onOpenChange}>
-        <CollapsibleTrigger className={cn(EXPLORER_GROUP_ROW_CLASS, "pl-4")}>
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
-            aria-hidden
-          />
-          <HugeiconsIcon
-            icon={Folder01Icon}
-            className={cn(EXPLORER_ICON_CLASS, "text-muted-foreground")}
-            aria-hidden
-          />
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{group.unit}</span>
-          <span className={EXPLORER_COUNT_CLASS}>{group.flows.length}</span>
-        </CollapsibleTrigger>
+        <CollapsibleTrigger
+          nativeButton={false}
+          className={cn(EXPLORER_GROUP_ROW_CLASS, "pl-4")}
+          data-slot="unit-group-toggle"
+          render={(props) => (
+            <div {...props}>
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
+                aria-hidden
+              />
+              <HugeiconsIcon
+                icon={Folder01Icon}
+                className={cn(EXPLORER_ICON_CLASS, "text-muted-foreground")}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                {group.unit}
+              </span>
+              <span className="relative grid shrink-0 place-items-center">
+                <span
+                  className={cn(
+                    EXPLORER_COUNT_CLASS,
+                    "col-start-1 row-start-1 transition-opacity",
+                    pinned
+                      ? "pointer-events-none opacity-0 group-hover/folder:pointer-events-auto group-hover/folder:opacity-100"
+                      : "group-hover/folder:pointer-events-none group-hover/folder:opacity-0 group-focus-within/folder:pointer-events-none group-focus-within/folder:opacity-0",
+                  )}
+                >
+                  {group.flows.length}
+                </span>
+                <span
+                  className={cn(
+                    EXPLORER_FOLDER_ACTIONS_CLASS,
+                    "pointer-events-none col-start-1 row-start-1 group-hover/folder:pointer-events-auto group-focus-within/folder:pointer-events-auto",
+                    pinned &&
+                      "pointer-events-auto opacity-100 group-hover/folder:pointer-events-none group-hover/folder:opacity-0",
+                  )}
+                >
+                  <ToolbarTip label={pinLabel}>
+                    <button
+                      type="button"
+                      aria-label={pinLabel}
+                      aria-pressed={pinned}
+                      data-slot="unit-pin"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onTogglePin();
+                      }}
+                      className={cn(EXPLORER_ICON_BUTTON_BARE_CLASS, pinned && "text-foreground")}
+                    >
+                      <HugeiconsIcon icon={PinIcon} className="size-3.5" aria-hidden />
+                    </button>
+                  </ToolbarTip>
+                </span>
+              </span>
+            </div>
+          )}
+        />
         <CollapsibleContent>
           <ul className="flex flex-col">
             {group.flows.map((f) => (
