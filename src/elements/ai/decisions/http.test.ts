@@ -11,7 +11,7 @@ import {
   parseDecisionResponse,
   resetDecisionBreakers,
 } from "./http.ts";
-import { DecisionRequestError } from "./provider.ts";
+import { DecisionOutageError, DecisionRequestError } from "./provider.ts";
 
 const request = {
   model: "typesafe/jev-1.13",
@@ -44,5 +44,107 @@ describe("decision breaker", () => {
       }),
     ).rejects.toBeInstanceOf(DecisionRequestError);
     expect(decisionBreakerOpen("openrouter-422")).toBe(false);
+  });
+
+  test("429 retries without opening the breaker", async () => {
+    resetDecisionBreakers();
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      if (calls === 1) return new Response("slow", { status: 429, headers: { "retry-after": "0" } });
+      return Response.json({ model: "jev", answers: { urgent: { noul: 0.9 } }, usage: {} });
+    };
+    const result = await decisionHttp({
+      url: "https://example.test/decisions",
+      apiKey: "test",
+      request,
+      timeoutMs: 1000,
+      breakerKey: "openrouter-429",
+      fetch: fetchImpl,
+    });
+    expect(result.model).toBe("jev");
+    expect(calls).toBe(2);
+    expect(decisionBreakerOpen("openrouter-429")).toBe(false);
+  });
+
+  test("500 counts toward the breaker and is not retried", async () => {
+    resetDecisionBreakers();
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Response("down", { status: 500 });
+    };
+    await expect(
+      decisionHttp({
+        url: "https://example.test/decisions",
+        apiKey: "test",
+        request,
+        timeoutMs: 1000,
+        breakerKey: "openrouter-500",
+        fetch: fetchImpl,
+      }),
+    ).rejects.toBeInstanceOf(DecisionOutageError);
+    expect(calls).toBe(1);
+    await decisionHttp({
+      url: "https://example.test/decisions",
+      apiKey: "test",
+      request,
+      timeoutMs: 1000,
+      breakerKey: "openrouter-500",
+      fetch: fetchImpl,
+    }).catch(() => undefined);
+    await decisionHttp({
+      url: "https://example.test/decisions",
+      apiKey: "test",
+      request,
+      timeoutMs: 1000,
+      breakerKey: "openrouter-500",
+      fetch: fetchImpl,
+    }).catch(() => undefined);
+    expect(decisionBreakerOpen("openrouter-500")).toBe(true);
+  });
+
+  test("an aborted call is not retried", async () => {
+    resetDecisionBreakers();
+    let calls = 0;
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Response("nope", { status: 429, headers: { "retry-after": "0" } });
+    };
+    await expect(
+      decisionHttp({
+        url: "https://example.test/decisions",
+        apiKey: "test",
+        request: { ...request, signal: controller.signal },
+        timeoutMs: 1000,
+        breakerKey: "openrouter-abort",
+        fetch: fetchImpl,
+      }),
+    ).rejects.toThrow();
+    expect(calls).toBeLessThanOrEqual(1);
+    expect(decisionBreakerOpen("openrouter-abort")).toBe(false);
+  });
+
+  test("invalid JSON is not retried", async () => {
+    resetDecisionBreakers();
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      return new Response("not-json", { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await expect(
+      decisionHttp({
+        url: "https://example.test/decisions",
+        apiKey: "test",
+        request,
+        timeoutMs: 1000,
+        breakerKey: "openrouter-json",
+        fetch: fetchImpl,
+      }),
+    ).rejects.toBeInstanceOf(DecisionRequestError);
+    expect(calls).toBe(1);
+    expect(decisionBreakerOpen("openrouter-json")).toBe(false);
   });
 });

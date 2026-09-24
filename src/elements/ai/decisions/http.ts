@@ -65,11 +65,37 @@ function noteSuccess(key: string): void {
   breakers.delete(key);
 }
 
-function retryAfterMs(res: Response): number {
+const REQUEST_STATUSES = new Set([400, 401, 402, 403, 404, 422]);
+
+function retryAfterMs(res: Response, now = Date.now()): number {
   const header = res.headers.get("retry-after");
-  const seconds = header === null ? Number.NaN : Number(header);
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  if (!header) return 250;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const when = Date.parse(header);
+  if (Number.isFinite(when)) return Math.max(0, when - now);
   return 250;
+}
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The operation was aborted", "AbortError");
+}
+
+async function waitForRetry(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  if (signal?.aborted) throw abortError(signal);
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError(signal!));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function usageFrom(raw: unknown): DecisionUsage {
@@ -149,42 +175,49 @@ export async function decisionHttp(options: DecisionHttpOptions): Promise<Decisi
         }),
         signal: local.signal,
       });
-      if (res.status === 401 || res.status === 402 || res.status === 422) {
+      if (REQUEST_STATUSES.has(res.status)) {
         const text = await res.text();
-        throw new DecisionRequestError(res.status, text.slice(0, 500));
+        throw new DecisionRequestError(
+          res.status as 400 | 401 | 402 | 403 | 404 | 422,
+          text.slice(0, 500),
+        );
       }
-      if (res.status === 429 || res.status === 529) {
-        noteFailure(options.breakerKey, Date.now());
+      if (res.status === 429) {
         lastError = new Error(`decision HTTP ${res.status}`);
         if (attempt < attempts) {
-          await new Promise((resolve) => setTimeout(resolve, retryAfterMs(res)));
+          await waitForRetry(retryAfterMs(res), parent);
           continue;
         }
         throw new DecisionOutageError(`decision HTTP ${res.status}`);
       }
-      if (res.status >= 500) {
+      if (res.status === 529 || res.status >= 500) {
         noteFailure(options.breakerKey, Date.now());
         lastError = new Error(`decision HTTP ${res.status}`);
-        if (attempt < attempts) continue;
+        if (res.status === 529 && attempt < attempts) {
+          await waitForRetry(retryAfterMs(res), parent);
+          continue;
+        }
         throw new DecisionOutageError(`decision HTTP ${res.status}`);
       }
       if (!res.ok) {
-        noteFailure(options.breakerKey, Date.now());
         throw new DecisionOutageError(`decision HTTP ${res.status}`);
       }
-      const parsed = parseDecisionResponse(await res.json());
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch {
+        throw new DecisionRequestError(422, "decision response was not JSON");
+      }
+      const parsed = parseDecisionResponse(body);
       noteSuccess(options.breakerKey);
       return parsed;
     } catch (err) {
+      if (parent?.aborted) throw abortError(parent);
       if (err instanceof DecisionRequestError) throw err;
       if (err instanceof DecisionOutageError) throw err;
       noteFailure(options.breakerKey, Date.now());
       lastError = err;
-      if (attempt >= attempts) {
-        throw new DecisionOutageError(
-          err instanceof Error ? err.message : "decision transport failed",
-        );
-      }
+      throw new DecisionOutageError(err instanceof Error ? err.message : "decision transport failed");
     } finally {
       clearTimeout(timer);
       parent?.removeEventListener("abort", onParent);
