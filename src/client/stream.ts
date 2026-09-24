@@ -5,14 +5,37 @@
  */
 
 import { iterateSseFrames, sseError } from "./sse.ts";
-import type { ClientFetch, ClientOptions } from "./types.ts";
+import type { ClientFetch, ClientOptions, ClientRouteMap } from "./types.ts";
 import {
   applyAuthHeader,
   applyHeaderBag,
   interpolatePath,
+  methodAndPath,
   resolveHeaders,
   toQuery,
+  walkContracts,
 } from "./wire.ts";
+
+/** Flow id → REST route for stream-only (non-live) SSE. */
+export type StreamByFlow = Readonly<
+  Record<string, { readonly method: string; readonly path: string }>
+>;
+
+/**
+ * Collect `stream: true` routes that are not live exposures.
+ *
+ * @param $routes - Runtime route map
+ */
+export function flattenStreamRoutes($routes: ClientRouteMap | undefined): StreamByFlow {
+  const out: Record<string, { readonly method: string; readonly path: string }> = {};
+  walkContracts($routes, (unit, flow, contract) => {
+    if (!("stream" in contract) || contract.stream !== true) return;
+    if ("live" in contract && typeof contract.live === "string") return;
+    const route = methodAndPath(contract);
+    if (route) out[`${unit}.${flow}`] = route;
+  });
+  return out;
+}
 
 /**
  * Open a one-shot SSE stream (no auto-resubscribe).

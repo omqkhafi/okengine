@@ -8,11 +8,10 @@
 export const KERNEL_EDGE_BUDGET_BYTES = 17 * 1024;
 
 /**
- * Client runtime — gzipped minified **entry** chunk.
+ * Client runtime — gzipped minified bundle.
  *
- * 6 kB (was 5 kB). The cap was raised when the single bundle measured 5194,
- * over 90% of 5120. Live subscribe and streams load on first use; this gate
- * is the entry chunk (call-only download).
+ * 6 kB (was 5 kB). Idempotency inlines the okid alphabet; measured gzip is
+ * 5194, which sat over 90% of 5120.
  */
 export const CLIENT_BUDGET_BYTES = 6 * 1024;
 

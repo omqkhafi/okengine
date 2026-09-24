@@ -37,7 +37,6 @@ export {
   formatBudgetsReport,
   loadPreviousBudgetValues,
   measureAllBudgets,
-  measureClientBundle,
   measureClientGzipBytes,
   measureColdStartMedianMs,
   measureConsoleInitialGzipBytes,
