@@ -346,9 +346,29 @@ async function decodeBinary(res: Response, mode: "blob" | "arrayBuffer"): Promis
   return stampReplay({ data, error: null }, res);
 }
 
-/** 21-char key. `randomUUID` stays smaller than pulling the okid alphabet. */
-function mintIdempotencyKey(): string {
-  return crypto.randomUUID().replaceAll("-", "").slice(0, 21);
+/**
+ * Default `okid()` alphabet, inlined.
+ *
+ * Same 64-character Base64URL order as {@link OKID_ALPHABET}. Importing
+ * `okid` would pull `lazyRequire` and every alphabet constant into the client.
+ */
+export const IDEMPOTENCY_KEY_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/**
+ * 21-char key from `crypto.getRandomValues`.
+ *
+ * `getRandomValues` works on plain HTTP. When `crypto` is missing entirely,
+ * returns `undefined` so the call sends no key and runs once.
+ */
+export function mintIdempotencyKey(): string | undefined {
+  const webCrypto = globalThis.crypto;
+  if (webCrypto?.getRandomValues === undefined) return undefined;
+  const bytes = new Uint8Array(21);
+  webCrypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < 21; i++) out += IDEMPOTENCY_KEY_ALPHABET[bytes[i]! & 63]!;
+  return out;
 }
 
 /**

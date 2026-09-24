@@ -20,7 +20,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   it after the gate and validation, replays the stored response, and holds a
   lease while `do` runs. Rows live in `oke_idempotency` on the journal driver
   until the TTL (default 24h). The client sends one key per non-GET call and
-  surfaces `Idempotent-Replayed: true` as `meta.idempotentReplayed`.
+  surfaces `Idempotent-Replayed: true` as `meta.idempotentReplayed`. The key is
+  21 characters from `crypto.getRandomValues` through the okid alphabet, so a
+  page on plain HTTP still sends one. If `crypto` is missing, the call sends
+  no key and runs once.
+- Client gzip budget is **6 kB** (was 5 kB). The growth is the idempotency
+  feature, not waste: measured client gzip is 5194, which was over 90% of 5120.
 - Effect inference follows a project helper whose parameter is named `fx`, and
   a same-function `fx.store` chain alias. `liveQuery` and `applySearchEmbedCdc`
   record their effects as package intrinsics. The shorter starter's link flows

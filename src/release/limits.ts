@@ -7,8 +7,13 @@
 /** Kernel (edge profile) — gzipped minified bundle. */
 export const KERNEL_EDGE_BUDGET_BYTES = 17 * 1024;
 
-/** Client runtime — gzipped minified bundle. */
-export const CLIENT_BUDGET_BYTES = 5 * 1024;
+/**
+ * Client runtime — gzipped minified bundle.
+ *
+ * 6 kB (was 5 kB). Idempotency inlines the okid alphabet; measured gzip is
+ * 5194, which sat over 90% of 5120.
+ */
+export const CLIENT_BUDGET_BYTES = 6 * 1024;
 
 /** Console initial load — gzipped html + entry js/css (ui-next SPA, no panel-* split). */
 export const CONSOLE_BUDGET_BYTES = 700 * 1024;

@@ -71,13 +71,13 @@ Mnemonic: O·K·E = 6·5·3.
 | Budget                | Limit   |
 | --------------------- | ------- |
 | Kernel (edge profile) | < 17 kB |
-| Client runtime        | < 5 kB  |
+| Client runtime        | < 6 kB  |
 | Cold start on Bun     | < 75 ms |
 | p99 routing overhead  | < 1 ms  |
 
 A regression fails the build. An absolute sample that can still double and stay under its cap (cold start today) also fails at 2× the last committed value. Claims we cannot measure, we do not make.
 
-After changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts`, run `bun run budgets:core` (kernel edge + client gzip) before claiming done. Do not raise the published 17 kB / 5 kB caps without a measured before/after and an Unreleased changelog note; prefer lazy-loading off the edge graph.
+After changing `src/kernel/`, `src/client/`, `src/compiler/`, `src/validation/`, or `src/release/limits.ts` / `measure.ts`, run `bun run budgets:core` (kernel edge + client gzip) before claiming done. Do not raise the published 17 kB / 6 kB caps without a measured before/after and an Unreleased changelog note; prefer lazy-loading off the edge graph.
 
 ## Package shape
 

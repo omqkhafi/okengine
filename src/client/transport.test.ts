@@ -3,7 +3,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { OKID_ALPHABET } from "../okid-shared.ts";
 import { createClient } from "./create.ts";
+import { IDEMPOTENCY_KEY_ALPHABET } from "./transport.ts";
 import type { AppOf } from "./types.ts";
 
 type PingApp = AppOf<{
@@ -135,6 +137,36 @@ describe("transport — retry", () => {
     keys.length = 0;
     await api.sys.ping({ idempotencyKey: "form-key-0123456789" });
     expect(keys).toEqual(["form-key-0123456789"]);
+  });
+
+  test("inlined idempotency alphabet matches OKID_ALPHABET", () => {
+    expect(IDEMPOTENCY_KEY_ALPHABET).toBe(OKID_ALPHABET);
+    expect(IDEMPOTENCY_KEY_ALPHABET).toHaveLength(64);
+  });
+
+  test("missing crypto sends no idempotency key", async () => {
+    const original = globalThis.crypto;
+    Object.defineProperty(globalThis, "crypto", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      const api = createClient<PingApp>("http://app.test", {
+        fetch: async (_input, init) => {
+          expect(new Headers(init?.headers).get("idempotency-key")).toBeNull();
+          return Response.json({ data: { ok: true }, error: null });
+        },
+      });
+      const { error } = await api.sys.ping();
+      expect(error).toBeNull();
+    } finally {
+      Object.defineProperty(globalThis, "crypto", {
+        value: original,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 
   test("GET sends no idempotency key", async () => {

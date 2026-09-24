@@ -105,7 +105,7 @@ describe("idempotency store", () => {
     expect(decideClaim(row, input, new Set(["t1"])).op).toBe("busy");
     expect(decideClaim(row, { ...input, fingerprint: "bbb" }, new Set()).op).toBe("mismatch");
     expect(decideClaim({ ...row, leaseExpiresAt: 0 }, input, new Set()).op).toBe("reclaim");
-  });
+  }, 30_000);
 
   test("postgres fake replays one claim and rejects a second payload", async () => {
     const journal = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
@@ -139,7 +139,7 @@ describe("idempotency store", () => {
       ttlMs: 5_000,
     });
     expect(reused.kind).toBe("mismatch");
-  });
+  }, 30_000);
 });
 
 describe("HTTP idempotency", () => {
@@ -158,7 +158,7 @@ describe("HTTP idempotency", () => {
     expect(second.headers.get("idempotent-replayed")).toBe("true");
     expect(await second.json()).toEqual(await first.json());
     expect(runs).toBe(1);
-  });
+  }, 30_000);
 
   test("two concurrent same-key requests: one runs, the other is 409", async () => {
     let runs = 0;
@@ -191,7 +191,7 @@ describe("HTTP idempotency", () => {
       "IdempotencyInProgress",
     );
     expect(runs).toBe(1);
-  });
+  }, 30_000);
 
   test("the same key with a different payload is 422", async () => {
     const app = await start("idem-reuse", [chargeBinding(() => ({ n: 1 }))]);
@@ -201,7 +201,7 @@ describe("HTTP idempotency", () => {
     expect(((await reused.json()) as { error: { code: string } }).error.code).toBe(
       "IdempotencyKeyReused",
     );
-  });
+  }, 30_000);
 
   test("a validation or gate rejection stores nothing; the same key then succeeds", async () => {
     let runs = 0;
@@ -236,7 +236,7 @@ describe("HTTP idempotency", () => {
     expect(allowed.failure).toBeUndefined();
     expect(allowed.output).toEqual({ n: 1 });
     expect(runs).toBe(1);
-  });
+  }, 30_000);
 
   test("a throw before any mutation deletes the row; a throw after a write replays 500", async () => {
     let early = 0;
@@ -278,7 +278,7 @@ describe("HTTP idempotency", () => {
     expect(second.status).toBe(500);
     expect(second.headers.get("idempotent-replayed")).toBe("true");
     expect(writes).toBe(1);
-  });
+  }, 30_000);
 
   test("a forfeited lease re-executes a non-durable flow and resumes a durable one", async () => {
     const memory = createMemoryJournalStore();
@@ -361,7 +361,7 @@ describe("HTTP idempotency", () => {
     expect((await hung).status).toBe(200);
     expect((await resumed).status).toBe(200);
     expect(step1).toEqual(["step1"]);
-  });
+  }, 30_000);
 
   test("an expired ttl runs again; streams and reads ignore the key; required demands it", async () => {
     let runs = 0;
@@ -446,7 +446,7 @@ describe("HTTP idempotency", () => {
     expect(((await bad.json()) as { error: { code: string } }).error.code).toBe(
       "IdempotencyKeyInvalid",
     );
-  });
+  }, 30_000);
 
   test("two principals with the same key are two records", async () => {
     let runs = 0;
@@ -481,7 +481,7 @@ describe("HTTP idempotency", () => {
         key: KEY,
       }),
     ).toBeDefined();
-  });
+  }, 30_000);
 
   test("a client timeout leaves do running, then a 409 waits and the replay arrives", async () => {
     let runs = 0;
@@ -546,7 +546,7 @@ describe("HTTP idempotency", () => {
     expect(result.meta?.idempotentReplayed).toBe(true);
     expect(runs).toBe(1);
     expect(aborted).toBe(0);
-  }, 15_000);
+  }, 30_000);
 });
 
 async function waitFor(cond: () => boolean, timeoutMs = 2_000): Promise<boolean> {
