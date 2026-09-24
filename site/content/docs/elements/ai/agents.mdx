@@ -77,9 +77,8 @@ when inference does not see `fx.run`.
 <Step>
 ### Bound termination
 
-Default `maxSteps` is **6** when omitted. Hitting the step cap ends the loop; exceeding
-`budget.maxCostPerRun` throws `AiBudgetExceededError`:
-`ai: agent "…" exceeded maxCostPerRun N`.
+Default `maxSteps` is **6** when omitted. Hitting the step cap ends the loop. Spending
+`budget.maxCostPerRun` stops the loop and `fx.run` returns the steps already finished.
 
 </Step>
 
@@ -195,8 +194,9 @@ Both default `maxSteps` to `6`. Denied or unknown tools surface as
   `oke()`.
 </Accordion>
 
-<Accordion title='ai: agent "…" exceeded maxCostPerRun'>
-  `AiBudgetExceededError` — raise `budget.maxCostPerRun`, lower `maxSteps`, or shrink tools.
+<Accordion title="The agent stopped before it finished">
+  `fx.run` returns the partial trail when `budget.maxCostPerRun` is spent. It does not throw.
+  Raise the budget, lower `maxSteps`, or shrink the tool bag.
 </Accordion>
 
 <Accordion title='ai: model requested unknown tool "…"'>

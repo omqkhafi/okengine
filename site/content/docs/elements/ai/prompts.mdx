@@ -128,8 +128,8 @@ smart.prompt("ticket-triage", {
 });
 ```
 
-`maxCostPerRun` on a prompt budget is reserved for multi-step asks; agents use
-`budget.maxCostPerRun` on `ai.agent`.
+A tool-less ask still throws `AiBudgetExceededError` at `maxCostPerCall`. An agent run
+returns the partial result when `budget.maxCostPerRun` is spent.
 
 </Tab>
 

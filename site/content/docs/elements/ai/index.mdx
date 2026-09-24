@@ -299,8 +299,8 @@ Compose does not pin inference — BYO URL + keys, or [OpenRouter](/docs/recipes
 </Accordion>
 
 <Accordion title="AiBudgetExceededError">
-  Cause: `ai: prompt "…" exceeded maxCostPerCall N` or `ai: agent "…" exceeded maxCostPerRun N`.
-  Raise the budget or shrink the work.
+  Cause: `ai: prompt "…" exceeded maxCostPerCall N`. A tool-less `fx.ask` throws
+  `AiBudgetExceededError`. `fx.run` returns the partial result when the agent budget is spent.
 </Accordion>
 
 <Accordion title="build failed: … without allowPii">

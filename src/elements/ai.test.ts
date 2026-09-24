@@ -191,6 +191,92 @@ describe("pii to third-party model fails the build", () => {
   });
 });
 
+describe("agent maxCostPerRun", () => {
+  test("a model call over the cap is the last call and the run resolves", async () => {
+    let calls = 0;
+    const agent = ai.agent("budget-agent", {
+      model: "smart",
+      tools: ["orders.get"],
+      maxSteps: 4,
+      budget: { maxCostPerRun: 0.5 },
+    });
+    const called: string[] = [];
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            calls++;
+            return {
+              text: "",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              usage: { cost: 0.8 },
+              toolCalls: [{ id: "c1", name: "orders.get", arguments: {} }],
+            };
+          },
+        },
+      },
+      callFlow: async (name) => {
+        called.push(name);
+        return { ok: true };
+      },
+    });
+    const result = await runtime.runAgent("budget-agent", { message: "look up" });
+    expect(calls).toBe(1);
+    expect(called).toEqual([]);
+    expect(result.ok).toBe(false);
+    expect(result.cost).toBe(0.8);
+  });
+
+  test("tools run while under the cap, and the loop stops once a later call crosses it", async () => {
+    let calls = 0;
+    const agent = ai.agent("budget-round", {
+      model: "smart",
+      tools: ["orders.get"],
+      maxSteps: 4,
+      budget: { maxCostPerRun: 0.5 },
+    });
+    const called: string[] = [];
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            calls++;
+            return {
+              text: calls === 1 ? "" : "done",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              usage: { cost: calls === 1 ? 0.4 : 0.4 },
+              ...(calls === 1
+                ? { toolCalls: [{ id: "c1", name: "orders.get", arguments: {} }] }
+                : {}),
+            };
+          },
+        },
+      },
+      callFlow: async (name) => {
+        called.push(name);
+        return { ok: true };
+      },
+    });
+    const result = await runtime.runAgent("budget-round", { message: "look up" });
+    expect(called).toEqual(["orders.get"]);
+    expect(calls).toBe(2);
+    expect(result.ok).toBe(false);
+    expect(result.cost).toBeCloseTo(0.8);
+  });
+});
+
 describe("journaling forced · auto-cache disabled", () => {
   test("identical asks both reach the model and both are journaled", async () => {
     let calls = 0;

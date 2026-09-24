@@ -40,6 +40,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
+  result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
 - Repeated identical `fx.ask` calls outside a durable run reach the model. Replay
   stays on that run's journal. Console keeps the newest 500 ask journal entries
   and agent runs.

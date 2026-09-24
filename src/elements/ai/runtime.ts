@@ -593,6 +593,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly messages: AiMessage[];
     readonly tools: readonly string[];
     readonly maxSteps: number;
+    /** Stop before the next model call once accumulated cost reaches this cap. */
+    readonly maxCostPerRun?: number;
     readonly agentLabel: string;
     readonly responseFormat?: unknown;
     readonly signal?: AbortSignal;
@@ -609,6 +611,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly denials: AgentDenial[];
     readonly steps: number;
     readonly cost: number;
+    readonly budgetExceeded: boolean;
     readonly inputTokens?: number;
     readonly outputTokens?: number;
   }> {
@@ -623,13 +626,34 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     const runDenials: AgentDenial[] = [];
     let steps = 0;
     let cost = 0;
+    let budgetExceeded = false;
     const tokens: { inputTokens?: number; outputTokens?: number } = {};
     let lastText = "";
     let lastRaw: unknown = {};
     let lastToolResult: unknown;
 
+    const capHit = (): boolean =>
+      opts.maxCostPerRun !== undefined && cost >= opts.maxCostPerRun;
+
+    const finish = () => ({
+      output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+      text: lastText,
+      raw: lastRaw,
+      lastToolResult,
+      trail,
+      denials: runDenials,
+      steps,
+      cost,
+      budgetExceeded,
+      ...tokenFields(tokens),
+    });
+
     const providerModel = wireModel(opts.modelName, opts.client);
     while (steps < opts.maxSteps) {
+      if (capHit()) {
+        budgetExceeded = true;
+        return finish();
+      }
       const result = await opts.client.complete({
         model: providerModel,
         messages,
@@ -644,20 +668,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       addUsageTokens(tokens, result.usage);
       lastText = result.text;
       lastRaw = result.raw !== undefined ? result.raw : result.text;
+      if (capHit()) {
+        budgetExceeded = true;
+        return finish();
+      }
 
       const toolCalls = result.toolCalls;
       if (!toolCalls || toolCalls.length === 0) {
-        return {
-          output: lastToolResult !== undefined ? lastToolResult : lastRaw,
-          text: lastText,
-          raw: lastRaw,
-          lastToolResult,
-          trail,
-          denials: runDenials,
-          steps,
-          cost,
-          ...tokenFields(tokens),
-        };
+        return finish();
       }
 
       messages.push({
@@ -689,20 +707,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           toolCallId: tc.id,
           name: tc.name,
         });
+        if (capHit()) {
+          budgetExceeded = true;
+          return finish();
+        }
       }
     }
 
-    return {
-      output: lastToolResult !== undefined ? lastToolResult : lastRaw,
-      text: lastText,
-      raw: lastRaw,
-      lastToolResult,
-      trail,
-      denials: runDenials,
-      steps,
-      cost,
-      ...tokenFields(tokens),
-    };
+    return finish();
   }
 
   const runtime: AiRuntime = {
@@ -961,6 +973,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
         tools: decl.tools,
         maxSteps,
+        ...(decl.budget?.maxCostPerRun !== undefined
+          ? { maxCostPerRun: decl.budget.maxCostPerRun }
+          : {}),
         agentLabel: agent,
         callTool: runOpts.callTool,
         auth: runOpts.auth,
@@ -968,18 +983,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         meta: runOpts.meta,
         signal: currentAbortSignal(),
       });
-      const runCap = decl.budget?.maxCostPerRun;
-      if (runCap !== undefined && loop.cost > runCap) {
-        const err = new Error(`ai: agent "${agent}" exceeded maxCostPerRun ${runCap}`);
-        err.name = "AiBudgetExceededError";
-        throw err;
-      }
 
       const record: AgentRunRecord = {
         id: `agent-run-${++runSeq}`,
         agent,
         message: runOpts.message,
-        ok: loop.denials.length === 0,
+        ok: loop.denials.length === 0 && !loop.budgetExceeded,
         steps: loop.steps,
         trail: loop.trail,
         denials: loop.denials,
