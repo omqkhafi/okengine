@@ -58,7 +58,7 @@ Response:
 <Callout title="Omit path and name">
   Tree default: `http.get()` and `flow({ do })` — no path or name strings. The
   file stamps both. Pass either only for
-  [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
+  [control](/docs/understand/routing#when-to-omit--when-to-pass).
 </Callout>
 
 ## Progressive Patterns
@@ -180,7 +180,7 @@ export const deleteAccount = on(
 ## Path Conventions
 
 **Default — omit the path.** Tree files stamp the URL from disk (`http.get()`).
-Pass a path only for [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
+Pass a path only for [control](/docs/understand/routing#when-to-omit--when-to-pass).
 
 **Control — explicit path** — pass the URL template when the folder should not own the route:
 
@@ -197,7 +197,7 @@ import { on, flow, http } from "okengine";
 export const get = on(http.get(), flow({ do: async ({ id }) => ({ id }) }));
 ```
 
-Full file-tree rules: [Routing](/docs/elements/flow/routing).
+Full file-tree rules: [Routing](/docs/understand/routing).
 
 ## Request Parsing
 
@@ -268,7 +268,7 @@ export const create = on(
 ## HTTP Methods
 
 Each verb binds with `on(http.<method>(), flow({…}))`. Omit the path on tree
-files; pass one only for [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
+files; pass one only for [control](/docs/understand/routing#when-to-omit--when-to-pass).
 
 <Tabs items={["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY", "HEAD", "OPTIONS"]}>
 

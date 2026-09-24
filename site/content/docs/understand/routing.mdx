@@ -588,28 +588,29 @@ plus a handwritten `http.get("/links")`.
 
 ## Learn more
 
+- [The Architecture](/docs/understand/the-architecture) — derived routes, no hand-written table
+- [Try it](/docs/understand/try-it) — scaffold, run, and hit a stamped path
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, `http.resource`, live SSE
 - [Client](/docs/client/calling) — `api.links.get`, REST vs RPC, `$routes`
 - [Errors](/docs/reference/errors) — OKE1040 · OKE1030 · OKE1041 · OKE1045 · OKE1070 · OKE1072
-- [The Architecture](/docs/understand/the-architecture) — derived routes, no hand-written table
 - [Gate](/docs/elements/gate) — `.gate(...)` / `.public()` on the same trigger
 
 ## Next
 
 <Cards>
   <Card
+    title="The Architecture"
+    description="One law, eight elements, derived Manifest — where routes come from."
+    href="/docs/understand/the-architecture"
+  />
+  <Card
+    title="Try it"
+    description="Scaffold shorter, run oke dev, and call a stamped path."
+    href="/docs/understand/try-it"
+  />
+  <Card
     title="HTTP"
     description="REST verbs, RFC 10008 QUERY, CRUD mounts, and live SSE on Flow."
     href="/docs/elements/flow/http"
-  />
-  <Card
-    title="Client"
-    description="Typed caller — createClient, envelopes, REST from $routes."
-    href="/docs/client/calling"
-  />
-  <Card
-    title="Consumers"
-    description="Signal workers, named Clock jobs, and SQL CDC — one Flow species."
-    href="/docs/elements/flow/consumers"
   />
 </Cards>

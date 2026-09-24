@@ -61,7 +61,7 @@ Response:
 <Callout title="Omit path and name">
   Tree default: `http.get()` + `flow({ do })` — no path or name strings. Pass
   either only for
-  [control](/docs/elements/flow/routing#when-to-omit--when-to-pass).
+  [control](/docs/understand/routing#when-to-omit--when-to-pass).
 </Callout>
 
 <Callout title="Call-only Flows">
@@ -200,7 +200,7 @@ const { chargeId } = await fx.call(chargeCard, { amount: 50 });
   <Card
     title="Routing"
     description="File-tree stamps for HTTP paths, Flow names, and client units."
-    href="/docs/elements/flow/routing"
+    href="/docs/understand/routing"
   />
   <Card
     title="Consumers"
@@ -592,7 +592,7 @@ Default is `true` once `gate.auth.tenant` is on.
 
 - [The Architecture](/docs/understand/the-architecture) — `on`, trigger, `flow`, `do`, `fx`
 - [HTTP](/docs/elements/flow/http) — verbs, envelopes, resources, live SSE
-- [Routing](/docs/elements/flow/routing) — file-tree stamps, barrels, OKE1030 · OKE1040–1045
+- [Routing](/docs/understand/routing) — file-tree stamps, barrels, OKE1030 · OKE1040–1045
 - [Consumers](/docs/elements/flow/consumers) — Signal / Clock / CDC
 - [Workflows](/docs/elements/flow/workflows) — `durable: true` + `fx.step`
 - [fx](/docs/reference/fx) — every method inside `do`

@@ -7,10 +7,9 @@
 import { BUDGETS_MEASURED_AT, budgetById, formatValueLanding } from "@/lib/budgets";
 import { OKE_VERSION } from "@/lib/elements";
 
-/** Core budgets worth a hero line — the three a reader can feel. */
+/** Core budgets worth a hero line — cold start and routing, felt not weighed. */
 const MEASURED: ReadonlyArray<{ readonly id: string; readonly label: string }> = [
   { id: "coldStartMedianMs", label: "cold start" },
-  { id: "clientGzipBytes", label: "client" },
   { id: "routingP99Ms", label: "routing p99" },
 ];
 

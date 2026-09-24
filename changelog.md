@@ -12,6 +12,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+#### Docs
+
+- Landing hero rail no longer shows the client gzip cell — cold start and
+  routing p99 stay; package size stays in budgets / CI, not the stage strip.
+- [Routing](/docs/understand/routing) moved from Flow into Understand
+  (Architecture → Routing → Try it).
+
 ## v0.22.0 — 2026-09-24
 
 ### ✨ Added

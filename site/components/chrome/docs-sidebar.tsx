@@ -232,7 +232,7 @@ function GroupBody({
 /**
  * Unwraps intermediate grouping folders:
  * - `Start`: renders flat as top-level links at the head of the sidebar.
- * - `Understand`: renders flat under `01 UNDERSTAND` (The Problem through Try It).
+ * - `Understand`: renders flat under `01 UNDERSTAND` (Architecture, Routing, Try It).
  * - `Elements`: each element (`Flow`, `Signal`, `Store`, etc.) becomes an accordion
  *   under `02 ELEMENTS`, omitting the redundant /docs/elements landing page.
  * - `Client`: renders flat under `04 CLIENT` (Overview, Calling, Auth, Live, React).

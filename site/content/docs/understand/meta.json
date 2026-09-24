@@ -1,5 +1,5 @@
 {
   "title": "Understand",
   "icon": "Compass",
-  "pages": ["the-architecture", "try-it"]
+  "pages": ["the-architecture", "routing", "try-it"]
 }
