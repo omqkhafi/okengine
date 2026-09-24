@@ -3,16 +3,38 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { __setLiveChunkLoaderForTests, __setStreamChunkLoaderForTests } from "./chunks.ts";
 import { createClient } from "./create.ts";
 import * as client from "./index.ts";
 import {
   LIVE_RESUBSCRIBE_INITIAL_MS,
   LIVE_RESUBSCRIBE_MAX_MS,
   nextResubscribeDelay,
-  pickLiveExposure,
-  type LiveExposure,
 } from "./live.ts";
+import { pickLiveExposure, type LiveExposure } from "./route-tables.ts";
 import type { AppOf } from "./types.ts";
+
+type NotesGetApp = AppOf<{
+  notes: {
+    get: {
+      in: { id: string };
+      out: { ok: boolean };
+      method: "GET";
+      path: "/notes/:id";
+    };
+  };
+}>;
+
+type NotesTailApp = AppOf<{
+  notes: {
+    tail: {
+      out: { n: number };
+      method: "GET";
+      path: "/notes/tail";
+      stream: true;
+    };
+  };
+}>;
 
 type EventsApp = AppOf<{
   orders: {
@@ -410,6 +432,81 @@ describe("createClient — live", () => {
     await waitFor(() => seen.length === 1);
     expect(seen).toEqual([{ orderId: "ord_1", status: "placed" }]);
     stop();
+  });
+
+  test("unsubscribe before the live chunk loads does not open a request", async () => {
+    let calls = 0;
+    let release!: (mod: Awaited<typeof import("./live.ts")>) => void;
+    const gate = new Promise<Awaited<typeof import("./live.ts")>>((resolve) => {
+      release = resolve;
+    });
+    __setLiveChunkLoaderForTests(() => gate);
+    try {
+      const api = createClient<EventsApp>("http://app.test", {
+        fetch: async () => {
+          calls += 1;
+          return sseResponse([]);
+        },
+        $routes: {
+          orders: {
+            events: {
+              method: "GET",
+              path: "/orders/:orderId/events",
+              live: "order-status",
+              matchKey: ["orderId"],
+              stream: true,
+            },
+          },
+        },
+      });
+      const stop = api.live(orderStatus, { orderId: "ord_1" }, { onEvent: () => undefined });
+      stop();
+      release(await import("./live.ts"));
+      await new Promise((r) => setTimeout(r, 30));
+      expect(calls).toBe(0);
+    } finally {
+      __setLiveChunkLoaderForTests(null);
+    }
+  });
+
+  test("a plain call does not load the live or stream chunks", async () => {
+    let liveLoads = 0;
+    let streamLoads = 0;
+    __setLiveChunkLoaderForTests(() => {
+      liveLoads += 1;
+      return import("./live.ts");
+    });
+    __setStreamChunkLoaderForTests(() => {
+      streamLoads += 1;
+      return import("./stream.ts");
+    });
+    try {
+      const api = createClient<NotesGetApp>("http://app.test", {
+        fetch: async () => Response.json({ data: { ok: true }, error: null }),
+        $routes: {
+          notes: { get: { method: "GET", path: "/notes/:id" } },
+        },
+      });
+      const result = await api.notes.get({ id: "n_1" });
+      expect(result.error).toBeNull();
+      expect(liveLoads).toBe(0);
+      expect(streamLoads).toBe(0);
+    } finally {
+      __setLiveChunkLoaderForTests(null);
+      __setStreamChunkLoaderForTests(null);
+    }
+  });
+
+  test("finite stream yields events", async () => {
+    const api = createClient<NotesTailApp>("http://app.test", {
+      fetch: async () => sseResponse([{ n: 1 }, { n: 2 }]),
+      $routes: {
+        notes: { tail: { method: "GET", path: "/notes/tail", stream: true } },
+      },
+    });
+    const seen: unknown[] = [];
+    for await (const event of api.notes.tail()) seen.push(event);
+    expect(seen).toEqual([{ n: 1 }, { n: 2 }]);
   });
 });
 

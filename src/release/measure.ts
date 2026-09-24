@@ -308,24 +308,58 @@ process.stdout.write(String(Bun.gzipSync(new Uint8Array(raw)).byteLength));
   return n;
 }
 
+/** Gzip of the client entry chunk and of every JS chunk together. */
+export interface ClientBundleGzip {
+  /** Entry chunk — what a call-only app downloads. Gated by {@link CLIENT_BUDGET_BYTES}. */
+  readonly entryGzipBytes: number;
+  /** Entry plus lazy live/stream chunks. Recorded so total growth stays visible. */
+  readonly fullGzipBytes: number;
+  /** Minified entry source, to assert live/stream code is not in the first download. */
+  readonly entrySource: string;
+}
+
 /**
- * Gzip size of the client runtime bundle.
+ * Build the client budget entry with code splitting.
+ *
+ * The entry chunk is the call path. `subscribeLive` and `openStream` are
+ * separate chunks loaded on first use.
  */
-export async function measureClientGzipBytes(): Promise<number> {
+export async function measureClientBundle(): Promise<ClientBundleGzip> {
   const entry = `${import.meta.dir}/../client/budget-entry.ts`;
   const result = await Bun.build({
     entrypoints: [entry],
     minify: true,
     target: "browser",
     format: "esm",
+    splitting: true,
   });
   if (!result.success) {
     throw new Error(`client build failed:\n${result.logs.map(String).join("\n")}`);
   }
-  const artifact = result.outputs[0];
-  if (!artifact) throw new Error("client build produced no output");
-  const raw = await artifact.arrayBuffer();
-  return Bun.gzipSync(new Uint8Array(raw)).byteLength;
+  const entryArtifact = result.outputs.find((output) => output.kind === "entry-point");
+  if (!entryArtifact) throw new Error("client build produced no entry chunk");
+  const entryRaw = new Uint8Array(await entryArtifact.arrayBuffer());
+  const entryGzipBytes = Bun.gzipSync(entryRaw).byteLength;
+  let fullGzipBytes = 0;
+  for (const artifact of result.outputs) {
+    if (artifact.kind !== "entry-point" && artifact.kind !== "chunk") continue;
+    const raw = new Uint8Array(await artifact.arrayBuffer());
+    if (raw.byteLength === 0) continue;
+    fullGzipBytes += Bun.gzipSync(raw).byteLength;
+  }
+  if (fullGzipBytes <= 0) throw new Error("client build produced no JS output");
+  return {
+    entryGzipBytes,
+    fullGzipBytes,
+    entrySource: new TextDecoder().decode(entryRaw),
+  };
+}
+
+/**
+ * Gzip size of the client entry chunk (live and stream excluded).
+ */
+export async function measureClientGzipBytes(): Promise<number> {
+  return (await measureClientBundle()).entryGzipBytes;
 }
 
 /**
@@ -611,13 +645,12 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
     "ms",
   );
   const coldStartMedianMs = await measureColdStartMedianMs(coldCeiling ?? COLD_START_BUDGET_MS);
-  const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes, httpPing] =
-    await Promise.all([
-      measureKernelEdgeGzipBytes(),
-      measureClientGzipBytes(),
-      measureConsoleInitialGzipBytes(),
-      measureHttpPingAppBytes(),
-    ]);
+  const [kernelEdgeGzipBytes, clientBundle, consoleInitialGzipBytes, httpPing] = await Promise.all([
+    measureKernelEdgeGzipBytes(),
+    measureClientBundle(),
+    measureConsoleInitialGzipBytes(),
+    measureHttpPingAppBytes(),
+  ]);
   const routingP99Ms = measureRoutingP99Ms();
 
   const budgets: BudgetSample[] = [
@@ -634,11 +667,18 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
     sample(
       "clientGzipBytes",
       "Client runtime",
-      clientGzipBytes,
+      clientBundle.entryGzipBytes,
       CLIENT_BUDGET_BYTES,
       "bytes",
       "absolute",
       "core",
+      previous,
+    ),
+    regressionSample(
+      "clientFullGzipBytes",
+      "Client runtime (full, with live/stream)",
+      "core",
+      clientBundle.fullGzipBytes,
       previous,
     ),
     sample(

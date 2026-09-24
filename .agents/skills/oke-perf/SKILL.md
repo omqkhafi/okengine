@@ -87,7 +87,8 @@ Bisect with the **one probe** for that id, not `bun run budgets`. `git bisect ru
 | --- | --- |
 | `coldStartMedianMs` | `measureColdStartMedianMs` from `src/release/measure.ts` |
 | `kernelEdgeGzipBytes` | `measureKernelEdgeGzipBytes` |
-| `clientGzipBytes` | `measureClientGzipBytes` |
+| `clientGzipBytes` | `measureClientGzipBytes` (entry chunk) |
+| `clientFullGzipBytes` | `measureClientBundle` → `fullGzipBytes` |
 | `consoleInitialGzipBytes` | `measureConsoleInitialGzipBytes` |
 | `routingP99Ms` | `measureRoutingP99Ms` |
 | `httpPingGzipBytes` / `httpPingRawBytes` | `measureHttpPingAppBytes` |

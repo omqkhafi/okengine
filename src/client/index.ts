@@ -6,13 +6,11 @@
  */
 
 export {
-  flattenLiveRoutes,
-  isLiveHandlers,
   LIVE_RESUBSCRIBE_INITIAL_MS,
   LIVE_RESUBSCRIBE_MAX_MS,
   nextResubscribeDelay,
-  pickLiveExposure,
 } from "./live.ts";
+export { flattenLiveRoutes, isLiveHandlers, pickLiveExposure } from "./route-tables.ts";
 export {
   createClient,
   flattenRoutes,

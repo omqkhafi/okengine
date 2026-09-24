@@ -68,6 +68,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+- `okengine/client` loads live subscribe and finite SSE streams on the first
+  `api.live` or stream call. A call-only app downloads the entry chunk
+  (4389 B gzip, was 5194). The 6 kB cap still gates that entry. The full
+  client, entry plus those chunks, is recorded beside it (7067 B gzip).
+  Unsubscribing before the live chunk finishes loading cancels the subscribe.
 - `fx.fetch`, Meilisearch, and remote Vault HTTP abort with the ambient
   `fx.signal` (`fx.race` / `fx.all`). An effect that has not started throws
   `AbortError`. SQL, Redis, and an in-flight sently Channel send still finish.

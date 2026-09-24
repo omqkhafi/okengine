@@ -12,17 +12,19 @@
  * Untriggered flows fall back to `POST /_oke/{unit}/{flow}` RPC.
  */
 
-import { createTransport, transportEnvelope, type Transport } from "./transport.ts";
+import { loadLiveModule, loadStreamModule } from "./chunks.ts";
 import { asThenableIterable, attachPager } from "./pager.ts";
 import {
   flattenLiveRoutes,
+  flattenStreamRoutes,
   isLiveHandlers,
   pickLiveExposure,
-  subscribeLive,
   type LiveByFlow,
+  type LiveExposure,
   type LiveRouteTable,
-} from "./live.ts";
-import { flattenStreamRoutes, openStream, type StreamByFlow } from "./stream.ts";
+  type StreamByFlow,
+} from "./route-tables.ts";
+import { createTransport, transportEnvelope, type Transport } from "./transport.ts";
 import type {
   Client,
   ClientHeaders,
@@ -31,6 +33,7 @@ import type {
   ClientResult,
   ClientRouteMap,
   LiveHandlers,
+  LiveUnsubscribe,
   ResolveApp,
 } from "./types.ts";
 import { methodAndPath, walkContracts } from "./wire.ts";
@@ -211,7 +214,7 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
       if (exposure && (isLiveHandlers(a) || isLiveHandlers(b))) {
         const handlers = (isLiveHandlers(a) ? a : b) as LiveHandlers<unknown>;
         const input = isLiveHandlers(a) ? undefined : a;
-        return subscribeLive(ctx.base, exposure, input, handlers, ctx.opts);
+        return subscribeLiveWhenReady(ctx.base, exposure, input, handlers, ctx.opts);
       }
       const streamRoute = ctx.streamByFlow[key];
       if (streamRoute) {
@@ -220,7 +223,7 @@ function proxy(transport: Transport, path: readonly string[], ctx: ProxyCtx): un
         const merged: ClientOptions = opts?.signal
           ? { ...ctx.opts, signal: opts.signal }
           : ctx.opts;
-        return openStream(ctx.base, streamRoute, input, merged);
+        return openStreamWhenReady(ctx.base, streamRoute, input, merged);
       }
       if (isCallOpts(a) || isCallOpts(b)) {
         const input = isCallOpts(a) ? undefined : a;
@@ -320,8 +323,63 @@ function makeLive(ctx: ProxyCtx): ClientLive {
       throw new Error(`No live HTTP exposure for signal "${name}"`);
     }
     const exposure = pickLiveExposure(exposures, input, handlers.via);
-    return subscribeLive(ctx.base, exposure, input, handlers, ctx.opts);
+    return subscribeLiveWhenReady(ctx.base, exposure, input, handlers, ctx.opts);
   }) as ClientLive;
+}
+
+/**
+ * Start the live chunk and return an unsubscribe that cancels the
+ * subscribe if it is called before the chunk finishes loading.
+ *
+ * @param base - Origin
+ * @param exposure - Route
+ * @param input - Path/query fields
+ * @param handlers - Callbacks
+ * @param opts - Client options
+ */
+function subscribeLiveWhenReady(
+  base: string,
+  exposure: LiveExposure,
+  input: unknown,
+  handlers: LiveHandlers<unknown>,
+  opts: ClientOptions,
+): LiveUnsubscribe {
+  let cancelled = false;
+  let inner: LiveUnsubscribe | undefined;
+  void loadLiveModule().then((mod) => {
+    if (cancelled) return;
+    const stop = mod.subscribeLive(base, exposure, input, handlers, opts);
+    if (cancelled) {
+      stop();
+      return;
+    }
+    inner = stop;
+  });
+  return () => {
+    cancelled = true;
+    inner?.();
+  };
+}
+
+/**
+ * Start the stream chunk on the call. Iteration waits for `openStream`.
+ *
+ * @param base - Origin
+ * @param route - REST method/path
+ * @param input - JSON body / path params
+ * @param opts - Client options
+ */
+function openStreamWhenReady(
+  base: string,
+  route: { readonly method: string; readonly path: string },
+  input: unknown,
+  opts: ClientOptions,
+): AsyncGenerator<unknown> {
+  const pending = loadStreamModule();
+  return (async function* (): AsyncGenerator<unknown> {
+    const mod = await pending;
+    yield* mod.openStream(base, route, input, opts);
+  })();
 }
 
 function isCallOpts(value: unknown): value is CallOpts {

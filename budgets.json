@@ -15,10 +15,20 @@
     {
       "id": "clientGzipBytes",
       "label": "Client runtime",
-      "value": 5194,
+      "value": 4389,
       "limit": 6144,
       "unit": "bytes",
       "gate": "absolute",
+      "group": "core",
+      "ok": true
+    },
+    {
+      "id": "clientFullGzipBytes",
+      "label": "Client runtime (full, with live/stream)",
+      "value": 7067,
+      "limit": 7323,
+      "unit": "bytes",
+      "gate": "regression",
       "group": "core",
       "ok": true
     },
