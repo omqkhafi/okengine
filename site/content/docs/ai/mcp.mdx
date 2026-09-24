@@ -35,10 +35,10 @@ Default-safe — they return inert data envelopes, never live handles. Approving
 | `oke.effects.get`  | Declared effects for one flow (`flowId`)       | `mcp:effects:read` · `console:manifest:read`  |
 | `oke.traces.list`       | Recent runs (`limit` ≤ 200, optional `flowId`)      | `mcp:traces:read` · `console:runs:read`       |
 | `oke.traces.get`        | One run/trace record (`runId`)                      | `mcp:traces:read` · `console:runs:read`       |
-| `oke.ai.runs.list`      | Agent runs (`limit` ≤ 200, optional `tenant`)       | `mcp:ai:read` · `console:runs:read`           |
-| `oke.ai.runs.get`       | One agent run plus its follow events (`runId`)      | `mcp:ai:read` · `console:runs:read`           |
-| `oke.ai.approvals.list` | Pending tool approvals (optional `tenant`)          | `mcp:ai:read` · `console:runs:read`           |
-| `oke.decisions.list`    | Decision state, pending count, metrics, and drift   | `mcp:decisions:read` · `console:runs:read`    |
+| `oke.ai.runs.list`      | Agent runs for the token's tenant (`limit` ≤ 200). `console:*` or `mcp:*` may omit `tenant` or name another one. PII and secrets are masked. | `mcp:ai:read` · `console:runs:read`           |
+| `oke.ai.runs.get`       | One agent run plus its follow events (`runId`). Same tenant rule. Args, trail, and events are masked. | `mcp:ai:read` · `console:runs:read`           |
+| `oke.ai.approvals.list` | Pending tool approvals for the token's tenant. Same operator rule. Approval args are masked. | `mcp:ai:read` · `console:runs:read`           |
+| `oke.decisions.list`    | Decision state, pending count, metrics, and drift for the token's tenant. Same operator rule. Inputs are masked. | `mcp:decisions:read` · `console:runs:read`    |
 
 ## Write tools — confirmed, every single call
 

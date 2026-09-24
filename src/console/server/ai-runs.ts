@@ -471,12 +471,13 @@ function trailFor(
   const seen = new Set<string>();
   for (const row of events) {
     if (row.event.type !== "TOOL_CALL_START") continue;
-    seen.add(row.event.toolCallId);
-    const approval = linked.get(row.event.toolCallId);
-    const resulted = events.some(
-      (event) =>
-        event.event.type === "TOOL_CALL_RESULT" && event.event.toolCallId === row.event.toolCallId,
-    );
+    const toolCallId = row.event.toolCallId;
+    seen.add(toolCallId);
+    const approval = linked.get(toolCallId);
+    const resulted = events.some((stored) => {
+      const body = stored.event;
+      return body.type === "TOOL_CALL_RESULT" && body.toolCallId === toolCallId;
+    });
     if (approval) {
       steps.push(
         resulted && approval.step.status === "pending"

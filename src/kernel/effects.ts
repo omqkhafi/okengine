@@ -66,6 +66,11 @@ export interface EffectEntry {
    * Omitted for in-process work (PGlite, mock AI, local channel console).
    */
   readonly external?: EffectExternal;
+  /**
+   * Agent run this `fx.run` or nested agent call started.
+   * Absent on prompt asks and on calls that are not agents.
+   */
+  readonly agentRunId?: string;
 }
 
 /** Append-only ledger of effect entries for one flow invocation. */
@@ -145,6 +150,7 @@ export async function recordEffect<T>(
   externalOf?:
     | EffectExternal
     | ((result: T | undefined, error: unknown) => EffectExternal | undefined),
+  stamp?: (result: T | undefined) => { readonly agentRunId?: string } | undefined,
 ): Promise<T> {
   const timestamp = now();
   const t0 = performance.now();
@@ -165,6 +171,7 @@ export async function recordEffect<T>(
       timestamp,
       resolveDurationMs(now() - timestamp, performance.now() - t0),
       external,
+      stamp?.(result),
     );
   }
 }
@@ -189,7 +196,9 @@ export function recordObservedEffect(
   timestamp: number,
   duration: number,
   external?: EffectExternal,
+  stamp?: { readonly agentRunId?: string },
 ): void {
+  const agentRunId = stamp?.agentRunId;
   ledger.record({
     kind,
     resource,
@@ -197,6 +206,7 @@ export function recordObservedEffect(
     duration,
     reversibility: reversibilityOf(kind),
     ...(external !== undefined ? { external } : {}),
+    ...(agentRunId !== undefined && agentRunId.length > 0 ? { agentRunId } : {}),
   });
 }
 

@@ -7,9 +7,11 @@
 
 import { describe, expect, test } from "bun:test";
 import { createSessionStore } from "../auth/sessions.ts";
+import { Redacted } from "../kernel/redacted.ts";
+import type { Manifest } from "../manifest/types.ts";
 import { authorizeToolCall } from "./authorization.ts";
 import { mintMcpSession, authenticateMcpRequest } from "./session.ts";
-import { createToolRuntime } from "./tools.ts";
+import { createToolRuntime, type McpContext } from "./tools.ts";
 
 const SECRET = "mcp-ai-secret";
 
@@ -44,9 +46,9 @@ describe("MCP AI and decision tools", () => {
     ).toBe(true);
   });
 
-  test("list and get stay inside the requested tenant and return events", async () => {
+  test("a tenant token sees only its tenant; an operator token sees every tenant", async () => {
     const runtime = createToolRuntime({
-      getManifest: () => ({ oke: "1.0", app: "skyport" }),
+      getManifest: () => ({ oke: "1.0", app: "skyport" }) as Manifest,
       listRuns: async () => [],
       listAgentRuns: async () => [runA, runB],
       getAgentRun: async (runId) => {
@@ -58,7 +60,10 @@ describe("MCP AI and decision tools", () => {
         { id: "a", tenant: "acme", tool: "refund" },
         { id: "b", tenant: "other", tool: "refund" },
       ],
-      listDecisions: async () => [{ name: "triage", state: "learning", pending: 1, drift: false }],
+      listDecisions: async () => [
+        { name: "triage", tenant: "acme", state: "learning", pending: 1, drift: false },
+        { name: "other-call", tenant: "other", state: "learning", pending: 0, drift: false },
+      ],
     });
     const store = createSessionStore();
     const issued = await mintMcpSession({
@@ -66,19 +71,22 @@ describe("MCP AI and decision tools", () => {
       secret: SECRET,
       principalId: "op",
       scopes: ["mcp:ai:read", "mcp:decisions:read"],
+      tenantId: "acme",
     });
     const requester = await authenticateMcpRequest(store, SECRET, issued.accessToken);
 
-    const listed = await runtime.callTool(requester, "oke.ai.runs.list", { tenant: "acme" });
+    const listed = await runtime.callTool(requester, "oke.ai.runs.list", {});
     expect(listed.ok).toBe(true);
     if (!listed.ok) return;
     const runs = (listed.data.content as { runs: { id: string }[] }).runs;
     expect(runs.map((row) => row.id)).toEqual(["run-a"]);
 
-    const foreign = await runtime.callTool(requester, "oke.ai.runs.get", {
-      runId: "run-b",
-      tenant: "acme",
-    });
+    const foreign = await runtime.callTool(requester, "oke.ai.runs.get", { runId: "run-b" });
+    expect(foreign.ok).toBe(false);
+    const namedOther = await runtime.callTool(requester, "oke.ai.runs.list", { tenant: "other" });
+    expect(namedOther.ok).toBe(true);
+    if (!namedOther.ok) return;
+    expect((namedOther.data.content as { runs: unknown[] }).runs).toEqual([]);
     expect(foreign.ok).toBe(false);
 
     const got = await runtime.callTool(requester, "oke.ai.runs.get", {
@@ -102,7 +110,93 @@ describe("MCP AI and decision tools", () => {
     expect(decisions.ok).toBe(true);
     if (!decisions.ok) return;
     expect(
-      (decisions.data.content as { decisions: { pending: number; drift: boolean }[] }).decisions[0],
-    ).toMatchObject({ pending: 1, drift: false });
+      (decisions.data.content as { decisions: { name: string }[] }).decisions.map(
+        (row) => row.name,
+      ),
+    ).toEqual(["triage"]);
+
+    const operatorIssued = await mintMcpSession({
+      store,
+      secret: SECRET,
+      principalId: "root",
+      scopes: ["mcp:*"],
+    });
+    const operator = await authenticateMcpRequest(store, SECRET, operatorIssued.accessToken);
+    const allRuns = await runtime.callTool(operator, "oke.ai.runs.list", {});
+    expect(allRuns.ok).toBe(true);
+    if (!allRuns.ok) return;
+    expect((allRuns.data.content as { runs: { id: string }[] }).runs.map((row) => row.id)).toEqual([
+      "run-a",
+      "run-b",
+    ]);
+    const otherApprovals = await runtime.callTool(operator, "oke.ai.approvals.list", {
+      tenant: "other",
+    });
+    expect(otherApprovals.ok).toBe(true);
+    if (!otherApprovals.ok) return;
+    expect(
+      (otherApprovals.data.content as { rows: { id: string }[] }).rows.map((row) => row.id),
+    ).toEqual(["b"]);
+  });
+
+  test("every AI tool masks PII fields and redacted secrets", async () => {
+    const secret = Redacted.of("sk-live");
+    const manifest = {
+      oke: "1.0",
+      app: "skyport",
+      stores: {
+        app: {
+          tables: {
+            people: { columns: { email: { pii: true }, apiKey: { sensitive: true } } },
+          },
+        },
+      },
+    } as unknown as Manifest;
+    const ctx: McpContext = {
+      getManifest: () => manifest,
+      listRuns: async () => [],
+      listAgentRuns: async () => [
+        {
+          id: "run-a",
+          tenant: "acme",
+          args: { email: "a@b.co", apiKey: secret },
+          trail: [{ args: { email: "a@b.co" } }],
+        },
+      ],
+      getAgentRun: async () => ({
+        run: { id: "run-a", tenant: "acme", args: { email: "a@b.co", apiKey: secret } },
+        events: [{ seq: 1, event: { type: "CUSTOM", value: { email: "a@b.co", apiKey: secret } } }],
+      }),
+      listApprovals: async () => [
+        { id: "a", tenant: "acme", args: { email: "a@b.co", apiKey: secret } },
+      ],
+      listDecisions: async () => [
+        { name: "triage", tenant: "acme", input: { email: "a@b.co", apiKey: secret } },
+      ],
+    };
+    const runtime = createToolRuntime(ctx);
+    const store = createSessionStore();
+    const issued = await mintMcpSession({
+      store,
+      secret: SECRET,
+      principalId: "op",
+      scopes: ["mcp:ai:read", "mcp:decisions:read"],
+      tenantId: "acme",
+    });
+    const requester = await authenticateMcpRequest(store, SECRET, issued.accessToken);
+    const blobs = [
+      await runtime.callTool(requester, "oke.ai.runs.list", {}),
+      await runtime.callTool(requester, "oke.ai.runs.get", { runId: "run-a" }),
+      await runtime.callTool(requester, "oke.ai.approvals.list", {}),
+      await runtime.callTool(requester, "oke.decisions.list", {}),
+    ];
+    for (const result of blobs) {
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      const text = JSON.stringify(result.data.content);
+      expect(text).not.toContain("a@b.co");
+      expect(text).not.toContain("sk-live");
+      expect(text).toContain("[redacted]");
+    }
   });
 });

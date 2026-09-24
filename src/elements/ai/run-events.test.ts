@@ -7,15 +7,18 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AGENT_EVENT_SWEEP_CLAIM_MS,
   AgentEventDuplicateSeqError,
   createFileAgentEventStore,
   createMemoryAgentEventStore,
   createPostgresAgentEventStore,
+  type AgentEventStore,
 } from "../../kernel/agent-event-store.ts";
 import { connectPglite } from "../../drivers/pglite.ts";
 import {
   AGENT_EVENT_CAP,
   AGENT_EVENT_TTL_MS,
+  AGENT_EVENTS_GAP,
   createMemoryAgentEventLog,
   setAgentEventLog,
   sweepInstalledAgentEvents,
@@ -387,5 +390,72 @@ describe("agent event log", () => {
     expect(removed.reduce((sum, count) => sum + count, 0)).toBe(1);
     expect(await store.read("r1")).toBeUndefined();
     await expect(b.sweep(100, AGENT_EVENT_TTL_MS, 10)).resolves.toBe(0);
+  });
+
+  test("a failed store write retries once, then the next stored row is a gap", async () => {
+    const inner = createMemoryAgentEventStore();
+    let failures = 2;
+    const store: AgentEventStore = {
+      ...inner,
+      async append(runId, row) {
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error("store write failed");
+        }
+        await inner.append(runId, row);
+      },
+    };
+    const log = createMemoryAgentEventLog(store);
+    await log.open(header);
+    expect(await log.append("r1", { type: "STEP_STARTED", stepName: "lost" }, 1)).toBeUndefined();
+    expect(await inner.maxSeq("r1")).toBe(0);
+    await log.append("r1", { type: "STEP_STARTED", stepName: "kept" }, 2);
+    const rows = await inner.read("r1");
+    expect(rows?.rows.map((row) => row.seq)).toEqual([1, 2]);
+    expect(rows?.rows[0]?.event).toMatchObject({ type: "CUSTOM", name: AGENT_EVENTS_GAP });
+    expect(rows?.rows[1]?.event).toMatchObject({ type: "STEP_STARTED", stepName: "kept" });
+  });
+
+  test("a sweep claim expires so another instance can reclaim the run", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-events-claim-"));
+    const sql = await connectPglite({ url: "memory://" });
+    const stores: AgentEventStore[] = [
+      createMemoryAgentEventStore(),
+      createFileAgentEventStore(dir),
+      await createPostgresAgentEventStore(sql),
+    ];
+    try {
+      for (const store of stores) {
+        await store.writeHeader({ ...header, openedAt: 1 });
+        expect(await store.claim("r1", 1_000)).toBe(true);
+        expect(await store.claim("r1", 1_000 + AGENT_EVENT_SWEEP_CLAIM_MS - 1)).toBe(false);
+        expect(await store.claim("r1", 1_000 + AGENT_EVENT_SWEEP_CLAIM_MS)).toBe(true);
+        await store.remove("r1");
+      }
+    } finally {
+      await sql.close();
+    }
+  });
+
+  test("truncation matches the stored event type, not a payload string", async () => {
+    const sql = await connectPglite({ url: "memory://" });
+    try {
+      const store = await createPostgresAgentEventStore(sql);
+      const log = createMemoryAgentEventLog(store);
+      await log.open(header);
+      await log.append(
+        "r1",
+        { type: "CUSTOM", name: "note", value: { text: "oke.events.truncated" } },
+        1,
+      );
+      expect(await store.truncated("r1")).toBe(false);
+      const capped = createMemoryAgentEventLog(store, { cap: 1 });
+      await capped.open(header);
+      await capped.append("r1", { type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "x" }, 2);
+      await capped.flush("r1", 2);
+      expect(await store.truncated("r1")).toBe(true);
+    } finally {
+      await sql.close();
+    }
   });
 });

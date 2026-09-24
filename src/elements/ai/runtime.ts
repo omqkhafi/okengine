@@ -378,7 +378,9 @@ export interface AiAgentRunOptions {
   /** Cost cap for this invocation. Wins over the agent's own budget. */
   readonly maxCostPerRun?: number;
   /** Record a `call` effect on the host ledger when a child agent starts. */
-  readonly recordCall?: (name: string) => void | Promise<void>;
+  readonly recordCall?: (name: string, runId?: string) => void | Promise<void>;
+  /** Fires once the agent run id exists, including streamed runs. */
+  readonly onRunId?: (runId: string) => void;
   /** AG-UI thread. Defaults to a unique id. */
   readonly threadId?: string;
   /** Non-public gates on the calling Flow. */
@@ -772,7 +774,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly depth?: number;
     readonly maxCostPerRun?: number;
     readonly spent?: number;
-    readonly recordCall?: (name: string) => void | Promise<void>;
+    readonly recordCall?: (name: string, runId?: string) => void | Promise<void>;
     readonly spend?: { cost: number; inputTokens?: number; outputTokens?: number };
   }): Promise<unknown> {
     const {
@@ -929,7 +931,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         name: "oke.subagent.started",
         value: { runId: childId, parentToolCallId: opts.callId },
       });
-      await opts.recordCall?.(childDecl.name);
+      await opts.recordCall?.(childDecl.name, childId);
       const parentRemaining =
         opts.maxCostPerRun !== undefined ? opts.maxCostPerRun - (opts.spent ?? 0) : undefined;
       const childCap = childDecl.budget?.maxCostPerRun;
@@ -1021,7 +1023,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly runId?: string;
     readonly threadId?: string;
     readonly depth?: number;
-    readonly recordCall?: (name: string) => void | Promise<void>;
+    readonly recordCall?: (name: string, runId?: string) => void | Promise<void>;
   }): Promise<{
     readonly output: unknown;
     readonly text: string;
@@ -1590,6 +1592,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const client = await clientFor(modelName);
       const started = now();
       const runId = await allocateAgentRunId(agent, runOpts);
+      runOpts.onRunId?.(runId);
       const threadId = runOpts.threadId ?? okid();
       const logHeader = agentLogHeader(runId, threadId, agent, runOpts);
       const safeAppend = async (event: AgUiEvent): Promise<void> => {
@@ -1637,6 +1640,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         };
         pushObservability(agentRuns, record);
         return {
+          runId,
           ok: record.ok,
           stopReason: record.stopReason,
           steps: record.steps,
@@ -1870,11 +1874,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         try {
           if (runOpts.journal) {
             runId = await allocateAgentRunId(agent, runOpts);
+            runOpts.onRunId?.(runId);
             await eventLog.open(agentLogHeader(runId, threadId, agent, runOpts));
             const prior = await eventLog.read(runId, 0);
             skipLoggedStart = prior.some((row) => row.event.type === "RUN_STARTED");
           } else {
             runId = runOpts.runId ?? okid();
+            runOpts.onRunId?.(runId);
           }
           emit({ type: "RUN_STARTED", threadId, runId });
           const decl = agents.get(agent);

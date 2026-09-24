@@ -119,6 +119,7 @@ const EffectEntryOut = z.object({
       kind: z.enum(["third-party", "infrastructure"]).optional(),
     })
     .optional(),
+  agentRunId: z.string().optional(),
 });
 
 const LogLineOut = z.object({
@@ -2697,6 +2698,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
       duration: e.duration,
       reversibility: e.reversibility,
       ...(e.external !== undefined ? { external: e.external } : {}),
+      ...(e.agentRunId !== undefined ? { agentRunId: e.agentRunId } : {}),
     })),
     logs: masked.logs.map((line) => ({
       level: line.level,

@@ -43,7 +43,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   The OpenRouter decisions endpoint is alpha on the provider side.
 - Drift is one flag per decision. Promote and recertify clear only that decision. The monitor emits the decisions that failed. Console reads that flag.
 - `oke decide labels <name> --export` writes reviewed labels as seed JSONL for the caller's tenant, grouped by review id. Only declared `in` fields are copied. Secret and redacted fields are masked when the label is written. The command prints that the file contains production data.
-- App MCP on `:6535` lists agent runs (`oke.ai.runs.list`, `oke.ai.runs.get` with the follow events), pending approvals (`oke.ai.approvals.list`), and decisions (`oke.decisions.list`: state, pending count, certificate metrics, drift). The scopes match the traces tools: one of `mcp:ai:read` or `mcp:decisions:read`, or `console:runs:read`. A `tenant` argument drops every other tenant. There is no resolve or promote tool.
+- App MCP on `:6535` lists agent runs (`oke.ai.runs.list`, `oke.ai.runs.get` with the follow events), pending approvals (`oke.ai.approvals.list`), and decisions (`oke.decisions.list`: state, pending count, certificate metrics, drift). The scopes match the traces tools: one of `mcp:ai:read` or `mcp:decisions:read`, or `console:runs:read`. The token's tenant is the default. Listing another tenant, or every tenant, requires `console:*` or `mcp:*`. Run args, trail, approval args, decision inputs, and follow events mask PII and redacted secrets the same way traces do. There is no resolve or promote tool.
 
 #### Docs
 
@@ -86,7 +86,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
 - Flows has a Decisions link and a review queue at `/flows/decisions`. Each decision is `learning`, `candidate ready`, `certified`, or `suspended` from its own drift flag and the lockfile. A candidate row shows fit metrics and `oke decide promote <name>`. The queue shows age. The resolve form accepts only declared options and levels. An unanswered boolean is invalid. An audit row submits `labelOnly`. A second resolve is Conflict. A lease collision waits for `Retry-After`. Label and drift write failures are listed. The sidebar stays six modules.
-- Ask, decide, and agent call rows in a trace link to the AI runs view or the decision.
+- Ask, decide, and agent call rows in a trace link to the AI runs view or the decision. An `fx.run` or nested agent call that carries an agent run id opens that run. A row without an id still searches by name.
 
 #### Console — Observability
 
@@ -95,7 +95,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
-- `AGENTS.md`, the `oke` skill, and the create-oke `AGENTS.md` state the AI rules: `fx.ask` / `fx.run` / `fx.decide`, durable tool approval, the follow stream, and lockfile autonomy.
+- `AGENTS.md`, the `oke` skill, and the create-oke `AGENTS.md` state the AI rules: `fx.ask` / `fx.run` / `fx.decide`, durable tool approval, the follow stream, and lockfile autonomy. The certify command is `oke eval --certify`.
 - When `OKE_CONSOLE_PROXY` is set, the Console dev server sends `/agent` to that kernel. `oke dev` still sends follow to the app on `:6530`.
 - `dev:console` loads the kernel from source. Vite's config bundle was making Bun `import.meta.dir` point at a temp chunk, so the parked approval could not boot.
 
@@ -171,6 +171,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   contract header ends with the same collapse control as the flows tree.
 
 ### 🐛 Fixed
+
+#### Runtime
+
+- A failed agent-event append does not consume a seq. It retries once. If it still fails, the next stored row is `oke.events.gap`.
+- A sweep claim expires after 30 seconds on the memory, file, and Postgres event stores, so another instance can close a run whose sweeper stopped.
+- Postgres truncation looks at `event_type` and `event_name`, not a `LIKE` over the payload.
 
 #### Console — Units & Call API
 

@@ -259,8 +259,10 @@ describe("projectApprovalQueue", () => {
 describe("loadConsoleAgentRuns", () => {
   test("the follow-log header names the agent and the journal step is the trail", async () => {
     const store = createMemoryJournalStore();
+    const agentEvents = store.agentEvents;
+    if (!agentEvents) throw new Error("agent event store missing");
     const id = approvalId("journal-run", "tc1");
-    await store.agentEvents.writeHeader({
+    await agentEvents.writeHeader({
       runId: "run-logged",
       threadId: "thread-1",
       agent: "support",
@@ -270,7 +272,7 @@ describe("loadConsoleAgentRuns", () => {
       operatorId: null,
       openedAt: 1_000,
     });
-    await store.agentEvents.append("run-logged", {
+    await agentEvents.append("run-logged", {
       seq: 1,
       event: {
         type: "RUN_FINISHED",
@@ -279,11 +281,11 @@ describe("loadConsoleAgentRuns", () => {
         outcome: { type: "interrupt", interrupts: [{ id, reason: "approval" }] },
       },
     });
-    await store.agentEvents.append("run-logged", {
+    await agentEvents.append("run-logged", {
       seq: 2,
       event: { type: "TOOL_CALL_START", toolCallId: "tc1", toolCallName: "refund" },
     });
-    await store.agentEvents.append("run-logged", {
+    await agentEvents.append("run-logged", {
       seq: 3,
       event: { type: "STEP_STARTED", stepName: "step-1" },
     });

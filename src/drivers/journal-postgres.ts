@@ -287,8 +287,14 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     labels: LabelDbRow[];
     drift: { decision_id: string; suspended: number; certified_at: number }[];
     candidates: { decision_id: string; body: string }[];
-    agentRuns: { run_id: string; header: string }[];
-    agentEvents: { run_id: string; seq: number; event: string }[];
+    agentRuns: { run_id: string; header: string; sweep_claim_at: number | null }[];
+    agentEvents: {
+      run_id: string;
+      seq: number;
+      event: string;
+      event_type: string | null;
+      event_name: string | null;
+    }[];
   };
 
   let committed: State = {
@@ -462,6 +468,16 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
             .filter((row) => row.run_id === id)
             .reduce((highest, row) => Math.max(highest, row.seq), 0);
           return [{ max_seq: max }];
+        }
+        if (/event_type\s*=/i.test(text)) {
+          const eventType = String(params[1] ?? "");
+          const eventName = String(params[2] ?? "");
+          return state.agentEvents
+            .filter(
+              (row) =>
+                row.run_id === id && row.event_type === eventType && row.event_name === eventName,
+            )
+            .map((row) => ({ ...row }));
         }
         const after = /seq\s*>\s*\?/i.test(text) ? Number(params[1] ?? 0) : 0;
         return state.agentEvents
@@ -684,9 +700,25 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         return { changes: 1 };
       }
 
+      if (/^UPDATE\s+oke_agent_run\s+SET\s+sweep_claim_at\b/i.test(text)) {
+        const until = Number(params[0]);
+        const runId = String(params[1] ?? "");
+        const now = Number(params[2]);
+        const row = state.agentRuns.find((candidate) => candidate.run_id === runId);
+        if (!row) return { changes: 0 };
+        if (row.sweep_claim_at !== null && row.sweep_claim_at > now) return { changes: 0 };
+        row.sweep_claim_at = until;
+        return { changes: 1 };
+      }
+
       if (/^INSERT\s+INTO\s+oke_agent_run\b/i.test(text)) {
         const runId = String(params[0]);
-        const next = { run_id: runId, header: String(params[1]) };
+        const existing = state.agentRuns.find((row) => row.run_id === runId);
+        const next = {
+          run_id: runId,
+          header: String(params[1]),
+          sweep_claim_at: existing?.sweep_claim_at ?? null,
+        };
         const idx = state.agentRuns.findIndex((row) => row.run_id === runId);
         if (idx >= 0) state.agentRuns[idx] = next;
         else state.agentRuns.push(next);
@@ -699,7 +731,13 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         if (state.agentEvents.some((row) => row.run_id === runId && row.seq === seq)) {
           throw new Error(`duplicate key value violates unique constraint "oke_agent_event_pkey"`);
         }
-        state.agentEvents.push({ run_id: runId, seq, event: String(params[2]) });
+        state.agentEvents.push({
+          run_id: runId,
+          seq,
+          event: String(params[2]),
+          event_type: params[3] === undefined || params[3] === null ? null : String(params[3]),
+          event_name: params[4] === undefined || params[4] === null ? null : String(params[4]),
+        });
         return { changes: 1 };
       }
 

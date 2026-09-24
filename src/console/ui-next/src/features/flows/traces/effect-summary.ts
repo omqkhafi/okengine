@@ -195,17 +195,19 @@ export function isMcpResource(resource: string): boolean {
  * @param agents - Declared agent names. A `call` links only when it names one.
  */
 export function effectAiHref(
-  effect: Pick<RunEffect, "kind" | "resource">,
+  effect: Pick<RunEffect, "kind" | "resource"> & { readonly agentRunId?: string },
   agents: ReadonlySet<string>,
 ): string | null {
   const name = effect.resource.split("@")[0] ?? effect.resource;
   if (effect.kind === "decide") {
     return `/flows/decisions?decision=${encodeURIComponent(name)}`;
   }
-  if (effect.kind === "ask" || (effect.kind === "call" && agents.has(name))) {
-    return `/observability?view=ai&q=${encodeURIComponent(name)}`;
+  const agentCall = effect.kind === "ask" || (effect.kind === "call" && agents.has(name));
+  if (!agentCall) return null;
+  if (effect.agentRunId) {
+    return `/observability?view=ai&agentRun=${encodeURIComponent(effect.agentRunId)}`;
   }
-  return null;
+  return `/observability?view=ai&q=${encodeURIComponent(name)}`;
 }
 
 export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): string {

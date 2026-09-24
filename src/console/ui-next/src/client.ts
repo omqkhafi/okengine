@@ -357,6 +357,8 @@ export type RunEffect = {
     readonly provider?: string;
     readonly kind?: "third-party" | "infrastructure";
   };
+  /** Agent run started by this `fx.run` or nested agent call. */
+  readonly agentRunId?: string;
 };
 
 /** Log line on a run row (matches server `RunsListOut`). */
@@ -740,8 +742,16 @@ export type AgentRunRow = {
     readonly denial: { readonly gate: string; readonly reason: string } | null;
     readonly at: number;
   }[];
-  readonly denials: readonly { readonly tool: string; readonly gate: string; readonly reason: string }[];
-  readonly repairs: readonly { readonly prompt: string; readonly at: number; readonly attempts: number }[];
+  readonly denials: readonly {
+    readonly tool: string;
+    readonly gate: string;
+    readonly reason: string;
+  }[];
+  readonly repairs: readonly {
+    readonly prompt: string;
+    readonly at: number;
+    readonly attempts: number;
+  }[];
   readonly children: readonly {
     readonly id: string;
     readonly agent: string;

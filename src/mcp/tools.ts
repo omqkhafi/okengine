@@ -5,6 +5,8 @@
  * confirmation token (no session-level consent cache).
  */
 
+import { addPiiFieldName, PII_MASK } from "../elements/store/classify.ts";
+import { maskRedactedDeep } from "../kernel/redacted.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import { authorizeToolCall, MCP_TOOL_POLICIES, type McpToolPolicy } from "./authorization.ts";
@@ -155,13 +157,13 @@ export function createToolRuntime(
         case "oke.traces.get":
           return tracesGet(ctx, args);
         case "oke.ai.runs.list":
-          return aiRunsList(ctx, args);
+          return aiRunsList(ctx, requester, args);
         case "oke.ai.runs.get":
-          return aiRunsGet(ctx, args);
+          return aiRunsGet(ctx, requester, args);
         case "oke.ai.approvals.list":
-          return aiApprovalsList(ctx, args);
+          return aiApprovalsList(ctx, requester, args);
         case "oke.decisions.list":
-          return decisionsList(ctx, args);
+          return decisionsList(ctx, requester, args);
         case "oke.action.confirm":
           return actionConfirm(confirm, requester, args);
         case "oke.action.invoke":
@@ -271,22 +273,94 @@ function sameTenant(row: unknown, tenant: string | undefined): boolean {
   return (row as { tenant?: unknown }).tenant === tenant;
 }
 
-async function aiRunsList(ctx: McpContext, args: Record<string, unknown>): Promise<ToolCallResult> {
+/** `console:*` and `mcp:*` may list every tenant. A named tool scope stays on its token. */
+function operatorTenantScope(scopes: readonly string[]): boolean {
+  return scopes.includes("console:*") || scopes.includes("mcp:*");
+}
+
+/**
+ * Tenant a read is allowed to see.
+ *
+ * The token's `tid` is the default. Naming another tenant, or listing every
+ * tenant, requires an operator scope. A non-operator token with no tenant
+ * sees nothing.
+ */
+function visibleTenant(
+  requester: McpRequester,
+  args: Record<string, unknown>,
+): { readonly ok: true; readonly tenant: string | undefined } | { readonly ok: false } {
+  const requested = tenantArg(args);
+  const own = requester.claims.tid;
+  if (operatorTenantScope(requester.scopes)) {
+    return { ok: true, tenant: requested };
+  }
+  if (!own) return { ok: false };
+  if (requested !== undefined && requested !== own) return { ok: false };
+  return { ok: true, tenant: own };
+}
+
+/**
+ * PII-classified and sensitive column names, plus {@link Redacted} values.
+ * Same mask token the Console traces projection uses.
+ */
+function maskAiValue(manifest: Manifest | null | undefined, value: unknown): unknown {
+  return maskPiiWalk(maskRedactedDeep(value), classifiedFieldNames(manifest));
+}
+
+function classifiedFieldNames(manifest: Manifest | null | undefined): ReadonlySet<string> {
+  const names = new Set<string>();
+  if (!manifest?.stores) return names;
+  for (const store of Object.values(manifest.stores)) {
+    for (const table of Object.values(store.tables ?? {})) {
+      for (const [col, tags] of Object.entries(table.columns ?? {})) {
+        if (tags?.pii || tags?.sensitive) addPiiFieldName(names, col);
+      }
+    }
+  }
+  return names;
+}
+
+function maskPiiWalk(value: unknown, fields: ReadonlySet<string>): unknown {
+  if (fields.size === 0 || value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map((item) => maskPiiWalk(item, fields));
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = fields.has(key) ? PII_MASK : maskPiiWalk(child, fields);
+    }
+    return out;
+  }
+  return value;
+}
+
+async function aiRunsList(
+  ctx: McpContext,
+  requester: McpRequester,
+  args: Record<string, unknown>,
+): Promise<ToolCallResult> {
   const limit =
     typeof args.limit === "number" && Number.isFinite(args.limit)
       ? Math.min(200, Math.max(1, Math.floor(args.limit)))
       : 50;
-  const tenant = tenantArg(args);
+  const scope = visibleTenant(requester, args);
+  if (!scope.ok) return okData(freezeData({ runs: [] }), "trace");
   const all = (await ctx.listAgentRuns?.()) ?? [];
-  const runs = all.filter((row) => sameTenant(row, tenant)).slice(0, limit);
+  const runs = all
+    .filter((row) => sameTenant(row, scope.tenant))
+    .slice(0, limit)
+    .map((row) => maskAiValue(ctx.getManifest(), row));
   return okData(freezeData({ runs }), "trace");
 }
 
-async function aiRunsGet(ctx: McpContext, args: Record<string, unknown>): Promise<ToolCallResult> {
+async function aiRunsGet(
+  ctx: McpContext,
+  requester: McpRequester,
+  args: Record<string, unknown>,
+): Promise<ToolCallResult> {
   const runId = String(args.runId ?? "");
-  const tenant = tenantArg(args);
-  const found = await ctx.getAgentRun?.(runId);
-  if (!found || !sameTenant(found.run, tenant)) {
+  const scope = visibleTenant(requester, args);
+  const found = scope.ok ? await ctx.getAgentRun?.(runId) : undefined;
+  if (!found || !sameTenant(found.run, scope.ok ? scope.tenant : undefined)) {
     return {
       ok: false,
       code: "not-found",
@@ -294,26 +368,40 @@ async function aiRunsGet(ctx: McpContext, args: Record<string, unknown>): Promis
       data: asData({ runId }, "error"),
     };
   }
-  return okData(freezeData({ run: found.run, events: found.events }), "store-record");
+  return okData(
+    freezeData({
+      run: maskAiValue(ctx.getManifest(), found.run),
+      events: maskAiValue(ctx.getManifest(), found.events),
+    }),
+    "store-record",
+  );
 }
 
 async function aiApprovalsList(
   ctx: McpContext,
+  requester: McpRequester,
   args: Record<string, unknown>,
 ): Promise<ToolCallResult> {
-  const tenant = tenantArg(args);
+  const scope = visibleTenant(requester, args);
+  if (!scope.ok) return okData(freezeData({ rows: [] }), "store-record");
   const all = (await ctx.listApprovals?.()) ?? [];
-  const rows = all.filter((row) => sameTenant(row, tenant));
+  const rows = all
+    .filter((row) => sameTenant(row, scope.tenant))
+    .map((row) => maskAiValue(ctx.getManifest(), row));
   return okData(freezeData({ rows }), "store-record");
 }
 
 async function decisionsList(
   ctx: McpContext,
+  requester: McpRequester,
   args: Record<string, unknown>,
 ): Promise<ToolCallResult> {
-  const tenant = tenantArg(args);
-  const decisions = (await ctx.listDecisions?.(tenant)) ?? [];
-  return okData(freezeData({ decisions }), "manifest");
+  const scope = visibleTenant(requester, args);
+  if (!scope.ok) return okData(freezeData({ decisions: [] }), "manifest");
+  const decisions = ((await ctx.listDecisions?.(scope.tenant)) ?? []).filter((row) =>
+    sameTenant(row, scope.tenant),
+  );
+  return okData(freezeData({ decisions: maskAiValue(ctx.getManifest(), decisions) }), "manifest");
 }
 
 function actionConfirm(

@@ -1276,11 +1276,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     externalOf?:
       | EffectExternal
       | ((result: T | undefined, error: unknown) => EffectExternal | undefined),
+    stamp?: (result: T | undefined) => { readonly agentRunId?: string } | undefined,
   ): Promise<T> {
     const signal = currentAbortSignal();
     if (signal.aborted) throw abortError(signal.reason);
     capability.assert(kind, resource);
-    const execute = () => recordEffect(ledger, kind, resource, now, body, externalOf);
+    const execute = () => recordEffect(ledger, kind, resource, now, body, externalOf, stamp);
     if (journal) {
       return journal.effect(kind, resource, execute);
     }
@@ -2060,38 +2061,72 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(agent);
       const turn = agentTurn(input);
       if (opts?.stream) {
-        let inner: { readonly result?: Promise<unknown> } | undefined;
+        let inner: (AsyncIterable<AgUiEvent> & { readonly result?: Promise<unknown> }) | undefined;
+        let heldRunId: string | undefined;
+        let markRun: () => void = () => undefined;
+        const heldReady = new Promise<void>((resolve) => {
+          markRun = resolve;
+        });
         const gen = (async function* () {
-          await gated("ask", name, async () => undefined);
           if (!options.aiRuntime) {
-            throw new Error(`fx.run: AI runtime is not configured for agent "${name}"`);
+            await gated("ask", name, async () => {
+              throw new Error(`fx.run: AI runtime is not configured for agent "${name}"`);
+            });
+            return;
           }
           const local = new AbortController();
           const unlink = linkAbort(currentAbortSignal(), local);
           try {
-            const events = await withAbortSignal(local.signal, () =>
-              options.aiRuntime!.streamAgent(name, {
-                ...turn,
-                ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
-                gates: (options.rlsGateNames ?? []).filter((name) => name !== "public"),
-                userId: auth.userId,
-                operatorId: operator.id,
-                ...(options.journal ? { journal: options.journal } : {}),
-                ...(options.flow !== undefined ? { flow: options.flow } : {}),
-                tenantId: tenant.id,
-                auth: {
-                  userId: auth.userId,
-                  scopes: auth.scopes,
-                  verified: auth.verified,
+            await withAbortSignal(local.signal, () =>
+              gated(
+                "ask",
+                name,
+                async () => {
+                  const events = await options.aiRuntime!.streamAgent(name, {
+                    ...turn,
+                    ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
+                    gates: (options.rlsGateNames ?? []).filter((gate) => gate !== "public"),
+                    userId: auth.userId,
+                    operatorId: operator.id,
+                    ...(options.journal ? { journal: options.journal } : {}),
+                    ...(options.flow !== undefined ? { flow: options.flow } : {}),
+                    tenantId: tenant.id,
+                    auth: {
+                      userId: auth.userId,
+                      scopes: auth.scopes,
+                      verified: auth.verified,
+                    },
+                    callTool: (tool, toolInput) => fx.call(tool, toolInput),
+                    recordCall: (tool, runId) => {
+                      void gated(
+                        "call",
+                        tool,
+                        async () => runId,
+                        undefined,
+                        (id) =>
+                          typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined,
+                      );
+                    },
+                    onRunId(id) {
+                      heldRunId = id;
+                      markRun();
+                    },
+                  });
+                  inner = events as AsyncIterable<AgUiEvent> & {
+                    readonly result?: Promise<unknown>;
+                  };
+                  const settled = inner.result?.then(
+                    () => undefined,
+                    () => undefined,
+                  );
+                  await Promise.race([heldReady, settled ?? Promise.resolve()]);
+                  return heldRunId;
                 },
-                callTool: (tool, toolInput) => fx.call(tool, toolInput),
-                recordCall: (tool) => {
-                  void gated("call", tool, async () => undefined);
-                },
-              }),
+                undefined,
+                (id) => (typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined),
+              ),
             );
-            inner = events as AsyncIterable<AgUiEvent> & { readonly result?: Promise<unknown> };
-            yield* events;
+            if (inner) yield* inner;
           } finally {
             unlink();
             if (!local.signal.aborted) local.abort();
@@ -2105,29 +2140,46 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         });
         return gen;
       }
-      return gated("ask", name, async () => {
-        if (options.aiRuntime) {
-          return options.aiRuntime.runAgent(name, {
-            ...turn,
-            gates: (options.rlsGateNames ?? []).filter((name) => name !== "public"),
-            userId: auth.userId,
-            operatorId: operator.id,
-            ...(options.journal ? { journal: options.journal } : {}),
-            ...(options.flow !== undefined ? { flow: options.flow } : {}),
-            tenantId: tenant.id,
-            auth: {
+      return gated(
+        "ask",
+        name,
+        async () => {
+          if (options.aiRuntime) {
+            return options.aiRuntime.runAgent(name, {
+              ...turn,
+              gates: (options.rlsGateNames ?? []).filter((gate) => gate !== "public"),
               userId: auth.userId,
-              scopes: auth.scopes,
-              verified: auth.verified,
-            },
-            callTool: (tool, toolInput) => fx.call(tool, toolInput),
-            recordCall: (tool) => {
-              void gated("call", tool, async () => undefined);
-            },
-          });
-        }
-        return { ok: true, steps: 0, denials: [], output: input };
-      });
+              operatorId: operator.id,
+              ...(options.journal ? { journal: options.journal } : {}),
+              ...(options.flow !== undefined ? { flow: options.flow } : {}),
+              tenantId: tenant.id,
+              auth: {
+                userId: auth.userId,
+                scopes: auth.scopes,
+                verified: auth.verified,
+              },
+              callTool: (tool, toolInput) => fx.call(tool, toolInput),
+              recordCall: (tool, runId) => {
+                void gated(
+                  "call",
+                  tool,
+                  async () => runId,
+                  undefined,
+                  (id) =>
+                    typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined,
+                );
+              },
+            });
+          }
+          return { ok: true, steps: 0, denials: [], output: input };
+        },
+        undefined,
+        (result) => {
+          if (!result || typeof result !== "object" || !("runId" in result)) return undefined;
+          const id = (result as { runId?: unknown }).runId;
+          return typeof id === "string" && id.length > 0 ? { agentRunId: id } : undefined;
+        },
+      );
     },
     stream(model, opts) {
       const name = resolveName(model);

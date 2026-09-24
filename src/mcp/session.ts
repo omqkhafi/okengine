@@ -38,6 +38,8 @@ export interface MintMcpSessionOptions {
   readonly secret: string;
   readonly principalId: string;
   readonly scopes: Iterable<string>;
+  /** Tenant stamped on the access token. Omitted tokens have no tenant. */
+  readonly tenantId?: string | null;
   readonly now?: () => number;
 }
 
@@ -58,6 +60,7 @@ export async function mintMcpSession(options: MintMcpSessionOptions): Promise<Is
       id: options.principalId,
       plane: "operator",
       scopes: options.scopes,
+      ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
     },
   );
 }

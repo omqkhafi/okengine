@@ -26,6 +26,9 @@ export const AGENT_EVENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /** Name of the one notice stored when deltas stop. */
 export const AGENT_EVENTS_TRUNCATED = "oke.events.truncated";
 
+/** Name of the notice stored after a durable append fails twice. */
+export const AGENT_EVENTS_GAP = "oke.events.gap";
+
 /** Flush a coalesced delta after this many milliseconds. */
 const FLUSH_MS = 100;
 
@@ -85,6 +88,8 @@ interface RunBucket {
   truncated: boolean;
   /** Store is already at the cap, even when this process has no rows yet. */
   overCap: boolean;
+  /** The last durable append failed. The next stored row is {@link AGENT_EVENTS_GAP}. */
+  pendingGap: boolean;
   pending?: { event: AgUiEvent; chars: number; since: number };
   timer?: ReturnType<typeof setTimeout>;
   listeners: Set<(row: StoredAgentEvent | undefined) => void>;
@@ -147,15 +152,49 @@ export function createMemoryAgentEventLog(
 
   const keepPastCap = (event: AgUiEvent): boolean => {
     if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") return true;
-    if (event.type === "CUSTOM" && event.name === AGENT_EVENTS_TRUNCATED) return true;
+    if (
+      event.type === "CUSTOM" &&
+      (event.name === AGENT_EVENTS_TRUNCATED || event.name === AGENT_EVENTS_GAP)
+    ) {
+      return true;
+    }
     return !DELTA_TYPES.has(event.type);
   };
 
-  const push = async (run: RunBucket, event: AgUiEvent): Promise<number> => {
-    const seq = run.nextSeq++;
+  const persist = async (runId: string, row: StoredAgentEvent): Promise<boolean> => {
+    if (!store) return true;
+    try {
+      await store.append(runId, row);
+      return true;
+    } catch (err) {
+      if (err instanceof AgentEventDuplicateSeqError) throw err;
+      try {
+        await store.append(runId, row);
+        return true;
+      } catch (again) {
+        if (again instanceof AgentEventDuplicateSeqError) throw again;
+        return false;
+      }
+    }
+  };
+
+  const push = async (run: RunBucket, event: AgUiEvent): Promise<number | undefined> => {
+    const gap = event.type === "CUSTOM" && event.name === AGENT_EVENTS_GAP;
+    if (run.pendingGap && !gap) {
+      run.pendingGap = false;
+      const marked = await push(run, { type: "CUSTOM", name: AGENT_EVENTS_GAP, value: {} });
+      if (marked === undefined) return undefined;
+    }
+    const seq = run.nextSeq;
     const row: StoredAgentEvent = { seq, event };
+    const stored = await persist(run.header.runId, row);
+    if (!stored) {
+      run.pendingGap = true;
+      return undefined;
+    }
+    if (gap) run.pendingGap = false;
+    run.nextSeq = seq + 1;
     run.rows.push(row);
-    await store?.append(run.header.runId, row);
     for (const listener of run.listeners) listener(row);
     return seq;
   };
@@ -234,6 +273,7 @@ export function createMemoryAgentEventLog(
             nextSeq: max + 1,
             truncated: marked,
             overCap: marked || max >= cap,
+            pendingGap: false,
             listeners: new Set(),
           });
           return;
@@ -245,6 +285,7 @@ export function createMemoryAgentEventLog(
           nextSeq: 1,
           truncated: false,
           overCap: false,
+          pendingGap: false,
           listeners: new Set(),
         });
         await store?.writeHeader(opened);
@@ -318,7 +359,7 @@ export function createMemoryAgentEventLog(
           const claimed = opts.claim
             ? await opts.claim(header.runId)
             : store
-              ? await store.claim(header.runId)
+              ? await store.claim(header.runId, now)
               : true;
           if (!claimed) continue;
           try {

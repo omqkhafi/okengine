@@ -25,6 +25,12 @@ export interface AgentEventHeaderRecord {
   /** Epoch ms the run was opened. Sweep uses this for abandoned runs. */
   readonly openedAt?: number;
   readonly finishedAt?: number;
+  /**
+   * Epoch ms until which a sweep claim is held.
+   * Another instance may reclaim the run after this instant.
+   * Postgres stores the claim on `sweep_claim_at` instead.
+   */
+  readonly sweepClaimUntil?: number;
 }
 
 /** One stored SSE row. */
@@ -67,9 +73,14 @@ export interface AgentEventStore {
   /** True when this run already stored `oke.events.truncated`. */
   truncated(runId: string): Promise<boolean>;
   /**
-   * Claim the right to close this run. False when another instance already claimed it.
+   * Claim the right to close this run.
+   * False when another instance holds an unexpired claim.
+   * A claim older than {@link AGENT_EVENT_SWEEP_CLAIM_MS} can be taken again.
+   *
+   * @param runId - Agent run
+   * @param now - Clock. Defaults to `Date.now()`.
    */
-  claim(runId: string): Promise<boolean>;
+  claim(runId: string, now?: number): Promise<boolean>;
   /** Every header, including runs this process did not open. */
   listHeaders(): Promise<readonly AgentEventHeaderRecord[]>;
   /** Create or replace the header. Existing rows stay. */
@@ -83,10 +94,13 @@ export interface AgentEventStore {
   remove(runId: string): Promise<void>;
 }
 
+/** How long a sweep claim blocks other instances. */
+export const AGENT_EVENT_SWEEP_CLAIM_MS = 30_000;
+
 /** In-memory event store. */
 export function createMemoryAgentEventStore(): AgentEventStore {
   const runs = new Map<string, { header: AgentEventHeaderRecord; rows: AgentEventRowRecord[] }>();
-  const claimed = new Set<string>();
+  const claimedUntil = new Map<string, number>();
   return {
     async read(runId) {
       const run = runs.get(runId);
@@ -111,9 +125,11 @@ export function createMemoryAgentEventStore(): AgentEventStore {
       if (!run) return false;
       return run.rows.some((row) => isTruncationEvent(row.event));
     },
-    async claim(runId) {
-      if (!runs.has(runId) || claimed.has(runId)) return false;
-      claimed.add(runId);
+    async claim(runId, now = Date.now()) {
+      if (!runs.has(runId)) return false;
+      const until = claimedUntil.get(runId);
+      if (until !== undefined && now < until) return false;
+      claimedUntil.set(runId, now + AGENT_EVENT_SWEEP_CLAIM_MS);
       return true;
     },
     async listHeaders() {
@@ -134,6 +150,7 @@ export function createMemoryAgentEventStore(): AgentEventStore {
     },
     async remove(runId) {
       runs.delete(runId);
+      claimedUntil.delete(runId);
     },
   };
 }
@@ -156,7 +173,6 @@ interface JsonlLine {
  */
 export function createFileAgentEventStore(dir: string): AgentEventStore {
   const locks = new Map<string, Promise<void>>();
-  const claimed = new Set<string>();
 
   const withLock = async <T>(runId: string, fn: () => Promise<T>): Promise<T> => {
     const prev = locks.get(runId) ?? Promise.resolve();
@@ -240,11 +256,15 @@ export function createFileAgentEventStore(dir: string): AgentEventStore {
         rowsOf(await readLines(runId)).some((row) => isTruncationEvent(row.event)),
       );
     },
-    async claim(runId) {
+    async claim(runId, now = Date.now()) {
       return withLock(runId, async () => {
-        if (claimed.has(runId)) return false;
-        if (!headerOf(await readLines(runId))) return false;
-        claimed.add(runId);
+        const header = headerOf(await readLines(runId));
+        if (!header) return false;
+        if (header.sweepClaimUntil !== undefined && now < header.sweepClaimUntil) return false;
+        await appendLine(runId, {
+          kind: "header",
+          header: { ...header, sweepClaimUntil: now + AGENT_EVENT_SWEEP_CLAIM_MS },
+        });
         return true;
       });
     },
@@ -300,14 +320,20 @@ export interface AgentEventSql {
 export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise<AgentEventStore> {
   await sql.exec(`CREATE TABLE IF NOT EXISTS oke_agent_run (
     run_id TEXT PRIMARY KEY,
-    header TEXT NOT NULL
+    header TEXT NOT NULL,
+    sweep_claim_at BIGINT
   )`);
   await sql.exec(`CREATE TABLE IF NOT EXISTS oke_agent_event (
     run_id TEXT NOT NULL,
     seq INTEGER NOT NULL,
     event TEXT NOT NULL,
+    event_type TEXT,
+    event_name TEXT,
     PRIMARY KEY (run_id, seq)
   )`);
+  await sql.exec(`ALTER TABLE oke_agent_run ADD COLUMN IF NOT EXISTS sweep_claim_at BIGINT`);
+  await sql.exec(`ALTER TABLE oke_agent_event ADD COLUMN IF NOT EXISTS event_type TEXT`);
+  await sql.exec(`ALTER TABLE oke_agent_event ADD COLUMN IF NOT EXISTS event_name TEXT`);
 
   const isDuplicate = (err: unknown): boolean => {
     const message = err instanceof Error ? err.message : String(err);
@@ -343,20 +369,18 @@ export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise
     readHeader,
     async truncated(runId) {
       const rows = await sql.query(
-        `SELECT 1 AS hit FROM oke_agent_event WHERE run_id = ? AND event LIKE ? LIMIT 1`,
-        [runId, '%"oke.events.truncated"%'],
+        `SELECT 1 AS hit FROM oke_agent_event WHERE run_id = ? AND event_type = ? AND event_name = ? LIMIT 1`,
+        [runId, "CUSTOM", "oke.events.truncated"],
       );
       return rows.length > 0;
     },
-    async claim(runId) {
+    async claim(runId, now = Date.now()) {
       const current = await readHeader(runId);
       if (!current) return false;
-      const record = current as AgentEventHeaderRecord & { sweepClaim?: boolean };
-      if (record.sweepClaim) return false;
-      const next = { ...record, sweepClaim: true };
+      const until = now + AGENT_EVENT_SWEEP_CLAIM_MS;
       const updated = await sql.exec(
-        `UPDATE oke_agent_run SET header = ? WHERE run_id = ? AND header NOT LIKE ?`,
-        [JSON.stringify(next), runId, '%"sweepClaim":true%'],
+        `UPDATE oke_agent_run SET sweep_claim_at = ? WHERE run_id = ? AND (sweep_claim_at IS NULL OR sweep_claim_at <= ?)`,
+        [until, runId, now],
       );
       return updated.changes === 1;
     },
@@ -373,11 +397,11 @@ export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise
     },
     async append(runId, row) {
       try {
-        await sql.exec(`INSERT INTO oke_agent_event (run_id, seq, event) VALUES (?, ?, ?)`, [
-          runId,
-          row.seq,
-          JSON.stringify(row.event),
-        ]);
+        const columns = eventColumns(row.event);
+        await sql.exec(
+          `INSERT INTO oke_agent_event (run_id, seq, event, event_type, event_name) VALUES (?, ?, ?, ?, ?)`,
+          [runId, row.seq, JSON.stringify(row.event), columns.type, columns.name],
+        );
       } catch (err) {
         if (isDuplicate(err)) throw new AgentEventDuplicateSeqError(runId, row.seq);
         throw err;
@@ -387,6 +411,18 @@ export async function createPostgresAgentEventStore(sql: AgentEventSql): Promise
       await sql.exec(`DELETE FROM oke_agent_event WHERE run_id = ?`, [runId]);
       await sql.exec(`DELETE FROM oke_agent_run WHERE run_id = ?`, [runId]);
     },
+  };
+}
+
+function eventColumns(event: unknown): {
+  readonly type: string | null;
+  readonly name: string | null;
+} {
+  if (!event || typeof event !== "object") return { type: null, name: null };
+  const row = event as { type?: unknown; name?: unknown };
+  return {
+    type: typeof row.type === "string" ? row.type : null,
+    name: typeof row.name === "string" ? row.name : null,
   };
 }
 
