@@ -1063,12 +1063,20 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   // Vault gaps before seed / app — missing contracts (e.g. OPENROUTER_API_KEY).
   {
     const { maybeAskVaultGaps } = await import("./ask-vault-gaps.ts");
-    const vaultCode = await maybeAskVaultGaps({
-      cwd,
-      entry,
-      write,
-      stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
-    });
+    // The secret prompt owns an open cursor line. A board repaint would
+    // move that cursor and split the mask.
+    bootBoard.hold();
+    let vaultCode = 0;
+    try {
+      vaultCode = await maybeAskVaultGaps({
+        cwd,
+        entry,
+        write,
+        stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
+      });
+    } finally {
+      bootBoard.release();
+    }
     if (vaultCode !== 0) {
       bootBoard.stop();
       restoreProcessEnv();

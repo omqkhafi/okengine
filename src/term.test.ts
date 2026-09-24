@@ -108,6 +108,19 @@ describe("term", () => {
     expect(chunks.join("")).toBe("one\ntwo\nCLAIM\n");
   });
 
+  test("createAnchoredBoard defers paint while held", () => {
+    const chunks: string[] = [];
+    const board = createAnchoredBoard((t) => {
+      chunks.push(t);
+    }, true);
+    board.paint("A\n");
+    board.hold();
+    board.paint("A\nB\n");
+    expect(chunks.join("")).toBe("A\n");
+    board.release();
+    expect(chunks.join("")).toContain("B");
+  });
+
   test("createAnchoredBoard inserts rows when the board grows under output", () => {
     const chunks: string[] = [];
     const board = createAnchoredBoard((t) => {

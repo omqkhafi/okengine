@@ -27,6 +27,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `content-type`, and the response status) even though they do not arrive as
   a socket request.
 
+### 🐛 Fixed
+
+#### Dev, Keel & create-oke
+
+- `oke dev` secret prompt keeps the masked API key on one line. Each `*` was
+  sent through CLI chrome, so every character printed as its own `│` row.
+  The status board also stays still while that prompt owns the cursor.
+
 ## v0.22.0 — 2026-09-24
 
 ### ✨ Added

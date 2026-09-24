@@ -14,7 +14,7 @@ import { buildVaultBootChain, normalizeVaultDriverId } from "../elements/vault/b
 import { createVaultRuntime, VaultBootError, type VaultGap } from "../elements/vault/runtime.ts";
 import type { OkeOptions } from "../kernel/app.ts";
 import { requiredEnvRegistry, secretRegistry } from "../kernel/element-registries.ts";
-import { formatCliChrome } from "../term.ts";
+import { formatCliChrome, formatStatusLine } from "../term.ts";
 import { loadOkeConfig } from "./load-config.ts";
 import { openEnvStore } from "./vault-cmd.ts";
 import { promptHidden } from "./vault-secure-input.ts";
@@ -148,6 +148,35 @@ function unionSecrets(
 }
 
 /**
+ * Writer for {@link promptHidden} during `oke dev`.
+ *
+ * The question is one chrome row with no trailing newline, so mask
+ * characters stay on that row. Echo (`*`, backspace, Enter) goes straight
+ * to stdout: `formatCliChrome` would turn each `*` into its own `│` line,
+ * and the anchored board would count each of those writes as a new row.
+ *
+ * @param sink - Line-oriented stdout (the dev board wrapper)
+ * @param echo - Raw echo. Defaults to `process.stdout.write`
+ */
+export function secretPromptWrite(
+  sink: (text: string) => void,
+  echo: (text: string) => void = (text) => {
+    process.stdout.write(text);
+  },
+): (text: string) => void {
+  let opened = false;
+  return (text: string) => {
+    if (!opened) {
+      opened = true;
+      const line = formatStatusLine(text);
+      sink(line.endsWith("\n") ? line.slice(0, -1) : line);
+      return;
+    }
+    echo(text);
+  };
+}
+
+/**
  * After compose hydrate (and usually schema push), fill Vault boot gaps
  * one-by-one into `.env.local`. Skips when non-TTY or no gaps.
  *
@@ -175,7 +204,11 @@ export async function maybeAskVaultGaps(options: AskVaultGapsOptions): Promise<n
   const envPath = resolve(cwd, options.envFile ?? ".env.local");
   const store = await openEnvStore(envPath);
   const read =
-    options.readSecret ?? ((prompt: string) => promptHidden(prompt, { write: chromeWrite }));
+    options.readSecret ??
+    ((prompt: string) =>
+      promptHidden(prompt, {
+        write: secretPromptWrite(write),
+      }));
 
   const remaining: VaultGap[] = [];
   for (const gap of gaps) {

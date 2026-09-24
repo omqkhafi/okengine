@@ -3,12 +3,14 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { resetRequiredEnvNames, resetSecrets } from "../elements/vault/declare.ts";
 import { resetBindings } from "../kernel/on.ts";
-import { maybeAskVaultGaps, probeVaultGaps } from "./ask-vault-gaps.ts";
+import { maybeAskVaultGaps, probeVaultGaps, secretPromptWrite } from "./ask-vault-gaps.ts";
+import { promptHidden } from "./vault-secure-input.ts";
 
 const OKE = resolve(import.meta.dir, "../index.ts");
 
@@ -90,6 +92,41 @@ describe("maybeAskVaultGaps", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("secretPromptWrite", () => {
+  test("keeps the mask on the prompt line", async () => {
+    const stdin = new EventEmitter() as EventEmitter & {
+      setRawMode?: (mode: boolean) => void;
+      off?: (event: string, listener: (...args: unknown[]) => void) => EventEmitter;
+    };
+    stdin.setRawMode = () => undefined;
+    stdin.off = (event: string | symbol, listener: (...args: unknown[]) => void) => {
+      stdin.removeListener(event, listener);
+      return stdin;
+    };
+    const shown: string[] = [];
+    const echoed: string[] = [];
+    const pending = promptHidden("Enter value for OPENROUTER_API_KEY: ", {
+      stdin,
+      write: secretPromptWrite(
+        (text) => shown.push(text),
+        (text) => echoed.push(text),
+      ),
+      exit: () => {
+        throw new Error("exit should not run");
+      },
+    });
+    await Promise.resolve();
+    stdin.emit("data", "sk");
+    stdin.emit("data", "\r");
+    expect(await pending).toBe("sk");
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toContain("Enter value for OPENROUTER_API_KEY: ");
+    expect(shown[0]?.endsWith("\n")).toBe(false);
+    expect(echoed.join("")).toBe("**\n");
+    expect(shown.join("")).not.toContain("*");
   });
 });
 

@@ -396,6 +396,13 @@ export type AnchoredBoard = {
   readonly reset: () => void;
   /** Disable further in-place rewrites (session end). */
   readonly stop: () => void;
+  /**
+   * Ignore {@link paint} until {@link release}. Used while a prompt owns
+   * the cursor on an open line (secret entry).
+   */
+  readonly hold: () => void;
+  /** Apply the newest paint skipped while held. */
+  readonly release: () => void;
 };
 
 /**
@@ -430,64 +437,89 @@ export function createAnchoredBoard(
   let boardLines = 0;
   let belowLines = 0;
   let stopped = false;
+  let held = false;
+  let pending: string | null = null;
   let lastBody = "";
 
-  return {
-    paint(text: string) {
-      if (stopped) return;
-      const body = text.endsWith("\n") ? text : `${text}\n`;
-      const nextLines = countTermLines(body);
-      if (!enabled) {
-        if (boardLines === 0) {
-          write(body);
-        } else if (body !== lastBody) {
-          const tail = grownBoardTail(lastBody, body);
-          if (tail.length > 0) write(tail);
-        }
-        boardLines = nextLines;
-        lastBody = body;
-        return;
-      }
+  const paintBody = (text: string): void => {
+    if (stopped) return;
+    const body = text.endsWith("\n") ? text : `${text}\n`;
+    const nextLines = countTermLines(body);
+    if (!enabled) {
       if (boardLines === 0) {
         write(body);
-        boardLines = nextLines;
-        lastBody = body;
-        return;
+      } else if (body !== lastBody) {
+        const tail = grownBoardTail(lastBody, body);
+        if (tail.length > 0) write(tail);
       }
-      if (body === lastBody) return;
-      const grew = nextLines - boardLines;
-      // Cursor sits after the below-board output. Move onto the first
-      // below line (or stay after the board when nothing is below).
-      if (belowLines > 0) write(`\x1b[${belowLines}A`);
-      if (grew > 0 && belowLines > 0) {
-        write(`\x1b[${grew}L`);
-      }
-      eraseTermLines(write, boardLines);
-      write(body);
-      if (grew < 0 && belowLines > 0) {
-        write(`\x1b[${-grew}M`);
-      }
-      if (belowLines > 0) write(`\x1b[${belowLines}B`);
       boardLines = nextLines;
       lastBody = body;
-    },
-    wrapWrite(inner: (text: string) => void) {
-      return (text: string) => {
-        if (!stopped && enabled && boardLines > 0) {
-          belowLines += countTermLines(text);
-        }
-        inner(text);
-      };
-    },
-    reset() {
-      boardLines = 0;
-      belowLines = 0;
-      lastBody = "";
-    },
-    stop() {
-      stopped = true;
-    },
+      return;
+    }
+    if (boardLines === 0) {
+      write(body);
+      boardLines = nextLines;
+      lastBody = body;
+      return;
+    }
+    if (body === lastBody) return;
+    const grew = nextLines - boardLines;
+    // Cursor sits after the below-board output. Move onto the first
+    // below line (or stay after the board when nothing is below).
+    if (belowLines > 0) write(`\x1b[${belowLines}A`);
+    if (grew > 0 && belowLines > 0) {
+      write(`\x1b[${grew}L`);
+    }
+    eraseTermLines(write, boardLines);
+    write(body);
+    if (grew < 0 && belowLines > 0) {
+      write(`\x1b[${-grew}M`);
+    }
+    if (belowLines > 0) write(`\x1b[${belowLines}B`);
+    boardLines = nextLines;
+    lastBody = body;
   };
+
+  const paint = (text: string): void => {
+    if (held) {
+      pending = text;
+      return;
+    }
+    paintBody(text);
+  };
+
+  const wrapWrite = (inner: (text: string) => void): ((text: string) => void) => {
+    return (text: string) => {
+      if (!stopped && enabled && boardLines > 0) {
+        belowLines += countTermLines(text);
+      }
+      inner(text);
+    };
+  };
+
+  const reset = (): void => {
+    boardLines = 0;
+    belowLines = 0;
+    lastBody = "";
+  };
+
+  const stop = (): void => {
+    stopped = true;
+  };
+
+  const hold = (): void => {
+    held = true;
+  };
+
+  const release = (): void => {
+    held = false;
+    if (pending === null) return;
+    const next = pending;
+    pending = null;
+    paintBody(next);
+  };
+
+  return { paint, wrapWrite, reset, stop, hold, release };
 }
 
 /**
