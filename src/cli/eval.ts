@@ -132,9 +132,8 @@ export async function runOkeCertify(
 ): Promise<number> {
   const { certifySeed } = await import("../elements/ai/decisions/certify.ts");
   const { aiDecisionRegistry } = await import("../kernel/element-registries.ts");
-  const { DECISION_LOCK_FILENAME, parseDecisionLockfile } = await import(
-    "../elements/ai/decisions/certificate.ts"
-  );
+  const { DECISION_LOCK_FILENAME, parseDecisionLockfile } =
+    await import("../elements/ai/decisions/certificate.ts");
   const { resolveStartEntry } = await import("./start.ts");
   const root = resolve(options.root ?? process.env["OKE_ROOT_DIR"] ?? ".");
   process.env["OKE_ROOT_DIR"] ??= root;
@@ -195,8 +194,10 @@ export async function runOkeCertify(
   await Bun.write(lockPath, `${JSON.stringify(next, null, 2)}\n`);
   const { setDecisionDrift } = await import("../elements/ai/decisions/certificate.ts");
   const { persistDecisionDrift } = await import("../elements/ai/decisions/labels.ts");
-  setDecisionDrift(false);
-  persistDecisionDrift(false);
+  for (const name of names) {
+    setDecisionDrift(name, false);
+    persistDecisionDrift(name, false);
+  }
   return 0;
 }
 
@@ -207,12 +208,10 @@ async function providerForDecision(
   const keyName = typesafe ? "TYPESAFE_API_KEY" : "OPENROUTER_API_KEY";
   const apiKey = process.env[keyName];
   if (!apiKey) throw new Error(`oke eval: secret "${keyName}" is not configured`);
-  const { createTypesafeDecisionProvider, TYPESAFE_JEV_MODEL } = await import(
-    "../elements/ai/decisions/typesafe.ts"
-  );
-  const { createOpenRouterDecisionProvider, OPENROUTER_JEV_MODEL } = await import(
-    "../elements/ai/decisions/openrouter.ts"
-  );
+  const { createTypesafeDecisionProvider, TYPESAFE_JEV_MODEL } =
+    await import("../elements/ai/decisions/typesafe.ts");
+  const { createOpenRouterDecisionProvider, OPENROUTER_JEV_MODEL } =
+    await import("../elements/ai/decisions/openrouter.ts");
   const provider = typesafe
     ? createTypesafeDecisionProvider(apiKey)
     : createOpenRouterDecisionProvider(apiKey);
@@ -237,7 +236,11 @@ function wireFromDecl(
         criteria: { ...question.options, none_of_these: null },
       };
     } else if (question.kind === "score") {
-      questions[id] = { type: "score", instructions: question.instructions, criteria: question.levels };
+      questions[id] = {
+        type: "score",
+        instructions: question.instructions,
+        criteria: question.levels,
+      };
     } else {
       questions[id] = {
         type: "noul",

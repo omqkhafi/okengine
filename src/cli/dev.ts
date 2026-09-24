@@ -1458,6 +1458,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       autoPushRunner.trigger();
     }
   });
+  const { watchDecisionLockfile } = await import("./decision-lock-watch.ts");
+  const decisionLockWatch = watchDecisionLockfile(cwd);
 
   let stopped = false;
   const stop = () => {
@@ -1473,6 +1475,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     clientRegen.cancel();
     manifestRefresh.cancel();
     watcher.close();
+    decisionLockWatch.close();
     const host = attachedHost;
     attachedHost = null;
     void host?.stop();

@@ -8,7 +8,7 @@ import { resolveDecisionReview } from "../../kernel/fx-decide.ts";
 import { fail, flow, http, type Binding } from "../../kernel/index.ts";
 import { bindHttp } from "./bind.ts";
 import type { ConsoleState } from "./state.ts";
-import { loadDecisionQueue, projectDecisionList } from "./decisions.ts";
+import { loadDecisionQueue, projectDecisionList, candidateMetrics } from "./decisions.ts";
 
 const AuthFailed = z.object({});
 
@@ -19,9 +19,11 @@ const DecisionListOut = z.object({
       state: z.enum(["learning", "candidate", "certified", "suspended"]),
       mode: z.enum(["review", "abstain"]),
       model: z.string().optional(),
+      metrics: z.record(z.string(), z.number()).optional(),
+      promote: z.string().optional(),
     }),
   ),
-  suspended: z.boolean(),
+  suspended: z.array(z.string()),
   failures: z.array(
     z.object({
       decision: z.string(),
@@ -41,6 +43,14 @@ const DecisionQueueOut = z.object({
       ageMs: z.number(),
       labelOnly: z.boolean(),
       status: z.enum(["pending", "reviewed"]),
+      questions: z.array(
+        z.object({
+          id: z.string(),
+          kind: z.enum(["boolean", "choice", "score"]),
+          options: z.array(z.string()).optional(),
+          levels: z.array(z.string()).optional(),
+        }),
+      ),
     }),
   ),
 });
@@ -63,15 +73,19 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
     plane: "operator",
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
-      const { decisionDriftSuspended, getDecisionLock } =
+      const { decisionDriftNames, getDecisionLock } =
         await import("../../elements/ai/decisions/certificate.ts");
-      const { decisionLabelWriteFailures, listDecisionCandidates } = await import(
-        "../../elements/ai/decisions/labels.ts"
-      );
-      const names = new Set(await listDecisionCandidates());
+      const { decisionLabelWriteFailures, listDecisionCandidates, loadDecisionCandidate } =
+        await import("../../elements/ai/decisions/labels.ts");
+      const names = await listDecisionCandidates();
+      const fitted: Record<string, Record<string, number>> = {};
+      for (const name of names) {
+        const metrics = candidateMetrics(await loadDecisionCandidate(name));
+        if (metrics) fitted[name] = metrics;
+      }
       return {
-        decisions: projectDecisionList(state.manifest, getDecisionLock(), names),
-        suspended: decisionDriftSuspended(),
+        decisions: projectDecisionList(state.manifest, getDecisionLock(), new Set(names), fitted),
+        suspended: decisionDriftNames(),
         failures: decisionLabelWriteFailures(),
       };
     },
@@ -85,10 +99,7 @@ export function decisionConsoleBindings(state: ConsoleState): Binding[] {
   });
   const resolve = flow("console.decisions.resolve", {
     plane: "operator",
-    do: async (
-      input: { id: string; values: Record<string, unknown>; labelOnly?: boolean },
-      fx,
-    ) => {
+    do: async (input: { id: string; values: Record<string, unknown>; labelOnly?: boolean }, fx) => {
       const reviewer = fx.operator.id;
       if (!reviewer) return fail("Unauthorized", {});
       const store = state.journalStore;

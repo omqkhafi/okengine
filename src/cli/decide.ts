@@ -10,6 +10,7 @@ import {
   parseDecisionLockfile,
   type DecisionLockfile,
 } from "../elements/ai/decisions/certificate.ts";
+import { DECISION_EXPORT_WARNING } from "../elements/ai/decisions/export.ts";
 
 /** Options for {@link promoteDecision}. */
 export interface PromoteDecisionOptions {
@@ -50,9 +51,85 @@ export async function promoteDecision(options: PromoteDecisionOptions): Promise<
   }
   const next = lockFromCandidate(options.name, candidate, current);
   const { persistDecisionDrift } = await import("../elements/ai/decisions/labels.ts");
-  persistDecisionDrift(false);
+  persistDecisionDrift(options.name, false);
   await Bun.write(path, `${JSON.stringify(next, null, 2)}\n`);
   return next;
+}
+
+/** Options for {@link exportDecisionLabelsFile}. */
+export interface ExportDecisionLabelsOptions {
+  readonly name: string;
+  /** Origin of the running app, including scheme and port. */
+  readonly origin: string;
+  /** File the JSONL is written to. */
+  readonly out: string;
+  /** Operator credential header value (`Authorization`). */
+  readonly authorization?: string;
+  /** Tenant the operator is exporting. A mismatch is rejected by the app. */
+  readonly tenant?: string;
+  /** Injected fetch. Defaults to the global fetch. */
+  readonly fetcher?: (input: string, init?: RequestInit) => Promise<Response>;
+  /** Where the production-data warning is printed. Defaults to stdout. */
+  readonly write?: (text: string) => void;
+}
+
+/**
+ * Fetch reviewed labels and write seed JSONL. Prints that the file holds production data.
+ *
+ * @param options - Decision name, origin, and output path
+ */
+export async function exportDecisionLabelsFile(
+  options: ExportDecisionLabelsOptions,
+): Promise<void> {
+  const fetcher = options.fetcher ?? fetch;
+  const url = new URL(
+    `/_oke/decisions/${encodeURIComponent(options.name)}/labels`,
+    options.origin.endsWith("/") ? options.origin : `${options.origin}/`,
+  );
+  if (options.tenant) url.searchParams.set("tenant", options.tenant);
+  const headers = new Headers();
+  if (options.authorization) headers.set("authorization", options.authorization);
+  const res = await fetcher(url.toString(), { headers });
+  if (!res.ok) {
+    throw new Error(`oke decide labels: ${res.status} from ${url}`);
+  }
+  const body = (await res.json()) as { lines?: string; data?: { lines?: string } };
+  const lines = body.data?.lines ?? body.lines ?? "";
+  const write = options.write ?? ((text: string) => process.stdout.write(text));
+  write(`${DECISION_EXPORT_WARNING}\n`);
+  await Bun.write(options.out, lines);
+}
+
+/**
+ * `oke decide labels <name> --export`.
+ *
+ * @param name - Decision name
+ * @param rest - Flags after the name
+ */
+async function exportLabelsCommand(name: string | undefined, rest: string[]): Promise<number> {
+  if (!name || !rest.includes("--export")) {
+    console.error("oke decide: expected `oke decide labels <name> --export`");
+    return 1;
+  }
+  let origin = process.env.OKE_ORIGIN ?? "http://127.0.0.1:6530";
+  let out = `${name}.labels.jsonl`;
+  let authorization = process.env.OKE_OPERATOR_AUTHORIZATION;
+  let tenant: string | undefined;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i];
+    if (arg === "--origin") origin = rest[++i] ?? origin;
+    else if (arg === "--out") out = rest[++i] ?? out;
+    else if (arg === "--authorization") authorization = rest[++i];
+    else if (arg === "--tenant") tenant = rest[++i];
+  }
+  await exportDecisionLabelsFile({
+    name,
+    origin,
+    out,
+    ...(authorization !== undefined ? { authorization } : {}),
+    ...(tenant !== undefined ? { tenant } : {}),
+  });
+  return 0;
 }
 
 /**
@@ -64,13 +141,18 @@ export async function decideCli(args: string[]): Promise<number> {
   const [sub, name, ...rest] = args;
   if (sub === "--help" || sub === "-h" || !sub) {
     console.log(`oke decide promote <name> [--origin URL] [--lock path]
+oke decide labels <name> --export [--out file] [--origin URL]
 
-Fetch the operator candidate and write oke-decisions.lock.json next to the app config.
+promote fetches the operator candidate and writes oke-decisions.lock.json.
+labels --export writes reviewed labels as seed JSONL. The file contains production data.
 `);
     return sub ? 0 : 1;
   }
+  if (sub === "labels") return exportLabelsCommand(name, rest);
   if (sub !== "promote" || !name) {
-    console.error("oke decide: expected `oke decide promote <name>`");
+    console.error(
+      "oke decide: expected `oke decide promote <name>` or `oke decide labels <name> --export`",
+    );
     return 1;
   }
   let origin = process.env.OKE_ORIGIN ?? "http://127.0.0.1:6530";

@@ -5,13 +5,18 @@
 import { describe, expect, test } from "bun:test";
 import type { JournalRun } from "../../kernel/journal.ts";
 import { projectDecisionList, projectDecisionQueue } from "./decisions.ts";
-import { setDecisionDrift, setDecisionLock, resetDecisionCertificates } from "../../elements/ai/decisions/certificate.ts";
+import {
+  setDecisionDrift,
+  setDecisionLock,
+  resetDecisionCertificates,
+} from "../../elements/ai/decisions/certificate.ts";
 import type { Manifest } from "../../manifest/types.ts";
 
 const manifest = {
   ai: {
     decisions: {
       triage: { mode: "review" as const, questions: ["team"] },
+      route: { mode: "review" as const, questions: ["team"] },
     },
   },
 } as unknown as Manifest;
@@ -25,9 +30,18 @@ describe("decision console projection", () => {
         triage: { model: "typesafe/jev-1.13.0", questions: {} },
       },
     });
-    expect(projectDecisionList(manifest)[0]?.state).toBe("certified");
-    setDecisionDrift(true);
-    expect(projectDecisionList(manifest)[0]?.state).toBe("suspended");
+    expect(projectDecisionList(manifest).find((row) => row.name === "triage")?.state).toBe(
+      "certified",
+    );
+    setDecisionDrift("triage", true);
+    const rows = projectDecisionList(manifest, undefined, new Set(["route"]), {
+      route: { labels: 12, errors: 0 },
+    });
+    expect(rows.find((row) => row.name === "triage")?.state).toBe("suspended");
+    const route = rows.find((row) => row.name === "route");
+    expect(route?.state).toBe("candidate");
+    expect(route?.metrics).toEqual({ labels: 12, errors: 0 });
+    expect(route?.promote).toBe("oke decide promote route");
     resetDecisionCertificates();
   });
 

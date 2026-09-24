@@ -274,16 +274,17 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     loss: number | null;
     raw: string | null;
     at: number;
+    input: string | null;
   };
   type State = {
     rows: JournalDbRow[];
     idem: IdemDbRow[];
     labels: LabelDbRow[];
-    drift: { suspended: number; certified_at: number } | null;
+    drift: { decision_id: string; suspended: number; certified_at: number }[];
     candidates: { decision_id: string; body: string }[];
   };
 
-  let committed: State = { rows: [], idem: [], labels: [], drift: null, candidates: [] };
+  let committed: State = { rows: [], idem: [], labels: [], drift: [], candidates: [] };
   let active: { state: State; locked: Set<string>; done: boolean } | null = null;
   /** Run ids held by other active transactions (SKIP LOCKED). */
   const heldByTxn = new Set<string>();
@@ -299,7 +300,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       rows: s.rows.map((r) => ({ ...r })),
       idem: s.idem.map((r) => ({ ...r })),
       labels: s.labels.map((r) => ({ ...r })),
-      drift: s.drift ? { ...s.drift } : null,
+      drift: s.drift.map((r) => ({ ...r })),
       candidates: s.candidates.map((r) => ({ ...r })),
     };
   }
@@ -418,13 +419,15 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       }
 
       if (/FROM\s+oke_decision_drift/i.test(text)) {
-        return state.drift ? [{ ...state.drift }] : [];
+        return state.drift.map((row) => ({ ...row }));
       }
 
       if (/FROM\s+oke_decision_candidates/i.test(text)) {
         if (/decision_id\s*=\s*\?/i.test(text)) {
           const id = String(params[0] ?? "");
-          return state.candidates.filter((row) => row.decision_id === id).map((row) => ({ ...row }));
+          return state.candidates
+            .filter((row) => row.decision_id === id)
+            .map((row) => ({ ...row }));
         }
         return state.candidates.map((row) => ({ ...row }));
       }
@@ -606,6 +609,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
           loss: params[9] === null || params[9] === undefined ? null : Number(params[9]),
           raw: params[10] === null || params[10] === undefined ? null : String(params[10]),
           at: Number(params[11]),
+          input: params[12] === null || params[12] === undefined ? null : String(params[12]),
         });
         return { changes: 1 };
       }
@@ -619,11 +623,25 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         return { changes: 1 };
       }
 
+      if (/^UPDATE\s+oke_decision_drift\b/i.test(text)) return { changes: 0 };
+
+      if (/^DELETE\s+FROM\s+oke_decision_drift\b/i.test(text)) {
+        const id = String(params[0] ?? "");
+        const before = state.drift.length;
+        state.drift = state.drift.filter((row) => row.decision_id !== id);
+        return { changes: before - state.drift.length };
+      }
+
       if (/^INSERT\s+INTO\s+oke_decision_drift\b/i.test(text)) {
-        state.drift = {
-          suspended: Number(params[0]),
-          certified_at: Number(params[1] ?? 0),
+        const decisionId = String(params[0]);
+        const next = {
+          decision_id: decisionId,
+          suspended: Number(params[1]),
+          certified_at: Number(params[2] ?? 0),
         };
+        const idx = state.drift.findIndex((row) => row.decision_id === decisionId);
+        if (idx >= 0) state.drift[idx] = next;
+        else state.drift.push(next);
         return { changes: 1 };
       }
 
@@ -708,7 +726,7 @@ function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
     insert: (label, at) => ready().then((store) => store.insert(label, at)),
     list: (decision, tenant) => ready().then((store) => store.list(decision, tenant)),
     drift: () => ready().then((store) => store.drift()),
-    setDrift: (record) => ready().then((store) => store.setDrift(record)),
+    setDrift: (decision, record) => ready().then((store) => store.setDrift(decision, record)),
     putCandidate: (decision, entry) => ready().then((store) => store.putCandidate(decision, entry)),
     getCandidate: (decision) => ready().then((store) => store.getCandidate(decision)),
     listCandidates: () => ready().then((store) => store.listCandidates()),

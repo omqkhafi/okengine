@@ -9,12 +9,15 @@ import type { Binding } from "../../../kernel/on.ts";
 import { http } from "../../../kernel/triggers.ts";
 import type { Manifest } from "../../../manifest/types.ts";
 import { aiDecisionRegistry } from "../../../kernel/element-registries.ts";
+import { aiDecisionRegistry } from "../../../kernel/element-registries.ts";
 import {
   aggregateDecisionCandidate,
+  decisionDriftNames,
   decisionDriftSuspended,
   setDecisionDrift,
 } from "./certificate.ts";
 import { certifyLabels } from "./certify.ts";
+import { decisionExportFields, exportDecisionLabels } from "./export.ts";
 import {
   auditDriftExceeded,
   loadDecisionCandidate,
@@ -84,8 +87,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     plane: "operator",
     effects: { emits: [DECISION_DRIFT_SIGNAL] },
     do: async (_input, fx) => {
-      let next = false;
-      let certifiedAt = 0;
+      const suspended: string[] = [];
       for (const [name, decision] of Object.entries(manifest.ai?.decisions ?? {})) {
         const pinned = pinnedDecision(name);
         if (!pinned) continue;
@@ -96,18 +98,15 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
           since: pinned.since,
           labels: await loadDecisionLabels(name),
         });
-        if (exceeded) {
-          next = true;
-          certifiedAt = pinned.since;
-          break;
-        }
+        const prev = decisionDriftSuspended(name);
+        if (exceeded === prev) continue;
+        setDecisionDrift(name, exceeded);
+        persistDecisionDrift(name, exceeded, pinned.since);
+        if (exceeded) suspended.push(name);
       }
-      const prev = decisionDriftSuspended();
-      if (next === prev) return { suspended: prev };
-      setDecisionDrift(next);
-      persistDecisionDrift(next, certifiedAt);
-      await fx.emit({ name: DECISION_DRIFT_SIGNAL }, { suspended: next });
-      return { suspended: next };
+      if (suspended.length === 0) return { suspended: decisionDriftNames() };
+      await fx.emit({ name: DECISION_DRIFT_SIGNAL }, { suspended: true, decisions: suspended });
+      return { suspended: decisionDriftNames() };
     },
   });
   adopt({
@@ -129,6 +128,30 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     trigger: http.get("/_oke/decisions/:name/candidate").gate(decisionOperatorGate),
     flow: candidate,
   });
+
+  const labels = flow("oke.decisions.labels", {
+    plane: "operator",
+    do: async (input: { name?: string; tenant?: string }, fx) => {
+      if (!fx.operator.id) return fx.fail.unauthorized();
+      const name = input.name ?? "";
+      const requested = input.tenant;
+      if (requested && requested !== (fx.tenant.id ?? null)) return fx.fail.notFound();
+      const decl = aiDecisionRegistry.find((item) => item.name === name);
+      const rows = await loadDecisionLabels(name, fx.tenant.id);
+      const exported = exportDecisionLabels({
+        labels: rows,
+        callerTenant: fx.tenant.id,
+        ...(requested !== undefined ? { requestedTenant: requested } : {}),
+        fields: decisionExportFields(decl?.inputSchema),
+      });
+      if (!exported.ok) return fx.fail.notFound();
+      return { lines: exported.lines };
+    },
+  });
+  adopt({
+    trigger: http.get("/_oke/decisions/:name/labels").gate(decisionOperatorGate),
+    flow: labels,
+  });
 }
 
 /**
@@ -136,6 +159,6 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
  *
  * @param suspended - Drift detected
  */
-export function noteDecisionDrift(suspended: boolean): void {
-  setDecisionDrift(suspended);
+export function noteDecisionDrift(name: string, suspended: boolean): void {
+  setDecisionDrift(name, suspended);
 }

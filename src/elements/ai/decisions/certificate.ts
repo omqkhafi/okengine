@@ -78,6 +78,8 @@ export interface DecisionLabel {
   readonly loss?: number;
   /** Epoch ms the label was written. */
   readonly at?: number;
+  /** Calling input, when the review stored one. */
+  readonly input?: unknown;
 }
 
 /** App-wide candidate. A full lock entry, not a count. */
@@ -91,7 +93,7 @@ export const DECISION_LOCK_FILENAME = "oke-decisions.lock.json";
 
 const labels: DecisionLabel[] = [];
 let lockfile: DecisionLockfile | undefined;
-let suspended = false;
+const drifted = new Map<string, number>();
 
 /**
  * Replace the in-memory lock. `undefined` is a missing lockfile.
@@ -110,19 +112,30 @@ export function getDecisionLock(): DecisionLockfile | undefined {
 }
 
 /**
- * App-level drift flag. One flag for the whole app.
+ * Set or clear drift for one decision.
  *
- * @param next - Suspend autonomy when true
+ * @param name - Decision name
+ * @param next - Suspend that decision when true
  */
-export function setDecisionDrift(next: boolean): void {
-  suspended = next;
+export function setDecisionDrift(name: string, next: boolean): void {
+  if (next) drifted.set(name, drifted.get(name) ?? 0);
+  else drifted.delete(name);
 }
 
 /**
- * Whether drift has suspended every certificate.
+ * Whether drift has suspended this decision.
+ *
+ * @param name - Decision name
  */
-export function decisionDriftSuspended(): boolean {
-  return suspended;
+export function decisionDriftSuspended(name: string): boolean {
+  return drifted.has(name);
+}
+
+/**
+ * Decision names currently suspended.
+ */
+export function decisionDriftNames(): readonly string[] {
+  return [...drifted.keys()];
 }
 
 /**
@@ -138,7 +151,7 @@ export function decisionLabels(): readonly DecisionLabel[] {
 export function resetDecisionCertificates(): void {
   labels.length = 0;
   lockfile = undefined;
-  suspended = false;
+  drifted.clear();
 }
 
 /**
@@ -326,7 +339,7 @@ export function lockFromCandidate(
 ): DecisionLockfile {
   const entry = parseDecisionLockEntry(candidate);
   if (!entry) throw new TypeError("promote: candidate is not a lock entry");
-  setDecisionDrift(false);
+  setDecisionDrift(name, false);
   return { decisions: { ...(current?.decisions ?? {}), [name]: entry } };
 }
 

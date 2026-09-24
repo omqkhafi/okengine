@@ -103,6 +103,8 @@ export interface DecisionReviewRecord {
   readonly scores?: Readonly<Record<string, number>>;
   readonly raws?: Readonly<Record<string, unknown>>;
   readonly modelValues?: Readonly<Record<string, unknown>>;
+  /** Calling input. Label export reads this. */
+  readonly input?: unknown;
 }
 
 /** Result of {@link resolveDecisionReview}. */
@@ -179,7 +181,9 @@ async function executeDecide(options: FxDecideInput, name: string): Promise<unkn
   const ordinal = decideOrdinal(options.journal, name);
   const slot = `${name}#${ordinal}`;
   const recorded = options.journal
-    ? await options.journal.effect("decide-provider", slot, () => callAndDraw(decl, options, ordinal))
+    ? await options.journal.effect("decide-provider", slot, () =>
+        callAndDraw(decl, options, ordinal),
+      )
     : await callAndDraw(decl, options, ordinal);
   const view = options.journal
     ? ((await options.journal.effect("decide-view", slot, () =>
@@ -252,7 +256,10 @@ async function callAndDraw(
   }
 }
 
-async function callProvider(decl: AiDecisionDecl, options: FxDecideInput): Promise<DecisionResponse> {
+async function callProvider(
+  decl: AiDecisionDecl,
+  options: FxDecideInput,
+): Promise<DecisionResponse> {
   if (providerOverride) return providerOverride(decl, options.input, options.signal);
   const model =
     decl.model ?? (decl.driverId === "typesafe" ? TYPESAFE_JEV_MODEL : OPENROUTER_JEV_MODEL);
@@ -336,14 +343,14 @@ interface JournaledView {
 
 function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): JournaledView {
   const locale = decl.locale?.(input);
-  let auto = !recorded.outage && !decisionDriftSuspended();
+  let auto = !recorded.outage && !decisionDriftSuspended(decl.name);
   let reason: DecisionUncertainty | undefined = recorded.outage
     ? "outage"
-    : decisionDriftSuspended()
+    : decisionDriftSuspended(decl.name)
       ? "drift"
       : undefined;
   const lock = getDecisionLock()?.decisions[decl.name];
-  if (!recorded.outage && !decisionDriftSuspended()) {
+  if (!recorded.outage && !decisionDriftSuspended(decl.name)) {
     if (!lock || !decl.autonomy) {
       auto = false;
       reason = "missing-lock";
@@ -517,12 +524,17 @@ function pendingRecord(
       .filter(([, question]) => question.uncertain)
       .map(([id]) => id),
     ...(view.meta.model !== undefined ? { model: view.meta.model } : {}),
-    scores: Object.fromEntries(Object.entries(view.questions).map(([id, question]) => [id, question.p])),
-    raws: Object.fromEntries(Object.entries(view.questions).map(([id, question]) => [id, question.raw])),
+    scores: Object.fromEntries(
+      Object.entries(view.questions).map(([id, question]) => [id, question.p]),
+    ),
+    raws: Object.fromEntries(
+      Object.entries(view.questions).map(([id, question]) => [id, question.raw]),
+    ),
     modelValues: Object.fromEntries(
       Object.entries(view.questions).map(([id, question]) => [id, question.value]),
     ),
     ...(view.reason !== undefined ? { reason: view.reason } : {}),
+    input: options.input,
   };
 }
 
@@ -666,6 +678,7 @@ export async function resolveDecisionReview(
         ...(current.scores?.[question] !== undefined ? { score: current.scores[question] } : {}),
         ...(current.raws?.[question] !== undefined ? { raw: current.raws[question] } : {}),
         loss: current.modelValues?.[question] === value ? 0 : 1,
+        ...(current.input !== undefined ? { input: current.input } : {}),
         at,
       };
       recordDecisionLabel(label);

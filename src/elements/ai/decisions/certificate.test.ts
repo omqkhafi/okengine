@@ -77,7 +77,7 @@ async function run(
       },
     });
   }
-  if (extra?.drift) setDecisionDrift(true);
+  if (extra?.drift) setDecisionDrift("triage", true);
   const fx = createFx({ flow: "run", effects: { decides: ["triage"] }, now: () => 1 });
   return (await fx.decide(decl, {})) as { team: string | null; $: { team: { how: string } } };
 }
@@ -128,7 +128,7 @@ describe("decision certificates", () => {
     expect((await run(true, { locale: true })).team).toBeNull();
     resetAiDecls();
     expect((await run(true, { drift: true })).team).toBeNull();
-    expect(decisionDriftSuspended()).toBe(true);
+    expect(decisionDriftSuspended("triage")).toBe(true);
   });
 
   test("promote writes the fetched candidate", async () => {

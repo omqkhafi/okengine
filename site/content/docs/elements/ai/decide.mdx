@@ -7,8 +7,8 @@ source: "docs/spec/unified-theory.md"
 
 A decision picks labels for one piece of work: which queue a ticket belongs in, and whether it needs a person today. One request asks every question. The result records whether the model or a person supplied each value.
 
-<Callout title="Experimental">
-  `ai.decision` is experimental. A promoted lockfile applies after restart. Drift is one flag for the whole app. A seed file can print a certificate. It is not a production pilot. Score levels and a whole question held in a same-file const are checked at compile time.
+<Callout title="OpenRouter">
+  The OpenRouter decisions endpoint is alpha on the provider side. Score levels and a whole question held in a same-file const are checked at compile time.
 </Callout>
 
 <Callout title="The one rule">
@@ -143,21 +143,22 @@ The consumer then returns. Each question is a top-level field. `$` records how i
 
 ## Lifecycle
 
-A decision is in one list state. Drift covers the whole app: while the flag is set, every
-decision shows `suspended`, even one that still has a lockfile entry.
+A decision is in one list state. Drift is one flag per decision. Suspending `triage` leaves `route` alone.
 
 ```text
-learning  --labels-->  candidate  --promote-->  certified
-                              \                      /
+learning  --labels-->  candidate ready  --promote-->  certified
+                              \                           /
                                \---- drift ----> suspended
 ```
 
 | State | What is true | What moves it |
 | --- | --- | --- |
 | `learning` | No lockfile entry and no candidate. | Reviews and audit labels accumulate. |
-| `candidate` | The clock has built a candidate from those labels. Counts are not the grant. | `oke decide promote` fetches it. |
+| `candidate ready` | The clock has built a candidate from those labels. The page shows the fit and `oke decide promote <name>`. Counts are not the grant. | Promote writes that slot. |
 | `certified` | `oke-decisions.lock.json` has this decision, and the declaration sets `autonomy`. A lock entry is ignored without `autonomy`. | The runtime may return `auto` under that certificate. |
-| `suspended` | Drift: audit labels since certification, inside 7 days, for the pinned model, failed the error cap. The monitor emitted `oke/decision/drift`. | The next boot, once the lockfile's `certifiedAt` is newer than that flag. |
+| `suspended` | This decision's audit labels since its certificate, inside 7 days, for the pinned model, failed the error cap. The monitor emitted `oke/decision/drift` with that name. | Promote or recertify clears only this decision. A newer `certifiedAt` on the next load ignores the flag. |
+
+`oke dev` reloads `oke-decisions.lock.json` when the file changes. Production reads it once, at boot.
 
 The runtime never raises a threshold and never invents a certificate. Missing lock, a stale
 question, a model version mismatch, an uncertified locale, low confidence, drift, and an
@@ -165,9 +166,7 @@ outage all take the non-auto path.
 
 ## How a person resolves a review
 
-Open Console at `/flows/decisions` on port 6533. The list is the lifecycle table. The queue
-shows how long each row has been waiting (`ageMs` from the moment it parked). Nothing times
-the row out.
+Open Console at `/flows/decisions` on port 6533. Each row is `learning`, `candidate ready`, `certified`, or `suspended` for that decision. The queue shows how long each row has been waiting. The resolve form only accepts a choice option, `none_of_these`, or a score level. An audit row submits `labelOnly: true`. A second resolve is `Conflict`. A lease collision retries. A failed label write is listed on the page.
 
 An audit row is a label only. The original Flow already returned. A review row is the park:
 submitting it wakes the consumer.
@@ -264,7 +263,7 @@ matches: the runtime stops returning `auto` until you certify again.
 }
 ```
 
-After production labels exist, the clock stores a candidate on the journal. It survives a restart only when that journal is a file or Postgres. A memory journal drops it when the process exits. Promote fetches it. It does not recompute the certificate. Other decisions already in the file stay. This decision's slot is replaced. The running process keeps the old drift flag. The next boot with this lockfile clears it when the new `certifiedAt` is newer than the flag.
+After production labels exist, the clock stores a candidate on the journal. It survives a restart only when that journal is a file or Postgres. A memory journal drops it when the process exits. Promote fetches it. It does not recompute the certificate. Other decisions already in the file stay. This decision's slot is replaced. Promote clears drift for this decision only.
 
 ```bash
 OKE_ORIGIN=http://127.0.0.1:6530 \
@@ -276,6 +275,12 @@ oke decide promote triage \
 ```
 
 That GET is `/_oke/decisions/triage/candidate`. The caller must be an operator. A missing candidate is 404. The route exists only when a decision declares `autonomy`.
+
+`oke decide labels <name> --export` writes reviewed labels as seed JSONL (`input`, `expect`, `locale`). It is operator-only and limited to the caller's tenant. The file keeps the decision's declared `in` fields. Secret and redacted fields are masked. The command prints that the file contains production data.
+
+```bash
+oke decide labels triage --export --out triage.labels.jsonl
+```
 
 ## Patterns
 

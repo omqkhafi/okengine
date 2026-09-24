@@ -11,7 +11,12 @@ import {
   DecisionLabelStoreError,
   createPostgresDecisionLabelStore,
 } from "../../../kernel/decision-label-store.ts";
-import { decisionDriftSuspended, setDecisionDrift, setDecisionLock } from "./certificate.ts";
+import {
+  decisionDriftNames,
+  decisionDriftSuspended,
+  setDecisionDrift,
+  setDecisionLock,
+} from "./certificate.ts";
 import {
   auditDriftExceeded,
   closeDecisionLabelStore,
@@ -25,7 +30,7 @@ import {
 
 afterEach(() => {
   closeDecisionLabelStore();
-  setDecisionDrift(false);
+  for (const name of decisionDriftNames()) setDecisionDrift(name, false);
   setDecisionLock(undefined);
 });
 
@@ -47,10 +52,10 @@ describe("decision labels", () => {
       loss: 1,
       at: 1,
     });
-    persistDecisionDrift(true);
+    persistDecisionDrift("triage", true);
     await flushDecisionLabels();
     closeDecisionLabelStore();
-    setDecisionDrift(false);
+    setDecisionDrift("triage", false);
     const second = createFileJournalStore(path);
     await openDecisionLabelStore(second, setDecisionDrift);
     const saved = await loadDecisionLabels("triage", "acme");
@@ -58,7 +63,7 @@ describe("decision labels", () => {
     expect(saved[0]?.at).toBe(1);
     expect(await loadDecisionLabels("triage", "other")).toHaveLength(0);
     expect(await loadDecisionLabels("triage")).toHaveLength(1);
-    expect(decisionDriftSuspended()).toBe(true);
+    expect(decisionDriftSuspended("triage")).toBe(true);
   });
 
   test("one correct audit label never suspends", async () => {
@@ -135,17 +140,32 @@ describe("decision labels", () => {
   test("a newer certificate ignores a drift flag raised against the previous one", async () => {
     const journal = createMemoryJournalStore();
     await openDecisionLabelStore(journal, setDecisionDrift);
-    persistDecisionDrift(true, 100);
+    persistDecisionDrift("triage", true, 100);
     await flushDecisionLabels();
     closeDecisionLabelStore();
-    setDecisionDrift(false);
+    setDecisionDrift("triage", false);
     setDecisionLock({
       decisions: {
         triage: { model: "typesafe/jev-1.13.0", certifiedAt: 200, questions: {} },
       },
     });
     await openDecisionLabelStore(journal, setDecisionDrift);
-    expect(decisionDriftSuspended()).toBe(false);
+    expect(decisionDriftSuspended("triage")).toBe(false);
+  });
+
+  test("promoting one decision clears only that decision", async () => {
+    const journal = createMemoryJournalStore();
+    await openDecisionLabelStore(journal, setDecisionDrift);
+    persistDecisionDrift("ship", true, 1);
+    persistDecisionDrift("triage", true, 1);
+    await flushDecisionLabels();
+    persistDecisionDrift("ship", false);
+    await flushDecisionLabels();
+    closeDecisionLabelStore();
+    for (const name of decisionDriftNames()) setDecisionDrift(name, false);
+    await openDecisionLabelStore(journal, setDecisionDrift);
+    expect(decisionDriftSuspended("ship")).toBe(false);
+    expect(decisionDriftSuspended("triage")).toBe(true);
   });
 
   test("one failed insert does not drop the next write", async () => {
@@ -229,7 +249,9 @@ describe("decision labels", () => {
       const acme = await store.list("triage", "acme");
       expect(unlabeled.map((row) => row.value)).toEqual(["billing"]);
       expect(acme.map((row) => row.value)).toEqual(["technical"]);
-      expect(await store.drift()).toEqual({ suspended: true, certifiedAt: 0 });
+      expect(await store.drift()).toEqual({
+        legacy: { suspended: true, certifiedAt: 0 },
+      });
     } finally {
       await db.close();
     }

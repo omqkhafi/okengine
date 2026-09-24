@@ -18,15 +18,15 @@ export interface DecisionLabelSql {
   exec(sql: string, params?: readonly unknown[]): Promise<{ changes: number }>;
 }
 
-/**
- * App drift flag plus the certificate time it was raised against.
- * A later lockfile certificate (`certifiedAt` newer than this) ignores the flag.
- */
-export interface DecisionDriftRecord {
+/** Drift for one decision. A later certificate (`certifiedAt` newer) ignores it. */
+export interface DecisionDriftFlag {
   readonly suspended: boolean;
   /** Epoch ms of the certificate that was current when the flag was written. */
   readonly certifiedAt: number;
 }
+
+/** @deprecated Use {@link DecisionDriftFlag}. Kept for stored rows. */
+export interface DecisionDriftRecord extends DecisionDriftFlag {}
 
 /** Thrown when the postgres label store cannot open or query. */
 export class DecisionLabelStoreError extends Error {
@@ -50,10 +50,15 @@ export interface DecisionLabelStore {
    * @param tenant - Tenant filter
    */
   list(decision?: string, tenant?: string | null): Promise<DecisionLabel[]>;
-  /** App-level suspension flag and the certificate time it belongs to. */
-  drift(): Promise<DecisionDriftRecord>;
-  /** Persist the app-level suspension flag. */
-  setDrift(record: DecisionDriftRecord): Promise<void>;
+  /** Drift flags keyed by decision name. */
+  drift(): Promise<Readonly<Record<string, DecisionDriftFlag>>>;
+  /**
+   * Persist one decision's suspension flag.
+   *
+   * @param decision - Decision name
+   * @param record - Flag and the certificate time it belongs to
+   */
+  setDrift(decision: string, record: DecisionDriftFlag): Promise<void>;
   /**
    * Store one candidate on this journal. Any instance can read it after a restart.
    *
@@ -81,7 +86,7 @@ interface StoredLabel extends DecisionLabel {
 export function createMemoryDecisionLabelStore(): DecisionLabelStore {
   const rows: StoredLabel[] = [];
   const candidates = new Map<string, DecisionCandidate>();
-  let driftRecord: DecisionDriftRecord = { suspended: false, certifiedAt: 0 };
+  const driftFlags = new Map<string, DecisionDriftFlag>();
   return {
     async insert(label, at) {
       rows.push({ ...label, at });
@@ -93,10 +98,11 @@ export function createMemoryDecisionLabelStore(): DecisionLabelStore {
         .map(toLabel);
     },
     async drift() {
-      return driftRecord;
+      return Object.fromEntries(driftFlags);
     },
-    async setDrift(next) {
-      driftRecord = next;
+    async setDrift(decision, next) {
+      if (next.suspended) driftFlags.set(decision, next);
+      else driftFlags.delete(decision);
     },
     async putCandidate(decision, entry) {
       candidates.set(decision, entry);
@@ -118,7 +124,7 @@ export function createMemoryDecisionLabelStore(): DecisionLabelStore {
 export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
   let rows: StoredLabel[] | undefined;
   let candidates: Record<string, DecisionCandidate> = {};
-  let driftRecord: DecisionDriftRecord = { suspended: false, certifiedAt: 0 };
+  let driftFlags: Record<string, DecisionDriftFlag> = {};
   const load = async (): Promise<void> => {
     if (rows) return;
     rows = [];
@@ -128,14 +134,15 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
         rows?: StoredLabel[];
         suspended?: boolean;
         certifiedAt?: number;
+        drifts?: Record<string, DecisionDriftFlag>;
         candidates?: Record<string, DecisionCandidate>;
       };
       rows = raw.rows ?? [];
       candidates = raw.candidates ?? {};
-      driftRecord = {
-        suspended: raw.suspended === true,
-        certifiedAt: typeof raw.certifiedAt === "number" ? raw.certifiedAt : 0,
-      };
+      driftFlags = raw.drifts ?? {};
+      if (raw.suspended === true && Object.keys(driftFlags).length === 0) {
+        driftFlags = { "*": { suspended: true, certifiedAt: raw.certifiedAt ?? 0 } };
+      }
     }
   };
   const flush = async (): Promise<void> => {
@@ -145,8 +152,7 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
       JSON.stringify({
         rows,
         candidates,
-        suspended: driftRecord.suspended,
-        certifiedAt: driftRecord.certifiedAt,
+        drifts: driftFlags,
       }),
     );
   };
@@ -165,11 +171,12 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
     },
     async drift() {
       await load();
-      return driftRecord;
+      return driftFlags;
     },
-    async setDrift(next) {
+    async setDrift(decision, next) {
       await load();
-      driftRecord = next;
+      if (next.suspended) driftFlags[decision] = next;
+      else delete driftFlags[decision];
       await flush();
     },
     async putCandidate(decision, entry) {
@@ -210,15 +217,21 @@ export async function createPostgresDecisionLabelStore(
       score DOUBLE PRECISION,
       loss INTEGER,
       raw TEXT,
-      at BIGINT NOT NULL
+      at BIGINT NOT NULL,
+      input TEXT
     )`);
+    await sql.exec(`ALTER TABLE oke_decision_labels ADD COLUMN IF NOT EXISTS input TEXT`);
     await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_drift (
-      id INTEGER PRIMARY KEY,
+      decision_id TEXT PRIMARY KEY,
       suspended INTEGER NOT NULL,
       certified_at BIGINT NOT NULL
     )`);
+    await sql.exec(`ALTER TABLE oke_decision_drift ADD COLUMN IF NOT EXISTS decision_id TEXT`);
     await sql.exec(
       `ALTER TABLE oke_decision_drift ADD COLUMN IF NOT EXISTS certified_at BIGINT NOT NULL DEFAULT 0`,
+    );
+    await sql.exec(
+      `UPDATE oke_decision_drift SET decision_id = 'legacy' WHERE decision_id IS NULL`,
     );
     await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_candidates (
       decision_id TEXT PRIMARY KEY,
@@ -248,8 +261,8 @@ export async function createPostgresDecisionLabelStore(
     async insert(label, at) {
       await exec(
         `INSERT INTO oke_decision_labels
-          (decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at, input)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           label.decision,
           label.question,
@@ -263,6 +276,7 @@ export async function createPostgresDecisionLabelStore(
           label.loss ?? null,
           label.raw === undefined ? null : JSON.stringify(label.raw),
           at,
+          label.input === undefined ? null : JSON.stringify(label.input),
         ],
       );
     },
@@ -279,7 +293,7 @@ export async function createPostgresDecisionLabelStore(
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
       const found = await query(
-        `SELECT decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at
+        `SELECT decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at, input
          FROM oke_decision_labels ${where}`,
         args,
       );
@@ -295,23 +309,34 @@ export async function createPostgresDecisionLabelStore(
         ...(row.score != null ? { score: Number(row.score) } : {}),
         ...(row.loss != null ? { loss: Number(row.loss) } : {}),
         ...(row.raw != null ? { raw: JSON.parse(String(row.raw)) as unknown } : {}),
+        ...(row.input != null ? { input: JSON.parse(String(row.input)) as unknown } : {}),
         at: Number(row.at),
       }));
     },
     async drift() {
       const rows = await query(
-        `SELECT suspended, certified_at FROM oke_decision_drift WHERE id = 1`,
+        `SELECT decision_id, suspended, certified_at FROM oke_decision_drift`,
       );
-      return {
-        suspended: Number(rows[0]?.suspended) === 1,
-        certifiedAt: Number(rows[0]?.certified_at ?? 0),
-      };
+      const flags: Record<string, DecisionDriftFlag> = {};
+      for (const row of rows) {
+        const name = String(row.decision_id ?? "");
+        if (!name) continue;
+        flags[name] = {
+          suspended: Number(row.suspended) === 1,
+          certifiedAt: Number(row.certified_at ?? 0),
+        };
+      }
+      return flags;
     },
-    async setDrift(next) {
+    async setDrift(decision, next) {
+      if (!next.suspended) {
+        await exec(`DELETE FROM oke_decision_drift WHERE decision_id = ?`, [decision]);
+        return;
+      }
       await exec(
-        `INSERT INTO oke_decision_drift (id, suspended, certified_at) VALUES (1, ?, ?)
-         ON CONFLICT (id) DO UPDATE SET suspended = excluded.suspended, certified_at = excluded.certified_at`,
-        [next.suspended ? 1 : 0, next.certifiedAt],
+        `INSERT INTO oke_decision_drift (decision_id, suspended, certified_at) VALUES (?, ?, ?)
+         ON CONFLICT (decision_id) DO UPDATE SET suspended = excluded.suspended, certified_at = excluded.certified_at`,
+        [decision, 1, next.certifiedAt],
       );
     },
     async putCandidate(decision, entry) {
@@ -322,10 +347,9 @@ export async function createPostgresDecisionLabelStore(
       );
     },
     async getCandidate(decision) {
-      const rows = await query(
-        `SELECT body FROM oke_decision_candidates WHERE decision_id = ?`,
-        [decision],
-      );
+      const rows = await query(`SELECT body FROM oke_decision_candidates WHERE decision_id = ?`, [
+        decision,
+      ]);
       const body = rows[0]?.body;
       if (typeof body !== "string") return undefined;
       const parsed = JSON.parse(body) as DecisionCandidate;
@@ -352,6 +376,7 @@ function toLabel(row: StoredLabel): DecisionLabel {
     ...(row.score !== undefined ? { score: row.score } : {}),
     ...(row.loss !== undefined ? { loss: row.loss } : {}),
     ...(row.raw !== undefined ? { raw: row.raw } : {}),
+    ...(row.input !== undefined ? { input: row.input } : {}),
     at: row.at,
   };
 }

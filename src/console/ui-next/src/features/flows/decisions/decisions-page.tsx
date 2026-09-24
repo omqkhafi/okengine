@@ -19,6 +19,7 @@ import {
   EXPLORER_STRIP_CLASS,
   SECTION_HEAD_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
+import { decisionStateLabel, decisionValuesValid, resolveDecisionWithRetry } from "./resolve.ts";
 
 /**
  * Format a pending age in seconds or minutes.
@@ -36,16 +37,15 @@ function formatAge(ageMs: number): string {
  */
 export function DecisionsPage(): JSX.Element {
   const [decisions, setDecisions] = useState<readonly DecisionListRow[]>([]);
-  const [suspended, setSuspended] = useState(false);
   const [failures, setFailures] = useState<readonly DecisionLabelFailure[]>([]);
   const [rows, setRows] = useState<readonly DecisionQueueRow[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, Record<string, string>>>({});
 
   const reload = useCallback(async () => {
     const list = await decisionList();
     if (list.data) {
       setDecisions(list.data.decisions);
-      setSuspended(list.data.suspended);
       setFailures(list.data.failures ?? []);
     }
     const queue = await decisionQueue();
@@ -57,20 +57,26 @@ export function DecisionsPage(): JSX.Element {
   }, [reload]);
 
   async function approve(row: DecisionQueueRow): Promise<void> {
-    const result = await decisionResolve({
+    const draft = values[row.id] ?? {};
+    const submitted: Record<string, unknown> = {};
+    for (const question of row.questions) {
+      const raw = draft[question.id];
+      if (question.kind === "boolean") submitted[question.id] = raw === "true";
+      else if (raw !== undefined) submitted[question.id] = raw;
+    }
+    if (!decisionValuesValid(row.questions, submitted)) {
+      setNotice("ValidationError");
+      return;
+    }
+    const result = await resolveDecisionWithRetry(decisionResolve, {
       id: row.id,
-      values: {},
+      values: submitted,
       ...(row.labelOnly ? { labelOnly: true } : {}),
     });
-    if (result.error?.code === "Conflict") {
-      setNotice("Conflict");
-    } else if (result.error?.code === "JournalLeaseBusy") {
-      setNotice("JournalLeaseBusy");
-    } else if (result.error) {
-      setNotice(result.error.code);
-    } else {
-      setNotice(null);
-    }
+    if (result.error?.code === "Conflict") setNotice("Conflict");
+    else if (result.error?.code === "JournalLeaseBusy") setNotice("JournalLeaseBusy");
+    else if (result.error) setNotice(result.error.code);
+    else setNotice(null);
     await reload();
   }
 
@@ -81,7 +87,6 @@ export function DecisionsPage(): JSX.Element {
           Flows
         </Link>
         <span className={`${SECTION_HEAD_CLASS} px-2.5`}>Decisions</span>
-        <span className={EXPLORER_COUNT_CLASS}>{suspended ? "suspended" : "open"}</span>
       </div>
       {failures.length > 0 ? (
         <ul>
@@ -101,9 +106,26 @@ export function DecisionsPage(): JSX.Element {
       ) : null}
       <ul>
         {decisions.map((decision) => (
-          <li key={decision.name} className={EXPLORER_ROW_CLASS} data-state={decision.state}>
+          <li
+            key={decision.name}
+            className={EXPLORER_ROW_CLASS}
+            data-state={decisionStateLabel(decision.state)}
+            data-decision={decision.name}
+          >
             <span className="min-w-0 flex-1 truncate">{decision.name}</span>
-            <span className={EXPLORER_COUNT_CLASS}>{decision.state}</span>
+            <span className={EXPLORER_COUNT_CLASS}>{decisionStateLabel(decision.state)}</span>
+            {decision.metrics ? (
+              <span className={EXPLORER_COUNT_CLASS} data-slot="decision-metrics">
+                {Object.entries(decision.metrics)
+                  .map(([key, value]) => `${key} ${value}`)
+                  .join(" · ")}
+              </span>
+            ) : null}
+            {decision.promote ? (
+              <code className="text-xs" data-slot="decision-promote">
+                {decision.promote}
+              </code>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -117,7 +139,11 @@ export function DecisionsPage(): JSX.Element {
       ) : null}
       <ul>
         {rows.map((row) => (
-          <li key={`${row.labelOnly ? "label" : "park"}:${row.id}`} className={EXPLORER_ROW_CLASS}>
+          <li
+            key={`${row.labelOnly ? "label" : "park"}:${row.id}`}
+            className={EXPLORER_ROW_CLASS}
+            data-label-only={row.labelOnly ? "true" : "false"}
+          >
             <span className="min-w-0 flex-1 truncate">
               {row.decision}
               {row.labelOnly ? " · label" : ""}
@@ -125,14 +151,59 @@ export function DecisionsPage(): JSX.Element {
             <span className={EXPLORER_COUNT_CLASS} data-slot="decision-age">
               {formatAge(row.ageMs)}
             </span>
-            <button
-              type="button"
-              className="text-xs"
-              disabled={row.status !== "pending"}
-              onClick={() => void approve(row)}
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void approve(row);
+              }}
             >
-              Approve
-            </button>
+              {row.questions.map((question) =>
+                question.kind === "boolean" ? (
+                  <select
+                    key={question.id}
+                    aria-label={question.id}
+                    value={values[row.id]?.[question.id] ?? ""}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setValues((current) => ({
+                        ...current,
+                        [row.id]: { ...current[row.id], [question.id]: next },
+                      }));
+                    }}
+                  >
+                    <option value="">Select</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                ) : (
+                  <select
+                    key={question.id}
+                    aria-label={question.id}
+                    value={values[row.id]?.[question.id] ?? ""}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setValues((current) => ({
+                        ...current,
+                        [row.id]: { ...current[row.id], [question.id]: next },
+                      }));
+                    }}
+                  >
+                    <option value="">Select</option>
+                    {(question.kind === "choice" ? question.options : question.levels)?.map(
+                      (option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                ),
+              )}
+              <button type="submit" className="text-xs" disabled={row.status !== "pending"}>
+                Approve
+              </button>
+            </form>
           </li>
         ))}
       </ul>

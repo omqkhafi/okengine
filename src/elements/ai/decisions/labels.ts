@@ -61,13 +61,17 @@ export function bindDecisionLabelTelemetry(telemetry: RunTelemetry): void {
  */
 export async function openDecisionLabelStore(
   journal: JournalStore,
-  setDrift: (suspended: boolean) => void,
+  setDrift: (name: string, suspended: boolean) => void,
 ): Promise<void> {
   await writes;
   store = journal.decisions;
   if (!store) return;
-  const flag = await store.drift();
-  setDrift(flag.suspended && newestCertificateAt() <= flag.certifiedAt);
+  const flags = await store.drift();
+  for (const [name, flag] of Object.entries(flags)) {
+    const pinned = pinnedDecision(name);
+    const suspended = flag.suspended && (pinned?.since ?? 0) <= flag.certifiedAt;
+    setDrift(name, suspended);
+  }
 }
 
 /**
@@ -215,33 +219,22 @@ export function auditDriftExceeded(options: {
 }
 
 /**
- * Persist the app-level suspension flag.
+ * Persist one decision's suspension flag.
  *
- * @param suspended - Drift detected
+ * @param name - Decision name
+ * @param suspended - Drift detected for that decision
+ * @param certifiedAt - Certificate time the flag was raised against
  */
-export function persistDecisionDrift(suspended: boolean, certifiedAt = 0): void {
+export function persistDecisionDrift(name: string, suspended: boolean, certifiedAt = 0): void {
   if (!store) return;
   const target = store;
   const record: DecisionDriftRecord = { suspended, certifiedAt };
   const write = (): Promise<void> =>
-    target.setDrift(record).then(
+    target.setDrift(name, record).then(
       () => undefined,
       () => undefined,
     );
   writes = writes.then(write, write);
-}
-
-/**
- * Newest certificate time in the loaded lockfile. `0` when none is stamped.
- */
-function newestCertificateAt(): number {
-  const decisions = getDecisionLock()?.decisions ?? {};
-  let newest = 0;
-  for (const entry of Object.values(decisions)) {
-    const at = entry.certifiedAt ?? 0;
-    if (at > newest) newest = at;
-  }
-  return newest;
 }
 
 /**

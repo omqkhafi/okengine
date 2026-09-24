@@ -33,8 +33,6 @@ needed). Large groups add `####` area headings so the list stays scannable.
   `durable: true`. The run parks until `fx.agent.approve`, `fx.agent.deny`, or the
   timeout (default `24h`, then deny). The first resolution wins; a later one is
   HTTP 409. Approve can replace the tool args. Resume replays the tool output.
-- `ai.decision` is experimental in 0.23. Autonomy is statistically certified only after
-  a real-data pilot. A seed file does not grant that certification.
 - `ai.decision` and `fx.decide` run one provider request for every question.
   `how` is `auto`, `reviewed`, or `abstained`. `audited` is a flag on an auto
   value, not a `how`. Review and `onUncertain: "abstain"` are exclusive. A
@@ -42,11 +40,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
   Autonomy comes only from `oke-decisions.lock.json` next to the app config.
   `oke decide promote` fetches the operator candidate. `oke eval --certify`
   builds a certificate from the seed file and does not run prompt evals.
+  The OpenRouter decisions endpoint is alpha on the provider side.
+- Drift is one flag per decision. Promote and recertify clear only that decision. The monitor emits the decisions that failed. Console reads that flag.
+- `oke decide labels <name> --export` writes reviewed labels as seed JSONL for the caller's tenant. Only declared `in` fields are copied. Secret and redacted fields are masked. The command prints that the file contains production data.
 
 #### Docs
 
 - `fx.run(..., { stream: true })` streams each model turn when the driver implements `stream`. `mock`, `anthropic`, and `openai-compatible` emit text deltas and tool-call argument deltas. `bedrock` and `vertex` stay reserved. The assembled turn is journaled, so a durable replay does not call the model. The default `threadId` is a unique id.
-- A durable agent run keeps a coalesced event log (text and args flush about every 100 ms or 1 KB). `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under the same gate and tenant. At the cap, further text deltas stop, one `oke.events.truncated` event is stored, and `RUN_FINISHED` is still stored. Finished logs are deleted after 24 hours.
+- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under the same gate and tenant. An approval interrupt does not end the follow. Another tenant, or a gate that denies the caller, is rejected. At the cap, further text deltas stop, one `oke.events.truncated` event is stored, and `RUN_FINISHED` is still stored. Finished logs are deleted after 24 hours.
+- `openai-compatible` logs a preconnect failure once outside production. The live OpenRouter stream test is the proof.
 - `okengine/client/agent` follows a run with `Last-Event-ID`, and `approve` / `deny` retry `JournalLeaseBusy` and surface `Conflict`. `okengine/client-react` exports `useAgentRun`. Neither module is on the `okengine/client` graph.
 - `ai.decision` score levels and a whole question held in a same-file const are checked at compile time. An unresolved name fails the build.
 - Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
@@ -81,10 +83,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   has one (`Chrome 131`, `curl 8.7`). Expanding the strip lists the client
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
-- Flows has a Decisions list and review queue at `/flows/decisions`. The queue
-  shows how long a row has been waiting. Resolving a row uses the same lease
-  as tool approval. An audit row is a label only. The list state follows the
-  lockfile and the app drift flag. The sidebar stays six modules.
+- Flows has a Decisions list and review queue at `/flows/decisions`. Each decision is `learning`, `candidate ready`, `certified`, or `suspended` from its own drift flag and the lockfile. A candidate row shows fit metrics and `oke decide promote <name>`. The queue shows age. The resolve form accepts only declared options and levels. An audit row submits `labelOnly`. A second resolve is Conflict. A lease collision retries. Label write failures are listed. The sidebar stays six modules.
 
 #### Console — Units & Call API
 
@@ -95,15 +94,20 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ♻️ Changed
 
+#### Dev, Keel & create-oke
+
+- `oke dev` reloads `oke-decisions.lock.json` when the file changes. Production reads the lockfile once, at boot.
+
 #### Runtime
 
 - Browser JSON page colors the status, latency, cache, and auth marks, and the
   request verb (GET green, POST sky, PUT amber, PATCH violet, DELETE rose).
-  Params, Path, Body, Cookies, Headers, and Auth each carry a colored icon.
+  Params, Path, Body, Headers, Auth, and Cookies each carry a colored icon.
   Fields, JSON, Auth, and Headers on the strips do too.
-- Browser JSON page puts Params, Path, Body, Cookies, Headers, and Auth above
-  the route list. Routes stays pinned to the bottom of the Request rail, and
-  its header ends with a control that collapses the list downward.
+- Browser JSON page puts Params, Path, Body, Headers, Auth, and Cookies above
+  the route list. Cookies sits after Auth. Routes stays pinned to the bottom of
+  the Request rail, and its header ends with a control that collapses the list
+  downward.
 - Browser JSON page opens the response as fields: status, response headers,
   and a body that expands objects and arrays. A collapsed row shows a short
   preview (`id: ENG-12`, `5 items`). Fields and JSON sit on the response header.

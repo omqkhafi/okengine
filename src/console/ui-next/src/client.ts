@@ -719,6 +719,8 @@ export type DecisionListRow = {
   readonly state: "learning" | "candidate" | "certified" | "suspended";
   readonly mode: "review" | "abstain";
   readonly model?: string;
+  readonly metrics?: Readonly<Record<string, number>>;
+  readonly promote?: string;
 };
 
 /** One failed label write, shown on the decisions page. */
@@ -729,11 +731,19 @@ export type DecisionLabelFailure = {
   readonly at: number;
 };
 
-/** Decision catalogue plus the app drift flag and label-write failures. */
+/** Decision catalogue, per-decision drift names, and label-write failures. */
 export type DecisionListPayload = {
   readonly decisions: readonly DecisionListRow[];
-  readonly suspended: boolean;
+  readonly suspended: readonly string[];
   readonly failures: readonly DecisionLabelFailure[];
+};
+
+/** One question on the resolve form. */
+export type DecisionFormQuestion = {
+  readonly id: string;
+  readonly kind: "boolean" | "choice" | "score";
+  readonly options?: readonly string[];
+  readonly levels?: readonly string[];
 };
 
 /** One review queue row. `ageMs` is how long it has been waiting. */
@@ -744,6 +754,7 @@ export type DecisionQueueRow = {
   readonly ageMs: number;
   readonly labelOnly: boolean;
   readonly status: "pending" | "reviewed";
+  readonly questions: readonly DecisionFormQuestion[];
 };
 
 /**

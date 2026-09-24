@@ -260,7 +260,8 @@ describe("fx.decide end to end", () => {
     const drift = locked.flow("oke.decisions.drift");
     if (!drift) throw new Error("expected the drift monitor");
     await locked.call(drift, {});
-    expect(decisionDriftSuspended()).toBe(true);
+    expect(decisionDriftSuspended("ship")).toBe(true);
+    expect(decisionDriftSuspended("triage")).toBe(false);
 
     const aggregate = locked.flow("oke.decisions.aggregate");
     if (!aggregate) throw new Error("expected the candidate job");
@@ -343,7 +344,8 @@ describe("fx.decide end to end", () => {
     });
     expect(promoted.decisions.ship).toBeDefined();
     expect(promoted.decisions.route?.questions.team?.[""]).toBeDefined();
-    expect(decisionDriftSuspended()).toBe(false);
+    expect(decisionDriftSuspended("route")).toBe(false);
+    expect(decisionDriftSuspended("ship")).toBe(true);
     await loadDecisionLockfile(root);
     const after = (await locked.call(work, { which: "route" })) as {
       team: string;
@@ -353,6 +355,7 @@ describe("fx.decide end to end", () => {
     expect(after.$.team.how).toBe("auto");
     await locked.bootResult?.close();
 
+    await flushDecisionLabels();
     closeDecisionLabelStore();
     resetDecisionCertificates();
     const restartedStore = await createPostgresJournalStore({ sql });
@@ -384,7 +387,8 @@ describe("fx.decide end to end", () => {
     await restarted.boot({ env: "test" });
     expect((await loadDecisionLabels("route")).length).toBeGreaterThan(0);
     expect(getDecisionLock()?.decisions.route?.questions.team?.[""]).toBeDefined();
-    expect(decisionDriftSuspended()).toBe(false);
+    expect(decisionDriftSuspended("ship")).toBe(true);
+    expect(decisionDriftSuspended("route")).toBe(false);
     const restartedAuto = (await restarted.call(work, { which: "route" })) as {
       team: string;
       $: { team: { how: string } };

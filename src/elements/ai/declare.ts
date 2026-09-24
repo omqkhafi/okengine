@@ -159,6 +159,8 @@ export interface AiDecisionDecl {
   readonly evals?: string;
   readonly timeout?: AiTimeout;
   readonly locale?: (input: unknown) => string | undefined;
+  /** Declared `in` schema. Label export keeps only these fields. */
+  readonly inputSchema?: unknown;
 }
 
 /** Options for {@link ai.agent}. */
@@ -600,7 +602,9 @@ export function buildDecisionDecl(name: string, options: AiDecisionOptions): AiD
     if (question.kind === "choice") {
       const count = Object.keys(question.options).length;
       if (count > 254) {
-        throw new TypeError(`ai.decision("${name}"): choice "${key}" has ${count} options; max 254`);
+        throw new TypeError(
+          `ai.decision("${name}"): choice "${key}" has ${count} options; max 254`,
+        );
       }
       if (Object.prototype.hasOwnProperty.call(question.options, "none_of_these")) {
         throw new TypeError(`ai.decision("${name}"): choice "${key}" must not set none_of_these`);
@@ -615,7 +619,9 @@ export function buildDecisionDecl(name: string, options: AiDecisionOptions): AiD
   }
   const review = typeof options.review === "string" ? options.review : options.review?.name;
   const model =
-    typeof options.model === "string" ? options.model : (options.model?.model ?? options.model?.name);
+    typeof options.model === "string"
+      ? options.model
+      : (options.model?.model ?? options.model?.name);
   return {
     kind: "decision",
     name,
@@ -628,5 +634,6 @@ export function buildDecisionDecl(name: string, options: AiDecisionOptions): AiD
     ...(options.evals !== undefined ? { evals: options.evals } : {}),
     ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
     ...(options.locale !== undefined ? { locale: options.locale } : {}),
+    ...(options.in !== undefined ? { inputSchema: options.in } : {}),
   };
 }

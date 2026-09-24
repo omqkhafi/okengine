@@ -4,9 +4,11 @@
 
 import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
+import { aiDecisionRegistry } from "../../kernel/element-registries.ts";
 import {
   decisionDriftSuspended,
   getDecisionLock,
+  type DecisionCandidate,
   type DecisionLockfile,
 } from "../../elements/ai/decisions/certificate.ts";
 
@@ -19,6 +21,18 @@ export interface DecisionListRow {
   readonly state: DecisionListState;
   readonly mode: "review" | "abstain";
   readonly model?: string;
+  /** Candidate fit, when one is stored and the decision is not certified. */
+  readonly metrics?: Readonly<Record<string, number>>;
+  /** Command that writes this decision's candidate into the lockfile. */
+  readonly promote?: string;
+}
+
+/** One question the resolve form can answer. */
+export interface DecisionFormQuestion {
+  readonly id: string;
+  readonly kind: "boolean" | "choice" | "score";
+  readonly options?: readonly string[];
+  readonly levels?: readonly string[];
 }
 
 /** One parked or audit review. */
@@ -29,6 +43,7 @@ export interface DecisionQueueRow {
   readonly ageMs: number;
   readonly labelOnly: boolean;
   readonly status: "pending" | "reviewed";
+  readonly questions: readonly DecisionFormQuestion[];
 }
 
 /**
@@ -41,12 +56,13 @@ export function projectDecisionList(
   manifest: Manifest | null | undefined,
   lock: DecisionLockfile | undefined = getDecisionLock(),
   candidates: ReadonlySet<string> = new Set(),
+  metrics: Readonly<Record<string, Readonly<Record<string, number>>>> = {},
 ): DecisionListRow[] {
   const decisions = manifest?.ai?.decisions ?? {};
-  const suspended = decisionDriftSuspended();
   return Object.entries(decisions).map(([name, decision]) => {
     const certified = lock?.decisions[name] !== undefined;
     const candidate = candidates.has(name);
+    const suspended = decisionDriftSuspended(name);
     const state: DecisionListState = suspended
       ? "suspended"
       : certified
@@ -54,13 +70,33 @@ export function projectDecisionList(
         : candidate
           ? "candidate"
           : "learning";
+    const fitted = metrics[name];
     return {
       name,
       state,
       mode: decision.mode,
       ...(decision.model !== undefined ? { model: decision.model } : {}),
+      ...(state === "candidate" && fitted ? { metrics: fitted } : {}),
+      ...(state === "candidate" ? { promote: `oke decide promote ${name}` } : {}),
     };
   });
+}
+
+/**
+ * First slice metrics on a stored candidate.
+ *
+ * @param entry - Candidate body
+ */
+export function candidateMetrics(
+  entry: DecisionCandidate | undefined,
+): Record<string, number> | undefined {
+  if (!entry) return undefined;
+  for (const slices of Object.values(entry.questions)) {
+    for (const slice of Object.values(slices)) {
+      if (slice.metrics) return { ...slice.metrics };
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -86,6 +122,7 @@ export function projectDecisionQueue(
         status?: "pending" | "reviewed";
         requestedAt?: number;
         tenant?: string | null;
+        open?: readonly string[];
       };
       if (tenantId !== undefined && (value.tenant ?? null) !== tenantId) continue;
       const requestedAt = value.requestedAt ?? entry.at;
@@ -96,6 +133,7 @@ export function projectDecisionQueue(
         ageMs: Math.max(0, now - requestedAt),
         labelOnly,
         status: value.status ?? "pending",
+        questions: formQuestions(decisionNameFromId(id), value.open),
       });
     }
   }
@@ -127,4 +165,27 @@ function decisionNameFromId(id: string): string {
   } catch {
     return id;
   }
+}
+
+function formQuestions(name: string, open: readonly string[] | undefined): DecisionFormQuestion[] {
+  const decl = aiDecisionRegistry.find((item) => item.name === name);
+  if (!decl) return [];
+  const ids = open && open.length > 0 ? open : Object.keys(decl.ask);
+  const questions: DecisionFormQuestion[] = [];
+  for (const id of ids) {
+    const question = decl.ask[id];
+    if (!question) continue;
+    if (question.kind === "choice") {
+      questions.push({
+        id,
+        kind: "choice",
+        options: [...Object.keys(question.options), "none_of_these"],
+      });
+    } else if (question.kind === "score") {
+      questions.push({ id, kind: "score", levels: [...question.levels] });
+    } else {
+      questions.push({ id, kind: "boolean" });
+    }
+  }
+  return questions;
 }
