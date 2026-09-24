@@ -43,7 +43,27 @@ type SharedPostgresEntry = {
   readonly guarded: PostgresClientLike;
 };
 
-const sharedClients = new Map<string, SharedPostgresEntry>();
+/**
+ * Process-wide pool registry.
+ *
+ * `bun --hot` re-evaluates this module on each save. A module-local `Map`
+ * would drop the only handle to the previous Bun.SQL pools and leave them
+ * connected. PgDog then queues every checkout — Console login included —
+ * until its server pool times out.
+ */
+const SHARED_POSTGRES_CLIENTS = Symbol.for("oke.sharedPostgresClients");
+
+function sharedClientMap(): Map<string, SharedPostgresEntry> {
+  const g = globalThis as typeof globalThis & {
+    [SHARED_POSTGRES_CLIENTS]?: Map<string, SharedPostgresEntry>;
+  };
+  let map = g[SHARED_POSTGRES_CLIENTS];
+  if (!map) {
+    map = new Map();
+    g[SHARED_POSTGRES_CLIENTS] = map;
+  }
+  return map;
+}
 
 /**
  * When true, shared pools stay closed and every query fails fast — no Bun.SQL
@@ -170,11 +190,12 @@ function guardSharedPostgresClient(raw: PostgresClientLike): PostgresClientLike 
 export function sharedPostgresClient(url?: string): PostgresClientLike {
   assertSharedPostgresReady();
   const key = resolvePostgresUrl(url);
-  const existing = sharedClients.get(key);
+  const clients = sharedClientMap();
+  const existing = clients.get(key);
   if (existing) return existing.guarded;
   const raw = new Bun.SQL(key, { max: POSTGRES_POOL_MAX }) as unknown as PostgresClientLike;
   const guarded = guardSharedPostgresClient(raw);
-  sharedClients.set(key, { raw, guarded });
+  clients.set(key, { raw, guarded });
   return guarded;
 }
 
@@ -185,8 +206,8 @@ export function sharedPostgresClient(url?: string): PostgresClientLike {
  * not stop Console from opening a fresh pool on the next poll.
  */
 export async function closeSharedPostgresClients(): Promise<void> {
-  const clients = [...sharedClients.values()];
-  sharedClients.clear();
+  const clients = [...sharedClientMap().values()];
+  sharedClientMap().clear();
   await Promise.all(
     clients.map(async (entry) => {
       try {

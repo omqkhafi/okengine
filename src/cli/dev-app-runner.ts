@@ -21,6 +21,8 @@
 
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { closeSharedPostgresClients } from "../drivers/postgres.ts";
+import { installDevHotGeneration, takeDevHotGeneration } from "./dev-hot.ts";
 import { installGracefulShutdown, type GracefulShutdownApp } from "../kernel/graceful-shutdown.ts";
 import type { Manifest } from "../manifest/types.ts";
 import { createBunRuntime } from "../runtime/bun.ts";
@@ -67,6 +69,23 @@ if (manifestPath !== undefined && manifestPath.length > 0) {
   }
 }
 
+// Soft reload re-enters this file in the same process. Stop the previous
+// boot's 1s scheduler and close its Bun.SQL pools before opening new ones.
+// Holder `close()` is a no-op on the shared pool, so this has to be explicit.
+const previous = takeDevHotGeneration();
+if (previous) {
+  try {
+    await previous.dispose();
+  } catch (err) {
+    console.error(
+      `oke dev: previous hot generation failed to dispose — ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+await closeSharedPostgresClients();
+
 const absoluteEntry = resolve(entry);
 const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
   app?: BootableApp;
@@ -99,7 +118,14 @@ const handle = createBunRuntime().serve(mod.app, {
   hostname,
   id: DEV_APP_SERVE_ID,
 });
-installGracefulShutdown({ app: mod.app, handle });
+const removeSignals = installGracefulShutdown({ app: mod.app, handle });
+installDevHotGeneration({
+  async dispose() {
+    removeSignals();
+    await mod.app.stop();
+    await closeSharedPostgresClients();
+  },
+});
 
 const appUrl = `http://${formatHostForUrl(hostname)}:${handle.port}`;
 // Parent board (claim + Docker) stays. Bun `--no-clear-screen` + no child wipe.
