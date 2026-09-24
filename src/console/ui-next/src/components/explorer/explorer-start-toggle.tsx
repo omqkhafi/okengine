@@ -16,6 +16,8 @@ export interface ExplorerStartToggleProps {
   readonly noun: string;
   readonly controlsId: string;
   readonly dataSlot: string;
+  /** `end` mirrors the icon for a right-hand rail. */
+  readonly side?: "start" | "end";
 }
 
 /**
@@ -29,8 +31,10 @@ export function ExplorerStartToggle({
   noun,
   controlsId,
   dataSlot,
+  side = "start",
 }: ExplorerStartToggleProps): JSX.Element {
   const label = open ? `Collapse ${noun}` : `Expand ${noun}`;
+  const collapsedTowardStart = side === "end" ? !open : open;
   return (
     <ToolbarTip label={label} className="flex self-stretch">
       <button
@@ -43,7 +47,7 @@ export function ExplorerStartToggle({
         className={EXPLORER_ICON_BUTTON_CLASS}
       >
         <HugeiconsIcon
-          icon={open ? LayoutAlignLeftIcon : LayoutAlignRightIcon}
+          icon={collapsedTowardStart ? LayoutAlignLeftIcon : LayoutAlignRightIcon}
           className="size-3.5"
         />
       </button>

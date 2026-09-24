@@ -21,6 +21,8 @@ export interface DetailHeaderProps {
   readonly subtitle?: ReactNode;
   /** First control — typically collapse / expand the start explorer. */
   readonly leading?: ReactNode;
+  /** Last control — typically collapse / expand an end rail. */
+  readonly trailing?: ReactNode;
   readonly actions?: ReactNode;
   readonly sticky?: boolean;
   readonly className?: string;
@@ -40,6 +42,7 @@ export function DetailHeader({
   badge,
   subtitle,
   leading,
+  trailing,
   actions,
   sticky = false,
   className,
@@ -77,6 +80,12 @@ export function DetailHeader({
         ) : null}
       </div>
       {actions ? <div className="flex h-full shrink-0 items-stretch">{actions}</div> : null}
+      {trailing ? (
+        <div className="-mr-2 flex h-full shrink-0 items-stretch">
+          <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+          {trailing}
+        </div>
+      ) : null}
     </header>
   );
 }

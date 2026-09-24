@@ -955,7 +955,7 @@ function ResponseStatus({
 }
 
 /**
- * Flush invoke dock — toolbar + scrollable body (Units workbench).
+ * Flush invoke rail — toolbar + scrollable body (Units workbench).
  */
 function CallDock({
   title,

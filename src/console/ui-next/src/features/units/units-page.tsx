@@ -1,5 +1,5 @@
 /**
- * Flows page — Manifest service catalog + docked Call API.
+ * Flows page — Manifest service catalog, contract, and a Call API rail.
  */
 
 import { useMemo, type JSX } from "react";
@@ -27,6 +27,7 @@ export function UnitsPage(): JSX.Element {
   useConsoleLive(true);
   const { selectedFlowId: urlFlowId, setSelectedFlow } = useUnitsSelection();
   const start = useExplorerStartPanel();
+  const callRail = useExplorerStartPanel();
   const groups = useMemo(() => buildUnitTree(manifestQuery.data ?? null), [manifestQuery.data]);
   const startToggle = (
     <ExplorerStartToggle
@@ -35,6 +36,16 @@ export function UnitsPage(): JSX.Element {
       noun="flows"
       controlsId="flows-tree"
       dataSlot="flows-tree-toggle"
+    />
+  );
+  const callToggle = (
+    <ExplorerStartToggle
+      open={callRail.open}
+      onToggle={callRail.toggle}
+      noun="Call API"
+      controlsId="call-api-rail"
+      dataSlot="call-api-toggle"
+      side="end"
     />
   );
 
@@ -79,25 +90,32 @@ export function UnitsPage(): JSX.Element {
           <div className="h-full min-h-0 overflow-hidden">
             {selectedRow ? (
               <ResizablePanelGroup
-                orientation="vertical"
+                orientation="horizontal"
                 className="min-h-0 flex-1"
                 data-slot="units-inspector"
               >
-                <ResizablePanel defaultSize="56%" minSize="28%" className="min-h-0 overflow-hidden">
+                <ResizablePanel defaultSize="62%" minSize="36%" className="min-h-0 overflow-hidden">
                   <FlowContractPanel
                     row={selectedRow}
                     manifest={manifestQuery.data ?? null}
                     runs={runs.data}
                     leading={startToggle}
+                    trailing={callToggle}
                   />
                 </ResizablePanel>
-                <ResizableHandle withHandle />
+                {callRail.open ? <ResizableHandle withHandle /> : null}
                 <ResizablePanel
-                  defaultSize="44%"
-                  minSize="220px"
+                  panelRef={callRail.panelRef}
+                  collapsible
+                  collapsedSize={0}
+                  defaultSize="38%"
+                  minSize="352px"
+                  onResize={callRail.onResize}
                   className="min-h-0 overflow-hidden"
                 >
-                  <CallApiPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
+                  <div id="call-api-rail" className="h-full min-h-0 overflow-hidden">
+                    <CallApiPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
+                  </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
             ) : (

@@ -48,18 +48,21 @@ export interface FlowContractPanelProps {
   readonly runs?: readonly RunRow[];
   /** Start-panel collapse control for the Flows catalog. */
   readonly leading?: ReactNode;
+  /** End-rail collapse control for Call API. */
+  readonly trailing?: ReactNode;
 }
 
 /**
- * Top inspector pane for a selected flow.
+ * Contract pane for a selected flow — Call API sits in the rail beside it.
  *
- * @param props - Flow row + Manifest + optional runs buffer + tree toggle
+ * @param props - Flow row + Manifest + optional runs buffer + panel toggles
  */
 export function FlowContractPanel({
   row,
   manifest,
   runs,
   leading,
+  trailing,
 }: FlowContractPanelProps): JSX.Element {
   const kind = flowTriggerKind(row.flow.trigger);
   const trigger = flowTriggerSpec(row.flow.trigger);
@@ -95,6 +98,7 @@ export function FlowContractPanel({
       <DetailHeader
         dataSlot="endpoint-header"
         leading={leading}
+        trailing={trailing}
         icon={
           <span data-slot="trigger-kind-icon" data-kind={kind}>
             <HugeiconsIcon icon={trigger.icon} className="size-4" />

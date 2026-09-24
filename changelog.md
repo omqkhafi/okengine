@@ -87,6 +87,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   effect. Shorter runs still list each effect. Expanding a lane opens the
   individual events.
 
+#### Console — Units & Call API
+
+- Call API is a full-height rail on the right of the flow contract. The
+  contract keeps the main pane. Drag the split to resize the rail. The
+  contract header ends with the same collapse control as the flows tree.
+
 ### 🐛 Fixed
 
 #### Runtime
