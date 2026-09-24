@@ -1425,6 +1425,7 @@ export function oke(options: OkeOptions): OkeApp {
     }
 
     const unguardedHttp = overrides?.unguardedHttp ?? gateConfig.unguardedHttp ?? "deny";
+    await ensureDecisionFlows(overrides?.manifest ?? options.manifest);
     // Auth bindings are in `adopted` — missing posture fails with GateBootError.
     assertHttpGatePosture(adopted, { unguardedHttp, env: bootEnv });
 
@@ -1600,7 +1601,6 @@ export function oke(options: OkeOptions): OkeApp {
     const { openDecisionLabelStore } = await import("../elements/ai/decisions/labels.ts");
     await loadDecisionLockfile(process.cwd());
     openDecisionLabelStore(process.cwd(), setDecisionDrift);
-    await ensureDecisionFlows(overrides?.manifest ?? options.manifest);
     // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");

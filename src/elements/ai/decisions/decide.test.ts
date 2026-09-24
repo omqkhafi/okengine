@@ -240,7 +240,7 @@ describe("fx.decide", () => {
     });
     await app.boot({ env: "test" });
     const res = await app.fetch(new Request("http://localhost/_oke/decisions/triage/candidate"));
-    expect(res.status).toBeLessThan(500);
+    expect(res.status === 401 || res.status === 403).toBe(true);
     await app.bootResult?.close();
   });
 

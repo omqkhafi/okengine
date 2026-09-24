@@ -3,6 +3,7 @@
  * a drift monitor, and the operator candidate endpoint.
  */
 
+import { gate } from "../../gate/declare.ts";
 import { flow } from "../../../kernel/flow.ts";
 import type { Binding } from "../../../kernel/on.ts";
 import { http } from "../../../kernel/triggers.ts";
@@ -86,9 +87,11 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     flow: drift,
   });
 
+  const operatorGate = gate.policy("oke.decisions.operator", (ctx) => ctx.operator.id !== null);
   const candidate = flow("oke.decisions.candidate", {
     plane: "operator",
     do: async (input: { name?: string }, fx) => {
+      if (!fx.operator.id) return fx.fail.unauthorized();
       const name = input.name ?? "";
       const body = getDecisionCandidate(name);
       if (!body) return fx.fail.notFound();
@@ -96,7 +99,7 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
     },
   });
   adopt({
-    trigger: http.get("/_oke/decisions/:name/candidate"),
+    trigger: http.get("/_oke/decisions/:name/candidate").gate(operatorGate),
     flow: candidate,
   });
 }
