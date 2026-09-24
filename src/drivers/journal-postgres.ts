@@ -25,6 +25,10 @@ import {
   type DecisionLabelStore,
 } from "../kernel/decision-label-store.ts";
 import {
+  createPostgresAgentEventStore,
+  type AgentEventStore,
+} from "../kernel/agent-event-store.ts";
+import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
   type JournalLeaseStore,
@@ -275,6 +279,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     raw: string | null;
     at: number;
     input: string | null;
+    review_id?: string | null;
   };
   type State = {
     rows: JournalDbRow[];
@@ -282,9 +287,19 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     labels: LabelDbRow[];
     drift: { decision_id: string; suspended: number; certified_at: number }[];
     candidates: { decision_id: string; body: string }[];
+    agentRuns: { run_id: string; header: string }[];
+    agentEvents: { run_id: string; seq: number; event: string }[];
   };
 
-  let committed: State = { rows: [], idem: [], labels: [], drift: [], candidates: [] };
+  let committed: State = {
+    rows: [],
+    idem: [],
+    labels: [],
+    drift: [],
+    candidates: [],
+    agentRuns: [],
+    agentEvents: [],
+  };
   let active: { state: State; locked: Set<string>; done: boolean } | null = null;
   /** Run ids held by other active transactions (SKIP LOCKED). */
   const heldByTxn = new Set<string>();
@@ -302,6 +317,8 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       labels: s.labels.map((r) => ({ ...r })),
       drift: s.drift.map((r) => ({ ...r })),
       candidates: s.candidates.map((r) => ({ ...r })),
+      agentRuns: s.agentRuns.map((r) => ({ ...r })),
+      agentEvents: s.agentEvents.map((r) => ({ ...r })),
     };
   }
 
@@ -430,6 +447,19 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
             .map((row) => ({ ...row }));
         }
         return state.candidates.map((row) => ({ ...row }));
+      }
+
+      if (/FROM\s+oke_agent_run\b/i.test(text)) {
+        const id = String(params[0] ?? "");
+        return state.agentRuns.filter((row) => row.run_id === id).map((row) => ({ ...row }));
+      }
+
+      if (/FROM\s+oke_agent_event\b/i.test(text)) {
+        const id = String(params[0] ?? "");
+        return state.agentEvents
+          .filter((row) => row.run_id === id)
+          .sort((a, b) => a.seq - b.seq)
+          .map((row) => ({ ...row }));
       }
 
       throw new Error(`postgres journal fake: unsupported query: ${sql}`);
@@ -610,6 +640,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
           raw: params[10] === null || params[10] === undefined ? null : String(params[10]),
           at: Number(params[11]),
           input: params[12] === null || params[12] === undefined ? null : String(params[12]),
+          review_id: params[13] === null || params[13] === undefined ? null : String(params[13]),
         });
         return { changes: 1 };
       }
@@ -643,6 +674,39 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         if (idx >= 0) state.drift[idx] = next;
         else state.drift.push(next);
         return { changes: 1 };
+      }
+
+      if (/^INSERT\s+INTO\s+oke_agent_run\b/i.test(text)) {
+        const runId = String(params[0]);
+        const next = { run_id: runId, header: String(params[1]) };
+        const idx = state.agentRuns.findIndex((row) => row.run_id === runId);
+        if (idx >= 0) state.agentRuns[idx] = next;
+        else state.agentRuns.push(next);
+        return { changes: 1 };
+      }
+
+      if (/^INSERT\s+INTO\s+oke_agent_event\b/i.test(text)) {
+        const runId = String(params[0]);
+        const seq = Number(params[1]);
+        if (state.agentEvents.some((row) => row.run_id === runId && row.seq === seq)) {
+          return { changes: 0 };
+        }
+        state.agentEvents.push({ run_id: runId, seq, event: String(params[2]) });
+        return { changes: 1 };
+      }
+
+      if (/^DELETE\s+FROM\s+oke_agent_event\b/i.test(text)) {
+        const id = String(params[0] ?? "");
+        const before = state.agentEvents.length;
+        state.agentEvents = state.agentEvents.filter((row) => row.run_id !== id);
+        return { changes: before - state.agentEvents.length };
+      }
+
+      if (/^DELETE\s+FROM\s+oke_agent_run\b/i.test(text)) {
+        const id = String(params[0] ?? "");
+        const before = state.agentRuns.length;
+        state.agentRuns = state.agentRuns.filter((row) => row.run_id !== id);
+        return { changes: before - state.agentRuns.length };
       }
 
       if (text === IDEM_FORFEIT_SQL) {
@@ -734,6 +798,25 @@ function lazyDecisionLabels(sql: PostgresJournalSql): DecisionLabelStore {
 }
 
 /**
+ * Open the agent event tables on first use.
+ *
+ * @param sql - Journal SQL client
+ */
+function lazyAgentEvents(sql: PostgresJournalSql): AgentEventStore {
+  let pending: Promise<AgentEventStore> | undefined;
+  const ready = (): Promise<AgentEventStore> => {
+    pending ??= createPostgresAgentEventStore(sql);
+    return pending;
+  };
+  return {
+    read: (runId) => ready().then((store) => store.read(runId)),
+    writeHeader: (header) => ready().then((store) => store.writeHeader(header)),
+    append: (runId, row) => ready().then((store) => store.append(runId, row)),
+    remove: (runId) => ready().then((store) => store.remove(runId)),
+  };
+}
+
+/**
  * Open a postgres-backed JournalStore (multi-host durable-run coordination).
  *
  * @param options - URL / injected sql / Bun.SQL client
@@ -754,6 +837,7 @@ export async function createPostgresJournalStore(
     sql,
     idempotency: createPostgresIdempotencyStore(sql),
     decisions: lazyDecisionLabels(sql),
+    agentEvents: lazyAgentEvents(sql),
     async get(runId) {
       const rows = await sql.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [runId]);
       if (!rows[0]) return undefined;

@@ -202,7 +202,7 @@ Approving or denying does not continue this SSE response. Follow the run to see 
 
 An approval interrupt does not end this follow. The stream stays open through the interrupt and continues to the terminal `RUN_FINISHED`. The first run stream still closes after the interrupt. Disconnect, then resume with the last id you received.
 
-The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB) and stores structural events one by one. At the cap, text deltas stop, one `CUSTOM` event named `oke.events.truncated` is stored, and `RUN_FINISHED` is still stored. A finished run's events are deleted after 24 hours.
+The run stream yields every token. The follow log coalesces text and argument deltas (about every 100 ms or 1 KB, including a timer) and stores structural events one by one. Past the cap, only `RUN_FINISHED`, `RUN_ERROR`, and interrupts remain. A finished run's events are deleted after 24 hours by the scheduler. The log is stored on the journal driver and keyed by the agent run id. A follower must be the starting principal or an operator, and must pass every gate on the Flow.
 
 ```typescript
 import { approve, deny, readAgentEvents } from "okengine/client/agent";

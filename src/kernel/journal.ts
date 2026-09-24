@@ -187,6 +187,13 @@ function loadDecisionLabelStore(): typeof import("./decision-label-store.ts") {
   return lazyRequire(import.meta.dir, ["decision", "label", "store"].join("-"));
 }
 
+/**
+ * Load the agent-event table without a static import.
+ */
+function loadAgentEventStore(): typeof import("./agent-event-store.ts") {
+  return lazyRequire(import.meta.dir, ["agent", "event", "store"].join("-"));
+}
+
 /** Persistence backend for journal runs. */
 export interface JournalStore extends Partial<JournalLeaseStore> {
   /**
@@ -199,6 +206,11 @@ export interface JournalStore extends Partial<JournalLeaseStore> {
    * the app declares decisions.
    */
   readonly decisions?: DecisionLabelStore;
+  /**
+   * Agent-run event log on this same driver. Followers resume from these rows
+   * after a restart and from another instance.
+   */
+  readonly agentEvents?: import("./agent-event-store.ts").AgentEventStore;
   /**
    * Load a run by id.
    *
@@ -368,6 +380,11 @@ export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalS
       Object.defineProperty(this, "decisions", { value: created });
       return created;
     },
+    get agentEvents(): import("./agent-event-store.ts").AgentEventStore {
+      const created = loadAgentEventStore().createMemoryAgentEventStore();
+      Object.defineProperty(this, "agentEvents", { value: created });
+      return created;
+    },
   };
 }
 
@@ -426,6 +443,11 @@ export function createFileJournalStore(path: string): JournalStore {
         `${dirname(path)}/decision-labels.json`,
       );
       Object.defineProperty(this, "decisions", { value: created });
+      return created;
+    },
+    get agentEvents(): import("./agent-event-store.ts").AgentEventStore {
+      const created = loadAgentEventStore().createFileAgentEventStore(`${path}.events.json`);
+      Object.defineProperty(this, "agentEvents", { value: created });
       return created;
     },
   };

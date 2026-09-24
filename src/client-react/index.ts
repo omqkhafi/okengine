@@ -19,6 +19,7 @@ export {
 } from "./use-agent-run.ts";
 export {
   useLiveQuery,
+  type LiveRouteContract,
   type UseLiveQueryOptions,
   type UseLiveQueryState,
 } from "./use-live-query.ts";

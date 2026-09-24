@@ -7,7 +7,7 @@
 
 import { flow } from "../../kernel/flow.ts";
 import type { Fx } from "../../kernel/fx.ts";
-import { sseFrame } from "../../kernel/fx.ts";
+import { sseComment, sseFrame } from "../../kernel/fx.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
 import { getAgentEventLog } from "./run-events.ts";
@@ -142,28 +142,60 @@ async function followAgentRun(input: unknown, fx: Fx): Promise<unknown> {
   const header = await log.header(runId);
   if (!header) return fx.fail.notFound();
   if ((header.tenant ?? null) !== (fx.tenant.id ?? null)) return fx.fail.notFound();
-  if (header.gate && followGates) {
-    const checks = await followGates.check([header.gate], {
+  const followerIsOperator = fx.operator.id !== null;
+  const sameUser = (header.userId ?? null) === (fx.auth.userId ?? null);
+  const sameOperator = (header.operatorId ?? null) === (fx.operator.id ?? null);
+  const samePrincipal =
+    (header.userId === null && header.operatorId === null && sameUser && sameOperator) ||
+    (header.userId !== null && sameUser) ||
+    (header.operatorId !== null && sameOperator);
+  if (!followerIsOperator && !samePrincipal) return fx.fail.forbidden();
+  if (header.gates.length > 0) {
+    if (!followGates) return fx.fail.forbidden();
+    const checks = await followGates.check(header.gates, {
       auth: fx.auth,
       operator: fx.operator,
-      tenant: fx.tenant,
       meta: {},
     });
     if (checks.some((check) => check.allowed === false)) return fx.fail.forbidden();
   }
   const after = Number(fx.lastEventId ?? "0");
   const afterSeq = Number.isFinite(after) ? after : 0;
-  return fx.json.stream(frames(log, runId, afterSeq));
+  return fx.json.stream(frames(log, runId, afterSeq, fx.signal));
 }
 
 async function* frames(
   log: NonNullable<ReturnType<typeof getAgentEventLog>>,
   runId: string,
   afterSeq: number,
+  signal: AbortSignal,
 ): AsyncIterable<unknown> {
-  for await (const row of log.subscribe(runId, afterSeq)) {
-    yield sseFrame(row.event, String(row.seq));
-    if (row.event.type === "RUN_ERROR") return;
-    if (row.event.type === "RUN_FINISHED" && row.event.outcome?.type !== "interrupt") return;
+  const iter = log.subscribe(runId, afterSeq, signal)[Symbol.asyncIterator]();
+  let pending = iter.next();
+  try {
+    for (;;) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const ping = new Promise<"ping">((resolve) => {
+        timer = setTimeout(() => resolve("ping"), 15_000);
+      });
+      const winner = await Promise.race([
+        pending.then((row) => ({ kind: "row" as const, row })),
+        ping.then((kind) => ({ kind })),
+      ]);
+      if (timer) clearTimeout(timer);
+      if (winner.kind === "ping") {
+        if (signal.aborted) return;
+        yield sseComment("keepalive");
+        continue;
+      }
+      pending = iter.next();
+      if (winner.row.done || winner.row.value === undefined) return;
+      const row = winner.row.value;
+      yield sseFrame(row.event, String(row.seq));
+      if (row.event.type === "RUN_ERROR") return;
+      if (row.event.type === "RUN_FINISHED" && row.event.outcome?.type !== "interrupt") return;
+    }
+  } finally {
+    await iter.return?.();
   }
 }

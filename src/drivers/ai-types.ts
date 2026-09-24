@@ -86,6 +86,10 @@ export interface AiStreamChunk {
     readonly outputTokens?: number;
     readonly cost?: number;
   };
+  /** Provider payload. Present on the terminal chunk when the driver has one. */
+  readonly raw?: unknown;
+  /** Egress identity, matching {@link AiCompleteResult.external}. */
+  readonly external?: DriverExternal;
 }
 
 /** Embedding request. */

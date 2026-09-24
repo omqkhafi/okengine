@@ -635,7 +635,9 @@ describe("approval http", () => {
       runId: "other-tenant",
       threadId: "t",
       tenant: "acme",
-      gate: null,
+      gates: [],
+      userId: null,
+      operatorId: null,
     });
     const foreign = await app.fetch(new Request("http://localhost/agent/runs/other-tenant/events"));
     expect(foreign.status).toBe(404);

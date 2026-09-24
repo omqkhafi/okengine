@@ -88,19 +88,41 @@ export async function* readAgentEvents(
   }
   const fetcher = init?.fetch ?? fetch;
   let lastEventId = init?.lastEventId;
+  let delayMs = 250;
   for (;;) {
     if (init?.signal?.aborted) return;
     const headers = new Headers(init?.headers);
     if (lastEventId) headers.set("last-event-id", lastEventId);
-    const response = await fetcher(source, { headers, signal: init?.signal });
+    let response: Response;
+    try {
+      response = await fetcher(source, { headers, signal: init?.signal });
+    } catch (err) {
+      if (init?.signal?.aborted) return;
+      init?.trace?.(err instanceof Error ? err.message : "agent events: network error");
+      await wait(delayMs, init?.signal);
+      delayMs = Math.min(delayMs * 2, 10_000);
+      continue;
+    }
+    delayMs = 250;
     if (!response.ok) throw new Error(`agent events: HTTP ${response.status}`);
     let sawFrame = false;
-    for await (const frame of readAgentEventFrames(response)) {
-      sawFrame = true;
-      if (frame.id) lastEventId = frame.id;
-      if (frame.event) yield frame.event;
-      if (frame.event?.type === "RUN_ERROR") return;
-      if (frame.event?.type === "RUN_FINISHED" && frame.event.outcome?.type !== "interrupt") return;
+    try {
+      for await (const frame of readAgentEventFrames(response, init?.trace)) {
+        sawFrame = true;
+        if (frame.id) {
+          lastEventId = frame.id;
+          init?.onId?.(frame.id);
+        }
+        if (frame.event) yield frame.event;
+        if (frame.event?.type === "RUN_ERROR") return;
+        if (frame.event?.type === "RUN_FINISHED" && frame.event.outcome?.type !== "interrupt") return;
+      }
+    } catch (err) {
+      if (init?.signal?.aborted) return;
+      init?.trace?.(err instanceof Error ? err.message : "agent events: network error");
+      await wait(delayMs, init?.signal);
+      delayMs = Math.min(delayMs * 2, 10_000);
+      continue;
     }
     if (!sawFrame || init?.signal?.aborted) return;
   }
@@ -111,6 +133,7 @@ export interface AgentDecisionInit {
   readonly fetch?: typeof fetch;
   /** Cap on lease retries. Default 5. */
   readonly attempts?: number;
+  readonly headers?: Record<string, string>;
 }
 
 /**
@@ -150,9 +173,13 @@ export async function deny(
 /** Follow options for {@link readAgentEvents}. */
 export interface AgentFollowInit {
   readonly fetch?: typeof fetch;
-  readonly headers?: HeadersInit;
+  readonly headers?: Record<string, string>;
   readonly signal?: AbortSignal;
   readonly lastEventId?: string;
+  /** Called with each SSE id as it is read. */
+  onId?(id: string): void;
+  /** Called when a frame cannot be parsed. The frame is skipped. */
+  trace?(message: string): void;
 }
 
 async function* readAgentEventResponse(response: Response): AsyncIterable<ParsedAgentEvent> {
@@ -163,6 +190,7 @@ async function* readAgentEventResponse(response: Response): AsyncIterable<Parsed
 
 async function* readAgentEventFrames(
   response: Response,
+  trace?: (message: string) => void,
 ): AsyncIterable<{ id?: string; event?: ParsedAgentEvent }> {
   const body = response.body;
   if (!body) return;
@@ -183,7 +211,13 @@ async function* readAgentEventFrames(
         .map((line) => line.slice(5).trim())
         .join("\n");
       if (!data || data === "[DONE]") continue;
-      const parsed = parseAgentEvent(JSON.parse(data) as unknown);
+      let parsed: ParsedAgentEvent | undefined;
+      try {
+        parsed = parseAgentEvent(JSON.parse(data) as unknown);
+      } catch (err) {
+        trace?.(err instanceof Error ? err.message : "agent events: malformed frame");
+        continue;
+      }
       yield {
         ...(idLine ? { id: idLine.slice(3).trim() } : {}),
         ...(parsed ? { event: parsed } : {}),
@@ -202,7 +236,7 @@ async function postDecision(
   for (let attempt = 0; attempt < attempts; attempt++) {
     const response = await fetcher(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headersOf(init?.headers) },
       body: JSON.stringify(body),
     });
     if (response.ok) return;
@@ -211,8 +245,8 @@ async function postDecision(
     };
     const code = payload.error?.code;
     if (response.status === 409 && code === "JournalLeaseBusy") {
-      const retryAfter = Number(response.headers.get("retry-after") ?? "0");
-      await new Promise((resolve) => setTimeout(resolve, Math.max(0, retryAfter) * 1000));
+      const retryAfter = retryAfterMs(response.headers.get("retry-after"));
+      await new Promise((resolve) => setTimeout(resolve, retryAfter));
       continue;
     }
     if (response.status === 409 && code === "Conflict") {
@@ -227,4 +261,42 @@ async function postDecision(
   const error = new Error("This run is locked by another worker. Retry after the given delay.");
   error.name = "JournalLeaseBusy";
   throw error;
+}
+
+/**
+ * `Retry-After` as delta-seconds or an HTTP-date.
+ *
+ * @param header - Header value
+ */
+function retryAfterMs(header: string | null): number {
+  if (!header) return 0;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds) * 1000;
+  const at = Date.parse(header);
+  if (Number.isNaN(at)) return 0;
+  return Math.max(0, at - Date.now());
+}
+
+function headersOf(headers: Record<string, string> | undefined): Record<string, string> {
+  return headers ?? {};
+}
+
+/**
+ * Wait, or return early when `signal` aborts.
+ *
+ * @param ms - Delay
+ * @param signal - Abort
+ */
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 }

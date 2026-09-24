@@ -437,11 +437,13 @@ export type { JsonResult, JsonStreamResult };
 
 const sseFrameBrand: unique symbol = Symbol.for("oke.sse.frame");
 
-/** One SSE frame — optional `id:` plus JSON `data:`. */
+/** One SSE frame — optional `id:` plus JSON `data:`, or a comment line. */
 export interface SseFrame {
   readonly [sseFrameBrand]: true;
   readonly data: unknown;
   readonly id?: string;
+  /** Comment body. When set and `data` is undefined, the encoder emits `: comment`. */
+  readonly comment?: string;
 }
 
 /**
@@ -452,6 +454,15 @@ export interface SseFrame {
  */
 export function sseFrame(data: unknown, id?: string): SseFrame {
   return id !== undefined ? { [sseFrameBrand]: true, data, id } : { [sseFrameBrand]: true, data };
+}
+
+/**
+ * SSE comment (`: keepalive`). Keeps a followed run from being idle-closed.
+ *
+ * @param text - Comment text
+ */
+export function sseComment(text: string): SseFrame {
+  return { [sseFrameBrand]: true, data: undefined, comment: text };
 }
 
 /**
@@ -2062,7 +2073,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               options.aiRuntime!.streamAgent(name, {
                 ...turn,
                 ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
-                gate: options.rlsGateNames?.find((name) => name !== "public") ?? null,
+                gates: (options.rlsGateNames ?? []).filter((name) => name !== "public"),
+                userId: auth.userId,
+                operatorId: operator.id,
                 ...(options.journal ? { journal: options.journal } : {}),
                 ...(options.flow !== undefined ? { flow: options.flow } : {}),
                 tenantId: tenant.id,
@@ -2096,7 +2109,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (options.aiRuntime) {
           return options.aiRuntime.runAgent(name, {
             ...turn,
-            gate: options.rlsGateNames?.find((name) => name !== "public") ?? null,
+            gates: (options.rlsGateNames ?? []).filter((name) => name !== "public"),
+            userId: auth.userId,
+            operatorId: operator.id,
             ...(options.journal ? { journal: options.journal } : {}),
             ...(options.flow !== undefined ? { flow: options.flow } : {}),
             tenantId: tenant.id,

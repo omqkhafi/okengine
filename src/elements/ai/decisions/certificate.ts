@@ -78,8 +78,10 @@ export interface DecisionLabel {
   readonly loss?: number;
   /** Epoch ms the label was written. */
   readonly at?: number;
-  /** Calling input, when the review stored one. */
+  /** Calling input, with secret and redacted fields already masked. */
   readonly input?: unknown;
+  /** Review id this label belongs to. Rows from one review share it. */
+  readonly reviewId?: string;
 }
 
 /** App-wide candidate. A full lock entry, not a count. */

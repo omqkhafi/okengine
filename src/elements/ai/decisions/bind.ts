@@ -9,7 +9,6 @@ import type { Binding } from "../../../kernel/on.ts";
 import { http } from "../../../kernel/triggers.ts";
 import type { Manifest } from "../../../manifest/types.ts";
 import { aiDecisionRegistry } from "../../../kernel/element-registries.ts";
-import { aiDecisionRegistry } from "../../../kernel/element-registries.ts";
 import {
   aggregateDecisionCandidate,
   decisionDriftNames,

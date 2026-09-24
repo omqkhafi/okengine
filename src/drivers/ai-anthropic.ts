@@ -15,6 +15,7 @@ import type {
   AiToolCall,
 } from "./ai-types.ts";
 import { hostFromUrl } from "./external.ts";
+import { preconnectFetch } from "./ai-preconnect.ts";
 
 const DEFAULT_BASE = "https://api.anthropic.com";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -32,10 +33,7 @@ export async function openAnthropic(options: AiOpenOptions = {}): Promise<AiMode
   const model = options.model ?? "claude-sonnet-4-20250514";
   const baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
   const fetchFn = options.fetch ?? globalThis.fetch;
-  const preconnect = (fetchFn as { preconnect?: (href: string) => void }).preconnect;
-  if (typeof preconnect === "function") {
-    preconnect(baseUrl);
-  }
+  preconnectFetch(fetchFn, baseUrl);
   const host = hostFromUrl(baseUrl);
   const external = host
     ? {
@@ -229,6 +227,7 @@ async function* readAnthropicSse(
   let buffer = "";
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
+  let stopped = false;
   for await (const piece of stream.call(res)) {
     if (signal?.aborted) {
       const err = new Error("This operation was aborted");
@@ -259,6 +258,17 @@ async function* readAnthropicSse(
       try {
         event = JSON.parse(data) as typeof event;
       } catch {
+        continue;
+      }
+      if (event.type === "error") {
+        const message =
+          typeof (event as { error?: { message?: string } }).error?.message === "string"
+            ? (event as { error?: { message?: string } }).error?.message
+            : "anthropic stream error";
+        throw new Error(`anthropic: ${message}`);
+      }
+      if (event.type === "message_stop") {
+        stopped = true;
         continue;
       }
       if (event.type === "message_start") {
@@ -299,6 +309,7 @@ async function* readAnthropicSse(
       }
     }
   }
+  if (!stopped) throw new Error("anthropic: stream ended without message_stop");
   yield {
     text: "",
     done: true,

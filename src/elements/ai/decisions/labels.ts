@@ -229,11 +229,17 @@ export function persistDecisionDrift(name: string, suspended: boolean, certified
   if (!store) return;
   const target = store;
   const record: DecisionDriftRecord = { suspended, certifiedAt };
-  const write = (): Promise<void> =>
-    target.setDrift(name, record).then(
-      () => undefined,
-      () => undefined,
-    );
+  const write = async (): Promise<void> => {
+    try {
+      await target.setDrift(name, record);
+    } catch (error) {
+      noteLabelWriteFailure(
+        { decision: name, question: "drift", value: null, propensity: 0, reviewer: "drift" },
+        error,
+      );
+      throw error;
+    }
+  };
   writes = writes.then(write, write);
 }
 

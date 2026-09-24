@@ -195,6 +195,18 @@ export function createFileDecisionLabelStore(path: string): DecisionLabelStore {
   };
 }
 
+/** Decision names an old app-wide drift flag is copied onto. Boot sets this before open. */
+let declaredDriftDecisions: readonly string[] = [];
+
+/**
+ * Declare which decisions receive a legacy app-wide drift flag.
+ *
+ * @param names - Decision names from the manifest
+ */
+export function setDeclaredDriftDecisions(names: readonly string[]): void {
+  declaredDriftDecisions = names;
+}
+
 /**
  * Postgres label store on the journal connection. Creates the tables.
  * A failed init or query throws {@link DecisionLabelStoreError}.
@@ -221,18 +233,8 @@ export async function createPostgresDecisionLabelStore(
       input TEXT
     )`);
     await sql.exec(`ALTER TABLE oke_decision_labels ADD COLUMN IF NOT EXISTS input TEXT`);
-    await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_drift (
-      decision_id TEXT PRIMARY KEY,
-      suspended INTEGER NOT NULL,
-      certified_at BIGINT NOT NULL
-    )`);
-    await sql.exec(`ALTER TABLE oke_decision_drift ADD COLUMN IF NOT EXISTS decision_id TEXT`);
-    await sql.exec(
-      `ALTER TABLE oke_decision_drift ADD COLUMN IF NOT EXISTS certified_at BIGINT NOT NULL DEFAULT 0`,
-    );
-    await sql.exec(
-      `UPDATE oke_decision_drift SET decision_id = 'legacy' WHERE decision_id IS NULL`,
-    );
+    await sql.exec(`ALTER TABLE oke_decision_labels ADD COLUMN IF NOT EXISTS review_id TEXT`);
+    await migrateDecisionDriftTable(sql, declaredDriftDecisions);
     await sql.exec(`CREATE TABLE IF NOT EXISTS oke_decision_candidates (
       decision_id TEXT PRIMARY KEY,
       body TEXT NOT NULL
@@ -261,8 +263,8 @@ export async function createPostgresDecisionLabelStore(
     async insert(label, at) {
       await exec(
         `INSERT INTO oke_decision_labels
-          (decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at, input)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at, input, review_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           label.decision,
           label.question,
@@ -277,6 +279,7 @@ export async function createPostgresDecisionLabelStore(
           label.raw === undefined ? null : JSON.stringify(label.raw),
           at,
           label.input === undefined ? null : JSON.stringify(label.input),
+          label.reviewId ?? null,
         ],
       );
     },
@@ -293,7 +296,7 @@ export async function createPostgresDecisionLabelStore(
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
       const found = await query(
-        `SELECT decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at, input
+        `SELECT decision_id, question, value, propensity, reviewer, locale, model, tenant, score, loss, raw, at, input, review_id
          FROM oke_decision_labels ${where}`,
         args,
       );
@@ -310,6 +313,7 @@ export async function createPostgresDecisionLabelStore(
         ...(row.loss != null ? { loss: Number(row.loss) } : {}),
         ...(row.raw != null ? { raw: JSON.parse(String(row.raw)) as unknown } : {}),
         ...(row.input != null ? { input: JSON.parse(String(row.input)) as unknown } : {}),
+        ...(row.review_id != null ? { reviewId: String(row.review_id) } : {}),
         at: Number(row.at),
       }));
     },
@@ -377,6 +381,51 @@ function toLabel(row: StoredLabel): DecisionLabel {
     ...(row.loss !== undefined ? { loss: row.loss } : {}),
     ...(row.raw !== undefined ? { raw: row.raw } : {}),
     ...(row.input !== undefined ? { input: row.input } : {}),
+    ...(row.reviewId !== undefined ? { reviewId: row.reviewId } : {}),
     at: row.at,
   };
+}
+
+/**
+ * Recreate `oke_decision_drift` when it still uses an app-wide `id` row.
+ * A suspended flag is copied onto every declared decision.
+ *
+ * @param sql - Journal SQL client
+ * @param names - Declared decision names
+ */
+async function migrateDecisionDriftTable(
+  sql: DecisionLabelSql,
+  names: readonly string[],
+): Promise<void> {
+  const create = `CREATE TABLE IF NOT EXISTS oke_decision_drift (
+      decision_id TEXT PRIMARY KEY,
+      suspended INTEGER NOT NULL,
+      certified_at BIGINT NOT NULL
+    )`;
+  let columns: string[] = [];
+  try {
+    const rows = await sql.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'oke_decision_drift'`,
+    );
+    columns = rows.map((row) => String(row.column_name ?? "").toLowerCase());
+  } catch {
+    columns = [];
+  }
+  if (columns.includes("id") && !columns.includes("decision_id")) {
+    const old = await sql.query(`SELECT * FROM oke_decision_drift`);
+    const flag = old[0];
+    await sql.exec(`DROP TABLE oke_decision_drift`);
+    await sql.exec(create.replace("IF NOT EXISTS ", ""));
+    if (flag && Number(flag.suspended) === 1) {
+      const certifiedAt = Number(flag.certified_at ?? 0);
+      for (const name of names) {
+        await sql.exec(
+          `INSERT INTO oke_decision_drift (decision_id, suspended, certified_at) VALUES (?, ?, ?)`,
+          [name, 1, certifiedAt],
+        );
+      }
+    }
+    return;
+  }
+  await sql.exec(create);
 }

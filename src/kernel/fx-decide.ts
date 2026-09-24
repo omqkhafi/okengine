@@ -31,6 +31,7 @@ import {
   type DecisionUncertainty,
 } from "../elements/ai/decisions/certificate.ts";
 import { flushDecisionLabels, persistDecisionLabel } from "../elements/ai/decisions/labels.ts";
+import { decisionExportFields, maskDecisionInput } from "../elements/ai/decisions/export.ts";
 import {
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
@@ -665,6 +666,10 @@ export async function resolveDecisionReview(
     const entry = run.entries.find((item) => item.kind === "step" && item.name === name);
     if (!entry || entry.kind !== "step") return { ok: false, status: 404 };
     const current = entry.value as DecisionReviewRecord;
+    const maskedInput =
+      current.input !== undefined
+        ? maskDecisionInput(current.input, decisionExportFields(decl?.inputSchema))
+        : undefined;
     for (const [question, value] of Object.entries(input.values)) {
       const label = {
         decision: parsed.name,
@@ -672,13 +677,14 @@ export async function resolveDecisionReview(
         value,
         propensity: current.propensity,
         reviewer: input.reviewer,
+        reviewId: id,
         ...(current.locale !== undefined ? { locale: current.locale } : {}),
         ...(current.tenant !== null ? { tenant: current.tenant } : {}),
         ...(current.model !== undefined ? { model: current.model } : {}),
         ...(current.scores?.[question] !== undefined ? { score: current.scores[question] } : {}),
         ...(current.raws?.[question] !== undefined ? { raw: current.raws[question] } : {}),
         loss: current.modelValues?.[question] === value ? 0 : 1,
-        ...(current.input !== undefined ? { input: current.input } : {}),
+        ...(maskedInput !== undefined ? { input: maskedInput } : {}),
         at,
       };
       recordDecisionLabel(label);

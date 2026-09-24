@@ -61,8 +61,10 @@ export function DecisionsPage(): JSX.Element {
     const submitted: Record<string, unknown> = {};
     for (const question of row.questions) {
       const raw = draft[question.id];
-      if (question.kind === "boolean") submitted[question.id] = raw === "true";
-      else if (raw !== undefined) submitted[question.id] = raw;
+      if (question.kind === "boolean") {
+        if (raw !== "true" && raw !== "false") continue;
+        submitted[question.id] = raw === "true";
+      } else if (raw !== undefined) submitted[question.id] = raw;
     }
     if (!decisionValuesValid(row.questions, submitted)) {
       setNotice("ValidationError");

@@ -53,7 +53,7 @@ export function exportDecisionLabels(options: {
   const kept = options.labels.filter((label) => (label.tenant ?? null) === tenant);
   const groups = new Map<string, DecisionLabel[]>();
   for (const label of kept) {
-    const key = `${label.at ?? 0}:${label.locale ?? ""}`;
+    const key = label.reviewId ?? `${label.question}:${label.at ?? 0}:${label.reviewer}`;
     const group = groups.get(key);
     if (group) group.push(label);
     else groups.set(key, [label]);
@@ -63,7 +63,7 @@ export function exportDecisionLabels(options: {
     const first = group[0];
     if (!first) continue;
     const row: DecisionExportLine = {
-      input: pickInput(first.input, options.fields),
+      input: maskDecisionInput(first.input, options.fields),
       expect: Object.fromEntries(group.map((label) => [label.question, label.value])),
       ...(first.locale !== undefined ? { locale: first.locale } : {}),
     };
@@ -75,7 +75,11 @@ export function exportDecisionLabels(options: {
 /** Printed by `oke decide labels --export`. The file itself is only JSONL. */
 export const DECISION_EXPORT_WARNING = "This file contains production data.";
 
-function pickInput(input: unknown, fields: DecisionExportFields): Record<string, unknown> {
+/** Keep declared fields and replace secret or redacted values. */
+export function maskDecisionInput(
+  input: unknown,
+  fields: DecisionExportFields,
+): Record<string, unknown> {
   const source =
     input && typeof input === "object" && !Array.isArray(input)
       ? (input as Record<string, unknown>)
@@ -99,7 +103,19 @@ function zodShape(schema: unknown): Record<string, unknown> {
 }
 
 function secretMarked(field: unknown): boolean {
-  if (!field || typeof field !== "object") return false;
+  let current = field;
+  for (let depth = 0; depth < 8 && current && typeof current === "object"; depth++) {
+    if (marker(current)) return true;
+    const unwrap = (current as { unwrap?: () => unknown }).unwrap;
+    if (typeof unwrap !== "function") return false;
+    const next = unwrap.call(current);
+    if (next === current) return false;
+    current = next;
+  }
+  return false;
+}
+
+function marker(field: object): boolean {
   const record = field as { description?: string; meta?: () => unknown };
   if (record.description === "secret" || record.description === "redacted") return true;
   if (typeof record.meta !== "function") return false;

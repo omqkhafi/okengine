@@ -1600,6 +1600,7 @@ export function oke(options: OkeOptions): OkeApp {
       const { loadDecisionLockfile, setDecisionDrift } =
         await import("../elements/ai/decisions/certificate.ts");
       const { openDecisionLabelStore } = await import("../elements/ai/decisions/labels.ts");
+      const { setDeclaredDriftDecisions } = await import("./decision-label-store.ts");
       const { setDecisionGateAllow } = await import("./fx-decide.ts");
       const root = overrides?.rootDir ?? options.rootDir ?? process.env["OKE_ROOT_DIR"];
       if (!root) {
@@ -1608,6 +1609,7 @@ export function oke(options: OkeOptions): OkeApp {
         );
       }
       await loadDecisionLockfile(root);
+      setDeclaredDriftDecisions(Object.keys(declaredDecisions));
       if (result.journal && result.journal.store.decisions) {
         await openDecisionLabelStore(result.journal.store, setDecisionDrift);
       }

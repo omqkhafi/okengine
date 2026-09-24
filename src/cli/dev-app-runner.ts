@@ -118,9 +118,12 @@ const handle = createBunRuntime().serve(mod.app, {
   hostname,
   id: DEV_APP_SERVE_ID,
 });
+const { watchDecisionLockfile } = await import("./decision-lock-watch.ts");
+const decisionLockWatch = watchDecisionLockfile(process.env.OKE_ROOT_DIR ?? process.cwd());
 const removeSignals = installGracefulShutdown({ app: mod.app, handle });
 installDevHotGeneration({
   async dispose() {
+    decisionLockWatch.close();
     removeSignals();
     await mod.app.stop();
     await closeSharedPostgresClients();

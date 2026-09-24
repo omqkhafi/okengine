@@ -548,6 +548,9 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       if (clockRt) void Promise.resolve(clockRt.tick()).catch(ignoreBenignSql);
       if (journal && durableResume) void Promise.resolve(durableResume()).catch(ignoreBenignSql);
       if (fleet) void fleet.maybeHeartbeat().catch(ignoreBenignSql);
+      void import("../elements/ai/run-events.ts")
+        .then((mod) => mod.sweepInstalledAgentEvents())
+        .catch(ignoreBenignSql);
     }, period);
     schedulerTimer.unref?.();
   }

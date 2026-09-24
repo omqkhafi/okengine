@@ -12,7 +12,10 @@ export interface DecisionFormQuestion {
 
 /** Result of one resolve POST. */
 export interface DecisionResolveResult {
-  readonly error?: { readonly code: string };
+  readonly error?: {
+    readonly code: string;
+    readonly data?: { readonly retryAfter?: number | string };
+  };
   readonly data?: { readonly ok: true };
 }
 
@@ -67,6 +70,8 @@ export async function resolveDecisionWithRetry(
   for (let i = 0; i < attempts; i++) {
     last = await post(body);
     if (last.error?.code !== "JournalLeaseBusy") return last;
+    const waitMs = retryAfterToMs(last.error.data?.retryAfter);
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   return last;
 }
@@ -77,4 +82,19 @@ export function decisionStateLabel(
 ): string {
   if (state === "candidate") return "candidate ready";
   return state;
+}
+
+/**
+ * `Retry-After` as delta-seconds or an HTTP-date.
+ *
+ * @param value - Seconds, or an HTTP-date string
+ */
+function retryAfterToMs(value: number | string | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value) * 1000;
+  if (typeof value !== "string" || value.length === 0) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds) * 1000;
+  const at = Date.parse(value);
+  if (Number.isNaN(at)) return 0;
+  return Math.max(0, at - Date.now());
 }

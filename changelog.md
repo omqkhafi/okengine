@@ -42,13 +42,13 @@ needed). Large groups add `####` area headings so the list stays scannable.
   builds a certificate from the seed file and does not run prompt evals.
   The OpenRouter decisions endpoint is alpha on the provider side.
 - Drift is one flag per decision. Promote and recertify clear only that decision. The monitor emits the decisions that failed. Console reads that flag.
-- `oke decide labels <name> --export` writes reviewed labels as seed JSONL for the caller's tenant. Only declared `in` fields are copied. Secret and redacted fields are masked. The command prints that the file contains production data.
+- `oke decide labels <name> --export` writes reviewed labels as seed JSONL for the caller's tenant, grouped by review id. Only declared `in` fields are copied. Secret and redacted fields are masked when the label is written. The command prints that the file contains production data.
 
 #### Docs
 
 - `fx.run(..., { stream: true })` streams each model turn when the driver implements `stream`. `mock`, `anthropic`, and `openai-compatible` emit text deltas and tool-call argument deltas. `bedrock` and `vertex` stay reserved. The assembled turn is journaled, so a durable replay does not call the model. The default `threadId` is a unique id.
-- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under the same gate and tenant. An approval interrupt does not end the follow. Another tenant, or a gate that denies the caller, is rejected. At the cap, further text deltas stop, one `oke.events.truncated` event is stored, and `RUN_FINISHED` is still stored. Finished logs are deleted after 24 hours.
-- `openai-compatible` logs a preconnect failure once outside production. The live OpenRouter stream test is the proof.
+- `GET /agent/runs/:runId/events` resumes with `Last-Event-ID` under every gate on the Flow and the starting principal. An operator may follow. No gate runtime denies a gated run. An approval interrupt does not end the follow. The log lives on the journal driver, keyed by the agent run id. Past the cap only `RUN_FINISHED`, `RUN_ERROR`, and interrupts remain. The scheduler deletes finished logs after 24 hours.
+- A failed `fetch.preconnect` is ignored. `anthropic` and `openai-compatible` share that guard.
 - `okengine/client/agent` follows a run with `Last-Event-ID`, and `approve` / `deny` retry `JournalLeaseBusy` and surface `Conflict`. `okengine/client-react` exports `useAgentRun`. Neither module is on the `okengine/client` graph.
 - `ai.decision` score levels and a whole question held in a same-file const are checked at compile time. An unresolved name fails the build.
 - Prompts document `repair: 1`: the follow-up counts toward `maxCostPerCall` and is its own journal entry.
@@ -83,7 +83,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
   has one (`Chrome 131`, `curl 8.7`). Expanding the strip lists the client
   IP and the raw user-agent. A Console Call API invoke is labeled Console.
   Runs recorded before the stamp still show only the headers they stored.
-- Flows has a Decisions list and review queue at `/flows/decisions`. Each decision is `learning`, `candidate ready`, `certified`, or `suspended` from its own drift flag and the lockfile. A candidate row shows fit metrics and `oke decide promote <name>`. The queue shows age. The resolve form accepts only declared options and levels. An audit row submits `labelOnly`. A second resolve is Conflict. A lease collision retries. Label write failures are listed. The sidebar stays six modules.
+- Flows has a Decisions link and a review queue at `/flows/decisions`. Each decision is `learning`, `candidate ready`, `certified`, or `suspended` from its own drift flag and the lockfile. A candidate row shows fit metrics and `oke decide promote <name>`. The queue shows age. The resolve form accepts only declared options and levels. An unanswered boolean is invalid. An audit row submits `labelOnly`. A second resolve is Conflict. A lease collision waits for `Retry-After`. Label and drift write failures are listed. The sidebar stays six modules.
 
 #### Console — Units & Call API
 

@@ -20,6 +20,7 @@ import type {
 } from "./ai-types.ts";
 import type { DriverExternal } from "./external.ts";
 import { hostFromUrl } from "./external.ts";
+import { preconnectFetch } from "./ai-preconnect.ts";
 
 /** Default OpenAI cloud base — apiKey is required for this origin. */
 export const OPENAI_COMPAT_DEFAULT_BASE = "https://api.openai.com/v1";
@@ -177,7 +178,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
         const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
         throwHttp(`openai-compatible: ${msg}`, res.status);
       }
-      yield* readOpenaiSse(res, opts.signal);
+      yield* readOpenaiSse(res, opts.signal, externalBase);
     },
     async embed(opts: AiEmbedOptions): Promise<AiEmbedResult> {
       const resolvedModel = opts.model ?? model;
@@ -301,8 +302,13 @@ function parseToolCalls(
  * @param res - Streaming response
  * @param signal - Optional abort
  */
-async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerator<AiStreamChunk> {
+async function* readOpenaiSse(
+  res: Response,
+  signal?: AbortSignal,
+  external?: AiStreamChunk["external"],
+): AsyncGenerator<AiStreamChunk> {
   let buffer = "";
+  let closed = false;
   for await (const piece of responseTextStream(res)) {
     if (signal?.aborted) throw abortAsError(signal.reason);
     buffer += piece;
@@ -313,7 +319,7 @@ async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerat
       if (!trimmed.startsWith("data:")) continue;
       const data = trimmed.slice(5).trim();
       if (data === "[DONE]") {
-        yield { text: "", done: true };
+        yield { text: "", done: true, ...(external !== undefined ? { external } : {}) };
         return;
       }
       try {
@@ -331,6 +337,7 @@ async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerat
           }[];
           usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
+        if (chunk.choices?.[0]?.finish_reason) closed = true;
         const delta = chunk.choices?.[0]?.delta;
         const content = delta?.content;
         if (typeof content === "string" && content.length > 0) {
@@ -361,12 +368,15 @@ async function* readOpenaiSse(res: Response, signal?: AbortSignal): AsyncGenerat
             },
           };
         }
-      } catch {
-        // ignore malformed SSE lines
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith("openai-compatible:")) throw err;
       }
     }
   }
-  yield { text: "", done: true };
+  if (!closed) {
+    throw new Error("openai-compatible: stream ended without [DONE] or finish_reason");
+  }
+  yield { text: "", done: true, ...(external !== undefined ? { external } : {}) };
 }
 
 /**
@@ -381,28 +391,6 @@ function responseTextStream(res: Response): AsyncIterable<string> {
   }
   return stream.call(res);
 }
-
-/**
- * Warm DNS+TCP+TLS for a cloud origin. No-op when `fetch` is a test stub.
- *
- * @param fetchFn - Fetch implementation
- * @param url - Provider base URL
- */
-function preconnectFetch(fetchFn: typeof fetch, url: string): void {
-  const preconnect = (fetchFn as { preconnect?: (href: string) => void }).preconnect;
-  if (typeof preconnect !== "function") return;
-  try {
-    preconnect(url);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (process.env.NODE_ENV !== "production" && !preconnectWarned) {
-      preconnectWarned = true;
-      console.warn(`openai-compatible: preconnect failed for ${url}: ${message}`);
-    }
-  }
-}
-
-let preconnectWarned = false;
 
 function abortAsError(reason?: unknown): Error {
   if (reason instanceof Error) return reason;

@@ -10,6 +10,7 @@ import { createFileJournalStore, createMemoryJournalStore } from "../../../kerne
 import {
   DecisionLabelStoreError,
   createPostgresDecisionLabelStore,
+  setDeclaredDriftDecisions,
 } from "../../../kernel/decision-label-store.ts";
 import {
   decisionDriftNames,
@@ -223,6 +224,7 @@ describe("decision labels", () => {
         suspended INTEGER NOT NULL
       )`);
       await db.exec(`INSERT INTO oke_decision_drift (id, suspended) VALUES (1, 1)`);
+      setDeclaredDriftDecisions(["ship", "triage"]);
       const store = await createPostgresDecisionLabelStore(db);
       await store.insert(
         {
@@ -250,7 +252,8 @@ describe("decision labels", () => {
       expect(unlabeled.map((row) => row.value)).toEqual(["billing"]);
       expect(acme.map((row) => row.value)).toEqual(["technical"]);
       expect(await store.drift()).toEqual({
-        legacy: { suspended: true, certifiedAt: 0 },
+        ship: { suspended: true, certifiedAt: 0 },
+        triage: { suspended: true, certifiedAt: 0 },
       });
     } finally {
       await db.close();

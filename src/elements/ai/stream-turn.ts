@@ -67,6 +67,9 @@ async function consumeStream(
   let emittedText = false;
   const tools = new Map<number, ToolAcc>();
   let usage: AiCompleteResult["usage"];
+  let raw: unknown;
+  let external: AiCompleteResult["external"];
+  let sawDone = false;
   const closeText = (): void => {
     if (!textOpen || messageId === undefined) return;
     emit({ type: "TEXT_MESSAGE_END", messageId });
@@ -78,6 +81,9 @@ async function consumeStream(
     acc.ended = true;
   };
   for await (const chunk of stream.call(client, options)) {
+    if (chunk.raw !== undefined) raw = chunk.raw;
+    if (chunk.external !== undefined) external = chunk.external;
+    if (chunk.done) sawDone = true;
     applyChunk(chunk, {
       emit,
       tools,
@@ -111,11 +117,14 @@ async function consumeStream(
   }
   closeText();
   for (const acc of tools.values()) endTool(acc);
+  if (!sawDone) throw new Error("ai: model stream ended before a terminal chunk");
   const toolCalls = assembleToolCalls(tools);
   return {
     text,
     model: options.model ?? client.model,
     driverId: client.driverId,
+    ...(raw !== undefined ? { raw } : {}),
+    ...(external !== undefined ? { external } : {}),
     ...(toolCalls !== undefined ? { toolCalls } : {}),
     ...(usage !== undefined ? { usage } : {}),
   };

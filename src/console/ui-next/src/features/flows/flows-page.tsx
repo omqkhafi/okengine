@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { ExplorerStartToggle } from "@/components/explorer/explorer-start-toggle.tsx";
 import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
 import { useExplorerStartPanel } from "@/components/explorer/use-explorer-start-panel.ts";
@@ -171,6 +172,11 @@ export function FlowsPage() {
 
   return (
     <div className={EXPLORER_PAGE_CLASS} data-slot="flows-page">
+      <div className="flex justify-end px-3 py-1">
+        <Link to="/flows/decisions" className="text-sm underline">
+          Decisions
+        </Link>
+      </div>
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
           panelRef={start.panelRef}

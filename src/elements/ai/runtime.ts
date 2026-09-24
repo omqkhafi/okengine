@@ -54,7 +54,7 @@ import {
   type AgUiEvent,
 } from "./events.ts";
 import { readModelTurn } from "./stream-turn.ts";
-import { createMemoryAgentEventLog, setAgentEventLog, type AgentEventLog } from "./run-events.ts";
+import { createMemoryAgentEventLog, setAgentEventLog, type AgentEventLog, type AgentRunHeader } from "./run-events.ts";
 import { setAgentFollowGates } from "./approval-http.ts";
 import { okid } from "../../okid.ts";
 import {
@@ -367,8 +367,12 @@ export interface AiAgentRunOptions {
   readonly recordCall?: (name: string) => void | Promise<void>;
   /** AG-UI thread. Defaults to a unique id. */
   readonly threadId?: string;
-  /** Gate that allowed the calling Flow. Null when the Flow is public. */
-  readonly gate?: string | null;
+  /** Non-public gates on the calling Flow. */
+  readonly gates?: readonly string[];
+  /** Starting `auth.userId`. */
+  readonly userId?: string | null;
+  /** Starting operator id. */
+  readonly operatorId?: string | null;
 }
 
 /** Stream options. */
@@ -512,6 +516,47 @@ function agentMessages(runOpts: AiAgentRunOptions): AiMessage[] {
   return [{ role: "user", content: promptContentFromInput(runOpts.message ?? "") }];
 }
 
+const agentRunSlots = new WeakMap<JournalSession, number>();
+
+/**
+ * Run id for one agent invocation. A durable Flow journals the id so two
+ * streamed runs in the same Flow do not share a log, and a replay keeps it.
+ *
+ * @param agent - Agent name
+ * @param runOpts - Run options
+ */
+async function allocateAgentRunId(agent: string, runOpts: AiAgentRunOptions): Promise<string> {
+  if (runOpts.runId) return runOpts.runId;
+  const journal = runOpts.journal;
+  if (!journal) return okid();
+  const next = (agentRunSlots.get(journal) ?? 0) + 1;
+  agentRunSlots.set(journal, next);
+  const stored = await journal.effect("ask", `oke.agent.run.${agent}.${next}`, () => okid());
+  return typeof stored === "string" ? stored : okid();
+}
+
+/**
+ * Principal and gates stored on the follow log.
+ *
+ * @param runId - Agent run id
+ * @param threadId - AG-UI thread
+ * @param runOpts - Run options
+ */
+function agentLogHeader(
+  runId: string,
+  threadId: string,
+  runOpts: AiAgentRunOptions,
+): AgentRunHeader {
+  return {
+    runId,
+    threadId,
+    tenant: runOpts.tenantId ?? null,
+    gates: runOpts.gates ?? [],
+    userId: runOpts.userId ?? runOpts.auth?.userId ?? null,
+    operatorId: runOpts.operatorId ?? runOpts.operator?.id ?? null,
+  };
+}
+
 /**
  * Ledger label for a run that may be a history rather than one string.
  *
@@ -548,7 +593,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
   for (const m of options.models ?? []) models.set(m.name, m);
 
   const clients = new Map<string, AiModelClient>(Object.entries(options.clients ?? {}));
-  const eventLog = options.eventLog ?? createMemoryAgentEventLog();
+  const eventLog =
+    options.eventLog ?? createMemoryAgentEventLog(options.journalStore?.agentEvents);
   setAgentEventLog(eventLog);
   setAgentFollowGates(options.gates);
   const mcpClient: McpClient = createMcpClient({
@@ -823,7 +869,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (depth >= parentLimit) {
         return { error: `ai: agent "${agentLabel}" is nested past maxDepth ${parentLimit}` };
       }
-      const childId = `agent-run-${++runSeq}`;
+      const childId = okid();
       opts.emit?.({
         type: "CUSTOM",
         name: "oke.subagent.started",
@@ -1489,15 +1535,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
       const client = await clientFor(modelName);
       const started = now();
-      const runId = runOpts.runId ?? `agent-run-${++runSeq}`;
+      const runId = await allocateAgentRunId(agent, runOpts);
       const threadId = runOpts.threadId ?? okid();
+      const logHeader = agentLogHeader(runId, threadId, runOpts);
       if (runOpts.journal) {
-        void eventLog.open({
-          runId,
-          threadId,
-          tenant: runOpts.tenantId ?? null,
-          gate: runOpts.gate ?? null,
-        });
+        await eventLog.open(logHeader);
+        await eventLog.append(runId, { type: "RUN_STARTED", threadId, runId }, now());
       }
 
       const remember = (partial: {
@@ -1577,7 +1620,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           ...(decl.approvals !== undefined ? { approvals: decl.approvals } : {}),
         });
         loopTokens = tokenFields(loop);
-        return remember({
+        const settled = remember({
           ok: loop.stopReason === "completed" && loop.denials.length === 0,
           stopReason: loop.stopReason,
           steps: loop.steps,
@@ -1586,6 +1629,19 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           output: loop.output,
           cost: loop.cost,
         });
+        if (runOpts.journal) {
+          await eventLog.append(
+            runId,
+            {
+              type: "RUN_FINISHED",
+              threadId,
+              runId,
+              result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
+            },
+            now(),
+          );
+        }
+        return settled;
       } catch (err) {
         if (err instanceof AgentLoopHalt) {
           const result = remember({
@@ -1600,8 +1656,46 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               ? { error: err.cause instanceof Error ? err.cause.message : String(err.cause) }
               : {}),
           });
-          if (err.stopReason === "aborted" || err.stopReason === "error") throw err.cause;
+          if (err.stopReason === "aborted" || err.stopReason === "error") {
+            if (runOpts.journal) {
+              const cause = err.cause instanceof Error ? err.cause : undefined;
+              await eventLog.append(
+                runId,
+                {
+                  type: "RUN_ERROR",
+                  message: cause?.message ?? String(err.cause),
+                  ...(cause && cause.name !== "Error" ? { code: cause.name } : {}),
+                },
+                now(),
+              );
+            }
+            throw err.cause;
+          }
+          if (runOpts.journal) {
+            await eventLog.append(
+              runId,
+              {
+                type: "RUN_FINISHED",
+                threadId,
+                runId,
+                result: { cost: err.cost, stopReason: err.stopReason, output: err.output },
+              },
+              now(),
+            );
+          }
           return result;
+        }
+        if (runOpts.journal) {
+          const error = err instanceof Error ? err : undefined;
+          await eventLog.append(
+            runId,
+            {
+              type: "RUN_ERROR",
+              message: error?.message ?? String(err),
+              ...(error && error.name !== "Error" ? { code: error.name } : {}),
+            },
+            now(),
+          );
         }
         throw err;
       }
@@ -1671,18 +1765,16 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
 
     streamAgent(agent, runOpts) {
       const queue = createEventQueue();
-      const runId = runOpts.journal?.runId ?? runOpts.runId ?? `agent-run-${++runSeq}`;
       const signal = currentAbortSignal();
       const threadId = runOpts.threadId ?? okid();
       let skipLoggedStart = false;
-      if (runOpts.journal) {
-        const inner = queue.emit.bind(queue);
-        queue.emit = (event) => {
-          inner(event);
-          if (skipLoggedStart && event.type === "RUN_STARTED") return;
-          void eventLog.append(runId, event, now());
-        };
-      }
+      let runId = runOpts.runId ?? "";
+      const emit: AgentEventEmit = (event) => {
+        queue.emit(event);
+        if (!runOpts.journal) return;
+        if (skipLoggedStart && event.type === "RUN_STARTED") return;
+        void eventLog.append(runId, event, now());
+      };
       let resolveResult: (value: unknown) => void = () => undefined;
       let rejectResult: (err: unknown) => void = () => undefined;
       const result = new Promise<unknown>((resolve, reject) => {
@@ -1694,16 +1786,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       void (async () => {
         try {
           if (runOpts.journal) {
-            await eventLog.open({
-              runId,
-              threadId,
-              tenant: runOpts.tenantId ?? null,
-              gate: runOpts.gate ?? null,
-            });
+            runId = await allocateAgentRunId(agent, runOpts);
+            await eventLog.open(agentLogHeader(runId, threadId, runOpts));
             const prior = await eventLog.read(runId, 0);
             skipLoggedStart = prior.some((row) => row.event.type === "RUN_STARTED");
+          } else {
+            runId = runOpts.runId ?? okid();
           }
-          queue.emit({ type: "RUN_STARTED", threadId, runId });
+          emit({ type: "RUN_STARTED", threadId, runId });
           const decl = agents.get(agent);
           if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
           const maxSteps = decl.maxSteps ?? AI_DEFAULT_MAX_STEPS;
@@ -1729,7 +1819,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             auth: runOpts.auth,
             operator: runOpts.operator,
             meta: runOpts.meta,
-            emit: queue.emit,
+            emit,
             signal,
             threadId,
             ...(runOpts.journal !== undefined ? { journal: runOpts.journal } : {}),
@@ -1765,7 +1855,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
           };
           resolveResult(settled);
-          queue.emit({
+          emit({
             type: "RUN_FINISHED",
             threadId,
             runId,
@@ -1782,7 +1872,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             return;
           }
           if (err instanceof AiDurableRequiredError) {
-            queue.emit({
+            emit({
               type: "RUN_ERROR",
               message: err.message,
               code: err.name,
@@ -1819,7 +1909,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 cost: err.cost,
               };
               resolveResult(settled);
-              queue.emit({
+              emit({
                 type: "RUN_FINISHED",
                 threadId: runOpts.threadId ?? okid(),
                 runId,
@@ -1836,7 +1926,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           }
           const message = err instanceof Error ? err.message : String(err);
           rejectResult(err);
-          queue.emit({
+          emit({
             type: "RUN_ERROR",
             message,
             ...(err instanceof Error && err.name !== "Error" ? { code: err.name } : {}),

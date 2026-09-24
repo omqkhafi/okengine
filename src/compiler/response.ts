@@ -167,6 +167,10 @@ function encodeSseStream(carrier: JsonStreamResult): Response {
             ? chunk
             : { data: chunk as unknown, id: undefined as string | undefined };
           const lines: string[] = [];
+          if ("comment" in frame && frame.comment && frame.data === undefined) {
+            controller.enqueue(encoder.encode(`: ${frame.comment}\n\n`));
+            continue;
+          }
           if (frame.id !== undefined) lines.push(`id: ${frame.id}`);
           lines.push(`data: ${JSON.stringify(frame.data)}`);
           controller.enqueue(encoder.encode(`${lines.join("\n")}\n\n`));

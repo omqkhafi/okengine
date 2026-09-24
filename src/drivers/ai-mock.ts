@@ -125,6 +125,7 @@ export const mockAiDriver: AiDriver = {
           yield {
             text: "",
             done: true,
+            raw: payload,
             usage: { inputTokens: last.length, outputTokens: text.length, cost: 0 },
           };
           return;
@@ -139,7 +140,7 @@ export const mockAiDriver: AiDriver = {
           }
           yield { text: text.slice(i, i + size) };
         }
-        yield { text: "", done: true };
+        yield { text: "", done: true, raw: payload };
       },
       async embed(opts: AiEmbedOptions): Promise<AiEmbedResult> {
         const inputs = Array.isArray(opts.input) ? opts.input : [opts.input];
