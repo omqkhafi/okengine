@@ -696,6 +696,11 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         seedAccessDemoData(state.apiKeys, state.invites, state.now);
         accessSeeded = true;
       }
+      try {
+        await state.apiKeys.reload?.();
+      } catch {
+        // Keep the in-memory keys when the table read fails.
+      }
       return access.projectAccessPanel({
         manifest: state.manifest,
         roles: state.roles,

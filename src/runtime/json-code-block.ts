@@ -854,6 +854,44 @@ svg[hidden] { display: none !important; }
   font-size: 11px;
   color: var(--mute);
 }
+.auth-field {
+  display: flex;
+  align-items: stretch;
+  height: 2rem;
+  border-bottom: 1px solid var(--line);
+}
+.auth-lab {
+  display: flex;
+  align-items: center;
+  width: 42%;
+  max-width: 42%;
+  flex-shrink: 0;
+  padding: 0 .5rem;
+  border-right: 1px solid var(--line);
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--mute);
+}
+.auth-field .kv-val { flex: 1; }
+.auth-in {
+  display: inline-flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+}
+.auth-pane[hidden] { display: none; }
+.global-pop {
+  position: absolute;
+  z-index: 4;
+  top: 2.5rem;
+  right: 0;
+  width: 22rem;
+  max-height: min(70%, 24rem);
+  overflow: auto;
+  background: var(--field);
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.global-pop[hidden] { display: none; }
 .body-mode-strip {
   display: inline-flex;
   align-items: stretch;
@@ -1059,6 +1097,8 @@ pre {
       ${cacheHtml(options.cache)}
       ${authHtml(options.auth)}
       <span class="grow"></span>
+      <button type="button" class="token" data-slot="json-code-global-auth" aria-expanded="false" aria-controls="json-code-global-panel" title="Global authentication">Auth</button>
+      <button type="button" class="token" data-slot="json-code-global-headers" aria-expanded="false" aria-controls="json-code-global-panel" title="Global headers">Headers</button>
       <span class="sep" aria-hidden="true"></span>
       <a
         class="token is-on"
@@ -1069,6 +1109,17 @@ pre {
         title="${compact ? "Show pretty JSON" : "Show compact JSON"}"
       >${compact ? "Raw" : "Pretty"}</a>
     </header>
+    <div class="global-pop" id="json-code-global-panel" data-slot="json-code-global-panel" data-pane="auth" hidden>
+      <p class="rail-sec-label" data-slot="json-code-global-label">Global auth</p>
+      <div data-global-pane="auth" data-auth-scope="global">
+        ${authEditorHtml("global")}
+      </div>
+      <div data-global-pane="headers" hidden>
+        <div class="kv-editor">
+          <div class="kv-rows" data-slot="json-code-kv-rows" data-kv="headers-global"></div>
+        </div>
+      </div>
+    </div>
     <header class="strip">
       <span class="icon" aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7.2L19 8.2V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 7 20V3.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M14 3.5V8h5" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -1090,6 +1141,9 @@ pre {
   <script>
   (() => {
     const HEADERS_KEY = "oke:json-code:headers";
+    const HEADERS_GLOBAL_KEY = "oke:json-code:headers-global";
+    const AUTH_KEY = "oke:json-code:auth";
+    const AUTH_GLOBAL_KEY = "oke:json-code:auth-global";
     const QUERY_KEY = "oke:json-code:query";
     const PATH_KEY = "oke:json-code:path";
     const PATH_TEMPLATE_KEY = "oke:json-code:path-template";
@@ -1099,7 +1153,7 @@ pre {
     const BODY_JSON_KEY = "oke:json-code:body-json";
     const SECTION_KEY = "oke:json-code:rail-section";
     const ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-    const SECTIONS = ["query", "body", "cookies", "headers", "path"];
+    const SECTIONS = ["query", "body", "cookies", "headers", "auth", "path"];
     const page = document.querySelector("[data-slot=json-code-block]");
     const railCheck = document.getElementById("json-code-rail");
     const resetBtn = document.querySelector("[data-slot=json-code-reset]");
@@ -1364,7 +1418,8 @@ pre {
         section.open = true;
         section.scrollIntoView({ block: "nearest" });
       }
-      if (name === "cookies" || name === "headers" || name === "query" || name === "path" || name === "body") {
+      if (name === "auth") fillAuth("request");
+      else if (name === "cookies" || name === "headers" || name === "query" || name === "path" || name === "body") {
         if (name === "body") syncBodyMode(bodyMode());
         else renderKv(name);
       }
@@ -1449,7 +1504,7 @@ pre {
         const key = (row.querySelector(".kv-key")?.value || "").trim();
         const value = row.querySelector(".kv-val")?.value || "";
         if (!key && !value.trim()) continue;
-        if (kind === "headers" && key.toLowerCase() === "authorization") continue;
+        if ((kind === "headers" || kind === "headers-global") && key.toLowerCase() === "authorization") continue;
         out.push({ key, value });
       }
       return out;
@@ -1473,6 +1528,8 @@ pre {
       } else if (kind === "headers") {
         pairs = loadPairs(HEADERS_KEY).filter((p) => String(p.key).toLowerCase() !== "authorization");
         if (pairs.length === 0) pairs = [{ key: "accept", value: ACCEPT }];
+      } else if (kind === "headers-global") {
+        pairs = loadPairs(HEADERS_GLOBAL_KEY).filter((p) => String(p.key).toLowerCase() !== "authorization");
       } else if (kind === "body") {
         pairs = loadPairs(BODY_FORM_KEY);
       } else {
@@ -1491,6 +1548,9 @@ pre {
       if (!sessionStorage.getItem(HEADERS_KEY)) {
         savePairs(HEADERS_KEY, [{ key: "accept", value: ACCEPT }]);
       }
+      if (!sessionStorage.getItem(HEADERS_GLOBAL_KEY)) savePairs(HEADERS_GLOBAL_KEY, []);
+      if (!sessionStorage.getItem(AUTH_KEY)) sessionStorage.setItem(AUTH_KEY, JSON.stringify(emptyAuth()));
+      if (!sessionStorage.getItem(AUTH_GLOBAL_KEY)) sessionStorage.setItem(AUTH_GLOBAL_KEY, JSON.stringify(emptyAuth()));
       if (!sessionStorage.getItem(QUERY_KEY)) {
         const pairs = [];
         for (const [key, value] of new URLSearchParams(location.search)) pairs.push({ key, value });
@@ -1528,14 +1588,145 @@ pre {
       }
     }
 
+    function emptyAuth() {
+      return { type: "none", token: "", username: "", password: "", key: "", value: "", in: "header" };
+    }
+
+    function authStorageKey(scope) {
+      return scope === "global" ? AUTH_GLOBAL_KEY : AUTH_KEY;
+    }
+
+    function loadAuth(key) {
+      try {
+        const raw = sessionStorage.getItem(key);
+        if (!raw) return emptyAuth();
+        const parsed = JSON.parse(raw);
+        const type = parsed && parsed.type;
+        if (type !== "bearer" && type !== "basic" && type !== "apikey" && type !== "none") return emptyAuth();
+        return {
+          type,
+          token: typeof parsed.token === "string" ? parsed.token : "",
+          username: typeof parsed.username === "string" ? parsed.username : "",
+          password: typeof parsed.password === "string" ? parsed.password : "",
+          key: typeof parsed.key === "string" ? parsed.key : "",
+          value: typeof parsed.value === "string" ? parsed.value : "",
+          in: parsed.in === "query" ? "query" : "header",
+        };
+      } catch {
+        return emptyAuth();
+      }
+    }
+
+    function readAuth(scope) {
+      const root = document.querySelector('[data-auth-scope="' + scope + '"]');
+      if (!root) return loadAuth(authStorageKey(scope));
+      const on = root.querySelector("[data-auth-type].is-on");
+      const type = on ? on.getAttribute("data-auth-type") : "none";
+      const field = (name) => {
+        const input = root.querySelector('[data-auth-field="' + name + '"]');
+        return input ? input.value : "";
+      };
+      const inBtn = root.querySelector("[data-auth-in].is-on");
+      return {
+        type: type === "bearer" || type === "basic" || type === "apikey" ? type : "none",
+        token: field("token"),
+        username: field("username"),
+        password: field("password"),
+        key: field("key"),
+        value: field("value"),
+        in: inBtn && inBtn.getAttribute("data-auth-in") === "query" ? "query" : "header",
+      };
+    }
+
+    function authLabel(auth) {
+      if (auth.type === "bearer") return "Bearer";
+      if (auth.type === "basic") return "Basic";
+      if (auth.type === "apikey") return "API";
+      return "No";
+    }
+
+    function paintAuth(scope, auth) {
+      const root = document.querySelector('[data-auth-scope="' + scope + '"]');
+      if (root) {
+        for (const btn of root.querySelectorAll("[data-auth-type]")) {
+          const on = btn.getAttribute("data-auth-type") === auth.type;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        for (const pane of root.querySelectorAll("[data-auth-pane]")) {
+          pane.hidden = pane.getAttribute("data-auth-pane") !== auth.type;
+        }
+        for (const btn of root.querySelectorAll("[data-auth-in]")) {
+          const on = (btn.getAttribute("data-auth-in") || "header") === auth.in;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+      }
+      if (scope === "global") {
+        const btn = document.querySelector("[data-slot=json-code-global-auth]");
+        if (btn) {
+          const active = auth.type !== "none";
+          btn.classList.toggle("is-on", active);
+          btn.title = active ? "Global authentication · " + authLabel(auth) : "Global authentication";
+        }
+      }
+    }
+
+    function fillAuth(scope) {
+      const auth = loadAuth(authStorageKey(scope));
+      const root = document.querySelector('[data-auth-scope="' + scope + '"]');
+      if (root) {
+        const set = (name, value) => {
+          const input = root.querySelector('[data-auth-field="' + name + '"]');
+          if (input) input.value = value;
+        };
+        set("token", auth.token);
+        set("username", auth.username);
+        set("password", auth.password);
+        set("key", auth.key);
+        set("value", auth.value);
+      }
+      paintAuth(scope, auth);
+    }
+
+    function persistAuth(scope) {
+      const auth = readAuth(scope);
+      sessionStorage.setItem(authStorageKey(scope), JSON.stringify(auth));
+      paintAuth(scope, auth);
+    }
+
+    function effectiveAuth() {
+      const request = loadAuth(AUTH_KEY);
+      if (request.type !== "none") return request;
+      return loadAuth(AUTH_GLOBAL_KEY);
+    }
+
+    function basicAuthorization(user, pass) {
+      const bytes = new TextEncoder().encode(String(user) + ":" + String(pass));
+      let bin = "";
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return "Basic " + btoa(bin);
+    }
+
+    function applyHeaderPairs(headers, pairs) {
+      for (const p of pairs) {
+        const k = (p.key || "").trim();
+        if (!k || k.toLowerCase() === "authorization") continue;
+        headers[k] = p.value ?? "";
+      }
+    }
+
     function requestHeaders(contentType) {
       const headers = { accept: ACCEPT };
-      for (const p of loadPairs(HEADERS_KEY)) {
-        const k = (p.key || "").trim();
-        if (!k) continue;
-        const lower = k.toLowerCase();
-        if (lower === "authorization") continue;
-        headers[k] = p.value ?? "";
+      applyHeaderPairs(headers, loadPairs(HEADERS_GLOBAL_KEY));
+      applyHeaderPairs(headers, loadPairs(HEADERS_KEY));
+      const auth = effectiveAuth();
+      if (auth.type === "bearer" && auth.token.trim()) {
+        headers.authorization = "Bearer " + auth.token.trim();
+      } else if (auth.type === "basic" && (auth.username || auth.password)) {
+        headers.authorization = basicAuthorization(auth.username, auth.password);
+      } else if (auth.type === "apikey" && auth.in !== "query" && auth.key.trim()) {
+        headers[auth.key.trim()] = auth.value ?? "";
       }
       if (contentType) {
         const hasCt = Object.keys(headers).some((k) => k.toLowerCase() === "content-type");
@@ -1550,6 +1741,10 @@ pre {
         const k = (p.key || "").trim();
         if (!k) continue;
         params.set(k, p.value ?? "");
+      }
+      const auth = effectiveAuth();
+      if (auth.type === "apikey" && auth.in === "query" && auth.key.trim()) {
+        params.set(auth.key.trim(), auth.value ?? "");
       }
       const q = params.toString();
       return q ? pathname + "?" + q : pathname;
@@ -1625,6 +1820,12 @@ pre {
         HEADERS_KEY,
         collectKv("headers").filter((p) => p.key.toLowerCase() !== "authorization"),
       );
+      savePairs(
+        HEADERS_GLOBAL_KEY,
+        collectKv("headers-global").filter((p) => p.key.toLowerCase() !== "authorization"),
+      );
+      persistAuth("request");
+      persistAuth("global");
       savePairs(QUERY_KEY, collectKv("query"));
       savePairs(BODY_FORM_KEY, collectKv("body"));
       if (bodyRaw) sessionStorage.setItem(BODY_JSON_KEY, bodyRaw.value);
@@ -1688,6 +1889,7 @@ pre {
 
     function resetOptions() {
       savePairs(HEADERS_KEY, [{ key: "accept", value: ACCEPT }]);
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify(emptyAuth()));
       const pairs = [];
       for (const [key, value] of new URLSearchParams(location.search)) pairs.push({ key, value });
       savePairs(QUERY_KEY, pairs);
@@ -1699,6 +1901,7 @@ pre {
         savePairs(PATH_KEY, pathNames(template).map((n) => ({ key: n, value: "" })));
       }
       for (const kind of ["cookies", "headers", "query", "path", "body"]) renderKv(kind);
+      fillAuth("request");
       syncBodyMode("form");
       syncPathChapter();
     }
@@ -1711,7 +1914,9 @@ pre {
     }
 
     ensureSeeds();
-    for (const kind of ["cookies", "headers", "query", "path", "body"]) renderKv(kind);
+    for (const kind of ["cookies", "headers", "headers-global", "query", "path", "body"]) renderKv(kind);
+    fillAuth("request");
+    fillAuth("global");
     syncBodyMode(bodyMode());
     syncPathChapter();
     const saved = sessionStorage.getItem(SECTION_KEY) || "";
@@ -1732,6 +1937,24 @@ pre {
         syncBodyMode(mode);
       });
     }
+    for (const el of document.querySelectorAll("[data-auth-type]")) {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const root = el.closest("[data-auth-scope]");
+        if (!root) return;
+        for (const btn of root.querySelectorAll("[data-auth-type]")) {
+          const on = btn === el;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        const type = el.getAttribute("data-auth-type") || "none";
+        for (const pane of root.querySelectorAll("[data-auth-pane]")) {
+          pane.hidden = pane.getAttribute("data-auth-pane") !== type;
+        }
+        persistAuth(root.getAttribute("data-auth-scope") || "request");
+      });
+    }
     if (bodyRaw) {
       bodyRaw.addEventListener("input", () => {
         sessionStorage.setItem(BODY_JSON_KEY, bodyRaw.value);
@@ -1750,12 +1973,63 @@ pre {
         const name = section.getAttribute("data-rail-section");
         if (!name) return;
         sessionStorage.setItem(SECTION_KEY, name);
-        if (name === "cookies" || name === "headers" || name === "query" || name === "path" || name === "body") {
+        if (name === "auth") fillAuth("request");
+        else if (name === "cookies" || name === "headers" || name === "query" || name === "path" || name === "body") {
           if (name === "body") syncBodyMode(bodyMode());
           else renderKv(name);
         }
       });
     }
+
+    const globalPop = document.querySelector("[data-slot=json-code-global-panel]");
+    const globalAuthBtn = document.querySelector("[data-slot=json-code-global-auth]");
+    const globalHeadersBtn = document.querySelector("[data-slot=json-code-global-headers]");
+
+    function paintGlobalHeaders() {
+      if (!globalHeadersBtn) return;
+      const n = loadPairs(HEADERS_GLOBAL_KEY).filter((p) => (p.key || "").trim() && String(p.key).toLowerCase() !== "authorization").length;
+      globalHeadersBtn.classList.toggle("is-on", n > 0);
+      globalHeadersBtn.title = n > 0 ? "Global headers · " + n : "Global headers";
+    }
+
+    function closeGlobal() {
+      if (globalPop) globalPop.hidden = true;
+      if (globalAuthBtn) globalAuthBtn.setAttribute("aria-expanded", "false");
+      if (globalHeadersBtn) globalHeadersBtn.setAttribute("aria-expanded", "false");
+    }
+
+    function openGlobal(pane) {
+      if (!globalPop) return;
+      const same = !globalPop.hidden && globalPop.getAttribute("data-pane") === pane;
+      if (same) {
+        closeGlobal();
+        return;
+      }
+      globalPop.hidden = false;
+      globalPop.setAttribute("data-pane", pane);
+      const label = document.querySelector("[data-slot=json-code-global-label]");
+      if (label) label.textContent = pane === "headers" ? "Global headers" : "Global auth";
+      const authPane = globalPop.querySelector('[data-global-pane="auth"]');
+      const headersPane = globalPop.querySelector('[data-global-pane="headers"]');
+      if (authPane) authPane.hidden = pane !== "auth";
+      if (headersPane) headersPane.hidden = pane !== "headers";
+      if (globalAuthBtn) globalAuthBtn.setAttribute("aria-expanded", pane === "auth" ? "true" : "false");
+      if (globalHeadersBtn) globalHeadersBtn.setAttribute("aria-expanded", pane === "headers" ? "true" : "false");
+      if (pane === "headers") renderKv("headers-global");
+      else fillAuth("global");
+    }
+
+    paintGlobalHeaders();
+    if (globalAuthBtn) globalAuthBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openGlobal("auth");
+    });
+    if (globalHeadersBtn) globalHeadersBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openGlobal("headers");
+    });
 
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
@@ -1782,10 +2056,43 @@ pre {
       }
     }
 
+    document.addEventListener("input", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
+      const authRoot = t.closest("[data-auth-scope]");
+      if (authRoot) {
+        persistAuth(authRoot.getAttribute("data-auth-scope") || "request");
+        return;
+      }
+      if (t.closest('[data-kv="headers-global"]')) {
+        savePairs(
+          HEADERS_GLOBAL_KEY,
+          collectKv("headers-global").filter((p) => p.key.toLowerCase() !== "authorization"),
+        );
+        paintGlobalHeaders();
+      }
+    });
+
     document.addEventListener("click", (e) => {
       const t = e.target;
       const el = t instanceof Element ? t : t && t.parentElement;
       if (!el) return;
+      const authIn = el.closest("[data-auth-in]");
+      if (authIn) {
+        e.preventDefault();
+        const root = authIn.closest("[data-auth-scope]");
+        if (!root) return;
+        for (const btn of root.querySelectorAll("[data-auth-in]")) {
+          const on = btn === authIn;
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        persistAuth(root.getAttribute("data-auth-scope") || "request");
+        return;
+      }
+      if (globalPop && !globalPop.hidden && !el.closest("[data-slot=json-code-global-panel]") && !el.closest("[data-slot=json-code-global-auth]") && !el.closest("[data-slot=json-code-global-headers]")) {
+        closeGlobal();
+      }
       const paramLeaf = el.closest("button.leaf[data-param-template]");
       if (paramLeaf) {
         e.preventDefault();
@@ -1992,6 +2299,45 @@ function authHtml(auth: JsonCodeAuth | undefined): string {
   return `<span class="count auth auth-${value.kind}" data-slot="json-code-auth" data-auth="${value.kind}" title="${escapeHtml(title)}">${mark.icon}<span class="auth-label">${escapeHtml(label)}</span></span>`;
 }
 
+function authSwitchHtml(): string {
+  const opt = (type: string, text: string) =>
+    `<button type="button" class="token${type === "none" ? " is-on" : ""}" data-auth-type="${type}" aria-pressed="${type === "none" ? "true" : "false"}">${text}</button>`;
+  return `<span class="body-mode-strip" role="group" aria-label="Authorization">${opt("none", "No")}${opt("bearer", "Bearer")}${opt("basic", "Basic")}${opt("apikey", "API")}</span>`;
+}
+
+function authEditorHtml(scope: "request" | "global"): string {
+  const none =
+    scope === "global"
+      ? "No global credentials. Each request uses its own Authorization."
+      : "No credentials on this request. Global credentials apply when they are set.";
+  const switchRow =
+    scope === "global"
+      ? `<div class="strip">${authSwitchHtml()}</div>`
+      : "";
+  return `<div class="auth-editor" data-slot="json-code-auth-editor">
+    ${switchRow}
+    <p class="kv-empty" data-auth-pane="none">${none}</p>
+    <div class="auth-pane" data-auth-pane="bearer" hidden>
+      <label class="auth-field"><span class="auth-lab">Token</span><input class="kv-val" data-auth-field="token" spellcheck="false" autocomplete="off" placeholder="Token" /></label>
+    </div>
+    <div class="auth-pane" data-auth-pane="basic" hidden>
+      <label class="auth-field"><span class="auth-lab">Username</span><input class="kv-val" data-auth-field="username" spellcheck="false" autocomplete="off" placeholder="Username" /></label>
+      <label class="auth-field"><span class="auth-lab">Password</span><input class="kv-val" data-auth-field="password" spellcheck="false" autocomplete="off" placeholder="Password" /></label>
+    </div>
+    <div class="auth-pane" data-auth-pane="apikey" hidden>
+      <label class="auth-field"><span class="auth-lab">Key</span><input class="kv-val" data-auth-field="key" spellcheck="false" autocomplete="off" placeholder="X-Api-Key" /></label>
+      <label class="auth-field"><span class="auth-lab">Value</span><input class="kv-val" data-auth-field="value" spellcheck="false" autocomplete="off" placeholder="Value" /></label>
+      <div class="auth-field">
+        <span class="auth-lab">Add to</span>
+        <span class="auth-in" role="group" aria-label="API key location">
+          <button type="button" class="token is-on" data-auth-in="header" aria-pressed="true">Header</button>
+          <button type="button" class="token" data-auth-in="query" aria-pressed="false">Query</button>
+        </span>
+      </div>
+    </div>
+  </div>`;
+}
+
 function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
   const groups = (nav ?? []).map(navGroupHtml).join("");
   const chev = `<span class="chev" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 9.5 12 15.5 18 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
@@ -2051,6 +2397,12 @@ function navHtml(nav: readonly JsonCodeNavGroup[] | undefined): string {
       </details>
       ${kvSection("cookies", "Cookies")}
       ${kvSection("headers", "Headers")}
+      <details class="rail-acc" data-rail-section="auth" data-auth-scope="request">
+        <summary class="rail-acc-sum">${chev}<span>Authorization</span><span class="grow"></span>${authSwitchHtml()}</summary>
+        <div class="rail-acc-body">
+          ${authEditorHtml("request")}
+        </div>
+      </details>
       ${kvSection("path", "Path")}
     </div>
   </div>

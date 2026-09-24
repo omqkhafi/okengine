@@ -103,8 +103,11 @@ export const app = oke({
 });
 ```
 
-In production, set `gate.auth.secret` (or `OKE_AUTH_SECRET`). Omitting it in `prod` throws:
+In production, set `gate.auth.secret` (or `OKE_AUTH_SECRET`). Omitting both in `prod` throws:
 `gate.auth: secret is required in production (set gate.auth.secret or OKE_AUTH_SECRET)`.
+When `gate.auth.secret` is omitted, the process uses `OKE_AUTH_SECRET`. `oke dev` writes one
+value into `.env.local` and passes it to Console and the app, so a Bearer API key created
+in Console verifies on the app.
 
 Forged, expired, or revoked access tokens map to typed `Unauthorized` — they never become a
 principal.

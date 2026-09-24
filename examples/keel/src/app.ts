@@ -10,6 +10,9 @@ export const app = oke({
   // is), so pass the full contract list explicitly for `fx.vault.get` to
   // resolve configs like KEEL_WORKSPACE in test / dev boots.
   secrets: KEEL_VAULT,
+  // Bearer API keys (Console Access) need a verifier. `http: false` keeps
+  // `/auth/*` off; policies stay on the Flows.
+  gate: { auth: { http: false } },
 }).adopt(routes);
 
 export type App = typeof app;

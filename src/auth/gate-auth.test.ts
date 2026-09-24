@@ -21,13 +21,33 @@ afterEach(() => {
 });
 
 describe("gate.auth — config", () => {
+  const prevAuthSecret = process.env.OKE_AUTH_SECRET;
+
+  afterEach(() => {
+    if (prevAuthSecret === undefined) delete process.env.OKE_AUTH_SECRET;
+    else process.env.OKE_AUTH_SECRET = prevAuthSecret;
+  });
+
   test("prod without secret fails", () => {
+    delete process.env.OKE_AUTH_SECRET;
     expect(() =>
       resolveGateAuth({ auth: { emailAndPassword: { enabled: true } }, env: "prod" }),
     ).toThrow(/secret is required/);
   });
 
+  test("OKE_AUTH_SECRET is the pepper when gate.auth.secret is omitted", () => {
+    process.env.OKE_AUTH_SECRET = "shared-dev-pepper";
+    const resolved = resolveGateAuth({
+      auth: { emailAndPassword: { enabled: true } },
+      env: "dev",
+    });
+    expect(resolved.secret).toBe("shared-dev-pepper");
+    expect(resolved.secretMinted).toBe(false);
+    expect(resolved.apiKeyStore.pepper).toBe("shared-dev-pepper");
+  });
+
   test("dev mints secret", () => {
+    delete process.env.OKE_AUTH_SECRET;
     const resolved = resolveGateAuth({
       auth: { emailAndPassword: { enabled: true } },
       env: "dev",

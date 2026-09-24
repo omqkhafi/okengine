@@ -44,4 +44,48 @@ describe("api-key SQL persist", () => {
     expect(other.keys.get("key_sql")?.creatorId).toBe("u1");
     expect(other.keys.get("key_sql")?.hash).toBe(created.row.hash);
   });
+
+  test("authenticate reloads an oke_ secret missing from memory", async () => {
+    const { authenticateApiKey } = await import("./api-keys.ts");
+    const rows = new Map<string, Record<string, unknown>>();
+    const sql: ApiKeySqlExec = {
+      async execute(_q, params) {
+        const id = String(params[0]);
+        rows.set(id, {
+          id,
+          plane: params[1],
+          hash: params[2],
+          name: params[3],
+          scopes: params[4],
+          expires_at: params[5],
+          rate_limit: params[6],
+          ip_allowlist: params[7],
+          creator_id: params[8],
+          creator_scopes: params[9],
+          created_at: params[10],
+          last_used_at: params[11],
+          revoked_at: params[12],
+        });
+      },
+      async all() {
+        return [...rows.values()];
+      },
+    };
+    const writer = createApiKeyStore({ pepper: "shared" });
+    bindApiKeySqlPersist(writer, sql);
+    const created = await createApiKey(writer, {
+      plane: "user",
+      name: "Auth Test",
+      scopes: ["member"],
+      creatorId: "user_admin",
+      creatorScopes: ["member"],
+      id: "key_live",
+    });
+    const reader = createApiKeyStore({ pepper: "shared" });
+    bindApiKeySqlPersist(reader, sql);
+    expect(reader.keys.size).toBe(0);
+    const row = await authenticateApiKey(reader, created.secret);
+    expect(row?.id).toBe("key_live");
+    expect(reader.keys.has("key_live")).toBe(true);
+  });
 });

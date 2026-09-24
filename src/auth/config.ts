@@ -4,6 +4,7 @@
  * Better Auth is inspiration for shape only; this is OKE-native.
  */
 
+import { createEnv } from "../runtime/primitives.ts";
 import type { PasswordHashOptions } from "../runtime/types.ts";
 import type { SessionStore } from "./sessions.ts";
 import { createApiKeyStore, type ApiKeyStore } from "./api-keys.ts";
@@ -226,9 +227,12 @@ export function mintDevAuthSecret(): string {
 export function resolveGateAuth(options: ResolveGateAuthOptions): ResolvedGateAuth {
   const { auth, env } = options;
   const isProd = env === "prod" || env === "production";
-  let secret = auth.secret;
+  let secret = auth.secret?.trim() ?? "";
   let secretMinted = false;
-  if (!secret || secret.length === 0) {
+  if (secret.length === 0) {
+    secret = createEnv().get("OKE_AUTH_SECRET")?.trim() ?? "";
+  }
+  if (secret.length === 0) {
     if (isProd) {
       throw new Error(
         "gate.auth: secret is required in production (set gate.auth.secret or OKE_AUTH_SECRET)",

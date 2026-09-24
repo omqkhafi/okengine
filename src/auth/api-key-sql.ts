@@ -97,6 +97,7 @@ export function bindApiKeySqlPersist(
   table: string = AUTH_TABLES.apiKeys,
 ): void {
   store.persist = (row) => persistApiKeyRow(sql, row, table);
+  store.reload = () => hydrateApiKeyStore(sql, store, table);
 }
 
 /** Runtime that can open the app's shared primary SQL connection. */

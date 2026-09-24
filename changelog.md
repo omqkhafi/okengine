@@ -16,6 +16,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- Browser JSON page Authorization sits after Headers. Its summary switches
+  No, Bearer, Basic, or API. The strip Auth and Headers tokens set global
+  credentials and headers. A request with No Auth uses the global credentials.
+  Request headers override global headers on the same name.
 - `prompt({ repair: 1 })` sends one follow-up when the answer misses `out`. That
   completion counts toward `maxCostPerCall` and is its own journal entry. `repair: 0`
   still throws `AiSchemaValidationError`.
@@ -145,6 +149,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   trace and the decisions page, and the next write still runs. Postgres matches a
   null tenant with `IS NOT DISTINCT FROM`. An older drift table gains `certified_at`
   when the store opens.
+- A Bearer API key created in Console verifies on the app. `oke dev` stores one
+  `OKE_AUTH_SECRET` in `.env.local` and gives it to Console and the app, and
+  `gate.auth` uses that value instead of minting a different secret per process.
+  An `oke_` secret missing from memory reloads `oke_api_keys` before the 401.
+  Access refresh reads that table too, so Calls updates after the request.
+  Keel turns on `gate.auth` with `http: false` so member gates accept that key.
 - Learn-then-Test certifies a threshold only when the error count is low under
   `maxError`. Choice and score candidates read the stored label distribution.
   The postgres label store throws if it cannot open or query, and candidate and

@@ -193,12 +193,11 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(publicHtml).not.toContain('data-slot="json-code-auth-switch"');
     expect(publicHtml).not.toContain("data-auth-default");
     expect(publicHtml).not.toContain("data-route-public");
-    expect(publicHtml).not.toContain('data-slot="json-code-auth-global"');
-    expect(publicHtml).not.toContain('data-rail-section="auth"');
     expect(publicHtml).not.toContain(">Inherit</button>");
     expect(publicHtml).not.toContain(">Custom</button>");
     expect(publicHtml).not.toContain("oke:json-code:bearer");
-    expect(publicHtml).not.toContain("Authentication");
+    expect(publicHtml).toContain('data-rail-section="auth"');
+    expect(publicHtml).toContain(">Authorization</span>");
 
     const userHtml = renderJsonCodeBlockHtml({
       json: '{"ok":true}',
@@ -216,13 +215,12 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(userHtml).not.toContain('data-slot="json-code-auth-switch"');
     expect(userHtml).not.toContain('data-slot="json-code-api-key-global"');
     expect(userHtml).not.toContain('data-slot="json-code-api-key-route"');
-    expect(userHtml).not.toContain('data-slot="json-code-auth-global"');
-    expect(userHtml).not.toContain('data-rail-section="auth"');
-    expect(userHtml).not.toContain("Authentication");
+    expect(userHtml).toContain('data-rail-section="auth"');
+    expect(userHtml).toContain('data-slot="json-code-global-auth"');
     expect(userHtml).not.toContain(">Console</a>");
   });
 
-  test("Authentication interactive UI is gone", () => {
+  test("Authorization follows headers and global auth lives on the strip", () => {
     const html = renderJsonCodeBlockHtml({
       json: '{"ok":true}',
       status: 200,
@@ -234,29 +232,33 @@ describe("renderJsonCodeBlockHtml", () => {
       auth: { kind: "public" },
     });
     expect(html).not.toContain('data-slot="json-code-auth-switch"');
-    expect(html).not.toContain(">Authentication</button>");
-    expect(html).not.toContain("Global API Key");
-    expect(html).not.toContain("Route API Key");
-    expect(html).not.toContain('data-slot="json-code-api-key-apply-global"');
-    expect(html).not.toContain('data-slot="json-code-api-key-apply-route"');
-    expect(html).not.toContain('data-slot="json-code-auth-route-mode"');
-    expect(html).not.toContain('data-slot="json-code-auth-inherit"');
-    expect(html).not.toContain('data-rail-section="auth"');
     expect(html).not.toContain(">Inherit</button>");
     expect(html).not.toContain(">Custom</button>");
-    expect(html).not.toContain("oke:json-code:bearer");
-    expect(html).not.toContain("oke:json-code:bearer-route");
-    expect(html).not.toContain("oke:json-code:auth-route-mode");
-    expect(html).not.toContain("oke:json-code:auth-tone");
     expect(html).not.toContain("function resolveBearer");
-    expect(html).not.toContain("function routeIsPublic");
-    expect(html).not.toContain("function applyGlobalKey");
-    expect(html).not.toContain("refreshAuthTone");
+    expect(html.indexOf('data-rail-section="headers"')).toBeLessThan(
+      html.indexOf('data-rail-section="auth"'),
+    );
+    expect(html.indexOf('data-rail-section="auth"')).toBeLessThan(
+      html.indexOf('data-rail-section="path"'),
+    );
+    expect(html).toContain(">Authorization</span>");
+    expect(html).toContain('data-auth-type="none"');
+    expect(html).toContain(">No</button>");
+    expect(html).toContain(">Bearer</button>");
+    expect(html).toContain(">Basic</button>");
+    expect(html).toContain(">API</button>");
+    expect(html).not.toContain("auth-opt");
+    expect(html).toContain('data-auth-scope="request"');
+    expect(html).toContain('data-auth-scope="global"');
+    expect(html).toContain('data-slot="json-code-global-auth"');
+    expect(html).toContain('data-slot="json-code-global-headers"');
+    expect(html).toContain('data-slot="json-code-global-panel"');
+    expect(html).toContain('data-kv="headers-global"');
+    expect(html).toContain("oke:json-code:auth");
+    expect(html).toContain("oke:json-code:auth-global");
+    expect(html).toContain("oke:json-code:headers-global");
+    expect(html).toContain("function effectiveAuth");
     expect(html).toContain('data-slot="json-code-send"');
-    expect(html).toContain('data-kv="headers"');
-    expect(html).toContain('aria-label="Request"');
-    expect(html).not.toContain(":6533");
-    expect(html).not.toContain(">Console</a>");
   });
 
   test("renders the Request rail with tabs and current GET on", () => {
@@ -319,7 +321,7 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain('data-slot="json-code-request-dock"');
     expect(html).toContain('data-slot="json-code-send"');
     expect(html).toContain('data-slot="json-code-reset"');
-    expect(html).not.toContain('data-slot="json-code-dock-auth"');
+    expect(html).toContain('data-slot="json-code-global-auth"');
     expect(html).toContain('data-rail-section="query"');
     expect(html).toContain(">Params</span>");
     expect(html).toContain('data-rail-section="body"');
@@ -330,11 +332,10 @@ describe("renderJsonCodeBlockHtml", () => {
     expect(html).toContain('data-slot="json-code-body-raw"');
     expect(html).toContain('data-slot="json-code-body-hi"');
     expect(html).toContain('data-kv="body"');
-    expect(html).not.toContain('data-rail-section="auth"');
-    expect(html).not.toContain('data-slot="json-code-auth-route-mode"');
+    expect(html).toContain('data-rail-section="auth"');
     expect(html).not.toContain(">Inherit</button>");
     expect(html).not.toContain(">Custom</button>");
-    expect(html).not.toContain('data-slot="json-code-auth-global"');
+    expect(html).toContain('data-slot="json-code-global-headers"');
     expect(html).toContain('data-rail-section="cookies"');
     expect(html).toContain('data-rail-section="headers"');
     expect(html).toContain('data-rail-section="path"');

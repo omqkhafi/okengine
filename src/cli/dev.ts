@@ -1036,6 +1036,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     setProcessEnv("OKE_KV_DRIVER", stackKvDriver);
   }
 
+  // One secret for Console (this process) and the app child. Must land
+  // before the first import of the app entry.
+  {
+    const { ensureDevAuthSecret } = await import("./dev-auth-secret.ts");
+    setProcessEnv("OKE_AUTH_SECRET", await ensureDevAuthSecret(cwd));
+  }
+
   // One-shot schema sync for the compose (`dev`) profile: emits
   // drizzle/ for the active dialect, then pushes via drizzle-kit.
   let schemaPushOk = options.noDbPush === true;

@@ -85,6 +85,11 @@ export interface ApiKeyStore {
   pepper?: string;
   /** Optional write-through persist (SQL). */
   persist?: (row: ApiKeyRow) => void | Promise<void>;
+  /**
+   * Reload rows from the durable table. `oke dev` keeps Console and the app
+   * in separate processes; a miss on an `oke_` secret refreshes this cache.
+   */
+  reload?: () => void | Promise<void>;
   /** Sliding-window hits for per-key rateLimit (subject = key id). */
   rateHits?: Map<string, number[]>;
 }
@@ -202,20 +207,33 @@ export async function authenticateApiKey(
   const now = options.now ?? (() => Date.now());
   const pepper = store.pepper ?? DEFAULT_PEPPER;
   const hash = await hashApiKeySecret(secret, pepper);
-  for (const row of store.keys.values()) {
-    if (row.hash !== hash) continue;
-    if (row.revokedAt !== null) return null;
-    if (row.expiresAt !== null && row.expiresAt <= now()) return null;
-    if (row.ipAllowlist.length > 0) {
-      const allowed = await allowlistAllowsIp(row.ipAllowlist, options.ip, options.lookup);
-      if (!allowed) return null;
+  let row = matchApiKeyHash(store, hash);
+  if (!row && secret.startsWith("oke_") && store.reload) {
+    try {
+      await store.reload();
+    } catch {
+      // Durable read missed — the in-memory miss still stands.
     }
-    if (row.rateLimit && !takeKeyRate(store, row.id, row.rateLimit, now())) return null;
-    row.lastUsedAt = now();
-    await persistRow(store, row);
-    return row;
+    row = matchApiKeyHash(store, hash);
   }
-  return null;
+  if (!row) return null;
+  if (row.revokedAt !== null) return null;
+  if (row.expiresAt !== null && row.expiresAt <= now()) return null;
+  if (row.ipAllowlist.length > 0) {
+    const allowed = await allowlistAllowsIp(row.ipAllowlist, options.ip, options.lookup);
+    if (!allowed) return null;
+  }
+  if (row.rateLimit && !takeKeyRate(store, row.id, row.rateLimit, now())) return null;
+  row.lastUsedAt = now();
+  await persistRow(store, row);
+  return row;
+}
+
+function matchApiKeyHash(store: ApiKeyStore, hash: string): ApiKeyRow | undefined {
+  for (const row of store.keys.values()) {
+    if (row.hash === hash) return row;
+  }
+  return undefined;
 }
 
 /**
