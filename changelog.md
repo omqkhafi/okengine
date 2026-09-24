@@ -16,6 +16,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `ai.agent({ tools })` may include another agent. The child keeps its own step cap.
+  Its cost cap is the smaller of its budget and the parent's remaining spend. Nesting
+  stops at `maxDepth` (default 3). The child run records `parentRunId`.
 - A tool on `ai.agent` may set `approval` and `gate`. The calling Flow must be
   `durable: true`. The run parks until `fx.agent.approve`, `fx.agent.deny`, or the
   timeout (default `24h`, then deny). The first resolution wins; a later one is

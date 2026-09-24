@@ -2037,6 +2037,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
                   verified: auth.verified,
                 },
                 callTool: (tool, toolInput) => fx.call(tool, toolInput),
+                recordCall: (tool) => {
+                  void gated("call", tool, async () => undefined);
+                },
               }),
             );
             yield* events;
@@ -2059,6 +2062,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               verified: auth.verified,
             },
             callTool: (tool, toolInput) => fx.call(tool, toolInput),
+            recordCall: (tool) => {
+              void gated("call", tool, async () => undefined);
+            },
           });
         }
         return { ok: true, steps: 0, denials: [], output: input };

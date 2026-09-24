@@ -91,6 +91,8 @@ export interface AiAgentOptions {
   readonly model?: AiModelDecl | string;
   readonly tools?: readonly (AiAgentToolOptions | { readonly name: string } | string)[];
   readonly maxSteps?: number;
+  /** Nested agent depth. Default 3. */
+  readonly maxDepth?: number;
   readonly budget?: AiBudgetDecl;
 }
 
@@ -152,6 +154,7 @@ export interface AiAgentDecl {
   readonly tools: readonly string[];
   readonly approvals?: Readonly<Record<string, AiAgentApprovalDecl>>;
   readonly maxSteps?: number;
+  readonly maxDepth?: number;
   readonly model?: string;
   readonly budget?: AiBudgetDecl;
 }
@@ -381,6 +384,7 @@ export const ai: AiNamespace = {
       tools: (options.tools ?? []).map(toolName),
       ...(Object.keys(approvals).length > 0 ? { approvals } : {}),
       ...(options.maxSteps !== undefined ? { maxSteps: options.maxSteps } : {}),
+      ...(options.maxDepth !== undefined ? { maxDepth: options.maxDepth } : {}),
       ...(options.budget !== undefined ? { budget: options.budget } : {}),
       ...(typeof options.model === "string"
         ? { model: options.model }

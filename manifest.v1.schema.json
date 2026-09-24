@@ -686,6 +686,7 @@
           "additionalProperties": { "const": true }
         },
         "maxSteps": { "type": "integer", "minimum": 1 },
+        "maxDepth": { "type": "integer", "minimum": 1 },
         "model": { "type": "string", "minLength": 1 },
         "budget": { "$ref": "#/$defs/AiPromptBudget" }
       }

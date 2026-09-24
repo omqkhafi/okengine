@@ -163,6 +163,7 @@ ai.agent("planner", {
 | `model`    | `AiModelDecl` \| `string`             | first model | Logical binding for the loop |
 | `tools`    | Flow ref, MCP ref, or `{ name, approval?, gate?, timeout? }` | `[]` | Callable via `fx.call` |
 | `maxSteps` | `number`                              | `6`         | Hard cap on tool rounds      |
+| `maxDepth` | `number`                              | `3`         | Nested agent limit           |
 | `budget`   | `{ maxCostPerCall?, maxCostPerRun? }` | —           | Cost contracts for the run   |
 
 ## `fx.run` input
@@ -180,6 +181,17 @@ await fx.run(supportAgent, {
     { role: "user", content: "Open the oldest." },
   ],
 });
+```
+
+## Agents as tools
+
+Another agent can sit in `tools`. The child uses its own `maxSteps`. Its cost cap is the
+smaller of its budget and what the parent has left. Past `maxDepth` (default 3) the tool
+result is an error and no further child starts.
+
+```typescript
+const lookup = ai.agent("lookup", { tools: ["orders.get"], maxSteps: 3 });
+const support = ai.agent("support", { tools: [lookup, "billing.refund"] });
 ```
 
 ## Tool approval

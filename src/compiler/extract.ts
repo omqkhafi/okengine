@@ -1426,7 +1426,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
     }
 
     if (obj === "ai" && prop === "agent") {
-      collectAgent(call, scope);
+      collectAgent(call, program, scope);
     }
 
     if (obj === "ai" && prop === "mcpServer") {
@@ -1670,7 +1670,7 @@ function agentToolEntry(
   return { name, approval: false };
 }
 
-function collectAgent(call: CallExpression, scope: ProjectScope): void {
+function collectAgent(call: CallExpression, program: AstNode, scope: ProjectScope): void {
   const agentName = stringArg(call.arguments[0]);
   const opts = objectArg(call.arguments[1]);
   if (!agentName || !opts) return;
@@ -1679,6 +1679,9 @@ function collectAgent(call: CallExpression, scope: ProjectScope): void {
     .map((el) => agentToolEntry(el, scope))
     .filter((entry): entry is { name: string; approval: boolean } => entry !== undefined);
   const tools = entries.map((entry) => entry.name);
+  const agentCalls = tools.filter(
+    (name) => scope.bindings.get(name)?.kind === "agent" || scope.ai.agents?.[name],
+  );
   const approvals = Object.fromEntries(
     entries.filter((entry) => entry.approval).map((entry) => [entry.name, true as const]),
   );
@@ -1688,9 +1691,20 @@ function collectAgent(call: CallExpression, scope: ProjectScope): void {
     ...(numberProp(opts, "maxSteps") !== undefined
       ? { maxSteps: numberProp(opts, "maxSteps") }
       : {}),
+    ...(numberProp(opts, "maxDepth") !== undefined
+      ? { maxDepth: numberProp(opts, "maxDepth") }
+      : {}),
   };
   scope.ai.agents = scope.ai.agents ?? {};
   scope.ai.agents[agentName] = agent;
+  const bindingName = enclosingConstName(call, program);
+  if (bindingName) {
+    scope.bindings.set(bindingName, {
+      kind: "agent",
+      ref: agentName,
+      ...(agentCalls.length > 0 ? { agentCalls } : {}),
+    });
+  }
 }
 
 function collectMcpServer(call: CallExpression, program: AstNode, scope: ProjectScope): void {

@@ -490,6 +490,7 @@ export interface AiAgent {
   /** Tools that park for human approval. The predicate stays in author code. */
   approvals?: Record<string, true>;
   maxSteps?: number;
+  maxDepth?: number;
   model?: string;
   budget?: AiBudget;
 }

@@ -57,6 +57,7 @@ export interface InferBinding {
     | "signal"
     | "clock"
     | "prompt"
+    | "agent"
     | "secret"
     | "template"
     | "flow"
@@ -71,6 +72,8 @@ export interface InferBinding {
   readonly facet?: "sql" | "kv" | "files" | "index";
   /** Prompt version when kind is `prompt`. */
   readonly version?: number;
+  /** Nested agent tools when kind is `agent`. */
+  readonly agentCalls?: readonly string[];
 }
 
 /** What a callee that is passed `fx` resolves to. */
@@ -234,6 +237,17 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     if (chain.rootMethod === "send" && call === chain.rootCall) {
       const ref = resolveNamed(call.arguments[0], options.bindings, "template");
       if (ref) sends.add(ref);
+      continue;
+    }
+
+    if (chain.rootMethod === "run" && call === chain.rootCall) {
+      const binding = resolveBinding(call.arguments[0], options.bindings);
+      const name =
+        stringArg(call.arguments[0]) ?? (binding?.kind === "agent" ? binding.ref : undefined);
+      if (name) asks.add(name);
+      if (binding?.kind === "agent") {
+        for (const child of binding.agentCalls ?? []) calls.add(child);
+      }
       continue;
     }
 

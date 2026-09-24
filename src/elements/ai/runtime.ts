@@ -173,6 +173,8 @@ export interface AgentRunRecord {
   readonly output?: unknown;
   readonly at: number;
   readonly cost: number;
+  /** Parent agent run, when this run is a nested tool. */
+  readonly parentRunId?: string;
 }
 
 /** Fallback attempt for model routing (`via` chains). */
@@ -342,6 +344,16 @@ export interface AiAgentRunOptions {
   /** Calling flow name, used when approval requires durability. */
   readonly flow?: string;
   readonly tenantId?: string | null;
+  /** This run's id. Nested tools stamp it as `parentRunId`. */
+  readonly runId?: string;
+  /** Parent agent run id. */
+  readonly parentRunId?: string;
+  /** 1-based nest level. Default 1. */
+  readonly depth?: number;
+  /** Cost cap for this invocation. Wins over the agent's own budget. */
+  readonly maxCostPerRun?: number;
+  /** Record a `call` effect on the host ledger when a child agent starts. */
+  readonly recordCall?: (name: string) => void | Promise<void>;
 }
 
 /** Stream options. */
@@ -406,6 +418,8 @@ export interface AiRuntime {
     readonly trail: readonly AgentToolStep[];
     readonly output?: unknown;
     readonly cost: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
   }>;
   /**
    * Run an agent and yield AG-UI events.
@@ -614,6 +628,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     return defs;
   }
 
+  let self: AiRuntime;
+
   async function dispatchTool(opts: {
     readonly tool: string;
     readonly args: unknown;
@@ -632,6 +648,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly tenantId?: string | null;
     readonly approvals?: AiAgentDecl["approvals"];
     readonly emit?: AgentEventEmit;
+    readonly runId?: string;
+    readonly depth?: number;
+    readonly maxCostPerRun?: number;
+    readonly spent?: number;
+    readonly recordCall?: (name: string) => void | Promise<void>;
+    readonly spend?: { cost: number; inputTokens?: number; outputTokens?: number };
   }): Promise<unknown> {
     const {
       tool,
@@ -766,6 +788,67 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       return output;
     }
 
+    const childDecl = agents.get(capability) ?? agents.get(tool);
+    if (childDecl && self) {
+      const depth = opts.depth ?? 1;
+      const parentLimit = agents.get(agentLabel)?.maxDepth ?? 3;
+      if (depth >= parentLimit) {
+        return { error: `ai: agent "${agentLabel}" is nested past maxDepth ${parentLimit}` };
+      }
+      const childId = `agent-run-${++runSeq}`;
+      opts.emit?.({
+        type: "CUSTOM",
+        name: "oke.subagent.started",
+        value: { runId: childId, parentToolCallId: opts.callId },
+      });
+      await opts.recordCall?.(childDecl.name);
+      const parentRemaining =
+        opts.maxCostPerRun !== undefined ? opts.maxCostPerRun - (opts.spent ?? 0) : undefined;
+      const childCap = childDecl.budget?.maxCostPerRun;
+      const cap =
+        parentRemaining !== undefined
+          ? childCap !== undefined
+            ? Math.min(childCap, parentRemaining)
+            : parentRemaining
+          : childCap;
+      try {
+        const child = await self.runAgent(childDecl.name, {
+          message: typeof args === "string" ? args : JSON.stringify(args ?? {}),
+          runId: childId,
+          parentRunId: opts.runId,
+          depth: depth + 1,
+          ...(cap !== undefined ? { maxCostPerRun: cap } : {}),
+          ...(callTool !== undefined ? { callTool } : {}),
+          ...(auth !== undefined ? { auth } : {}),
+          ...(operator !== undefined ? { operator } : {}),
+          ...(meta !== undefined ? { meta } : {}),
+          ...(opts.journal !== undefined ? { journal: opts.journal } : {}),
+          ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
+          ...(opts.tenantId !== undefined ? { tenantId: opts.tenantId } : {}),
+          ...(opts.recordCall !== undefined ? { recordCall: opts.recordCall } : {}),
+        });
+        if (opts.spend) {
+          opts.spend.cost += child.cost;
+          opts.spend.inputTokens = (opts.spend.inputTokens ?? 0) + (child.inputTokens ?? 0);
+          opts.spend.outputTokens = (opts.spend.outputTokens ?? 0) + (child.outputTokens ?? 0);
+        }
+        opts.emit?.({
+          type: "CUSTOM",
+          name: "oke.subagent.finished",
+          value: { runId: childId, parentToolCallId: opts.callId },
+        });
+        trail.push({ tool: capability, status: "ok", effects, at: now() });
+        return child.output ?? child;
+      } catch (err) {
+        opts.emit?.({
+          type: "CUSTOM",
+          name: "oke.subagent.error",
+          value: { runId: childId, parentToolCallId: opts.callId },
+        });
+        throw err;
+      }
+    }
+
     const invoke = callTool ?? options.callFlow;
     if (!invoke) {
       const denial: AgentDenial = {
@@ -807,6 +890,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly flow?: string;
     readonly tenantId?: string | null;
     readonly approvals?: AiAgentDecl["approvals"];
+    readonly runId?: string;
+    readonly depth?: number;
+    readonly recordCall?: (name: string) => void | Promise<void>;
   }): Promise<{
     readonly output: unknown;
     readonly text: string;
@@ -946,6 +1032,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         });
         opts.emit?.({ type: "TOOL_CALL_END", toolCallId: tc.id });
         let toolResult: unknown;
+        const spend = { cost: 0, inputTokens: 0, outputTokens: 0 };
         try {
           toolResult = await dispatchTool({
             tool: tc.name,
@@ -965,6 +1052,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             ...(opts.tenantId !== undefined ? { tenantId: opts.tenantId } : {}),
             ...(opts.approvals !== undefined ? { approvals: opts.approvals } : {}),
             ...(opts.emit !== undefined ? { emit: opts.emit } : {}),
+            ...(opts.runId !== undefined ? { runId: opts.runId } : {}),
+            ...(opts.depth !== undefined ? { depth: opts.depth } : {}),
+            ...(opts.maxCostPerRun !== undefined ? { maxCostPerRun: opts.maxCostPerRun } : {}),
+            spent: cost,
+            ...(opts.recordCall !== undefined ? { recordCall: opts.recordCall } : {}),
+            spend,
           });
         } catch (err) {
           if (err instanceof AgentLoopHalt || isJournalSuspend(err)) throw err;
@@ -986,6 +1079,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           });
         }
         lastToolResult = toolResult;
+        cost += spend.cost;
+        addUsageTokens(tokens, spend);
         opts.emit?.({
           type: "TOOL_CALL_RESULT",
           messageId: `m-${++messageSeq}`,
@@ -1261,6 +1356,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
       const client = await clientFor(modelName);
       const started = now();
+      const runId = runOpts.runId ?? `agent-run-${++runSeq}`;
 
       const remember = (partial: {
         readonly ok: boolean;
@@ -1272,9 +1368,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         readonly cost: number;
       }) => {
         const record: AgentRunRecord = {
-          id: `agent-run-${++runSeq}`,
+          id: runId,
           agent,
           message: agentMessageLabel(runOpts),
+          ...(runOpts.parentRunId !== undefined ? { parentRunId: runOpts.parentRunId } : {}),
           ok: partial.ok,
           stopReason: partial.stopReason,
           steps: partial.steps,
@@ -1293,8 +1390,13 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           trail: record.trail,
           output: record.output,
           cost: record.cost,
+          ...(loopTokens.inputTokens !== undefined ? { inputTokens: loopTokens.inputTokens } : {}),
+          ...(loopTokens.outputTokens !== undefined
+            ? { outputTokens: loopTokens.outputTokens }
+            : {}),
         };
       };
+      let loopTokens: { inputTokens?: number; outputTokens?: number } = {};
 
       try {
         const loop = await toolLoop({
@@ -1303,10 +1405,15 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           messages: agentMessages(runOpts),
           tools: decl.tools,
           maxSteps,
-          ...(decl.budget?.maxCostPerRun !== undefined
-            ? { maxCostPerRun: decl.budget.maxCostPerRun }
-            : {}),
+          ...(runOpts.maxCostPerRun !== undefined
+            ? { maxCostPerRun: runOpts.maxCostPerRun }
+            : decl.budget?.maxCostPerRun !== undefined
+              ? { maxCostPerRun: decl.budget.maxCostPerRun }
+              : {}),
           agentLabel: agent,
+          runId,
+          depth: runOpts.depth ?? 1,
+          ...(runOpts.recordCall !== undefined ? { recordCall: runOpts.recordCall } : {}),
           callTool: runOpts.callTool,
           auth: runOpts.auth,
           operator: runOpts.operator,
@@ -1317,6 +1424,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
           ...(decl.approvals !== undefined ? { approvals: decl.approvals } : {}),
         });
+        loopTokens = tokenFields(loop);
         return remember({
           ok: loop.stopReason === "completed" && loop.denials.length === 0,
           stopReason: loop.stopReason,
@@ -1425,10 +1533,15 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             messages: agentMessages(runOpts),
             tools: decl.tools,
             maxSteps,
-            ...(decl.budget?.maxCostPerRun !== undefined
-              ? { maxCostPerRun: decl.budget.maxCostPerRun }
-              : {}),
+            ...(runOpts.maxCostPerRun !== undefined
+              ? { maxCostPerRun: runOpts.maxCostPerRun }
+              : decl.budget?.maxCostPerRun !== undefined
+                ? { maxCostPerRun: decl.budget.maxCostPerRun }
+                : {}),
             agentLabel: agent,
+            runId,
+            depth: runOpts.depth ?? 1,
+            ...(runOpts.recordCall !== undefined ? { recordCall: runOpts.recordCall } : {}),
             callTool: runOpts.callTool,
             auth: runOpts.auth,
             operator: runOpts.operator,
@@ -1444,6 +1557,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             id: runId,
             agent,
             message: agentMessageLabel(runOpts),
+            ...(runOpts.parentRunId !== undefined ? { parentRunId: runOpts.parentRunId } : {}),
             ok: loop.stopReason === "completed" && loop.denials.length === 0,
             stopReason: loop.stopReason,
             steps: loop.steps,
@@ -1589,6 +1703,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       return vector;
     },
   };
+  self = runtime;
   return runtime;
 }
 
