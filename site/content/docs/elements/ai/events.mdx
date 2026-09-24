@@ -28,7 +28,8 @@ For a support reply that should show tokens and tool calls in the browser — re
 return fx.json.stream(fx.run(support, { message: "Refund order 14" }, { stream: true }));
 ```
 
-The response is `text/event-stream`. Each `data:` frame is one JSON event.
+The response is `text/event-stream`. Each `data:` frame is one JSON event. `threadId`
+defaults to the run id. Pass `{ stream: true, threadId }` to set it.
 
 </Step>
 

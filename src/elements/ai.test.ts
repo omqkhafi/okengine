@@ -388,6 +388,39 @@ describe("agent maxCostPerRun", () => {
     expect(runtime.agentRuns[0]?.stopReason).toBe("denied");
   });
 
+  test("a thrown tool error is recorded as error and rethrown", async () => {
+    const agent = ai.agent("tool-error", {
+      model: "smart",
+      tools: ["orders.get"],
+      maxSteps: 2,
+    });
+    const runtime = createAiRuntime({
+      models: [ai.model("smart")],
+      agents: [agent],
+      clients: {
+        smart: {
+          driverId: "mock",
+          model: "smart",
+          async complete() {
+            return {
+              text: "",
+              raw: {},
+              model: "smart",
+              driverId: "mock",
+              toolCalls: [{ id: "c1", name: "orders.get", arguments: {} }],
+            };
+          },
+        },
+      },
+      callFlow: async () => {
+        throw new Error("store down");
+      },
+    });
+    await expect(runtime.runAgent("tool-error", { message: "go" })).rejects.toThrow("store down");
+    expect(runtime.agentRuns[0]?.stopReason).toBe("error");
+    expect(runtime.agentRuns[0]?.error).toBe("store down");
+  });
+
   test("an aborted run is recorded and then rejected", async () => {
     const agent = ai.agent("abort-agent", { model: "smart", tools: [], maxSteps: 2 });
     const runtime = createAiRuntime({
@@ -850,6 +883,8 @@ describe("schema-validation is its own class", () => {
                 usage: { cost: 0.01 },
               };
             }
+            expect(opts.messages).toHaveLength(2);
+            expect(opts.messages[0]?.role).toBe("user");
             expect(last).toContain("Schema mismatch");
             return {
               text: JSON.stringify({ urgency: "high", team: "ops" }),

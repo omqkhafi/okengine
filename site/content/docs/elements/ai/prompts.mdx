@@ -130,7 +130,7 @@ smart.prompt("ticket-triage", {
 
 A tool-less ask still throws `AiBudgetExceededError` at `maxCostPerCall`. An agent run
 returns the partial result when `budget.maxCostPerRun` is spent. `repair: 1` sends one
-follow-up with the mismatch; that completion counts toward the cap and is its own journal entry.
+follow-up of the original messages plus the mismatch; it counts toward the cap and is its own journal entry.
 
 </Tab>
 

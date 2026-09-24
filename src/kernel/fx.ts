@@ -869,7 +869,11 @@ export interface Fx {
    * @param input - Agent input (`{ message }`, `{ messages }`, or string)
    */
   run(agent: NamedRef, input?: unknown): Promise<unknown>;
-  run(agent: NamedRef, input: unknown, opts: { readonly stream: true }): AsyncIterable<AgUiEvent>;
+  run(
+    agent: NamedRef,
+    input: unknown,
+    opts: { readonly stream: true; readonly threadId?: string },
+  ): AsyncIterable<AgUiEvent>;
   /**
    * Stream model tokens (records `ask`). Returns an async iterable of chunks.
    *
@@ -2013,7 +2017,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return resolveAgentDecision(id, { decision: "deny", reason: opts?.reason });
       },
     },
-    run(agent, input, opts?: { readonly stream?: boolean }) {
+    run(agent, input, opts?: { readonly stream?: boolean; readonly threadId?: string }) {
       const name = resolveName(agent);
       const turn = agentTurn(input);
       if (opts?.stream) {
@@ -2028,6 +2032,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             const events = await withAbortSignal(local.signal, () =>
               options.aiRuntime!.streamAgent(name, {
                 ...turn,
+                ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
                 ...(options.journal ? { journal: options.journal } : {}),
                 ...(options.flow !== undefined ? { flow: options.flow } : {}),
                 tenantId: tenant.id,

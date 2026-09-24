@@ -77,8 +77,9 @@ when inference does not see `fx.run`.
 <Step>
 ### Bound termination
 
-Default `maxSteps` is **6**. `stopReason` is `completed`, `max_steps` (`ok: false`), or
-`budget` (partial trail, no throw). A denial fed back to the model stays `completed`.
+Default `maxSteps` is **6**. `stopReason` is `completed`, `max_steps` (`ok: false`),
+`budget` (partial trail, no throw), or `error` (a thrown tool, rethrown). A denial fed
+back to the model stays `completed`.
 
 </Step>
 

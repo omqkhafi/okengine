@@ -11,7 +11,11 @@ import { oke, type OkeApp } from "../../kernel/app.ts";
 import { resetBindings, type Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
 import { ai, createAiRuntime, type AiRuntime } from "../ai.ts";
-import { readAgentApproval, resolveAgentApproval } from "./approval.ts";
+import {
+  createPostgresJournalFake,
+  createPostgresJournalStore,
+} from "../../drivers/journal-postgres.ts";
+import { parseApprovalId, readAgentApproval, resolveAgentApproval } from "./approval.ts";
 import { createGateRuntime, gate } from "../gate.ts";
 
 const apps: OkeApp[] = [];
@@ -23,7 +27,7 @@ afterEach(async () => {
   apps.length = 0;
 });
 
-function model(seen: AiMessage[][]) {
+function model(seen: AiMessage[][], toolCallId = "tc1") {
   return {
     driverId: "mock" as const,
     model: "smart",
@@ -38,7 +42,7 @@ function model(seen: AiMessage[][]) {
         raw: {},
         model: "smart",
         driverId: "mock" as const,
-        toolCalls: [{ id: "tc1", name: "refund", arguments: { amount: 10 } }],
+        toolCalls: [{ id: toolCallId, name: "refund", arguments: { amount: 10 } }],
       };
     },
   };
@@ -51,6 +55,7 @@ function runtime(opts: {
   readonly now: () => number;
   readonly approval?: boolean | ((input: unknown) => boolean);
   readonly allow?: boolean;
+  readonly toolCallId?: string;
 }): AiRuntime {
   const ops = gate.policy("ops", () => opts.allow !== false);
   return createAiRuntime({
@@ -72,12 +77,20 @@ function runtime(opts: {
         ],
       }),
     ],
-    clients: { smart: model(opts.seen) },
+    clients: { smart: model(opts.seen, opts.toolCallId) },
     callFlow: async (_name, input) => {
       opts.calls.push(input);
       return { refunded: true };
     },
   });
+}
+
+function parkedId(session: JournalSession): string {
+  const entry = session.run.entries.find(
+    (item) => item.kind === "step" && item.name.startsWith("ai-approval:"),
+  );
+  if (!entry || entry.kind !== "step") throw new Error("expected a pending approval");
+  return entry.name.slice("ai-approval:".length);
 }
 
 async function park(aiRuntime: AiRuntime, session: JournalSession): Promise<void> {
@@ -104,19 +117,20 @@ describe("durable tool approval", () => {
     const session = await journal.start("assist", { message: "refund" });
     await park(aiRuntime, session);
 
-    const pending = await readAgentApproval(store, "tc1");
+    const id = parkedId(session);
+    const pending = await readAgentApproval(store, id);
     expect(pending?.status).toBe("pending");
     expect(pending?.tool).toBe("refund");
 
     const approved = await resolveAgentApproval(
       store,
-      "tc1",
+      id,
       { decision: "approve", args: { amount: 4 }, approver: "sam", tenant: null },
       now,
     );
     expect(approved).toEqual({ ok: true });
     expect(
-      await resolveAgentApproval(store, "tc1", { decision: "deny", tenant: null }, now),
+      await resolveAgentApproval(store, id, { decision: "deny", tenant: null }, now),
     ).toEqual({ ok: false, status: 409 });
 
     const resumed = await journal.resume(session.runId);
@@ -149,7 +163,7 @@ describe("durable tool approval", () => {
     await park(aiRuntime, session);
     await resolveAgentApproval(
       store,
-      "tc1",
+      parkedId(session),
       { decision: "deny", reason: "over the limit", tenant: null },
       now,
     );
@@ -176,7 +190,7 @@ describe("durable tool approval", () => {
     await park(aiRuntime, session);
 
     const restarted = createJournal({ store, now: () => clock });
-    expect((await readAgentApproval(restarted.store, "tc1"))?.status).toBe("pending");
+    expect((await readAgentApproval(restarted.store, parkedId(session)))?.status).toBe("pending");
 
     clock += 60 * 60 * 1000 + 1;
     const resumed = await restarted.resume(session.runId);
@@ -224,15 +238,16 @@ describe("durable tool approval", () => {
       operator: { id: null },
     };
     expect(
-      await aiRuntime.resolveApproval("tc1", { decision: "approve", tenant: null }, ctx),
+      await aiRuntime.resolveApproval(parkedId(session), { decision: "approve", tenant: null }, ctx),
     ).toEqual({
       ok: false,
       status: 403,
     });
-    expect((await readAgentApproval(store, "tc1"))?.status).toBe("pending");
+    const pendingId = parkedId(session);
+    expect((await readAgentApproval(store, pendingId))?.status).toBe("pending");
     const allowed = runtime({ seen: [], calls: [], store, now });
     expect(
-      await allowed.resolveApproval("tc1", { decision: "approve", tenant: "other" }, ctx),
+      await allowed.resolveApproval(pendingId, { decision: "approve", tenant: "other" }, ctx),
     ).toEqual({ ok: false, status: 404 });
   });
 });
@@ -290,6 +305,7 @@ describe("approval http", () => {
     const app = oke({
       name: "approval-http",
       env: "test",
+      startScheduler: false,
       registry: "ignore",
       gate: { unguardedHttp: "allow", policies: [ops] },
       bindings: [assist, { trigger: http.post("/refund"), flow: refund as AnyFlowDef }],
@@ -305,7 +321,13 @@ describe("approval http", () => {
       new Request("http://localhost/assist", { method: "POST", body: "{}" }),
     );
     expect(parked.status).toBeLessThan(500);
-    expect((await readAgentApproval(store, "tc1"))?.status).toBe("pending");
+    const runs = await store.list();
+    const step = runs
+      .flatMap((run) => run.entries)
+      .find((entry) => entry.kind === "step" && entry.name.startsWith("ai-approval:"));
+    if (!step || step.kind !== "step") throw new Error("expected a pending approval");
+    const id = step.name.slice("ai-approval:".length);
+    expect((await readAgentApproval(store, id))?.status).toBe("pending");
 
     const key = "approval-key-0001";
     const first = await app.fetch(
@@ -315,7 +337,7 @@ describe("approval http", () => {
           "content-type": "application/json",
           "idempotency-key": key,
         },
-        body: JSON.stringify({ id: "tc1", args: { amount: 4 } }),
+        body: JSON.stringify({ id, args: { amount: 4 } }),
       }),
     );
     expect(first.status).toBe(200);
@@ -327,7 +349,7 @@ describe("approval http", () => {
           "content-type": "application/json",
           "idempotency-key": key,
         },
-        body: JSON.stringify({ id: "tc1", args: { amount: 4 } }),
+        body: JSON.stringify({ id, args: { amount: 4 } }),
       }),
     );
     expect(replay.status).toBe(200);
@@ -337,7 +359,7 @@ describe("approval http", () => {
       new Request("http://localhost/agent/approvals/deny", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: "tc1", reason: "late" }),
+        body: JSON.stringify({ id, reason: "late" }),
       }),
     );
     expect(conflict.status).toBe(409);
@@ -346,5 +368,61 @@ describe("approval http", () => {
     expect(calls).toEqual([{ amount: 4 }]);
     await app.resumeDurable(Date.now() + 1000);
     expect(calls).toEqual([{ amount: 4 }]);
+  }, 20_000);
+});
+
+describe("approval ids", () => {
+  test("two runs with the same tool call id resolve independently", async () => {
+    const seen: AiMessage[][] = [];
+    const store = createMemoryJournalStore();
+    const now = () => 1_000_000;
+    const aiRuntime = runtime({ seen, calls: [], store, now, toolCallId: "call_0" });
+    const journal = createJournal({ store, now });
+    const first = await journal.start("assist", {});
+    const second = await journal.start("assist", {});
+    await park(aiRuntime, first);
+    await park(aiRuntime, second);
+    const a = parkedId(first);
+    const b = parkedId(second);
+    expect(a).not.toBe(b);
+    expect(parseApprovalId(a)?.toolCallId).toBe("call_0");
+    expect(parseApprovalId(b)?.toolCallId).toBe("call_0");
+    expect(
+      await resolveAgentApproval(store, a, { decision: "approve", tenant: null }, now),
+    ).toEqual({ ok: true });
+    expect((await readAgentApproval(store, b))?.status).toBe("pending");
+    expect(
+      await resolveAgentApproval(store, b, { decision: "deny", reason: "no", tenant: null }, now),
+    ).toEqual({ ok: true });
+  });
+
+  test("two instances on one postgres journal: one wins and entries stay", async () => {
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const now = () => 1_000_000;
+    const journal = createJournal({ store, now });
+    const session = await journal.start("assist", { message: "refund" });
+    await session.step("keep-me", () => ({ n: 1 }));
+    const aiRuntime = runtime({ seen: [], calls: [], store, now });
+    await park(aiRuntime, session);
+    const id = parkedId(session);
+    const [left, right] = await Promise.all([
+      resolveAgentApproval(store, id, { decision: "approve", tenant: null }, now),
+      resolveAgentApproval(store, id, { decision: "deny", reason: "late", tenant: null }, now),
+    ]);
+    const wins = [left, right].filter((result) => result.ok);
+    const lost = [left, right].filter((result) => !result.ok);
+    expect(wins).toHaveLength(1);
+    expect(lost).toEqual([{ ok: false, status: 409 }]);
+    const row = await store.get(session.runId);
+    expect(row?.entries.some((entry) => entry.kind === "step" && entry.name === "keep-me")).toBe(
+      true,
+    );
+    const approval = row?.entries.find(
+      (entry) => entry.kind === "step" && entry.name === `ai-approval:${id}`,
+    );
+    expect(approval?.kind === "step" && (approval.value as { status: string }).status).not.toBe(
+      "pending",
+    );
+    await store.close();
   });
 });

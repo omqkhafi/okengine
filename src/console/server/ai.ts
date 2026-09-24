@@ -96,6 +96,7 @@ export interface AgentRunRow {
   readonly message: string;
   readonly ok: boolean;
   readonly stopReason: AgentStopReason;
+  readonly error?: string;
   readonly steps: number;
   readonly cost: number;
   readonly at: number;
@@ -416,6 +417,7 @@ function projectAgentRuns(runs: readonly AgentRunRecord[]): readonly AgentRunRow
       message: r.message,
       ok: r.ok,
       stopReason: r.stopReason,
+      ...(r.error !== undefined ? { error: r.error } : {}),
       steps: r.steps,
       cost: r.cost,
       at: r.at,

@@ -70,9 +70,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - `fx.run(agent, input, { stream: true })` and tool-using `fx.ask(..., { stream: true })`
   yield AG-UI events. Pipe them through `fx.json.stream`. Parse with
   `okengine/client/agent` (not the core client). Subagent notices are `CUSTOM`.
-- `fx.run` reports `stopReason`: `completed`, `max_steps`, `budget`, `denied`, or
-  `aborted`. Hitting `maxSteps` is not a normal completion. `denied` is set only
-  when a deny ends the run.
+- `fx.run` reports `stopReason`: `completed`, `max_steps`, `budget`, `denied`,
+  `aborted`, or `error`. Hitting `maxSteps` is not a normal completion. `denied` is
+  set only when a deny ends the run. A thrown tool is `error` and still rejects.
 - `fx.run` stops when `budget.maxCostPerRun` is reached and returns the partial
   result. A tool-less `fx.ask` still throws `AiBudgetExceededError` at `maxCostPerCall`.
 - Repeated identical `fx.ask` calls outside a durable run reach the model. Replay
@@ -88,6 +88,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
   individual events.
 
 ### 🐛 Fixed
+
+#### Runtime
+
+- Agent tool approval resolves under the journal lease (`get` one run, compare-and-set,
+  `put`). Two instances cannot both win, and the winning write keeps the run's other
+  entries. The approval id is `${runId}.${toolCallId}` (base64url).
 
 #### Console — Flows & traces
 

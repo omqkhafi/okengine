@@ -13,6 +13,7 @@ import type { JournalSession, JournalStore } from "../../kernel/journal.ts";
 import { isJournalSuspend } from "../../kernel/journal-suspend.ts";
 import {
   AiDurableRequiredError,
+  approvalId,
   approvalStepName,
   approvalTimeoutMs,
   readAgentApproval,
@@ -69,7 +70,8 @@ export const AI_DEFAULT_MAX_STEPS = 6;
 
 /** Thrown inside the tool loop when a deny or abort ends the run. */
 class AgentLoopHalt extends Error {
-  readonly stopReason: "aborted" | "denied";
+  readonly stopReason: "aborted" | "denied" | "error";
+  readonly cause: unknown;
   readonly trail: readonly AgentToolStep[];
   readonly denials: readonly AgentDenial[];
   readonly steps: number;
@@ -90,6 +92,7 @@ class AgentLoopHalt extends Error {
     super(cause instanceof Error ? cause.message : String(cause));
     this.name = stopReason === "aborted" ? "AbortError" : "AgentLoopHalt";
     this.stopReason = stopReason;
+    this.cause = cause;
     this.trail = partial.trail;
     this.denials = partial.denials;
     this.steps = partial.steps;
@@ -129,7 +132,7 @@ export function parsePromptRef(ref: string): {
 }
 
 /** Why an agent loop stopped. A fed-back denial is not `denied`. */
-export type AgentStopReason = "completed" | "max_steps" | "budget" | "denied" | "aborted";
+export type AgentStopReason = "completed" | "max_steps" | "budget" | "denied" | "aborted" | "error";
 
 /** Recorded agent tool denial (containment proof — not an error). */
 export interface AgentDenial {
@@ -175,6 +178,8 @@ export interface AgentRunRecord {
   readonly cost: number;
   /** Parent agent run, when this run is a nested tool. */
   readonly parentRunId?: string;
+  /** Message when {@link stopReason} is `error`. */
+  readonly error?: string;
 }
 
 /** Fallback attempt for model routing (`via` chains). */
@@ -354,6 +359,8 @@ export interface AiAgentRunOptions {
   readonly maxCostPerRun?: number;
   /** Record a `call` effect on the host ledger when a child agent starts. */
   readonly recordCall?: (name: string) => void | Promise<void>;
+  /** AG-UI thread. Defaults to the agent run id. */
+  readonly threadId?: string;
 }
 
 /** Stream options. */
@@ -643,6 +650,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly runDenials: AgentDenial[];
     readonly signal?: AbortSignal;
     readonly callId?: string;
+    readonly step?: number;
+    readonly index?: number;
+    readonly threadId?: string;
     readonly journal?: JournalSession;
     readonly flow?: string;
     readonly tenantId?: string | null;
@@ -682,7 +692,9 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       runDenials.push(denial);
       denials.push(denial);
       trail.push({ tool, status: "denied", effects, denial, at: denial.at });
-      throw new Error(`ai: model requested unknown tool "${tool}"`);
+      const unknown = new Error(`ai: model requested unknown tool "${tool}"`);
+      unknown.name = "AgentDenied";
+      throw unknown;
     }
 
     const requiredGates = options.gatesForFlow?.(capability) ?? [];
@@ -717,7 +729,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (!opts.journal) {
         throw new AiDurableRequiredError(opts.flow ?? "(unknown)", agentLabel);
       }
-      const id = opts.callId && opts.callId.length > 0 ? opts.callId : `${now()}-${trail.length}`;
+      const toolCallId =
+        opts.callId && opts.callId.length > 0
+          ? opts.callId
+          : `${agentLabel}:${opts.step ?? 0}:${opts.index ?? 0}`;
+      const id = approvalId(opts.journal.runId, toolCallId);
       const record: AgentApprovalRecord = {
         status: "pending",
         tool: capability,
@@ -734,8 +750,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (decision.status === "pending") {
         opts.emit?.({
           type: "RUN_FINISHED",
-          threadId: "default",
-          runId: opts.journal.runId,
+          threadId: opts.threadId ?? opts.runId ?? opts.journal.runId,
+          runId: opts.runId ?? opts.journal.runId,
           outcome: {
             type: "interrupt",
             interrupts: [{ id, reason: "approval", payload: { tool: capability, args } }],
@@ -753,6 +769,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             id,
             { decision: "deny", reason: "timeout", tenant: decision.tenant },
             now,
+            opts.journal.run.lockedBy,
           );
           decision = wrote.ok
             ? { ...decision, status: "denied", reason: "timeout" }
@@ -891,6 +908,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly tenantId?: string | null;
     readonly approvals?: AiAgentDecl["approvals"];
     readonly runId?: string;
+    readonly threadId?: string;
     readonly depth?: number;
     readonly recordCall?: (name: string) => void | Promise<void>;
   }): Promise<{
@@ -1016,21 +1034,22 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         toolCalls,
       });
 
-      for (const tc of toolCalls) {
+      for (const [index, tc] of toolCalls.entries()) {
         if (steps >= opts.maxSteps) break;
         steps++;
+        const callId = tc.id.length > 0 ? tc.id : `${opts.agentLabel}:${steps}:${index}`;
         opts.emit?.({
           type: "TOOL_CALL_START",
-          toolCallId: tc.id,
+          toolCallId: callId,
           toolCallName: tc.name,
           parentMessageId: messageId,
         });
         opts.emit?.({
           type: "TOOL_CALL_ARGS",
-          toolCallId: tc.id,
+          toolCallId: callId,
           delta: JSON.stringify(tc.arguments ?? {}),
         });
-        opts.emit?.({ type: "TOOL_CALL_END", toolCallId: tc.id });
+        opts.emit?.({ type: "TOOL_CALL_END", toolCallId: callId });
         let toolResult: unknown;
         const spend = { cost: 0, inputTokens: 0, outputTokens: 0 };
         try {
@@ -1045,7 +1064,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             meta: opts.meta,
             trail,
             runDenials,
-            callId: tc.id,
+            callId,
+            step: steps,
+            index,
+            ...(opts.threadId !== undefined ? { threadId: opts.threadId } : {}),
             ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
             ...(opts.journal !== undefined ? { journal: opts.journal } : {}),
             ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
@@ -1062,15 +1084,25 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         } catch (err) {
           if (err instanceof AgentLoopHalt || isJournalSuspend(err)) throw err;
           if (err instanceof AiDurableRequiredError) throw err;
-          const reason = err instanceof Error && err.name === "AbortError" ? "aborted" : "denied";
-          opts.emit?.({
-            type: "TOOL_CALL_RESULT",
-            messageId: `m-${++messageSeq}`,
-            toolCallId: tc.id,
-            content: err instanceof Error ? err.message : String(err),
-            role: "tool",
-          });
-          throw new AgentLoopHalt(reason, err, {
+          if (err instanceof Error && err.name === "AgentDenied") {
+            throw new AgentLoopHalt("denied", err, {
+              trail,
+              denials: runDenials,
+              steps,
+              cost,
+              output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+            });
+          }
+          if (err instanceof Error && err.name === "AbortError") {
+            throw new AgentLoopHalt("aborted", err, {
+              trail,
+              denials: runDenials,
+              steps,
+              cost,
+              output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+            });
+          }
+          throw new AgentLoopHalt("error", err, {
             trail,
             denials: runDenials,
             steps,
@@ -1084,14 +1116,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         opts.emit?.({
           type: "TOOL_CALL_RESULT",
           messageId: `m-${++messageSeq}`,
-          toolCallId: tc.id,
+          toolCallId: callId,
           content: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult ?? null),
           role: "tool",
         });
         messages.push({
           role: "tool",
           content: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult ?? null),
-          toolCallId: tc.id,
+          toolCallId: callId,
           name: tc.name,
         });
         if (capHit()) {
@@ -1187,6 +1219,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             const client = await clientFor(modelName);
             let raw: unknown;
             let attemptCost = 0;
+            const sent: AiMessage[] = [{ role: "user", content: userContent }];
 
             if (tools.length > 0) {
               const loop = await toolLoop({
@@ -1214,7 +1247,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             } else {
               const result = await client.complete({
                 model: wireModel(modelName, client),
-                messages: [{ role: "user", content: userContent }],
+                messages: sent,
                 ...(responseFormat !== undefined ? { responseFormat } : {}),
                 ...(signal !== undefined ? { signal } : {}),
               });
@@ -1295,11 +1328,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                   const follow = await client.complete({
                     model: wireModel(modelName, client),
                     messages: [
-                      { role: "user", content: userContent },
-                      {
-                        role: "assistant",
-                        content: typeof raw === "string" ? raw : JSON.stringify(raw ?? null),
-                      },
+                      ...sent,
                       {
                         role: "user",
                         content: `Schema mismatch: ${err.message}. Reply with JSON only.`,
@@ -1442,6 +1471,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         readonly denials: readonly AgentDenial[];
         readonly output: unknown;
         readonly cost: number;
+        readonly error?: string;
       }) => {
         const record: AgentRunRecord = {
           id: runId,
@@ -1450,6 +1480,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           ...(runOpts.parentRunId !== undefined ? { parentRunId: runOpts.parentRunId } : {}),
           ok: partial.ok,
           stopReason: partial.stopReason,
+          ...(partial.error !== undefined ? { error: partial.error } : {}),
           steps: partial.steps,
           trail: partial.trail,
           denials: partial.denials,
@@ -1495,6 +1526,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           operator: runOpts.operator,
           meta: runOpts.meta,
           signal: currentAbortSignal(),
+          threadId: runOpts.threadId ?? runId,
           ...(runOpts.journal !== undefined ? { journal: runOpts.journal } : {}),
           ...(runOpts.flow !== undefined ? { flow: runOpts.flow } : {}),
           ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
@@ -1520,8 +1552,11 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             denials: err.denials,
             output: err.output,
             cost: err.cost,
+            ...(err.stopReason === "error"
+              ? { error: err.cause instanceof Error ? err.cause.message : String(err.cause) }
+              : {}),
           });
-          if (err.stopReason === "aborted") throw err;
+          if (err.stopReason === "aborted" || err.stopReason === "error") throw err.cause;
           return result;
         }
         throw err;
@@ -1596,7 +1631,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const signal = currentAbortSignal();
       void (async () => {
         try {
-          queue.emit({ type: "RUN_STARTED", threadId: "default", runId });
+          const threadId = runOpts.threadId ?? runId;
+          queue.emit({ type: "RUN_STARTED", threadId, runId });
           const decl = agents.get(agent);
           if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
           const maxSteps = decl.maxSteps ?? AI_DEFAULT_MAX_STEPS;
@@ -1624,6 +1660,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             meta: runOpts.meta,
             emit: queue.emit,
             signal,
+            threadId,
             ...(runOpts.journal !== undefined ? { journal: runOpts.journal } : {}),
             ...(runOpts.flow !== undefined ? { flow: runOpts.flow } : {}),
             ...(runOpts.tenantId !== undefined ? { tenantId: runOpts.tenantId } : {}),
@@ -1647,7 +1684,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
           const usage = tokenFields(loop);
           queue.emit({
             type: "RUN_FINISHED",
-            threadId: "default",
+            threadId,
             runId,
             result: { cost: loop.cost, stopReason: loop.stopReason, output: loop.output },
             ...(usage.inputTokens !== undefined || usage.outputTokens !== undefined
@@ -1661,12 +1698,14 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             return;
           }
           if (err instanceof AgentLoopHalt) {
+            const message = err.cause instanceof Error ? err.cause.message : String(err.cause);
             pushObservability(agentRuns, {
               id: runId,
               agent,
               message: agentMessageLabel(runOpts),
               ok: false,
               stopReason: err.stopReason,
+              ...(err.stopReason === "error" ? { error: message } : {}),
               steps: err.steps,
               trail: err.trail,
               denials: err.denials,
@@ -1674,6 +1713,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               at: now(),
               cost: err.cost,
             });
+            if (err.stopReason === "error") {
+              queue.finish(err.cause instanceof Error ? err.cause : new Error(message));
+              return;
+            }
           }
           queue.emit({
             type: "RUN_ERROR",

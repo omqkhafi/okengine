@@ -9,6 +9,51 @@ import { flow } from "../../kernel/flow.ts";
 import type { Fx } from "../../kernel/fx.ts";
 import type { Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
+import type { StandardSchemaV1 } from "../../validation/standard-schema.ts";
+
+/** Body the approve route accepts. `args` replaces the tool input. */
+const approveIn: StandardSchemaV1<{ id: string; args?: unknown }> = {
+  "~standard": {
+    version: 1,
+    vendor: "okengine",
+    validate(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { issues: [{ message: "expected object", path: [] }] };
+      }
+      const body = value as { id?: unknown; args?: unknown };
+      if (typeof body.id !== "string" || body.id.length === 0) {
+        return { issues: [{ message: "id is required", path: ["id"] }] };
+      }
+      return { value: { id: body.id, ...(body.args !== undefined ? { args: body.args } : {}) } };
+    },
+  },
+};
+
+/** Body the deny route accepts. */
+const denyIn: StandardSchemaV1<{ id: string; reason?: string }> = {
+  "~standard": {
+    version: 1,
+    vendor: "okengine",
+    validate(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { issues: [{ message: "expected object", path: [] }] };
+      }
+      const body = value as { id?: unknown; reason?: unknown };
+      if (typeof body.id !== "string" || body.id.length === 0) {
+        return { issues: [{ message: "id is required", path: ["id"] }] };
+      }
+      if (body.reason !== undefined && typeof body.reason !== "string") {
+        return { issues: [{ message: "reason must be a string", path: ["reason"] }] };
+      }
+      return {
+        value: {
+          id: body.id,
+          ...(typeof body.reason === "string" ? { reason: body.reason } : {}),
+        },
+      };
+    },
+  },
+};
 
 /**
  * Map a resolution to the HTTP failure the rest of the kernel already speaks.
@@ -33,24 +78,22 @@ function approvalHttpResult(
  */
 export function bindAgentApprovalFlows(adopt: (binding: Binding) => void): void {
   adopt({
-    trigger: http.post("/agent/approvals/approve").public(),
+    trigger: http.post("/agent/approvals/approve", { in: approveIn }).public(),
     flow: flow("oke.agent.approve", {
       effects: { writes: ["journal:runs"] },
       do: async (input, fx) => {
-        const body = (input ?? {}) as { id?: string; args?: unknown };
-        if (!body.id) return fx.fail.notFound();
+        const body = input as { id: string; args?: unknown };
         const result = await fx.agent.approve(body.id, { args: body.args });
         return approvalHttpResult(fx, result);
       },
     }),
   });
   adopt({
-    trigger: http.post("/agent/approvals/deny").public(),
+    trigger: http.post("/agent/approvals/deny", { in: denyIn }).public(),
     flow: flow("oke.agent.deny", {
       effects: { writes: ["journal:runs"] },
       do: async (input, fx) => {
-        const body = (input ?? {}) as { id?: string; reason?: string };
-        if (!body.id) return fx.fail.notFound();
+        const body = input as { id: string; reason?: string };
         const result = await fx.agent.deny(body.id, { reason: body.reason });
         return approvalHttpResult(fx, result);
       },

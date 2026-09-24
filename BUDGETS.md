@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.22.0 · measured 2026-09-24T07:42:34.615Z_
+_okengine v0.22.0 · measured 2026-09-24T13:36:13.490Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absolute sample also fails when it reaches 2× its last committed value and that multiple is still under the cap (cold start, and any other absolute row with the same headroom). Cold start keeps the best of five rounds and confirms a failure once, so one noisy run does not fail. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
@@ -10,44 +10,45 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 
 |                                 | Measured  | Limit     |
 | ------------------------------- | --------- | --------- |
-| Kernel (edge profile)           | 12.39 kB  | 17.00 kB  |
+| Kernel (edge profile)           | 12.82 kB  | 17.00 kB  |
 | Client runtime                  | 5.07 kB   | 6.00 kB   |
-| Console initial load            | 344.83 kB | 700.00 kB |
-| Cold start on Bun               | 8.999 ms  | 75.000 ms |
+| Console initial load            | 344.99 kB | 700.00 kB |
+| Cold start on Bun               | 9.918 ms  | 75.000 ms |
 | p99 routing overhead            | 0.000 ms  | 1.000 ms  |
-| HTTP ping app (gzip, externals) | 43.87 kB  | 44.75 kB  |
-| HTTP ping app (raw, externals)  | 126.74 kB | 129.28 kB |
+| HTTP ping app (gzip, externals) | 44.75 kB  | 45.64 kB  |
+| HTTP ping app (raw, externals)  | 129.79 kB | 132.39 kB |
 
 ## Exports
 
 |                | Measured  | Ceiling   |
 | -------------- | --------- | --------- |
-| okengine       | 98.04 kB  | 100.00 kB |
-| ai             | 13.24 kB  | 13.50 kB  |
+| okengine       | 103.09 kB | 105.15 kB |
+| ai             | 17.14 kB  | 17.49 kB  |
 | auth           | 18.33 kB  | 18.70 kB  |
 | channel        | 7.75 kB   | 8.00 kB   |
 | client         | 8.96 kB   | 9.21 kB   |
 | client-react   | 11.95 kB  | 12.20 kB  |
+| client/agent   | 695 B     | 951 B     |
 | client/auth    | 8.67 kB   | 8.92 kB   |
 | client/explain | 1.10 kB   | 1.35 kB   |
-| clock          | 15.32 kB  | 15.63 kB  |
-| compiler       | 27.39 kB  | 27.93 kB  |
+| clock          | 15.79 kB  | 16.11 kB  |
+| compiler       | 27.61 kB  | 28.16 kB  |
 | config         | 1.21 kB   | 1.46 kB   |
-| console        | 162.10 kB | 165.34 kB |
-| full           | 109.84 kB | 112.04 kB |
+| console        | 167.18 kB | 170.53 kB |
+| full           | 115.02 kB | 117.32 kB |
 | gate           | 4.53 kB   | 4.78 kB   |
-| http           | 45.32 kB  | 46.23 kB  |
+| http           | 46.23 kB  | 47.16 kB  |
 | i18n           | 5.41 kB   | 5.66 kB   |
 | journal        | 2.59 kB   | 2.84 kB   |
-| kernel         | 49.92 kB  | 50.92 kB  |
+| kernel         | 51.21 kB  | 52.24 kB  |
 | mcp            | 9.65 kB   | 9.90 kB   |
 | okid           | 742 B     | 998 B     |
 | plugins        | 35.11 kB  | 35.81 kB  |
-| runs           | 9.29 kB   | 9.54 kB   |
+| runs           | 9.37 kB   | 9.62 kB   |
 | signal         | 1.26 kB   | 1.51 kB   |
 | store          | 33.07 kB  | 33.73 kB  |
-| test           | 44.79 kB  | 45.69 kB  |
-| testing        | 44.79 kB  | 45.69 kB  |
+| test           | 48.90 kB  | 49.88 kB  |
+| testing        | 48.90 kB  | 49.88 kB  |
 | vault          | 13.15 kB  | 13.42 kB  |
 
 ## Plugins
@@ -95,7 +96,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 
 |                           | Measured | Ceiling  |
 | ------------------------- | -------- | -------- |
-| drivers                   | 74.59 kB | 76.08 kB |
+| drivers                   | 74.64 kB | 76.13 kB |
 | ai-anthropic              | 1.06 kB  | 1.31 kB  |
 | ai-mock                   | 1.05 kB  | 1.30 kB  |
 | ai-openai-compatible      | 1.88 kB  | 2.13 kB  |
@@ -113,12 +114,12 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 | channel-unifonic          | 763 B    | 1019 B   |
 | channel-wa-cloud          | 809 B    | 1.04 kB  |
 | channel-webpush           | 937 B    | 1.17 kB  |
-| clock-postgres            | 2.92 kB  | 3.17 kB  |
+| clock-postgres            | 2.97 kB  | 3.22 kB  |
 | drizzle-dialect           | 303 B    | 559 B    |
 | external                  | 262 B    | 518 B    |
 | fs                        | 674 B    | 930 B    |
-| instances-postgres        | 1.38 kB  | 1.63 kB  |
-| journal-postgres          | 5.25 kB  | 5.50 kB  |
+| instances-postgres        | 1.44 kB  | 1.69 kB  |
+| journal-postgres          | 5.30 kB  | 5.55 kB  |
 | kv-lua                    | 995 B    | 1.22 kB  |
 | meilisearch               | 1.88 kB  | 2.13 kB  |
 | memory                    | 9.81 kB  | 10.06 kB |
@@ -140,7 +141,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 | pg-vault-rls              | 731 B    | 987 B    |
 | pglite                    | 808 B    | 1.04 kB  |
 | pgvector                  | 21.96 kB | 22.40 kB |
-| postgres                  | 2.60 kB  | 2.85 kB  |
+| postgres                  | 2.65 kB  | 2.90 kB  |
 | redis                     | 2.00 kB  | 2.25 kB  |
 | s3                        | 1.82 kB  | 2.07 kB  |
 | s3-ensure-bucket          | 1.12 kB  | 1.37 kB  |
@@ -154,7 +155,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 | vault-1password           | 2.05 kB  | 2.30 kB  |
 | vault-aws-secrets-manager | 1.55 kB  | 1.80 kB  |
 | vault-azure-key-vault     | 1.55 kB  | 1.80 kB  |
-| vault-builtin             | 11.36 kB | 11.61 kB |
+| vault-builtin             | 11.40 kB | 11.65 kB |
 | vault-doppler             | 1.70 kB  | 1.95 kB  |
 | vault-dotenv-parse        | 715 B    | 971 B    |
 | vault-env                 | 856 B    | 1.09 kB  |

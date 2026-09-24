@@ -4,7 +4,13 @@
  * The pending row is a journal step. The first approve, deny, or timeout wins.
  */
 
-import type { JournalEntry, JournalRun, JournalStore } from "../../kernel/journal.ts";
+import {
+  hasJournalLease,
+  JOURNAL_DEFAULT_LEASE_MS,
+  type JournalEntry,
+  type JournalRun,
+  type JournalStore,
+} from "../../kernel/journal.ts";
 import { parseDurationMs } from "../clock/duration.ts";
 
 /** Default wait before an unanswered approval is denied. */
@@ -49,25 +55,33 @@ export type AgentApprovalResolveResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly status: 403 | 404 | 409 };
 
-const chains = new Map<string, Promise<unknown>>();
+/**
+ * Opaque approval id. The run id is the prefix so resolve can `get` one run.
+ *
+ * @param runId - Durable run id
+ * @param toolCallId - Provider tool-call id, or a deterministic fallback
+ */
+export function approvalId(runId: string, toolCallId: string): string {
+  return Buffer.from(`${runId}.${toolCallId}`, "utf8").toString("base64url");
+}
 
 /**
- * Run `fn` after any in-flight resolution of the same id.
+ * Split an opaque approval id. Run ids do not contain `.`.
  *
- * @param id - Approval id
- * @param fn - Critical section
+ * @param id - Approval id from the interrupt
  */
-function exclusive<T>(id: string, fn: () => Promise<T>): Promise<T> {
-  const prev = chains.get(id) ?? Promise.resolve();
-  const run = prev.then(fn, fn);
-  chains.set(
-    id,
-    run.then(
-      () => undefined,
-      () => undefined,
-    ),
-  );
-  return run;
+export function parseApprovalId(
+  id: string,
+): { readonly runId: string; readonly toolCallId: string } | undefined {
+  let decoded: string;
+  try {
+    decoded = Buffer.from(id, "base64url").toString("utf8");
+  } catch {
+    return undefined;
+  }
+  const dot = decoded.indexOf(".");
+  if (dot <= 0 || dot === decoded.length - 1) return undefined;
+  return { runId: decoded.slice(0, dot), toolCallId: decoded.slice(dot + 1) };
 }
 
 /**
@@ -99,16 +113,14 @@ export async function readAgentApproval(
   store: JournalStore,
   id: string,
 ): Promise<AgentApprovalRecord | undefined> {
+  const parsed = parseApprovalId(id);
+  if (!parsed) return undefined;
+  const run = await store.get(parsed.runId);
+  if (!run) return undefined;
   const name = approvalStepName(id);
-  const runs = await store.list();
-  for (const run of runs) {
-    for (const entry of run.entries) {
-      if (entry.kind === "step" && entry.name === name) {
-        return entry.value as AgentApprovalRecord;
-      }
-    }
-  }
-  return undefined;
+  const entry = run.entries.find((item) => item.kind === "step" && item.name === name);
+  if (!entry || entry.kind !== "step") return undefined;
+  return entry.value as AgentApprovalRecord;
 }
 
 /**
@@ -119,19 +131,25 @@ export async function readAgentApproval(
  * @param id - Approval id
  * @param decision - Approve or deny
  * @param now - Clock used for the early wake
+ * @param hold - Lease holder to renew instead of taking a new token. Timeout
+ *   deny passes the resume holder's id so it does not drop that lease.
  */
 export async function resolveAgentApproval(
   store: JournalStore,
   id: string,
   decision: AgentApprovalDecision,
   now: () => number = Date.now,
+  hold?: string,
 ): Promise<AgentApprovalResolveResult> {
-  return exclusive(id, async () => {
-    const name = approvalStepName(id);
-    const runs = await store.list();
-    const run = runs.find((candidate) =>
-      candidate.entries.some((entry) => entry.kind === "step" && entry.name === name),
-    );
+  const parsed = parseApprovalId(id);
+  if (!parsed || !hasJournalLease(store)) return { ok: false, status: 404 };
+  const name = approvalStepName(id);
+  const token = hold ?? crypto.randomUUID();
+  const at = now();
+  const claimed = await store.acquireLease(parsed.runId, token, at, JOURNAL_DEFAULT_LEASE_MS);
+  if (!claimed) return { ok: false, status: 409 };
+  try {
+    const run = await store.get(parsed.runId);
     if (!run) return { ok: false, status: 404 };
     const entry = run.entries.find((item) => item.kind === "step" && item.name === name);
     if (!entry || entry.kind !== "step") return { ok: false, status: 404 };
@@ -147,7 +165,6 @@ export async function resolveAgentApproval(
       ...(decision.approver !== undefined ? { approver: decision.approver } : {}),
       ...(decision.args !== undefined ? { editedArgs: decision.args } : {}),
     };
-    const at = now();
     const entries: JournalEntry[] = run.entries.map((item) => {
       if (item.kind === "step" && item.name === name) return { ...item, value: next };
       if (item.kind === "sleep" && item.label === name) return { ...item, wakeAt: at };
@@ -158,8 +175,12 @@ export async function resolveAgentApproval(
       entries,
       wakeAt: at,
       status: run.status === "sleeping" ? "sleeping" : run.status,
+      lockedBy: run.lockedBy,
+      leaseExpiresAt: run.leaseExpiresAt,
     };
     await store.put(updated);
     return { ok: true };
-  });
+  } finally {
+    if (hold === undefined) await store.releaseLease(parsed.runId, token);
+  }
 }
