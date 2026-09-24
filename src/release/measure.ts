@@ -288,7 +288,7 @@ if (!artifact) { console.error("no output"); process.exit(1); }
 const raw = await artifact.arrayBuffer();
 process.stdout.write(String(Bun.gzipSync(new Uint8Array(raw)).byteLength));
 `;
-  const proc = Bun.spawn(["bun", "-e", probe], {
+  const proc = Bun.spawn([process.execPath, "-e", probe], {
     cwd: ROOT,
     stdout: "pipe",
     stderr: "pipe",
@@ -336,7 +336,7 @@ if (!artifact) { console.error("no output"); process.exit(1); }
 const raw = await artifact.arrayBuffer();
 process.stdout.write(String(Bun.gzipSync(new Uint8Array(raw)).byteLength));
 `;
-  const proc = Bun.spawn(["bun", "-e", probe], {
+  const proc = Bun.spawn([process.execPath, "-e", probe], {
     cwd: ROOT,
     stdout: "pipe",
     stderr: "pipe",
@@ -463,7 +463,7 @@ process.stdout.write(String(ms));
 `;
   const samples: number[] = [];
   for (let i = 0; i < 7; i++) {
-    const proc = Bun.spawn(["bun", "-e", probe], {
+    const proc = Bun.spawn([process.execPath, "-e", probe], {
       cwd: ROOT,
       stdout: "pipe",
       stderr: "pipe",
