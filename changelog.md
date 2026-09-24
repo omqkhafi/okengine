@@ -38,10 +38,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Units & Call API
 
-- Flows folders can be pinned. Hovering a folder row swaps its flow count
-  for a pin. Pinning keeps that unit at the top of its trigger band and stays
-  in this browser. A pinned row shows the pin until hover, which brings the
-  count back.
+- Flows folders can be pinned. The count stays at the end of the row. Hover
+  reveals a pin after the folder name, and a pinned folder keeps that pin.
+  Pinning lifts the unit to the top of its trigger band and stays in this
+  browser.
 
 ### ♻️ Changed
 
@@ -75,6 +75,11 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - HTTP traces omit the Body panel when the stored payload is empty (`{}`,
   `[]`, or nothing). Query, headers, status, and a body that has fields stay.
+
+#### Console — Units & Call API
+
+- A pinned Flows folder keeps its flow count at the end of the row. The pin
+  sits after the folder name and no longer makes that row taller.
 
 #### Dev, Keel & create-oke
 

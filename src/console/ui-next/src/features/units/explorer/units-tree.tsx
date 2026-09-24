@@ -22,9 +22,7 @@ import {
   EXPLORER_BAND_LABEL_CLASS,
   EXPLORER_CHEVRON_CLASS,
   EXPLORER_COUNT_CLASS,
-  EXPLORER_FOLDER_ACTIONS_CLASS,
   EXPLORER_GROUP_ROW_CLASS,
-  EXPLORER_ICON_BUTTON_BARE_CLASS,
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
   EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
@@ -41,7 +39,6 @@ import { TreeExpandToggle } from "@/components/explorer/tree-expand-toggle.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { HttpMethodBadge } from "@/components/http-method-badge";
 import { httpMethodBadgeClass, httpMethodIcon } from "@/features/flows/traces/http-method.ts";
-import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -586,46 +583,28 @@ function UnitGroupItem({
                 className={cn(EXPLORER_ICON_CLASS, "text-muted-foreground")}
                 aria-hidden
               />
-              <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                {group.unit}
-              </span>
-              <span className="relative grid shrink-0 place-items-center">
-                <span
+              <span className="flex min-w-0 flex-1 items-center">
+                <span className="min-w-0 truncate font-medium text-foreground">{group.unit}</span>
+                <button
+                  type="button"
+                  aria-label={pinLabel}
+                  aria-pressed={pinned}
+                  data-slot="unit-pin"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onTogglePin();
+                  }}
                   className={cn(
-                    EXPLORER_COUNT_CLASS,
-                    "col-start-1 row-start-1 transition-opacity",
+                    "inline-flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground transition-[width,opacity,margin] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
                     pinned
-                      ? "pointer-events-none opacity-0 group-hover/folder:pointer-events-auto group-hover/folder:opacity-100"
-                      : "group-hover/folder:pointer-events-none group-hover/folder:opacity-0 group-focus-within/folder:pointer-events-none group-focus-within/folder:opacity-0",
+                      ? "ml-1.5 size-3.5 text-foreground"
+                      : "pointer-events-none ml-0 size-0 opacity-0 group-hover/folder:pointer-events-auto group-hover/folder:ml-1.5 group-hover/folder:size-3.5 group-hover/folder:opacity-100 group-focus-within/folder:pointer-events-auto group-focus-within/folder:ml-1.5 group-focus-within/folder:size-3.5 group-focus-within/folder:opacity-100",
                   )}
                 >
-                  {group.flows.length}
-                </span>
-                <span
-                  className={cn(
-                    EXPLORER_FOLDER_ACTIONS_CLASS,
-                    "pointer-events-none col-start-1 row-start-1 group-hover/folder:pointer-events-auto group-focus-within/folder:pointer-events-auto",
-                    pinned &&
-                      "pointer-events-auto opacity-100 group-hover/folder:pointer-events-none group-hover/folder:opacity-0",
-                  )}
-                >
-                  <ToolbarTip label={pinLabel}>
-                    <button
-                      type="button"
-                      aria-label={pinLabel}
-                      aria-pressed={pinned}
-                      data-slot="unit-pin"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onTogglePin();
-                      }}
-                      className={cn(EXPLORER_ICON_BUTTON_BARE_CLASS, pinned && "text-foreground")}
-                    >
-                      <HugeiconsIcon icon={PinIcon} className="size-3.5" aria-hidden />
-                    </button>
-                  </ToolbarTip>
-                </span>
+                  <HugeiconsIcon icon={PinIcon} className="size-3 shrink-0" aria-hidden />
+                </button>
               </span>
+              <span className={EXPLORER_COUNT_CLASS}>{group.flows.length}</span>
             </div>
           )}
         />
