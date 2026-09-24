@@ -30,12 +30,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import type { RunHttpFrame } from "@/client.ts";
 import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
+import { RequestClientCard } from "./request-client-card.tsx";
 import { httpStatusRailClass, httpStatusReason, httpStatusTextClass } from "./http-status.ts";
 import {
   fieldCopyText,
   inputByteLabel,
   inputFieldRows,
   inputShapeHint,
+  payloadHasContent,
   type InputFieldKind,
   type InputFieldRow,
 } from "./request-input-view.ts";
@@ -107,8 +109,8 @@ export function TraceRequestSection({
   const responseHeaders = http?.response?.headers ?? {};
   const hasResponseHeaders = Object.keys(responseHeaders).length > 0;
   const failed = error !== null;
-  const hasInput = input !== null && input !== undefined;
-  const hasOutput = output !== null && output !== undefined;
+  const hasInput = payloadHasContent(input);
+  const hasOutput = payloadHasContent(output);
   const responseFills = outputOpen && !failed && hasOutput;
   const requestFills = inputOpen && hasInput && !responseFills;
 
@@ -139,6 +141,7 @@ export function TraceRequestSection({
             <MethodRail method={shownMethod} />
             <div className={cn("flex min-w-0 flex-1 flex-col", requestFills && "min-h-0")}>
               <RequestEndpoint method={shownMethod} path={shownPath} headline={headline} />
+              {hasRequestHeaders ? <RequestClientCard headers={requestHeaders} /> : null}
               {hasQuery ? (
                 <PayloadPanel
                   value={query}
@@ -169,19 +172,21 @@ export function TraceRequestSection({
                   localOpen
                 />
               ) : null}
-              <PayloadPanel
-                value={input}
-                open={inputOpen}
-                onOpenChange={onInputOpenChange}
-                label="Body"
-                empty="No stored input — replay uses an empty body when the ledger has none."
-                copyLabel="Copy body JSON"
-                copySlot="trace-request-copy-input"
-                toggleSlot="trace-input-toggle"
-                fieldsSlot="trace-request-fields"
-                jsonSlot="trace-input-json"
-                fill={requestFills}
-              />
+              {hasInput ? (
+                <PayloadPanel
+                  value={input}
+                  open={inputOpen}
+                  onOpenChange={onInputOpenChange}
+                  label="Body"
+                  empty=""
+                  copyLabel="Copy body JSON"
+                  copySlot="trace-request-copy-input"
+                  toggleSlot="trace-input-toggle"
+                  fieldsSlot="trace-request-fields"
+                  jsonSlot="trace-input-json"
+                  fill={requestFills}
+                />
+              ) : null}
             </div>
           </div>
         </div>
@@ -197,7 +202,7 @@ export function TraceRequestSection({
         <div className={EXPLORER_STRIP_CLASS}>
           <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Response</h3>
           <div className="ml-auto flex h-full items-stretch">
-            {!failed && output !== null && output !== undefined ? (
+            {!failed && hasOutput ? (
               <CopyIconButton
                 label="Copy response JSON"
                 text={JSON.stringify(output, null, 2)}
@@ -251,13 +256,13 @@ export function TraceRequestSection({
                 ) : null}
                 {failed ? (
                   <ResponseError error={error} errorMessage={errorMessage} bare />
-                ) : (
+                ) : hasOutput ? (
                   <PayloadPanel
                     value={output}
                     open={outputOpen}
                     onOpenChange={onOutputOpenChange}
                     label="Body"
-                    empty="No stored response — this run completed without a return value."
+                    empty=""
                     copyLabel="Copy response JSON"
                     copySlot="trace-response-copy-body"
                     toggleSlot="trace-response-toggle"
@@ -265,7 +270,7 @@ export function TraceRequestSection({
                     jsonSlot="trace-response-json"
                     fill={responseFills}
                   />
-                )}
+                ) : null}
               </div>
             </div>
           </div>

@@ -26,8 +26,18 @@ needed). Large groups add `####` area headings so the list stays scannable.
   invokes record the same frame (method, path, query, `accept` /
   `content-type`, and the response status) even though they do not arrive as
   a socket request.
+- HTTP traces show who sent the request under the method line: device,
+  platform, and browser or API client, with a version when the user-agent
+  has one (`Chrome 131`, `curl 8.7`). Expanding the strip lists the client
+  IP and the raw user-agent. A Console Call API invoke is labeled Console.
+  Runs recorded before the stamp still show only the headers they stored.
 
 ### 🐛 Fixed
+
+#### Console — Flows & traces
+
+- HTTP traces omit the Body panel when the stored payload is empty (`{}`,
+  `[]`, or nothing). Query, headers, status, and a body that has fields stay.
 
 #### Dev, Keel & create-oke
 

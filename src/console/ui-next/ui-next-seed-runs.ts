@@ -372,6 +372,11 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
           accept: "application/json",
           authorization: "[redacted]",
           host: "localhost:6530",
+          "user-agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "sec-ch-ua-platform": '"macOS"',
+          "sec-ch-ua-mobile": "?0",
+          "cf-connecting-ip": "203.0.113.10",
         },
       },
       response: {

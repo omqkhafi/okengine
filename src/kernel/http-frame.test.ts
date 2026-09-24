@@ -21,6 +21,7 @@ describe("requestForHttpInvoke", () => {
     expect(new URL(request.url).searchParams.get("limit")).toBe("20");
     expect(new URL(request.url).searchParams.has("id")).toBe(false);
     expect(request.headers.get("accept")).toBe("application/json");
+    expect(request.headers.get("x-oke-client")).toBe("console");
     expect(request.headers.get("content-type")).toBeNull();
   });
 });

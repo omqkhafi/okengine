@@ -24,7 +24,8 @@ const EXACT_HEADERS = new Set([
  *
  * Call API runs `execute` directly, so there is no socket request. The frame
  * still needs a method, path, query, and the headers the invoke actually
- * uses (`accept`, and `content-type` when there is a body).
+ * uses (`accept`, `x-oke-client: console`, and `content-type` when there is a body).
+ * The operator's browser user-agent is not copied onto the flow.
  *
  * @param trigger - HTTP method and path template
  * @param options - Path params and the assembled flow input
@@ -43,7 +44,7 @@ export function requestForHttpInvoke(
   }
   const url = new URL(path, "http://127.0.0.1");
   const method = trigger.method.toUpperCase();
-  const headers = new Headers({ accept: "application/json" });
+  const headers = new Headers({ accept: "application/json", "x-oke-client": "console" });
   if (!methodCarriesBody(method)) {
     appendScalarQuery(url, options.input, new Set(Object.keys(params)));
     return new Request(url, { method, headers });

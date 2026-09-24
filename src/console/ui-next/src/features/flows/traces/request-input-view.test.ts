@@ -8,7 +8,25 @@ import {
   inputByteLabel,
   inputFieldRows,
   inputShapeHint,
+  payloadHasContent,
 } from "./request-input-view.ts";
+
+describe("payloadHasContent", () => {
+  test("treats an empty object, array, or missing value as no body", () => {
+    expect(payloadHasContent({})).toBe(false);
+    expect(payloadHasContent([])).toBe(false);
+    expect(payloadHasContent("")).toBe(false);
+    expect(payloadHasContent(null)).toBe(false);
+    expect(payloadHasContent(undefined)).toBe(false);
+  });
+
+  test("keeps a payload that has fields or a scalar", () => {
+    expect(payloadHasContent({ limit: 20 })).toBe(true);
+    expect(payloadHasContent([1])).toBe(true);
+    expect(payloadHasContent(0)).toBe(true);
+    expect(payloadHasContent(false)).toBe(true);
+  });
+});
 
 describe("inputFieldRows", () => {
   test("projects plain objects into typed rows", () => {

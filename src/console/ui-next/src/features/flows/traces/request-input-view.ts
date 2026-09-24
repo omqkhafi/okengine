@@ -39,6 +39,22 @@ export function inputFieldRows(value: unknown): readonly InputFieldRow[] | null 
 }
 
 /**
+ * Whether a stored payload is worth a Body panel.
+ *
+ * `null`, `undefined`, `""`, `{}`, and `[]` are empty. A scalar such as
+ * `0` or `false` still counts.
+ *
+ * @param value - Stored run input or output
+ */
+export function payloadHasContent(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
+/**
  * Human shape hint for the body chrome (e.g. `"2 fields"`).
  *
  * @param value - Stored run input
