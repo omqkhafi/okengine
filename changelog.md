@@ -12,6 +12,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### 🐛 Fixed
+
+#### Docs
+
+- The auth, vault, and search note names the secrets protocol. It does not name removed vault vendor ids.
+
 ## v0.23.1 — 2026-10-06
 
 ### ✨ Added

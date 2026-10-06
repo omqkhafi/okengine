@@ -20,11 +20,11 @@ Adapter, if we adopt: keep `fx.auth` / `fx.operator` and the gate scope check. P
 
 What we have: an encrypted-at-rest, path-addressed store. Boot unseals with `OKE_VAULT_MASTER_KEY`, snapshots secrets into a synchronous bag, and degrades to that bag when the backend is sealed or missing.
 
-Mature libraries: HashiCorp Vault, OpenBao, and cloud secret managers. The driver id stays `vault` (the protocol), not a vendor name.
+Mature libraries: encrypted secret stores that speak an HTTP key-value API, plus cloud secret managers. The driver id stays `vault` (the protocol), not a vendor name.
 
 Why it is still in-house: local `oke dev` has to boot with no network and no operator login. The built-in store is that path. The degradation rule (uninitialized vault does not kill boot) is ours.
 
-Adapter, if we adopt: a `vault` driver that speaks the Vault HTTP API, next to the built-in driver. `fx.vault.get(name)` stays the only read in a Flow. The driver id is not `hashicorp`.
+Adapter, if we adopt: a `vault` driver that speaks that HTTP API, next to the built-in driver. `fx.vault.get(name)` stays the only read in a Flow. The driver id is the protocol name.
 
 ## Search — `src/elements/store/search-bm25.ts` and `search-lsh.ts`
 
