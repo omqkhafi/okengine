@@ -16,7 +16,7 @@ Two genuinely distinct things share the protocol in OKE:
 
 OKE does not create separate security models for users, operators, and agents. They enter the same execution model through different triggers and planes.
 
-The server on **6535** speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead.
+The server on **6535** speaks JSON-RPC over HTTP. It implements `initialize`, `ping`, `tools/list`, and `tools/call`, and advertises protocol `2024-11-05`. A client that sends another `protocolVersion` is rejected. An omitted version gets `2024-11-05`. It requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead. The outbound client that calls external MCP servers probes `2026-07-28` (`_meta` on each request) and falls back to a `2024-11-05` `initialize`. That probe is not what this server advertises.
 
 <Callout title="The one rule">
   MCP inherits the operator's capability and can never exceed it. Server-level controls alone are

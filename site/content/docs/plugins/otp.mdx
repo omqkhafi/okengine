@@ -22,9 +22,9 @@ app-owned delivery across the channels you declare.
 </Callout>
 
 <Callout type="info" title="fx.sendOtp vs otp()">
-  `fx.sendOtp` / `fx.verifyOtp` are raw Channel capabilities — no `.plug()`. Direct use means you
-  build routes, sessions, rates, and storage yourself. `otp()` provider mode wraps that path; skip
-  it and call the raw methods in your own flow without losing the provider connection.
+  `fx.sendOtp` / `fx.verifyOtp` / `fx.deliverOtp` are supported Channel methods. Direct use means
+  you build routes, sessions, rates, and storage yourself. `otp()` provider mode wraps that path.
+  The `mena` plugin (`menaChannels`) is an additional way to open the same providers.
 </Callout>
 
 ## Quick start

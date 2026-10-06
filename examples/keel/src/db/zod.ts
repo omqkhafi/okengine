@@ -70,9 +70,9 @@ export type DrizzleTable = (typeof drizzleBySqlName)[keyof typeof drizzleBySqlNa
  */
 export function tableZod<T extends DrizzleTable>(table: T) {
   return {
-    select: createSelectSchema(table as never),
-    insert: createInsertSchema(table as never),
-    update: createUpdateSchema(table as never),
+    select: createSelectSchema(table),
+    insert: createInsertSchema(table),
+    update: createUpdateSchema(table),
   };
 }
 

@@ -6,7 +6,7 @@
  * including Store-only apps that never enable `gate.auth.tenant`.
  */
 
-import { tenantScopesForMember } from "../auth/tenants.ts";
+import { tenantRoleForMember, tenantScopesForMember } from "../auth/tenants.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { PipelineDeps } from "./pipeline.ts";
 import type { InvocationContext } from "./hooks.ts";
@@ -41,6 +41,10 @@ export function applyPipelineTenant(
     for (const scope of tenantScopesForMember(tenant.store, result.id, userId)) {
       deps.principals.auth.scopes.add(scope);
     }
+    const role = tenantRoleForMember(tenant.store, result.id, userId);
+    deps.principals.cacheRoles = role ? [role] : [];
+  } else {
+    deps.principals.cacheRoles = [];
   }
   return undefined;
 }

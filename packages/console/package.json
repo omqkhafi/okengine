@@ -1,0 +1,10 @@
+{
+  "name": "okengine-console",
+  "version": "0.23.1",
+  "private": true,
+  "description": "OKE Console. The supported public import is okengine/console.",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  }
+}

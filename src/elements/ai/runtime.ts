@@ -879,8 +879,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         approvalStepName(id),
         () => record,
       )) as AgentApprovalRecord;
-      let decision = stored;
-      if (decision.status === "pending") {
+      if (stored.status === "pending") {
         opts.emit?.({
           type: "RUN_FINISHED",
           threadId: opts.threadId ?? opts.runId ?? opts.journal.runId,
@@ -890,24 +889,26 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
             interrupts: [{ id, reason: "approval", payload: { tool: capability, args } }],
           },
         });
-        await opts.journal.sleep(approvalStepName(id), approval.timeout, () =>
-          approvalTimeoutMs(approval.timeout),
+      }
+      // Always consume the sleep row. Resolve moves wakeAt to now, so a
+      // resolved replay returns here instead of parking again.
+      await opts.journal.sleep(approvalStepName(id), approval.timeout, () =>
+        approvalTimeoutMs(approval.timeout),
+      );
+      const store = options.journalStore;
+      if (!store) throw new Error("ai: approval resume requires a journal store");
+      let decision = (await readAgentApproval(store, id)) ?? stored;
+      if (decision.status === "pending") {
+        const wrote = await resolveAgentApproval(
+          store,
+          id,
+          { decision: "deny", reason: "timeout", tenant: decision.tenant },
+          now,
+          opts.journal.run.lockedBy,
         );
-        const store = options.journalStore;
-        if (!store) throw new Error("ai: approval resume requires a journal store");
-        decision = (await readAgentApproval(store, id)) ?? decision;
-        if (decision.status === "pending") {
-          const wrote = await resolveAgentApproval(
-            store,
-            id,
-            { decision: "deny", reason: "timeout", tenant: decision.tenant },
-            now,
-            opts.journal.run.lockedBy,
-          );
-          decision = wrote.ok
-            ? { ...decision, status: "denied", reason: "timeout" }
-            : ((await readAgentApproval(store, id)) ?? decision);
-        }
+        decision = wrote.ok
+          ? { ...decision, status: "denied", reason: "timeout" }
+          : ((await readAgentApproval(store, id)) ?? decision);
       }
       if (decision.status === "denied") {
         const denial: AgentDenial = {

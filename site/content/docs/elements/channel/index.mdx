@@ -247,7 +247,7 @@ overrides). Manifest stays free of copy.
 | Method                     | Capability / `sends` | Meaning                                     |
 | -------------------------- | -------------------- | ------------------------------------------- |
 | `fx.send(template, opts?)` | template name        | Deliver through the medium’s driver chain   |
-| `fx.sendOtp(opts)`         | `"sms-otp"`          | Provider-managed SMS OTP (Taqnyat Verify)   |
+| `fx.sendOtp(opts)`         | `"sms-otp"`          | Provider-managed SMS OTP.                   |
 | `fx.verifyOtp(opts)`       | `"sms-otp"`          | Check a provider OTP code                   |
 | `fx.deliverOtp(opts)`      | `"auth-otp"`         | App-owned OTP across email / SMS / WhatsApp |
 
@@ -351,9 +351,9 @@ Env knobs: [Environment variables](/docs/reference/environment-variables). Local
 </Accordion>
 
 <Accordion title="Process-local suppression / receipts warning">
-  Boot warns: `Channel suppression/consent/receipts default to process-local memory…` Opt-out on one
-  instance is invisible to others until you inject shared stores or run a single Channel consumer.
-  See [Receipts](/docs/elements/channel/receipts).
+  Boot warns: `Channel suppression/consent/receipts default to process-local memory…` That is
+  `test`, or a boot with no `DATABASE_URL`. Otherwise consent, suppression, and receipts are the
+  Postgres ledger. See [Receipts](/docs/elements/channel/receipts).
 </Accordion>
 
 </Accordions>

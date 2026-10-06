@@ -294,6 +294,14 @@ const OKE_ERROR_ROWS = {
   LIVE_EXPOSURE_DUPLICATE: { code: 1050, domain: "kernel" },
   /** Two MCP tool bindings share the same exposed tool name. */
   MCP_TOOL_DUPLICATE: { code: 1060, domain: "kernel" },
+  /** A journal write arrived from a holder whose lease token no longer matches. */
+  JOURNAL_STALE_LEASE: { code: 1074, domain: "kernel" },
+  /** Replay called a different step or effect than the next journal entry. */
+  JOURNAL_REPLAY_DIVERGENCE: { code: 1075, domain: "kernel" },
+  /** Resume of a run stamped with a different code version. */
+  JOURNAL_CODE_VERSION: { code: 1076, domain: "kernel" },
+  /** A journaled value could not be stored as JSON. */
+  JOURNAL_VALUE_NOT_JSON: { code: 1077, domain: "kernel" },
   /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.

@@ -191,6 +191,8 @@ export interface BootOptions {
   readonly clients?: {
     readonly kv?: import("../drivers/types.ts").KvClientLike;
     readonly signalRedis?: import("../drivers/signal-types.ts").SignalRedisClientLike;
+    /** Injected postgres signal client (tests). Production opens Bun.SQL. */
+    readonly signalSql?: import("../drivers/signal-postgres.ts").PostgresSignalSql;
   };
   /**
    * Process instance id for Clock / Journal / fleet registry.
@@ -538,7 +540,16 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   // 4d. Scheduler — one timer drives clock ticks, durable-run resume, heartbeat.
   let schedulerTimer: ReturnType<typeof setInterval> | undefined;
   const startScheduler = options.startScheduler ?? env !== "test";
-  if (startScheduler && (clock !== undefined || journal !== undefined || instances !== undefined)) {
+  const signalBus = signal?.bus ?? undefined;
+  let refreshChannel: (() => Promise<void>) | undefined;
+  if (
+    startScheduler &&
+    (clock !== undefined ||
+      journal !== undefined ||
+      instances !== undefined ||
+      signalBus !== undefined ||
+      needs.channel)
+  ) {
     const period = options.schedulerIntervalMs ?? 1000;
     const clockRt = clock;
     const durableResume = options.onDurableResume;
@@ -550,6 +561,8 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       console.error(err);
     };
     schedulerTimer = setInterval(() => {
+      if (signalBus) void signalBus.drain().catch(ignoreBenignSql);
+      if (refreshChannel) void refreshChannel().catch(ignoreBenignSql);
       if (clockRt) void Promise.resolve(clockRt.tick()).catch(ignoreBenignSql);
       if (journal && durableResume) void Promise.resolve(durableResume()).catch(ignoreBenignSql);
       if (fleet) void fleet.maybeHeartbeat().catch(ignoreBenignSql);
@@ -572,7 +585,8 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   // 5. Channel
   let channel = pre.channel;
   if (needs.channel && !channel) {
-    channel = channelBind!.bindChannel(options, env, now, docker);
+    channel = await channelBind!.bindChannel(options, env, now, docker);
+    refreshChannel = channel.refresh?.bind(channel);
   }
 
   // 6. AI

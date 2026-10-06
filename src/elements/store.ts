@@ -137,6 +137,7 @@ export type {
   SelectWhereBuilder,
   SelectOrderBuilder,
   InferSelectRow,
+  SqlPredicate,
   InsertBuilder,
   InsertValuesBuilder,
   SqlSessionOptions,

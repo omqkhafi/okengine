@@ -2,7 +2,8 @@
  * `postgres` signal driver — transactional emit (dual-write fix).
  *
  * `fx.emit` inserts into the outbox on the caller's connection. Consumers
- * claim with `FOR UPDATE SKIP LOCKED`; wakeups use `LISTEN` / `NOTIFY`.
+ * claim with `FOR UPDATE SKIP LOCKED`. Wakeups use `LISTEN` / `NOTIFY` when
+ * the client has them; otherwise the boot scheduler polls `drain`.
  */
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
@@ -65,18 +66,19 @@ export interface PostgresSignalSql {
   begin<T>(fn: (sql: PostgresSignalSql) => Promise<T>): Promise<T>;
   /**
    * LISTEN channel; returns unsubscribe.
+   * Optional — Bun.SQL has no listen API. Omit it and poll {@link SignalBus.drain}.
    *
    * @param channel - Channel name
    * @param onNotify - Payload callback
    */
-  listen(channel: string, onNotify: (payload: string) => void): Promise<() => void>;
+  listen?(channel: string, onNotify: (payload: string) => void): Promise<() => void>;
   /**
-   * NOTIFY channel.
+   * NOTIFY channel. Optional when the client cannot notify.
    *
    * @param channel - Channel name
    * @param payload - Payload
    */
-  notify(channel: string, payload: string): Promise<void>;
+  notify?(channel: string, payload: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -205,6 +207,9 @@ export function createPostgresSignalFake(options?: {
           return true;
         });
         if (!row) return [];
+        // Hold the row before yielding so a concurrent claim skips it.
+        row.status = "inflight";
+        if (row.locked_by === null) row.locked_by = "claimed";
         return [{ ...row }];
       }
 
@@ -565,9 +570,18 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     return n;
   }
 
-  unlisten = await sql.listen(CHANNEL, () => {
-    void drainQuiet();
-  });
+  if (typeof sql.listen === "function") {
+    unlisten = await sql.listen(CHANNEL, () => {
+      void drainQuiet();
+    });
+  } else if ((options.pollMs ?? 0) > 0) {
+    const timer = setInterval(() => {
+      void drainQuiet();
+    }, options.pollMs);
+    unlisten = () => {
+      clearInterval(timer);
+    };
+  }
 
   function requireDecl(name: string): SignalDecl {
     const decl = signals.get(name);
@@ -663,7 +677,9 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
             await insertEmit(tx, e.signal, e.payload, e.options);
           }
         });
-        await sql.notify(CHANNEL, "commit");
+        if (typeof sql.notify === "function") {
+          await sql.notify(CHANNEL, "commit");
+        }
       },
       async rollback() {
         if (finished) throw new Error("transaction finished");
@@ -827,20 +843,24 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     for (const consumer of consumers) {
       const decl = signals.get(consumer.signal);
       if (decl?.delivery !== "once") continue;
-      const claimed = await sql.query(CLAIM_ONCE_SQL, [consumer.signal, t, t, t]);
-      if (claimed[0]) {
-        progress = true;
-        const row = claimed[0];
-        const attempts = Number(row.attempts) + 1;
+      const row = await sql.begin(async (tx) => {
+        const claimed = await tx.query(CLAIM_ONCE_SQL, [consumer.signal, t, t, t]);
+        const hit = claimed[0];
+        if (!hit) return undefined;
+        const attempts = Number(hit.attempts) + 1;
         const leaseExpiresAt = t + leaseMs;
-        await sql.exec(
+        await tx.exec(
           `UPDATE oke_signal_messages SET status = 'inflight', locked_by = ?, attempts = ?, lease_expires_at = ? WHERE id = ?`,
-          [consumer.subscriberId, attempts, leaseExpiresAt, row.id],
+          [consumer.subscriberId, attempts, leaseExpiresAt, hit.id],
         );
-        row.locked_by = consumer.subscriberId;
-        row.attempts = attempts;
-        row.status = "inflight";
-        row.lease_expires_at = leaseExpiresAt;
+        hit.locked_by = consumer.subscriberId;
+        hit.attempts = attempts;
+        hit.status = "inflight";
+        hit.lease_expires_at = leaseExpiresAt;
+        return hit;
+      });
+      if (row) {
+        progress = true;
         await deliverOnce(row, consumer);
       }
     }

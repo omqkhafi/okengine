@@ -129,8 +129,14 @@ export interface McpInitializeResult {
   readonly sessionId: string;
 }
 
-/** Supported MCP protocol version. */
-export const MCP_PROTOCOL_VERSION = "2024-11-05";
+/** Highest protocol version the servers implement (`2024-11-05`). */
+export {
+  MCP_PROTOCOL_VERSION,
+  MCP_SUPPORTED_PROTOCOL_VERSIONS,
+  acceptsMcpProtocolVersion,
+  negotiateMcpProtocolVersion,
+  protocolVersionOf,
+} from "./versions.ts";
 
 /**
  * Parse tools/call params.

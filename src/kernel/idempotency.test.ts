@@ -353,7 +353,8 @@ describe("HTTP idempotency", () => {
     expect(step1).toEqual(["step1"]);
     blockers[0]!();
     blockers[1]!();
-    expect((await hung).status).toBe(200);
+    // The forfeited holder kept the old lease token. Its later write is rejected.
+    await expect(hung).rejects.toThrow(/OKE1074/);
     expect((await resumed).status).toBe(200);
     expect(step1).toEqual(["step1"]);
   }, 30_000);

@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { JournalRun } from "../kernel/journal.ts";
+import { createJournal, type JournalRun } from "../kernel/journal.ts";
 import { createPostgresJournalFake, createPostgresJournalStore } from "./journal-postgres.ts";
 
 function seedRun(patch: Partial<JournalRun> & { id: string }): JournalRun {
@@ -172,6 +172,27 @@ describe("postgres JournalStore (fake)", () => {
     const row = await store.get("r");
     expect(row?.lockedBy).toBeUndefined();
     expect(row?.leaseExpiresAt).toBeUndefined();
+    await store.close();
+  });
+
+  test("step writes stay linear as the journal grows", async () => {
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const journal = createJournal({ store, now: () => 1, codeVersion: "v1" });
+    const session = await journal.start("long");
+    const steps = 40;
+    const payload = "x".repeat(200);
+    for (let i = 0; i < steps; i++) {
+      await session.step(`s${i}`, () => payload);
+    }
+    const perStep = JSON.stringify({
+      kind: "step",
+      name: "s0",
+      value: payload,
+      at: 1,
+    }).length;
+    expect(store.writeBytes).toBeLessThan(steps * (perStep + 80) * 3);
+    const row = await store.get(session.runId);
+    expect(row?.entries).toHaveLength(steps);
     await store.close();
   });
 });

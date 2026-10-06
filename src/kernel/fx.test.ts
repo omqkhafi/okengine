@@ -436,9 +436,7 @@ describe("fx — wholesale swap", () => {
       live() {
         throw new Error("live must not be used");
       },
-      async call() {
-        return null;
-      },
+      call: (async () => null) as Fx["call"],
       clock: {
         now: () => 0,
         ago: () => 0,

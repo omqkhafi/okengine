@@ -368,6 +368,15 @@ export interface OkeOptions {
       };
     };
   };
+  /**
+   * Tier-1 read cache. Omitted caches pure store-read flows. `{ auto: false }`
+   * turns that off. A flow can still opt in with `cache: true` or a duration,
+   * and `cache: false` always disables. The key includes tenant, locale,
+   * scopes, and membership roles.
+   */
+  readonly cache?: {
+    readonly auto?: boolean;
+  };
   /** Channel runtime options. */
   readonly channel?: BootOptions["channel"];
   /** AI runtime options. */
@@ -598,6 +607,8 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
       readonly runId?: string;
       /** Tenant identity for cron / `fx.call` (propagated, unlike auth). */
       readonly tenant?: { readonly id: string | null };
+      /** Explicit locale override for {@link Fx.t} / channel sends. */
+      readonly locale?: string;
     },
   ): Promise<ExecuteResult>;
   /**
@@ -2085,6 +2096,14 @@ export function oke(options: OkeOptions): OkeApp {
               : undefined;
             // Revealed PII must not hit a prior masked entry or land in cache.
             const reveal = extras?.trustedInvoke === true && extras.revealPii === true;
+            const cacheAuto = options.cache?.auto !== false;
+            const cacheCaller = {
+              userId: fx.auth.userId,
+              tenantId: fx.tenant.id,
+              locale: fx.locale,
+              scopes: fx.auth.scopes,
+              roles: principals?.cacheRoles ?? [],
+            };
             const cacheOk =
               cache !== undefined &&
               storeRt !== undefined &&
@@ -2092,12 +2111,13 @@ export function oke(options: OkeOptions): OkeApp {
               !reveal &&
               cache.autoCacheEligible({
                 cache: flowDef.cache,
+                auto: cacheAuto,
                 durable: flowDef.durable,
                 effects: cacheEffects,
               });
             const dims =
               cacheOk && cache && cacheEffects
-                ? cache.tier1DimsByResource(cacheEffects, flowDef.name, input, fx.auth.userId)
+                ? cache.tier1DimsByResource(cacheEffects, flowDef.name, input, cacheCaller)
                 : undefined;
             if (cacheOk && cache && dims && storeRt) {
               const keys = cache.tier1KeysForReads(cacheEffects, dims);
@@ -2132,39 +2152,35 @@ export function oke(options: OkeOptions): OkeApp {
             const output = isFlowFailure(raw) ? raw : await projectFlowOut(flowDef.out, raw);
             if (!isFlowFailure(output) && cache && storeRt && cacheEffects) {
               const ledgerFx = cache.effectsFromLedger(ledger.entries);
+              const observed = cache.mergeEffects(cacheEffects, ledgerFx);
               const writeEffects: Effects = {
-                writes: [
-                  ...new Set([...(cacheEffects.writes ?? []), ...(ledgerFx.writes ?? [])]),
-                ].filter(cache.isStoreResourceRef),
+                writes: (observed.writes ?? []).filter(cache.isStoreResourceRef),
               };
               if ((writeEffects.writes?.length ?? 0) > 0) {
                 storeRt.onWriteEffects(writeEffects);
               }
-              const mergedReads = [
-                ...new Set([...(cacheEffects.reads ?? []), ...(ledgerFx.reads ?? [])]),
-              ].filter(cache.isStoreResourceRef);
-              if (mergedReads.length > 0) {
-                learnedTier1Reads.set(flowDef.name, mergedReads);
+              const storeReads = (observed.reads ?? []).filter(cache.isStoreResourceRef);
+              if (cache.autoCachePure(observed) && storeReads.length > 0) {
+                learnedTier1Reads.set(flowDef.name, storeReads);
+              } else {
+                learnedTier1Reads.delete(flowDef.name);
               }
-              const putEffects: Effects = {
-                reads: mergedReads,
-                ...(ledgerFx.writes ? { writes: ledgerFx.writes } : {}),
-                ...(ledgerFx.asks ? { asks: ledgerFx.asks } : {}),
-              };
               const storeAfter =
                 !reveal &&
                 cache.autoCacheEligible({
                   cache: flowDef.cache,
+                  auto: cacheAuto,
                   durable: flowDef.durable,
-                  effects: putEffects,
+                  effects: observed,
                 });
               if (storeAfter && output !== undefined && !loadFx().isJsonStreamResult(output)) {
                 const ttlMs =
                   typeof flowDef.cache === "string" ? cache.parseTtlMs(flowDef.cache) : undefined;
+                const putEffects: Effects = { reads: storeReads };
                 storeRt.putTier1(
                   putEffects,
                   output,
-                  cache.tier1DimsByResource(putEffects, flowDef.name, input, fx.auth.userId),
+                  cache.tier1DimsByResource(putEffects, flowDef.name, input, cacheCaller),
                   ttlMs,
                 );
                 if (!cacheOk) telemetry.cacheMisses += 1;

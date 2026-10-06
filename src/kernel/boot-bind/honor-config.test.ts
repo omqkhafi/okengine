@@ -336,18 +336,48 @@ describe("boot binders honour drivers.* config", () => {
     }
   });
 
-  test("signal: drivers.signal postgres fails loud (never silent memory)", async () => {
-    await expect(
-      bootApplication({
-        env: "test",
-        signals: [signal.once("ping")],
-        config: {
-          drivers: {
-            signal: { test: "postgres" },
+  test("signal: drivers.signal postgres needs DATABASE_URL (never silent memory)", async () => {
+    const prevDb = process.env.DATABASE_URL;
+    const prevStore = process.env.OKE_STORE_SQL_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.OKE_STORE_SQL_URL;
+    try {
+      await expect(
+        bootApplication({
+          env: "test",
+          signals: [signal.once("ping")],
+          config: {
+            drivers: {
+              signal: { test: "postgres" },
+            },
           },
+        }),
+      ).rejects.toThrow(/DATABASE_URL/);
+    } finally {
+      if (prevDb !== undefined) process.env.DATABASE_URL = prevDb;
+      else delete process.env.DATABASE_URL;
+      if (prevStore !== undefined) process.env.OKE_STORE_SQL_URL = prevStore;
+      else delete process.env.OKE_STORE_SQL_URL;
+    }
+  });
+
+  test("signal: drivers.signal postgres binds an injected client", async () => {
+    const { createPostgresSignalFake } = await import("../../drivers/signal-postgres.ts");
+    const result = await bootApplication({
+      env: "test",
+      signals: [signal.once("ping")],
+      clients: { signalSql: createPostgresSignalFake() },
+      config: {
+        drivers: {
+          signal: { test: "postgres" },
         },
-      }),
-    ).rejects.toThrow(/signal driver "postgres"/);
+      },
+    });
+    try {
+      expect(result.signal!.driverId).toBe("postgres");
+    } finally {
+      await result.close();
+    }
   });
 
   test("runs: drivers.runs unset in test binds memory", async () => {

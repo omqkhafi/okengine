@@ -208,19 +208,23 @@ async function executeDecide(options: FxDecideInput, name: string): Promise<unkn
   const stored = (await options.journal.step(step, () =>
     pendingRecord(options, view, false, decl),
   )) as DecisionReviewRecord;
-  if (stored.status === "pending") {
-    await options.journal.sleep(step, "876000h", () => 876000 * 60 * 60 * 1000);
-  }
+  // Always consume the sleep row. Resolve moves wakeAt to now.
+  await options.journal.sleep(step, "876000h", () => 876000 * 60 * 60 * 1000);
   const resolved = readStepRecord(options.journal, step) ?? stored;
   return reviewed(view, resolved.values ?? {});
 }
 
-/** Completed outer `decide` effects for this name. The current call is not stored yet. */
+/** Completed `decide-provider` rows for this name. The current call is not included. */
 function decideOrdinal(journal: JournalSession | undefined, name: string): number {
   if (!journal) return 0;
-  return journal.run.entries.filter(
-    (entry) => entry.kind === "effect" && entry.effectKind === "decide" && entry.resource === name,
-  ).length;
+  return journal
+    .recordedBeforeCursor()
+    .filter(
+      (entry) =>
+        entry.kind === "effect" &&
+        entry.effectKind === "decide-provider" &&
+        entry.resource.startsWith(`${name}#`),
+    ).length;
 }
 
 function readStepRecord(journal: JournalSession, step: string): DecisionReviewRecord | undefined {

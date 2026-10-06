@@ -4,11 +4,19 @@
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { SIGNAL_DEFAULTS } from "../../config/driver-defaults.ts";
+import {
+  sharedPostgresClient,
+  toPostgresParams,
+  withPinnedPostgres,
+} from "../../drivers/postgres.ts";
+import type { PostgresClientLike } from "../../drivers/postgres.ts";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
+import type { PostgresSignalSql } from "../../drivers/signal-postgres.ts";
+import { postgresSignalDriver } from "../../drivers/signal-postgres.ts";
 import { createBunSignalRedisClient, redisSignalDriver } from "../../drivers/signal-redis.ts";
 import type { SignalRedisClientLike } from "../../drivers/signal-types.ts";
 import { createSignalRuntime, type SignalRuntime } from "../../elements/signal.ts";
-import { emitBootWarn } from "../../runtime/boot-warn.ts";
+import { resolveInstanceId } from "../instance-id.ts";
 import type { BootOptions } from "../boot.ts";
 
 /**
@@ -32,29 +40,43 @@ function redisUrlFor(docker: boolean): string | undefined {
   return url;
 }
 
-let signalRedisWarned = false;
-
-/** One-shot: redis Signal is emit-relay + process-local outbox consume today. */
-function warnSignalRedisProcessLocal(): void {
-  if (signalRedisWarned) return;
-  signalRedisWarned = true;
-  emitBootWarn(
-    "oke boot: drivers.signal redis — emit relays to Redis, but consume/live/drain use a " +
-      "process-local outbox (not multi-instance competing consumers). Prefer a shared durable " +
-      "outbox path for multi-process tests, or a single consumer instance, until Redis Streams " +
-      "consume ships.",
-  );
-}
-
-/** Test helper — reset the one-shot redis Signal warn. */
-export function resetSignalRedisWarnForTests(): void {
-  signalRedisWarned = false;
+/**
+ * Wrap a Bun.SQL client as the signal driver's query surface.
+ * `listen` is omitted — Bun.SQL has no LISTEN/NOTIFY. Boot polls `drain`.
+ *
+ * @param client - Shared postgres pool
+ */
+function asSignalSql(client: PostgresClientLike): PostgresSignalSql {
+  return {
+    async query(sql, params = []) {
+      const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
+      if (Array.isArray(result)) return result as Record<string, unknown>[];
+      return Array.from(result as ArrayLike<Record<string, unknown>>);
+    },
+    async exec(sql, params = []) {
+      const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
+      if (
+        result &&
+        typeof result === "object" &&
+        "changes" in result &&
+        typeof result.changes === "number"
+      ) {
+        return { changes: result.changes };
+      }
+      if (Array.isArray(result)) return { changes: result.length };
+      return { changes: 0 };
+    },
+    begin: (fn) => withPinnedPostgres(client, (tx) => fn(asSignalSql(tx))),
+    async close() {
+      /* Shared pool — boot owns the connection. */
+    },
+  };
 }
 
 /**
  * Construct a Signal runtime, register decls / binding names, start the bus.
  *
- * Supported ids: `memory` · `redis`. `postgres` / `nats` fail loud until a real
+ * Supported ids: `memory` · `redis` · `postgres`. `nats` fails loud until a
  * native client can be constructed (never silently bind memory).
  *
  * @param options - Boot options
@@ -81,19 +103,33 @@ export async function bindSignal(
       break;
     case "redis": {
       const redis = injectedRedis ?? createBunSignalRedisClient(redisUrlFor(docker));
-      warnSignalRedisProcessLocal();
       signal = createSignalRuntime({
         driver: redisSignalDriver,
         now,
         redis,
+        compete: true,
+        consumerId: resolveInstanceId(options.instanceId),
       });
       break;
     }
-    case "postgres":
-      throw new Error(
-        'oke boot: signal driver "postgres" needs a LISTEN/NOTIFY-capable SQL client — ' +
-          'not available via Bun.SQL yet. Use "redis" or "memory", or inject elements.signal.',
-      );
+    case "postgres": {
+      const injected = options.clients?.signalSql;
+      const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL ?? undefined;
+      if (!injected && !url) {
+        throw new Error(
+          env === "dev"
+            ? 'oke boot: signal driver "postgres" needs DATABASE_URL (did `oke dev` write .env.local?)'
+            : 'oke boot: signal driver "postgres" needs DATABASE_URL',
+        );
+      }
+      signal = createSignalRuntime({
+        driver: postgresSignalDriver,
+        now,
+        sql: injected ?? asSignalSql(sharedPostgresClient(url)),
+        pollMs: injected ? undefined : 1_000,
+      });
+      break;
+    }
     case "nats":
       throw new Error(
         'oke boot: signal driver "nats" has no production client bind yet — ' +

@@ -1,15 +1,14 @@
 /**
  * MCP client protocol — 2026-07-28 happy path + dual-era fallback types.
  *
- * Reuses only the JSON-RPC envelope. Does not import the app MCP *server*
- * dialect (`2024-11-05` initialize) as the client version.
+ * Reuses only the JSON-RPC envelope. The client version is
+ * {@link MCP_CLIENT_PROTOCOL_VERSION} from the shared module, not the
+ * server's initialize advertisement.
  */
 
-/** Current MCP protocol version (stateless core). */
-export const MCP_CLIENT_PROTOCOL_VERSION = "2026-07-28";
+import { MCP_CLIENT_PROTOCOL_VERSION, MCP_LEGACY_PROTOCOL_VERSION } from "../../mcp/versions.ts";
 
-/** Legacy initialize dialect still in production. */
-export const MCP_LEGACY_PROTOCOL_VERSION = "2024-11-05";
+export { MCP_CLIENT_PROTOCOL_VERSION, MCP_LEGACY_PROTOCOL_VERSION };
 
 /** JSON-RPC request id. */
 export type JsonRpcId = string | number;

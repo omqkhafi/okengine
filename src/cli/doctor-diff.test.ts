@@ -7,7 +7,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import type { Manifest } from "../manifest/types.ts";
 import { parseManifest } from "../manifest/validate.ts";
-import { runDoctorDiff } from "./doctor-diff.ts";
+import { formatManifestDiffComment, runDoctorDiff } from "./doctor-diff.ts";
 
 const baseUrl = new URL("../manifest/fixtures/base.manifest.json", import.meta.url);
 
@@ -83,5 +83,33 @@ describe("oke doctor --diff", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  test("comment lists contract, permission, and effect changes", () => {
+    const body = formatManifestDiffComment([
+      {
+        path: "flows.a",
+        category: "contract-breaking",
+        kind: "changed",
+        summary: "out schema changed",
+      },
+      {
+        path: "flows.b",
+        category: "permission-widening",
+        kind: "changed",
+        summary: "gate removed",
+      },
+      {
+        path: "flows.c",
+        category: "effect-widening",
+        kind: "changed",
+        summary: "writes grew",
+      },
+    ]);
+    expect(body).toContain("Contract breaks");
+    expect(body).toContain("Permission widening");
+    expect(body).toContain("Effect widening");
+    expect(body).toContain("out schema changed");
+    expect(body).toContain("widening are comments only");
   });
 });

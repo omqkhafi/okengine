@@ -4,6 +4,8 @@
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { CHANNEL_EMAIL_DEFAULTS, CHANNEL_SMS_DEFAULTS } from "../../config/driver-defaults.ts";
+import { sharedPostgresClient, toPostgresParams } from "../../drivers/postgres.ts";
+import type { PostgresClientLike } from "../../drivers/postgres.ts";
 import { openConsoleChannel } from "../../drivers/channel-console.ts";
 import { openMsegatChannel } from "../../drivers/channel-msegat.ts";
 import { openResendChannel } from "../../drivers/channel-resend.ts";
@@ -16,7 +18,58 @@ import { openUnifonicChannel } from "../../drivers/channel-unifonic.ts";
 import { openWaCloudChannel } from "../../drivers/channel-wa-cloud.ts";
 import type { ChannelDriver, ChannelOpenOptions } from "../../drivers/channel-types.ts";
 import { createChannelRuntime, type ChannelRuntime } from "../../elements/channel.ts";
+import {
+  openPostgresChannelLedger,
+  type ChannelLedgerSql,
+  type PostgresChannelLedger,
+} from "../../elements/channel/sql-ledger.ts";
 import type { BootOptions } from "../boot.ts";
+
+/**
+ * Query/exec wrapper over the shared Bun.SQL pool.
+ *
+ * @param client - Shared postgres client
+ */
+function asChannelSql(client: PostgresClientLike): ChannelLedgerSql {
+  return {
+    async query(sql, params = []) {
+      const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
+      if (Array.isArray(result)) return result as Record<string, unknown>[];
+      return Array.from(result as ArrayLike<Record<string, unknown>>);
+    },
+    async exec(sql, params = []) {
+      const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
+      if (
+        result &&
+        typeof result === "object" &&
+        "changes" in result &&
+        typeof result.changes === "number"
+      ) {
+        return { changes: result.changes };
+      }
+      if (Array.isArray(result)) return { changes: result.length };
+      return { changes: 0 };
+    },
+  };
+}
+
+/**
+ * Durable ledger when a SQL URL is set outside `test`.
+ * Injected stores win. `test` stays in memory.
+ *
+ * @param options - Boot options
+ * @param env - Active environment
+ */
+async function maybeLedger(
+  options: BootOptions,
+  env: ConfigEnv,
+): Promise<PostgresChannelLedger | undefined> {
+  if (env === "test") return undefined;
+  if (options.channel?.suppression && options.channel.receipts) return undefined;
+  const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL;
+  if (!url) return undefined;
+  return openPostgresChannelLedger(asChannelSql(sharedPostgresClient(url)));
+}
 
 /**
  * Construct a Channel runtime (console inbox default).
@@ -29,16 +82,24 @@ import type { BootOptions } from "../boot.ts";
  * @param now - Clock
  * @param docker - Prefer compose SMTP when active
  */
-export function bindChannel(
+export async function bindChannel(
   options: BootOptions,
   env: ConfigEnv,
   now: () => number,
   docker = false,
-): ChannelRuntime {
+): Promise<ChannelRuntime> {
+  const ledger = await maybeLedger(options, env);
   return createChannelRuntime({
     ...(options.channel ?? {}),
     drivers: options.channel?.drivers ?? defaultDrivers(options, env, docker),
     now,
+    ...(ledger
+      ? {
+          suppression: options.channel?.suppression ?? ledger.suppression,
+          receipts: options.channel?.receipts ?? ledger.receipts,
+          refresh: () => ledger.reload(),
+        }
+      : {}),
   });
 }
 

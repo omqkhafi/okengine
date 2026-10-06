@@ -55,6 +55,41 @@ export interface DoctorDiffResult {
   readonly allChanges: readonly ManifestChange[];
 }
 
+const COMMENT_CATEGORIES = ["contract-breaking", "permission-widening", "effect-widening"] as const;
+
+const CATEGORY_LABEL: Record<(typeof COMMENT_CATEGORIES)[number], string> = {
+  "contract-breaking": "Contract breaks",
+  "permission-widening": "Permission widening",
+  "effect-widening": "Effect widening",
+};
+
+/**
+ * Plain-language pull-request comment for the three behavioural categories.
+ * Widening is informational. Contract breaks are the lines that fail CI
+ * when they are undeclared.
+ *
+ * @param changes - {@link diffManifest} changes
+ */
+export function formatManifestDiffComment(changes: readonly ManifestChange[]): string {
+  const lines = ["## Manifest diff", ""];
+  for (const category of COMMENT_CATEGORIES) {
+    const rows = changes.filter((change) => change.category === category);
+    lines.push(`### ${CATEGORY_LABEL[category]}`);
+    if (rows.length === 0) {
+      lines.push("None.");
+    } else {
+      for (const row of rows) {
+        lines.push(`- \`${row.path}\` — ${row.summary}`);
+      }
+    }
+    lines.push("");
+  }
+  lines.push(
+    "Undeclared contract breaks fail the check. Permission and effect widening are comments only. Acknowledge an intentional break with `breaking: true` on the HTTP, call, MCP, or resource contract.",
+  );
+  return lines.join("\n");
+}
+
 /**
  * Diff two manifests and fail on undeclared contract breaks.
  *

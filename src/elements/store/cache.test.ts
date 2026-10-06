@@ -17,6 +17,7 @@ import {
   isInvalidatedByWrite,
   resolveCacheEffects,
   tier1DimsByResource,
+  tier1FlowDims,
   tier1KeysForReads,
   tier1Lookup,
 } from "./cache.ts";
@@ -79,21 +80,41 @@ describe("tier-1 cache — exact per-resource invalidation (path b)", () => {
 });
 
 describe("autoCacheEligible", () => {
-  test("read-only flows cache by default; mutations / asks / durable / cache:false do not", () => {
-    expect(autoCacheEligible({ effects: { reads: ["sql:notes"] } })).toBe(true);
-    expect(autoCacheEligible({ cache: true, effects: { reads: ["sql:notes"] } })).toBe(true);
-    expect(autoCacheEligible({ cache: "30s", effects: { reads: ["sql:notes"] } })).toBe(true);
-    expect(autoCacheEligible({ cache: false, effects: { reads: ["sql:notes"] } })).toBe(false);
-    expect(autoCacheEligible({ durable: true, effects: { reads: ["sql:notes"] } })).toBe(false);
-    expect(autoCacheEligible({ effects: { reads: ["sql:notes"], writes: ["sql:notes"] } })).toBe(
+  test("pure store reads cache by default; side effects never cache", () => {
+    const reads: Effects = { reads: ["sql:notes"] };
+    expect(autoCacheEligible({ effects: reads })).toBe(true);
+    expect(autoCacheEligible({ auto: false, effects: reads })).toBe(false);
+    expect(autoCacheEligible({ auto: false, cache: true, effects: reads })).toBe(true);
+    expect(autoCacheEligible({ auto: true, effects: reads })).toBe(true);
+    expect(autoCacheEligible({ cache: true, effects: reads })).toBe(true);
+    expect(autoCacheEligible({ cache: "30s", effects: reads })).toBe(true);
+    expect(autoCacheEligible({ auto: true, cache: false, effects: reads })).toBe(false);
+    expect(autoCacheEligible({ cache: true, durable: true, effects: reads })).toBe(false);
+    expect(
+      autoCacheEligible({ cache: true, effects: { reads: ["sql:notes"], writes: ["sql:notes"] } }),
+    ).toBe(false);
+    expect(
+      autoCacheEligible({ cache: true, effects: { reads: ["sql:notes"], asks: ["task-suggest"] } }),
+    ).toBe(false);
+    for (const extra of [
+      { emits: ["note.created"] },
+      { sends: ["welcome"] },
+      { fetches: ["api.example.com"] },
+      { secrets: ["stripe"] },
+      { calls: ["notes.create"] },
+      { embeds: ["embed-small"] },
+      { decides: ["route"] },
+    ]) {
+      expect(autoCacheEligible({ auto: true, effects: { reads: ["sql:notes"], ...extra } })).toBe(
+        false,
+      );
+    }
+    expect(autoCacheEligible({ auto: true, effects: { reads: ["runs"] } })).toBe(false);
+    expect(autoCacheEligible({ auto: true, effects: { reads: ["signal:notify"] } })).toBe(false);
+    expect(autoCacheEligible({ auto: true, effects: { reads: ["sql:notes", "runs"] } })).toBe(
       false,
     );
-    expect(autoCacheEligible({ effects: { reads: ["sql:notes"], asks: ["task-suggest"] } })).toBe(
-      false,
-    );
-    expect(autoCacheEligible({ effects: { reads: ["runs"] } })).toBe(false);
-    expect(autoCacheEligible({ effects: { reads: ["signal:notify"] } })).toBe(false);
-    expect(autoCacheEligible({ effects: {} })).toBe(false);
+    expect(autoCacheEligible({ auto: true, effects: {} })).toBe(false);
   });
 
   test("flow+input dims keep list and get from colliding; invalidation still uses the resource", () => {
@@ -107,7 +128,7 @@ describe("autoCacheEligible", () => {
     expect(isInvalidatedByWrite(getKeys[0]!, { writes: ["sql:views"] })).toBe(true);
   });
 
-  test("effectsFromLedger keeps store reads/writes and asks; drops runs", () => {
+  test("effectsFromLedger keeps store effects and side effects, including non-store reads", () => {
     expect(
       effectsFromLedger([
         { kind: "read", resource: "sql:views" },
@@ -117,12 +138,96 @@ describe("autoCacheEligible", () => {
         { kind: "write", resource: "sql:views" },
         { kind: "ask", resource: "summarize" },
         { kind: "emit", resource: "view-changed" },
+        { kind: "send", resource: "welcome" },
+        { kind: "fetch", resource: "api.example.com" },
+        { kind: "secret", resource: "stripe" },
+        { kind: "call", resource: "notes.create" },
+        { kind: "embed", resource: "embed-small" },
+        { kind: "decide", resource: "route" },
       ]),
     ).toEqual({
-      reads: ["sql:views"],
+      reads: ["sql:views", "runs", "signal:notify"],
       writes: ["sql:views"],
       asks: ["summarize"],
+      emits: ["view-changed"],
+      sends: ["welcome"],
+      fetches: ["api.example.com"],
+      secrets: ["stripe"],
+      calls: ["notes.create"],
+      embeds: ["embed-small"],
+      decides: ["route"],
     });
+  });
+
+  test("tier-1 dims always include tenant, locale, scopes, and roles", () => {
+    const effects: Effects = { reads: ["sql:notes"] };
+    const a = tier1FlowDims(
+      "notes.list",
+      {},
+      {
+        userId: "u1",
+        tenantId: "ta",
+        locale: "en",
+        scopes: ["b", "a"],
+        roles: ["admin"],
+      },
+    );
+    const b = tier1FlowDims(
+      "notes.list",
+      {},
+      {
+        userId: "u1",
+        tenantId: "tb",
+        locale: "en",
+        scopes: ["a", "b"],
+        roles: ["admin"],
+      },
+    );
+    const locale = tier1FlowDims(
+      "notes.list",
+      {},
+      {
+        userId: "u1",
+        tenantId: "ta",
+        locale: "ar",
+        scopes: ["a", "b"],
+        roles: ["member"],
+      },
+    );
+    expect(a).toContain("t:ta");
+    expect(a).toContain("l:en");
+    expect(a).toContain("s:a,b");
+    expect(a).toContain("r:admin");
+    expect(a).not.toEqual(b);
+    expect(
+      tier1DimsByResource(
+        effects,
+        "notes.list",
+        {},
+        {
+          userId: "u1",
+          tenantId: "ta",
+          locale: "en",
+          scopes: ["a"],
+          roles: ["admin"],
+        },
+      )["sql:notes"],
+    ).not.toEqual(
+      tier1DimsByResource(
+        effects,
+        "notes.list",
+        {},
+        {
+          userId: "u1",
+          tenantId: "ta",
+          locale: "ar",
+          scopes: ["a"],
+          roles: ["member"],
+        },
+      )["sql:notes"],
+    );
+    expect(locale).toContain("l:ar");
+    expect(locale).toContain("r:member");
   });
 
   test("resolveCacheEffects prefers stamped reads, then learned reads", () => {

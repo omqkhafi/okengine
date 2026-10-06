@@ -3,8 +3,9 @@
  *
  * Same concurrency physics as Signal's `once` delivery and Clock's postgres
  * CronStore: claim with `FOR UPDATE SKIP LOCKED`; a crashed holder's lease is
- * reclaimed lazily on the next claim attempt (no sweeper, no fencing token —
- * completed journal steps replay instead of re-running).
+ * reclaimed lazily on the next claim attempt (no sweeper). Each acquire bumps
+ * a fencing token; writes from a previous holder are rejected. Entries are
+ * append-only rows, not a rewritten JSON blob.
  */
 
 import {
@@ -22,6 +23,7 @@ import {
 } from "../kernel/idempotency-store.ts";
 import type { DecisionLabelStore } from "../kernel/decision-label-store.ts";
 import type { AgentEventStore } from "../kernel/agent-event-store.ts";
+import { throwOke } from "../kernel/errors.ts";
 import { lazyRequire } from "../kernel/lazy-require.ts";
 import {
   JOURNAL_DEFAULT_LEASE_MS,
@@ -29,6 +31,7 @@ import {
   type JournalLeaseStore,
   type JournalRun,
   type JournalStore,
+  type JournalWriteFence,
 } from "../kernel/journal.ts";
 import {
   resolvePostgresUrl,
@@ -53,6 +56,19 @@ interface JournalDbRow {
   created_at: number;
   updated_at: number;
   tenant: string | null;
+  lease_token: number | null;
+  code_version: string | null;
+}
+
+/** One append-only journal entry row. */
+interface JournalEntryDbRow {
+  run_id: string;
+  seq: number;
+  kind: string;
+  name: string | null;
+  resource: string | null;
+  value: string | null;
+  at: number;
 }
 
 /** Minimal SQL + transaction surface for the postgres journal store. */
@@ -85,7 +101,11 @@ const CLAIM_DUE_SQL = `SELECT * FROM oke_journal_runs WHERE status='sleeping' AN
 /** Boot-time orphan discovery: running/sleeping runs with no live lease. */
 const ORPHANS_SQL = `SELECT * FROM oke_journal_runs WHERE (status='running' OR status='sleeping' OR status='compensating') AND ((locked_by IS NULL) OR (lease_expires_at IS NOT NULL AND lease_expires_at<=?))`;
 
-const UPDATE_LEASE_SQL = `UPDATE oke_journal_runs SET locked_by = ?, lease_expires_at = ? WHERE id = ?`;
+const UPDATE_LEASE_SQL = `UPDATE oke_journal_runs SET locked_by = ?, lease_expires_at = ?, lease_token = COALESCE(lease_token, 0) + 1 WHERE id = ?`;
+
+const INSERT_ENTRY_SQL = `INSERT INTO oke_journal_entries (run_id, seq, kind, name, resource, value, at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (run_id, seq) DO UPDATE SET kind = EXCLUDED.kind, name = EXCLUDED.name, resource = EXCLUDED.resource, value = EXCLUDED.value, at = EXCLUDED.at`;
+
+const SELECT_ENTRIES_SQL = `SELECT * FROM oke_journal_entries WHERE run_id = ? ORDER BY seq ASC`;
 
 /** Guarded release — never clears another holder's lease. */
 const RELEASE_LEASE_SQL = `UPDATE oke_journal_runs SET locked_by = NULL, lease_expires_at = NULL WHERE id = ? AND locked_by = ?`;
@@ -171,7 +191,68 @@ function rowToRun(row: Record<string, unknown>): JournalRun {
   if (r.tenant !== null && r.tenant !== undefined && String(r.tenant).length > 0) {
     run.tenant = String(r.tenant);
   }
+  const leaseToken = numOrNull(r.lease_token);
+  if (leaseToken !== null) run.leaseToken = leaseToken;
+  if (
+    r.code_version !== null &&
+    r.code_version !== undefined &&
+    String(r.code_version).length > 0
+  ) {
+    run.codeVersion = String(r.code_version);
+  }
   return run;
+}
+
+function entryToParams(runId: string, seq: number, entry: JournalEntry): unknown[] {
+  if (entry.kind === "step") {
+    return [runId, seq, "step", entry.name, null, JSON.stringify(entry.value ?? null), entry.at];
+  }
+  if (entry.kind === "sleep") {
+    return [
+      runId,
+      seq,
+      "sleep",
+      entry.label,
+      entry.duration,
+      JSON.stringify(entry.wakeAt),
+      entry.at,
+    ];
+  }
+  return [
+    runId,
+    seq,
+    "effect",
+    entry.effectKind,
+    entry.resource,
+    JSON.stringify(entry.value ?? null),
+    entry.at,
+  ];
+}
+
+function entryFromRow(row: Record<string, unknown>): JournalEntry {
+  const kind = String(row.kind);
+  const at = Number(row.at);
+  const value =
+    row.value === null || row.value === undefined ? null : JSON.parse(String(row.value));
+  if (kind === "step") {
+    return { kind: "step", name: String(row.name ?? ""), value, at };
+  }
+  if (kind === "sleep") {
+    return {
+      kind: "sleep",
+      label: String(row.name ?? ""),
+      duration: String(row.resource ?? ""),
+      wakeAt: Number(value),
+      at,
+    };
+  }
+  return {
+    kind: "effect",
+    effectKind: String(row.name ?? ""),
+    resource: String(row.resource ?? ""),
+    value,
+    at,
+  };
 }
 
 function runToParams(run: JournalRun): unknown[] {
@@ -189,6 +270,8 @@ function runToParams(run: JournalRun): unknown[] {
     run.createdAt,
     run.updatedAt,
     run.tenant ?? null,
+    run.leaseToken ?? null,
+    run.codeVersion ?? null,
   ];
 }
 
@@ -209,6 +292,18 @@ async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
     tenant TEXT
   )`);
   await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS tenant TEXT`);
+  await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS lease_token BIGINT`);
+  await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS code_version TEXT`);
+  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_journal_entries (
+    run_id TEXT NOT NULL,
+    seq BIGINT NOT NULL,
+    kind TEXT NOT NULL,
+    name TEXT,
+    resource TEXT,
+    value TEXT,
+    at BIGINT NOT NULL,
+    PRIMARY KEY (run_id, seq)
+  )`);
   await sql.exec(
     `CREATE INDEX IF NOT EXISTS oke_journal_runs_wake ON oke_journal_runs (status, wake_at)`,
   );
@@ -290,6 +385,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       event_type: string | null;
       event_name: string | null;
     }[];
+    entries: JournalEntryDbRow[];
   };
 
   let committed: State = {
@@ -300,6 +396,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
     candidates: [],
     agentRuns: [],
     agentEvents: [],
+    entries: [],
   };
   let active: { state: State; locked: Set<string>; done: boolean } | null = null;
   /** Run ids held by other active transactions (SKIP LOCKED). */
@@ -320,6 +417,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       candidates: s.candidates.map((r) => ({ ...r })),
       agentRuns: s.agentRuns.map((r) => ({ ...r })),
       agentEvents: s.agentEvents.map((r) => ({ ...r })),
+      entries: s.entries.map((r) => ({ ...r })),
     };
   }
 
@@ -481,6 +579,14 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
           .map((row) => ({ ...row }));
       }
 
+      if (/FROM\s+oke_journal_entries/i.test(text)) {
+        const runId = String(params[0] ?? "");
+        return state.entries
+          .filter((row) => row.run_id === runId)
+          .sort((a, b) => a.seq - b.seq)
+          .map((row) => ({ ...row }));
+      }
+
       throw new Error(`postgres journal fake: unsupported query: ${sql}`);
     },
     async exec(sql, params = []) {
@@ -518,6 +624,14 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
           created_at: Number(record.created_at ?? 0),
           updated_at: Number(record.updated_at ?? 0),
           tenant: (record.tenant as string | null) ?? null,
+          lease_token:
+            record.lease_token === undefined || record.lease_token === null
+              ? (state.rows.find((r) => r.id === String(record.id))?.lease_token ?? null)
+              : Number(record.lease_token),
+          code_version:
+            record.code_version === undefined || record.code_version === null
+              ? (state.rows.find((r) => r.id === String(record.id))?.code_version ?? null)
+              : String(record.code_version),
         };
         const idx = state.rows.findIndex((r) => r.id === next.id);
         if (idx >= 0) state.rows[idx] = next;
@@ -526,15 +640,33 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       }
 
       const updLease =
-        /^UPDATE\s+oke_journal_runs\s+SET\s+locked_by\s*=\s*\?,\s*lease_expires_at\s*=\s*\?\s+WHERE\s+id\s*=\s*\?\s*$/i.exec(
+        /^UPDATE\s+oke_journal_runs\s+SET\s+locked_by\s*=\s*\?,\s*lease_expires_at\s*=\s*\?/i.exec(
           text,
         );
-      if (updLease) {
-        const row = state.rows.find((r) => r.id === params[2]);
+      if (updLease && /WHERE\s+id\s*=\s*\?/i.test(text) && !/locked_by\s*=\s*NULL/i.test(text)) {
+        const id = String(params[params.length - 1]);
+        const row = state.rows.find((r) => r.id === id);
         if (!row) return { changes: 0 };
         row.locked_by = params[0] === null ? null : String(params[0]);
         row.lease_expires_at =
           params[1] === null || params[1] === undefined ? null : Number(params[1]);
+        if (/lease_token/i.test(text)) row.lease_token = (row.lease_token ?? 0) + 1;
+        return { changes: 1 };
+      }
+
+      if (/^INSERT\s+INTO\s+oke_journal_entries\b/i.test(text)) {
+        const row: JournalEntryDbRow = {
+          run_id: String(params[0]),
+          seq: Number(params[1]),
+          kind: String(params[2]),
+          name: params[3] === null || params[3] === undefined ? null : String(params[3]),
+          resource: params[4] === null || params[4] === undefined ? null : String(params[4]),
+          value: params[5] === null || params[5] === undefined ? null : String(params[5]),
+          at: Number(params[6]),
+        };
+        const idx = state.entries.findIndex((e) => e.run_id === row.run_id && e.seq === row.seq);
+        if (idx >= 0) state.entries[idx] = row;
+        else state.entries.push(row);
         return { changes: 1 };
       }
 
@@ -807,12 +939,14 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
   return api;
 }
 
-const UPSERT_SQL = `INSERT INTO oke_journal_runs (id, flow, input, status, entries, wake_at, error, output, locked_by, lease_expires_at, created_at, updated_at, tenant) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET flow = EXCLUDED.flow, input = EXCLUDED.input, status = EXCLUDED.status, entries = EXCLUDED.entries, wake_at = EXCLUDED.wake_at, error = EXCLUDED.error, output = EXCLUDED.output, locked_by = EXCLUDED.locked_by, lease_expires_at = EXCLUDED.lease_expires_at, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, tenant = EXCLUDED.tenant`;
+const UPSERT_SQL = `INSERT INTO oke_journal_runs (id, flow, input, status, entries, wake_at, error, output, locked_by, lease_expires_at, created_at, updated_at, tenant, lease_token, code_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET flow = EXCLUDED.flow, input = EXCLUDED.input, status = EXCLUDED.status, entries = EXCLUDED.entries, wake_at = EXCLUDED.wake_at, error = EXCLUDED.error, output = EXCLUDED.output, locked_by = EXCLUDED.locked_by, lease_expires_at = EXCLUDED.lease_expires_at, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, tenant = EXCLUDED.tenant, lease_token = EXCLUDED.lease_token, code_version = EXCLUDED.code_version`;
 
 /** Postgres journal store with run-level lease coordination. */
 export type PostgresJournalStore = JournalStore &
   JournalLeaseStore & {
     readonly sql: PostgresJournalSql;
+    /** Bytes written for entry rows plus header entry payloads. */
+    readonly writeBytes: number;
     close(): Promise<void>;
   };
 
@@ -888,22 +1022,77 @@ export async function createPostgresJournalStore(
 
   await ensureSchema(sql);
 
+  let writeBytes = 0;
+
+  async function hydrate(row: Record<string, unknown>): Promise<JournalRun> {
+    const run = rowToRun(row);
+    const entryRows = await sql.query(SELECT_ENTRIES_SQL, [run.id]);
+    if (entryRows.length > 0) {
+      (run as { entries: JournalEntry[] }).entries = entryRows.map((entry) => entryFromRow(entry));
+      return run;
+    }
+    if (run.entries.length > 0) {
+      for (let seq = 0; seq < run.entries.length; seq++) {
+        const entry = run.entries[seq];
+        if (!entry) continue;
+        const params = entryToParams(run.id, seq, entry);
+        writeBytes += JSON.stringify(entry).length;
+        await sql.exec(INSERT_ENTRY_SQL, params);
+      }
+    }
+    return run;
+  }
+
+  function assertFence(run: JournalRun | undefined, fence: JournalWriteFence | undefined): void {
+    if (!fence || !run) return;
+    const expired = run.leaseExpiresAt !== undefined && run.leaseExpiresAt <= fence.now;
+    if (run.lockedBy !== fence.lockedBy || run.leaseToken !== fence.leaseToken || expired) {
+      throwOke("JOURNAL_STALE_LEASE", { runId: run.id });
+    }
+  }
+
   const store: PostgresJournalStore = {
     sql,
+    get writeBytes() {
+      return writeBytes;
+    },
     idempotency: createPostgresIdempotencyStore(sql),
     decisions: lazyDecisionLabels(sql),
     agentEvents: lazyAgentEvents(sql),
     async get(runId) {
       const rows = await sql.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [runId]);
       if (!rows[0]) return undefined;
-      return rowToRun(rows[0]);
+      return hydrate(rows[0]);
     },
-    async put(run) {
+    async put(run, fence) {
+      if (fence) {
+        const rows = await sql.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [run.id]);
+        assertFence(rows[0] ? rowToRun(rows[0]) : undefined, fence);
+      }
+      writeBytes += JSON.stringify(run.entries).length;
       await sql.exec(UPSERT_SQL, runToParams(run));
+      for (let seq = 0; seq < run.entries.length; seq++) {
+        const entry = run.entries[seq];
+        if (!entry) continue;
+        writeBytes += JSON.stringify(entry).length;
+        await sql.exec(INSERT_ENTRY_SQL, entryToParams(run.id, seq, entry));
+      }
+    },
+    async appendEntry(runId, seq, entry, fence) {
+      if (fence) {
+        const rows = await sql.query(`SELECT * FROM oke_journal_runs WHERE id = ?`, [runId]);
+        const current = rows[0] ? rowToRun(rows[0]) : undefined;
+        if (!current) throw new Error(`journal: run "${runId}" not found`);
+        assertFence(current, fence);
+      }
+      writeBytes += JSON.stringify(entry).length;
+      await sql.exec(INSERT_ENTRY_SQL, entryToParams(runId, seq, entry));
     },
     async list() {
       const rows = await sql.query(`SELECT * FROM oke_journal_runs`);
-      return rows.map((r) => rowToRun(r));
+      const runs: JournalRun[] = [];
+      for (const row of rows) runs.push(await hydrate(row));
+      return runs;
     },
     async acquireLease(runId, instanceId, now, leaseMs) {
       return sql.begin(async (tx) => {
@@ -925,10 +1114,28 @@ export async function createPostgresJournalStore(
           return { lease: true, leaseExpiresAt: current.leaseExpiresAt };
         }
         const current = rowToRun(row);
+        const entryRows = await tx.query(SELECT_ENTRIES_SQL, [runId]);
+        if (entryRows.length > 0) {
+          (current as { entries: JournalEntry[] }).entries = entryRows.map((entry) =>
+            entryFromRow(entry),
+          );
+        }
         const next = update(current) ?? current;
+        const renew =
+          current.lockedBy === instanceId &&
+          current.leaseExpiresAt !== undefined &&
+          current.leaseExpiresAt > now &&
+          current.leaseToken !== undefined;
         next.lockedBy = instanceId;
         next.leaseExpiresAt = now + leaseMs;
-        await tx.exec(UPSERT_SQL, runToParams(next));
+        next.leaseToken = renew ? current.leaseToken : (current.leaseToken ?? 0) + 1;
+        for (let seq = 0; seq < next.entries.length; seq++) {
+          const entry = next.entries[seq];
+          if (!entry) continue;
+          await tx.exec(INSERT_ENTRY_SQL, entryToParams(runId, seq, entry));
+        }
+        const header = { ...next, entries: [] as JournalEntry[] };
+        await tx.exec(UPSERT_SQL, runToParams(header));
         return "ok";
       });
     },
@@ -941,7 +1148,11 @@ export async function createPostgresJournalStore(
         const row = rows[0];
         if (!row) return undefined;
         await tx.exec(UPDATE_LEASE_SQL, [instanceId, now + leaseMs, String(row.id)]);
-        return rowToRun(row);
+        const run = rowToRun(row);
+        run.lockedBy = instanceId;
+        run.leaseExpiresAt = now + leaseMs;
+        run.leaseToken = (run.leaseToken ?? 0) + 1;
+        return run;
       });
     },
     async listOrphans(now) {

@@ -110,6 +110,11 @@ export interface InferEffectsOptions {
    * never pass `fx` into another function.
    */
   readonly resolveCallee?: (callee: AstNode, file: string) => FxCalleeResolution;
+  /**
+   * Flow name of an imported handle in `file`. Absent when inference does
+   * not follow imports (unit tests).
+   */
+  readonly resolveFlowRef?: (localName: string, file: string) => string | undefined;
 }
 
 /** Result of effect inference for one flow body. */
@@ -129,6 +134,11 @@ export interface InferredEffects {
   readonly nondeterministic: boolean;
   /** True when the body references `fx.auth.userId`. */
   readonly readsUserId: boolean;
+  /**
+   * `fx.fetch` / `fx.send` calls that are not inside an `fx.step` callback.
+   * A `durable: true` flow must not call these directly.
+   */
+  readonly bareIrreversible: readonly ("fetch" | "send")[];
 }
 
 const READ_METHODS = new Set([
@@ -145,6 +155,10 @@ const READ_METHODS = new Set([
   "page",
   "search",
   "raw",
+  "innerJoin",
+  "leftJoin",
+  "rightJoin",
+  "fullJoin",
 ]);
 
 const WRITE_METHODS = new Set([
@@ -175,6 +189,10 @@ const TABLE_ARG_METHODS = new Set([
   "count",
   "page",
   "search",
+  "innerJoin",
+  "leftJoin",
+  "rightJoin",
+  "fullJoin",
 ]);
 
 /**
@@ -204,7 +222,8 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     name: "liveQuery" | "applySearchEmbedCdc";
     call: CallExpression;
   }> = [];
-  const chains = collectFxChains(options, opaque, userIdRoots, intrinsics);
+  const bareIrreversible = new Set<"fetch" | "send">();
+  const chains = collectFxChains(options, opaque, userIdRoots, intrinsics, bareIrreversible);
 
   for (const { call, chain } of chains) {
     if (chain.rootMethod === "raw") {
@@ -313,7 +332,13 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     }
 
     if (chain.rootMethod === "call" && call === chain.rootCall) {
-      const ref = resolveCallTarget(call.arguments[0], options.bindings);
+      const arg = unwrapValueNode(call.arguments[0]);
+      const local = identifierName(arg);
+      const imported =
+        local && options.file && options.resolveFlowRef
+          ? options.resolveFlowRef(local, options.file)
+          : undefined;
+      const ref = imported ?? resolveCallTarget(call.arguments[0], options.bindings);
       if (ref) calls.add(ref);
       continue;
     }
@@ -359,18 +384,28 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
       // Skip incomplete chains (`select` before `.from`, `insert` before table) —
       // the sibling call that carries the table arg records the real resource.
       const leaf = resolved.methods[resolved.methods.length - 1]!;
-      const hasTable = tableFromStoreChain(call, options.bindings, chain) !== undefined;
+      const tables = tablesFromStoreChain(call, options.bindings, chain);
+      const hasTable = tables.length > 0;
       if (!hasTable && (leaf === "select" || leaf === "insert" || leaf === "update")) {
         continue;
       }
       // Intermediate chain links that only forward (where/values/returning)
       // still carry read/write from earlier methods — record once we have a table
       // or a terminal key-based op.
-      if (!hasTable && (leaf === "where" || leaf === "values" || leaf === "returning")) {
+      if (
+        !hasTable &&
+        (leaf === "where" || leaf === "values" || leaf === "returning" || leaf === "groupBy")
+      ) {
         continue;
       }
-      if (op === "read" || op === "both") reads.add(resolved.resource);
-      if (op === "write" || op === "both") writes.add(resolved.resource);
+      const resources =
+        tables.length > 0
+          ? tables.map((table) => sqlTableRef(table) as ResourceRef)
+          : [resolved.resource];
+      for (const resource of resources) {
+        if (op === "read" || op === "both") reads.add(resource);
+        if (op === "write" || op === "both") writes.add(resource);
+      }
     }
   }
 
@@ -407,6 +442,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     cacheIneligible: usesRaw && !options.hasExplicitEffects,
     nondeterministic: asks.size > 0 || embeds.size > 0 || decides.size > 0,
     readsUserId: userIdRoots.some((node) => containsAuthUserId(node)),
+    bareIrreversible: [...bareIrreversible],
   };
 }
 
@@ -610,21 +646,37 @@ function tableFromStoreChain(
   bindings: ReadonlyMap<string, InferBinding>,
   chain?: FxChain,
 ): string | undefined {
+  return tablesFromStoreChain(call, bindings, chain)[0];
+}
+
+/**
+ * Every table argument on a store chain, including joins.
+ *
+ * @param call - Any call in the chain
+ * @param bindings - Scope bindings
+ * @param chain - Precomputed chain when already known
+ */
+function tablesFromStoreChain(
+  call: CallExpression,
+  bindings: ReadonlyMap<string, InferBinding>,
+  chain?: FxChain,
+): string[] {
   const found = tableFromStoreWalk(call, bindings, chain);
-  if (found) return found;
+  if (found.length > 0) return found;
   if (chain?.aliasLeaf && chain.aliasLeaf !== call) {
     return tableFromStoreWalk(chain.aliasLeaf, bindings);
   }
-  return undefined;
+  return [];
 }
 
 function tableFromStoreWalk(
   call: CallExpression,
   bindings: ReadonlyMap<string, InferBinding>,
   chain?: FxChain,
-): string | undefined {
+): string[] {
   let current: AstNode | undefined = call;
   const seen = new Set<AstNode>();
+  const names: string[] = [];
   while (current && current.type === "CallExpression" && !seen.has(current)) {
     seen.add(current);
     const c = current as CallExpression;
@@ -644,7 +696,8 @@ function tableFromStoreWalk(
         const id = identifierName(c.arguments[0]);
         if (id) {
           const binding = bindings.get(id);
-          return binding?.kind === "table" ? binding.ref : id;
+          const tableName = binding?.kind === "table" ? binding.ref : id;
+          if (!names.includes(tableName)) names.push(tableName);
         }
       }
     }
@@ -658,7 +711,7 @@ function tableFromStoreWalk(
     }
     break;
   }
-  return undefined;
+  return names;
 }
 
 function methodNameOfCall(call: CallExpression): string | undefined {
@@ -908,7 +961,9 @@ function collectFxChains(
   opaque: string[],
   userIdRoots: AstNode[],
   intrinsics: Array<{ name: "liveQuery" | "applySearchEmbedCdc"; call: CallExpression }>,
+  bareIrreversible: Set<"fetch" | "send">,
 ): ChainHit[] {
+  const stepBodies = new Set<AstNode>();
   const hits: ChainHit[] = [];
   const seen = new Set<AstNode>();
 
@@ -918,7 +973,7 @@ function collectFxChains(
     aliases: ReadonlyMap<string, ChainAlias>,
     locals: ReadonlyMap<string, AstNode>,
   ): void => {
-    analyzeFunction(fn, "fx", aliases, locals, file);
+    analyzeFunction(fn, "fx", aliases, locals, file, stepBodies.has(fn));
   };
 
   const analyzeFunction = (
@@ -927,13 +982,14 @@ function collectFxChains(
     outerAliases: ReadonlyMap<string, ChainAlias>,
     outerLocals: ReadonlyMap<string, AstNode>,
     file: string,
+    insideStep: boolean,
   ): void => {
     if (seen.has(fn)) return;
     seen.add(fn);
     userIdRoots.push(fn);
     const body = (fn as AstNode & { body?: AstNode }).body;
     if (!body) return;
-    analyzeBody(body, door, outerAliases, outerLocals, file);
+    analyzeBody(body, door, outerAliases, outerLocals, file, insideStep);
   };
 
   const analyzeBody = (
@@ -942,6 +998,7 @@ function collectFxChains(
     outerAliases: ReadonlyMap<string, ChainAlias>,
     outerLocals: ReadonlyMap<string, AstNode>,
     file: string,
+    insideStep: boolean,
   ): void => {
     const aliases = new Map(outerAliases);
     const locals = new Map(outerLocals);
@@ -951,6 +1008,20 @@ function collectFxChains(
     });
     for (const call of callsSkippingNested(body)) {
       const chain = chainFromCall(call, aliases);
+      if (chain?.rootMethod === "step") {
+        for (const arg of call.arguments) {
+          const fn = unwrapValue(arg);
+          if (fn && isFunctionNode(fn)) stepBodies.add(fn);
+        }
+      }
+      if (
+        !insideStep &&
+        chain &&
+        call === chain.rootCall &&
+        (chain.rootMethod === "fetch" || chain.rootMethod === "send")
+      ) {
+        bareIrreversible.add(chain.rootMethod);
+      }
       if (chain) {
         hits.push({ call, chain });
         continue;
@@ -961,7 +1032,7 @@ function collectFxChains(
       if (seen.has(nested)) continue;
       const shadows = functionParams(nested).some((param) => paramIdentifierName(param) === door);
       if (shadows) continue;
-      analyzeFunction(nested, door, aliases, locals, file);
+      analyzeFunction(nested, door, aliases, locals, file, insideStep || stepBodies.has(nested));
     }
   };
 
@@ -972,9 +1043,9 @@ function collectFxChains(
     if (second && paramIdentifierName(second) !== "fx") {
       opaque.push("the do callback's second parameter is not named fx");
     }
-    analyzeFunction(options.doNode, "fx", new Map(), new Map(), startFile);
+    analyzeFunction(options.doNode, "fx", new Map(), new Map(), startFile, false);
   } else {
-    analyzeBody(options.doNode, "fx", new Map(), new Map(), startFile);
+    analyzeBody(options.doNode, "fx", new Map(), new Map(), startFile, false);
   }
 
   return hits;

@@ -142,8 +142,12 @@ describe("SqlStoreHandle upsert — epoch-ms into timestamp (Postgres)", () => {
   });
 
   test("select/update WHERE coerces epoch-ms on timestamp columns", async () => {
-    await handle.insert(notesTs).values({ id: "old", title: "old", createdAt: 1 });
-    await handle.insert(notesTs).values({ id: "new", title: "new", createdAt: 100 });
+    await handle
+      .insert(notesTs)
+      .values({ id: "old", title: "old", createdAt: 1 as unknown as Date });
+    await handle
+      .insert(notesTs)
+      .values({ id: "new", title: "new", createdAt: 100 as unknown as Date });
 
     // Drizzle types timestamp `{ mode: "date" }` as Date; the store still
     // coerces epoch-ms binds (`fx.clock.now()`) at WHERE compile time.

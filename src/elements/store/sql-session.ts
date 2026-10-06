@@ -51,6 +51,24 @@ export type { WhereMap } from "./sql-condition.ts";
  */
 export type InferSelectRow<T> = T extends { readonly $inferSelect: infer R } ? R : SqlRow;
 
+/**
+ * Insert row from a Drizzle table's `$inferInsert`, or {@link SqlRow}.
+ *
+ * @typeParam T - Table handle or Drizzle table
+ */
+export type InferInsertRow<T> = T extends { readonly $inferInsert: infer R } ? R : SqlRow;
+
+/**
+ * Equality map or a Drizzle SQL fragment (`queryChunks`).
+ * A bare `unknown` would swallow the row type.
+ *
+ * @typeParam TRow - Selected or inserted row
+ */
+export type SqlPredicate<TRow> =
+  | { readonly [K in keyof TRow]?: TRow[K] }
+  | { readonly queryChunks: readonly unknown[] }
+  | undefined;
+
 /** Serialize stamp frames on a shared connection so concurrent identities cannot interleave. */
 const rlsStampTails = new WeakMap<SqlConnection, Promise<unknown>>();
 
@@ -118,6 +136,9 @@ function notifySqlCdc(event: {
  * contract).
  */
 const cdcMutationStorage = new AsyncLocalStorage<{ readonly mutationId: string }>();
+
+/** Pinned connection for {@link SqlStoreHandle.transaction}. */
+const sqlTxStorage = new AsyncLocalStorage<SqlConnection>();
 
 /**
  * Read the ambient mutation id, or `undefined` outside a stamped request.
@@ -274,7 +295,7 @@ export interface SelectFromBuilder<TRow = SqlRow> extends PromiseLike<TRow[]> {
    *
    * @param where - Condition
    */
-  where(where: unknown): SelectWhereBuilder<TRow>;
+  where(where: SqlPredicate<TRow>): SelectWhereBuilder<TRow>;
   /**
    * Order rows with Drizzle `asc()` / `desc()` terms.
    *
@@ -312,14 +333,18 @@ export interface SelectBuilder<TLocked extends SqlRow | undefined = undefined> {
   ): SelectFromBuilder<TLocked extends undefined ? InferSelectRow<TTable> : TLocked>;
 }
 
-/** Fluent insert builder. */
-export interface InsertBuilder {
+/**
+ * Fluent insert builder.
+ *
+ * @typeParam TRow - `$inferInsert` when the table is a Drizzle table
+ */
+export interface InsertBuilder<TRow = SqlRow> {
   /**
    * Provide row values.
    *
    * @param row - Row to insert
    */
-  values(row: SqlRow): InsertValuesBuilder;
+  values(row: TRow): InsertValuesBuilder;
 }
 
 /**
@@ -340,7 +365,7 @@ export interface DeleteBuilder {
    *
    * @param where - Equality map or Drizzle SQL
    */
-  where(where: unknown): Promise<number>;
+  where(where: SqlPredicate<SqlRow>): Promise<number>;
 }
 
 /** Fluent update builder. */
@@ -360,7 +385,7 @@ export interface UpdateSetBuilder {
    *
    * @param where - Equality map or Drizzle SQL
    */
-  where(where: unknown): Promise<number>;
+  where(where: SqlPredicate<SqlRow>): Promise<number>;
 }
 
 /**
@@ -393,7 +418,7 @@ export interface SqlStoreHandle {
    *
    * @param table - Target table
    */
-  insert(table: TableHandle | unknown): InsertBuilder;
+  insert<TTable>(table: TTable): InsertBuilder<InferInsertRow<TTable>>;
   /**
    * Start an update on `table`.
    *
@@ -415,6 +440,22 @@ export interface SqlStoreHandle {
    */
   delete(table: TableHandle | unknown): DeleteBuilder;
   delete(table: TableHandle | unknown, id: string): Promise<boolean>;
+  /**
+   * Run `fn` on one pinned connection. `fx.emit` inside `fn` stages on the
+   * signal outbox and publishes only after this SQL transaction commits.
+   *
+   * @param fn - Transaction body. `tx` is this handle, bound to the pin.
+   */
+  transaction<T>(fn: (tx: SqlStoreHandle) => Promise<T>): Promise<T>;
+  /**
+   * Execute a Drizzle select, insert, update, or delete builder.
+   * Calls `toSQL()` so `drizzle-orm` stays off the edge graph.
+   *
+   * @param query - Builder with `toSQL()`
+   */
+  run<T extends SqlRow = SqlRow>(query: {
+    toSQL(): { readonly sql: string; readonly params: readonly unknown[] };
+  }): Promise<T[]>;
   /**
    * True when at least one row matches.
    *
@@ -564,6 +605,10 @@ export function createSqlStoreHandle(
     }
   }
 
+  function activeConnection(): SqlConnection {
+    return sqlTxStorage.getStore() ?? connection;
+  }
+
   function query(sql: string, params: readonly unknown[] = []): Promise<SqlRow[]> {
     return withSchemaGuard(() => withRlsStamp((conn) => conn.query(sql, params), sql));
   }
@@ -572,9 +617,29 @@ export function createSqlStoreHandle(
     return withSchemaGuard(() => withRlsStamp((conn) => conn.exec(sql, params), sql));
   }
 
+  /**
+   * Rewrite Drizzle `$1` placeholders to the connection's `?` form.
+   *
+   * @param sql - Dialect SQL
+   * @param params - Bindings in `$n` order (1-based)
+   */
+  function fromDialect(
+    sql: string,
+    params: readonly unknown[],
+  ): { sql: string; params: unknown[] } {
+    if (!sql.includes("$")) return { sql, params: [...params] };
+    const ordered: unknown[] = [];
+    const text = sql.replace(/\$(\d+)/g, (_match, index: string) => {
+      ordered.push(params[Number(index) - 1]);
+      return "?";
+    });
+    return { sql: text, params: ordered };
+  }
+
   async function withRlsStamp<T>(fn: (conn: SqlConnection) => Promise<T>, sql: string): Promise<T> {
-    if (!rls || !RLS_CONTEXT_DRIVERS.has(connection.driverId)) return fn(connection);
-    if (isRlsStampExemptSql(sql)) return fn(connection);
+    if (!rls || !RLS_CONTEXT_DRIVERS.has(connection.driverId)) return fn(activeConnection());
+    if (isRlsStampExemptSql(sql)) return fn(activeConnection());
+    if (sqlTxStorage.getStore()) return fn(activeConnection());
     const run = (): Promise<T> => applyRlsStamp(fn);
     // PGlite is one backend session — concurrent identities must not interleave.
     // Pooled postgres pins each stamp via `transaction()` instead.
@@ -1330,6 +1395,27 @@ export function createSqlStoreHandle(
         options: searchOptions,
         ...(embedQuery ? { embedQuery } : {}),
       });
+    },
+
+    async transaction<T>(fn: (tx: SqlStoreHandle) => Promise<T>): Promise<T> {
+      if (!connection.transaction) {
+        throw new Error("fx.store().transaction needs SqlConnection.transaction");
+      }
+      return connection.transaction(async (txConn) =>
+        sqlTxStorage.run(txConn, () => fn(handle as SqlStoreHandle)),
+      );
+    },
+
+    async run<T extends SqlRow = SqlRow>(builder: {
+      toSQL(): { readonly sql: string; readonly params: readonly unknown[] };
+    }): Promise<T[]> {
+      const compiled = builder.toSQL();
+      const dialect = fromDialect(compiled.sql, compiled.params);
+      if (isSqlDml(dialect.sql)) {
+        await exec(dialect.sql, dialect.params);
+        return [];
+      }
+      return query(dialect.sql, dialect.params) as Promise<T[]>;
     },
 
     async ensureTable(table: TableHandle) {

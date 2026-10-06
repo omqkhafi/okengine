@@ -1,21 +1,23 @@
 ---
 title: "Receipts"
-description: "Delivery ledger, seven-state outcomes, consent opt-out, and hard-bounce suppression — process-local by default."
+description: "Delivery ledger, seven-state outcomes, consent opt-out, and hard-bounce suppression."
 icon: "ReceiptText"
 source: "docs/spec/unified-theory.md"
 ---
 
 Every Channel send records a **receipt** — success (`sent` / `fallback`), suppression, or a
 classified failure. Provider bounces and complaints update that ledger through normalized
-outcomes. There is no `oke_receipts` SQL table and no `fx.channel.getReceipt` helper.
+outcomes. There is no `fx.channel.getReceipt` helper. Outside `test`, boot stores consent,
+suppression, and receipts in Postgres (`oke_channel_consent`, `oke_channel_bounce`,
+`oke_channel_receipt`) when `DATABASE_URL` is set. `test` stays in memory.
 
 For operators watching deliverability — Console projects the ledger; Flows only see send
 results via `fx.send`’s `{ ok: true }` gate.
 
 <Callout title="The one rule">
-  Consent and prior hard bounces suppress **before** any driver runs. Default suppression / consent
-  / receipts stores are **process-local memory** — inject shared stores for multi-instance, or run a
-  single Channel consumer, until a durable driver ships.
+  Consent and prior hard bounces suppress **before** any driver runs. With `DATABASE_URL` outside
+  `test`, those rows are shared across instances. `test`, and any boot without a SQL URL, keep
+  process-local memory and still warn.
 </Callout>
 
 ## Smallest Example

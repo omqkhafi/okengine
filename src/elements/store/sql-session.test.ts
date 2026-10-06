@@ -69,6 +69,8 @@ describe("SqlStoreHandle — no relational query surface (path b)", () => {
         "upsert",
         "increment",
         "raw",
+        "run",
+        "transaction",
         "count",
         "page",
         "ensureTable",

@@ -49,9 +49,9 @@ export interface FlowOptions<I = unknown, O = unknown> {
    */
   readonly retry?: FxRetryOptions;
   /**
-   * Cache policy. Read-only flows cache automatically from inferred
-   * effects (`true` / omitted). `false` opts out; a duration string
-   * (`"30s"`) adds a TTL on top of write invalidation.
+   * Cache policy. Omitted caches a pure store-read flow. `true` or a duration
+   * (`"30s"`) opts one flow in when the app set `cache: { auto: false }`.
+   * `false` always disables. The key includes tenant, locale, scopes, and roles.
    */
   readonly cache?: boolean | string;
   /**
@@ -124,6 +124,10 @@ export type InferFlowOut<Opts> = Opts extends { readonly do: FlowHandler<infer _
  * `FlowDef<…, undefined>` remains assignable into `on()` before rebinding.
  */
 declare const triggerPhantom: unique symbol;
+/** Covariant input phantom so `fx.call` can read `I` without hitting `do`. */
+declare const inputPhantom: unique symbol;
+/** Covariant output phantom so `fx.call` can read `O` without hitting `do`. */
+declare const outputPhantom: unique symbol;
 
 /**
  * A Flow definition — one species, trigger-agnostic until {@link on} binds.
@@ -151,6 +155,10 @@ export interface FlowDef<
    * `$trigger` / `triggers[0]` for the value.
    */
   readonly [triggerPhantom]?: T;
+  /** Type-level input. Not present at runtime. */
+  readonly [inputPhantom]?: I;
+  /** Type-level output. Not present at runtime. */
+  readonly [outputPhantom]?: O;
   /** Stable name (auto-assigned when omitted). */
   readonly name: string;
   /** Unit scope — derived from `name`'s first dot segment (e.g. `"auth.refresh"` → `"auth"`). */
@@ -254,6 +262,28 @@ export interface FlowDef<
     pluginDef: P,
   ): FlowDef<I, O, E, D & (P extends PluginDef<infer PD> ? PD : Record<string, never>), T>;
 }
+
+/**
+ * Input type of a Flow handle. `unknown` when `F` is a string name.
+ *
+ * @typeParam F - Flow handle or other call target
+ */
+export type FlowInput<F> = F extends { readonly [inputPhantom]?: infer I }
+  ? [I] extends [undefined]
+    ? unknown
+    : Exclude<I, undefined>
+  : unknown;
+
+/**
+ * Output type of a Flow handle. `unknown` when `F` is a string name.
+ *
+ * @typeParam F - Flow handle or other call target
+ */
+export type FlowOutput<F> = F extends { readonly [outputPhantom]?: infer O }
+  ? [O] extends [undefined]
+    ? unknown
+    : Exclude<O, undefined>
+  : unknown;
 
 /** Unique brand symbol for {@link FlowDef}. */
 export const flowBrand: unique symbol = Symbol("oke.flow");

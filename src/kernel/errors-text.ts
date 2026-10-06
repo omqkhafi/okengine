@@ -84,6 +84,22 @@ export const OKE_ERROR_TEXT: Readonly<Record<string, OkeErrorText>> = {
       'Live signal "{signal}" is exposed twice with the same gates ({gates}) and match ({match}).',
     fix: "Use a different gate or path-param filter, or drop the extra route.",
   },
+  JOURNAL_STALE_LEASE: {
+    cause: 'Journal run "{runId}" rejected a write from an expired lease holder.',
+    fix: "Resume the run so the current holder acquires a new lease token. Do not write with a token from a previous holder.",
+  },
+  JOURNAL_REPLAY_DIVERGENCE: {
+    cause: 'Journal run "{runId}" expected {expected} but the code called {actual}.',
+    fix: "Keep step names, sleep labels, and effect order stable for in-flight runs. A code change that reorders journal calls cannot resume the old run.",
+  },
+  JOURNAL_CODE_VERSION: {
+    cause: 'Journal run "{runId}" was started on code {expected} and this process is {actual}.',
+    fix: "Finish or abandon in-flight runs before deploying a different code version. Do not replay them on the new build.",
+  },
+  JOURNAL_VALUE_NOT_JSON: {
+    cause: "A durable journal entry held a value that is not JSON ({detail}).",
+    fix: "Return plain JSON from fx.step. fx.fetch and fx.send must run inside fx.step so the journal can store a JSON snapshot.",
+  },
   MCP_TOOL_DUPLICATE: {
     cause: 'MCP tool "{tool}" is bound twice (flow "{flow}").',
     fix: "Give each MCP tool exposure a unique tool name.",

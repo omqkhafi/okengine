@@ -16,7 +16,9 @@ import { asData } from "./data.ts";
 import { defaultDocsContentDir, loadDocsIndex, type DocsIndex } from "./docs-index.ts";
 import { createDocsToolRuntime } from "./docs-tools.ts";
 import {
-  MCP_PROTOCOL_VERSION,
+  acceptsMcpProtocolVersion,
+  negotiateMcpProtocolVersion,
+  protocolVersionOf,
   parseJsonRpcRequest,
   parseToolsCallParams,
   rpcError,
@@ -94,10 +96,18 @@ export async function createDocsMcpServer(
 
     switch (rpc.method) {
       case "initialize": {
+        const requested = protocolVersionOf(rpc.params);
+        const protocolVersion = negotiateMcpProtocolVersion(requested);
+        if (protocolVersion === undefined) {
+          return jsonRpcHttp(
+            rpcError(id, RpcErrorCode.invalidParams, "unsupported protocol version"),
+            400,
+          );
+        }
         const sessionId = newMcpTransportSessionId();
         transportSessions.add(sessionId);
         const result: McpInitializeResult = {
-          protocolVersion: MCP_PROTOCOL_VERSION,
+          protocolVersion,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: "okengine-docs-mcp", version },
           sessionId,
@@ -124,6 +134,13 @@ export async function createDocsMcpServer(
         );
       }
       case "tools/call": {
+        const requested = protocolVersionOf(rpc.params);
+        if (requested !== undefined && !acceptsMcpProtocolVersion(requested)) {
+          return jsonRpcHttp(
+            rpcError(id, RpcErrorCode.invalidParams, "unsupported protocol version"),
+            400,
+          );
+        }
         const call = parseToolsCallParams(rpc.params);
         if (!call.ok) {
           return jsonRpcHttp(rpcError(id, RpcErrorCode.invalidParams, call.message), 400);

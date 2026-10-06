@@ -331,11 +331,11 @@ Omit `key` for a pure competing pool with no ordering.
 Protocol ids: `memory` · `redis` · `postgres` · `nats`. Defaults (when `oke.config.ts` omits
 `drivers.signal`):
 
-| Env    | Default  | Boot today                                                              |
-| ------ | -------- | ----------------------------------------------------------------------- |
-| `dev`  | `redis`  | Emit relays to Redis; consume / live / drain use a process-local outbox |
-| `test` | `memory` | In-process bus                                                          |
-| `prod` | `redis`  | Same redis honesty as `dev`                                             |
+| Env    | Default  | Boot today                                                                       |
+| ------ | -------- | -------------------------------------------------------------------------------- |
+| `dev`  | `redis`  | Emit relays to Redis. `once` consume is a consumer group (`XREADGROUP` / `XACK`) |
+| `test` | `memory` | In-process bus                                                                   |
+| `prod` | `redis`  | Same redis path as `dev`                                                         |
 
 ```typescript title="oke.config.ts"
 export default defineConfig({
@@ -345,8 +345,10 @@ export default defineConfig({
 });
 ```
 
-`postgres` and `nats` fail loud at boot until a native bind ships — never silently fall back to
-`memory`. Prefer `memory` for tests; pin `redis` when Compose provides Redis.
+`postgres` binds Bun.SQL and the scheduler polls `drain` (`FOR UPDATE SKIP LOCKED`). Bun.SQL has no
+`LISTEN` / `NOTIFY`. `nats` still fails loud at boot — never silently fall back to `memory`. Prefer
+`memory` for tests; pin `redis` when Compose provides Redis. Live history stays on the emitting
+process; `once` is the competing path.
 
 ## Troubleshooting
 
@@ -383,15 +385,14 @@ export default defineConfig({
   consumers](#competing-consumers-once-vs-broadcast).
 </Accordion>
 
-<Accordion title='oke boot: signal driver "postgres" / "nats"'>
-  Those ids are reserved but not bound for production yet. Use `"memory"` or `"redis"`, or inject a
-  custom `elements.signal` runtime.
+<Accordion title='oke boot: signal driver "postgres" needs DATABASE_URL'>
+  `drivers.signal` is `postgres` and neither `DATABASE_URL` nor `OKE_STORE_SQL_URL` is set. Boot
+  polls `drain` on that connection. There is no `LISTEN` / `NOTIFY` requirement.
 </Accordion>
 
-<Accordion title="redis Signal — process-local consume">
-  Boot warns that redis emit relays to Redis while consume / live / drain stay process-local.
-  Multi-instance competing consumers need a shared durable outbox path (or a single consumer
-  instance) until Redis Streams consume ships.
+<Accordion title='oke boot: signal driver "nats"'>
+  `nats` has no production client yet. Use `"memory"`, `"redis"`, or `"postgres"`, or inject a
+  custom `elements.signal` runtime.
 </Accordion>
 
 </Accordions>

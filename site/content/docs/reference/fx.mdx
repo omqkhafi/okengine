@@ -158,7 +158,13 @@ on(
 | `fx.auth.upsertTenantRole({ tenantId, roleName, scopes })`                     | `write` `auth:tenants`  | Application scopes only — `console:*` is unknown_scope                                             |
 
 `fx.call` starts the callee with an **empty** `fx.auth` (fail-closed) and propagates `fx.tenant.id`.
-Read `fx.principal` for audit — it does not copy into `fx.auth`.
+Read `fx.principal` for audit — it does not copy into `fx.auth`. Passing a Flow handle types
+`input` and the result. A string name stays `Promise<unknown>`.
+
+`fx.store(db).transaction(async (tx) => { … })` pins one SQL connection. `fx.emit` inside the
+callback stages on the signal outbox and publishes after commit. A throw rolls that batch back.
+`fx.store(db).run(builder)` runs a Drizzle builder through `toSQL()`. Joins stay on that builder;
+the hand-rolled chain does not grow a join API. Inference still records every joined table.
 
 <Callout>
   Gates never consult `fx.principal`. `return fx.fail(...)` is a `FlowFailure`; an unhandled `throw`
@@ -281,9 +287,11 @@ Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400
 
 ## Cache
 
-Read-only flows cache automatically from inferred or ledgered `reads` — no
-`fx.cache` call and no `cache:` default on the flow. Writes invalidate those
-keys. Use `cache: false` to opt out, or `cache: "30s"` for a TTL.
+Pure store-read flows cache by default. A send, emit, fetch, vault read, ask,
+decide, or `fx.call` is never cached. The key includes tenant, locale, scopes,
+and membership roles. Writes through `fx` invalidate those keys. `cache: false`
+always disables. `oke({ cache: { auto: false } })` turns the default off.
+Cross-instance invalidation and out-of-band writes are not covered.
 
 `fx.cache` is the manual (tier-3) surface:
 

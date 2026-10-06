@@ -265,6 +265,18 @@ export interface SignalOpenOptions {
   readonly nats?: SignalNatsClientLike;
   /** Outbox SQL for redis/nats relay (defaults to in-process). */
   readonly outboxSql?: unknown;
+  /**
+   * When the SQL client has no `LISTEN`, poll `drain` on this interval (ms).
+   * `0` or omitted with a `listen` client uses notifications only.
+   */
+  readonly pollMs?: number;
+  /**
+   * Redis `once` consume via a consumer group (`xreadgroup` / `xack`)
+   * instead of the process-local outbox. Boot sets this for `drivers.signal: redis`.
+   */
+  readonly compete?: boolean;
+  /** Consumer name inside the redis group. Defaults to `"local"`. */
+  readonly consumerId?: string;
 }
 
 /**

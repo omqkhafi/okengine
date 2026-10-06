@@ -17,6 +17,7 @@ import {
   type JsonStreamResult,
 } from "./json-result.ts";
 import type { Effects, ResourceRef, SignalResourceRef } from "../manifest/types.ts";
+import type { FlowInput, FlowOutput } from "./flow.ts";
 import { isMcpToolRef } from "../manifest/mcp-ref.ts";
 import type { QueryPageSpec } from "./list-page.ts";
 import type {
@@ -36,6 +37,7 @@ import { rlsIdentityFromAuth } from "../elements/store.ts";
 import type { RlsIdentity } from "../drivers/pg-rls.ts";
 import type { SignalDecl, SignalRuntime } from "../elements/signal.ts";
 import type { DeadLetter, SignalEmitOptions } from "../drivers/signal-types.ts";
+import { currentSignalTransaction } from "./signal-tx.ts";
 import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AgentApprovalResolveResult } from "../elements/ai/approval.ts";
@@ -171,6 +173,12 @@ export type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 
 /** Named ref: plain string or `{ name }` element handle (optional pin). */
 export type NamedRef = string | { readonly name: string; readonly version?: number };
+
+/** Input of {@link Fx.call}: the flow's input, or `unknown` for a name. */
+type FxCallInput<F> = FlowInput<F>;
+
+/** Result of {@link Fx.call}: the flow's output, or `unknown` for a name. */
+type FxCallResult<F> = Promise<FlowOutput<F>>;
 
 /** Resolve a {@link NamedRef} to its string id (`name@version` when pinned). */
 export function resolveName(ref: NamedRef): string {
@@ -768,7 +776,7 @@ export interface Fx {
    * @param flow - Flow name or handle
    * @param input - Input payload
    */
-  call(flow: NamedRef, input?: unknown): Promise<unknown>;
+  call<F extends NamedRef>(flow: F, input?: FxCallInput<F>): FxCallResult<F>;
   /**
    * Query the Runs wide-event store (records `read` on `"runs"`).
    * Requires a bound runs runtime and `effects.reads` including `"runs"`.
@@ -790,10 +798,6 @@ export interface Fx {
   /**
    * Send a provider-managed SMS OTP (records `send` on `sms-otp`).
    *
-   * Vendor extra (Taqnyat Verify API) — requires a bound SMS driver that
-   * supports provider-managed OTP. Dry-run records would-have-fired without
-   * contacting the provider.
-   *
    * @param opts - Recipient + requestId (+ lang / note / from)
    */
   sendOtp(opts: FxSendOtpOptions): Promise<{ ok: true }>;
@@ -805,9 +809,6 @@ export interface Fx {
   verifyOtp(opts: FxVerifyOtpOptions): Promise<{ ok: true }>;
   /**
    * Deliver an app-owned OTP across declared channels (records `send` on `auth-otp`).
-   *
-   * Tier-2 only — uses Channel `deliverOtp` (sently FallbackTransport). Pass
-   * `only` for explicit user resend (single channel, no cross-medium failover).
    *
    * @param opts - Channels, templates, addresses, OTP data
    */
@@ -1407,6 +1408,11 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           gated,
           capability,
           ask: (model, input) => fx.ask(model, input),
+          beginSignal: async () => {
+            const bus = options.signalRuntime?.bus;
+            if (!bus) return undefined;
+            return bus.begin();
+          },
         });
       }
 
@@ -1783,13 +1789,18 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     emit(signal: NamedRef, payload?: unknown, emitOptions?: SignalEmitOptions) {
       const name = resolveName(signal);
       return gated("emit", name, async () => {
+        const merged: SignalEmitOptions = {
+          ...emitOptions,
+          ...(options.runId !== undefined && emitOptions?.parentRunId === undefined
+            ? { parentRunId: options.runId }
+            : {}),
+        };
+        const pending = currentSignalTransaction();
+        if (pending) {
+          await pending.emit(name, payload, merged);
+          return;
+        }
         if (options.signalRuntime) {
-          const merged: SignalEmitOptions = {
-            ...emitOptions,
-            ...(options.runId !== undefined && emitOptions?.parentRunId === undefined
-              ? { parentRunId: options.runId }
-              : {}),
-          };
           await options.signalRuntime.emit(name, payload, merged);
         }
       });
@@ -1815,7 +1826,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         signalRuntime: options.signalRuntime,
       }) as JsonStreamResult;
     },
-    call(flow, input) {
+    call<F extends NamedRef>(flow: F, input?: FxCallInput<F>): FxCallResult<F> {
       const name = resolveName(flow);
       return gated("call", name, async () => {
         if (isMcpToolRef(name)) {
@@ -1828,7 +1839,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           return options.callHandler(name, input);
         }
         return undefined;
-      });
+      }) as FxCallResult<F>;
     },
     clock,
     vault: vaultSurface,

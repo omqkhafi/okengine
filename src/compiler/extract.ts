@@ -2194,6 +2194,7 @@ function registerFlow(args: {
         flowName: name,
         file: args.file.path,
         resolveCallee: (callee, file) => args.scope.fxIndex.resolve(file, callee),
+        resolveFlowRef: (localName, file) => args.scope.fxIndex.flowRef(file, localName),
       })
     : {
         effects: {} as Effects,
@@ -2202,6 +2203,7 @@ function registerFlow(args: {
         cacheIneligible: false,
         nondeterministic: false,
         readsUserId: false,
+        bareIrreversible: [] as ("fetch" | "send")[],
       };
 
   let effects: Effects | undefined;
@@ -2262,7 +2264,15 @@ function registerFlow(args: {
   const line = lineAt(args.file.source, args.flowCall.start ?? 0);
   flow.source = `${args.file.path}:${line}`;
 
-  if (boolProp(opts, "durable")) flow.durable = true;
+  if (boolProp(opts, "durable")) {
+    flow.durable = true;
+    const bare = inferred.bareIrreversible[0];
+    if (bare !== undefined) {
+      throw new Error(
+        `OKE1901: durable flow "${name}" calls fx.${bare} outside fx.step. Wrap fx.fetch and fx.send in fx.step.`,
+      );
+    }
+  }
   assertDecisionPlacement(name, flow, args.scope);
   if (typeof liveFromTrigger === "string") {
     flow.live = liveFromTrigger;

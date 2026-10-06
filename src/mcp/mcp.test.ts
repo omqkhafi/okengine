@@ -15,6 +15,7 @@ import { asData, isDataEnvelope, MCP_DATA_KIND } from "./data.ts";
 import { authenticateMcpRequest, mintMcpSession, MCP_AUDIENCE } from "./session.ts";
 import { createMcpServer } from "./server.ts";
 import { createToolRuntime } from "./tools.ts";
+import { MCP_CLIENT_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION } from "./versions.ts";
 
 const SECRET = "mcp-test-secret";
 
@@ -313,5 +314,87 @@ describe("MCP HTTP server", () => {
     };
     expect(callBody.result.structuredContent.kind).toBe("data");
     expect(callBody.result.structuredContent.content.manifest.app).toBe("skyport");
+  });
+
+  test("initialize advertises 2024-11-05 and rejects a version the server does not implement", async () => {
+    const store = createSessionStore();
+    const issued = await mintMcpSession({
+      store,
+      secret: SECRET,
+      principalId: "op1",
+      scopes: ["console:*"],
+    });
+    const server = createMcpServer({
+      sessions: store,
+      secret: SECRET,
+      context: {
+        getManifest: () => SAMPLE_MANIFEST,
+        listRuns: async () => [],
+      },
+    });
+    const headers = {
+      host: "127.0.0.1:6535",
+      authorization: `Bearer ${issued.accessToken}`,
+      "content-type": "application/json",
+    };
+    const init = await server.fetch(
+      new Request("http://127.0.0.1:6535/mcp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: { protocolVersion: MCP_PROTOCOL_VERSION },
+        }),
+      }),
+    );
+    expect(init.status).toBe(200);
+    const initBody = (await init.json()) as { result: { protocolVersion: string } };
+    expect(initBody.result.protocolVersion).toBe("2024-11-05");
+    const omitted = await server.fetch(
+      new Request("http://127.0.0.1:6535/mcp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "initialize",
+          params: {},
+        }),
+      }),
+    );
+    const omittedBody = (await omitted.json()) as { result: { protocolVersion: string } };
+    expect(omittedBody.result.protocolVersion).toBe("2024-11-05");
+    const rejected = await server.fetch(
+      new Request("http://127.0.0.1:6535/mcp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "initialize",
+          params: { protocolVersion: MCP_CLIENT_PROTOCOL_VERSION },
+        }),
+      }),
+    );
+    expect(rejected.status).toBe(400);
+    const call = await server.fetch(
+      new Request("http://127.0.0.1:6535/mcp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 4,
+          method: "tools/call",
+          params: {
+            name: "oke.manifest.get",
+            arguments: {},
+            protocolVersion: MCP_PROTOCOL_VERSION,
+          },
+        }),
+      }),
+    );
+    expect(call.status).toBe(200);
   });
 });

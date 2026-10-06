@@ -174,42 +174,156 @@ export function isStoreResourceRef(ref: string): ref is ResourceRef {
   return STORE_REF.test(ref) && ref !== "runs";
 }
 
+/** Effect list keys that disqualify tier-1 auto-cache when non-empty. */
+const DISQUALIFYING_EFFECTS = [
+  "writes",
+  "emits",
+  "sends",
+  "asks",
+  "embeds",
+  "secrets",
+  "calls",
+  "fetches",
+  "decides",
+] as const satisfies readonly (keyof Effects)[];
+
 /**
- * Store reads / writes / asks recorded on one invocation's ledger.
+ * Store and non-store effects recorded on one invocation's ledger.
  *
- * Used when the flow has no stamped `effects` (open capability token) so
- * the cache cycle still runs from what `fx.store` actually touched.
+ * Side effects stay on the result so auto-cache can refuse a flow that
+ * also fetched, emitted, or called — a learned store read is not enough.
  *
  * @param entries - Ledger entries from the invocation
  */
 export function effectsFromLedger(
   entries: readonly { readonly kind: string; readonly resource: string }[],
 ): Effects {
-  const reads: ResourceRef[] = [];
-  const writes: ResourceRef[] = [];
+  const reads: string[] = [];
+  const writes: string[] = [];
   const asks: string[] = [];
-  const seenRead = new Set<string>();
-  const seenWrite = new Set<string>();
+  const emits: string[] = [];
+  const sends: string[] = [];
+  const embeds: string[] = [];
+  const secrets: string[] = [];
+  const calls: string[] = [];
+  const fetches: string[] = [];
+  const decides: string[] = [];
+  const seen = new Set<string>();
+  const push = (bucket: string[], kind: string, resource: string): void => {
+    const key = `${kind}:${resource}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    bucket.push(resource);
+  };
   for (const entry of entries) {
-    if (entry.kind === "ask") {
-      asks.push(entry.resource);
-      continue;
-    }
-    if (!isStoreResourceRef(entry.resource)) continue;
-    if (entry.kind === "read" && !seenRead.has(entry.resource)) {
-      seenRead.add(entry.resource);
-      reads.push(entry.resource);
-    }
-    if (entry.kind === "write" && !seenWrite.has(entry.resource)) {
-      seenWrite.add(entry.resource);
-      writes.push(entry.resource);
+    switch (entry.kind) {
+      case "read":
+        push(reads, entry.kind, entry.resource);
+        break;
+      case "write":
+        push(writes, entry.kind, entry.resource);
+        break;
+      case "ask":
+        push(asks, entry.kind, entry.resource);
+        break;
+      case "emit":
+        push(emits, entry.kind, entry.resource);
+        break;
+      case "send":
+        push(sends, entry.kind, entry.resource);
+        break;
+      case "embed":
+        push(embeds, entry.kind, entry.resource);
+        break;
+      case "secret":
+        push(secrets, entry.kind, entry.resource);
+        break;
+      case "call":
+        push(calls, entry.kind, entry.resource);
+        break;
+      case "fetch":
+        push(fetches, entry.kind, entry.resource);
+        break;
+      case "decide":
+        push(decides, entry.kind, entry.resource);
+        break;
+      default:
+        break;
     }
   }
   return {
+    ...(reads.length > 0 ? { reads: reads as Effects["reads"] } : {}),
+    ...(writes.length > 0 ? { writes: writes as Effects["writes"] } : {}),
+    ...(asks.length > 0 ? { asks } : {}),
+    ...(emits.length > 0 ? { emits } : {}),
+    ...(sends.length > 0 ? { sends } : {}),
+    ...(embeds.length > 0 ? { embeds } : {}),
+    ...(secrets.length > 0 ? { secrets } : {}),
+    ...(calls.length > 0 ? { calls } : {}),
+    ...(fetches.length > 0 ? { fetches } : {}),
+    ...(decides.length > 0 ? { decides } : {}),
+  };
+}
+
+/**
+ * True when every effect is a store read (`sql:` / `kv:` / `files:` / `index:`).
+ *
+ * Sends, emits, fetches, vault reads, asks, decides, calls, writes, and
+ * non-store reads (`runs`, `signal:`) are not cacheable.
+ *
+ * @param effects - Declared or ledgered effects
+ */
+export function autoCachePure(effects: Effects | undefined): boolean {
+  if (!effects) return false;
+  for (const key of DISQUALIFYING_EFFECTS) {
+    if ((effects[key]?.length ?? 0) > 0) return false;
+  }
+  const reads = effects.reads ?? [];
+  if (reads.length === 0) return false;
+  return reads.every((ref) => isStoreResourceRef(ref));
+}
+
+/**
+ * Union two effect bags. Used so a ledgered fetch cannot be dropped
+ * before the auto-cache eligibility check.
+ *
+ * @param left - Declared or previously resolved effects
+ * @param right - Ledgered effects
+ */
+export function mergeEffects(left: Effects, right: Effects): Effects {
+  const reads = union(left.reads, right.reads);
+  const writes = union(left.writes, right.writes);
+  const emits = union(left.emits, right.emits);
+  const sends = union(left.sends, right.sends);
+  const asks = union(left.asks, right.asks);
+  const embeds = union(left.embeds, right.embeds);
+  const secrets = union(left.secrets, right.secrets);
+  const calls = union(left.calls, right.calls);
+  const fetches = union(left.fetches, right.fetches);
+  const decides = union(left.decides, right.decides);
+  return {
     ...(reads.length > 0 ? { reads } : {}),
     ...(writes.length > 0 ? { writes } : {}),
+    ...(emits.length > 0 ? { emits } : {}),
+    ...(sends.length > 0 ? { sends } : {}),
     ...(asks.length > 0 ? { asks } : {}),
+    ...(embeds.length > 0 ? { embeds } : {}),
+    ...(secrets.length > 0 ? { secrets } : {}),
+    ...(calls.length > 0 ? { calls } : {}),
+    ...(fetches.length > 0 ? { fetches } : {}),
+    ...(decides.length > 0 ? { decides } : {}),
   };
+}
+
+/**
+ * Stable union of two effect lists.
+ *
+ * @param left - First list
+ * @param right - Second list
+ */
+function union<T extends string>(left?: readonly T[], right?: readonly T[]): T[] {
+  if ((left?.length ?? 0) === 0 && (right?.length ?? 0) === 0) return [];
+  return [...new Set([...(left ?? []), ...(right ?? [])])];
 }
 
 /**
@@ -223,6 +337,9 @@ export function resolveCacheEffects(
   declared: Effects | undefined,
   learnedReads: readonly ResourceRef[] | undefined,
 ): Effects {
+  if (declared && !autoCachePure(declared) && hasAnyEffect(declared)) {
+    return declared;
+  }
   const declaredReads = (declared?.reads ?? []).filter((r) => isStoreResourceRef(r));
   if (declaredReads.length > 0 || (declared?.writes?.length ?? 0) > 0) {
     return declared ?? {};
@@ -231,6 +348,16 @@ export function resolveCacheEffects(
     return { reads: [...learnedReads] };
   }
   return declared ?? {};
+}
+
+/**
+ * Whether the effect bag records anything.
+ *
+ * @param effects - Declared or ledgered effects
+ */
+function hasAnyEffect(effects: Effects): boolean {
+  const keys = ["reads", ...DISQUALIFYING_EFFECTS] as const;
+  return keys.some((key) => (effects[key]?.length ?? 0) > 0);
 }
 
 /**
@@ -256,47 +383,81 @@ export function tier1Lookup<T>(
 }
 
 /**
+ * Caller dimensions stamped into a tier-1 cache key.
+ *
+ * Segments are always present so an empty tenant cannot collide with a set one.
+ */
+export interface Tier1Caller {
+  /** Authenticated user id. Empty when anonymous. */
+  readonly userId?: string | null;
+  /** Active tenant id. Empty when tenancy is off. */
+  readonly tenantId?: string | null;
+  /** Resolved request locale. */
+  readonly locale?: string | null;
+  /** Effective scopes, including the tenant-role union. */
+  readonly scopes?: Iterable<string>;
+  /**
+   * Membership role names. Cache identity only — gates do not read this.
+   */
+  readonly roles?: Iterable<string>;
+}
+
+/**
  * Whether a flow should use automatic tier-1 cache.
  *
- * Read-only flows (inferred, declared, or ledgered `reads`, no `writes`)
- * cache by default. Opt out with `cache: false`. Mutations, AI asks,
- * durable flows, and empty effect sets stay uncached — no `cache: "30s"`
- * or hand-declared `effects` required on the flow.
+ * On by default for a pure store read that is not durable. `auto: false`
+ * turns the app default off; a flow can still opt in with `cache: true` or a
+ * duration. `cache: false` always disables. Sends, emits, fetches, secrets,
+ * calls, asks, embeds, decides, and writes are never cached.
  *
- * @param options - Flow cache flag, durability, and effect set
+ * @param options - Flow cache flag, app switch, durability, and effect set
  */
 export function autoCacheEligible(options: {
   readonly cache?: boolean | string;
+  /** App-level switch. Omitted means on. `false` turns auto-cache off. */
+  readonly auto?: boolean;
   readonly durable?: boolean;
   readonly effects?: Effects;
 }): boolean {
   if (options.cache === false) return false;
   if (options.durable === true) return false;
-  const effects = options.effects ?? {};
-  if ((effects.asks?.length ?? 0) > 0) return false;
-  if ((effects.writes?.length ?? 0) > 0) return false;
-  const reads = (effects.reads ?? []).filter((r) => isStoreResourceRef(r));
-  return reads.length > 0;
+  if (options.auto === false && options.cache !== true && typeof options.cache !== "string") {
+    return false;
+  }
+  return autoCachePure(options.effects);
 }
 
 /**
  * Dimension suffixes for a flow-scoped tier-1 key.
  *
- * Format after {@link computedCacheKey}: `computed:{resource}/{flow}/{input}[/{userId}]`.
+ * Format after {@link computedCacheKey}:
+ * `computed:{resource}/{flow}/{input}/{userId}/t:{tenant}/l:{locale}/s:{scopes}/r:{roles}`.
  * Invalidation still keys off the resource segment.
+ *
+ * A string third argument is the user id (older call shape).
  *
  * @param flowName - Flow id
  * @param input - Validated flow input
- * @param userId - Caller id when present (per-user lists)
+ * @param caller - Caller identity, or a user id string
  */
 export function tier1FlowDims(
   flowName: string,
   input: unknown,
-  userId?: string | null,
+  caller?: Tier1Caller | string | null,
 ): readonly string[] {
-  const dims = [flowName, fingerprintInput(input)];
-  if (userId) dims.push(userId);
-  return dims;
+  const identity: Tier1Caller =
+    typeof caller === "string" || caller == null ? { userId: caller ?? null } : caller;
+  const scopes = [...(identity.scopes ?? [])].sort();
+  const roles = [...(identity.roles ?? [])].sort();
+  return [
+    flowName,
+    fingerprintInput(input),
+    identity.userId ?? "",
+    `t:${identity.tenantId ?? ""}`,
+    `l:${identity.locale ?? ""}`,
+    `s:${scopes.join(",")}`,
+    `r:${roles.join(",")}`,
+  ];
 }
 
 /**
@@ -305,18 +466,18 @@ export function tier1FlowDims(
  * @param effects - Read effects
  * @param flowName - Flow id
  * @param input - Validated flow input
- * @param userId - Caller id when present
+ * @param caller - Caller identity, or a user id string
  */
 export function tier1DimsByResource(
   effects: Effects,
   flowName: string,
   input: unknown,
-  userId?: string | null,
+  caller?: Tier1Caller | string | null,
 ): Readonly<Record<string, readonly string[]>> {
-  const dims = tier1FlowDims(flowName, input, userId);
+  const dims = tier1FlowDims(flowName, input, caller);
   const out: Record<string, readonly string[]> = {};
   for (const resource of effects.reads ?? []) {
-    if (resource === "runs") continue;
+    if (!isStoreResourceRef(resource)) continue;
     out[resource] = dims;
   }
   return out;

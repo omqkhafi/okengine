@@ -220,17 +220,17 @@ Second argument to `flow(name, options)` — or the only argument to a nameless 
 Invoke contracts (`in` / `out` / `errors` / `breaking`) belong on the exposure — see
 [Contracts](#contracts) below.
 
-| Option         | Type                                   | Default                   | Meaning                                                                         |
-| -------------- | -------------------------------------- | ------------------------- | ------------------------------------------------------------------------------- |
-| `do`           | `(input, fx) => output \| FlowFailure` | _(required)_              | Handler. Missing `do` throws `flow() expected an options bag with a do handler` |
-| `durable`      | `boolean`                              | `false`                   | Journal `fx.step` / sleep / gated `fx` calls                                    |
-| `retry`        | `FxRetryOptions`                       | omitted                   | Whole-`do` retry on throw (same journal when durable)                           |
-| `cache`        | `boolean \| string`                    | omitted (auto)            | Read-only Flows cache automatically; `false` opts out; `"30s"` adds TTL         |
-| `compensate`   | `(ctx, fx) => unknown`                 | omitted                   | After LIFO `{ undo }`, before the run commits `failed`                          |
-| `plane`        | `"user" \| "operator"`                 | `"user"`                  | Operator bypasses RLS; user must not `fx.call` operator                         |
-| `effects`      | `Effects`                              | inferred                  | Capability token — write this only when inference cannot see the body           |
-| `slo`          | `{ availability?, latency? }`          | omitted                   | Manifest metadata (Console / docs)                                              |
-| `tenantScoped` | `boolean`                              | `true` when tenancy is on | `false` skips tenant-role scope union                                           |
+| Option         | Type                                   | Default                   | Meaning                                                                                                          |
+| -------------- | -------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `do`           | `(input, fx) => output \| FlowFailure` | _(required)_              | Handler. Missing `do` throws `flow() expected an options bag with a do handler`                                  |
+| `durable`      | `boolean`                              | `false`                   | Journal `fx.step` / sleep / gated `fx` calls                                                                     |
+| `retry`        | `FxRetryOptions`                       | omitted                   | Whole-`do` retry on throw (same journal when durable)                                                            |
+| `cache`        | `boolean \| string`                    | omitted (on when pure)    | Pure store reads cache; `false` disables; `"30s"` sets a TTL; app `cache: { auto: false }` turns the default off |
+| `compensate`   | `(ctx, fx) => unknown`                 | omitted                   | After LIFO `{ undo }`, before the run commits `failed`                                                           |
+| `plane`        | `"user" \| "operator"`                 | `"user"`                  | Operator bypasses RLS; user must not `fx.call` operator                                                          |
+| `effects`      | `Effects`                              | inferred                  | Capability token — write this only when inference cannot see the body                                            |
+| `slo`          | `{ availability?, latency? }`          | omitted                   | Manifest metadata (Console / docs)                                                                               |
+| `tenantScoped` | `boolean`                              | `true` when tenancy is on | `false` skips tenant-role scope union                                                                            |
 
 **Consequence:** `durable: true` disables automatic read-cache for that Flow.
 
@@ -438,12 +438,12 @@ durable Flow, or split with `fx.emit`. See [Workflows](/docs/elements/flow/workf
 
 <Tab value="Cache">
 
-Read-only Flows (Store `reads`, no `writes`, no `asks`, not durable) cache automatically.
-No `cache:` option required. Mutations and `durable: true` stay uncached:
+A pure store-read Flow caches on its own. A send, emit, fetch, vault read, ask,
+decide, or `fx.call` is never cached. The key includes the flow, the input, the
+user, the tenant, the locale, and the caller's scopes and membership roles.
 
 ```typescript
 flow("catalog.get", {
-  cache: "30s",
   do: async ({ id }, fx) => {
     const [row] = await fx.store(db).select().from(products).where(eq(products.id, id));
     return row;
@@ -451,7 +451,10 @@ flow("catalog.get", {
 });
 ```
 
-`cache: false` opts out. A duration string adds TTL on top of write invalidation.
+`cache: false` always disables. A duration string adds TTL on top of write
+invalidation. `oke({ cache: { auto: false } })` turns the default off; a Flow
+can still set `cache: true` or `"30s"`. Cross-instance invalidation and writes
+that skip `fx` are not covered.
 
 </Tab>
 
@@ -570,9 +573,10 @@ Default is `true` once `gate.auth.tenant` is on.
 </Accordion>
 
 <Accordion title="Read-only Flow never cache-hits">
-  Auto-cache needs Store `reads`, no `writes`, no `asks`, and `durable` off. Empty effect sets stay
-  uncached. Opt in with a duration (`cache: "30s"`) only after a real read is inferred — or pass
-  `cache: false` to disable.
+  A pure Store read caches unless the Flow sets `cache: false` or the app sets
+  `cache: { auto: false }`. A send, emit, fetch, secret, ask, decide, call, or write
+  is never cached, and `durable: true` is never cached. The key includes tenant,
+  locale, scopes, and roles, so a hit for one caller is a miss for another.
 </Accordion>
 
 <Accordion title='cross-plane call: user flow "…" calls operator flow "…"'>

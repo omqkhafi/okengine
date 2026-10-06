@@ -3,8 +3,9 @@
  *
  * Emit still enrols in a transactional outbox (semantics never regress).
  * After commit, a relay pushes to Redis Streams (`once`) or pub/sub
- * (`broadcast` / `live`). Consumer delivery is driven from the outbox so
- * exactly-once / fan-out physics stay correct under `drain()`.
+ * (`broadcast` / `live`). With `compete: true`, `once` delivery is
+ * `XREADGROUP` / `XACK` (pending reclaim on the next drain). Broadcast
+ * and live stay on the outbox plus pub/sub.
  *
  * Production bind: {@link createBunSignalRedisClient} (typed `publish` /
  * `subscribe` / `xadd` / `xreadgroup` / `xack` / `xgroup` on Bun ≥1.4).
@@ -12,8 +13,12 @@
 
 import { createSignalEngine } from "./signal-engine.ts";
 import type {
+  DeadLetter,
   SignalBus,
   SignalDriver,
+  SignalFailureReason,
+  SignalHandler,
+  SignalMessage,
   SignalOpenOptions,
   SignalRedisClientLike,
 } from "./signal-types.ts";
@@ -68,6 +73,32 @@ export function createBunSignalRedisClient(url?: string): SignalRedisClientLike 
       }
     },
     async xreadgroup(group, consumer, key, count) {
+      try {
+        await redis.send("XAUTOCLAIM", [
+          key,
+          group,
+          consumer,
+          "5000",
+          "0-0",
+          "COUNT",
+          String(count),
+        ]);
+      } catch {
+        /* Idle reclaim is best-effort; same-consumer pending still returns below. */
+      }
+      const pending = parseXreadgroupReply(
+        await typedStreams(redis).xreadgroup(
+          "GROUP",
+          group,
+          consumer,
+          "COUNT",
+          count,
+          "STREAMS",
+          key,
+          "0",
+        ),
+      );
+      if (pending.length > 0) return pending;
       const reply = await typedStreams(redis).xreadgroup(
         "GROUP",
         group,
@@ -138,6 +169,10 @@ export function createSignalRedisFake(): SignalRedisClientLike & {
   const streams = new Map<string, Array<{ id: string; fields: Record<string, string> }>>();
   const groups = new Map<string, Set<string>>();
   const claimed = new Map<string, Set<string>>();
+  const pending = new Map<
+    string,
+    Array<{ id: string; fields: Record<string, string>; consumer: string }>
+  >();
   const subs = new Map<string, Set<(message: string) => void>>();
   const published: Array<{ channel: string; message: string }> = [];
   let seq = 0;
@@ -160,6 +195,7 @@ export function createSignalRedisFake(): SignalRedisClientLike & {
       const gkey = `${key}::${group}`;
       if (!groups.has(gkey)) groups.set(gkey, new Set());
       if (!claimed.has(gkey)) claimed.set(gkey, new Set());
+      if (!pending.has(gkey)) pending.set(gkey, []);
     },
     async xreadgroup(group, consumer, key, count) {
       const gkey = `${key}::${group}`;
@@ -167,21 +203,36 @@ export function createSignalRedisFake(): SignalRedisClientLike & {
         await this.xgroupCreate(key, group, "0", { mkstream: true });
       }
       const seen = claimed.get(gkey)!;
+      const held = pending.get(gkey)!;
       const list = streams.get(key) ?? [];
       const out: Array<{ id: string; fields: Record<string, string> }> = [];
+      for (const entry of held) {
+        if (entry.consumer !== consumer) continue;
+        out.push({ id: entry.id, fields: { ...entry.fields } });
+        if (out.length >= count) return out;
+      }
       for (const entry of list) {
         if (seen.has(entry.id)) continue;
         seen.add(entry.id);
-        out.push({
-          id: entry.id,
-          fields: { ...entry.fields, _consumer: consumer },
-        });
+        held.push({ id: entry.id, fields: { ...entry.fields }, consumer });
+        out.push({ id: entry.id, fields: { ...entry.fields } });
+        if (out.length >= count) return out;
+      }
+      for (const entry of held) {
+        if (entry.consumer === consumer) continue;
+        entry.consumer = consumer;
+        out.push({ id: entry.id, fields: { ...entry.fields } });
         if (out.length >= count) break;
       }
       return out;
     },
-    async xack() {
-      return 1;
+    async xack(key, group, id) {
+      const gkey = `${key}::${group}`;
+      const held = pending.get(gkey);
+      if (!held) return 0;
+      const next = held.filter((entry) => entry.id !== id);
+      pending.set(gkey, next);
+      return next.length === held.length ? 0 : 1;
     },
     async publish(channel, message) {
       published.push({ channel, message });
@@ -214,6 +265,93 @@ export async function openRedisSignal(options: SignalOpenOptions): Promise<Signa
   // binds Bun.redis (Streams via send until Bun ships typed xadd).
   const redis = options.redis ?? createBunSignalRedisClient();
   const outbox = await createSignalEngine("redis", options);
+  const compete = options.compete === true;
+  const onceHandlers = new Map<string, SignalHandler[]>();
+  const streamDead: DeadLetter[] = [];
+  const attemptById = new Map<string, number>();
+  const now = options.now ?? (() => Date.now());
+
+  if (compete) {
+    for (const [name, decl] of options.signals) {
+      if (decl.delivery !== "once") continue;
+      outbox.subscribe(name, "oke-relay-ack", async () => {});
+      onceHandlers.set(name, []);
+    }
+  }
+
+  function streamMessage(
+    name: string,
+    id: string,
+    payload: unknown,
+    attempt: number,
+  ): SignalMessage {
+    const at = now();
+    return {
+      id,
+      signal: name,
+      payload,
+      delivery: "once",
+      attempts: attempt,
+      failures: [],
+      createdAt: at,
+      availableAt: at,
+      status: "inflight",
+    };
+  }
+
+  async function drainOnceStreams(): Promise<void> {
+    const group = "oke";
+    const consumer = options.consumerId ?? "local";
+    for (const [name, decl] of options.signals) {
+      if (decl.delivery !== "once") continue;
+      const key = `oke:signal:${name}`;
+      await redis.xgroupCreate(key, group, "0", { mkstream: true });
+      const rows = await redis.xreadgroup(group, consumer, key, 32);
+      for (const row of rows) {
+        const handler = onceHandlers.get(name)?.[0];
+        let payload: unknown = null;
+        try {
+          payload = JSON.parse(row.fields.payload ?? "null");
+        } catch {
+          payload = null;
+        }
+        const attempt = (attemptById.get(row.id) ?? 0) + 1;
+        attemptById.set(row.id, attempt);
+        if (!handler) continue;
+        try {
+          await handler(streamMessage(name, row.id, payload, attempt));
+          await redis.xack(key, group, row.id);
+          attemptById.delete(row.id);
+        } catch (err) {
+          const retries = decl.retries ?? 3;
+          if (attempt > retries) {
+            const failure: SignalFailureReason = {
+              code: "handler_error",
+              message: err instanceof Error ? err.message : String(err),
+              at: now(),
+              attempt,
+            };
+            if (decl.deadLetter) {
+              const at = now();
+              streamDead.push({
+                id: row.id,
+                signal: name,
+                payload,
+                delivery: "once",
+                attempts: attempt,
+                failures: [failure],
+                createdAt: at,
+                availableAt: at,
+                status: "dead",
+              });
+            }
+            await redis.xack(key, group, row.id);
+            attemptById.delete(row.id);
+          }
+        }
+      }
+    }
+  }
 
   async function relayToRedis(signal: string, payload: unknown): Promise<void> {
     const decl = options.signals.get(signal);
@@ -252,11 +390,29 @@ export async function openRedisSignal(options: SignalOpenOptions): Promise<Signa
         rollback: () => tx.rollback(),
       };
     },
-    subscribe: (signal, subscriberId, handler) => outbox.subscribe(signal, subscriberId, handler),
+    subscribe(signal, subscriberId, handler) {
+      if (compete && options.signals.get(signal)?.delivery === "once") {
+        const list = onceHandlers.get(signal) ?? [];
+        list.push(handler);
+        onceHandlers.set(signal, list);
+        return Promise.resolve(() => {
+          const next = (onceHandlers.get(signal) ?? []).filter((h) => h !== handler);
+          onceHandlers.set(signal, next);
+        });
+      }
+      return outbox.subscribe(signal, subscriberId, handler);
+    },
     live: (signal, opts) => outbox.live(signal, opts),
     checkLiveResume: (signal, afterId) => outbox.checkLiveResume(signal, afterId),
-    drain: () => outbox.drain(),
-    deadLetters: (s) => outbox.deadLetters(s),
+    async drain() {
+      if (compete) await drainOnceStreams();
+      await outbox.drain();
+    },
+    async deadLetters(s) {
+      const local = streamDead.filter((entry) => entry.signal === s);
+      const rest = await outbox.deadLetters(s);
+      return [...rest, ...local];
+    },
     inspect: (s) => outbox.inspect(s),
     replay: (opts) => outbox.replay(opts),
     discard: (opts) => outbox.discard(opts),

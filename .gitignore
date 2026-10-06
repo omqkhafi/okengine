@@ -11,6 +11,8 @@ node_modules
 !/docs/spec/**
 !/docs/guides/
 !/docs/guides/**
+!/docs/adr/
+!/docs/adr/**
 !site/content/docs/
 !site/content/docs/**
 # Cursor plan files carry macOS `com.apple.provenance` and break Bun's

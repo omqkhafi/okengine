@@ -7,9 +7,11 @@
  * (four-applications · Provisions).
  */
 
+import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { okid } from "../okid.ts";
+import { throwOke } from "./errors.ts";
 import type { DecisionLabelStore } from "./decision-label-store.ts";
 import type { IdempotencyStore } from "./idempotency-store.ts";
 import { JournalSuspend } from "./journal-suspend.ts";
@@ -106,17 +108,31 @@ export interface JournalRun {
   lockedBy?: string;
   /** Lease expiry epoch-ms; a crashed holder's run is reclaimable after this. */
   leaseExpiresAt?: number;
+  /**
+   * Fencing token. Bumped on each acquire that is not a live same-holder renew.
+   * Writes from a previous holder are rejected.
+   */
+  leaseToken?: number;
+  /** Code version stamped at start. Resume fails when the process version differs. */
+  codeVersion?: string;
   readonly createdAt: number;
   updatedAt: number;
   /** Isolation context for resume (`fx.tenant`). */
   tenant?: string | null;
 }
 
+/** Fence presented with every leased journal write. */
+export interface JournalWriteFence {
+  readonly lockedBy: string;
+  readonly leaseToken: number;
+  /** Epoch-ms used to reject an expired holder. */
+  readonly now: number;
+}
+
 /**
  * Run-level lease coordination — same SKIP LOCKED + lazy-reclaim physics as
- * Signal's message claims and Clock's tick claims. No sweeper, no fencing
- * token: at-least-once after lease expiry, journal replay keeps completed
- * steps from re-running.
+ * Signal's message claims and Clock's tick claims. No sweeper. A fencing
+ * token rejects writes from a holder whose lease was reclaimed.
  */
 export interface JournalLeaseStore {
   /**
@@ -218,11 +234,31 @@ export interface JournalStore extends Partial<JournalLeaseStore> {
    */
   get(runId: string): Promise<JournalRun | undefined>;
   /**
-   * Persist a run (create or replace).
+   * Persist a run header (create or replace).
+   *
+   * When {@link JournalStore.appendEntry} is present, `entries` on this
+   * snapshot may be empty — the store keeps previously appended rows.
    *
    * @param run - Run snapshot
+   * @param fence - Required for a leased update. Omitted on the first insert
+   *   and on uncoordinated stores.
    */
-  put(run: JournalRun): Promise<void>;
+  put(run: JournalRun, fence?: JournalWriteFence): Promise<void>;
+  /**
+   * Append one journal entry. Built-in stores implement this so a step does
+   * not rewrite earlier entries.
+   *
+   * @param runId - Run id
+   * @param seq - Zero-based position
+   * @param entry - JSON-safe entry
+   * @param fence - Lease fence when the run is coordinated
+   */
+  appendEntry?(
+    runId: string,
+    seq: number,
+    entry: JournalEntry,
+    fence?: JournalWriteFence,
+  ): Promise<void>;
   /** List all runs (test / console helper). */
   list(): Promise<readonly JournalRun[]>;
 }
@@ -283,8 +319,7 @@ function leaseMethods(
       const map = await load();
       const run = map.get(runId);
       if (!run || !claimable(run, instanceId, now)) return false;
-      run.lockedBy = instanceId;
-      run.leaseExpiresAt = now + leaseMs;
+      holdLease(run, instanceId, now, leaseMs);
       await flush?.(map);
       return true;
     },
@@ -304,8 +339,10 @@ function leaseMethods(
           return { lease: true, leaseExpiresAt: run.leaseExpiresAt };
         }
         const next = update(cloneRun(run)) ?? run;
-        next.lockedBy = instanceId;
-        next.leaseExpiresAt = now + leaseMs;
+        holdLease(next, instanceId, now, leaseMs);
+        if (run.entries.length > 0 && next.entries.length === 0) {
+          (next as { entries: JournalEntry[] }).entries = run.entries;
+        }
         map.set(runId, next);
         await flush?.(map);
         return "ok";
@@ -333,8 +370,7 @@ function leaseMethods(
         )
         .sort((a, b) => (a.wakeAt ?? 0) - (b.wakeAt ?? 0))[0];
       if (!due) return undefined;
-      due.lockedBy = instanceId;
-      due.leaseExpiresAt = now + leaseMs;
+      holdLease(due, instanceId, now, leaseMs);
       await flush?.(map);
       return cloneRun(due);
     },
@@ -363,8 +399,16 @@ export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalS
       const r = runs.get(runId);
       return r ? cloneRun(r) : undefined;
     },
-    async put(run) {
-      runs.set(run.id, cloneRun(run));
+    async put(run, fence) {
+      const existing = runs.get(run.id);
+      assertJournalFence(existing, fence);
+      runs.set(run.id, mergeJournalPut(existing, run));
+    },
+    async appendEntry(runId, seq, entry, fence) {
+      const existing = runs.get(runId);
+      if (!existing) throw new Error(`journal: run "${runId}" not found`);
+      assertJournalFence(existing, fence);
+      appendStoredEntry(existing, seq, entry);
     },
     async list() {
       return [...runs.values()].map(cloneRun);
@@ -420,9 +464,19 @@ export function createFileJournalStore(path: string): JournalStore {
       const r = map.get(runId);
       return r ? cloneRun(r) : undefined;
     },
-    async put(run) {
+    async put(run, fence) {
       const map = await load();
-      map.set(run.id, cloneRun(run));
+      const existing = map.get(run.id);
+      assertJournalFence(existing, fence);
+      map.set(run.id, mergeJournalPut(existing, run));
+      await flush(map);
+    },
+    async appendEntry(runId, seq, entry, fence) {
+      const map = await load();
+      const existing = map.get(runId);
+      if (!existing) throw new Error(`journal: run "${runId}" not found`);
+      assertJournalFence(existing, fence);
+      appendStoredEntry(existing, seq, entry);
       await flush(map);
     },
     async list() {
@@ -478,6 +532,11 @@ export interface CreateJournalOptions {
    * sleeping/finished run never holds a 30s lock.
    */
   readonly lease?: JournalLeaseOptions;
+  /**
+   * Code version stamped on new runs. Resume of a different version fails.
+   * Defaults to the package version.
+   */
+  readonly codeVersion?: string;
 }
 
 /**
@@ -531,6 +590,11 @@ export interface JournalSession {
    */
   readonly epoch: number;
   rewind(): void;
+  /**
+   * Entries already replayed or appended. The row under the cursor is excluded
+   * so a replayed call does not count itself.
+   */
+  recordedBeforeCursor(): readonly JournalEntry[];
   /** Registered per-step undos in persist/replay order (LIFO compensate). */
   undoStack(): readonly JournalUndoFrame[];
   /**
@@ -610,6 +674,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
   const now = options.now ?? (() => Date.now());
   const newId = options.id ?? (() => okid());
   const lease = options.lease;
+  const codeVersion = options.codeVersion ?? packageVersion();
   const coordinated = lease !== undefined && hasJournalLease(options.store);
 
   function openSession(run: JournalRun, leased: boolean): JournalSession {
@@ -619,16 +684,61 @@ export function createJournal(options: CreateJournalOptions): Journal {
     let leaseHeld = leased;
     let registrationPass = false;
     let undoExecution = false;
+    let stepDepth = 0;
+    /** Outer `effect` calls re-enter when the next row was written by a nested call. */
+    let effectDepth = 0;
     const undos: JournalUndoFrame[] = [];
 
-    async function persist(): Promise<void> {
+    function fence(): JournalWriteFence | undefined {
+      if (!leaseHeld || !lease || run.leaseToken === undefined || run.lockedBy === undefined) {
+        return undefined;
+      }
+      return { lockedBy: run.lockedBy, leaseToken: run.leaseToken, now: now() };
+    }
+
+    async function persist(entry?: JournalEntry): Promise<void> {
       run.updatedAt = now();
       // Natural heartbeat — a live holder renews on every journal write.
       if (leaseHeld && lease) {
         run.lockedBy = lease.instanceId;
         run.leaseExpiresAt = now() + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
       }
-      await options.store.put(cloneRun(run));
+      const writeFence = fence();
+      if (entry && options.store.appendEntry) {
+        try {
+          await options.store.appendEntry(run.id, run.entries.length - 1, entry, writeFence);
+        } catch (err) {
+          // The session list was edited in place (a test drops replayed rows).
+          // The stored rows no longer match, so replace them from the session.
+          if (!(err instanceof Error) || !err.message.includes("does not append")) throw err;
+          await options.store.put(cloneRun(run), writeFence);
+          return;
+        }
+      }
+      const header = cloneRun(run);
+      if (options.store.appendEntry) (header as { entries: JournalEntry[] }).entries = [];
+      await options.store.put(header, writeFence);
+    }
+
+    /**
+     * The next entry must match this call. Scanning forward would hide a
+     * reordered step.
+     */
+    function takeReplay(
+      match: (entry: JournalEntry) => boolean,
+      called: string,
+    ): JournalEntry | undefined {
+      if (cursor >= run.entries.length) return undefined;
+      const entry = run.entries[cursor];
+      if (entry === undefined || !match(entry)) {
+        throwOke("JOURNAL_REPLAY_DIVERGENCE", {
+          runId: run.id,
+          expected: entry === undefined ? "end" : entryLabel(entry),
+          actual: called,
+        });
+      }
+      cursor += 1;
+      return entry;
     }
 
     /** Parking / terminal states must not hold a short lease across days. */
@@ -673,47 +783,51 @@ export function createJournal(options: CreateJournalOptions): Journal {
         if (name.startsWith(JOURNAL_UNDO_PREFIX) && opts?.undo) {
           throw new Error("journal: undo steps cannot register nested undo");
         }
-        // Prefer name match among remaining entries (resume after crash).
-        for (let i = cursor; i < run.entries.length; i++) {
-          const e = run.entries[i]!;
-          if (e.kind === "step" && e.name === name) {
-            cursor = i + 1;
-            if (!name.startsWith(JOURNAL_UNDO_PREFIX)) {
-              registerUndo(name, e.value as T, opts);
-            }
-            return e.value as T;
+        const replayed = takeReplay((e) => e.kind === "step" && e.name === name, `step ${name}`);
+        if (replayed && replayed.kind === "step") {
+          const value = reviveJournalValue(replayed.value) as T;
+          if (!name.startsWith(JOURNAL_UNDO_PREFIX)) {
+            registerUndo(name, value, opts);
           }
+          return value;
         }
         assertCanAppendStep(name);
-        const value = await fn();
+        stepDepth += 1;
+        let stored: unknown;
+        try {
+          stored = await journalValue(await fn());
+        } finally {
+          stepDepth -= 1;
+        }
+        const value = reviveJournalValue(stored) as T;
         const entry: JournalStepEntry = {
           kind: "step",
           name,
-          value,
+          value: stored,
           at: now(),
         };
         run.entries.push(entry);
         cursor = run.entries.length;
-        await persist();
+        await persist(entry);
         if (!name.startsWith(JOURNAL_UNDO_PREFIX)) {
           registerUndo(name, value, opts);
         }
         return value;
       },
       async sleep(label, duration, parseMs) {
-        for (let i = cursor; i < run.entries.length; i++) {
-          const e = run.entries[i]!;
-          if (e.kind === "sleep" && e.label === label) {
-            cursor = i + 1;
-            if (now() < e.wakeAt) {
-              run.status = "sleeping";
-              run.wakeAt = e.wakeAt;
-              releaseLeaseLocally();
-              await persist();
-              throw new JournalSuspend(label, e.wakeAt);
-            }
-            return;
+        const replayed = takeReplay(
+          (e) => e.kind === "sleep" && e.label === label,
+          `sleep ${label}`,
+        );
+        if (replayed && replayed.kind === "sleep") {
+          if (now() < replayed.wakeAt) {
+            run.status = "sleeping";
+            run.wakeAt = replayed.wakeAt;
+            releaseLeaseLocally();
+            await persist();
+            throw new JournalSuspend(label, replayed.wakeAt);
           }
+          return;
         }
         if (registrationPass) {
           throw new JournalRegistrationComplete();
@@ -732,38 +846,73 @@ export function createJournal(options: CreateJournalOptions): Journal {
           run.status = "sleeping";
           run.wakeAt = wakeAt;
           releaseLeaseLocally();
-          await persist();
+          await persist(entry);
           throw new JournalSuspend(label, wakeAt);
         }
-        await persist();
+        await persist(entry);
       },
       async effect<T>(
         effectKind: string,
         resource: string,
         execute: () => T | Promise<T>,
       ): Promise<T> {
-        for (let i = cursor; i < run.entries.length; i++) {
-          const e = run.entries[i]!;
-          if (e.kind === "effect" && e.effectKind === effectKind && e.resource === resource) {
-            cursor = i + 1;
-            return e.value as T;
-          }
+        // Inside fx.step the step value is the snapshot. A nested effect must
+        // not insert a row ahead of that step, or replay would diverge.
+        if (stepDepth > 0) return execute();
+        const called = `effect ${effectKind} ${resource}`;
+        const next = cursor < run.entries.length ? run.entries[cursor] : undefined;
+        const matches =
+          next?.kind === "effect" && next.effectKind === effectKind && next.resource === resource;
+        if (matches && next.kind === "effect") {
+          cursor += 1;
+          return reviveJournalValue(next.value) as T;
+        }
+        // A nested call must hit its own row. An outer call re-enters: its row
+        // is appended after the nested rows, so it is not next yet.
+        if (next !== undefined && effectDepth > 0) {
+          throwOke("JOURNAL_REPLAY_DIVERGENCE", {
+            runId: run.id,
+            expected: entryLabel(next),
+            actual: called,
+          });
         }
         if (registrationPass) {
           throw new JournalRegistrationComplete();
         }
-        const value = await execute();
+        effectDepth += 1;
+        let stored: unknown;
+        try {
+          stored = await journalValue(await execute());
+        } finally {
+          effectDepth -= 1;
+        }
+        const after = cursor < run.entries.length ? run.entries[cursor] : undefined;
+        if (
+          after?.kind === "effect" &&
+          after.effectKind === effectKind &&
+          after.resource === resource
+        ) {
+          cursor += 1;
+          return reviveJournalValue(after.value) as T;
+        }
+        if (after !== undefined) {
+          throwOke("JOURNAL_REPLAY_DIVERGENCE", {
+            runId: run.id,
+            expected: entryLabel(after),
+            actual: called,
+          });
+        }
         const entry: JournalEffectEntry = {
           kind: "effect",
           effectKind,
           resource,
-          value,
+          value: stored,
           at: now(),
         };
         run.entries.push(entry);
         cursor = run.entries.length;
-        await persist();
-        return value;
+        await persist(entry);
+        return reviveJournalValue(stored) as T;
       },
       get epoch() {
         return epoch;
@@ -772,6 +921,9 @@ export function createJournal(options: CreateJournalOptions): Journal {
         cursor = 0;
         undos.length = 0;
         epoch += 1;
+      },
+      recordedBeforeCursor() {
+        return run.entries.slice(0, cursor);
       },
       undoStack() {
         return undos;
@@ -813,6 +965,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
         input,
         status: "running",
         entries: [],
+        codeVersion,
         createdAt: t,
         updatedAt: t,
       };
@@ -820,6 +973,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
         // Fresh id — insert already holding the lease (no claim race).
         run.lockedBy = lease.instanceId;
         run.leaseExpiresAt = t + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
+        run.leaseToken = 1;
       }
       await options.store.put(cloneRun(run));
       return openSession(run, coordinated);
@@ -844,6 +998,16 @@ export function createJournal(options: CreateJournalOptions): Journal {
         }
         throw new Error(`journal: run "${runId}" not found`);
       }
+      if (run.codeVersion !== undefined && run.codeVersion !== codeVersion) {
+        if (coordinated && lease) {
+          await options.store.releaseLease!(runId, lease.instanceId);
+        }
+        throwOke("JOURNAL_CODE_VERSION", {
+          runId,
+          expected: run.codeVersion,
+          actual: codeVersion,
+        });
+      }
       // Leave status intact — the durable runner parks or continues.
       run.updatedAt = now();
       if (coordinated && lease) {
@@ -858,4 +1022,156 @@ export function createJournal(options: CreateJournalOptions): Journal {
 
 function cloneRun(run: JournalRun): JournalRun {
   return structuredClone(run);
+}
+
+/**
+ * Bump the fencing token unless this instance already holds a live lease.
+ *
+ * @param run - Run being claimed
+ * @param instanceId - Claimant
+ * @param now - Epoch-ms
+ * @param leaseMs - Lease duration
+ */
+function holdLease(run: JournalRun, instanceId: string, now: number, leaseMs: number): void {
+  const renew =
+    run.lockedBy === instanceId && hasLiveLease(run, now) && run.leaseToken !== undefined;
+  if (!renew) run.leaseToken = (run.leaseToken ?? 0) + 1;
+  run.lockedBy = instanceId;
+  const nextExpiry = now + leaseMs;
+  if (run.leaseExpiresAt === undefined || run.leaseExpiresAt < nextExpiry) {
+    run.leaseExpiresAt = nextExpiry;
+  }
+}
+
+/**
+ * Reject a write whose lease token is no longer current.
+ *
+ * @param existing - Stored run, if any
+ * @param fence - Caller fence. Omitted on insert and uncoordinated stores.
+ */
+function assertJournalFence(
+  existing: JournalRun | undefined,
+  fence: JournalWriteFence | undefined,
+): void {
+  if (!fence || !existing) return;
+  const expired = existing.leaseExpiresAt !== undefined && existing.leaseExpiresAt <= fence.now;
+  if (existing.lockedBy !== fence.lockedBy || existing.leaseToken !== fence.leaseToken || expired) {
+    throwOke("JOURNAL_STALE_LEASE", { runId: existing.id });
+  }
+}
+
+/**
+ * Header replace that keeps appended entries when the snapshot omitted them.
+ *
+ * @param existing - Previous row
+ * @param incoming - Header snapshot
+ */
+function mergeJournalPut(existing: JournalRun | undefined, incoming: JournalRun): JournalRun {
+  const next = cloneRun(incoming);
+  if (existing && incoming.entries.length === 0 && existing.entries.length > 0) {
+    (next as { entries: JournalEntry[] }).entries = existing.entries;
+  }
+  return next;
+}
+
+/**
+ * Append one entry at `seq`, or no-op when that seq is already stored.
+ *
+ * @param run - Stored run
+ * @param seq - Zero-based position
+ * @param entry - JSON-safe entry
+ */
+function appendStoredEntry(run: JournalRun, seq: number, entry: JournalEntry): void {
+  const entries = run.entries as JournalEntry[];
+  if (entries.length === seq) {
+    entries.push(structuredClone(entry));
+    return;
+  }
+  if (entries.length === seq + 1) return;
+  throw new Error(`journal: entry seq ${seq} does not append (have ${entries.length})`);
+}
+
+/**
+ * JSON snapshot of a journaled value. `Response` becomes a marked object.
+ *
+ * @param value - Step or effect result
+ */
+async function journalValue(value: unknown): Promise<unknown> {
+  if (typeof Response !== "undefined" && value instanceof Response) {
+    const bytes = new Uint8Array(await value.arrayBuffer());
+    let body = "";
+    for (const byte of bytes) body += String.fromCharCode(byte);
+    const headers: Record<string, string> = {};
+    value.headers.forEach((header, name) => {
+      headers[name] = header;
+    });
+    return {
+      __oke: "response",
+      status: value.status,
+      statusText: value.statusText,
+      headers,
+      body: btoa(body),
+    };
+  }
+  if (typeof value === "bigint" || typeof value === "function" || typeof value === "symbol") {
+    throwOke("JOURNAL_VALUE_NOT_JSON", { detail: typeof value });
+  }
+  try {
+    return JSON.parse(JSON.stringify(value ?? null)) as unknown;
+  } catch {
+    throwOke("JOURNAL_VALUE_NOT_JSON", { detail: "unserializable" });
+  }
+}
+
+/**
+ * Rebuild a `Response` from a journal snapshot. Other values pass through.
+ *
+ * @param value - Stored entry value
+ */
+function reviveJournalValue(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const record = value as {
+    __oke?: string;
+    status?: number;
+    statusText?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  };
+  if (record.__oke !== "response" || typeof record.body !== "string") return value;
+  const binary = atob(record.body);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Response(bytes, {
+    status: record.status ?? 200,
+    statusText: record.statusText,
+    headers: record.headers,
+  });
+}
+
+/**
+ * Short label for a journal entry, used in replay errors.
+ *
+ * @param entry - Stored entry
+ */
+function entryLabel(entry: JournalEntry): string {
+  if (entry.kind === "step") return `step ${entry.name}`;
+  if (entry.kind === "sleep") return `sleep ${entry.label}`;
+  return `effect ${entry.effectKind} ${entry.resource}`;
+}
+
+let cachedPackageVersion: string | undefined;
+
+/**
+ * Package version used when a journal is not given an explicit code version.
+ */
+function packageVersion(): string {
+  if (cachedPackageVersion !== undefined) return cachedPackageVersion;
+  try {
+    const raw = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
+    const parsed = JSON.parse(raw) as { version?: string };
+    cachedPackageVersion = parsed.version && parsed.version.length > 0 ? parsed.version : "0";
+  } catch {
+    cachedPackageVersion = "0";
+  }
+  return cachedPackageVersion;
 }

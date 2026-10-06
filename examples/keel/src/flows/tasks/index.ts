@@ -369,13 +369,13 @@ export const duplicate = on(
       const task = asTask(row);
       const spaceRows = await fx.store(db).select().from(spaces);
       const space = spaceRows.find((t) => String(t.id) === task.spaceId);
-      return (await fx.call(create, {
+      return fx.call(create, {
         title: `${task.title} (copy)`,
         spaceKey: space ? String(space.key) : "ENG",
         priority: task.priority,
         description: task.description ?? undefined,
         projectId: task.projectId ?? undefined,
-      })) as { id: string; identifier: string; userId: string | null };
+      });
     },
   }),
 );

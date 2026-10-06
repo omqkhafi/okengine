@@ -26,6 +26,14 @@ export interface FxIndex {
    * @param callee - Call callee node
    */
   resolve(file: string, callee: AstNode): FxCalleeResolution;
+  /**
+   * Flow name behind an imported handle (`import { create as createTask }`).
+   * Absent when `localName` is not a named import of a `flow()` / `on()` export.
+   *
+   * @param file - File that contains the `fx.call`
+   * @param localName - Local binding (`createTask`)
+   */
+  flowRef(file: string, localName: string): string | undefined;
 }
 
 interface NamedImport {
@@ -61,6 +69,8 @@ interface FileFx {
   readonly functions: Map<string, AstNode>;
   readonly imports: Map<string, ImportBinding>;
   readonly exports: Map<string, LocalExport | Reexport>;
+  /** Local binding → `flow("name")` / `on(…, flow("name"))` literal. */
+  readonly flowNames: Map<string, string>;
 }
 
 const INTRINSIC_SOURCES: Readonly<
@@ -176,7 +186,29 @@ export function buildFxIndex(
     return resolveExport(target, imported.imported, seen);
   }
 
+  function flowExportName(file: string, exportName: string, seen: Set<string>): string | undefined {
+    const key = `${file}#flow:${exportName}`;
+    if (seen.has(key)) return undefined;
+    seen.add(key);
+    const indexed = byFile.get(file);
+    if (!indexed) return undefined;
+    const exported = indexed.exports.get(exportName);
+    if (!exported) return indexed.flowNames.get(exportName);
+    if (exported.kind === "local") return indexed.flowNames.get(exported.binding);
+    const target = resolveModule(file, exported.from);
+    if (!target) return undefined;
+    return flowExportName(target, exported.imported, seen);
+  }
+
   return {
+    flowRef(file, localName) {
+      const from = normalizePosix(file);
+      const imported = byFile.get(from)?.imports.get(localName);
+      if (!imported || imported.kind !== "named") return undefined;
+      const target = resolveModule(from, imported.from);
+      if (!target) return undefined;
+      return flowExportName(target, imported.imported, new Set());
+    },
     resolve(file, callee) {
       const from = normalizePosix(file);
       const seen = new Set<string>();
@@ -212,9 +244,10 @@ function indexFile(program: AstNode): FileFx {
   const functions = new Map<string, AstNode>();
   const imports = new Map<string, ImportBinding>();
   const exports = new Map<string, LocalExport | Reexport>();
+  const flowNames = new Map<string, string>();
   const body = (program as AstNode & { body?: AstNode[] }).body ?? [];
-  for (const stmt of body) indexStmt(stmt, functions, imports, exports);
-  return { functions, imports, exports };
+  for (const stmt of body) indexStmt(stmt, functions, imports, exports, flowNames);
+  return { functions, imports, exports, flowNames };
 }
 
 function indexStmt(
@@ -222,6 +255,7 @@ function indexStmt(
   functions: Map<string, AstNode>,
   imports: Map<string, ImportBinding>,
   exports: Map<string, LocalExport | Reexport>,
+  flowNames: Map<string, string>,
 ): void {
   if (stmt.type === "ImportDeclaration") {
     indexImport(stmt, imports);
@@ -232,7 +266,7 @@ function indexStmt(
     return;
   }
   if (stmt.type === "VariableDeclaration") {
-    rememberVars(stmt, functions, exports, false);
+    rememberVars(stmt, functions, exports, flowNames, false);
     return;
   }
   if (stmt.type === "ExportDefaultDeclaration") {
@@ -247,7 +281,7 @@ function indexStmt(
   const decl = (stmt as AstNode & { declaration?: AstNode | null }).declaration;
   const source = stringArg((stmt as AstNode & { source?: AstNode }).source);
   if (decl?.type === "FunctionDeclaration") rememberFunction(decl, functions, exports, true);
-  if (decl?.type === "VariableDeclaration") rememberVars(decl, functions, exports, true);
+  if (decl?.type === "VariableDeclaration") rememberVars(decl, functions, exports, flowNames, true);
   const specifiers = (stmt as AstNode & { specifiers?: AstNode[] }).specifiers ?? [];
   for (const spec of specifiers) {
     const local = exportedLocalName(spec);
@@ -309,6 +343,7 @@ function rememberVars(
   decl: AstNode,
   functions: Map<string, AstNode>,
   exports: Map<string, LocalExport | Reexport>,
+  flowNames: Map<string, string>,
   exportIt: boolean,
 ): void {
   const declarations = (decl as AstNode & { declarations?: AstNode[] }).declarations ?? [];
@@ -317,8 +352,27 @@ function rememberVars(
     if (!name) continue;
     const init = (item as AstNode & { init?: AstNode | null }).init;
     if (init && isFunctionNode(unwrapValue(init))) functions.set(name, unwrapValue(init));
+    const flowName = init ? flowLiteralName(unwrapValue(init)) : undefined;
+    if (flowName) flowNames.set(name, flowName);
     if (exportIt) exports.set(name, { kind: "local", binding: name });
   }
+}
+
+/**
+ * `flow("name")` / `call("name")` / `on(trigger, flow("name"))` literal.
+ *
+ * @param node - Initializer
+ */
+function flowLiteralName(node: AstNode): string | undefined {
+  if (node.type !== "CallExpression") return undefined;
+  const call = node as AstNode & { callee: AstNode; arguments?: AstNode[] };
+  const callee = identifierName(call.callee);
+  if (callee === "flow" || callee === "call") return stringArg(call.arguments?.[0]);
+  if (callee === "on") {
+    const body = call.arguments?.[1];
+    return body ? flowLiteralName(unwrapValue(body)) : undefined;
+  }
+  return undefined;
 }
 
 function exportedLocalName(spec: AstNode): string | undefined {

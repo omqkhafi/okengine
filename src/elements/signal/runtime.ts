@@ -26,6 +26,12 @@ export interface CreateSignalRuntimeOptions {
   readonly sql?: unknown;
   readonly redis?: import("../../drivers/signal-types.ts").SignalRedisClientLike;
   readonly nats?: import("../../drivers/signal-types.ts").SignalNatsClientLike;
+  /** Forwarded to the driver. Postgres poll when `listen` is absent. */
+  readonly pollMs?: number;
+  /** Redis consumer-group consume for `once`. */
+  readonly compete?: boolean;
+  /** Redis consumer name. */
+  readonly consumerId?: string;
 }
 
 /** Signal runtime. */
@@ -106,6 +112,9 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
         sql: options.sql,
         redis: options.redis,
         nats: options.nats,
+        pollMs: options.pollMs,
+        compete: options.compete,
+        consumerId: options.consumerId,
       });
       return bus;
     },

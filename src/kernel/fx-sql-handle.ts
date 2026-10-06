@@ -9,6 +9,7 @@ import type { SqlRow } from "../drivers/types.ts";
 import type {
   SelectFromBuilder,
   SelectOrderBuilder,
+  SqlPredicate,
   SqlStoreHandle,
   StoreDecl,
 } from "../elements/store.ts";
@@ -16,6 +17,7 @@ import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type { CapabilityToken } from "./capability.ts";
 import { DryRunWriteIsolationError, isDryRun } from "./dry-run.ts";
 import type { EffectExternal } from "./effects.ts";
+import { runInSignalTransaction } from "./signal-tx.ts";
 
 /** Capability-gated effect runner from {@link createFx}. */
 type Gated = <T>(
@@ -39,6 +41,13 @@ export interface GatedSqlHandleOptions {
   readonly capability: CapabilityToken;
   /** `fx.ask` — optional search rerank. */
   readonly ask: (model: string, input: unknown) => Promise<unknown>;
+  /**
+   * Open the signal outbox for emits inside {@link SqlStoreHandle.transaction}.
+   * Absent when the app has no signal runtime.
+   */
+  readonly beginSignal?: () => Promise<
+    import("../drivers/signal-types.ts").SignalTransaction | undefined
+  >;
 }
 
 /**
@@ -90,7 +99,7 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
     return gated(kind, ref, body, externalOf);
   };
 
-  return {
+  const api = {
     ref,
     get routedRole() {
       return cached?.routedRole ?? "primary";
@@ -102,7 +111,7 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
       return {
         from(table: unknown) {
           const run = (plan: {
-            where?: unknown;
+            where?: SqlPredicate<SqlRow> | null;
             orders?: readonly unknown[];
             limit?: number;
             offset?: number;
@@ -110,7 +119,8 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
             gatedTable("read", table, async () => {
               const h = await ensure();
               const from = h.select(columns).from(table) as SelectFromBuilder;
-              const filtered = plan.where === undefined ? from : from.where(plan.where);
+              const filtered =
+                plan.where === undefined || plan.where === null ? from : from.where(plan.where);
               const ordered =
                 plan.orders === undefined ? filtered : filtered.orderBy(...plan.orders);
               if (plan.offset !== undefined) return ordered.offset(plan.offset);
@@ -118,7 +128,7 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
             });
 
           const tail = (plan: {
-            where?: unknown;
+            where?: SqlPredicate<SqlRow> | null;
             orders?: readonly unknown[];
           }): SelectOrderBuilder => ({
             limit(n) {
@@ -133,7 +143,7 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
           });
 
           return {
-            where(where: unknown) {
+            where(where: SqlPredicate<SqlRow>) {
               return {
                 ...tail({ where }),
                 orderBy: (...orders: readonly unknown[]) => tail({ where, orders }),
@@ -185,7 +195,7 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
       return {
         set(row) {
           return {
-            where(where) {
+            where(where: SqlPredicate<SqlRow>) {
               return gatedTable("write", table, async () => {
                 refuseDryRunWrite();
                 const h = await ensure();
@@ -211,7 +221,7 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
         });
       }
       return {
-        where(where: unknown) {
+        where(where: SqlPredicate<SqlRow>) {
           return gatedTable("write", table, async () => {
             refuseDryRunWrite();
             const h = await ensure();
@@ -238,6 +248,34 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
         refuseDryRunWrite();
         const h = await ensure();
         return h.increment(table, id, column, by);
+      });
+    },
+    async transaction(fn) {
+      refuseDryRunWrite();
+      const h = await ensure();
+      const signalTx = options.beginSignal ? await options.beginSignal() : undefined;
+      try {
+        const result = await h.transaction(async () => {
+          const body = () => fn(api);
+          if (!signalTx) return body();
+          return runInSignalTransaction(signalTx, body);
+        });
+        if (signalTx) await signalTx.commit();
+        return result;
+      } catch (err) {
+        if (signalTx) await signalTx.rollback();
+        throw err;
+      }
+    },
+    run(builder) {
+      const text = builder.toSQL().sql;
+      const kind = /^(insert|update|delete|create|drop|alter|truncate|replace)\b/i.test(text.trim())
+        ? "write"
+        : "read";
+      return gated(kind, ref, async () => {
+        if (kind === "write") refuseDryRunWrite();
+        const h = await ensure();
+        return h.run(builder);
       });
     },
     raw(sql, params) {
@@ -302,4 +340,5 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
       });
     },
   } as SqlStoreHandle;
+  return api;
 }

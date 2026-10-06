@@ -37,6 +37,11 @@ export interface PrincipalBag {
   readonly tenant: {
     id: string | null;
   };
+  /**
+   * Membership role names for the tier-1 cache key.
+   * Gates do not read this field.
+   */
+  cacheRoles?: string[];
 }
 
 /** Resolved identity from auth middleware / test harness. */

@@ -1577,6 +1577,34 @@ export const ping = flow({ do: () => ({ ok: true }) });
     expect(manifest.flows?.["notes.ping"]).toBeDefined();
   });
 
+  test("fx.call of an imported flow handle records that flow's name", async () => {
+    const tasks = `
+import { on, flow, http } from "okengine";
+export const create = on(
+  http.post("/tasks"),
+  flow("tasks.create", { do: async () => ({ id: "1" }) }),
+);
+`;
+    const forms = `
+import { on, flow, http } from "okengine";
+import { create as createTask } from "../tasks/index.ts";
+export const submit = on(
+  http.post("/forms/:id/submit"),
+  flow("forms.submit", {
+    do: async (_input, fx) => {
+      await fx.call(createTask, { title: "SSO" });
+      return { ok: true };
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({
+      "src/flows/tasks/index.ts": tasks,
+      "src/flows/forms/index.ts": forms,
+    });
+    expect(manifest.flows?.["forms.submit"]?.effects?.calls).toEqual(["tasks.create"]);
+  });
+
   test("effects are identical for the same do body in a tree file vs a barrel", async () => {
     const doBody = `
       const rows = await fx.store(db).select().from(notes);

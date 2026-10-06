@@ -267,6 +267,7 @@ describe("postgres transactional emit (dual-write fix)", () => {
     });
 
     const notified: string[] = [];
+    if (sql.listen === undefined) throw new Error("postgres fake has no listen");
     await sql.listen("oke_signal", (p) => {
       notified.push(p);
     });

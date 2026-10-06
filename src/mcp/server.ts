@@ -18,7 +18,9 @@ import { MCP_PORT, type ServerHandle } from "../runtime/types.ts";
 import { SessionError, type SessionStore } from "../auth/sessions.ts";
 import { asData } from "./data.ts";
 import {
-  MCP_PROTOCOL_VERSION,
+  acceptsMcpProtocolVersion,
+  negotiateMcpProtocolVersion,
+  protocolVersionOf,
   parseJsonRpcRequest,
   parseToolsCallParams,
   rpcError,
@@ -149,10 +151,20 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
 
     switch (rpc.method) {
       case "initialize": {
+        const requested = protocolVersionOf(rpc.params);
+        const protocolVersion = negotiateMcpProtocolVersion(requested);
+        if (protocolVersion === undefined) {
+          return respond(
+            jsonRpcHttp(
+              rpcError(id, RpcErrorCode.invalidParams, "unsupported protocol version"),
+              400,
+            ),
+          );
+        }
         const sessionId = newMcpTransportSessionId();
         transportSessions.add(sessionId);
         const result: McpInitializeResult = {
-          protocolVersion: MCP_PROTOCOL_VERSION,
+          protocolVersion,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: "okengine-mcp", version },
           sessionId,
@@ -182,6 +194,15 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
         );
       }
       case "tools/call": {
+        const requested = protocolVersionOf(rpc.params);
+        if (requested !== undefined && !acceptsMcpProtocolVersion(requested)) {
+          return respond(
+            jsonRpcHttp(
+              rpcError(id, RpcErrorCode.invalidParams, "unsupported protocol version"),
+              400,
+            ),
+          );
+        }
         const call = parseToolsCallParams(rpc.params);
         if (!call.ok) {
           return respond(jsonRpcHttp(rpcError(id, RpcErrorCode.invalidParams, call.message), 400));

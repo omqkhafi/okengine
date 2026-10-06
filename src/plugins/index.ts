@@ -24,6 +24,7 @@ export {
   type MagicLinkOptions,
 } from "./magic-link.ts";
 export { maintenanceMode, type MaintenanceModeOptions } from "./maintenance-mode.ts";
+export { mena, menaChannels, type MenaChannelOptions } from "./mena.ts";
 export {
   createPhoneStore,
   otp,

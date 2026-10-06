@@ -105,6 +105,11 @@ export interface CreateChannelRuntimeOptions {
   readonly retry?: boolean;
   /** Injectable clock. */
   readonly now?: () => number;
+  /**
+   * Reload durable consent / suppression / receipts.
+   * Boot calls this from the scheduler when a SQL ledger is bound.
+   */
+  readonly refresh?: () => Promise<void>;
 }
 
 /** Send options for {@link ChannelRuntime.send}. */
@@ -127,6 +132,11 @@ export interface ChannelRuntime {
   readonly costs: MediumCosts;
   /** Bound driver chain (email + SMS + …). */
   readonly drivers: readonly ChannelDriver[];
+  /**
+   * Reload a shared consent / suppression / receipt ledger.
+   * Memory stores leave this unset.
+   */
+  refresh?(): Promise<void>;
   /**
    * Send a template through the driver chain.
    *
@@ -728,6 +738,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     receipts,
     costs,
     drivers,
+    ...(options.refresh ? { refresh: options.refresh } : {}),
     async sendOtp(opts) {
       const { otp } = otpSmsDriver();
       return otp.sendOtp(opts);

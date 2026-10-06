@@ -1,5 +1,5 @@
 /**
- * Console — operator plane UI + server (port 6533).
+ * Console — operator plane UI + server (port 6533). Public import: `okengine/console`.
  *
  * Built on `createClient<ConsoleApp>`. Every action is a real flow through `fx`;
  * the audit log is the trace (docs/spec/console.md).

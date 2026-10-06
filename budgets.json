@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-09-24T22:49:35.485Z",
+  "measuredAt": "2026-10-06T15:11:29.356Z",
   "version": "0.23.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 13839,
+      "value": 13986,
       "limit": 17408,
       "unit": "bytes",
       "gate": "absolute",
@@ -27,7 +27,7 @@
       "label": "Console initial load",
       "value": 353829,
       "limit": 716800,
-      "regressionLimit": 707662,
+      "regressionLimit": 707658,
       "unit": "bytes",
       "gate": "absolute",
       "group": "core",
@@ -36,9 +36,9 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 9.552,
+      "value": 10.232,
       "limit": 75,
-      "regressionLimit": 42.442,
+      "regressionLimit": 19.104,
       "unit": "ms",
       "gate": "absolute",
       "group": "core",
@@ -49,6 +49,7 @@
       "label": "p99 routing overhead",
       "value": 0.001,
       "limit": 1,
+      "regressionLimit": 0.002,
       "unit": "ms",
       "gate": "absolute",
       "group": "core",
@@ -57,28 +58,28 @@
     {
       "id": "httpPingGzipBytes",
       "label": "HTTP ping app (gzip, externals)",
-      "value": 43395,
-      "limit": 52636,
+      "value": 44457,
+      "limit": 44263,
       "unit": "bytes",
       "gate": "regression",
       "group": "core",
-      "ok": true
+      "ok": false
     },
     {
       "id": "httpPingRawBytes",
       "label": "HTTP ping app (raw, externals)",
-      "value": 126382,
-      "limit": 152467,
+      "value": 129360,
+      "limit": 128910,
       "unit": "bytes",
       "gate": "regression",
       "group": "core",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 106444,
-      "limit": 118979,
+      "value": 107817,
+      "limit": 108573,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -87,8 +88,8 @@
     {
       "id": "export:./ai",
       "label": "ai",
-      "value": 19327,
-      "limit": 22661,
+      "value": 19326,
+      "limit": 19714,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -97,7 +98,7 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 18919,
+      "value": 18918,
       "limit": 19298,
       "unit": "bytes",
       "gate": "regression",
@@ -107,7 +108,7 @@
     {
       "id": "export:./channel",
       "label": "channel",
-      "value": 7933,
+      "value": 7950,
       "limit": 8189,
       "unit": "bytes",
       "gate": "regression",
@@ -167,18 +168,18 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 16837,
-      "limit": 17167,
+      "value": 17737,
+      "limit": 17174,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./compiler",
       "label": "compiler",
-      "value": 29613,
-      "limit": 30234,
+      "value": 29914,
+      "limit": 30206,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -197,8 +198,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 172643,
-      "limit": 191035,
+      "value": 173948,
+      "limit": 176096,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -207,8 +208,8 @@
     {
       "id": "export:./full",
       "label": "full",
-      "value": 122223,
-      "limit": 131114,
+      "value": 123672,
+      "limit": 124668,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -227,12 +228,12 @@
     {
       "id": "export:./http",
       "label": "http",
-      "value": 44889,
-      "limit": 53712,
+      "value": 45959,
+      "limit": 45787,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./i18n",
@@ -247,28 +248,28 @@
     {
       "id": "export:./journal",
       "label": "journal",
-      "value": 2924,
+      "value": 5053,
       "limit": 3180,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./kernel",
       "label": "kernel",
-      "value": 50972,
-      "limit": 59828,
+      "value": 52178,
+      "limit": 51992,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./mcp",
       "label": "mcp",
-      "value": 10744,
-      "limit": 11184,
+      "value": 10852,
+      "limit": 11000,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -287,12 +288,12 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 35954,
+      "value": 36994,
       "limit": 36674,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./runs",
@@ -307,7 +308,7 @@
     {
       "id": "export:./signal",
       "label": "signal",
-      "value": 1293,
+      "value": 1317,
       "limit": 1549,
       "unit": "bytes",
       "gate": "regression",
@@ -317,7 +318,7 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 34339,
+      "value": 34739,
       "limit": 35026,
       "unit": "bytes",
       "gate": "regression",
@@ -327,8 +328,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 52636,
-      "limit": 56310,
+      "value": 52913,
+      "limit": 53689,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -337,8 +338,8 @@
     {
       "id": "export:./testing",
       "label": "testing",
-      "value": 52636,
-      "limit": 56310,
+      "value": 52913,
+      "limit": 53689,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -357,7 +358,7 @@
     {
       "id": "export:./plugins/username",
       "label": "username",
-      "value": 7450,
+      "value": 7449,
       "limit": 7706,
       "unit": "bytes",
       "gate": "regression",
@@ -387,7 +388,7 @@
     {
       "id": "export:./plugins/otp",
       "label": "otp",
-      "value": 8718,
+      "value": 8717,
       "limit": 8974,
       "unit": "bytes",
       "gate": "regression",
@@ -407,7 +408,7 @@
     {
       "id": "export:./plugins/passkey",
       "label": "passkey",
-      "value": 6964,
+      "value": 6963,
       "limit": 7220,
       "unit": "bytes",
       "gate": "regression",
@@ -417,7 +418,7 @@
     {
       "id": "export:./plugins/oauth",
       "label": "oauth",
-      "value": 13498,
+      "value": 13497,
       "limit": 13768,
       "unit": "bytes",
       "gate": "regression",
@@ -467,7 +468,7 @@
     {
       "id": "export:./plugins/ipAllowlist",
       "label": "ipAllowlist",
-      "value": 3610,
+      "value": 3612,
       "limit": 3866,
       "unit": "bytes",
       "gate": "regression",
@@ -497,12 +498,12 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 79004,
-      "limit": 82383,
+      "value": 81156,
+      "limit": 80585,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./drivers/ai-anthropic",
@@ -737,12 +738,12 @@
     {
       "id": "export:./drivers/journal-postgres",
       "label": "journal-postgres",
-      "value": 6939,
-      "limit": 8917,
+      "value": 9069,
+      "limit": 7195,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./drivers/kv-lua",
@@ -767,8 +768,8 @@
     {
       "id": "export:./drivers/memory",
       "label": "memory",
-      "value": 10114,
-      "limit": 10305,
+      "value": 10176,
+      "limit": 10370,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -997,7 +998,7 @@
     {
       "id": "export:./drivers/signal-engine",
       "label": "signal-engine",
-      "value": 5792,
+      "value": 5863,
       "limit": 6048,
       "unit": "bytes",
       "gate": "regression",
@@ -1017,7 +1018,7 @@
     {
       "id": "export:./drivers/signal-memory",
       "label": "signal-memory",
-      "value": 5835,
+      "value": 5907,
       "limit": 6091,
       "unit": "bytes",
       "gate": "regression",
@@ -1027,7 +1028,7 @@
     {
       "id": "export:./drivers/signal-nats",
       "label": "signal-nats",
-      "value": 6319,
+      "value": 6391,
       "limit": 6575,
       "unit": "bytes",
       "gate": "regression",
@@ -1037,7 +1038,7 @@
     {
       "id": "export:./drivers/signal-postgres",
       "label": "signal-postgres",
-      "value": 8289,
+      "value": 8450,
       "limit": 8545,
       "unit": "bytes",
       "gate": "regression",
@@ -1047,12 +1048,12 @@
     {
       "id": "export:./drivers/signal-redis",
       "label": "signal-redis",
-      "value": 6923,
+      "value": 7602,
       "limit": 7179,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./drivers/signal-retention",

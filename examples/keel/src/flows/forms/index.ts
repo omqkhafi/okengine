@@ -6,6 +6,7 @@ import { formSubmissions, forms, projects, spaces } from "@/db/schema";
 import { formsZod } from "@/db/zod";
 import { IdOut, Unavailable } from "@/lib/shapes";
 import { bindCrud } from "@/lib/resource";
+import { create as createTask } from "@/flows/tasks";
 import { formChanged, formIntake, formSubmitted } from "./signals";
 
 import "./signals";
@@ -102,14 +103,14 @@ export const submit = on(
       } catch {
         // keep defaults
       }
-      const created = (await fx.call("tasks.create", {
+      const created = await fx.call(createTask, {
         title,
         spaceKey: space ? String(space.key) : "ENG",
         description: input.body,
         projectId: project ? String(project.id) : undefined,
         roleNeeded,
         priority,
-      })) as { id: string; identifier: string };
+      });
       const submissionId = fx.id();
       await fx
         .store(db)

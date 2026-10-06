@@ -2,6 +2,7 @@ import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 import { member, slackBot } from "@/core";
+import { create } from "@/flows/tasks";
 
 /** Stub Slack ingest — reads vault, creates a task. No outbound HTTP. */
 export const ingest = on(
@@ -18,12 +19,12 @@ export const ingest = on(
     durable: true,
     do: async (input, fx) => {
       await fx.vault.get(slackBot);
-      const created = (await fx.call("tasks.create", {
+      const created = await fx.call(create, {
         title: input.text.slice(0, 200),
         spaceKey: "ENG",
         description: input.channel ? `from #${input.channel}` : undefined,
         roleNeeded: "developer",
-      })) as { id: string };
+      });
       return { id: created.id };
     },
   }),

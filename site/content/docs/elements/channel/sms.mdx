@@ -7,7 +7,8 @@ source: "docs/spec/unified-theory.md"
 
 SMS (`channel.sms`) delivers short text and provider-managed one-time codes. Pin an SMS driver
 (no default in any env), declare templates for app-owned messages, or call `fx.sendOtp` when the
-vendor owns the code.
+vendor owns the code. `fx.sendOtp` and `fx.verifyOtp` stay on `fx`. The `mena` plugin opens the
+same providers when you want that packaging.
 
 For developers verifying phones — choose raw Channel OTP vs the [`otp`](/docs/plugins/otp) plugin.
 

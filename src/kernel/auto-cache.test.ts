@@ -9,6 +9,7 @@ import { gate } from "../elements/gate.ts";
 import { field, id, now, store } from "../elements/store.ts";
 import { createTestApp, type TestApiCall, type TestApp } from "../test/create-test-app.ts";
 import { isStoreResourceRef } from "../elements/store/cache.ts";
+import type { Effects } from "../manifest/types.ts";
 import { oke } from "./app.ts";
 import { resetNoEffectsWarnForTests } from "./boot.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
@@ -56,6 +57,7 @@ describe("automatic tier-1 cache from effects", () => {
     const app = oke({
       name: "auto-cache",
       stores: [db],
+      cache: { auto: true },
       gate: { policies: [gate.public] },
     }).adopt({ list });
     const t = await createTestApp(app, { capability: "open" });
@@ -88,6 +90,7 @@ describe("automatic tier-1 cache from effects", () => {
     const app = oke({
       name: "auto-cache-execute",
       stores: [db],
+      cache: { auto: true },
       gate: { policies: [gate.public] },
     }).adopt({ list });
     const t = await createTestApp(app, { capability: "open" });
@@ -156,6 +159,7 @@ describe("automatic tier-1 cache from effects", () => {
     const app = oke({
       name: "auto-cache-ledger",
       stores: [db],
+      cache: { auto: true },
       gate: { policies: [gate.public] },
     }).adopt({ list });
     const t = await createTestApp(app, { capability: "open" });
@@ -207,6 +211,7 @@ describe("automatic tier-1 cache from effects", () => {
     const app = oke({
       name: "auto-cache-inv",
       stores: [db],
+      cache: { auto: true },
       gate: { policies: [gate.public] },
     }).adopt({ list, create });
     const t = await createTestApp(app, { capability: "open" });
@@ -249,6 +254,7 @@ describe("automatic tier-1 cache from effects", () => {
     const app = oke({
       name: "auto-cache-ledger-inv",
       stores: [db],
+      cache: { auto: true },
       gate: { policies: [gate.public] },
     }).adopt({ list, create });
     const t = await createTestApp(app, { capability: "open" });
@@ -258,6 +264,228 @@ describe("automatic tier-1 cache from effects", () => {
     expect(lists).toBe(1);
     await notesApi.create({ title: "New" });
     await notesApi.list({});
+    expect(lists).toBe(2);
+    await t.close();
+  });
+
+  test("omitted cache caches a pure store read", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const db = store.sql("app", { schema: { notes } });
+    let lists = 0;
+    const list = on(
+      http.get("/notes").public(),
+      flow("notes.list", {
+        effects: { reads: ["sql:notes"] },
+        do: () => {
+          lists += 1;
+          return [{ id: "n1", title: "Harbor" }];
+        },
+      }),
+    );
+    const app = oke({
+      name: "auto-cache-default-on",
+      stores: [db],
+      gate: { policies: [gate.public] },
+    }).adopt({ list });
+    const t = await createTestApp(app, { capability: "open" });
+    const notesApi = requireNotesApi(t);
+    await notesApi.list({});
+    await notesApi.list({});
+    expect(lists).toBe(1);
+    await t.close();
+  });
+
+  test("cache.auto false turns automatic caching off", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const db = store.sql("app", { schema: { notes } });
+    let lists = 0;
+    const list = on(
+      http.get("/notes").public(),
+      flow("notes.list", {
+        effects: { reads: ["sql:notes"] },
+        do: () => {
+          lists += 1;
+          return [{ id: "n1", title: "Harbor" }];
+        },
+      }),
+    );
+    const app = oke({
+      name: "auto-cache-app-off",
+      stores: [db],
+      cache: { auto: false },
+      gate: { policies: [gate.public] },
+    }).adopt({ list });
+    const t = await createTestApp(app, { capability: "open" });
+    const notesApi = requireNotesApi(t);
+    await notesApi.list({});
+    await notesApi.list({});
+    expect(lists).toBe(2);
+    await t.close();
+  });
+
+  test("cache: true opts one flow in without the app switch", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const db = store.sql("app", { schema: { notes } });
+    let lists = 0;
+    const list = on(
+      http.get("/notes", { out: z.array(NoteOut) }).public(),
+      flow("notes.list", {
+        cache: true,
+        effects: { reads: ["sql:notes"] },
+        do: () => {
+          lists += 1;
+          return [{ id: "n1", title: "Harbor" }];
+        },
+      }),
+    );
+    const app = oke({
+      name: "auto-cache-flow-opt-in",
+      stores: [db],
+      gate: { policies: [gate.public] },
+    }).adopt({ list });
+    const t = await createTestApp(app, { capability: "open" });
+    const notesApi = requireNotesApi(t);
+    await notesApi.list({});
+    await notesApi.list({});
+    expect(lists).toBe(1);
+    await t.close();
+  });
+
+  const sideEffects = [
+    { kind: "emit", effects: { reads: ["sql:notes"], emits: ["note.created"] } },
+    { kind: "send", effects: { reads: ["sql:notes"], sends: ["welcome"] } },
+    { kind: "fetch", effects: { reads: ["sql:notes"], fetches: ["api.example.com"] } },
+    { kind: "secret", effects: { reads: ["sql:notes"], secrets: ["stripe"] } },
+    { kind: "ask", effects: { reads: ["sql:notes"], asks: ["summarize"] } },
+    { kind: "decide", effects: { reads: ["sql:notes"], decides: ["route"] } },
+    { kind: "call", effects: { reads: ["sql:notes"], calls: ["notes.create"] } },
+  ] satisfies readonly { kind: string; effects: Effects }[];
+
+  for (const side of sideEffects) {
+    test(`${side.kind} effects run the handler on every call`, async () => {
+      resetBindings();
+      resetFlowSeq();
+      const db = store.sql("app", { schema: { notes } });
+      let lists = 0;
+      const list = on(
+        http.get("/notes").public(),
+        flow("notes.list", {
+          effects: side.effects,
+          do: () => {
+            lists += 1;
+            return [{ id: "n1", title: "Harbor" }];
+          },
+        }),
+      );
+      const app = oke({
+        name: `auto-cache-${side.kind}`,
+        stores: [db],
+        cache: { auto: true },
+        gate: { policies: [gate.public] },
+      }).adopt({ list });
+      const t = await createTestApp(app, { capability: "open" });
+      const notesApi = requireNotesApi(t);
+      await notesApi.list({});
+      await notesApi.list({});
+      expect(lists).toBe(2);
+      await t.close();
+    });
+  }
+
+  test("a ledgered call beside a store read is not cached", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const db = store.sql("app", { schema: { notes } });
+    let lists = 0;
+    const list = on(
+      http.get("/notes", { out: z.array(NoteOut) }).public(),
+      flow("notes.list", {
+        do: async (_input, fx) => {
+          lists += 1;
+          await fx.store(db).select().from(notes);
+          await fx.call("notes.missing", {});
+          return [{ id: "n1", title: "Harbor" }];
+        },
+      }),
+    );
+    const app = oke({
+      name: "auto-cache-ledger-call",
+      stores: [db],
+      cache: { auto: true },
+      gate: { policies: [gate.public] },
+    }).adopt({ list });
+    const t = await createTestApp(app, { capability: "open" });
+    const notesApi = requireNotesApi(t);
+    await notesApi.list({});
+    await notesApi.list({});
+    expect(lists).toBe(2);
+    await t.close();
+  });
+
+  test("two tenants do not share a cache hit", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const db = store.sql("app", { schema: { notes } });
+    let lists = 0;
+    const list = on(
+      http.get("/notes").public(),
+      flow("notes.list", {
+        effects: { reads: ["sql:notes"] },
+        do: () => {
+          lists += 1;
+          return [{ id: "n1", title: "Harbor" }];
+        },
+      }),
+    );
+    const app = oke({
+      name: "auto-cache-tenant",
+      stores: [db],
+      cache: { auto: true },
+      gate: { policies: [gate.public] },
+    }).adopt({ list });
+    const t = await createTestApp(app, { capability: "open" });
+    const trigger = list.triggers[0];
+    if (trigger === undefined) throw new Error("notes.list has no trigger");
+    await app.execute(list, {}, trigger, { tenant: { id: "ta" } });
+    await app.execute(list, {}, trigger, { tenant: { id: "ta" } });
+    expect(lists).toBe(1);
+    await app.execute(list, {}, trigger, { tenant: { id: "tb" } });
+    expect(lists).toBe(2);
+    await t.close();
+  });
+
+  test("two locales do not share a cache hit", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const db = store.sql("app", { schema: { notes } });
+    let lists = 0;
+    const list = on(
+      http.get("/notes").public(),
+      flow("notes.list", {
+        effects: { reads: ["sql:notes"] },
+        do: () => {
+          lists += 1;
+          return [{ id: "n1", title: "Harbor" }];
+        },
+      }),
+    );
+    const app = oke({
+      name: "auto-cache-locale",
+      stores: [db],
+      cache: { auto: true },
+      config: { i18n: { locales: ["en", "ar"], default: "en" } },
+      gate: { policies: [gate.public] },
+    }).adopt({ list });
+    const t = await createTestApp(app, { capability: "open" });
+    const trigger = list.triggers[0];
+    if (trigger === undefined) throw new Error("notes.list has no trigger");
+    await app.execute(list, {}, trigger, { locale: "en" });
+    await app.execute(list, {}, trigger, { locale: "en" });
+    expect(lists).toBe(1);
+    await app.execute(list, {}, trigger, { locale: "ar" });
     expect(lists).toBe(2);
     await t.close();
   });

@@ -359,3 +359,20 @@ export function tenantScopesForMember(
   const role = store.roles.get(roleKey(tenantId, member.role));
   return role?.scopes ?? [];
 }
+
+/**
+ * Membership role name for the tier-1 cache key.
+ *
+ * Same member lookup as {@link tenantScopesForMember}. Not an authorization input.
+ *
+ * @param store - Tenant store
+ * @param tenantId - Tenant id
+ * @param userId - User id
+ */
+export function tenantRoleForMember(
+  store: TenantStore,
+  tenantId: string,
+  userId: string,
+): string | null {
+  return getMember(store, tenantId, userId)?.role ?? null;
+}

@@ -12,6 +12,30 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.23.1 — 2026-10-06
+
+### ✨ Added
+
+#### Runtime
+
+- `fx.store(db).transaction(fn)` pins one SQL connection. `fx.emit` inside `fn` stages on the signal outbox and publishes after that transaction commits; a throw rolls the batch back. `fx.store(db).run(builder)` executes a Drizzle select, insert, update, or delete via `toSQL()` without putting Drizzle on the edge graph. `fx.call(flow, input)` types the input and the result when `flow` is a Flow handle. A string name stays `Promise<unknown>`. A join plus `groupBy` lists every source table under the flow's `reads`.
+- Pull requests run a manifest diff and comment on contract breaks, permission widening, and effect widening. Only undeclared contract breaks fail the check.
+- MENA SMS, mail, and WhatsApp providers are also available as the `mena` plugin (`okengine/plugins`). `fx.sendOtp`, `fx.verifyOtp`, and `fx.deliverOtp` stay supported Channel methods.
+- App and docs MCP servers implement `initialize`, `ping`, `tools/list`, and `tools/call`, and advertise protocol `2024-11-05`. A client version outside that set is rejected. An omitted version gets `2024-11-05`. The outbound client that calls external MCP servers still probes `2026-07-28` and falls back to a `2024-11-05` `initialize`.
+
+#### Docs
+
+- `docs/adr/0001-adopt-auth-vault-search.md` compares in-house auth, the built-in vault, and BM25/LSH with mature libraries behind thin adapters. No code is removed.
+
+### 🐛 Fixed
+
+#### Runtime
+
+- Tier-1 auto-cache stays on for a pure store-read Flow. A send, emit, fetch, vault read, ask, decide, `fx.call`, embed, or write is never cached. The key includes tenant, locale, scopes, and membership roles. `cache: false` still disables. `oke({ cache: { auto: false } })` turns the default off.
+- Durable journal entries append as rows instead of rewriting the whole run. Each acquire bumps a lease token, and a write from an expired holder is rejected (OKE1074). Replay requires the next entry to match (OKE1075). A run stamped with another code version fails on resume (OKE1076). `Response` values from `fx.fetch` are stored as JSON and rebuilt on replay. A value that is not JSON is OKE1077. A `durable: true` Flow that calls `fx.fetch` or `fx.send` outside `fx.step` is OKE1901. A journal `put` writes the entry rows, so the next read sees an approval resolve. Renewing a live lease keeps the later expiry.
+- `fx.call` of an imported Flow handle is recorded as that Flow's name.
+- Postgres signal boot polls `drain` (`FOR UPDATE SKIP LOCKED`) because Bun.SQL has no `LISTEN` / `NOTIFY`. The claim and the inflight mark share one transaction. Redis `once` consume uses a consumer group when `compete: true`: ack after success, pending reclaim on the next drain. Outside `test`, Channel consent, suppression, and receipts persist in Postgres when `DATABASE_URL` is set.
+
 ## v0.23.0 — 2026-09-25
 
 ### ✨ Added
