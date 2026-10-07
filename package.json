@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.23.2",
+  "version": "0.24.0",
   "description": "One law. Eight elements. One contract. The backend model stays small; operational surfaces are derived from it instead of maintained separately.",
   "license": "Apache-2.0",
   "repository": {
@@ -145,6 +145,7 @@
     "dev": "turbo run dev --filter=site",
     "site:build": "turbo run build --filter=site",
     "boundaries": "turbo boundaries",
+    "check": "bun run verify",
     "verify": "bun run lint && bun run fmt:check && bun run typecheck && bun run test && bun run gate && bun run site:build",
     "ci": "bun scripts/ci.ts",
     "bump": "bun run scripts/bump-version.ts",

@@ -1,0 +1,53 @@
+name: Feature
+description: A change that needs one pull request
+title: "feat: "
+labels: ["needs triage"]
+type: Feature
+projects:
+  - "omqkhafi/2"
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who hits this, and what they cannot do
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: Proposed API
+      description: A short example of the call site
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What else was considered, including doing nothing
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: The area label a maintainer applies during triage
+      options:
+        - area: kernel
+        - area: ai
+        - area: http
+        - area: store
+        - area: channel
+        - area: auth
+        - area: compiler
+        - area: manifest
+        - area: cli
+        - area: console
+        - area: client
+        - area: docs
+        - area: site
+        - area: ci
+        - area: release
+    validations:
+      required: true

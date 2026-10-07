@@ -825,6 +825,12 @@ export type DecisionListRow = {
   readonly state: "learning" | "candidate" | "certified" | "suspended";
   readonly mode: "review" | "abstain";
   readonly model?: string;
+  readonly certificates?: readonly {
+    readonly decider: string;
+    readonly model: string;
+    readonly pinned: boolean;
+    readonly expiresAt?: number;
+  }[];
   readonly metrics?: Readonly<Record<string, number>>;
   readonly promote?: string;
 };
@@ -861,6 +867,8 @@ export type DecisionQueueRow = {
   readonly labelOnly: boolean;
   readonly status: "pending" | "reviewed";
   readonly questions: readonly DecisionFormQuestion[];
+  readonly by?: string;
+  readonly why?: string;
 };
 
 /**

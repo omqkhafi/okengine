@@ -13,7 +13,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const WORKFLOW = join(ROOT, ".github/workflows/ci.yml");
+const CI_WORKFLOW = join(ROOT, ".github/workflows/ci.yml");
+const RELEASE_WORKFLOW = join(ROOT, ".github/workflows/release.yml");
 
 /** Package roots published in lockstep. */
 const PACKAGES = [
@@ -27,70 +28,77 @@ if (!PUBLISH_GATE) {
 }
 
 describe("publish workflow", () => {
-  test("ci.yml parses and mirrors gflows gate → split npm/JSR publish", () => {
-    expect(existsSync(WORKFLOW)).toBe(true);
-    const yml = readFileSync(WORKFLOW, "utf-8");
+  test("pull-request CI stays a check matrix; release.yml publishes on v*", () => {
+    expect(existsSync(CI_WORKFLOW)).toBe(true);
+    expect(existsSync(RELEASE_WORKFLOW)).toBe(true);
+    const ciYml = readFileSync(CI_WORKFLOW, "utf-8");
+    const releaseYml = readFileSync(RELEASE_WORKFLOW, "utf-8");
     type PublishJob = {
       needs?: string | string[];
       environment?: string;
       permissions?: { contents?: string; "id-token"?: string };
     };
-    const parsed = Bun.YAML.parse(yml) as {
-      on?: {
-        push?: {
-          tags?: string | string[];
-        };
-      };
+    const ci = Bun.YAML.parse(ciYml) as {
+      on?: { push?: { tags?: string | string[] }; workflow_call?: unknown };
       jobs?: {
         lint?: unknown;
         typecheck?: unknown;
         test?: unknown;
         gate?: unknown;
         site?: unknown;
-        ci?: { needs?: string | string[] };
+        ci?: unknown;
+        "publish-npm"?: unknown;
+        "publish-jsr"?: unknown;
+      };
+    };
+    const release = Bun.YAML.parse(releaseYml) as {
+      on?: { push?: { tags?: string | string[] } };
+      jobs?: {
+        checks?: { uses?: string };
         "publish-npm"?: PublishJob;
         "publish-jsr"?: PublishJob;
       };
     };
 
-    const tags = parsed.on?.push?.tags;
+    expect(ci.on?.push).toBeUndefined();
+    expect(ci.on?.workflow_call).not.toBeUndefined();
+    expect(ci.jobs?.["publish-npm"]).toBeUndefined();
+    expect(ci.jobs?.["publish-jsr"]).toBeUndefined();
+
+    const tags = release.on?.push?.tags;
     const tagList = Array.isArray(tags) ? tags : tags ? [tags] : [];
     expect(tagList).toContain("v*");
+    expect(release.jobs?.checks?.uses).toBe("./.github/workflows/ci.yml");
 
-    for (const key of ["lint", "typecheck", "test", "gate", "site", "ci"] as const) {
-      expect(parsed.jobs?.[key]).toBeTruthy();
+    for (const key of ["lint", "typecheck", "test", "gate", "site"] as const) {
+      expect(ci.jobs?.[key]).toBeTruthy();
     }
-    expect(parsed.jobs?.["budgets"]).toBeUndefined();
-    expect(parsed.jobs?.["publish-npm"]).toBeTruthy();
-    expect(parsed.jobs?.["publish-jsr"]).toBeTruthy();
-
-    const ciNeeds = parsed.jobs?.ci?.needs;
-    const ciNeedList = Array.isArray(ciNeeds) ? ciNeeds : ciNeeds ? [ciNeeds] : [];
-    for (const need of ["lint", "typecheck", "test", "gate", "site"]) {
-      expect(ciNeedList).toContain(need);
-    }
-    expect(ciNeedList).not.toContain("budgets");
+    expect(ci.jobs?.ci).toBeUndefined();
+    expect(ci.jobs?.["budgets"]).toBeUndefined();
+    expect(release.jobs?.["publish-npm"]).toBeTruthy();
+    expect(release.jobs?.["publish-jsr"]).toBeTruthy();
 
     for (const key of ["publish-npm", "publish-jsr"] as const) {
-      const job = parsed.jobs?.[key];
-      expect(job?.needs).toBe("ci");
+      const job = release.jobs?.[key];
+      expect(job?.needs).toBe("checks");
       expect(job?.environment).toBe("production");
       expect(job?.permissions?.contents).toBe("read");
       expect(job?.permissions?.["id-token"]).toBe("write");
     }
 
-    // Step commands (string search — Bun.YAML keeps step `run` as strings)
-    expect(yml).toContain("bun run lint");
-    expect(yml).toContain("bun run fmt:check");
-    expect(yml).toContain("bun run typecheck");
-    expect(yml).toContain("bun run test");
-    expect(yml).not.toContain("bun run budgets");
-    expect(yml).toContain("bun run gate");
-    expect(yml).toContain("bun run site:build");
-    expect(yml).toContain("bun install --frozen-lockfile");
-    expect(yml).toContain("npm install -g npm@latest");
-    expect(yml).toContain("--jsr-only");
-    expect(yml).toContain("--npm-only");
+    expect(ciYml).toContain("bun run lint");
+    expect(ciYml).toContain("bun run fmt:check");
+    expect(ciYml).toContain("bun run typecheck");
+    expect(ciYml).toContain("bun test ${{ matrix.paths }}");
+    expect(ciYml).not.toContain("bun run budgets");
+    expect(ciYml).toContain("bun run gate");
+    expect(ciYml).toContain("bun run site:build");
+    expect(ciYml).toContain("bun install --frozen-lockfile");
+    expect(ciYml).not.toContain("--jsr-only");
+    expect(ciYml).not.toContain("--npm-only");
+    expect(releaseYml).toContain("npm install -g npm@latest");
+    expect(releaseYml).toContain("--jsr-only");
+    expect(releaseYml).toContain("--npm-only");
   });
 
   test("create-oke package.json has repository.directory for provenance", () => {

@@ -1,58 +1,74 @@
 # Decisions
 
-`fx.decide` asks a System One model one or more typed questions and returns values the Flow can act on. Autonomy is granted only by `oke-decisions.lock.json`. The runtime can only take a non-auto path.
+`fx.decide` asks one or more typed questions of a decider and returns values the Flow can act on. Autonomy is a certificate on that decider, stored in `oke-decisions.lock.json` version 2. The runtime takes `otherwise` on every path that is not auto.
 
 ## Declaration
 
 ```ts
+ai.decider(name, {
+  provider?: "openrouter" | "openai",
+  driverId?: "systemone" | "openai-decisions",
+  baseUrl?: string,
+  model: string,
+  secret?: string,
+  region?: string,
+  zdr?: boolean,
+  timeout?: number | string,
+  concurrency?: number,
+  capabilities?: { boolean, choice, score, refusal, maxChoices?, minLevels?, maxLevels?, maxContext? },
+})
+
 ai.decision(name, {
-  model?,
-  in,
+  decider: Decider,
+  backup?: Decider[],
+  otherwise: Gate | "abstain",
   ask,
-  autonomy?: { maxError, audit },
-  review?: Gate,
-  onUncertain?: "abstain",
+  autonomy?: { maxError, audit, risk? },
   locale?: (input) => string | undefined,
   evals?,
+  in?,
 })
 ```
 
-Exactly one of `review` and `onUncertain: "abstain"` is required. Declaring both, or neither, is a compile error. `autonomy` requires `audit`.
+`decider` and `otherwise` are required. There is no default decider. `model`, `driverId`, `review`, and `onUncertain` are not decision fields. `shadow` fails to compile with a message that says it is planned.
 
-Builders: `ai.choice(instructions, options)`, `ai.score(instructions, levels)`, `ai.boolean(instructions, criteria?)`. Every choice injects `none_of_these`. Author choice maps allow at most 254 options. Score levels are 2–10. Question ids `meta` and `$` are reserved. `ask` must not be empty.
+`otherwise: Gate` parks. The Flow must be durable and must not be HTTP. `otherwise: "abstain"` returns null and does not park.
 
-`ai.boolean` is `noul` on the wire. The default model is OpenRouter `typesafe/jev-1.13`. `driverId: "typesafe"` pins `jev-1.13.0`. Absent `locale` is one certificate slice.
+`backup` runs only on outage: open breaker, HTTP 5xx, or timeout. HTTP 4xx is `DecisionRequestError`. It does not open the breaker and does not try the backup.
 
-A `review` decision used from an HTTP-triggered Flow is a compile error, durable or not. A park returns no body (HTTP 204). Emit a signal and decide in a consumer. A `review` decision also requires `durable: true`.
+Builders: `ai.choice`, `ai.score`, `ai.boolean`. Every choice injects `none_of_these`. Question ids `meta` and `$` are reserved. Numeric choice and level limits apply only when that decider's capability row contains the number.
+
+State larger than `maxContext` (estimated as `ceil(JSON.stringify(state).length / 4)`) throws `DecisionInputTooLarge` before any call.
 
 ## Result
 
-`$.<question>.how` is `"auto"`, `"reviewed"`, or `"abstained"`. The value is `null` only when `how` is `"abstained"`. A sampled question sets `$.<question>.audited: true` and still returns the auto value. `$` also carries calibrated `p`, the raw distribution, and `meta` (resolved model, provider, usage).
+`$.<question>` carries `how` (`auto` | `reviewed` | `abstained`), `p`, `raw`, `audited`, and `by`. `why` is present only when the question is not auto: `uncertain` | `refused` | `none_of_these` | `uncertified` | `drift` | `outage`.
 
-## Paths
+A refusal is not a label. It takes `otherwise` with `why: "refused"` and `by`. The review row shows `refused by <decider>`.
 
-Review mode parks every non-auto path: low confidence, missing or stale certificate, version mismatch, uncertified locale, drift, and provider outage. The run waits until the review Gate resolves it. There is no default timeout. One decision produces one review.
+Auto is allowed only when the answering decider holds its own certificate: echoed model, unexpired, question hash, and threshold.
 
-Abstain mode returns `null` on those same paths and does not park. It may run in a non-durable Flow.
+## Protocols
 
-An audit draw does not park. After the auto value is returned, the item is queued for review only to produce a label. The draw is seeded and journaled. Propensity is recorded. Replay does not sample again.
+| Protocol           | Wire                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `systemone`        | `POST` `{ model, state, questions }`. Answers are an object of `noul`, `choice`, or `score`.                                     |
+| `openai-decisions` | `POST` `{ model, input, questions }`. `input` is a string. Answers are an array of `predicate`, `choice`, `score`, or `refusal`. |
 
-Labels are written when a review resolves, including an audit review. That write belongs to the reviewer Flow, not the Flow that called `fx.decide`. Labels are tenant-scoped and store locale when one was computed.
+Presets: `openrouter` (System One, dated pinning, `OPENROUTER_API_KEY`) and `openai` (OpenAI decisions, alias pinning, `OPENAI_API_KEY`). Every other host uses `driverId`, `baseUrl`, and `capabilities`. `region` and `zdr` without a verified provider value are `declared` on the Manifest.
 
-## Providers
-
-`DecisionProvider` is raw HTTP. TypeSafe is `POST https://api.typesafe.ai/v1/systemone`. OpenRouter is `POST https://openrouter.ai/api/alpha/decisions`. One request carries every question.
-
-Retry `429` and `529` and honor `Retry-After`. The circuit breaker opens only on network errors, timeouts, 5xx, and 529. `401`, `402`, and `422` throw typed errors and do not open it. An open breaker is an outage (a non-auto path).
+Alias certificates store `pinned: false` and `expiresAt` = certify time + 30 days. After expiry, `why` is `uncertified`. If a dated catalog lists a dated id, autonomy requires the decider to use it.
 
 ## Certificates
 
-`oke-decisions.lock.json` lives next to the app's OKE config. Per decision: pinned resolved model version. Per question, and per locale slice when `locale` is declared: question hash, calibrator (temperature for choice and score, beta or Platt for boolean), Learn-then-Test threshold at `maxError`, and metrics.
+Lockfile version 2: `{ version: 2, decisions: { [name]: { deciders: { [decider]: { model, pinned, expiresAt?, certifiedAt?, questions } } } } }`.
 
-A Clock job sums label counts across tenants into one app-wide candidate. Drift sets one app-level suspension flag and emits a Signal. `oke decide promote <name>` fetches that candidate from an operator-authenticated admin endpoint and writes the lockfile. `oke eval --certify` builds one from the seed eval file.
+Version 1 throws a message to recertify. A runtime model mismatch, missing cert, hash mismatch, locale mismatch, or alias expiry is `why: "uncertified"`. Switching to a decider that already has a certificate needs no recertification.
 
-Seed evals are JSONL: `{ id?, input, expect: { <question>: value }, locale? }`.
+`oke decide certify <name> --deciders a,b` writes one certificate per decider. `oke decide promote` and `oke decide labels` stay. `oke decide models` lists catalog id, canonical slug, context, and input modalities. `oke eval --certify` is removed.
 
-## Out of scope
+`drivers.decide` defaults to `{ test: "mock" }`. Unset dev and prod call the host. `t.ai.decide(decision, answers)` scripts probabilities or `{ refusal }`. The refusal string is not stored.
 
-Composites, conformal sets, shadow challengers, providers other than TypeSafe and OpenRouter, and order or injection probes.
+## Console and MCP
+
+Console resolves reviews. MCP stays read-only and includes `by`, `why`, and per-decider certificates. There is no resolve or promote tool.

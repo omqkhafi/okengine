@@ -97,23 +97,19 @@ export async function runOkeEval(options: OkeEvalOptions = {}): Promise<number> 
  */
 export async function evalCli(args: string[]): Promise<number> {
   let manifestPath: string | undefined;
-  let certify = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--manifest" || a === "-m") {
       manifestPath = args[++i];
-    } else if (a === "--certify") {
-      certify = true;
     } else if (a === "--help" || a === "-h") {
-      console.log(`oke eval [--manifest oke.manifest.json] [--certify]
+      console.log(`oke eval [--manifest oke.manifest.json]
 
 Run prompt eval sets declared in the Manifest. Fails CI on regression.
---certify builds a decision certificate from each decision seed file.
+Decision certificates are \`oke decide certify\`.
 `);
       return 0;
     }
   }
-  if (certify) return runOkeCertify({ manifestPath });
   return runOkeEval({ manifestPath });
 }
 
@@ -131,7 +127,7 @@ export async function runOkeCertify(
   } = {},
 ): Promise<number> {
   const { certifySeed } = await import("../elements/ai/decisions/certify.ts");
-  const { aiDecisionRegistry } = await import("../kernel/element-registries.ts");
+  const { aiDeciderRegistry, aiDecisionRegistry } = await import("../kernel/element-registries.ts");
   const { DECISION_LOCK_FILENAME, parseDecisionLockfile } =
     await import("../elements/ai/decisions/certificate.ts");
   const { resolveStartEntry } = await import("./start.ts");
@@ -168,28 +164,39 @@ export async function runOkeCertify(
   const current = (await existingFile.exists())
     ? parseDecisionLockfile(await existingFile.json())
     : undefined;
-  const next = { decisions: { ...(current?.decisions ?? {}) } };
+  const next: {
+    version: 2;
+    decisions: Record<string, { deciders: Record<string, unknown> }>;
+  } = { version: 2, decisions: { ...(current?.decisions ?? {}) } };
   for (const name of names) {
     const decision = decisions[name];
     if (!decision?.evals) {
-      process.stdout.write(`oke eval: skip ${name} (no evals)\n`);
+      process.stdout.write(`oke decide certify: skip ${name} (no evals)\n`);
       continue;
     }
     const decl = aiDecisionRegistry.find((item) => item.name === name);
     if (!decl) {
-      console.error(`oke eval: decision "${name}" is not loaded`);
+      console.error(`oke decide certify: decision "${name}" is not loaded`);
+      return 1;
+    }
+    const decider = aiDeciderRegistry.find((item) => item.name === decl.decider);
+    if (!decider) {
+      console.error(`oke decide certify: decider "${decl.decider}" is not loaded`);
       return 1;
     }
     const text = await Bun.file(resolve(root, decision.evals)).text();
-    const evaluate = injected ?? (await providerForDecision(decl));
-    next.decisions[name] = await certifySeed({
-      model: decl.model ?? decision.model ?? "",
+    const evaluate = injected ?? (await providerForDecider(decl, decider));
+    const result = await certifySeed({
+      model: decider.model,
+      pinned: decider.pinning !== "alias",
       maxError: decision.autonomy?.maxError ?? 0.05,
       delta: decision.autonomy?.risk ?? decl.autonomy?.risk ?? 0.1,
       jsonl: text,
       ask: decl.ask,
       evaluate,
     });
+    const prev = next.decisions[name]?.deciders ?? {};
+    next.decisions[name] = { deciders: { ...prev, [decider.name]: result.cert } };
   }
   await Bun.write(lockPath, `${JSON.stringify(next, null, 2)}\n`);
   const { setDecisionDrift } = await import("../elements/ai/decisions/certificate.ts");
@@ -201,53 +208,25 @@ export async function runOkeCertify(
   return 0;
 }
 
-async function providerForDecision(
+async function providerForDecider(
   decl: import("../elements/ai/declare.ts").AiDecisionDecl,
+  decider: import("../elements/ai/declare.ts").AiDeciderDecl,
 ): Promise<(input: unknown) => Promise<DecisionResponse>> {
-  const typesafe = decl.driverId === "typesafe";
-  const keyName = typesafe ? "TYPESAFE_API_KEY" : "OPENROUTER_API_KEY";
-  const apiKey = process.env[keyName];
-  if (!apiKey) throw new Error(`oke eval: secret "${keyName}" is not configured`);
-  const { createTypesafeDecisionProvider, TYPESAFE_JEV_MODEL } =
-    await import("../elements/ai/decisions/typesafe.ts");
-  const { createOpenRouterDecisionProvider, OPENROUTER_JEV_MODEL } =
-    await import("../elements/ai/decisions/openrouter.ts");
-  const provider = typesafe
-    ? createTypesafeDecisionProvider(apiKey)
-    : createOpenRouterDecisionProvider(apiKey);
-  const model = decl.model ?? (typesafe ? TYPESAFE_JEV_MODEL : OPENROUTER_JEV_MODEL);
-  return (input) =>
-    provider.evaluate({
-      model,
-      state: input,
-      questions: wireFromDecl(decl),
+  const apiKey = process.env[decider.secret];
+  if (!apiKey) throw new Error(`oke decide certify: secret "${decider.secret}" is not configured`);
+  return async (input) => {
+    const { decisionHttp } = await import("../elements/ai/decisions/http.ts");
+    const { encodeDecisionRequest, normalizeDecisionResponse, wireQuestions } =
+      await import("../elements/ai/decisions/codec.ts");
+    const request = { model: decider.model, state: input, questions: wireQuestions(decl.ask) };
+    const raw = await decisionHttp({
+      url: decider.baseUrl,
+      apiKey,
+      request,
+      body: encodeDecisionRequest(decider.protocol, request),
+      timeoutMs: 30_000,
+      breakerKey: decider.name,
     });
-}
-
-function wireFromDecl(
-  decl: import("../elements/ai/declare.ts").AiDecisionDecl,
-): import("../elements/ai/decisions/provider.ts").DecisionRequest["questions"] {
-  const questions: Record<string, import("../elements/ai/decisions/provider.ts").WireQuestion> = {};
-  for (const [id, question] of Object.entries(decl.ask)) {
-    if (question.kind === "choice") {
-      questions[id] = {
-        type: "choice",
-        instructions: question.instructions,
-        criteria: { ...question.options, none_of_these: null },
-      };
-    } else if (question.kind === "score") {
-      questions[id] = {
-        type: "score",
-        instructions: question.instructions,
-        criteria: question.levels,
-      };
-    } else {
-      questions[id] = {
-        type: "noul",
-        instructions: question.instructions,
-        ...(question.criteria !== undefined ? { criteria: question.criteria } : {}),
-      };
-    }
-  }
-  return questions;
+    return normalizeDecisionResponse(decider.protocol, raw);
+  };
 }

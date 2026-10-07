@@ -37,26 +37,43 @@ export interface DecisionCertSlice {
   readonly metrics?: Readonly<Record<string, number>>;
 }
 
-/** One decision inside `oke-decisions.lock.json`. */
-export interface DecisionLockEntry {
+/** One decider's certificate inside a decision. */
+export interface DecisionDeciderCert {
   readonly model: string;
+  /** False when the provider only echoes an alias. */
+  readonly pinned: boolean;
+  /** Epoch ms an alias certificate stops granting auto. */
+  readonly expiresAt?: number;
   /** Epoch ms the certificate was written. Drift counts labels after this. */
   readonly certifiedAt?: number;
   readonly questions: Readonly<Record<string, Readonly<Record<string, DecisionCertSlice>>>>;
 }
 
-/** App lockfile. Lives next to that app's OKE config. */
+/** One decision inside `oke-decisions.lock.json`. */
+export interface DecisionLockEntry {
+  readonly deciders: Readonly<Record<string, DecisionDeciderCert>>;
+}
+
+/** App lockfile. Version 1 is rejected. */
 export interface DecisionLockfile {
+  readonly version: 2;
   readonly decisions: Readonly<Record<string, DecisionLockEntry>>;
 }
 
+/** A lockfile that is not version 2. */
+export class DecisionLockVersionError extends Error {
+  constructor() {
+    super("oke-decisions.lock.json is not version 2. Run `oke decide certify` to recertify.");
+    this.name = "DecisionLockVersionError";
+  }
+}
+
 /** Why a question is not auto. */
-export type DecisionUncertainty =
-  | "low-confidence"
-  | "missing-lock"
-  | "stale-hash"
-  | "version-mismatch"
-  | "uncertified-locale"
+export type DecisionWhy =
+  | "uncertain"
+  | "refused"
+  | "none_of_these"
+  | "uncertified"
   | "drift"
   | "outage";
 
@@ -84,10 +101,14 @@ export interface DecisionLabel {
   readonly reviewId?: string;
 }
 
-/** App-wide candidate. A full lock entry, not a count. */
+/** App-wide candidate for one decider. */
 export interface DecisionCandidate {
+  readonly decider: string;
   readonly model: string;
-  readonly questions: DecisionLockEntry["questions"];
+  readonly pinned: boolean;
+  readonly expiresAt?: number;
+  readonly certifiedAt?: number;
+  readonly questions: DecisionDeciderCert["questions"];
 }
 
 /** Lockfile name at the app project root. */
@@ -292,7 +313,9 @@ export function recordDecisionLabel(label: DecisionLabel): void {
 export function aggregateDecisionCandidate(
   decision: string,
   fit: (rows: readonly DecisionLabel[]) => DecisionCandidate = () => ({
+    decider: "",
     model: "",
+    pinned: true,
     questions: {},
   }),
 ): DecisionCandidate {
@@ -312,21 +335,39 @@ export function lockFromCandidate(
   candidate: unknown,
   current: DecisionLockfile | undefined,
 ): DecisionLockfile {
-  const entry = parseDecisionLockEntry(candidate);
-  if (!entry) throw new TypeError("promote: candidate is not a lock entry");
+  const parsed = parseDecisionCandidate(candidate);
+  if (!parsed) throw new TypeError("promote: candidate is not a lock entry");
   setDecisionDrift(name, false);
-  return { decisions: { ...(current?.decisions ?? {}), [name]: entry } };
+  const prev = current?.decisions[name]?.deciders ?? {};
+  return {
+    version: 2,
+    decisions: {
+      ...(current?.decisions ?? {}),
+      [name]: { deciders: { ...prev, [parsed.decider]: certFromCandidate(parsed) } },
+    },
+  };
+}
+
+function certFromCandidate(candidate: DecisionCandidate): DecisionDeciderCert {
+  return {
+    model: candidate.model,
+    pinned: candidate.pinned,
+    ...(candidate.expiresAt !== undefined ? { expiresAt: candidate.expiresAt } : {}),
+    ...(candidate.certifiedAt !== undefined ? { certifiedAt: candidate.certifiedAt } : {}),
+    questions: candidate.questions,
+  };
 }
 
 /**
- * Accept a lock entry with a model and a questions map.
+ * Accept a candidate for one decider.
  *
- * @param body - Candidate or file slot
+ * @param body - Candidate body
  */
-export function parseDecisionLockEntry(body: unknown): DecisionLockEntry | undefined {
+export function parseDecisionCandidate(body: unknown): DecisionCandidate | undefined {
   if (!body || typeof body !== "object") return undefined;
   const record = body as Record<string, unknown>;
-  if (typeof record.model !== "string") return undefined;
+  if (typeof record.decider !== "string" || typeof record.model !== "string") return undefined;
+  if (typeof record.pinned !== "boolean") return undefined;
   if (
     !record.questions ||
     typeof record.questions !== "object" ||
@@ -335,28 +376,70 @@ export function parseDecisionLockEntry(body: unknown): DecisionLockEntry | undef
     return undefined;
   }
   return {
+    decider: record.decider,
     model: record.model,
+    pinned: record.pinned,
+    ...(typeof record.expiresAt === "number" ? { expiresAt: record.expiresAt } : {}),
     ...(typeof record.certifiedAt === "number" ? { certifiedAt: record.certifiedAt } : {}),
-    questions: record.questions as DecisionLockEntry["questions"],
+    questions: record.questions as DecisionCandidate["questions"],
   };
 }
 
 /**
- * Accept a lockfile object.
+ * Accept one decision slot (`deciders` map).
+ *
+ * @param body - File slot
+ */
+export function parseDecisionLockEntry(body: unknown): DecisionLockEntry | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const record = body as Record<string, unknown>;
+  if (typeof record.model === "string" && record.deciders === undefined) {
+    throw new DecisionLockVersionError();
+  }
+  if (!record.deciders || typeof record.deciders !== "object" || Array.isArray(record.deciders)) {
+    return undefined;
+  }
+  const deciders: Record<string, DecisionDeciderCert> = {};
+  for (const [name, entry] of Object.entries(record.deciders)) {
+    const parsed = parseDecisionCandidate({
+      ...(entry as object),
+      decider: name,
+      pinned: (entry as { pinned?: unknown }).pinned ?? true,
+    });
+    if (!parsed) return undefined;
+    deciders[name] = certFromCandidate(parsed);
+  }
+  return { deciders };
+}
+
+/**
+ * Accept a version 2 lockfile. Version 1 throws {@link DecisionLockVersionError}.
  *
  * @param body - Parsed JSON
  */
 export function parseDecisionLockfile(body: unknown): DecisionLockfile | undefined {
   if (!body || typeof body !== "object") return undefined;
-  const decisions = (body as { decisions?: unknown }).decisions;
-  if (!decisions || typeof decisions !== "object" || Array.isArray(decisions)) return undefined;
+  const record = body as { version?: unknown; decisions?: unknown };
+  if (record.version !== 2) {
+    if (record.decisions && typeof record.decisions === "object") {
+      throw new DecisionLockVersionError();
+    }
+    return undefined;
+  }
+  if (
+    !record.decisions ||
+    typeof record.decisions !== "object" ||
+    Array.isArray(record.decisions)
+  ) {
+    return undefined;
+  }
   const next: Record<string, DecisionLockEntry> = {};
-  for (const [name, entry] of Object.entries(decisions)) {
+  for (const [name, entry] of Object.entries(record.decisions)) {
     const parsed = parseDecisionLockEntry(entry);
     if (!parsed) return undefined;
     next[name] = parsed;
   }
-  return { decisions: next };
+  return { version: 2, decisions: next };
 }
 
 /**

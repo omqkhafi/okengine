@@ -54,6 +54,44 @@ function choice() {
   return ai.choice("which team", { billing: "Billing", technical: "Technical" });
 }
 
+function jev(name = "jev") {
+  return ai.decider(name, { provider: "openrouter", model: "typesafe/jev-1.13.0" });
+}
+
+function setLock(
+  body:
+    | {
+        decisions: Record<
+          string,
+          { model: string; certifiedAt?: number; questions: Record<string, unknown> }
+        >;
+      }
+    | undefined,
+) {
+  if (!body) {
+    setDecisionLock(undefined);
+    return;
+  }
+  setDecisionLock({
+    version: 2,
+    decisions: Object.fromEntries(
+      Object.entries(body.decisions).map(([name, entry]) => [
+        name,
+        {
+          deciders: {
+            jev: {
+              model: entry.model,
+              pinned: true as const,
+              ...(entry.certifiedAt !== undefined ? { certifiedAt: entry.certifiedAt } : {}),
+              questions: entry.questions as never,
+            },
+          },
+        },
+      ]),
+    ),
+  });
+}
+
 function provider() {
   setDecisionProvider(async () => ({
     model: "typesafe/jev-1.13.0",
@@ -74,11 +112,12 @@ describe("fx.decide", () => {
     provider();
     const question = choice();
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -122,7 +161,8 @@ describe("fx.decide", () => {
       throw new DecisionOutageError("down");
     });
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       ask: { team: choice() },
     });
     const fx = createFx({ flow: "run", effects: { decides: ["triage"] }, now: () => 1 });
@@ -139,11 +179,12 @@ describe("fx.decide", () => {
     provider();
     const question = choice();
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 1 },
       ask: { team: question },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -187,7 +228,8 @@ describe("fx.decide", () => {
     provider();
     gate.policy("ops", (ctx) => ctx.operator.id !== null);
     const decl = ai.decision("triage", {
-      review: "ops",
+      decider: jev(),
+      otherwise: "ops",
       ask: { team: choice() },
     });
     const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
@@ -232,7 +274,8 @@ describe("fx.decide", () => {
   test("the parked review masks secret input and keeps the rest", async () => {
     provider();
     const decl = ai.decision("triage", {
-      review: "ops",
+      decider: jev(),
+      otherwise: "ops",
       in: z.object({
         ticket: z.string(),
         token: z.string().describe("secret"),
@@ -298,11 +341,12 @@ describe("fx.decide", () => {
     provider();
     const question = choice();
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -340,7 +384,11 @@ describe("fx.decide", () => {
   test("the same decision can park twice in one run", async () => {
     provider();
     gate.policy("ops", (ctx) => ctx.operator.id !== null);
-    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "ops",
+      ask: { team: choice() },
+    });
     const store = createMemoryJournalStore();
     const journal = createJournal({ store, now: () => 1_000_000 });
     const session = await journal.start("run", {});
@@ -413,11 +461,12 @@ describe("fx.decide", () => {
     }));
     const question = choice();
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -456,11 +505,12 @@ describe("fx.decide", () => {
     const team = choice();
     const urgent = ai.boolean("urgent?");
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team, urgent },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -498,7 +548,11 @@ describe("fx.decide", () => {
   test("a reviewer may resolve a choice as none_of_these", async () => {
     provider();
     gate.policy("ops", () => true);
-    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "ops",
+      ask: { team: choice() },
+    });
     const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
     const journal = createJournal({ store, now: () => 1 });
     const session = await journal.start("run", {});
@@ -553,11 +607,12 @@ describe("fx.decide", () => {
     }));
     const question = ai.boolean("urgent?");
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { urgent: question },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -581,7 +636,11 @@ describe("fx.decide", () => {
   test("resolve checks the gate, the tenant, and every open question", async () => {
     provider();
     gate.policy("ops", (ctx) => ctx.operator.id === "reviewer");
-    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "ops",
+      ask: { team: choice() },
+    });
     const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
     const session = await createJournal({ store, now: () => 1 }).start("run", {});
     const fx = createFx({
@@ -636,7 +695,11 @@ describe("fx.decide", () => {
 
   test("pending review stamps the tenant", async () => {
     provider();
-    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "ops",
+      ask: { team: choice() },
+    });
     const store = createMemoryJournalStore();
     const session = await createJournal({ store, now: () => 1 }).start("run", {});
     const fx = createFx({
@@ -683,12 +746,12 @@ describe("fx.decide", () => {
     try {
       const question = choice();
       const decl = ai.decision("triage", {
-        onUncertain: "abstain",
-        model: "typesafe/jev-1.13",
+        decider: jev(),
+        otherwise: "abstain",
         autonomy: { maxError: 0.05, audit: 0 },
         ask: { team: question },
       });
-      setDecisionLock({
+      setLock({
         decisions: {
           triage: {
             model: "typesafe/jev-1.13.0",
@@ -743,11 +806,12 @@ describe("fx.decide", () => {
     const team = choice();
     const urgent = ai.boolean("urgent");
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 1 },
       ask: { team, urgent },
     });
-    setDecisionLock({
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -824,7 +888,11 @@ describe("fx.decide", () => {
   test("an operator resolves another tenant and a tenant reviewer cannot", async () => {
     provider();
     gate.policy("ops", (ctx) => ctx.auth.userId === "ada" && ctx.operator.id === "reviewer");
-    const decl = ai.decision("triage", { review: "ops", ask: { team: choice() } });
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "ops",
+      ask: { team: choice() },
+    });
     const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
     const session = await createJournal({ store, now: () => 1 }).start("run", {});
     const fx = createFx({
@@ -872,8 +940,12 @@ describe("fx.decide", () => {
       throw new DecisionOutageError("down");
     });
     const question = choice();
-    const decl = ai.decision("triage", { review: "ops", ask: { team: question } });
-    setDecisionLock({
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "ops",
+      ask: { team: question },
+    });
+    setLock({
       decisions: {
         triage: {
           model: "typesafe/jev-1.13.0",
@@ -908,9 +980,9 @@ describe("fx.decide", () => {
       (entry) => entry.kind === "step" && entry.name.startsWith("ai-decision:"),
     );
     expect(
-      (step && step.kind === "step" ? step.value : undefined) as { reason?: string },
+      (step && step.kind === "step" ? step.value : undefined) as { why?: string },
     ).toMatchObject({
-      reason: "outage",
+      why: "outage",
     });
   });
 
@@ -930,7 +1002,8 @@ describe("fx.decide", () => {
       usage: {},
     }));
     const decl = ai.decision("severity", {
-      onUncertain: "abstain",
+      decider: jev(),
+      otherwise: "abstain",
       ask: { severity: ai.score("How severe is this?", ["low", "medium", "high"]) },
     });
     const fx = createFx({ flow: "run", effects: { decides: ["severity"] } });
@@ -942,7 +1015,11 @@ describe("fx.decide", () => {
   });
 
   test("a missing secret is a config error", async () => {
-    const decl = ai.decision("triage", { onUncertain: "abstain", ask: { team: choice() } });
+    const decl = ai.decision("triage", {
+      decider: jev(),
+      otherwise: "abstain",
+      ask: { team: choice() },
+    });
     const fx = createFx({
       flow: "run",
       effects: { decides: ["triage"], secrets: ["OPENROUTER_API_KEY"] },

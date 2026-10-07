@@ -163,6 +163,7 @@ Read `fx.principal` for audit — it does not copy into `fx.auth`. Passing a Flo
 
 `fx.store(db).transaction(async (tx) => { … })` pins one SQL connection. `fx.emit` inside the
 callback stages on the signal outbox and publishes after commit. A throw rolls that batch back.
+
 `fx.store(db).run(builder)` runs a Drizzle builder through `toSQL()`. Joins stay on that builder;
 the hand-rolled chain does not grow a join API. Inference still records every joined table.
 
@@ -246,13 +247,13 @@ elements.
 
 ## AI
 
-| Signature                                             | Records                   | Returns                                                                                                                             |
-| ----------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `fx.ask(prompt, input?, { via?, tools?, maxSteps? })` | `ask` (+ `call` per tool) | Object validated against the prompt's `out`                                                                                         |
-| `fx.run(agent, input?)`                               | `ask`                     | Agent result                                                                                                                        |
-| `fx.stream(model, { prompt?, data?, via? })`          | `ask`                     | `AsyncIterable<string>` — real driver stream; cancels via ambient `fx.signal` (HTTP disconnect included)                            |
-| `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                                                                        |
-| `fx.decide(decision, input)`                          | `decide`                  | `$.<question>.how` is `auto`, `reviewed`, or `abstained`. `audited` is a boolean flag, not a `how`. Abstain makes the value `null`. |
+| Signature                                             | Records                   | Returns                                                                                                                                                                                                     |
+| ----------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fx.ask(prompt, input?, { via?, tools?, maxSteps? })` | `ask` (+ `call` per tool) | Object validated against the prompt's `out`                                                                                                                                                                 |
+| `fx.run(agent, input?)`                               | `ask`                     | Agent result                                                                                                                                                                                                |
+| `fx.stream(model, { prompt?, data?, via? })`          | `ask`                     | `AsyncIterable<string>` — real driver stream; cancels via ambient `fx.signal` (HTTP disconnect included)                                                                                                    |
+| `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                                                                                                                                                |
+| `fx.decide(decision, input)`                          | `decide`                  | `$.<question>.how` is `auto`, `reviewed`, or `abstained`. `by` is the decider. `why` is set only when the question is not `auto`. `audited` is a boolean flag, not a `how`. Abstain makes the value `null`. |
 
 AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them. `tools` are Flow refs — each model tool call goes through `fx.call` (same capability and Runs path).
 
@@ -289,8 +290,9 @@ Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`. A `"d"` is 86_400
 
 Pure store-read flows cache by default. A send, emit, fetch, vault read, ask,
 decide, or `fx.call` is never cached. The key includes tenant, locale, scopes,
-and membership roles. Writes through `fx` invalidate those keys. `cache: false`
-always disables. `oke({ cache: { auto: false } })` turns the default off.
+and membership roles. Writes through `fx` invalidate those keys.
+
+`cache: false` always disables. `oke({ cache: { auto: false } })` turns the default off.
 Cross-instance invalidation and out-of-band writes are not covered.
 
 `fx.cache` is the manual (tier-3) surface:

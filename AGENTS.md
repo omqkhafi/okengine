@@ -60,7 +60,7 @@ A direct `node:` import (or any other side-channel I/O) in element or flow code 
 - `fx.ask` runs a prompt (repair, budgets). `fx.run` runs an agent (`maxSteps`, `maxCostPerRun`, `stopReason`). `fx.decide` runs a decision.
 - A tool with `approval` requires `durable: true`. Resolve it in the Console or on the approval routes. Do not resolve it from MCP.
 - Stream with `return fx.json.stream(fx.run(agent, input, { stream: true }))`. Follow with `GET /agent/runs/:runId/events` (`Last-Event-ID`). Client: `okengine/client/agent`. React: `useAgentRun`.
-- `fx.decide` takes exactly one of `review` or `onUncertain: "abstain"`. Review only inside a durable non-HTTP Flow (emit to a consumer). Autonomy needs `{ maxError, audit }` and comes only from `oke-decisions.lock.json` (`oke eval --certify` / `oke decide promote`).
+- `fx.decide` names a decider and `otherwise` (a Gate, or `"abstain"`). A Gate parks only inside a durable non-HTTP Flow (emit to a consumer). Autonomy is that decider's certificate in `oke-decisions.lock.json` (`oke decide certify` / `oke decide promote`). Prompt evals stay on `oke eval`.
 
 ## Ports
 
@@ -107,6 +107,10 @@ Engine: Bun `>=1.4.2`.
 | Manifest     | `manifest.v1.schema.json`       |
 
 **If the documentation is silent, stop and ask.**
+
+## GitHub workflow
+
+Branch from `dev` with `type/short-name`. Never commit on `dev` or `main`, and never merge. A pull request closes a leaf issue (Feature, Bug, or Task), not an Epic. The title is `type(scope): summary`, with one `type:` label, at least one `area:` label, a milestone, and `Closes #N` (or `Refs #N`). The loop, Ready, and the board are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## After every implementation
 

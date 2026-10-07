@@ -76,6 +76,11 @@ export interface DriversConfig {
   readonly vault?: EnvDriverInput;
   readonly channel?: ChannelDriversConfig;
   readonly ai?: EnvDriverInput;
+  /**
+   * Decision transport. Default `{ test: "mock" }`.
+   * Unset dev and prod call the decider host.
+   */
+  readonly decide?: EnvDriverInput;
   readonly runs?: EnvDriverInput;
 }
 
@@ -371,6 +376,7 @@ function mapDriversSlots(
     vault: fn(drivers.vault),
     ...(channel !== undefined ? { channel } : {}),
     ai: fn(drivers.ai),
+    decide: fn(drivers.decide),
     runs: fn(drivers.runs),
   };
 }

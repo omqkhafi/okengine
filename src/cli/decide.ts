@@ -11,6 +11,10 @@ import {
   type DecisionLockfile,
 } from "../elements/ai/decisions/certificate.ts";
 import { DECISION_EXPORT_WARNING } from "../elements/ai/decisions/export.ts";
+import { ALIAS_CERTIFICATE_MS } from "../elements/ai/deciders/presets.ts";
+import { requiredDatedModel } from "../elements/ai/decisions/catalog.ts";
+import type { Manifest } from "../manifest/types.ts";
+import type { DecisionEvaluate } from "../elements/ai/decisions/certify.ts";
 
 /** Options for {@link promoteDecision}. */
 export interface PromoteDecisionOptions {
@@ -137,22 +141,115 @@ async function exportLabelsCommand(name: string | undefined, rest: string[]): Pr
  *
  * @param args - Remaining argv after `decide`
  */
+/**
+ * Certify one decision for each named decider and write lockfile version 2.
+ *
+ * @param options - Decision, deciders, and injected evaluators
+ */
+export async function certifyDecisionDeciders(options: {
+  readonly root: string;
+  readonly manifest: Manifest;
+  readonly decision: string;
+  readonly deciders: readonly string[];
+  readonly evaluate: Readonly<Record<string, DecisionEvaluate>>;
+  readonly now?: () => number;
+  readonly fetcher?: (input: string, init?: RequestInit) => Promise<Response>;
+  readonly write?: (text: string) => void;
+}): Promise<DecisionLockfile> {
+  const { certifySeed } = await import("../elements/ai/decisions/certify.ts");
+  const { aiDecisionRegistry, aiDeciderRegistry } = await import("../kernel/element-registries.ts");
+  const decl = aiDecisionRegistry.find((item) => item.name === options.decision);
+  const decision = options.manifest.ai?.decisions?.[options.decision];
+  if (!decl || !decision) {
+    throw new Error(`oke decide certify: decision "${options.decision}" is not loaded`);
+  }
+  if (!decision.evals) {
+    throw new Error(`oke decide certify: decision "${options.decision}" has no evals`);
+  }
+  const text = await Bun.file(resolve(options.root, decision.evals)).text();
+  const lockPath = resolve(options.root, DECISION_LOCK_FILENAME);
+  const existing = Bun.file(lockPath);
+  let current: DecisionLockfile | undefined;
+  if (await existing.exists()) current = parseDecisionLockfile(await existing.json());
+  const write = options.write ?? ((line: string) => process.stdout.write(line));
+  const deciders: Record<string, DecisionLockfile["decisions"][string]["deciders"][string]> = {
+    ...(current?.decisions[options.decision]?.deciders ?? {}),
+  };
+  for (const name of options.deciders) {
+    const decider = aiDeciderRegistry.find((item) => item.name === name) ?? undefined;
+    const manifestDecider = options.manifest.ai?.deciders?.[name];
+    if (!decider && !manifestDecider) {
+      throw new Error(`oke decide certify: decider "${name}" is not loaded`);
+    }
+    const model = decider?.model ?? manifestDecider?.model ?? "";
+    const pinning = decider?.pinning ?? manifestDecider?.pinning ?? "dated";
+    const baseUrl = decider?.baseUrl ?? manifestDecider?.baseUrl ?? "";
+    const required = await requiredDatedModel(model, baseUrl, pinning, options.fetcher);
+    if (required && required !== model) {
+      throw new Error(
+        `oke decide certify: autonomy requires model "${required}" on decider "${name}"`,
+      );
+    }
+    const evaluate = options.evaluate[name];
+    if (!evaluate) throw new Error(`oke decide certify: no evaluator for decider "${name}"`);
+    const alias = pinning === "alias";
+    const now = options.now ?? Date.now;
+    const result = await certifySeed({
+      model,
+      pinned: !alias,
+      ...(alias ? { expiresAt: now() + ALIAS_CERTIFICATE_MS } : {}),
+      maxError: decision.autonomy?.maxError ?? decl.autonomy?.maxError ?? 0.05,
+      delta: decision.autonomy?.risk ?? decl.autonomy?.risk ?? 0.1,
+      jsonl: text,
+      ask: decl.ask,
+      evaluate,
+      now,
+    });
+    deciders[name] = result.cert;
+    if (result.unpinned) {
+      write(`oke decide certify: decider "${name}" model "${result.cert.model}" is unpinned\n`);
+    }
+    for (const [question, row] of Object.entries(result.report)) {
+      write(
+        `${name}\t${question}\taccuracy ${row.accuracy.toFixed(3)}\tECE ${row.ece.toFixed(3)}\tcoverage ${row.coverage.toFixed(3)}\tp50 ${row.p50Ms}ms\tp95 ${row.p95Ms}ms\tcost ${row.cost}\n`,
+      );
+    }
+  }
+  const next: DecisionLockfile = {
+    version: 2,
+    decisions: { ...(current?.decisions ?? {}), [options.decision]: { deciders } },
+  };
+  await Bun.write(lockPath, `${JSON.stringify(next, null, 2)}\n`);
+  const { setDecisionDrift } = await import("../elements/ai/decisions/certificate.ts");
+  const { persistDecisionDrift } = await import("../elements/ai/decisions/labels.ts");
+  setDecisionDrift(options.decision, false);
+  persistDecisionDrift(options.decision, false);
+  return next;
+}
+
 export async function decideCli(args: string[]): Promise<number> {
   const [sub, name, ...rest] = args;
   if (sub === "--help" || sub === "-h" || !sub) {
     console.log(`oke decide promote <name> [--origin URL] [--lock path]
 oke decide labels <name> --export [--out file] [--origin URL]
+oke decide certify <name> --deciders a,b
+oke decide models
 
 promote fetches the operator candidate and writes oke-decisions.lock.json.
 labels --export writes reviewed labels as seed JSONL. The file contains production data.
+certify writes one certificate per decider. models lists decision models.
 `);
     return sub ? 0 : 1;
   }
   if (sub === "labels") return exportLabelsCommand(name, rest);
+  if (sub === "models") {
+    const { fetchDecisionModels } = await import("../elements/ai/decisions/catalog.ts");
+    process.stdout.write(await fetchDecisionModels());
+    return 0;
+  }
+  if (sub === "certify") return certifyCommand(name, rest);
   if (sub !== "promote" || !name) {
-    console.error(
-      "oke decide: expected `oke decide promote <name>` or `oke decide labels <name> --export`",
-    );
+    console.error("oke decide: expected promote, labels, certify, or models");
     return 1;
   }
   let origin = process.env.OKE_ORIGIN ?? "http://127.0.0.1:6530";
@@ -170,5 +267,75 @@ labels --export writes reviewed labels as seed JSONL. The file contains producti
     ...(lockPath !== undefined ? { lockPath } : {}),
     ...(authorization !== undefined ? { authorization } : {}),
   });
+  return 0;
+}
+
+async function certifyCommand(name: string | undefined, rest: string[]): Promise<number> {
+  if (!name) {
+    console.error("oke decide: expected `oke decide certify <name> --deciders a,b`");
+    return 1;
+  }
+  const flag = rest.indexOf("--deciders");
+  const list = flag >= 0 ? rest[flag + 1] : undefined;
+  if (!list) {
+    console.error("oke decide certify: --deciders is required");
+    return 1;
+  }
+  const deciders = list
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  const { resolveStartEntry } = await import("./start.ts");
+  const root = resolve(process.env["OKE_ROOT_DIR"] ?? ".");
+  try {
+    await import(await resolveStartEntry(root));
+  } catch (error) {
+    console.error(
+      `oke decide certify: failed to load the app: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 1;
+  }
+  const manifestPath = resolve(root, "oke.manifest.json");
+  const file = Bun.file(manifestPath);
+  if (!(await file.exists())) {
+    console.error(`oke decide certify: manifest not found: ${manifestPath}`);
+    return 1;
+  }
+  const manifest = (await file.json()) as Manifest;
+  const { aiDeciderRegistry, aiDecisionRegistry } = await import("../kernel/element-registries.ts");
+  const decl = aiDecisionRegistry.find((item) => item.name === name);
+  if (!decl) {
+    console.error(`oke decide certify: decision "${name}" is not loaded`);
+    return 1;
+  }
+  const evaluate: Record<string, DecisionEvaluate> = {};
+  for (const id of deciders) {
+    const decider = aiDeciderRegistry.find((item) => item.name === id);
+    if (!decider) {
+      console.error(`oke decide certify: decider "${id}" is not loaded`);
+      return 1;
+    }
+    const apiKey = process.env[decider.secret];
+    if (!apiKey) {
+      console.error(`oke decide certify: secret "${decider.secret}" is not configured`);
+      return 1;
+    }
+    evaluate[id] = async (input) => {
+      const { decisionHttp } = await import("../elements/ai/decisions/http.ts");
+      const { encodeDecisionRequest, normalizeDecisionResponse, wireQuestions } =
+        await import("../elements/ai/decisions/codec.ts");
+      const request = { model: decider.model, state: input, questions: wireQuestions(decl.ask) };
+      const raw = await decisionHttp({
+        url: decider.baseUrl,
+        apiKey,
+        request,
+        body: encodeDecisionRequest(decider.protocol, request),
+        timeoutMs: 30_000,
+        breakerKey: decider.name,
+      });
+      return normalizeDecisionResponse(decider.protocol, raw);
+    };
+  }
+  await certifyDecisionDeciders({ root, manifest, decision: name, deciders, evaluate });
   return 0;
 }

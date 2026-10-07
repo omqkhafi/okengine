@@ -1,14 +1,24 @@
 {
-  "measuredAt": "2026-10-07T13:48:11.587Z",
-  "version": "0.23.2",
+  "measuredAt": "2026-10-07T17:45:07.358Z",
+  "version": "0.24.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 14704,
+      "value": 14835,
       "limit": 17408,
       "unit": "bytes",
       "gate": "absolute",
+      "group": "core",
+      "ok": true
+    },
+    {
+      "id": "decisionChunkGzipBytes",
+      "label": "Decision module",
+      "value": 6119,
+      "limit": 6119,
+      "unit": "bytes",
+      "gate": "report",
       "group": "core",
       "ok": true
     },
@@ -88,8 +98,8 @@
     {
       "id": "export:./ai",
       "label": "ai",
-      "value": 19419,
-      "limit": 19808,
+      "value": 20063,
+      "limit": 20465,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -178,8 +188,8 @@
     {
       "id": "export:./compiler",
       "label": "compiler",
-      "value": 31023,
-      "limit": 31644,
+      "value": 32683,
+      "limit": 33337,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -328,8 +338,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 53278,
-      "limit": 54344,
+      "value": 54929,
+      "limit": 56028,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -338,8 +348,8 @@
     {
       "id": "export:./testing",
       "label": "testing",
-      "value": 53278,
-      "limit": 54344,
+      "value": 54929,
+      "limit": 56028,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

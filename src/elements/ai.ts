@@ -18,6 +18,7 @@ export type {
   AiAgentDecl,
   AiBooleanQuestion,
   AiChoiceQuestion,
+  AiDeciderDecl,
   AiDecisionDecl,
   AiDecisionOptions,
   AiDecisionQuestion,
