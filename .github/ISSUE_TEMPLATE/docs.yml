@@ -1,0 +1,23 @@
+name: Docs
+description: A gap in the documentation
+title: "docs: "
+labels: ["needs triage", "area: docs"]
+type: Task
+projects:
+  - "omqkhafi/2"
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: Path or URL of the page. Say "missing" if the page does not exist.
+      placeholder: site/content/docs/elements/flow.mdx
+    validations:
+      required: true
+  - type: textarea
+    id: gap
+    attributes:
+      label: Gap
+      description: What the page says, and what the reader still cannot do
+    validations:
+      required: true

@@ -1,0 +1,48 @@
+name: Bug
+description: Something does not behave as specified
+title: "fix: "
+labels: ["needs triage"]
+type: Bug
+projects:
+  - "omqkhafi/2"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Include the version, the runtime, and the smallest repro that shows the bug.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: okengine version from `oke --version` or package.json
+      placeholder: "0.23.2"
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Bun version and operating system
+      placeholder: "bun 1.4.2 on macOS"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal repro
+      description: The smallest flow that shows the bug
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true

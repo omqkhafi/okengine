@@ -1,0 +1,36 @@
+name: Epic
+description: Maintainers. A feature that spans more than one pull request
+title: "epic: "
+labels: ["needs triage"]
+type: Epic
+projects:
+  - "omqkhafi/2"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An Epic is the parent. Each step is its own sub-issue and its own pull request. The Epic closes when every sub-issue closes.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The outcome in one paragraph
+    validations:
+      required: true
+  - type: input
+    id: design
+    attributes:
+      label: Design doc
+      description: Link to the design note, or "none yet"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: One sub-issue per line. Use a blocked-by link when a step needs another.
+      placeholder: |
+        - [ ] # — protocols and the decision API
+        - [ ] # — blocked by the core step
+    validations:
+      required: true
