@@ -46,7 +46,7 @@ describe("publish workflow", () => {
         test?: unknown;
         gate?: unknown;
         site?: unknown;
-        ci?: { needs?: string | string[] };
+        ci?: unknown;
         "publish-npm"?: unknown;
         "publish-jsr"?: unknown;
       };
@@ -70,19 +70,13 @@ describe("publish workflow", () => {
     expect(tagList).toContain("v*");
     expect(release.jobs?.checks?.uses).toBe("./.github/workflows/ci.yml");
 
-    for (const key of ["lint", "typecheck", "test", "gate", "site", "ci"] as const) {
+    for (const key of ["lint", "typecheck", "test", "gate", "site"] as const) {
       expect(ci.jobs?.[key]).toBeTruthy();
     }
+    expect(ci.jobs?.ci).toBeUndefined();
     expect(ci.jobs?.["budgets"]).toBeUndefined();
     expect(release.jobs?.["publish-npm"]).toBeTruthy();
     expect(release.jobs?.["publish-jsr"]).toBeTruthy();
-
-    const ciNeeds = ci.jobs?.ci?.needs;
-    const ciNeedList = Array.isArray(ciNeeds) ? ciNeeds : ciNeeds ? [ciNeeds] : [];
-    for (const need of ["lint", "typecheck", "test", "gate", "site"]) {
-      expect(ciNeedList).toContain(need);
-    }
-    expect(ciNeedList).not.toContain("budgets");
 
     for (const key of ["publish-npm", "publish-jsr"] as const) {
       const job = release.jobs?.[key];

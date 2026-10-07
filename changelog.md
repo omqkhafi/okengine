@@ -14,7 +14,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ### ✨ Added
 
-- Contributor workflow lives in the repository: issue forms, labels, the okengine board, pull-request checks, and a GitHub Release cut from the changelog. npm and JSR publish on the `v*` release workflow, not on a pull request. See CONTRIBUTING.md.
+- Contributor workflow lives in the repository: issue forms, labels, the okengine board, pull-request checks, and a GitHub Release cut from the changelog. Code checks and the manifest diff are one CI workflow. `pr-meta` stays separate so a title or label edit does not re-run the suite. npm and JSR publish on the `v*` release workflow, not on a pull request. See CONTRIBUTING.md.
 
 ## v0.23.2 — 2026-10-07
 

@@ -1,3 +1,7 @@
+# Metadata only. Separate from CI so a title, label, or milestone edit
+# re-runs this job and does not re-run lint, test, gate, or the site build.
+# A skipped required job on the same commit would clear a green check.
+
 name: PR meta
 
 on:

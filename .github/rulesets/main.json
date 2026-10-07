@@ -34,7 +34,6 @@
           { "context": "test" },
           { "context": "gate" },
           { "context": "site" },
-          { "context": "ci" },
           { "context": "pr-meta" }
         ]
       }
