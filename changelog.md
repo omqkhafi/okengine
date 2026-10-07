@@ -12,6 +12,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### 🐛 Fixed
+
+- The release workflow grants `ci.yml` its `contents: read`, `issues: read`, and `pull-requests: write` permissions. A smaller grant fails at startup, before npm, JSR, or the GitHub Release run.
+
 ## v0.24.0 — 2026-10-07
 
 ### ♻️ Changed
