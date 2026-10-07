@@ -89,7 +89,7 @@ describe("publish workflow", () => {
     expect(ciYml).toContain("bun run lint");
     expect(ciYml).toContain("bun run fmt:check");
     expect(ciYml).toContain("bun run typecheck");
-    expect(ciYml).toContain("bun run test");
+    expect(ciYml).toContain("bun test ${{ matrix.paths }}");
     expect(ciYml).not.toContain("bun run budgets");
     expect(ciYml).toContain("bun run gate");
     expect(ciYml).toContain("bun run site:build");
