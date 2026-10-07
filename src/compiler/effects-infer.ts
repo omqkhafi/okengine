@@ -63,6 +63,7 @@ export interface InferBinding {
     | "flow"
     | "embed"
     | "decision"
+    | "decider"
     | "table"
     | "mcp-server"
     | "mcp-tool"

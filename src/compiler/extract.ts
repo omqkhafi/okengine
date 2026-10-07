@@ -15,6 +15,7 @@ import {
   formatAiProviderTier2Warn,
   getAiProviderEntry,
 } from "../elements/ai/providers.ts";
+import { resolveDecider, type DeciderCapabilities } from "../elements/ai/deciders/presets.ts";
 import { buildCronExpression, type CronField } from "../elements/clock/cron-fields.ts";
 import {
   hasMutatingEffects,
@@ -28,6 +29,7 @@ import { SearchConfigError } from "../elements/store/search-errors.ts";
 import type {
   Ai,
   AiAgent,
+  AiDecider,
   AiDecision,
   AiMcpServer,
   AiModel,
@@ -262,6 +264,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
     scope.ai.models ||
     scope.ai.prompts ||
     scope.ai.agents ||
+    scope.ai.deciders ||
     scope.ai.decisions ||
     scope.ai.mcpServers
   ) {
@@ -269,6 +272,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
       ...(scope.ai.models ? { models: sortRecord(scope.ai.models) } : {}),
       ...(scope.ai.prompts ? { prompts: sortRecord(scope.ai.prompts) } : {}),
       ...(scope.ai.agents ? { agents: sortRecord(scope.ai.agents) } : {}),
+      ...(scope.ai.deciders ? { deciders: sortRecord(scope.ai.deciders) } : {}),
       ...(scope.ai.decisions ? { decisions: sortRecord(scope.ai.decisions) } : {}),
       ...(scope.ai.mcpServers ? { mcpServers: sortRecord(scope.ai.mcpServers) } : {}),
     };
@@ -1437,6 +1441,10 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       collectAgent(call, program, scope);
     }
 
+    if (obj === "ai" && prop === "decider") {
+      collectDecider(call, program, scope);
+    }
+
     if (obj === "ai" && prop === "decision") {
       collectDecision(call, program, scope);
     }
@@ -1703,7 +1711,7 @@ function assertDecisionPlacement(flowName: string, flow: Flow, scope: ProjectSco
   }
 }
 
-function decisionReviewName(node: AstNode | undefined, scope: ProjectScope): string {
+function decisionOtherwiseName(node: AstNode | undefined, scope: ProjectScope): string {
   const literal = stringArg(node);
   if (literal) return literal;
   if (node?.type === "Identifier") {
@@ -1720,7 +1728,7 @@ function decisionReviewName(node: AstNode | undefined, scope: ProjectScope): str
       return (member.property as Identifier).name;
     }
   }
-  throw new Error("ai.decision: review gate name could not be resolved");
+  throw new Error("ai.decision: otherwise gate name could not be resolved");
 }
 
 function assertDecisionQuestion(
@@ -1755,18 +1763,9 @@ function assertDecisionQuestion(
     if (keys.includes("none_of_these")) {
       throw new Error(`ai.decision("${decisionName}"): choice "${key}" must not set none_of_these`);
     }
-    if (keys.length > 254) {
-      throw new Error(
-        `ai.decision("${decisionName}"): choice "${key}" has ${keys.length} options; max 254`,
-      );
-    }
   }
   if (fn === "score") {
-    const levels = resolveScoreLevels(args[1], program, decisionName, key);
-    const count = ((levels as AstNode & { elements?: unknown[] }).elements ?? []).length;
-    if (count < 2 || count > 10) {
-      throw new Error(`ai.decision("${decisionName}"): score "${key}" needs 2–10 levels`);
-    }
+    resolveScoreLevels(args[1], program, decisionName, key);
   }
 }
 
@@ -1819,10 +1818,125 @@ function sameFileConstInit(name: string, program: AstNode): AstNode | undefined 
   return found;
 }
 
+function collectDecider(call: CallExpression, program: AstNode, scope: ProjectScope): void {
+  const name = stringArg(call.arguments[0]);
+  const opts = objectArg(call.arguments[1]);
+  if (!name || !opts) return;
+  if (scope.ai.deciders?.[name]) return;
+  const capabilitiesNode = objectProp(opts, "capabilities");
+  let resolved: ReturnType<typeof resolveDecider>;
+  try {
+    resolved = resolveDecider(name, {
+      ...(stringProp(opts, "provider") !== undefined
+        ? { provider: stringProp(opts, "provider") }
+        : {}),
+      ...(stringProp(opts, "driverId") !== undefined
+        ? { driverId: stringProp(opts, "driverId") }
+        : {}),
+      ...(stringProp(opts, "baseUrl") !== undefined
+        ? { baseUrl: stringProp(opts, "baseUrl") }
+        : {}),
+      ...(stringProp(opts, "model") !== undefined ? { model: stringProp(opts, "model") } : {}),
+      ...(stringProp(opts, "secret") !== undefined ? { secret: stringProp(opts, "secret") } : {}),
+      ...(capabilitiesNode ? { capabilities: capabilitiesFromAst(capabilitiesNode) } : {}),
+      ...(stringProp(opts, "region") !== undefined ? { region: stringProp(opts, "region") } : {}),
+      ...(boolProp(opts, "zdr") !== undefined ? { zdr: boolProp(opts, "zdr") } : {}),
+      ...(numberProp(opts, "timeout") !== undefined
+        ? { timeout: numberProp(opts, "timeout") }
+        : stringProp(opts, "timeout") !== undefined
+          ? { timeout: stringProp(opts, "timeout") }
+          : {}),
+      ...(numberProp(opts, "concurrency") !== undefined
+        ? { concurrency: numberProp(opts, "concurrency") }
+        : {}),
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+  const decider: AiDecider = {
+    ...(resolved.provider !== undefined ? { provider: resolved.provider } : {}),
+    driverId: resolved.protocol,
+    baseUrl: resolved.baseUrl,
+    model: resolved.model,
+    secret: resolved.secret,
+    pinning: resolved.pinning,
+    capabilities: { ...resolved.capabilities },
+    ...(resolved.region !== undefined
+      ? { region: resolved.region, regionStatus: resolved.regionStatus }
+      : {}),
+    ...(resolved.zdr !== undefined ? { zdr: resolved.zdr, zdrStatus: resolved.zdrStatus } : {}),
+    ...(resolved.timeout !== undefined ? { timeout: resolved.timeout } : {}),
+    ...(resolved.concurrency !== undefined ? { concurrency: resolved.concurrency } : {}),
+  };
+  scope.ai.deciders = scope.ai.deciders ?? {};
+  scope.ai.deciders[name] = decider;
+  const bindingName = enclosingConstName(call, program);
+  if (bindingName) scope.bindings.set(bindingName, { kind: "decider", ref: name });
+}
+
+function capabilitiesFromAst(node: AstNode): DeciderCapabilities {
+  if (node.type !== "ObjectExpression") {
+    throw new Error("ai.decider: capabilities must be an object literal");
+  }
+  const maxChoices = numberProp(node, "maxChoices");
+  const minLevels = numberProp(node, "minLevels");
+  const maxLevels = numberProp(node, "maxLevels");
+  const maxContext = numberProp(node, "maxContext");
+  return {
+    boolean: boolProp(node, "boolean") === true,
+    choice: boolProp(node, "choice") === true,
+    score: boolProp(node, "score") === true,
+    refusal: boolProp(node, "refusal") === true,
+    ...(maxChoices !== undefined ? { maxChoices } : {}),
+    ...(minLevels !== undefined ? { minLevels } : {}),
+    ...(maxLevels !== undefined ? { maxLevels } : {}),
+    ...(maxContext !== undefined ? { maxContext } : {}),
+  };
+}
+
+function deciderNames(node: AstNode | undefined, scope: ProjectScope, program: AstNode): string[] {
+  if (!node) return [];
+  if (node.type === "ArrayExpression") {
+    const elements = (node as AstNode & { elements?: (AstNode | null)[] }).elements ?? [];
+    return elements
+      .filter((item): item is AstNode => item !== null)
+      .map((item) => {
+        const name = oneDeciderName(item, scope, program);
+        if (!name) throw new Error("ai.decision: backup entry is not a decider");
+        return name;
+      });
+  }
+  const name = oneDeciderName(node, scope, program);
+  return name ? [name] : [];
+}
+
+function oneDeciderName(node: AstNode, scope: ProjectScope, program: AstNode): string | undefined {
+  if (node.type === "Identifier") {
+    const binding = scope.bindings.get((node as Identifier).name);
+    if (binding?.kind !== "decider") return undefined;
+    return binding.ref;
+  }
+  if (node.type === "CallExpression") {
+    const call = node as CallExpression;
+    const callee = call.callee as AstNode & { property?: AstNode };
+    const prop =
+      callee.type === "MemberExpression" && callee.property?.type === "Identifier"
+        ? (callee.property as Identifier).name
+        : undefined;
+    if (prop !== "decider") return undefined;
+    collectDecider(call, program, scope);
+    return stringArg(call.arguments[0]);
+  }
+  return undefined;
+}
+
 function collectDecision(call: CallExpression, program: AstNode, scope: ProjectScope): void {
   const decisionName = stringArg(call.arguments[0]);
   const opts = objectArg(call.arguments[1]);
   if (!decisionName || !opts) return;
+  if (objectProp(opts, "shadow") !== undefined) {
+    throw new Error(`ai.decision("${decisionName}"): shadow is planned`);
+  }
   const ask = objectProp(opts, "ask");
   const questionProps = ask?.type === "ObjectExpression" ? objectProperties(ask) : [];
   const questionNames = questionProps
@@ -1847,13 +1961,24 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
   if (scope.ai.decisions?.[decisionName]) {
     throw new Error(`ai.decision("${decisionName}"): duplicate decision name`);
   }
-  const hasReview = objectProp(opts, "review") !== undefined;
-  const uncertain = stringProp(opts, "onUncertain");
-  const abstain = uncertain === "abstain";
-  if (hasReview === abstain) {
-    throw new Error(
-      `ai.decision("${decisionName}"): declare exactly one of review or onUncertain: "abstain"`,
-    );
+  const deciderNode = objectProp(opts, "decider");
+  if (!deciderNode) throw new Error(`ai.decision("${decisionName}"): decider is required`);
+  const deciderName = oneDeciderName(deciderNode, scope, program);
+  if (!deciderName || !scope.ai.deciders?.[deciderName]) {
+    throw new Error(`ai.decision("${decisionName}"): decider is not a decider`);
+  }
+  const otherwiseNode = objectProp(opts, "otherwise");
+  if (!otherwiseNode) throw new Error(`ai.decision("${decisionName}"): otherwise is required`);
+  const otherwise =
+    stringProp(opts, "otherwise") === "abstain"
+      ? "abstain"
+      : decisionOtherwiseName(otherwiseNode, scope);
+  const backup = deciderNames(objectProp(opts, "backup"), scope, program);
+  const chain = [deciderName, ...backup];
+  for (const id of chain) {
+    const row = scope.ai.deciders?.[id];
+    if (!row) throw new Error(`ai.decision("${decisionName}"): decider "${id}" is not a decider`);
+    assertDecisionCapabilities(decisionName, questionProps, program, row, id);
   }
   const autonomyNode = objectProp(opts, "autonomy");
   let autonomy: AiDecision["autonomy"];
@@ -1870,12 +1995,21 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
     autonomy = { maxError, audit, ...(risk !== undefined ? { risk } : {}) };
   }
   const evals = stringProp(opts, "evals");
+  const secrets = [
+    ...new Set(
+      chain
+        .map((id) => scope.ai.deciders?.[id]?.secret)
+        .filter((secret): secret is string => !!secret),
+    ),
+  ].sort();
   const decision: AiDecision = {
-    mode: abstain ? "abstain" : "review",
+    mode: otherwise === "abstain" ? "abstain" : "review",
     questions: questionNames,
-    ...(hasReview ? { review: decisionReviewName(objectProp(opts, "review"), scope) } : {}),
-    ...(stringProp(opts, "model") ? { model: stringProp(opts, "model") } : {}),
-    driverId: stringProp(opts, "driverId") === "typesafe" ? "typesafe" : "openrouter",
+    decider: deciderName,
+    ...(backup.length > 0 ? { backup } : {}),
+    otherwise,
+    ...(otherwise !== "abstain" ? { review: otherwise } : {}),
+    ...(secrets.length > 0 ? { secrets } : {}),
     ...(evals !== undefined ? { evals } : {}),
     ...(autonomy !== undefined ? { autonomy } : {}),
   };
@@ -1885,6 +2019,83 @@ function collectDecision(call: CallExpression, program: AstNode, scope: ProjectS
   if (bindingName) {
     scope.bindings.set(bindingName, { kind: "decision", ref: decisionName });
   }
+}
+
+function assertDecisionCapabilities(
+  decisionName: string,
+  questionProps: readonly AstNode[],
+  program: AstNode,
+  row: AiDecider,
+  deciderName: string,
+): void {
+  for (const prop of questionProps) {
+    const key = propKey(prop);
+    if (!key) continue;
+    const value = (prop as AstNode & { value?: AstNode }).value;
+    const resolved = resolveDecisionExpr(value, program, decisionName, key);
+    const callee =
+      resolved?.type === "CallExpression" ? (resolved as CallExpression).callee : undefined;
+    const member = callee as (AstNode & { property?: AstNode }) | undefined;
+    const fn =
+      member?.type === "MemberExpression" && member.property?.type === "Identifier"
+        ? (member.property as Identifier).name
+        : undefined;
+    const caps = row.capabilities;
+    if (fn === "choice") {
+      if (!caps.choice) {
+        throw new Error(
+          `ai.decision("${decisionName}"): decider "${deciderName}" cannot answer choice "${key}"`,
+        );
+      }
+      const options = (resolved as CallExpression).arguments[1];
+      const count = options?.type === "ObjectExpression" ? objectProperties(options).length : 0;
+      if (typeof caps.maxChoices === "number" && count > caps.maxChoices) {
+        throw new Error(
+          `ai.decision("${decisionName}"): choice "${key}" has ${count} options; decider "${deciderName}" allows ${caps.maxChoices}`,
+        );
+      }
+    }
+    if (fn === "score") {
+      if (!caps.score) {
+        throw new Error(
+          `ai.decision("${decisionName}"): decider "${deciderName}" cannot answer score "${key}"`,
+        );
+      }
+      const levels = resolveScoreLevels(
+        (resolved as CallExpression).arguments[1],
+        program,
+        decisionName,
+        key,
+      );
+      const count = ((levels as AstNode & { elements?: unknown[] }).elements ?? []).length;
+      if (typeof caps.minLevels === "number" && count < caps.minLevels) {
+        throw new Error(
+          `ai.decision("${decisionName}"): score "${key}" has ${count} levels; decider "${deciderName}" needs at least ${caps.minLevels}`,
+        );
+      }
+      if (typeof caps.maxLevels === "number" && count > caps.maxLevels) {
+        throw new Error(
+          `ai.decision("${decisionName}"): score "${key}" has ${count} levels; decider "${deciderName}" allows ${caps.maxLevels}`,
+        );
+      }
+    }
+    if (fn === "boolean" && !caps.boolean) {
+      throw new Error(
+        `ai.decision("${decisionName}"): decider "${deciderName}" cannot answer boolean "${key}"`,
+      );
+    }
+  }
+}
+
+function withDecisionSecrets(effects: Effects, scope: ProjectScope): Effects {
+  const names = effects.decides;
+  if (!names || names.length === 0) return effects;
+  const secrets = new Set(effects.secrets ?? []);
+  for (const name of names) {
+    for (const secret of scope.ai.decisions?.[name]?.secrets ?? []) secrets.add(secret);
+  }
+  if (secrets.size === 0) return effects;
+  return { ...effects, secrets: [...secrets].sort() };
 }
 
 function collectAgent(call: CallExpression, program: AstNode, scope: ProjectScope): void {
@@ -2186,7 +2397,7 @@ function registerFlow(args: {
   const effectsNode = objectProp(opts, "effects");
   const hasExplicitEffects = effectsNode !== undefined;
   const doNode = objectProp(opts, "do");
-  const inferred = doNode
+  const inferredRaw = doNode
     ? inferEffects({
         doNode,
         bindings: args.scope.bindings,
@@ -2205,6 +2416,10 @@ function registerFlow(args: {
         readsUserId: false,
         bareIrreversible: [] as ("fetch" | "send")[],
       };
+  const inferred = {
+    ...inferredRaw,
+    effects: withDecisionSecrets(inferredRaw.effects, args.scope),
+  };
 
   let effects: Effects | undefined;
   if (hasExplicitEffects && effectsNode?.type === "ObjectExpression") {

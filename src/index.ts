@@ -175,6 +175,7 @@ export {
   type AiModelDecl,
   type AiPromptDecl,
   type AiAgentDecl,
+  type AiDeciderDecl,
   type AiDecisionDecl,
   type AiDecisionOptions,
   type AiMcpServerDecl,

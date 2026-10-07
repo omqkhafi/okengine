@@ -79,7 +79,7 @@ export function mcpContextFromConsole(state: McpConsoleSurface): McpContext {
         if (row.status !== "pending" || row.labelOnly) continue;
         pending[row.decision] = (pending[row.decision] ?? 0) + 1;
       }
-      return projectMcpDecisions(state.manifest, pending, fitted);
+      return projectMcpDecisions(state.manifest, pending, fitted, queue);
     },
     proposeStructural: async (input) =>
       emitStructuralDiff({

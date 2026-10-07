@@ -2,24 +2,23 @@
  * `fx.decide` — one provider request, journaled. Loaded with `lazyRequire`.
  */
 
-import { aiDecisionRegistry, gateRegistry } from "./element-registries.ts";
+import { aiDeciderRegistry, aiDecisionRegistry, gateRegistry } from "./element-registries.ts";
 import type { GatePolicyContext } from "../elements/gate/declare.ts";
-import type { AiDecisionDecl, AiDecisionQuestion } from "../elements/ai/declare.ts";
+import type { AiDeciderDecl, AiDecisionDecl, AiDecisionQuestion } from "../elements/ai/declare.ts";
 import {
   DecisionConfigError,
+  DecisionInputTooLarge,
   DecisionOutageError,
   type DecisionResponse,
-  type WireQuestion,
 } from "../elements/ai/decisions/provider.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
+import { decisionHttp } from "../elements/ai/decisions/http.ts";
 import {
-  createOpenRouterDecisionProvider,
-  OPENROUTER_JEV_MODEL,
-} from "../elements/ai/decisions/openrouter.ts";
-import {
-  createTypesafeDecisionProvider,
-  TYPESAFE_JEV_MODEL,
-} from "../elements/ai/decisions/typesafe.ts";
+  encodeDecisionRequest,
+  estimateDecisionTokens,
+  normalizeDecisionResponse,
+  wireQuestions,
+} from "../elements/ai/decisions/codec.ts";
 import {
   applyTemperature,
   calibrateBoolean,
@@ -28,7 +27,8 @@ import {
   questionHash,
   recordDecisionLabel,
   type DecisionCertSlice,
-  type DecisionUncertainty,
+  type DecisionDeciderCert,
+  type DecisionWhy,
 } from "../elements/ai/decisions/certificate.ts";
 import { flushDecisionLabels, persistDecisionLabel } from "../elements/ai/decisions/labels.ts";
 import { decisionExportFields, maskDecisionInput } from "../elements/ai/decisions/export.ts";
@@ -96,7 +96,6 @@ export interface DecisionReviewRecord {
   readonly labelOnly: boolean;
   readonly values?: Readonly<Record<string, unknown>>;
   readonly reviewer?: string;
-  readonly reason?: DecisionUncertainty;
   /** Question ids that are not auto. Resolve must answer each of them. */
   readonly open?: readonly string[];
   readonly model?: string;
@@ -105,6 +104,9 @@ export interface DecisionReviewRecord {
   readonly modelValues?: Readonly<Record<string, unknown>>;
   /** Calling input. Label export reads this. */
   readonly input?: unknown;
+  readonly why?: DecisionWhy;
+  /** Decider that answered, when one did. */
+  readonly by?: string;
 }
 
 /** Result of {@link resolveDecisionReview}. */
@@ -126,10 +128,21 @@ type ProviderFn = (
   decl: AiDecisionDecl,
   input: unknown,
   signal: AbortSignal,
+  decider: AiDeciderDecl,
 ) => Promise<DecisionResponse>;
+
+/** Scripted probabilities, or a refusal signal that is not stored as a label. */
+export type DecisionScriptAnswer =
+  | { readonly probabilities: Readonly<Record<string, number>> }
+  | { readonly probability: number }
+  | { readonly refusal: string };
 
 let providerOverride: ProviderFn | undefined;
 let providerCalls = 0;
+let decisionTransport: "live" | "mock" = "live";
+const decisionScripts = new Map<string, Readonly<Record<string, DecisionScriptAnswer>>>();
+const inflight = new Map<string, number>();
+const waiters = new Map<string, Array<() => void>>();
 
 /**
  * Replace the provider. Tests use this so no key is required.
@@ -153,6 +166,33 @@ export function decisionProviderCalls(): number {
 export function resetDecisionProvider(): void {
   providerOverride = undefined;
   providerCalls = 0;
+  decisionTransport = "live";
+  decisionScripts.clear();
+  inflight.clear();
+  waiters.clear();
+}
+
+/**
+ * `mock` answers locally. `live` calls the decider host.
+ *
+ * @param transport - Boot selection from `drivers.decide`
+ */
+export function setDecisionTransport(transport: "live" | "mock"): void {
+  decisionTransport = transport;
+}
+
+/**
+ * Script one decision. `{ refusal }` is the test signal; the string is not stored.
+ *
+ * @param name - Decision name
+ * @param answers - Per-question script, or undefined to clear
+ */
+export function setDecisionScript(
+  name: string,
+  answers: Readonly<Record<string, DecisionScriptAnswer>> | undefined,
+): void {
+  if (!answers) decisionScripts.delete(name);
+  else decisionScripts.set(name, answers);
 }
 
 /**
@@ -187,9 +227,9 @@ async function executeDecide(options: FxDecideInput, name: string): Promise<unkn
     : await callAndDraw(decl, options, ordinal);
   const view = options.journal
     ? ((await options.journal.effect("decide-view", slot, () =>
-        project(decl, options.input, recorded),
+        project(decl, options.input, recorded, options.now()),
       )) as JournaledView)
-    : project(decl, options.input, recorded);
+    : project(decl, options.input, recorded, options.now());
   if (view.auto) {
     if (view.audited && options.journal) {
       const id = reviewId(options.journal.runId, ordinal, name);
@@ -238,6 +278,7 @@ interface RecordedCall {
   readonly outage: boolean;
   readonly audited: boolean;
   readonly propensity: number;
+  readonly by?: string;
 }
 
 async function callAndDraw(
@@ -250,8 +291,14 @@ async function callAndDraw(
   const draw = auditDraw(`${run}:${decl.name}#${ordinal}`, rate);
   try {
     providerCalls += 1;
-    const response = await callProvider(decl, options);
-    return { response, outage: false, audited: draw.audited, propensity: draw.propensity };
+    const called = await callProvider(decl, options);
+    return {
+      response: called.response,
+      by: called.by,
+      outage: false,
+      audited: draw.audited,
+      propensity: draw.propensity,
+    };
   } catch (err) {
     if (err instanceof DecisionOutageError) {
       return { outage: true, audited: false, propensity: draw.propensity };
@@ -263,59 +310,166 @@ async function callAndDraw(
 async function callProvider(
   decl: AiDecisionDecl,
   options: FxDecideInput,
-): Promise<DecisionResponse> {
-  if (providerOverride) return providerOverride(decl, options.input, options.signal);
-  const model =
-    decl.model ?? (decl.driverId === "typesafe" ? TYPESAFE_JEV_MODEL : OPENROUTER_JEV_MODEL);
-  const keyName = decl.driverId === "typesafe" ? "TYPESAFE_API_KEY" : "OPENROUTER_API_KEY";
-  const apiKey = await options.getSecret?.(keyName);
-  if (!apiKey) throw new DecisionConfigError(keyName);
-  const timeoutMs = decisionTimeoutMs(decl.timeout);
-  const provider =
-    decl.driverId === "typesafe"
-      ? createTypesafeDecisionProvider(apiKey, timeoutMs)
-      : createOpenRouterDecisionProvider(apiKey, timeoutMs);
-  return provider.evaluate({
-    model,
-    state: options.input,
-    questions: wireQuestions(decl),
-    signal: options.signal,
+): Promise<{ readonly response: DecisionResponse; readonly by: string }> {
+  const chain = deciderChain(decl);
+  let last: unknown;
+  for (let i = 0; i < chain.length; i += 1) {
+    const decider = chain[i];
+    if (!decider) continue;
+    assertDecisionContext(decider, options.input);
+    try {
+      const response = await withDeciderConcurrency(decider, () => callOne(decl, decider, options));
+      return { response, by: decider.name };
+    } catch (err) {
+      if (!(err instanceof DecisionOutageError) || i === chain.length - 1) throw err;
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new DecisionOutageError("decision backup exhausted");
+}
+
+function deciderChain(decl: AiDecisionDecl): AiDeciderDecl[] {
+  const names = [decl.decider, ...decl.backup];
+  return names.map((name) => {
+    const decider = aiDeciderRegistry.find((item) => item.name === name);
+    if (!decider) throw new Error(`fx.decide: unknown decider "${name}"`);
+    return decider;
   });
 }
 
-function decisionTimeoutMs(timeout: AiDecisionDecl["timeout"]): number {
+function assertDecisionContext(decider: AiDeciderDecl, input: unknown): void {
+  const max = decider.capabilities.maxContext;
+  if (typeof max !== "number") return;
+  const tokens = estimateDecisionTokens(input);
+  if (tokens > max) throw new DecisionInputTooLarge(decider.name, tokens, max);
+}
+
+async function withDeciderConcurrency<T>(
+  decider: AiDeciderDecl,
+  body: () => Promise<T>,
+): Promise<T> {
+  const limit = decider.concurrency;
+  if (limit === undefined || limit < 1) return body();
+  while ((inflight.get(decider.name) ?? 0) >= limit) {
+    await new Promise<void>((resolve) => {
+      const queue = waiters.get(decider.name) ?? [];
+      queue.push(resolve);
+      waiters.set(decider.name, queue);
+    });
+  }
+  inflight.set(decider.name, (inflight.get(decider.name) ?? 0) + 1);
+  try {
+    return await body();
+  } finally {
+    inflight.set(decider.name, Math.max(0, (inflight.get(decider.name) ?? 1) - 1));
+    waiters.get(decider.name)?.shift()?.();
+  }
+}
+
+async function callOne(
+  decl: AiDecisionDecl,
+  decider: AiDeciderDecl,
+  options: FxDecideInput,
+): Promise<DecisionResponse> {
+  const script = decisionScripts.get(decl.name);
+  if (script && decider.name === decl.decider) return scriptedResponse(decl, decider, script);
+  if (providerOverride) {
+    return normalizeDecisionResponse(
+      decider.protocol,
+      await providerOverride(decl, options.input, options.signal, decider),
+    );
+  }
+  if (decisionTransport === "mock") return mockResponse(decl, decider);
+  const apiKey = await options.getSecret?.(decider.secret);
+  if (!apiKey) throw new DecisionConfigError(decider.secret);
+  const request = {
+    model: decider.model,
+    state: options.input,
+    questions: wireQuestions(decl.ask),
+    signal: options.signal,
+  };
+  const raw = await decisionHttp({
+    url: decider.baseUrl,
+    apiKey,
+    request,
+    body: encodeDecisionRequest(decider.protocol, request),
+    timeoutMs: decisionTimeoutMs(decider.timeout),
+    breakerKey: decider.name,
+  });
+  return normalizeDecisionResponse(decider.protocol, raw);
+}
+
+function scriptedResponse(
+  decl: AiDecisionDecl,
+  decider: AiDeciderDecl,
+  script: Readonly<Record<string, DecisionScriptAnswer>>,
+): DecisionResponse {
+  const answers: Record<string, unknown> = {};
+  for (const [id, question] of Object.entries(decl.ask)) {
+    const row = script[id];
+    if (!row) {
+      answers[id] = { type: "malformed" };
+      continue;
+    }
+    if ("refusal" in row) {
+      answers[id] = { type: "refusal" };
+      continue;
+    }
+    if ("probability" in row) {
+      answers[id] = { type: "boolean", probability: row.probability };
+      continue;
+    }
+    if (question.kind === "boolean") {
+      const probability = row.probabilities.true ?? row.probabilities.yes ?? 0;
+      answers[id] = { type: "boolean", probability };
+      continue;
+    }
+    const choice = argmaxKey(row.probabilities);
+    answers[id] =
+      question.kind === "score"
+        ? { type: "score", score: choice, probabilities: row.probabilities }
+        : { type: "choice", choice, probabilities: row.probabilities };
+  }
+  return { model: decider.model, provider: "script", answers, usage: {} };
+}
+
+function mockResponse(decl: AiDecisionDecl, decider: AiDeciderDecl): DecisionResponse {
+  const answers: Record<string, unknown> = {};
+  for (const [id, question] of Object.entries(decl.ask)) {
+    if (question.kind === "boolean") answers[id] = { type: "boolean", probability: 0.5 };
+    else if (question.kind === "choice") {
+      answers[id] = {
+        type: "choice",
+        choice: "none_of_these",
+        probabilities: { none_of_these: 1 },
+      };
+    } else {
+      const level = question.levels[0] ?? "";
+      answers[id] = { type: "score", score: level, probabilities: { [level]: 1 } };
+    }
+  }
+  return { model: decider.model, provider: "mock", answers, usage: {} };
+}
+
+function argmaxKey(probabilities: Readonly<Record<string, number>>): string {
+  let best = "";
+  let score = -1;
+  for (const [key, value] of Object.entries(probabilities)) {
+    if (value > score) {
+      best = key;
+      score = value;
+    }
+  }
+  return best;
+}
+
+function decisionTimeoutMs(timeout: AiDeciderDecl["timeout"]): number {
   if (typeof timeout === "number" && timeout > 0) return timeout;
   if (typeof timeout === "string") {
     const parsed = parseDurationMs(timeout);
     if (parsed > 0) return parsed;
   }
   return 30_000;
-}
-
-function wireQuestions(decl: AiDecisionDecl): Record<string, WireQuestion> {
-  const questions: Record<string, WireQuestion> = {};
-  for (const [id, question] of Object.entries(decl.ask)) {
-    questions[id] = wireQuestion(question);
-  }
-  return questions;
-}
-
-function wireQuestion(question: AiDecisionQuestion): WireQuestion {
-  if (question.kind === "choice") {
-    return {
-      type: "choice",
-      instructions: question.instructions,
-      criteria: { ...question.options, none_of_these: null },
-    };
-  }
-  if (question.kind === "score") {
-    return { type: "score", instructions: question.instructions, criteria: question.levels };
-  }
-  return {
-    type: "noul",
-    instructions: question.instructions,
-    ...(question.criteria !== undefined ? { criteria: question.criteria } : {}),
-  };
 }
 
 /** One question as journaled. Replay returns this; it is not re-projected. */
@@ -327,12 +481,14 @@ interface JournaledQuestion {
   readonly audited?: boolean;
   /** True when this question did not clear autonomy. */
   readonly uncertain: boolean;
+  readonly why?: DecisionWhy;
 }
 
 /** Projection stored on the journal. The live lock is not consulted on replay. */
 interface JournaledView {
   readonly auto: boolean;
-  readonly reason?: DecisionUncertainty;
+  readonly why?: DecisionWhy;
+  readonly by?: string;
   readonly locale?: string;
   readonly lockModel?: string;
   readonly audited: boolean;
@@ -345,57 +501,67 @@ interface JournaledView {
   };
 }
 
-function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): JournaledView {
+function project(
+  decl: AiDecisionDecl,
+  input: unknown,
+  recorded: RecordedCall,
+  now: number,
+): JournaledView {
   const locale = decl.locale?.(input);
-  let auto = !recorded.outage && !decisionDriftSuspended(decl.name);
-  let reason: DecisionUncertainty | undefined = recorded.outage
+  const drifted = decisionDriftSuspended(decl.name);
+  const slot = recorded.by
+    ? getDecisionLock()?.decisions[decl.name]?.deciders[recorded.by]
+    : undefined;
+  const expired = slot?.pinned === false && slot.expiresAt !== undefined && now >= slot.expiresAt;
+  const mismatched = slot !== undefined && slot.model !== recorded.response?.model;
+  const lock = slot && !expired && !mismatched ? slot : undefined;
+  let blocked: DecisionWhy | undefined = recorded.outage
     ? "outage"
-    : decisionDriftSuspended(decl.name)
+    : drifted
       ? "drift"
-      : undefined;
-  const lock = getDecisionLock()?.decisions[decl.name];
-  if (!recorded.outage && !decisionDriftSuspended(decl.name)) {
-    if (!lock || !decl.autonomy) {
-      auto = false;
-      reason = "missing-lock";
-    } else if (lock.model !== recorded.response?.model) {
-      auto = false;
-      reason = "version-mismatch";
-    }
-  }
+      : !decl.autonomy || !lock
+        ? "uncertified"
+        : undefined;
   const questions: Record<string, JournaledQuestion> = {};
+  let auto = blocked === undefined;
   for (const [id, question] of Object.entries(decl.ask)) {
     const slice = sliceFor(lock, id, locale);
-    const answer = recorded.response?.answers[id];
+    const answer = answerAt(recorded.response?.answers, id);
     const calibrated = calibrateAnswer(question, answer, slice);
+    let why: DecisionWhy | undefined = blocked;
     let questionAuto = auto && slice !== undefined && calibrated.p >= (slice?.threshold ?? 1);
-    if (calibrated.value === "none_of_these") {
+    if (calibrated.refused) {
       questionAuto = false;
-      reason = reason ?? "low-confidence";
-    } else if (slice === undefined && !reason) {
+      why = "refused";
+    } else if (calibrated.value === "none_of_these") {
       questionAuto = false;
-      reason = locale ? "uncertified-locale" : "missing-lock";
-    } else if (slice && questionHash(question) !== slice.hash) {
+      why = why ?? "none_of_these";
+    } else if (!slice || questionHash(question) !== slice.hash) {
       questionAuto = false;
-      reason = reason ?? "stale-hash";
-    } else if (slice && calibrated.p < slice.threshold) {
+      why = why ?? "uncertified";
+    } else if (calibrated.p < slice.threshold) {
       questionAuto = false;
-      reason = reason ?? "low-confidence";
+      why = why ?? "uncertain";
     }
     if (!questionAuto) auto = false;
     const how: DecisionHow = questionAuto ? "auto" : decl.mode === "abstain" ? "abstained" : "auto";
+    const value =
+      calibrated.refused || (!questionAuto && decl.mode === "abstain") ? null : calibrated.value;
     questions[id] = {
-      value: questionAuto || decl.mode !== "abstain" ? calibrated.value : null,
+      value,
       how,
       p: calibrated.p,
       raw: calibrated.raw,
       uncertain: !questionAuto,
+      ...(!questionAuto && why ? { why } : {}),
       ...(recorded.audited && questionAuto ? { audited: true } : {}),
     };
   }
+  const why = Object.values(questions).find((question) => question.why)?.why;
   return {
     auto,
-    ...(reason !== undefined ? { reason } : {}),
+    ...(why !== undefined ? { why } : {}),
+    ...(recorded.by !== undefined ? { by: recorded.by } : {}),
     ...(locale !== undefined ? { locale } : {}),
     ...(lock?.model !== undefined ? { lockModel: lock.model } : {}),
     audited: recorded.audited,
@@ -403,10 +569,15 @@ function project(decl: AiDecisionDecl, input: unknown, recorded: RecordedCall): 
     questions,
     meta: {
       model: recorded.response?.model,
-      provider: recorded.response?.provider ?? decl.driverId,
+      provider: recorded.response?.provider ?? recorded.by ?? "",
       usage: recorded.response?.usage ?? {},
     },
   };
+}
+
+function answerAt(answers: DecisionResponse["answers"] | undefined, id: string): unknown {
+  if (!answers || Array.isArray(answers)) return undefined;
+  return (answers as Readonly<Record<string, unknown>>)[id];
 }
 
 function materialize(view: JournaledView): Record<string, unknown> {
@@ -418,6 +589,8 @@ function materialize(view: JournaledView): Record<string, unknown> {
       how: question.how,
       p: question.p,
       raw: question.raw,
+      ...(view.by !== undefined ? { by: view.by } : {}),
+      ...(question.why !== undefined ? { why: question.why } : {}),
       ...(question.audited ? { audited: true } : {}),
     };
   }
@@ -425,9 +598,7 @@ function materialize(view: JournaledView): Record<string, unknown> {
 }
 
 function sliceFor(
-  lock:
-    | { readonly questions: Readonly<Record<string, Readonly<Record<string, DecisionCertSlice>>>> }
-    | undefined,
+  lock: DecisionDeciderCert | undefined,
   question: string,
   locale: string | undefined,
 ): DecisionCertSlice | undefined {
@@ -441,10 +612,26 @@ function calibrateAnswer(
   question: AiDecisionQuestion,
   answer: unknown,
   slice: DecisionCertSlice | undefined,
-): { readonly value: unknown; readonly p: number; readonly raw: unknown } {
+): {
+  readonly value: unknown;
+  readonly p: number;
+  readonly raw: unknown;
+  readonly refused?: boolean;
+} {
   const record = answer && typeof answer === "object" ? (answer as Record<string, unknown>) : {};
+  if (record.type === "refusal") {
+    return { value: null, p: 0, raw: { type: "refusal" }, refused: true };
+  }
+  if (record.type === "malformed") {
+    return { value: null, p: 0, raw: { type: "malformed" } };
+  }
   if (question.kind === "boolean") {
-    const noul = typeof record.noul === "number" ? record.noul : 0;
+    const noul =
+      typeof record.probability === "number"
+        ? record.probability
+        : typeof record.noul === "number"
+          ? record.noul
+          : 0;
     const calibrator =
       slice?.calibrator.kind === "platt" || slice?.calibrator.kind === "beta"
         ? slice.calibrator
@@ -538,7 +725,8 @@ function pendingRecord(
     modelValues: Object.fromEntries(
       Object.entries(view.questions).map(([id, question]) => [id, question.value]),
     ),
-    ...(view.reason !== undefined ? { reason: view.reason } : {}),
+    ...(view.why !== undefined ? { why: view.why } : {}),
+    ...(view.by !== undefined ? { by: view.by } : {}),
     input: maskDecisionInput(options.input, decisionExportFields(decl.inputSchema)),
   };
 }

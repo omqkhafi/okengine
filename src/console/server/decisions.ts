@@ -22,6 +22,12 @@ export interface DecisionListRow {
   readonly state: DecisionListState;
   readonly mode: "review" | "abstain";
   readonly model?: string;
+  readonly certificates?: readonly {
+    readonly decider: string;
+    readonly model: string;
+    readonly pinned: boolean;
+    readonly expiresAt?: number;
+  }[];
   /** Candidate fit, when one is stored and the decision is not certified. */
   readonly metrics?: Readonly<Record<string, number>>;
   /** Command that writes this decision's candidate into the lockfile. */
@@ -45,6 +51,8 @@ export interface DecisionQueueRow {
   readonly labelOnly: boolean;
   readonly status: "pending" | "reviewed";
   readonly questions: readonly DecisionFormQuestion[];
+  readonly by?: string;
+  readonly why?: string;
 }
 
 /**
@@ -72,11 +80,20 @@ export function projectDecisionList(
           ? "candidate"
           : "learning";
     const fitted = metrics[name];
+    const certificates = Object.entries(lock?.decisions[name]?.deciders ?? {}).map(
+      ([decider, cert]) => ({
+        decider,
+        model: cert.model,
+        pinned: cert.pinned,
+        ...(cert.expiresAt !== undefined ? { expiresAt: cert.expiresAt } : {}),
+      }),
+    );
     return {
       name,
       state,
       mode: decision.mode,
-      ...(decision.model !== undefined ? { model: decision.model } : {}),
+      ...(certificates[0] !== undefined ? { model: certificates[0].model } : {}),
+      ...(certificates.length > 0 ? { certificates } : {}),
       ...(state === "candidate" && fitted ? { metrics: fitted } : {}),
       ...(state === "candidate" ? { promote: `oke decide promote ${name}` } : {}),
     };
@@ -124,6 +141,8 @@ export function projectDecisionQueue(
         requestedAt?: number;
         tenant?: string | null;
         open?: readonly string[];
+        by?: string;
+        why?: string;
       };
       if (tenantId !== undefined && (value.tenant ?? null) !== tenantId) continue;
       const requestedAt = value.requestedAt ?? entry.at;
@@ -135,6 +154,8 @@ export function projectDecisionQueue(
         labelOnly,
         status: value.status ?? "pending",
         questions: formQuestions(decisionNameFromId(id), value.open),
+        ...(value.by !== undefined ? { by: value.by } : {}),
+        ...(value.why !== undefined ? { why: value.why } : {}),
       });
     }
   }
@@ -148,6 +169,8 @@ export interface McpDecisionRow {
   readonly pending: number;
   readonly metrics?: Readonly<Record<string, number>>;
   readonly drift: boolean;
+  readonly certificates?: DecisionListRow["certificates"];
+  readonly reviews?: readonly { readonly by?: string; readonly why?: string }[];
 }
 
 /**
@@ -162,6 +185,7 @@ export function projectMcpDecisions(
   manifest: Manifest | null | undefined,
   pendingByName: Readonly<Record<string, number>> = {},
   metrics: Readonly<Record<string, Readonly<Record<string, number>>>> = {},
+  queue: readonly DecisionQueueRow[] = [],
 ): McpDecisionRow[] {
   const drifted = new Set(decisionDriftNames());
   return projectDecisionList(
@@ -175,6 +199,13 @@ export function projectMcpDecisions(
     pending: pendingByName[row.name] ?? 0,
     ...((row.metrics ?? metrics[row.name]) ? { metrics: row.metrics ?? metrics[row.name] } : {}),
     drift: drifted.has(row.name) || row.state === "suspended",
+    ...(row.certificates ? { certificates: row.certificates } : {}),
+    reviews: queue
+      .filter((item) => item.decision === row.name && item.status === "pending")
+      .map((item) => ({
+        ...(item.by !== undefined ? { by: item.by } : {}),
+        ...(item.why !== undefined ? { why: item.why } : {}),
+      })),
   }));
 }
 

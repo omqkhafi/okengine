@@ -41,7 +41,11 @@ afterEach(() => {
 
 function decision() {
   return ai.decision("triage-live", {
-    onUncertain: "abstain",
+    decider: ai.decider("jev", {
+      provider: "openrouter",
+      model: "typesafe/jev-1.13",
+    }),
+    otherwise: "abstain",
     ask: {
       team: ai.choice("Which team should own this ticket?", {
         billing: "Payments and refunds",

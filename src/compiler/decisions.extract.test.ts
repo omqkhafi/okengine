@@ -1,27 +1,37 @@
 /**
- * Decision extraction: exclusive modes, and review cannot sit on HTTP.
+ * Decision extraction: decider, otherwise, and capability limits.
  */
 
 import { describe, expect, test } from "bun:test";
 import { extractFromSources } from "./extract.ts";
 
-const header = `const triage = ai.decision("triage", {\n`;
+const decider = `const jev = ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13" });\n`;
 
 describe("ai.decision extract", () => {
-  test("review and abstain together fail to compile", async () => {
+  test("a decision without otherwise fails to compile", async () => {
     await expect(
       extractFromSources({
-        "src/flows/run.ts": `${header}  review: "ops",\n  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { a: "A" }) },\n});\n`,
+        "src/flows/run.ts": `${decider}ai.decision("triage", {\n  decider: jev,\n  ask: { team: ai.choice("which", { a: "A" }) },\n});\n`,
       }),
-    ).rejects.toThrow(/exactly one of review/);
+    ).rejects.toThrow(/otherwise is required/);
   });
 
-  test("an HTTP trigger that reviews fails to compile", async () => {
+  test("shadow fails to compile as planned", async () => {
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `${decider}ai.decision("triage", {\n  decider: jev,\n  otherwise: "abstain",\n  shadow: "other",\n  ask: { team: ai.choice("which", { a: "A" }) },\n});\n`,
+      }),
+    ).rejects.toThrow(/planned/);
+  });
+
+  test("an HTTP trigger that parks fails to compile", async () => {
     await expect(
       extractFromSources({
         "src/flows/run.ts": `
+          const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
           const triage = ai.decision("triage", {
-            review: "ops",
+            decider: jev,
+            otherwise: "ops",
             ask: { team: ai.choice("which", { a: "A" }) },
           });
           on(http.post("/t"), flow("run", {
@@ -33,38 +43,52 @@ describe("ai.decision extract", () => {
     ).rejects.toThrow(/fx\.emit/);
   });
 
-  test("choice, score, and duplicate names fail at compile time", async () => {
-    const many = Array.from({ length: 255 }, (_, i) => `o${i}: "x"`).join(", ");
+  test("a custom decider's max choices fails at compile time", async () => {
     await expect(
       extractFromSources({
-        "src/flows/run.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { ${many} }) },\n});\n`,
+        "src/flows/run.ts": `
+          const host = ai.decider("host", {
+            driverId: "systemone",
+            baseUrl: "https://example.test/decisions",
+            model: "m",
+            secret: "HOST_KEY",
+            capabilities: { boolean: true, choice: true, score: true, refusal: false, maxChoices: 1 },
+          });
+          ai.decision("triage", {
+            decider: host,
+            otherwise: "abstain",
+            ask: { team: ai.choice("which", { a: "A", b: "B" }) },
+          });
+        `,
       }),
-    ).rejects.toThrow(/max 254/);
-    await expect(
-      extractFromSources({
-        "src/flows/run.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { none_of_these: null }) },\n});\n`,
-      }),
-    ).rejects.toThrow(/none_of_these/);
-    await expect(
-      extractFromSources({
-        "src/flows/run.ts": `${header}  onUncertain: "abstain",\n  ask: { rank: ai.score("rank", ["only"]) },\n});\n`,
-      }),
-    ).rejects.toThrow(/2–10 levels/);
-    await expect(
-      extractFromSources({
-        "src/flows/a.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { a: "A", b: "B" }) },\n});\n`,
-        "src/flows/b.ts": `${header}  onUncertain: "abstain",\n  ask: { team: ai.choice("which", { a: "A", b: "B" }) },\n});\n`,
-      }),
-    ).rejects.toThrow(/duplicate decision name/);
+    ).rejects.toThrow(/allows 1/);
   });
 
-  test("review records the gate name", async () => {
+  test("author none_of_these fails to compile", async () => {
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `${decider}ai.decision("triage", {\n  decider: jev,\n  otherwise: "abstain",\n  ask: { team: ai.choice("which", { none_of_these: null }) },\n});\n`,
+      }),
+    ).rejects.toThrow(/none_of_these/);
+  });
+
+  test("duplicate names fail to compile", async () => {
+    await expect(
+      extractFromSources({
+        "src/flows/a.ts": `${decider}ai.decision("triage", {\n  decider: jev,\n  otherwise: "abstain",\n  ask: { team: ai.choice("which", { a: "A", b: "B" }) },\n});\n`,
+        "src/flows/b.ts": `${decider}ai.decision("triage", {\n  decider: jev,\n  otherwise: "abstain",\n  ask: { team: ai.choice("which", { a: "A", b: "B" }) },\n});\n`,
+      }),
+    ).rejects.toThrow(/duplicate/);
+  });
+
+  test("otherwise resolves a gate and a durable flow parks", async () => {
     const manifest = await extractFromSources({
       "src/flows/run.ts": `
-        const ops = gate.policy("ops", () => true);
+        const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
         const triage = ai.decision("triage", {
-          review: ops,
-          ask: { team: ai.choice("which", { a: "A", b: "B" }) },
+          decider: jev,
+          otherwise: "ops",
+          ask: { team: ai.choice("which", { a: "A" }) },
         });
         on(signal.once("job"), flow("run", {
           durable: true,
@@ -72,15 +96,20 @@ describe("ai.decision extract", () => {
         }));
       `,
     });
+    expect(manifest.ai?.decisions?.triage?.otherwise).toBe("ops");
     expect(manifest.ai?.decisions?.triage?.review).toBe("ops");
+    expect(manifest.flows?.run?.effects?.secrets).toEqual(["OPENROUTER_API_KEY"]);
+    expect(manifest.ai?.deciders?.jev?.pinning).toBe("dated");
   });
 
-  test("review resolves a variable to the gate's declared name", async () => {
+  test("otherwise resolves a variable to the gate's declared name", async () => {
     const manifest = await extractFromSources({
       "src/flows/run.ts": `
+        const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
         const someVar = gate.policy("ops", () => true);
         const triage = ai.decision("triage", {
-          review: someVar,
+          decider: jev,
+          otherwise: someVar,
           ask: { team: ai.choice("which", { a: "A", b: "B" }) },
         });
         on(signal.once("job"), flow("run", {
@@ -95,8 +124,10 @@ describe("ai.decision extract", () => {
   test("autonomy and evals survive extraction", async () => {
     const manifest = await extractFromSources({
       "src/flows/run.ts": `
+        const jev = ai.decider("jev", { provider: "openrouter", model: "m", region: "eu" });
         const triage = ai.decision("triage", {
-          onUncertain: "abstain",
+          decider: jev,
+          otherwise: "abstain",
           evals: "evals/triage.jsonl",
           autonomy: { maxError: 0.05, audit: 0.1, risk: 0.1 },
           ask: { team: ai.choice("which", { a: "A", b: "B" }) },
@@ -109,15 +140,19 @@ describe("ai.decision extract", () => {
       audit: 0.1,
       risk: 0.1,
     });
+    expect(manifest.ai?.deciders?.jev?.region).toBe("eu");
+    expect(manifest.ai?.deciders?.jev?.regionStatus).toBe("declared");
   });
 
   test("choice options passed through a variable fail to compile", async () => {
     await expect(
       extractFromSources({
         "src/flows/run.ts": `
+          const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
           const options = { a: "A", b: "B" };
           ai.decision("triage", {
-            onUncertain: "abstain",
+            decider: jev,
+            otherwise: "abstain",
             ask: { team: ai.choice("which", options) },
           });
         `,
@@ -128,10 +163,12 @@ describe("ai.decision extract", () => {
   test("score levels and a whole question resolve a same-file const", async () => {
     const manifest = await extractFromSources({
       "src/flows/run.ts": `
+        const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
         const levels = ["low", "high"];
         const team = ai.choice("which", { a: "A", b: "B" });
         ai.decision("triage", {
-          onUncertain: "abstain",
+          decider: jev,
+          otherwise: "abstain",
           ask: { team, rank: ai.score("rank", levels) },
         });
       `,
@@ -143,8 +180,10 @@ describe("ai.decision extract", () => {
     await expect(
       extractFromSources({
         "src/flows/run.ts": `
+          const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
           ai.decision("triage", {
-            onUncertain: "abstain",
+            decider: jev,
+            otherwise: "abstain",
             ask: { rank: ai.score("rank", missing) },
           });
         `,
@@ -153,12 +192,28 @@ describe("ai.decision extract", () => {
     await expect(
       extractFromSources({
         "src/flows/run.ts": `
+          const jev = ai.decider("jev", { provider: "openrouter", model: "m" });
           ai.decision("triage", {
-            onUncertain: "abstain",
+            decider: jev,
+            otherwise: "abstain",
             ask: { team: missingQuestion },
           });
         `,
       }),
     ).rejects.toThrow(/not a same-file const/);
+  });
+
+  test("a string passed as decider fails to compile", async () => {
+    await expect(
+      extractFromSources({
+        "src/flows/run.ts": `
+          ai.decision("triage", {
+            decider: "jev",
+            otherwise: "abstain",
+            ask: { team: ai.choice("which", { a: "A" }) },
+          });
+        `,
+      }),
+    ).rejects.toThrow(/not a decider/);
   });
 });

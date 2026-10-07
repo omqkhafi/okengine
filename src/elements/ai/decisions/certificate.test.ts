@@ -36,6 +36,7 @@ function answer() {
     answers: {
       team: {
         type: "choice",
+        choice: "technical",
         probabilities: { billing: 0.08, technical: 0.9, none_of_these: 0.02 },
       },
     },
@@ -54,22 +55,29 @@ async function run(
 ) {
   const question = ai.choice("which team", { billing: "Billing", technical: "Technical" });
   const decl = ai.decision("triage", {
-    onUncertain: "abstain",
+    decider: ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13.0" }),
+    otherwise: "abstain",
     autonomy: { maxError: 0.05, audit: 0 },
     ...(extra?.locale ? { locale: () => "ar" } : {}),
     ask: { team: question },
   });
   if (lock) {
     setDecisionLock({
+      version: 2,
       decisions: {
         triage: {
-          model: extra?.mismatch ? "other" : "typesafe/jev-1.13.0",
-          questions: {
-            team: {
-              "": {
-                hash: extra?.stale ? "nope" : questionHash(question),
-                calibrator: { kind: "temperature" as const, t: 1 },
-                threshold: 0.5,
+          deciders: {
+            jev: {
+              model: extra?.mismatch ? "other" : "typesafe/jev-1.13.0",
+              pinned: true,
+              questions: {
+                team: {
+                  "": {
+                    hash: extra?.stale ? "nope" : questionHash(question),
+                    calibrator: { kind: "temperature" as const, t: 1 },
+                    threshold: 0.5,
+                  },
+                },
               },
             },
           },
@@ -133,7 +141,9 @@ describe("decision certificates", () => {
 
   test("promote writes the fetched candidate", async () => {
     const candidate = {
+      decider: "jev",
       model: "typesafe/jev-1.13.0",
+      pinned: true,
       questions: {
         team: {
           "": {
@@ -144,34 +154,45 @@ describe("decision certificates", () => {
         },
       },
     };
+    const slot = {
+      deciders: {
+        jev: {
+          model: candidate.model,
+          pinned: true,
+          questions: candidate.questions,
+        },
+      },
+    };
     const dir = await mkdtemp(join(tmpdir(), "oke-decide-"));
     const lockPath = join(dir, "oke-decisions.lock.json");
     const written = await promoteDecision({
       name: "triage",
       origin: "http://127.0.0.1:6530",
       lockPath,
-      current: { decisions: {} },
+      current: { version: 2, decisions: {} },
       fetcher: async () => new Response(JSON.stringify(candidate), { status: 200 }),
     });
-    expect(written.decisions.triage).toEqual(candidate);
+    expect(written.version).toBe(2);
+    expect(written.decisions.triage).toEqual(slot);
     const disk = JSON.parse(await readFile(lockPath, "utf8")) as { decisions: { triage: unknown } };
-    expect(disk.decisions.triage).toEqual(candidate);
-    await Bun.write(lockPath, `${JSON.stringify({ decisions: { other: candidate } })}\n`);
+    expect(disk.decisions.triage).toEqual(slot);
+    await Bun.write(lockPath, `${JSON.stringify({ version: 2, decisions: { other: slot } })}\n`);
     const merged = await promoteDecision({
       name: "triage",
       origin: "http://127.0.0.1:6530",
       lockPath,
       fetcher: async () => new Response(JSON.stringify(candidate), { status: 200 }),
     });
-    expect(merged.decisions.other).toEqual(candidate);
-    expect(merged.decisions.triage).toEqual(candidate);
+    expect(merged.decisions.other).toEqual(slot);
+    expect(merged.decisions.triage).toEqual(slot);
     expect(await loadDecisionLockfile(dir)).toEqual(merged);
   });
 
   test("certify fits a threshold from the provider and hashes the question", async () => {
     const question = ai.choice("which team", { billing: "Billing", technical: "Technical" });
     const decl = ai.decision("triage", {
-      onUncertain: "abstain",
+      decider: ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13.0" }),
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       evals: "seed.jsonl",
       ask: { team: question },
@@ -192,14 +213,15 @@ describe("decision certificates", () => {
         answers: {
           team: {
             type: "choice",
+            choice: "technical",
             probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
           },
         },
         usage: {},
       }),
     });
-    expect(entry.questions.team?.[""]?.hash).toBe(questionHash(question));
-    expect(entry.questions.team?.[""]?.threshold).toBeGreaterThan(0);
+    expect(entry.cert.questions.team?.[""]?.hash).toBe(questionHash(question));
+    expect(entry.cert.questions.team?.[""]?.threshold).toBeGreaterThan(0);
     const dir = await mkdtemp(join(tmpdir(), "oke-cert-"));
     const seedPath = join(dir, "seed.jsonl");
     await Bun.write(seedPath, seed);
@@ -212,6 +234,8 @@ describe("decision certificates", () => {
           decisions: {
             triage: {
               mode: "abstain",
+              decider: "jev",
+              otherwise: "abstain",
               questions: ["team"],
               evals: seedPath,
               autonomy: { maxError: 0.05, audit: 0 },
@@ -224,6 +248,7 @@ describe("decision certificates", () => {
         answers: {
           team: {
             type: "choice",
+            choice: "technical",
             probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
           },
         },
@@ -232,7 +257,9 @@ describe("decision certificates", () => {
     });
     expect(code).toBe(0);
     const loaded = await loadDecisionLockfile(dir);
-    expect(loaded?.decisions.triage?.questions.team?.[""]?.hash).toBe(questionHash(question));
+    expect(loaded?.decisions.triage?.deciders.jev?.questions.team?.[""]?.hash).toBe(
+      questionHash(question),
+    );
   });
 
   test("one seed row does not certify a slice", async () => {
@@ -247,13 +274,14 @@ describe("decision certificates", () => {
         answers: {
           team: {
             type: "choice",
+            choice: "technical",
             probabilities: { billing: 0.05, technical: 0.93, none_of_these: 0.02 },
           },
         },
         usage: {},
       }),
     });
-    expect(entry.questions.team).toBeUndefined();
+    expect(entry.cert.questions.team).toBeUndefined();
   });
 
   test("choice and score labels certify from the stored distribution", () => {

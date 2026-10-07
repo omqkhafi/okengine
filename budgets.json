@@ -5,10 +5,20 @@
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 14704,
+      "value": 14835,
       "limit": 17408,
       "unit": "bytes",
       "gate": "absolute",
+      "group": "core",
+      "ok": true
+    },
+    {
+      "id": "decisionChunkGzipBytes",
+      "label": "Decision module",
+      "value": 6119,
+      "limit": 6119,
+      "unit": "bytes",
+      "gate": "report",
       "group": "core",
       "ok": true
     },

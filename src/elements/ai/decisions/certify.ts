@@ -10,8 +10,8 @@ import {
   questionHash,
   type DecisionCalibrator,
   type DecisionCertSlice,
+  type DecisionDeciderCert,
   type DecisionLabel,
-  type DecisionLockEntry,
 } from "./certificate.ts";
 import type { DecisionResponse } from "./provider.ts";
 
@@ -25,6 +25,24 @@ export interface DecisionSeedCase {
 
 /** One provider call used while certifying. */
 export type DecisionEvaluate = (input: unknown) => Promise<DecisionResponse>;
+
+/** Printed for one question after certify. */
+export interface CertifyQuestionReport {
+  readonly accuracy: number;
+  readonly ece: number;
+  readonly coverage: number;
+  readonly p50Ms: number;
+  readonly p95Ms: number;
+  readonly cost: number;
+}
+
+/** Certificate plus the comparison row. */
+export interface CertifySeedResult {
+  readonly cert: DecisionDeciderCert;
+  readonly report: Readonly<Record<string, CertifyQuestionReport>>;
+  /** True when the certificate is an expiring alias. */
+  readonly unpinned: boolean;
+}
 
 /**
  * Parse decision seed JSONL. Blank lines are skipped.
@@ -73,29 +91,51 @@ interface FitRow {
  */
 export async function certifySeed(options: {
   readonly model: string;
+  readonly pinned?: boolean;
+  readonly expiresAt?: number;
   readonly maxError: number;
   readonly delta?: number;
   readonly jsonl: string;
   readonly ask: Readonly<Record<string, AiDecisionQuestion>>;
   readonly evaluate: DecisionEvaluate;
-}): Promise<DecisionLockEntry> {
+  readonly now?: () => number;
+}): Promise<CertifySeedResult> {
   const cases = parseDecisionSeed(options.jsonl);
   const buckets = new Map<string, FitRow[]>();
+  const samples = new Map<string, { correct: boolean; confidence: number }[]>();
+  const latencies: number[] = [];
+  let cost = 0;
   let resolved = options.model;
+  const now = options.now ?? Date.now;
   for (const row of cases) {
+    const started = now();
     const response = await options.evaluate(row.input);
+    latencies.push(Math.max(0, now() - started));
+    cost += response.usage.cost ?? 0;
     if (response.model) resolved = response.model;
     const locale = row.locale ?? "";
     for (const [id, expected] of Object.entries(row.expect)) {
       const question = options.ask[id];
       if (!question) continue;
-      const answer = response.answers[id];
+      const answers = response.answers;
+      const answer = Array.isArray(answers)
+        ? undefined
+        : (answers as Readonly<Record<string, unknown>>)[id];
       const fit = fitRow(question, answer, expected);
       if (!fit) continue;
       const key = `${id}\0${locale}`;
       const list = buckets.get(key) ?? [];
       list.push(fit);
       buckets.set(key, list);
+      const confidence =
+        fit.noul !== undefined ? Math.max(fit.noul, 1 - fit.noul) : Math.max(...fit.probs, 0);
+      const correct =
+        fit.booleanLabel !== undefined
+          ? fit.noul !== undefined && fit.noul >= 0.5 === fit.booleanLabel
+          : fit.probs[fit.labelIndex] === Math.max(...fit.probs);
+      const bag = samples.get(id) ?? [];
+      bag.push({ correct, confidence });
+      samples.set(id, bag);
     }
   }
   const entry = entryFromBuckets(
@@ -105,7 +145,30 @@ export async function certifySeed(options: {
     options.maxError,
     options.delta ?? 0.1,
   );
-  return { ...entry, certifiedAt: Date.now() };
+  const pinned = options.pinned !== false;
+  const cert: DecisionDeciderCert = {
+    ...entry,
+    pinned,
+    ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}),
+    certifiedAt: Date.now(),
+  };
+  const report: Record<string, CertifyQuestionReport> = {};
+  for (const [id, rows] of samples) {
+    const threshold = cert.questions[id]?.[""]?.threshold;
+    const covered =
+      threshold === undefined
+        ? 0
+        : rows.filter((row) => row.confidence >= threshold).length / rows.length;
+    report[id] = {
+      accuracy: rows.filter((row) => row.correct).length / rows.length,
+      ece: expectedCalibrationError(rows),
+      coverage: covered,
+      p50Ms: percentile(latencies, 0.5),
+      p95Ms: percentile(latencies, 0.95),
+      cost,
+    };
+  }
+  return { cert, report, unpinned: !pinned };
 }
 
 /**
@@ -119,7 +182,7 @@ export function certifyLabels(options: {
   readonly delta?: number;
   readonly ask: Readonly<Record<string, AiDecisionQuestion>>;
   readonly labels: readonly DecisionLabel[];
-}): DecisionLockEntry {
+}): DecisionDeciderCert {
   const groups = new Map<string, DecisionLabel[]>();
   for (const label of options.labels) {
     if (label.raw === undefined) continue;
@@ -148,7 +211,7 @@ export function certifyLabels(options: {
     bucket[locale] = slice;
     questions[id] = bucket;
   }
-  return { model, certifiedAt: Date.now(), questions };
+  return { model, pinned: true, certifiedAt: Date.now(), questions };
 }
 
 function entryFromBuckets(
@@ -157,7 +220,7 @@ function entryFromBuckets(
   buckets: ReadonlyMap<string, readonly FitRow[]>,
   maxError: number,
   delta: number,
-): DecisionLockEntry {
+): DecisionDeciderCert {
   const questions: Record<string, Record<string, DecisionCertSlice>> = {};
   for (const [key, rows] of buckets) {
     const split = key.indexOf("\0");
@@ -171,7 +234,7 @@ function entryFromBuckets(
     bucket[locale] = slice;
     questions[id] = bucket;
   }
-  return { model, questions };
+  return { model, pinned: true, questions };
 }
 
 function sliceFromRows(
@@ -270,6 +333,32 @@ function scoreFit(
  *
  * @param record - Answer or stored raw
  */
+function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+  return sorted[index] ?? 0;
+}
+
+function expectedCalibrationError(
+  rows: readonly { readonly confidence: number; readonly correct: boolean }[],
+): number {
+  if (rows.length === 0) return 0;
+  const bins = Array.from({ length: 10 }, () => ({ n: 0, confidence: 0, correct: 0 }));
+  for (const row of rows) {
+    const index = Math.min(9, Math.floor(row.confidence * 10));
+    const bin = bins[index];
+    if (!bin) continue;
+    bin.n += 1;
+    bin.confidence += row.confidence;
+    bin.correct += row.correct ? 1 : 0;
+  }
+  return bins.reduce((sum, bin) => {
+    if (bin.n === 0) return sum;
+    return sum + (bin.n / rows.length) * Math.abs(bin.correct / bin.n - bin.confidence / bin.n);
+  }, 0);
+}
+
 function storedDistribution(record: Record<string, unknown>): unknown {
   if (record.probabilities !== undefined) return record.probabilities;
   return record;
@@ -281,12 +370,18 @@ function fitRow(
   expected: unknown,
 ): FitRow | undefined {
   const record = answer && typeof answer === "object" ? (answer as Record<string, unknown>) : {};
+  if (record.type === "refusal" || record.type === "malformed") return undefined;
   if (question.kind === "boolean") {
     if (typeof expected !== "boolean") return undefined;
     return {
       probs: [],
       labelIndex: expected ? 1 : 0,
-      noul: typeof record.noul === "number" ? record.noul : 0,
+      noul:
+        typeof record.probability === "number"
+          ? record.probability
+          : typeof record.noul === "number"
+            ? record.noul
+            : 0,
       booleanLabel: expected,
       weight: 1,
     };

@@ -550,15 +550,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     name: "eval",
     summary: "prompt eval sets (CI gate)",
     leaf: true,
-    flags: [
-      MANIFEST,
-      {
-        long: "--certify",
-        takesValue: false,
-        summary: "Build a decision certificate from the seed file",
-      },
-      HELP,
-    ],
+    flags: [MANIFEST, HELP],
   },
   {
     name: "decide",
@@ -583,6 +575,50 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
           },
           HELP,
         ],
+      },
+      {
+        name: "labels",
+        summary: "Export reviewed labels as seed JSONL",
+        positionals: "<name>",
+        flags: [
+          {
+            long: "--export",
+            takesValue: false,
+            summary: "Write the JSONL file",
+          },
+          {
+            long: "--out",
+            takesValue: true,
+            valueName: "file",
+            summary: "Output path",
+          },
+          {
+            long: "--origin",
+            takesValue: true,
+            valueName: "url",
+            summary: "App origin",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "certify",
+        summary: "Write one certificate per decider",
+        positionals: "<name>",
+        flags: [
+          {
+            long: "--deciders",
+            takesValue: true,
+            valueName: "a,b",
+            summary: "Decider names",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "models",
+        summary: "List decision models",
+        flags: [HELP],
       },
     ],
   },

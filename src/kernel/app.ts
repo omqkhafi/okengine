@@ -1704,6 +1704,14 @@ export function oke(options: OkeOptions): OkeApp {
           "oke boot: decisions are declared but rootDir and OKE_ROOT_DIR are unset, so the decision lockfile cannot load.",
         );
       }
+      const { resolveDriverId } = await import("../config/index.ts");
+      const { setDecisionTransport } = loadFxDecideModule();
+      const decideDriver = resolveDriverId(
+        (overrides?.config ?? options.config)?.drivers?.decide,
+        bootEnv,
+        { test: "mock" },
+      );
+      setDecisionTransport(decideDriver === "mock" ? "mock" : "live");
       await loadDecisionLockfile(root);
       setDeclaredDriftDecisions(Object.keys(declaredDecisions));
       if (result.journal && result.journal.store.decisions) {

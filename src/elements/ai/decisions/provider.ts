@@ -40,7 +40,7 @@ export interface DecisionUsage {
 export interface DecisionResponse {
   readonly model: string;
   readonly provider?: string;
-  readonly answers: Readonly<Record<string, unknown>>;
+  readonly answers: Readonly<Record<string, unknown>> | readonly unknown[];
   readonly usage: DecisionUsage;
 }
 
@@ -87,6 +87,27 @@ export class DecisionConfigError extends Error {
     super(`fx.decide: secret "${secret}" is not configured`);
     this.name = "DecisionConfigError";
     this.secret = secret;
+  }
+}
+
+/** State is larger than the decider's max context. Not an outage. */
+export class DecisionInputTooLarge extends Error {
+  readonly decider: string;
+  readonly tokens: number;
+  readonly maxContext: number;
+  /**
+   * @param decider - Decider name
+   * @param tokens - Estimated input tokens
+   * @param maxContext - Capability limit
+   */
+  constructor(decider: string, tokens: number, maxContext: number) {
+    super(
+      `fx.decide: decider "${decider}" state is ${tokens} tokens; max context is ${maxContext}`,
+    );
+    this.name = "DecisionInputTooLarge";
+    this.decider = decider;
+    this.tokens = tokens;
+    this.maxContext = maxContext;
   }
 }
 

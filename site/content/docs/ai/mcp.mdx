@@ -38,7 +38,7 @@ Default-safe — they return inert data envelopes, never live handles. Approving
 | `oke.ai.runs.list`      | Agent runs for the token's tenant (`limit` ≤ 200). `console:*` or `mcp:*` may omit `tenant` or name another one. PII and secrets are masked. | `mcp:ai:read` · `console:runs:read`           |
 | `oke.ai.runs.get`       | One agent run plus its follow events (`runId`). Same tenant rule. Args, trail, and events are masked.                                        | `mcp:ai:read` · `console:runs:read`           |
 | `oke.ai.approvals.list` | Pending tool approvals for the token's tenant. Same operator rule. Approval args are masked.                                                 | `mcp:ai:read` · `console:runs:read`           |
-| `oke.decisions.list`    | Decision state, pending count, metrics, and drift for the token's tenant. Same operator rule. Inputs are masked.                             | `mcp:decisions:read` · `console:runs:read`    |
+| `oke.decisions.list`    | Decision state, `by`, `why`, per-decider certificates, pending count, and drift. Read-only. Inputs are masked. Resolve stays in the Console. | `mcp:decisions:read` · `console:runs:read`    |
 
 ## Write tools — confirmed, every single call
 

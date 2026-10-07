@@ -251,7 +251,8 @@ export function persistDecisionDrift(name: string, suspended: boolean, certified
 export function pinnedDecision(
   name: string,
 ): { readonly model: string; readonly since: number } | undefined {
-  const entry = getDecisionLock()?.decisions[name];
-  if (!entry) return undefined;
-  return { model: entry.model, since: entry.certifiedAt ?? 0 };
+  const deciders = getDecisionLock()?.decisions[name]?.deciders;
+  const first = deciders ? Object.values(deciders)[0] : undefined;
+  if (!first) return undefined;
+  return { model: first.model, since: first.certifiedAt ?? 0 };
 }

@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
-import { commandNames } from "./registry.ts";
+import { commandNames, OKE_COMMANDS } from "./registry.ts";
 
 describe("AGENTS.md commands", () => {
   test("every oke command mentioned in AGENTS.md is registered", () => {
@@ -17,7 +17,13 @@ describe("AGENTS.md commands", () => {
     }
     expect(mentioned.has("eval")).toBe(true);
     expect(mentioned.has("decide")).toBe(true);
-    expect(text).not.toContain("oke decide certify");
+    const decide = OKE_COMMANDS.find((command) => command.name === "decide");
+    expect(decide?.subcommands?.map((command) => command.name).sort()).toEqual([
+      "certify",
+      "labels",
+      "models",
+      "promote",
+    ]);
     for (const name of mentioned) {
       expect(registered.has(name)).toBe(true);
     }

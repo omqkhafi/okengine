@@ -118,6 +118,17 @@ export function DecisionsPage(): JSX.Element {
           >
             <span className="min-w-0 flex-1 truncate">{decision.name}</span>
             <span className={EXPLORER_COUNT_CLASS}>{decisionStateLabel(decision.state)}</span>
+            {decision.certificates?.map((certificate) => (
+              <span
+                key={certificate.decider}
+                className={EXPLORER_COUNT_CLASS}
+                data-slot="decision-certificate"
+                data-pinned={certificate.pinned ? "true" : "false"}
+              >
+                {certificate.decider} {certificate.model}
+                {certificate.pinned ? "" : " unpinned"}
+              </span>
+            ))}
             {decision.metrics ? (
               <span className={EXPLORER_COUNT_CLASS} data-slot="decision-metrics">
                 {Object.entries(decision.metrics)
@@ -151,6 +162,11 @@ export function DecisionsPage(): JSX.Element {
             <span className="min-w-0 flex-1 truncate">
               {row.decision}
               {row.labelOnly ? " · label" : ""}
+              {row.why === "refused" && row.by
+                ? ` · refused by ${row.by}`
+                : row.why
+                  ? ` · ${row.why}`
+                  : ""}
             </span>
             <span className={EXPLORER_COUNT_CLASS} data-slot="decision-age">
               {formatAge(row.ageMs)}
