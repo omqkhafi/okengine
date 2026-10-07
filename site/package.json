@@ -14,15 +14,15 @@
     "@fumadocs/base-ui": "^16.15.13",
     "cnfast": "^0.2.0",
     "framer-motion": "^13.4.2",
-    "fumadocs-core": "16.15.13",
-    "fumadocs-mdx": "15.4.3",
+    "fumadocs-core": "16.16.1",
+    "fumadocs-mdx": "15.4.6",
     "lucide-react": "^1.48.0",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "ogl": "^1.0.11",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "shiki": "^4.4.3",
-    "three": "^0.185.1",
+    "three": "^0.186.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -31,7 +31,7 @@
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/three": "^0.185.4",
+    "@types/three": "^0.186.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
