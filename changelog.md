@@ -12,6 +12,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+- CI splits the test suite into six parallel jobs: console, elements, kernel, cli, drivers, and core. One shard failing does not cancel the others.
+
 ### ✨ Added
 
 - Contributor workflow lives in the repository: issue forms, labels, the okengine board, pull-request checks, and a GitHub Release cut from the changelog. Code checks and `pr-meta` are one CI workflow. There is no manifest-diff job: this repository has no app manifest. Runners are pinned to `ubuntu-24.04`. npm and JSR publish on the `v*` release workflow, not on a pull request. See CONTRIBUTING.md.

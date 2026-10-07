@@ -31,7 +31,12 @@
         "required_status_checks": [
           { "context": "lint · fmt" },
           { "context": "typecheck" },
-          { "context": "test" },
+          { "context": "test · console" },
+          { "context": "test · elements" },
+          { "context": "test · kernel" },
+          { "context": "test · cli" },
+          { "context": "test · drivers" },
+          { "context": "test · core" },
           { "context": "gate" },
           { "context": "site" },
           { "context": "pr-meta" }
