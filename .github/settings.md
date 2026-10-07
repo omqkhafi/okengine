@@ -6,12 +6,14 @@ Applied with `gh api`. Re-run the commands from the repository root. They do not
 
 ## Merge
 
-Squash only. The squash commit title is the pull request title and the body is the pull request description. The head branch is deleted. Auto-merge is off.
+`main` stays the default branch. The repository allows squash and merge commits. Rebase stays off. Feature pull requests squash into `dev`: the commit title is the pull request title and the body is the description. The release pull request merges `dev` into `main` with a merge commit, so `dev`'s history and its `Closes #N` commit messages land on `main`. The head branch is deleted after a squash. Do not delete `dev` when merging the release. Auto-merge is off.
+
+`dev` ruleset allows squash only. `main` ruleset allows merge commit only.
 
 ```bash
 gh api --method PATCH repos/omqkhafi/okengine \
   -F allow_squash_merge=true \
-  -F allow_merge_commit=false \
+  -F allow_merge_commit=true \
   -F allow_rebase_merge=false \
   -F delete_branch_on_merge=true \
   -F allow_auto_merge=false \
@@ -79,13 +81,13 @@ Project menu → Workflows. The API can list these and cannot enable or retarget
 | ------------------------------ | -------------------------------- | -------------------------------------------------------------------- |
 | Item added to project          | off                              | Status = Triage                                                      |
 | Pull request linked to issue   | off                              | Status = In review                                                   |
-| Item closed                    | on                               | Status = Done                                                        |
-| Pull request merged            | on                               | Status = Done                                                        |
+| Item closed                    | on                               | Status = Done. An issue reaches Done when it closes, which is when the release reaches `main`. |
+| Pull request merged            | on                               | The pull request item goes to Done. `project-event.ts` sets linked issues to Merged when the pull request merges into `dev`. Those issues stay open. |
 | Auto-add sub-issues to project | on                               | leave on                                                             |
 | Auto-close issue               | on                               | leave on                                                             |
 | Auto-archive                   | not in the API list              | If the UI shows it: `is:closed reason:completed updated:<@today-14d` |
 
-`.github/workflows/project.yml` does the same status moves, and copies the milestone into Release, when `PROJECT_TOKEN` is present. It skips when the secret is absent. Turn the built-ins on as well; both write the same status.
+`.github/workflows/project.yml` runs `scripts/github/project-event.ts` when `PROJECT_TOKEN` is present, and skips when the secret is absent. An opened pull request moves its linked issues to In review. A merge into `dev` moves those issues to Merged. A closed issue moves to Done. A milestone change copies the title into Release.
 
 ## `PROJECT_TOKEN`
 

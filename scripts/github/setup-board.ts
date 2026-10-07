@@ -42,6 +42,7 @@ const STATUS: readonly { name: string; color: string; description: string }[] = 
   },
   { name: "In progress", color: "YELLOW", description: "Someone is doing the work" },
   { name: "In review", color: "PURPLE", description: "A pull request is open" },
+  { name: "Merged", color: "PINK", description: "Merged into dev; the release closes it" },
   { name: "Done", color: "GREEN", description: "Closed" },
 ];
 
@@ -54,7 +55,7 @@ const README = [
   "",
   "| Field | Values |",
   "| --- | --- |",
-  "| Status | Triage, Backlog, Ready, In progress, In review, Done |",
+  "| Status | Triage, Backlog, Ready, In progress, In review, Merged, Done |",
   "| Priority | P0, P1, P2, P3 |",
   "| Size | XS, S, M, L, XL |",
   "| Iteration | Two weeks, starting Sunday 2026-10-11 |",
@@ -89,7 +90,8 @@ const README = [
   "",
   "- Item added to project → Status = Triage",
   "- Pull request linked to issue → Status = In review",
-  "- Item closed, or pull request merged → Status = Done",
+  "- A pull request merged into dev → its linked issues go to Merged (they stay open)",
+  "- An issue closes when the release reaches main → Status = Done",
   "- Auto-archive, if the UI shows it → is:closed reason:completed updated:<@today-14d",
   "",
   "actions/add-to-project adds every new issue and pull request. That job, and the Release copy, skip cleanly while PROJECT_TOKEN is absent.",
