@@ -113,6 +113,14 @@ function mediaType(request: Request): string {
   return (raw.split(";")[0] ?? "").trim().toLowerCase();
 }
 
+function parseJson(text: string): unknown {
+  const value = JSON.parse(text) as unknown;
+  // Own `__proto__` keys are rare. Skip the clone unless the text can name one,
+  // including a `\u` escape of that key.
+  if (!text.includes("__proto__") && !text.includes("\\u")) return value;
+  return dropProto(value);
+}
+
 function dropProto(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((item) => dropProto(item));
   if (value !== null && typeof value === "object") {
@@ -125,6 +133,8 @@ function dropProto(value: unknown): unknown {
   }
   return value;
 }
+
+const textDecoder = new TextDecoder();
 
 async function readDeclared(request: Request, max: number): Promise<string> {
   const text = await request.text();
@@ -139,17 +149,45 @@ function byteLength(text: string): number {
   return text.length;
 }
 
+function decode(bytes: Uint8Array): string {
+  return textDecoder.decode(bytes);
+}
+
+/**
+ * Read a body with no usable Content-Length.
+ *
+ * At the default cap, `Bun.serve` already stops the socket at the same size,
+ * so this uses the native buffered read and then checks the real length.
+ * A tighter per-route cap still counts chunks and cancels the stream.
+ */
 async function readLimited(request: Request, max: number): Promise<string> {
+  if (max >= DEFAULT_MAX_BODY_BYTES) {
+    const text = await request.text();
+    if (byteLength(text) > max) throw new HttpBodyRejected("PayloadTooLarge");
+    return text;
+  }
   const body = request.body;
   if (!body) {
     const text = await request.text();
-    if (new TextEncoder().encode(text).byteLength > max)
-      throw new HttpBodyRejected("PayloadTooLarge");
+    if (byteLength(text) > max) throw new HttpBodyRejected("PayloadTooLarge");
     return text;
   }
   const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
+  const first = await reader.read();
+  if (first.done) return "";
+  if (first.value.byteLength > max) {
+    await reader.cancel();
+    throw new HttpBodyRejected("PayloadTooLarge");
+  }
+  const second = await reader.read();
+  if (second.done) return first.value.byteLength === 0 ? "" : decode(first.value);
+
+  const chunks: Uint8Array[] = [first.value, second.value];
+  let total = first.value.byteLength + second.value.byteLength;
+  if (total > max) {
+    await reader.cancel();
+    throw new HttpBodyRejected("PayloadTooLarge");
+  }
   for (;;) {
     const step = await reader.read();
     if (step.done) break;
@@ -166,7 +204,7 @@ async function readLimited(request: Request, max: number): Promise<string> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder().decode(bytes);
+  return decode(bytes);
 }
 
 /**
@@ -187,7 +225,8 @@ export async function parseBody(request: Request, options?: ParseBodyOptions): P
   }
   // A declared length inside the cap is buffered by the platform. Check the
   // real byte length afterwards so an understated Content-Length is still 413.
-  // A missing length is counted while streaming and cancelled at the cap.
+  // A missing length uses the native buffer at the default cap (the serve
+  // socket already stops there) and a cancelling read for a tighter cap.
   const text =
     declared !== null && declared !== "" && Number(declared) <= max
       ? await readDeclared(request, max)
@@ -198,14 +237,14 @@ export async function parseBody(request: Request, options?: ParseBodyOptions): P
     mt === "application/json" || (mt.endsWith("+json") && mt.length > "+json".length);
   if (jsonType) {
     try {
-      return dropProto(JSON.parse(text) as unknown);
+      return parseJson(text);
     } catch {
       throw new HttpBodyRejected("InvalidQuery", "malformed_body");
     }
   }
   if (options?.jsonContentType === "any") {
     try {
-      return dropProto(JSON.parse(text) as unknown);
+      return parseJson(text);
     } catch {
       return text;
     }

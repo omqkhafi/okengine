@@ -62,6 +62,35 @@ describe("request bodies", () => {
     expect(Object.prototype).not.toHaveProperty("isAdmin");
     const input = assembleInput({ body: parsed });
     expect((input as { isAdmin?: boolean }).isAdmin).toBeUndefined();
+
+    const escaped = await parseBody(
+      request('{"\\u005f\\u005fproto\\u005f\\u005f":{"isAdmin":true},"a":1}', "application/json"),
+    );
+    expect((escaped as { a?: number; isAdmin?: boolean }).a).toBe(1);
+    expect((escaped as { isAdmin?: boolean }).isAdmin).toBeUndefined();
+  });
+
+  test("a tighter cap cancels a chunked body instead of buffering it", async () => {
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        if (pulled > 4) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(8));
+      },
+    });
+    const req = new Request("http://localhost/hooks", {
+      method: "POST",
+      body: stream,
+      headers: { "content-type": "application/octet-stream" },
+    });
+    await expect(parseBody(req, { maxBytes: 8 })).rejects.toMatchObject({
+      code: "PayloadTooLarge",
+    });
+    expect(pulled).toBeLessThan(4);
   });
 
   test("an empty body is undefined", async () => {

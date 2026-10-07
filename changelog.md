@@ -33,6 +33,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- AoT JSON parsing stays at least 1.5× the dynamic path. A body with no `Content-Length` at the default cap uses the native read; a tighter route cap still cancels the stream. Ordinary JSON is not cloned, and a `\u`-escaped `__proto__` key is still dropped.
 - A durable resume writes its lease from a live clock. The tick sample is only used to choose which sleeps are due.
 - Journal entry writes land only while the caller's lease fence still holds. A lost lease is OKE1074. Approval and decide update the changed entries under their own token.
 - A session heartbeat extends the lease during a long step and stops recording the step result if the lease is lost. That is a lost lease, not a failure to compensate.
