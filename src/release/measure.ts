@@ -54,7 +54,7 @@ export const EXPORT_BUILD_EXTERNALS = [
 ] as const;
 
 /** How a sample is gated. */
-export type BudgetGate = "absolute" | "regression";
+export type BudgetGate = "absolute" | "regression" | "report";
 
 /** Report section headings. */
 const GROUP_HEADINGS: Readonly<Record<BudgetGroup, string>> = {
@@ -239,6 +239,26 @@ export async function measureHttpPingAppBytes(): Promise<HttpPingBudgetSample> {
 /**
  * Gzip size of the kernel edge profile bundle.
  */
+/**
+ * Gzip size of the lazy decision module. Reported, not gated.
+ */
+export async function measureDecisionChunkGzipBytes(): Promise<number> {
+  const entry = `${import.meta.dir}/../kernel/decision-budget-entry.ts`;
+  const result = await Bun.build({
+    entrypoints: [entry],
+    minify: true,
+    target: "bun",
+    format: "esm",
+  });
+  if (!result.success) {
+    throw new Error(`decision chunk build failed:\n${result.logs.map(String).join("\n")}`);
+  }
+  const artifact = result.outputs[0];
+  if (!artifact) throw new Error("decision chunk build produced no output");
+  const raw = await artifact.arrayBuffer();
+  return Bun.gzipSync(new Uint8Array(raw)).byteLength;
+}
+
 export async function measureKernelEdgeGzipBytes(): Promise<number> {
   try {
     return await gzipKernelEdgeInProcess();
@@ -640,13 +660,19 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
     "ms",
   );
   const coldStartMedianMs = await measureColdStartMedianMs(coldCeiling ?? COLD_START_BUDGET_MS);
-  const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes, httpPing] =
-    await Promise.all([
-      measureKernelEdgeGzipBytes(),
-      measureClientGzipBytes(),
-      measureConsoleInitialGzipBytes(),
-      measureHttpPingAppBytes(),
-    ]);
+  const [
+    kernelEdgeGzipBytes,
+    clientGzipBytes,
+    consoleInitialGzipBytes,
+    httpPing,
+    decisionChunkGzipBytes,
+  ] = await Promise.all([
+    measureKernelEdgeGzipBytes(),
+    measureClientGzipBytes(),
+    measureConsoleInitialGzipBytes(),
+    measureHttpPingAppBytes(),
+    measureDecisionChunkGzipBytes(),
+  ]);
   const routingP99Ms = measureRoutingP99Ms();
 
   const budgets: BudgetSample[] = [
@@ -657,6 +683,16 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       KERNEL_EDGE_BUDGET_BYTES,
       "bytes",
       "absolute",
+      "core",
+      previous,
+    ),
+    sample(
+      "decisionChunkGzipBytes",
+      "Decision module",
+      decisionChunkGzipBytes,
+      decisionChunkGzipBytes,
+      "bytes",
+      "report",
       "core",
       previous,
     ),
@@ -860,6 +896,9 @@ function sample(
   previous?: ReadonlyMap<string, number>,
 ): BudgetSample {
   const rounded = unit === "bytes" ? Math.round(value) : Math.round(value * 1000) / 1000;
+  if (gate === "report") {
+    return { id, label, value: rounded, limit: rounded, unit, gate, group, ok: true };
+  }
   const regressionLimit =
     gate === "absolute" ? absoluteRegressionCeiling(previous?.get(id), limit, unit) : undefined;
   return {

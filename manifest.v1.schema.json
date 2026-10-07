@@ -697,16 +697,61 @@
         "budget": { "$ref": "#/$defs/AiPromptBudget" }
       }
     },
+    "AiDeciderCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boolean", "choice", "score", "refusal"],
+      "properties": {
+        "boolean": { "type": "boolean" },
+        "choice": { "type": "boolean" },
+        "score": { "type": "boolean" },
+        "refusal": { "type": "boolean" },
+        "maxChoices": { "type": "integer", "minimum": 1 },
+        "minLevels": { "type": "integer", "minimum": 1 },
+        "maxLevels": { "type": "integer", "minimum": 1 },
+        "maxContext": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "AiDecider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["driverId", "baseUrl", "model", "secret", "pinning", "capabilities"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "driverId": { "enum": ["systemone", "openai-decisions"] },
+        "baseUrl": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "secret": { "type": "string", "minLength": 1 },
+        "pinning": { "enum": ["dated", "alias"] },
+        "capabilities": { "$ref": "#/$defs/AiDeciderCapabilities" },
+        "region": { "type": "string", "minLength": 1 },
+        "regionStatus": { "enum": ["declared", "verified"] },
+        "zdr": { "type": "boolean" },
+        "zdrStatus": { "enum": ["declared", "verified"] },
+        "timeout": { "anyOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] },
+        "concurrency": { "type": "integer", "minimum": 1 }
+      }
+    },
     "AiDecision": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "questions"],
+      "required": ["mode", "decider", "otherwise", "questions"],
       "properties": {
         "mode": { "enum": ["review", "abstain"] },
         "review": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "driverId": { "enum": ["openrouter", "typesafe"] },
+        "decider": { "type": "string", "minLength": 1 },
+        "backup": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "otherwise": { "type": "string", "minLength": 1 },
         "questions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "secrets": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
@@ -742,6 +787,11 @@
           "type": "object",
           "propertyNames": { "type": "string", "minLength": 1 },
           "additionalProperties": { "$ref": "#/$defs/AiAgent" }
+        },
+        "deciders": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/AiDecider" }
         },
         "decisions": {
           "type": "object",

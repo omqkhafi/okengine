@@ -147,8 +147,13 @@ describe("decision labels", () => {
     closeDecisionLabelStore();
     setDecisionDrift("triage", false);
     setDecisionLock({
+      version: 2,
       decisions: {
-        triage: { model: "typesafe/jev-1.13.0", certifiedAt: 200, questions: {} },
+        triage: {
+          deciders: {
+            jev: { model: "typesafe/jev-1.13.0", pinned: true, certifiedAt: 200, questions: {} },
+          },
+        },
       },
     });
     await openDecisionLabelStore(journal, setDecisionDrift);

@@ -63,15 +63,16 @@ export function bindDecisionFlows(adopt: (binding: Binding) => void, manifest: M
         const decl = aiDecisionRegistry.find((item) => item.name === name);
         const pinned = pinnedDecision(name);
         const rows = await loadDecisionLabels(name);
-        const fitted = aggregateDecisionCandidate(name, () =>
-          certifyLabels({
-            model: pinned?.model ?? decl?.model ?? "",
+        const fitted = aggregateDecisionCandidate(name, () => {
+          const cert = certifyLabels({
+            model: pinned?.model ?? "",
             maxError: decl?.autonomy?.maxError ?? 0.05,
             delta: decl?.autonomy?.risk ?? 0.1,
             ask: decl?.ask ?? {},
             labels: rows,
-          }),
-        );
+          });
+          return { decider: decl?.decider ?? "", ...cert };
+        });
         await persistDecisionCandidate(name, fitted);
       }
       return { ok: true };

@@ -10,7 +10,8 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 
 |                                 | Measured  | Limit     |
 | ------------------------------- | --------- | --------- |
-| Kernel (edge profile)           | 14.36 kB  | 17.00 kB  |
+| Kernel (edge profile)           | 14.49 kB  | 17.00 kB  |
+| Decision module                 | 5.98 kB   | 5.98 kB   |
 | Client runtime                  | 5.10 kB   | 6.00 kB   |
 | Console initial load            | 345.54 kB | 700.00 kB |
 | Cold start on Bun               | 9.842 ms  | 75.000 ms |

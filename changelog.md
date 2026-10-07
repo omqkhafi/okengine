@@ -24,6 +24,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Contributor workflow lives in the repository: issue forms, labels, the okengine board, pull-request checks, and a GitHub Release cut from the changelog. Code checks and `pr-meta` are one CI workflow. There is no manifest-diff job: this repository has no app manifest. Runners are pinned to `ubuntu-24.04`. npm and JSR publish on the `v*` release workflow, not on a pull request. See CONTRIBUTING.md.
 
+### 💥 Breaking Changes
+
+#### Runtime
+
+- A decision names a decider. `model`, `driverId`, `review`, and `onUncertain` are gone. `otherwise` is a Gate or `"abstain"`. `oke eval --certify` is removed. A version 1 `oke-decisions.lock.json` fails until `oke decide certify`.
+
+  Before: `ai.decision("triage", { review: ops, model: "typesafe/jev-1.13" })`.
+
+  After: `ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13-20260917" })` and `ai.decision("triage", { decider: jev, otherwise: ops })`.
+
 ## v0.23.2 — 2026-10-07
 
 ### ♻️ Changed

@@ -6,12 +6,20 @@
 
 import {
   aiAgentRegistry,
+  aiDeciderRegistry,
   aiDecisionRegistry,
   aiEmbedRegistry,
   aiMcpServerRegistry,
   aiModelRegistry,
   aiPromptRegistry,
 } from "../../kernel/element-registries.ts";
+import {
+  DECIDER_PRESETS,
+  resolveDecider,
+  type DeciderCapabilities,
+  type DeciderProtocol,
+  type DeciderPinning,
+} from "./deciders/presets.ts";
 import { mcpToolRef, type McpToolRef } from "../../manifest/mcp-ref.ts";
 import type { VaultSecretDecl } from "../vault/declare.ts";
 import { formatAiProviderTier2Warn, resolveAiModelBaseUrl } from "./providers.ts";
@@ -131,19 +139,78 @@ export interface AiDecisionAutonomy {
   readonly risk?: number;
 }
 
-/** Options for {@link ai.decision}. Exactly one of `review` and `onUncertain` is required. */
-export interface AiDecisionOptions {
-  readonly model?: AiModelDecl | string;
+/** Questions a capability row allows. A `false` flag removes that kind. */
+export type AskForCapabilities<C> = Readonly<
+  Record<
+    string,
+    | (C extends { readonly boolean: true } ? AiBooleanQuestion : never)
+    | (C extends { readonly choice: true } ? AiChoiceQuestion : never)
+    | (C extends { readonly score: true } ? AiScoreQuestion : never)
+  >
+>;
+
+/** Options for a preset host. URL, protocol, secret, and capabilities are filled in. */
+export interface AiDeciderPresetOptions {
+  readonly provider: "openrouter" | "openai";
+  readonly model: string;
+  readonly secret?: string;
+  readonly region?: string;
+  readonly zdr?: boolean;
+  readonly timeout?: AiTimeout;
+  readonly concurrency?: number;
+}
+
+/** Options for a host that is not a preset. */
+export interface AiDeciderCustomOptions<C extends DeciderCapabilities = DeciderCapabilities> {
+  readonly provider?: string;
+  readonly driverId: DeciderProtocol;
+  readonly baseUrl: string;
+  readonly model: string;
+  readonly secret: string;
+  readonly capabilities: C;
+  readonly region?: string;
+  readonly zdr?: boolean;
+  readonly timeout?: AiTimeout;
+  readonly concurrency?: number;
+}
+
+/** Options for {@link ai.decider}. */
+export type AiDeciderOptions<C extends DeciderCapabilities = DeciderCapabilities> =
+  | AiDeciderPresetOptions
+  | AiDeciderCustomOptions<C>;
+
+/** Declared decider. One model, one breaker, one certificate. */
+export interface AiDeciderDecl<C extends DeciderCapabilities = DeciderCapabilities> {
+  readonly kind: "decider";
+  readonly name: string;
+  readonly provider?: string;
+  readonly protocol: DeciderProtocol;
+  readonly baseUrl: string;
+  readonly model: string;
+  readonly secret: string;
+  readonly pinning: DeciderPinning;
+  readonly capabilities: C;
+  readonly region?: string;
+  readonly regionStatus?: "declared";
+  readonly zdr?: boolean;
+  readonly zdrStatus?: "declared";
+  readonly timeout?: AiTimeout;
+  readonly concurrency?: number;
+}
+
+/** Options for {@link ai.decision}. `decider` and `otherwise` are required. */
+export interface AiDecisionOptions<C extends DeciderCapabilities = DeciderCapabilities> {
+  readonly decider: AiDeciderDecl<C>;
+  readonly backup?: readonly AiDeciderDecl[];
+  /** A gate name parks. `"abstain"` returns null and does not park. */
+  readonly otherwise: { readonly name: string } | string;
   readonly in?: unknown;
-  readonly ask: Readonly<Record<string, AiDecisionQuestion>>;
+  readonly ask: AskForCapabilities<C>;
   readonly autonomy?: AiDecisionAutonomy;
-  readonly review?: { readonly name: string } | string;
-  readonly onUncertain?: "abstain";
   readonly locale?: (input: unknown) => string | undefined;
   readonly evals?: string;
-  /** `openrouter` (default) or `typesafe`. */
-  readonly driverId?: "openrouter" | "typesafe";
-  readonly timeout?: AiTimeout;
+  /** Reserved. Using it fails with a message that says it is planned. */
+  readonly shadow?: never;
 }
 
 /** Declared decision handle. */
@@ -152,12 +219,14 @@ export interface AiDecisionDecl {
   readonly name: string;
   readonly ask: Readonly<Record<string, AiDecisionQuestion>>;
   readonly mode: "review" | "abstain";
+  /** Gate name when `otherwise` is a gate. */
   readonly review?: string;
-  readonly model?: string;
-  readonly driverId: "openrouter" | "typesafe";
+  readonly decider: string;
+  readonly backup: readonly string[];
+  readonly otherwise: string;
+  readonly secrets: readonly string[];
   readonly autonomy?: AiDecisionAutonomy;
   readonly evals?: string;
-  readonly timeout?: AiTimeout;
   readonly locale?: (input: unknown) => string | undefined;
   /** Declared `in` schema. Label export keeps only these fields. */
   readonly inputSchema?: unknown;
@@ -325,24 +394,45 @@ export interface AiNamespace {
    */
   agent(name: string, options?: AiAgentOptions): AiAgentDecl;
   /**
-   * Declare a decision. Exactly one of `review` and `onUncertain: "abstain"`.
+   * Declare one model that can answer a decision.
+   *
+   * @param name - Decider id
+   * @param options - Preset provider, or driverId + baseUrl + capabilities
+   */
+  decider(
+    name: string,
+    options: AiDeciderPresetOptions & { readonly provider: "openrouter" },
+  ): AiDeciderDecl<(typeof DECIDER_PRESETS)["openrouter"]["capabilities"]>;
+  decider(
+    name: string,
+    options: AiDeciderPresetOptions & { readonly provider: "openai" },
+  ): AiDeciderDecl<(typeof DECIDER_PRESETS)["openai"]["capabilities"]>;
+  decider<const C extends DeciderCapabilities>(
+    name: string,
+    options: AiDeciderCustomOptions<C>,
+  ): AiDeciderDecl<C>;
+  /**
+   * Declare a decision. `decider` and `otherwise` are required.
    *
    * @param name - Decision id
-   * @param options - Questions, mode, and optional autonomy
+   * @param options - Decider, fallback, and questions
    */
-  decision(name: string, options: AiDecisionOptions): AiDecisionDecl;
+  decision<C extends DeciderCapabilities>(
+    name: string,
+    options: AiDecisionOptions<C>,
+  ): AiDecisionDecl;
   /**
-   * A choice question. The answer union is {@link DecisionChoiceValue}: author keys or `none_of_these`.
+   * A choice question. The answer union includes author keys and `none_of_these`.
    *
    * @param instructions - What to decide
-   * @param options - At most 254 author options
+   * @param options - Author options. `none_of_these` is injected.
    */
   choice(instructions: string, options: Readonly<Record<string, string | null>>): AiChoiceQuestion;
   /**
    * An ordered score question.
    *
    * @param instructions - What to rate
-   * @param levels - 2–10 level descriptions, low to high
+   * @param levels - Level descriptions, low to high
    */
   score(instructions: string, levels: readonly string[]): AiScoreQuestion;
   /**
@@ -372,6 +462,7 @@ export function listAiDecls(): {
   readonly prompts: readonly AiPromptDecl[];
   readonly embeds: readonly AiEmbedDecl[];
   readonly agents: readonly AiAgentDecl[];
+  readonly deciders: readonly AiDeciderDecl[];
   readonly decisions: readonly AiDecisionDecl[];
   readonly mcpServers: readonly AiMcpServerDecl[];
 } {
@@ -380,6 +471,7 @@ export function listAiDecls(): {
     prompts: aiPromptRegistry.slice(),
     embeds: aiEmbedRegistry.slice(),
     agents: aiAgentRegistry.slice(),
+    deciders: aiDeciderRegistry.slice(),
     decisions: aiDecisionRegistry.slice(),
     mcpServers: aiMcpServerRegistry.slice(),
   };
@@ -393,6 +485,7 @@ export function resetAiDecls(): void {
   aiPromptRegistry.length = 0;
   aiEmbedRegistry.length = 0;
   aiAgentRegistry.length = 0;
+  aiDeciderRegistry.length = 0;
   aiDecisionRegistry.length = 0;
   aiMcpServerRegistry.length = 0;
 }
@@ -400,7 +493,7 @@ export function resetAiDecls(): void {
 /**
  * AI element namespace.
  */
-export const ai: AiNamespace = {
+export const ai = {
   /**
    * Declare a model binding.
    *
@@ -510,6 +603,12 @@ export const ai: AiNamespace = {
     return decl;
   },
 
+  decider(name: string, options: AiDeciderOptions): AiDeciderDecl {
+    const decl = buildDeciderDecl(name, options);
+    aiDeciderRegistry.push(decl);
+    return decl;
+  },
+
   decision(name: string, options: AiDecisionOptions): AiDecisionDecl {
     const decl = buildDecisionDecl(name, options);
     aiDecisionRegistry.push(decl);
@@ -571,7 +670,25 @@ export const ai: AiNamespace = {
     aiMcpServerRegistry.push(decl);
     return decl;
   },
-};
+} as AiNamespace;
+
+/**
+ * Validate a decision and return the registered shape.
+ *
+ * @param name - Decision id
+ * @param options - Author options
+ */
+/**
+ * Validate a decider and return the registered shape.
+ *
+ * @param name - Decider id
+ * @param options - Author options
+ */
+export function buildDeciderDecl(name: string, options: AiDeciderOptions): AiDeciderDecl {
+  if (!name) throw new TypeError("ai.decider: name is required");
+  const resolved = resolveDecider(name, options);
+  return { kind: "decider", name, ...resolved };
+}
 
 /**
  * Validate a decision and return the registered shape.
@@ -581,59 +698,99 @@ export const ai: AiNamespace = {
  */
 export function buildDecisionDecl(name: string, options: AiDecisionOptions): AiDecisionDecl {
   if (!name) throw new TypeError("ai.decision: name is required");
+  if ("shadow" in options && options.shadow !== undefined) {
+    throw new TypeError(`ai.decision("${name}"): shadow is planned`);
+  }
+  if (!options.decider || options.decider.kind !== "decider") {
+    throw new TypeError(`ai.decision("${name}"): decider is required`);
+  }
+  if (options.otherwise === undefined) {
+    throw new TypeError(`ai.decision("${name}"): otherwise is required`);
+  }
   const keys = Object.keys(options.ask ?? {});
   if (keys.length === 0) throw new TypeError(`ai.decision("${name}"): ask is empty`);
-  const hasReview = options.review !== undefined;
-  const abstain = options.onUncertain === "abstain";
-  if (hasReview === abstain) {
-    throw new TypeError(
-      `ai.decision("${name}"): declare exactly one of review or onUncertain: "abstain"`,
-    );
-  }
   if (options.autonomy !== undefined && options.autonomy.audit === undefined) {
     throw new TypeError(`ai.decision("${name}"): autonomy requires audit`);
   }
+  const chain = [options.decider, ...(options.backup ?? [])];
   for (const key of keys) {
     if (key === "meta" || key === "$") {
       throw new TypeError(`ai.decision("${name}"): question id "${key}" is reserved`);
     }
     const question = options.ask[key];
     if (!question) continue;
-    if (question.kind === "choice") {
-      const count = Object.keys(question.options).length;
-      if (count > 254) {
-        throw new TypeError(
-          `ai.decision("${name}"): choice "${key}" has ${count} options; max 254`,
-        );
-      }
-      if (Object.prototype.hasOwnProperty.call(question.options, "none_of_these")) {
-        throw new TypeError(`ai.decision("${name}"): choice "${key}" must not set none_of_these`);
-      }
-    }
-    if (question.kind === "score") {
-      const count = question.levels.length;
-      if (count < 2 || count > 10) {
-        throw new TypeError(`ai.decision("${name}"): score "${key}" needs 2–10 levels`);
-      }
+    for (const decider of chain) {
+      assertQuestionFits(name, key, question, decider);
     }
   }
-  const review = typeof options.review === "string" ? options.review : options.review?.name;
-  const model =
-    typeof options.model === "string"
-      ? options.model
-      : (options.model?.model ?? options.model?.name);
+  const abstain = options.otherwise === "abstain";
+  const review = abstain
+    ? undefined
+    : typeof options.otherwise === "string"
+      ? options.otherwise
+      : options.otherwise.name;
+  const secrets = [...new Set(chain.map((decider) => decider.secret))].sort();
   return {
     kind: "decision",
     name,
     ask: options.ask,
     mode: abstain ? "abstain" : "review",
     ...(review !== undefined ? { review } : {}),
-    ...(model !== undefined ? { model } : {}),
-    driverId: options.driverId ?? "openrouter",
+    decider: options.decider.name,
+    backup: (options.backup ?? []).map((decider) => decider.name),
+    otherwise: abstain ? "abstain" : (review ?? ""),
+    secrets,
     ...(options.autonomy !== undefined ? { autonomy: options.autonomy } : {}),
     ...(options.evals !== undefined ? { evals: options.evals } : {}),
-    ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
     ...(options.locale !== undefined ? { locale: options.locale } : {}),
     ...(options.in !== undefined ? { inputSchema: options.in } : {}),
   };
+}
+
+function assertQuestionFits(
+  decision: string,
+  key: string,
+  question: AiDecisionQuestion,
+  decider: AiDeciderDecl,
+): void {
+  const caps = decider.capabilities;
+  if (question.kind === "boolean" && !caps.boolean) {
+    throw new TypeError(
+      `ai.decision("${decision}"): decider "${decider.name}" cannot answer boolean "${key}"`,
+    );
+  }
+  if (question.kind === "choice") {
+    if (!caps.choice) {
+      throw new TypeError(
+        `ai.decision("${decision}"): decider "${decider.name}" cannot answer choice "${key}"`,
+      );
+    }
+    const count = Object.keys(question.options).length;
+    if (typeof caps.maxChoices === "number" && count > caps.maxChoices) {
+      throw new TypeError(
+        `ai.decision("${decision}"): choice "${key}" has ${count} options; decider "${decider.name}" allows ${caps.maxChoices}`,
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(question.options, "none_of_these")) {
+      throw new TypeError(`ai.decision("${decision}"): choice "${key}" must not set none_of_these`);
+    }
+  }
+  if (question.kind === "score") {
+    if (!caps.score) {
+      throw new TypeError(
+        `ai.decision("${decision}"): decider "${decider.name}" cannot answer score "${key}"`,
+      );
+    }
+    const count = question.levels.length;
+    if (typeof caps.minLevels === "number" && count < caps.minLevels) {
+      throw new TypeError(
+        `ai.decision("${decision}"): score "${key}" has ${count} levels; decider "${decider.name}" needs at least ${caps.minLevels}`,
+      );
+    }
+    if (typeof caps.maxLevels === "number" && count > caps.maxLevels) {
+      throw new TypeError(
+        `ai.decision("${decision}"): score "${key}" has ${count} levels; decider "${decider.name}" allows ${caps.maxLevels}`,
+      );
+    }
+  }
 }

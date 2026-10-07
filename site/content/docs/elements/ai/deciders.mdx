@@ -1,0 +1,154 @@
+---
+title: "Deciders"
+description: "One model that can answer a decision, with its protocol, secret, and certificate."
+icon: "Cpu"
+source: "docs/spec/unified-theory.md"
+---
+
+A decider is the model behind a decision. Two presets are filled in. Every other host passes the protocol, the URL, and what it can answer.
+
+<Callout title="The one rule">
+  Use `provider: "openrouter"` or `provider: "openai"` when that is the host. Any other host needs
+  `driverId`, `baseUrl`, `secret`, and `capabilities`.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### OpenRouter
+
+Certificates bind to the dated model id the host echoes.
+
+```typescript
+import { ai } from "okengine";
+
+export const jev = ai.decider("jev", {
+  provider: "openrouter",
+  model: "typesafe/jev-1.13-20260917",
+});
+```
+
+The request is System One: `POST https://openrouter.ai/api/alpha/decisions` with `{ model, state, questions }`. The secret is `OPENROUTER_API_KEY`.
+
+</Step>
+
+<Step>
+### OpenAI
+
+The certificate binds to the echoed id, stays unpinned, and expires 30 days after certify.
+
+```typescript
+export const luna = ai.decider("luna", {
+  provider: "openai",
+  model: "gpt-6-luna",
+});
+```
+
+The request is `{ model, input, questions }` at `https://api.openai.com/v1/decisions`. Object state is sent as JSON text. The secret is `OPENAI_API_KEY`.
+
+</Step>
+
+<Step>
+### Any other host
+
+Name the protocol. Do not invent a preset.
+
+```typescript
+export const local = ai.decider("local", {
+  driverId: "systemone",
+  baseUrl: "https://decisions.example.com/v1",
+  model: "local-decider",
+  secret: "DECISION_API_KEY",
+  capabilities: { boolean: true, choice: true, score: true, refusal: false },
+  region: "self",
+});
+```
+
+`region` and `zdr` are your declaration. The Manifest marks them `declared`.
+
+</Step>
+
+</Steps>
+
+## Presets
+
+| Provider     | Protocol           | URL                                         | Secret               | Pinning | Answers                         |
+| ------------ | ------------------ | ------------------------------------------- | -------------------- | ------- | ------------------------------- |
+| `openrouter` | `systemone`        | `https://openrouter.ai/api/alpha/decisions` | `OPENROUTER_API_KEY` | `dated` | boolean, choice, score          |
+| `openai`     | `openai-decisions` | `https://api.openai.com/v1/decisions`       | `OPENAI_API_KEY`     | `alias` | boolean, choice, score, refusal |
+
+No other host is filled in. A dated certificate stores the echoed canonical slug. An alias certificate stores `pinned: false` and `expiresAt`. Console shows the unpinned flag. `oke decide certify` prints it.
+
+If OpenRouter lists a dated id for the model, autonomy requires the decider to use that id.
+
+## Capabilities
+
+| Field                                      | Meaning                                                        |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| `boolean` / `choice` / `score` / `refusal` | Whether that question kind is allowed.                         |
+| `maxChoices`                               | Enforced only when the row sets it.                            |
+| `minLevels` / `maxLevels`                  | Enforced only when the row sets it.                            |
+| `maxContext`                               | Estimated input tokens. Over the limit throws before the call. |
+
+Presets do not set a numeric limit. A custom row's `false` flag rejects that question at compile time.
+
+Both wires become one answer: `boolean`, `choice`, `score`, `refusal`, or `malformed`. A refusal carries no text.
+
+## Options
+
+| Option           | Preset                          | Custom host                       |
+| ---------------- | ------------------------------- | --------------------------------- |
+| `provider`       | `openrouter` or `openai`        | Optional label                    |
+| `driverId`       | Filled in                       | `systemone` or `openai-decisions` |
+| `baseUrl`        | Filled in                       | Required                          |
+| `model`          | Required                        | Required                          |
+| `secret`         | Preset secret, or your override | Required                          |
+| `region` / `zdr` | Stored as `declared`            | Stored as `declared`              |
+| `timeout`        | Optional                        | Optional                          |
+| `concurrency`    | Optional cap for this decider   | Optional                          |
+
+One decider has one breaker. Three HTTP 5xx responses open it for 30 seconds. The next call skips that decider and tries `backup`.
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="autonomy requires model">
+  `oke decide certify: autonomy requires model "…" on decider "…"`. The catalog lists a dated id.
+  Put that id on the decider.
+</Accordion>
+
+<Accordion title="model is unpinned">
+  Certify prints `model "…" is unpinned`. An alias certificate expires 30 days later. After that,
+  answers take `otherwise` with `why: "uncertified"`.
+</Accordion>
+
+<Accordion title="cannot answer choice">
+  `ai.decision("…"): decider "…" cannot answer choice "…"`. The capability row has that kind set to
+  `false`.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Decisions](/docs/elements/ai/decide) — `otherwise`, certificates, and `fx.decide`
+- [Configuration](/docs/reference/configuration) — `drivers.decide`
+
+## Next
+
+<Cards>
+  <Card
+    title="Decisions"
+    description="Questions, otherwise, and the lockfile."
+    href="/docs/elements/ai/decide"
+  />
+  <Card title="Models" description="Chat and embed providers." href="/docs/elements/ai/models" />
+  <Card
+    title="CLI"
+    description="Certify, promote, labels, and models."
+    href="/docs/reference/cli"
+  />
+</Cards>

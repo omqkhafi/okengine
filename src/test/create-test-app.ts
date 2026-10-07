@@ -23,7 +23,13 @@ import {
   type ChannelInbox,
   type ChannelInboxEntry,
 } from "../drivers/index.ts";
-import { createAiRuntime, type AiPromptDecl, type AiRuntime } from "../elements/ai.ts";
+import {
+  createAiRuntime,
+  type AiDecisionDecl,
+  type AiPromptDecl,
+  type AiRuntime,
+} from "../elements/ai.ts";
+import { setDecisionScript, type DecisionScriptAnswer } from "../kernel/fx-decide.ts";
 import { createChannelRuntime, type DeliveryReceipt } from "../elements/channel.ts";
 import { createTestClockRuntime } from "../elements/clock.ts";
 import type { GateDecl } from "../elements/gate.ts";
@@ -154,6 +160,16 @@ export interface TestAi {
    * @param output - JSON-serialisable output
    */
   mock(prompt: AiPromptDecl | string, output: unknown): void;
+  /**
+   * Script one decision. `{ refusal: string }` is the test signal and is not stored.
+   *
+   * @param decision - Decision decl or name
+   * @param answers - Probabilities, or a refusal, per question
+   */
+  decide(
+    decision: AiDecisionDecl | string,
+    answers: Readonly<Record<string, DecisionScriptAnswer>>,
+  ): void;
   /** Accumulated AI cost across asks in this harness. */
   cost(): number;
 }
@@ -460,6 +476,10 @@ export async function createTestApp<App extends OkeApp>(
       },
       cost() {
         return aiCost;
+      },
+      decide(decision, answers) {
+        const name = typeof decision === "string" ? decision : decision.name;
+        setDecisionScript(name, answers);
       },
     },
     effects: {

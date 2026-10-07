@@ -24,6 +24,8 @@ export interface DecisionHttpOptions {
   readonly attempts?: number;
   /** Breaker key. Calls that share it share the open/closed state. */
   readonly breakerKey: string;
+  /** Encoded body. When omitted, the System One `{ model, state, questions }` body is sent. */
+  readonly body?: unknown;
 }
 
 interface BreakerState {
@@ -138,13 +140,17 @@ export function parseDecisionResponse(body: unknown): DecisionResponse {
     answers?: unknown;
     usage?: unknown;
   };
-  if (typeof record.model !== "string" || !record.answers || typeof record.answers !== "object") {
+  if (
+    typeof record.model !== "string" ||
+    record.answers == null ||
+    typeof record.answers !== "object"
+  ) {
     throw new DecisionRequestError(422, "decision response missing model or answers");
   }
   return {
     model: record.model,
     ...(typeof record.provider === "string" ? { provider: record.provider } : {}),
-    answers: record.answers as Readonly<Record<string, unknown>>,
+    answers: record.answers as DecisionResponse["answers"],
     usage: usageFrom(record.usage),
   };
 }
@@ -175,11 +181,13 @@ export async function decisionHttp(options: DecisionHttpOptions): Promise<Decisi
           authorization: `Bearer ${options.apiKey}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          model: options.request.model,
-          state: options.request.state,
-          questions: options.request.questions,
-        }),
+        body: JSON.stringify(
+          options.body ?? {
+            model: options.request.model,
+            state: options.request.state,
+            questions: options.request.questions,
+          },
+        ),
         signal: local.signal,
       });
       if (REQUEST_STATUSES.has(res.status)) {

@@ -26,8 +26,13 @@ describe("decision console projection", () => {
     resetDecisionCertificates();
     expect(projectDecisionList(manifest)[0]?.state).toBe("learning");
     setDecisionLock({
+      version: 2,
       decisions: {
-        triage: { model: "typesafe/jev-1.13.0", questions: {} },
+        triage: {
+          deciders: {
+            jev: { model: "typesafe/jev-1.13.0", pinned: true, questions: {} },
+          },
+        },
       },
     });
     expect(projectDecisionList(manifest).find((row) => row.name === "triage")?.state).toBe(

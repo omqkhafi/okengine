@@ -524,11 +524,42 @@ export interface AiMcpServer {
   tools: string[];
 }
 
+/** What one decider can answer. Numeric limits apply only when present. */
+export interface AiDeciderCapabilities {
+  boolean: boolean;
+  choice: boolean;
+  score: boolean;
+  refusal: boolean;
+  maxChoices?: number;
+  minLevels?: number;
+  maxLevels?: number;
+  maxContext?: number;
+}
+
+/** One model that can answer a decision. */
+export interface AiDecider {
+  provider?: string;
+  driverId: "systemone" | "openai-decisions";
+  baseUrl: string;
+  model: string;
+  secret: string;
+  pinning: "dated" | "alias";
+  capabilities: AiDeciderCapabilities;
+  /** App-supplied. Presets have no verified region. */
+  region?: string;
+  regionStatus?: "declared" | "verified";
+  zdr?: boolean;
+  zdrStatus?: "declared" | "verified";
+  timeout?: number | string;
+  concurrency?: number;
+}
+
 /** AI element catalogue. */
 export interface Ai {
   models?: Record<string, AiModel>;
   prompts?: Record<string, AiPrompt>;
   agents?: Record<string, AiAgent>;
+  deciders?: Record<string, AiDecider>;
   decisions?: Record<string, AiDecision>;
   mcpServers?: Record<string, AiMcpServer>;
 }
@@ -536,10 +567,15 @@ export interface Ai {
 /** A declared decision. The predicate and locale function stay in author code. */
 export interface AiDecision {
   mode: "review" | "abstain";
+  /** Gate name when `otherwise` is a gate. */
   review?: string;
-  model?: string;
-  driverId?: "openrouter" | "typesafe";
+  decider: string;
+  backup?: string[];
+  /** `"abstain"` or the gate name. */
+  otherwise: string;
   questions: string[];
+  /** Secret contracts inferred from the decider chain. */
+  secrets?: string[];
   evals?: string;
   autonomy?: { maxError: number; audit: number; risk?: number };
 }

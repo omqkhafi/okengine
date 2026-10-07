@@ -70,8 +70,10 @@ describe("fx.decide end to end", () => {
     delete process.env["OKE_ROOT_DIR"];
     const manifest = await extractFromSources({
       "src/flows/run.ts": `
+        const jev = ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13.0" });
         ai.decision("triage", {
-          onUncertain: "abstain",
+          decider: jev,
+          otherwise: "abstain",
           ask: { team: ai.choice("which", { a: "A" }) },
         });
       `,
@@ -94,23 +96,24 @@ describe("fx.decide end to end", () => {
   test("certify, review, drift, and promote use the real routes", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-decide-e2e-"));
     const question = ai.choice("which team", { billing: "Billing", technical: "Technical" });
+    const jev = ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13.0" });
     const ship = ai.decision("ship", {
-      onUncertain: "abstain",
-      model: "typesafe/jev-1.13.0",
+      decider: jev,
+      otherwise: "abstain",
       autonomy: { maxError: 0.05, audit: 0 },
       evals: join(root, "ship.jsonl"),
       ask: { team: question },
     });
     const ops = gate.policy("ops", (ctx) => ctx.operator.id === "reviewer");
     const triage = ai.decision("triage", {
-      review: "ops",
-      model: "typesafe/jev-1.13.0",
+      decider: jev,
+      otherwise: "ops",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
     const route = ai.decision("route", {
-      review: "ops",
-      model: "typesafe/jev-1.13.0",
+      decider: jev,
+      otherwise: "ops",
       autonomy: { maxError: 0.05, audit: 0 },
       ask: { team: question },
     });
@@ -125,23 +128,24 @@ describe("fx.decide end to end", () => {
     const evals = JSON.stringify(join(root, "ship.jsonl"));
     const manifest = (await extractFromSources({
       "src/flows/support/route.ts": `
+        const jev = ai.decider("jev", { provider: "openrouter", model: "typesafe/jev-1.13.0" });
         const ops = gate.policy("ops", () => true);
         ai.decision("ship", {
-          onUncertain: "abstain",
-          model: "typesafe/jev-1.13.0",
+          decider: jev,
+          otherwise: "abstain",
           autonomy: { maxError: 0.05, audit: 0 },
           evals: ${evals},
           ask: { team: ai.choice("which team", { billing: "Billing", technical: "Technical" }) },
         });
         ai.decision("triage", {
-          review: ops,
-          model: "typesafe/jev-1.13.0",
+          decider: jev,
+          otherwise: ops,
           autonomy: { maxError: 0.05, audit: 0 },
           ask: { team: ai.choice("which team", { billing: "Billing", technical: "Technical" }) },
         });
         ai.decision("route", {
-          review: ops,
-          model: "typesafe/jev-1.13.0",
+          decider: jev,
+          otherwise: ops,
           autonomy: { maxError: 0.05, audit: 0 },
           ask: { team: ai.choice("which team", { billing: "Billing", technical: "Technical" }) },
         });
@@ -214,7 +218,7 @@ describe("fx.decide end to end", () => {
     };
     expect(auto.team).toBe("technical");
     expect(auto.$.team.how).toBe("auto");
-    expect(getDecisionLock()?.decisions.ship?.model).toBe("typesafe/jev-1.13.0");
+    expect(getDecisionLock()?.decisions.ship?.deciders.jev?.model).toBe("typesafe/jev-1.13.0");
 
     await locked.call(work, { which: "triage" });
     const run = (await store.list()).find((item) =>
@@ -343,7 +347,7 @@ describe("fx.decide end to end", () => {
       },
     });
     expect(promoted.decisions.ship).toBeDefined();
-    expect(promoted.decisions.route?.questions.team?.[""]).toBeDefined();
+    expect(promoted.decisions.route?.deciders.jev?.questions.team?.[""]).toBeDefined();
     expect(decisionDriftSuspended("route")).toBe(false);
     expect(decisionDriftSuspended("ship")).toBe(true);
     await loadDecisionLockfile(root);
@@ -386,7 +390,7 @@ describe("fx.decide end to end", () => {
     });
     await restarted.boot({ env: "test" });
     expect((await loadDecisionLabels("route")).length).toBeGreaterThan(0);
-    expect(getDecisionLock()?.decisions.route?.questions.team?.[""]).toBeDefined();
+    expect(getDecisionLock()?.decisions.route?.deciders.jev?.questions.team?.[""]).toBeDefined();
     expect(decisionDriftSuspended("ship")).toBe(true);
     expect(decisionDriftSuspended("route")).toBe(false);
     const restartedAuto = (await restarted.call(work, { which: "route" })) as {

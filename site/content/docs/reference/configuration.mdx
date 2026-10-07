@@ -99,7 +99,7 @@ Built-in defaults (`DRIVER_DEFAULTS`) when a key is omitted:
 | `channel.sms`   | — (opt-in) | —         | —          |
 | `runs`          | `files`    | `memory`  | `files`    |
 
-`store.index`, `channel.whatsapp` / `push`, and `ai` have no single three-env default table — set them explicitly when you need them. create-oke templates pin `vault.dev: "vault"` (built-in) because the default `dev` driver is `env`.
+`store.index`, `channel.whatsapp` / `push`, and `ai` have no single three-env default table — set them explicitly when you need them. `drivers.decide` defaults to `{ test: "mock" }`. Unset `dev` and `prod` call the decider host. create-oke templates pin `vault.dev: "vault"` (built-in) because the default `dev` driver is `env`.
 
 ## Driver keys and ids
 
@@ -118,6 +118,7 @@ Built-in defaults (`DRIVER_DEFAULTS`) when a key is omitted:
 | `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                           |
 | `channel.push`     | env driver map | `console` · `webpush` · `fcm`                                                    |
 | `ai`               | env driver map | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex`                |
+| `decide`           | env driver map | `mock` in `test` when omitted. Unset `dev` and `prod` call the decider host.     |
 | `runs`             | env driver map | `memory` · `files` (Parquet + DuckDB at `.oke/runs`) · `postgres` · `clickhouse` |
 | `prod`             | `string[]`     | flat protocol list for the Manifest — nested maps are preferred                  |
 
