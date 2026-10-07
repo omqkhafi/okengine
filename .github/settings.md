@@ -77,15 +77,15 @@ bun scripts/github/setup-board.ts
 
 Project menu → Workflows. The API can list these and cannot enable or retarget them.
 
-| Workflow                       | State when this file was written | Set                                                                  |
-| ------------------------------ | -------------------------------- | -------------------------------------------------------------------- |
-| Item added to project          | off                              | Status = Triage                                                      |
-| Pull request linked to issue   | off                              | Status = In review                                                   |
-| Item closed                    | on                               | Status = Done. An issue reaches Done when it closes, which is when the release reaches `main`. |
+| Workflow                       | State when this file was written | Set                                                                                                                                                  |
+| ------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Item added to project          | off                              | Status = Triage                                                                                                                                      |
+| Pull request linked to issue   | off                              | Status = In review                                                                                                                                   |
+| Item closed                    | on                               | Status = Done. An issue reaches Done when it closes, which is when the release reaches `main`.                                                       |
 | Pull request merged            | on                               | The pull request item goes to Done. `project-event.ts` sets linked issues to Merged when the pull request merges into `dev`. Those issues stay open. |
-| Auto-add sub-issues to project | on                               | leave on                                                             |
-| Auto-close issue               | on                               | leave on                                                             |
-| Auto-archive                   | not in the API list              | If the UI shows it: `is:closed reason:completed updated:<@today-14d` |
+| Auto-add sub-issues to project | on                               | leave on                                                                                                                                             |
+| Auto-close issue               | on                               | leave on                                                                                                                                             |
+| Auto-archive                   | not in the API list              | If the UI shows it: `is:closed reason:completed updated:<@today-14d`                                                                                 |
 
 `.github/workflows/project.yml` runs `scripts/github/project-event.ts` when `PROJECT_TOKEN` is present, and skips when the secret is absent. An opened pull request moves its linked issues to In review. A merge into `dev` moves those issues to Merged. A closed issue moves to Done. A milestone change copies the title into Release.
 
