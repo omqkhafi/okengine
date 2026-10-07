@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.23.2 · measured 2026-10-07T13:48:11.587Z_
+_okengine v0.24.0 · measured 2026-10-07T17:45:07.358Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absolute sample also fails when it reaches 2× its last committed value and that multiple is still under the cap (cold start, and any other absolute row with the same headroom). Cold start keeps the best of five rounds and confirms a failure once, so one noisy run does not fail. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes hard/optional externals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
@@ -24,7 +24,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 |                | Measured  | Ceiling   |
 | -------------- | --------- | --------- |
 | okengine       | 109.35 kB | 111.54 kB |
-| ai             | 18.96 kB  | 19.34 kB  |
+| ai             | 19.59 kB  | 19.99 kB  |
 | auth           | 18.48 kB  | 18.85 kB  |
 | channel        | 7.83 kB   | 8.08 kB   |
 | client         | 8.98 kB   | 9.23 kB   |
@@ -33,7 +33,7 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 | client/auth    | 8.69 kB   | 8.94 kB   |
 | client/explain | 1.10 kB   | 1.35 kB   |
 | clock          | 17.79 kB  | 18.15 kB  |
-| compiler       | 30.30 kB  | 30.90 kB  |
+| compiler       | 31.92 kB  | 32.56 kB  |
 | config         | 1.22 kB   | 1.47 kB   |
 | console        | 174.12 kB | 177.61 kB |
 | full           | 125.07 kB | 127.57 kB |
@@ -48,8 +48,8 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). An absol
 | runs           | 9.37 kB   | 9.62 kB   |
 | signal         | 1.29 kB   | 1.54 kB   |
 | store          | 35.93 kB  | 36.65 kB  |
-| test           | 52.03 kB  | 53.07 kB  |
-| testing        | 52.03 kB  | 53.07 kB  |
+| test           | 53.64 kB  | 54.71 kB  |
+| testing        | 53.64 kB  | 54.71 kB  |
 | vault          | 13.15 kB  | 13.42 kB  |
 
 ## Plugins
