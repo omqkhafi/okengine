@@ -54,12 +54,18 @@ export function changelogSection(markdown: string, version: string): string | nu
  *
  * @param version - Version without the leading `v`
  */
+/** Milestone titles that are not the version string. Tried after the version names. */
+const MILESTONE_ALIASES: Readonly<Record<string, string>> = {
+  "0.25": "OKModel replaces Drizzle (breaking)",
+};
+
 export function milestoneTitlesForVersion(version: string): readonly string[] {
   const parts = version.split(".");
   const major = parts[0];
   const minor = parts[1];
   if (major === undefined || minor === undefined) return [version];
   const train = `${major}.${minor}`;
-  if (train === version) return [version];
-  return [version, train];
+  const alias = MILESTONE_ALIASES[train];
+  const names = train === version ? [version] : [version, train];
+  return alias === undefined ? names : [...names, alias];
 }

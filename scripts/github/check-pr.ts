@@ -28,12 +28,15 @@ const TITLE = /^(feat|fix|docs|refactor|perf|test|chore)\(([^)]+)\)(!)?: (\S.*)$
 const LINK = /\b(Closes|Refs)\s+#(\d+)\b/gi;
 const PROJECT_TITLE = "okengine";
 const PROJECT_OWNER = "omqkhafi";
+const DEPENDABOT = "dependabot[bot]";
 
 export interface LinkedIssue {
   readonly number: number;
   readonly exists: boolean;
   /** Issue type name, or null when the issue has no type. */
   readonly typeName: string | null;
+  /** `subIssues.totalCount` from GraphQL. Above zero means the issue is an Epic. */
+  readonly subIssueCount: number;
   readonly milestone: string | null;
   /** Null skips the board check (no project token). */
   readonly onBoard: boolean | null;
@@ -42,6 +45,7 @@ export interface LinkedIssue {
 export interface PrSnapshot {
   readonly title: string;
   readonly body: string;
+  readonly author: string;
   readonly labels: readonly string[];
   readonly milestone: string | null;
   readonly baseRef: string;
@@ -82,7 +86,9 @@ export function evaluatePr(pr: PrSnapshot): readonly string[] {
     failures.push("breaking title or section needs the breaking label");
   }
 
-  if (pr.milestone === null) {
+  const dependabot = pr.author === DEPENDABOT;
+
+  if (!dependabot && pr.milestone === null) {
     failures.push("pull request milestone is not set");
   }
 
@@ -91,7 +97,7 @@ export function evaluatePr(pr: PrSnapshot): readonly string[] {
   }
 
   const links = linkedNumbers(pr.body);
-  if (links.length === 0) {
+  if (!dependabot && links.length === 0) {
     failures.push("body must contain Closes #N or Refs #N");
   }
 
@@ -100,16 +106,16 @@ export function evaluatePr(pr: PrSnapshot): readonly string[] {
       failures.push(`issue #${issue.number} does not exist`);
       continue;
     }
-    if (issue.typeName === "Epic") {
+    if (issue.typeName === "Epic" || issue.subIssueCount > 0) {
       failures.push(`issue #${issue.number} is an Epic; a pull request closes a leaf issue`);
     }
-    if (pr.milestone !== null && issue.milestone !== pr.milestone) {
+    if (!dependabot && pr.milestone !== null && issue.milestone !== pr.milestone) {
       const issueMilestone = issue.milestone ?? "unset";
       failures.push(
         `pull request milestone ${pr.milestone} does not match issue #${issue.number} milestone ${issueMilestone}`,
       );
     }
-    if (issue.onBoard === false) {
+    if (!dependabot && issue.onBoard === false) {
       failures.push(`issue #${issue.number} is not on the ${PROJECT_TITLE} board`);
     }
   }
@@ -174,9 +180,10 @@ function isNotFound(error: unknown): boolean {
 }
 
 interface EventPull {
+  readonly number: number;
   readonly title: string;
   readonly body: string;
-  readonly labels: readonly string[];
+  readonly author: string;
   readonly milestone: string | null;
   readonly baseRef: string;
   readonly headRef: string;
@@ -196,26 +203,24 @@ function readEvent(raw: string): { repo: string; pull: EventPull } {
   const base = pull["base"];
   const head = pull["head"];
   if (!isRecord(base) || !isRecord(head)) throw new Error("pull request has no base or head");
+  if (typeof pull["number"] !== "number") throw new Error("pull request has no number");
   if (typeof pull["title"] !== "string") throw new Error("pull request has no title");
+  const user = pull["user"];
+  const author = isRecord(user) && typeof user["login"] === "string" ? user["login"] : "";
   if (typeof base["ref"] !== "string" || typeof base["sha"] !== "string") {
     throw new Error("pull request base is incomplete");
   }
   if (typeof head["ref"] !== "string" || typeof head["sha"] !== "string") {
     throw new Error("pull request head is incomplete");
   }
-  const labels: string[] = [];
-  if (Array.isArray(pull["labels"])) {
-    for (const label of pull["labels"]) {
-      if (isRecord(label) && typeof label["name"] === "string") labels.push(label["name"]);
-    }
-  }
   const milestone = pull["milestone"];
   return {
     repo: repository["full_name"],
     pull: {
+      number: pull["number"],
       title: pull["title"],
       body: typeof pull["body"] === "string" ? pull["body"] : "",
-      labels,
+      author,
       milestone:
         isRecord(milestone) && typeof milestone["title"] === "string" ? milestone["title"] : null,
       baseRef: base["ref"],
@@ -254,6 +259,7 @@ async function loadIssue(
       number,
       exists: false,
       typeName: null,
+      subIssueCount: 0,
       milestone: null,
       onBoard: projectId === null ? null : false,
     };
@@ -263,6 +269,7 @@ async function loadIssue(
       number,
       exists: false,
       typeName: null,
+      subIssueCount: 0,
       milestone: null,
       onBoard: projectId === null ? null : false,
     };
@@ -273,14 +280,47 @@ async function loadIssue(
     projectId === null || token === undefined
       ? null
       : await issueOnBoard(payload["node_id"], projectId, token);
+  const subIssueCount =
+    typeof payload["node_id"] === "string" ? await subIssueTotal(payload["node_id"]) : 0;
   return {
     number,
     exists: true,
     typeName: isRecord(type) && typeof type["name"] === "string" ? type["name"] : null,
+    subIssueCount,
     milestone:
       isRecord(milestone) && typeof milestone["title"] === "string" ? milestone["title"] : null,
     onBoard,
   };
+}
+
+/** `Issue.subIssues.totalCount`. A count above zero is an Epic even with no issue type. */
+async function subIssueTotal(nodeId: string): Promise<number> {
+  const data = await ghGraphql<{
+    node: { subIssues: { totalCount: number } } | null;
+  }>(
+    `query($id: ID!) {
+      node(id: $id) {
+        ... on Issue {
+          subIssues(first: 1) { totalCount }
+        }
+      }
+    }`,
+    { id: nodeId },
+  );
+  const count = data.node?.subIssues.totalCount;
+  return typeof count === "number" ? count : 0;
+}
+
+async function pullLabels(repo: string, number: number): Promise<readonly string[]> {
+  const payload: unknown = JSON.parse(await ghApi([`repos/${repo}/pulls/${number}`]));
+  if (!isRecord(payload) || !Array.isArray(payload["labels"])) {
+    throw new Error(`pull request #${number} labels were not returned`);
+  }
+  const labels: string[] = [];
+  for (const label of payload["labels"]) {
+    if (isRecord(label) && typeof label["name"] === "string") labels.push(label["name"]);
+  }
+  return labels;
 }
 
 async function okengineProjectId(token: string): Promise<string | null> {
@@ -332,14 +372,16 @@ async function main(): Promise<void> {
   for (const number of numbers) {
     linkedIssues.push(await loadIssue(event.repo, number, projectId, token));
   }
-  const [baseLog, headLog] = await Promise.all([
+  const [baseLog, headLog, labels] = await Promise.all([
     fileAt(event.repo, "changelog.md", event.pull.baseSha),
     fileAt(event.repo, "changelog.md", event.pull.headSha),
+    pullLabels(event.repo, event.pull.number),
   ]);
   const failures = evaluatePr({
     title: event.pull.title,
     body: event.pull.body,
-    labels: event.pull.labels,
+    author: event.pull.author,
+    labels,
     milestone: event.pull.milestone,
     baseRef: event.pull.baseRef,
     headRef: event.pull.headRef,

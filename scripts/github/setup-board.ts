@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   ]);
   await ensureSelect(project.id, "Release", [
     { name: "0.24", color: "PURPLE", description: "Pluggable deciders (breaking)" },
-    { name: "0.25", color: "BLUE", description: "Images in decisions" },
+    { name: "0.25", color: "BLUE", description: "OKModel replaces Drizzle (breaking)" },
   ]);
   await ensureIteration(project.id);
   await ensureDate(project.id, "Start date");

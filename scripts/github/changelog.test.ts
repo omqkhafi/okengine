@@ -32,6 +32,9 @@ describe("changelogSection", () => {
 describe("milestoneTitlesForVersion", () => {
   test("tries the exact version, then the release train", () => {
     expect(milestoneTitlesForVersion("0.24.0")).toEqual(["0.24.0", "0.24"]);
-    expect(milestoneTitlesForVersion("0.25")).toEqual(["0.25"]);
+    expect(milestoneTitlesForVersion("0.25")).toEqual([
+      "0.25",
+      "OKModel replaces Drizzle (breaking)",
+    ]);
   });
 });

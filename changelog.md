@@ -16,6 +16,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - CI splits the test suite into six parallel jobs: console, elements, kernel, cli, drivers, and core. One shard failing does not cancel the others.
 
+### 🐛 Fixed
+
+- `pr-meta` treats an issue with sub-issues as an Epic, lets Dependabot skip the issue and milestone rules, and reads labels after it applies them. The GitHub Release waits until npm and JSR publish. Milestone 0.25 is the OKModel release.
+
 ### ✨ Added
 
 - Contributor workflow lives in the repository: issue forms, labels, the okengine board, pull-request checks, and a GitHub Release cut from the changelog. Code checks and `pr-meta` are one CI workflow. There is no manifest-diff job: this repository has no app manifest. Runners are pinned to `ubuntu-24.04`. npm and JSR publish on the `v*` release workflow, not on a pull request. See CONTRIBUTING.md.

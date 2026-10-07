@@ -12,6 +12,7 @@ const task: LinkedIssue = {
   number: 1,
   exists: true,
   typeName: "Task",
+  subIssueCount: 0,
   milestone: "0.24",
   onBoard: true,
 };
@@ -21,6 +22,7 @@ function valid(over: Partial<PrSnapshot> = {}): PrSnapshot {
   return {
     title: "feat(ai): add a pluggable decider",
     body: ["## Summary", "", "Deciders load from the lockfile.", "", "Closes #1", ""].join("\n"),
+    author: "omqkhafi",
     labels: ["type: feature", "area: ai"],
     milestone: "0.24",
     baseRef: "dev",
@@ -86,7 +88,14 @@ describe("evaluatePr", () => {
         {
           body: "Closes #9",
           linkedIssues: [
-            { number: 9, exists: false, typeName: null, milestone: null, onBoard: null },
+            {
+              number: 9,
+              exists: false,
+              typeName: null,
+              subIssueCount: 0,
+              milestone: null,
+              onBoard: null,
+            },
           ],
         },
         "issue #9 does not exist",
@@ -191,6 +200,46 @@ describe("evaluatePr", () => {
   test("rejects Closes pointing at an Epic", () => {
     expect(evaluatePr(valid({ linkedIssues: [{ ...task, typeName: "Epic" }] }))).toEqual([
       "issue #1 is an Epic; a pull request closes a leaf issue",
+    ]);
+  });
+
+  test("rejects Closes pointing at an issue with sub-issues and no type", () => {
+    expect(
+      evaluatePr(valid({ linkedIssues: [{ ...task, typeName: null, subIssueCount: 3 }] })),
+    ).toEqual(["issue #1 is an Epic; a pull request closes a leaf issue"]);
+  });
+
+  test("accepts a Dependabot pull request without a linked issue or milestone", () => {
+    expect(
+      evaluatePr(
+        valid({
+          author: "dependabot[bot]",
+          title: "chore(deps): bump actions/checkout from 4 to 5",
+          labels: ["type: chore", "area: ci"],
+          body: "Bumps the github-actions group.",
+          milestone: null,
+          linkedIssues: [],
+          changelogAddedUnderUnreleased: false,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("rejects a Dependabot pull request with a bad title", () => {
+    expect(
+      evaluatePr(
+        valid({
+          author: "dependabot[bot]",
+          title: "Bump actions/checkout from 4 to 5",
+          labels: ["type: chore", "area: ci"],
+          body: "Bumps the github-actions group.",
+          milestone: null,
+          linkedIssues: [],
+          changelogAddedUnderUnreleased: false,
+        }),
+      ),
+    ).toEqual([
+      "title must match type(scope): summary (feat, fix, docs, refactor, perf, test, chore; ! marks breaking)",
     ]);
   });
 

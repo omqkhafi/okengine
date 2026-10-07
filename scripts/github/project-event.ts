@@ -67,7 +67,7 @@ async function main(): Promise<void> {
     if (event["action"] === "demilestoned" || title === null) {
       await clearField(project.id, item.id, fieldId(project.fields, "Release"), token);
     } else {
-      await setOption(project, item, "Release", title, token);
+      await setOption(project, item, "Release", releaseOption(title), token);
     }
   }
   console.log(`project event: ${eventName} ${event["action"]} updated`);
@@ -90,6 +90,15 @@ function subjectOf(
     body: typeof node["body"] === "string" ? node["body"] : "",
     repo,
   };
+}
+
+/** Release options stay version numbers. This milestone's title is the goal. */
+const RELEASE_OPTION: Readonly<Record<string, string>> = {
+  "OKModel replaces Drizzle (breaking)": "0.25",
+};
+
+function releaseOption(title: string): string {
+  return RELEASE_OPTION[title] ?? title;
 }
 
 function milestoneTitle(event: Record<string, unknown>): string | null {

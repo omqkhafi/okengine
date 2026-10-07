@@ -1,4 +1,4 @@
-# Tag release. Runs the CI jobs, then the GitHub Release, npm, and JSR.
+# Tag release. Runs the CI jobs, then npm and JSR, then the GitHub Release.
 # These jobs are not part of a pull request.
 #
 # npm trusted publishing (OIDC, no NPM_TOKEN) must name this file:
@@ -26,7 +26,7 @@ jobs:
 
   release:
     name: GitHub release
-    needs: checks
+    needs: [publish-npm, publish-jsr]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
