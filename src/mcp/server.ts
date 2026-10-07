@@ -14,6 +14,7 @@ import {
   forbiddenResponse,
   resolveAllowedHosts,
 } from "../runtime/security.ts";
+import { HttpBodyRejected, parseBody } from "../compiler/http-parse.ts";
 import { MCP_PORT, type ServerHandle } from "../runtime/types.ts";
 import { SessionError, type SessionStore } from "../auth/sessions.ts";
 import { asData } from "./data.ts";
@@ -135,8 +136,11 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
 
     let body: unknown;
     try {
-      body = await request.json();
-    } catch {
+      body = await parseBody(request);
+    } catch (err) {
+      if (err instanceof HttpBodyRejected && err.code === "PayloadTooLarge") {
+        return respond(new Response("Payload Too Large", { status: 413 }));
+      }
       return respond(jsonRpcHttp(rpcError(null, RpcErrorCode.parse, "invalid JSON body"), 400));
     }
 
@@ -174,7 +178,7 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
       case "ping":
         return respond(jsonRpcHttp(rpcSuccess(id, { ok: true })));
       case "tools/list": {
-        const listed = tools.listTools().map((t) => ({
+        const listed = tools.listTools(requester).map((t) => ({
           name: t.name,
           description: t.description,
           inputSchema: t.inputSchema,
@@ -277,6 +281,7 @@ export async function serveMcp(options: ServeMcpOptions): Promise<McpServerHandl
   const server = Bun.serve({
     hostname,
     port,
+    maxRequestBodySize: 1_048_576,
     fetch: mcp.fetch,
   });
   const boundPort = server.port ?? port;

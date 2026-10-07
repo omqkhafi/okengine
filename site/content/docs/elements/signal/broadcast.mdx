@@ -12,8 +12,10 @@ For developers invalidating caches or syncing in-process state — declare the S
 more `on(signal, flow)` subscribers, emit with `fx.emit`.
 
 <Callout title="The one rule">
-  Broadcast is ephemeral. If a subscriber is offline or restarts during the emit, it does not
-  receive past events. Use [`live`](/docs/elements/signal/live) when clients need replay. Use
+  Broadcast is ephemeral. Each running instance handles a message once. If a subscriber is offline
+  during the emit, it does not receive that event. Postgres delivery is best-effort within `lagMs`
+  (default 30 seconds): a transaction that commits later than that can be missed. Use
+  [`live`](/docs/elements/signal/live) when clients need replay. Use
   [`once`](/docs/elements/signal/once) when exactly one worker must claim the job.
 </Callout>
 

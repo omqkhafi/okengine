@@ -81,6 +81,21 @@ export function isInvalidatedByWrite(key: string, writeEffects: Effects): boolea
   return (writeEffects.writes ?? []).some((w) => w === resource);
 }
 
+/** Options for {@link createStoreCache}. */
+export interface CreateStoreCacheOptions {
+  /** Clock for TTL expiry. */
+  readonly now?: () => number;
+  /** Entry cap. Default 10_000. Oldest entry is dropped. */
+  readonly maxEntries?: number;
+  /** TTL applied when a put does not set one. Default 60_000. */
+  readonly defaultTtlMs?: number;
+  /**
+   * Tell other instances which resources changed. Not called for
+   * {@link StoreCache.acceptRemote}.
+   */
+  readonly fanout?: (resources: readonly ResourceRef[]) => void;
+}
+
 /** In-memory multi-tier cache used by the store runtime and tests. */
 export interface StoreCache {
   /**
@@ -111,6 +126,32 @@ export interface StoreCache {
   keys(): string[];
   /** Clear all tiers. */
   clear(): void;
+  /** Default TTL for puts that omit one. */
+  readonly defaultTtlMs: number;
+  /** Current generation for a resource. Invalidation increments it. */
+  generationOf(resource: string): number;
+  /** True when every resource is still at the captured generation. */
+  sameGeneration(snapshot: Readonly<Record<string, number>>): boolean;
+  /**
+   * Apply an invalidation that arrived from another instance.
+   * Does not call `fanout`.
+   *
+   * @param resources - Resources the other instance wrote
+   */
+  acceptRemote(resources: readonly ResourceRef[]): InvalidationEvent;
+  /**
+   * Run `task` once per key. A caller that joined before an invalidation
+   * refetches once instead of keeping a value the cache will not store.
+   *
+   * @param key - Flight key
+   * @param resources - Resources read by the flight
+   * @param task - Loader
+   */
+  coalesce<T>(
+    key: string,
+    resources: readonly string[],
+    task: () => Promise<T>,
+  ): Promise<{ readonly value: T; readonly cacheable: boolean }>;
 }
 
 /**
@@ -118,37 +159,133 @@ export interface StoreCache {
  *
  * @param now - Clock for TTL expiry
  */
-export function createStoreCache(now: () => number = () => Date.now()): StoreCache {
+export function createStoreCache(
+  nowOrOptions: (() => number) | CreateStoreCacheOptions = {},
+): StoreCache {
+  const options: CreateStoreCacheOptions =
+    typeof nowOrOptions === "function" ? { now: nowOrOptions } : nowOrOptions;
+  const now = options.now ?? (() => Date.now());
+  const maxEntries = options.maxEntries ?? 10_000;
+  const defaultTtlMs = options.defaultTtlMs ?? 60_000;
   const entries = new Map<string, CacheEntry>();
+  const byResource = new Map<string, Set<string>>();
+  const generations = new Map<string, number>();
+  const flights = new Map<
+    string,
+    {
+      readonly promise: Promise<unknown>;
+      readonly resources: readonly string[];
+      readonly generation: Readonly<Record<string, number>>;
+    }
+  >();
 
   function alive(entry: CacheEntry): boolean {
     return entry.expiresAt === null || entry.expiresAt > now();
   }
 
-  return {
+  function forget(key: string): void {
+    const entry = entries.get(key);
+    entries.delete(key);
+    if (!entry) return;
+    for (const resource of entry.resources) byResource.get(resource)?.delete(key);
+  }
+
+  function snapshot(resources: readonly string[]): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const resource of resources) out[resource] = generations.get(resource) ?? 0;
+    return out;
+  }
+
+  function dropFlights(resources: readonly ResourceRef[]): void {
+    const set = new Set(resources);
+    for (const [key, flight] of flights) {
+      if (flight.resources.some((resource) => set.has(resource as ResourceRef))) {
+        flights.delete(key);
+      }
+    }
+  }
+
+  function invalidateLocal(resources: readonly ResourceRef[]): InvalidationEvent {
+    const keys: string[] = [];
+    for (const resource of resources) {
+      generations.set(resource, (generations.get(resource) ?? 0) + 1);
+      const held = byResource.get(resource);
+      if (!held) continue;
+      for (const key of held) {
+        keys.push(key);
+        forget(key);
+      }
+      held.clear();
+    }
+    dropFlights(resources);
+    return { resources: [...resources], keys };
+  }
+
+  const api: StoreCache = {
+    defaultTtlMs,
     get<T = unknown>(key: string): T | undefined {
       const entry = entries.get(key);
       if (!entry) return undefined;
       if (!alive(entry)) {
-        entries.delete(key);
+        forget(key);
         return undefined;
       }
+      entries.delete(key);
+      entries.set(key, entry);
       return entry.value as T;
     },
     set<T>(entry: CacheEntry<T>): void {
+      forget(entry.key);
       entries.set(entry.key, entry as CacheEntry);
+      for (const resource of entry.resources) {
+        const set = byResource.get(resource) ?? new Set<string>();
+        set.add(entry.key);
+        byResource.set(resource, set);
+      }
+      while (entries.size > maxEntries) {
+        const oldest = entries.keys().next().value;
+        if (oldest === undefined) break;
+        forget(oldest);
+      }
     },
     invalidate(resources: readonly ResourceRef[]): InvalidationEvent {
-      const set = new Set(resources);
-      const keys: string[] = [];
-      for (const [key, entry] of entries) {
-        if (entry.tier !== 1) continue;
-        if (entry.resources.some((r) => set.has(r))) {
-          keys.push(key);
-          entries.delete(key);
-        }
+      const event = invalidateLocal(resources);
+      options.fanout?.(resources);
+      return event;
+    },
+    generationOf(resource: string): number {
+      return generations.get(resource) ?? 0;
+    },
+    sameGeneration(shot: Readonly<Record<string, number>>): boolean {
+      for (const [resource, generation] of Object.entries(shot)) {
+        if ((generations.get(resource) ?? 0) !== generation) return false;
       }
-      return { resources: [...resources], keys };
+      return true;
+    },
+    acceptRemote(resources: readonly ResourceRef[]): InvalidationEvent {
+      return invalidateLocal(resources);
+    },
+    async coalesce<T>(
+      key: string,
+      resources: readonly string[],
+      task: () => Promise<T>,
+    ): Promise<{ readonly value: T; readonly cacheable: boolean }> {
+      const existing = flights.get(key);
+      if (existing) {
+        const value = (await existing.promise) as T;
+        if (api.sameGeneration(existing.generation)) return { value, cacheable: true };
+        const again = await task();
+        return { value: again, cacheable: api.sameGeneration(snapshot(resources)) };
+      }
+      const generation = snapshot(resources);
+      const promise = task();
+      flights.set(key, { promise, resources, generation });
+      try {
+        const value = await promise;
+        return { value, cacheable: api.sameGeneration(generation) };
+      } finally {
+        if (flights.get(key)?.promise === promise) flights.delete(key);
+      }
     },
     invalidateFromEffects(writeEffects: Effects): InvalidationEvent {
       return this.invalidate(resourcesTouchedByWrites(writeEffects));
@@ -158,8 +295,10 @@ export function createStoreCache(now: () => number = () => Date.now()): StoreCac
     },
     clear(): void {
       entries.clear();
+      byResource.clear();
     },
   };
+  return api;
 }
 
 /** Store resource refs that participate in the automatic cache cycle. */
@@ -400,6 +539,10 @@ export interface Tier1Caller {
    * Membership role names. Cache identity only — gates do not read this.
    */
   readonly roles?: Iterable<string>;
+  /** Email / session verified bit. `v:0` and `v:1` must not share an entry. */
+  readonly verified?: boolean;
+  /** Operator id when the caller is on the operator plane. */
+  readonly operatorId?: string | null;
 }
 
 /**
@@ -457,6 +600,8 @@ export function tier1FlowDims(
     `l:${identity.locale ?? ""}`,
     `s:${scopes.join(",")}`,
     `r:${roles.join(",")}`,
+    `v:${identity.verified === true ? "1" : "0"}`,
+    `o:${identity.operatorId ?? ""}`,
   ];
 }
 

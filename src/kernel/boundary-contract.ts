@@ -30,6 +30,13 @@ export interface BoundaryContract<
    * (`oke doctor --diff` / CI gate).
    */
   readonly breaking?: boolean;
+  /** Per-route body cap in bytes. Falls back to the app `maxRequestBodySize`. */
+  readonly maxBodySize?: number;
+  /**
+   * `required` (default) rejects a JSON-shaped body that is not
+   * `application/json` or `+json`. `any` keeps the previous parse-or-string behavior.
+   */
+  readonly jsonContentType?: "required" | "any";
 }
 
 /** Infer validated input from a {@link BoundaryContract} bag. */

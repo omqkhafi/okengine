@@ -22,6 +22,7 @@ import {
   type PostgresJournalStore,
 } from "../drivers/journal-postgres.ts";
 import { oke, type OkeApp } from "./app.ts";
+import { clearJournalHeartbeats } from "./journal.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { flow, resetFlowSeq, type AnyFlowDef } from "./flow.ts";
 import type { Binding } from "./on.ts";
@@ -47,6 +48,7 @@ async function bootDurableApp(options: {
   readonly name: string;
   readonly journal: JournalRuntime;
   readonly bindings: readonly Binding[];
+  readonly now?: () => number;
 }): Promise<OkeApp> {
   const app = oke({
     name: options.name,
@@ -57,6 +59,7 @@ async function bootDurableApp(options: {
     // oke() in the process — sibling apps need their own copies.
     bindings: [...options.bindings],
     elements: { journal: options.journal },
+    ...(options.now ? { fx: { now: options.now } } : {}),
   });
   await app.boot();
   return app;
@@ -127,11 +130,18 @@ describe("journal boot — shared store, real boot paths (fake SQL)", () => {
       bindings,
     });
     // Start the run through the real HTTP path; it hangs inside step 2.
-    void appA.fetch(new Request("http://localhost/charge", { method: "POST", body: "{}" }));
+    void appA.fetch(
+      new Request("http://localhost/charge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
+    );
     expect(await waitFor(async () => blockers.length === 1)).toBe(true);
     const runId = (await store.list())[0]!.id;
-    // "Crash": no commit, no release — the lease (120ms) is left to expire.
-    // appA is deliberately never stopped; its promise stays dangling.
+    // "Crash": the process dies, so its heartbeat timers die with it.
+    // The in-flight promise stays dangling and the lease (120ms) expires.
+    clearJournalHeartbeats();
 
     await Bun.sleep(300);
     const appB = await bootDurableApp({
@@ -165,7 +175,11 @@ describe("journal boot — shared store, real boot paths (fake SQL)", () => {
       bindings,
     });
     const parked = await appA.fetch(
-      new Request("http://localhost/sleep", { method: "POST", body: "{}" }),
+      new Request("http://localhost/sleep", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
     );
     expect(parked.status).toBe(204); // durable park — lease released, row sleeping
     const runId = (await store.list())[0]!.id;
@@ -198,7 +212,13 @@ describe("journal boot — shared store, real boot paths (fake SQL)", () => {
       journal: journalRuntime(store, "A", 5_000),
       bindings,
     });
-    await appA.fetch(new Request("http://localhost/sleep", { method: "POST", body: "{}" }));
+    await appA.fetch(
+      new Request("http://localhost/sleep", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
+    );
     await appA.stop();
 
     // Both survivors boot while the sleep is future (orphan scan skips it).
@@ -217,8 +237,59 @@ describe("journal boot — shared store, real boot paths (fake SQL)", () => {
     await Promise.all([appB.resumeDurable(), appC.resumeDurable()]);
 
     expect(confirms).toHaveLength(1);
+
     await appB.stop();
     await appC.stop();
+  });
+
+  test("resume uses a live clock: a lease written after the tick sample is not already expired", async () => {
+    let clock = 10_000_000;
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const confirms: string[] = [];
+    const bindings = [sleeperBinding("120ms", confirms)];
+    const acquiredAt: number[] = [];
+    const acquire = store.acquireLease.bind(store);
+    store.acquireLease = async (runId, instanceId, at, leaseMs) => {
+      acquiredAt.push(at);
+      return acquire(runId, instanceId, at, leaseMs);
+    };
+    const claim = store.claimDueSleep.bind(store);
+    store.claimDueSleep = async (instanceId, at, leaseMs) => {
+      const due = await claim(instanceId, at, leaseMs);
+      // The tick already sampled `at`. A live run clock must see this jump.
+      if (due) clock += 2_700;
+      return due;
+    };
+
+    const appA = await bootDurableApp({
+      name: "clock-a",
+      journal: journalRuntime(store, "A", 5_000),
+      bindings,
+      now: () => clock,
+    });
+    await appA.fetch(
+      new Request("http://localhost/sleep", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
+    );
+    await appA.stop();
+
+    const appB = await bootDurableApp({
+      name: "clock-b",
+      journal: journalRuntime(store, "B", 5_000),
+      bindings,
+      now: () => clock,
+    });
+    const before = clock;
+    clock = before + 500;
+    acquiredAt.length = 0;
+    await appB.resumeDurable();
+
+    const stamped = acquiredAt.find((at) => at >= before + 2_700);
+    expect(stamped).toBeDefined();
+    await appB.stop();
   });
 
   test("boot orphan scan skips runs held under a live lease", async () => {
@@ -233,7 +304,13 @@ describe("journal boot — shared store, real boot paths (fake SQL)", () => {
       journal: journalRuntime(store, "A", 30_000),
       bindings,
     });
-    void appA.fetch(new Request("http://localhost/charge", { method: "POST", body: "{}" }));
+    void appA.fetch(
+      new Request("http://localhost/charge", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
+    );
     expect(await waitFor(async () => blockers.length === 1)).toBe(true);
 
     // B boots while A's lease is live — must not steal the run.

@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { runDurable } from "../elements/clock/durable.ts";
 import { flow } from "./flow.ts";
 import {
+  clearJournalHeartbeats,
   createJournal,
   createMemoryJournalStore,
   hasJournalLease,
@@ -171,6 +172,34 @@ describe("journal lease (memory store)", () => {
     }
   });
 
+  test("heartbeat extends the lease, and a lost lease does not persist the step", async () => {
+    let t = 1_000;
+    const store = createMemoryJournalStore();
+    const a = createJournal({
+      store,
+      now: () => t,
+      lease: { instanceId: "a", leaseMs: 60 },
+      codeVersion: "v1",
+    });
+    const session = await a.start("charge");
+    t = 1_030;
+    await Bun.sleep(40);
+    expect((await store.get(session.runId))?.leaseExpiresAt).toBe(1_090);
+    t = 2_000;
+    const b = createJournal({
+      store,
+      now: () => t,
+      lease: { instanceId: "b", leaseMs: 60 },
+      codeVersion: "v1",
+    });
+    await b.resume(session.runId);
+    await Bun.sleep(40);
+    await expect(session.step("capture", () => 1)).rejects.toBeInstanceOf(OkeError);
+    expect((await store.get(session.runId))?.entries ?? []).toHaveLength(0);
+    expect((await store.get(session.runId))?.lockedBy).toBe("b");
+    clearJournalHeartbeats();
+  });
+
   test("replay throws when the next call does not match the journal", async () => {
     const store = createMemoryJournalStore();
     const journal = createJournal({ store, now: () => 1, codeVersion: "v1" });
@@ -196,6 +225,21 @@ describe("journal lease (memory store)", () => {
       expect(err).toBeInstanceOf(OkeError);
       expect((err as OkeError).code).toBe(1077);
     }
+  });
+
+  test("a 0.23.1 stamp resumes and is restamped when codeVersion is set", async () => {
+    const store = createMemoryJournalStore();
+    const started = await createJournal({ store, now: () => 1, codeVersion: "v1" }).start("charge");
+    const row = await store.get(started.runId);
+    if (row) {
+      row.codeVersion = "0.23.1";
+      await store.put(row);
+    }
+    const resumed = await createJournal({ store, now: () => 2, codeVersion: "v9" }).resume(
+      started.runId,
+    );
+    expect(resumed.run.codeVersion).toBe("app:v9");
+    expect((await store.get(started.runId))?.status).not.toBe("failed");
   });
 
   test("resume rejects a run stamped with another code version", async () => {

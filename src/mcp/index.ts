@@ -32,8 +32,12 @@ export {
   createConfirmationGate,
   digestArgs,
   MCP_CONFIRM_PHRASE,
+  type ConfirmationGate,
+  type ConfirmationTarget,
   type ConfirmConsumeResult,
+  type ConfirmIssueResult,
   type ConfirmationGateOptions,
+  type OpenConfirmation,
   type PendingConfirmation,
 } from "./confirmation.ts";
 

@@ -94,7 +94,11 @@ export async function bootParkedApproval(): Promise<ParkedApproval> {
   });
   await app.boot({ env: "test" });
   const parked = await app.fetch(
-    new Request("http://localhost/assist", { method: "POST", body: "{}" }),
+    new Request("http://localhost/assist", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }),
   );
   if (parked.status >= 500) {
     throw new Error(`seeded approval failed to park (${parked.status})`);

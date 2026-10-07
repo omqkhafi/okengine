@@ -6,6 +6,7 @@
  */
 
 import type { DomainDdlMode } from "../../config/index.ts";
+import type { SignalEmitOptions, SignalTransaction } from "../../drivers/signal-types.ts";
 import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/types.ts";
 import {
   buildRlsIdentityPreludeSql,
@@ -16,6 +17,7 @@ import {
 import { throwOke } from "../../kernel/errors.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
 import { lazyRequire } from "../../kernel/lazy-require.ts";
+import { currentSignalTransaction, runInSignalTransaction } from "../../kernel/signal-tx.ts";
 import { isRetryableSqlError, sqlErrorToFailure } from "./sql-errors.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { maskRows, tableFromSql } from "./classify.ts";
@@ -137,8 +139,28 @@ function notifySqlCdc(event: {
  */
 const cdcMutationStorage = new AsyncLocalStorage<{ readonly mutationId: string }>();
 
+/**
+ * One frame of {@link SqlStoreHandle.transaction}.
+ * Depth 0 is the driver `BEGIN`. Deeper frames are savepoints on that pin.
+ */
+interface SqlTxFrame {
+  readonly connection: SqlConnection;
+  /** 0 for the driver transaction; 1+ for `SAVEPOINT`. */
+  readonly depth: number;
+  /**
+   * Promise chain for direct child transactions on this pin.
+   * Siblings append here so their statements cannot interleave. A child
+   * waits on this chain, not on a connection-wide tail, so a nested call
+   * does not deadlock behind its own parent.
+   */
+  childTail: Promise<void>;
+}
+
 /** Pinned connection for {@link SqlStoreHandle.transaction}. */
-const sqlTxStorage = new AsyncLocalStorage<SqlConnection>();
+const sqlTxStorage = new AsyncLocalStorage<SqlTxFrame>();
+
+/** Monotonic savepoint counter, keyed by the pinned connection. */
+const savepointSeq = new WeakMap<SqlConnection, number>();
 
 /**
  * Read the ambient mutation id, or `undefined` outside a stamped request.
@@ -212,6 +234,110 @@ async function withRlsStampLock<T>(connection: SqlConnection, fn: () => Promise<
   } finally {
     release();
   }
+}
+
+/**
+ * Next `oke_sp_<depth>_<n>` name. `n` is per pinned connection so siblings
+ * and nested savepoints never reuse a name, even after `ROLLBACK TO`.
+ *
+ * @param connection - Pinned connection
+ * @param depth - Savepoint depth (1 for the first nested call)
+ */
+function nextSavepointId(connection: SqlConnection, depth: number): string {
+  const n = (savepointSeq.get(connection) ?? 0) + 1;
+  savepointSeq.set(connection, n);
+  return `oke_sp_${String(depth)}_${String(n)}`;
+}
+
+/**
+ * Run `fn` after earlier direct children of `frame` finish.
+ *
+ * @param frame - Parent transaction frame
+ * @param fn - Child body, including savepoint control
+ */
+async function withSqlChildLock<T>(frame: SqlTxFrame, fn: () => Promise<T>): Promise<T> {
+  const prev = frame.childTail;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  frame.childTail = prev.then(
+    () => gate,
+    () => gate,
+  );
+  await prev.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+/** One staged signal op inside a nested transaction. */
+type StagedSignalOp =
+  | { readonly kind: "write"; readonly key: string; readonly value: unknown }
+  | {
+      readonly kind: "emit";
+      readonly signal: string;
+      readonly payload: unknown;
+      readonly options?: SignalEmitOptions;
+    };
+
+/**
+ * Child staging scope. Emits buffer here and merge into `parent` on success.
+ * Discard drops them. Neither path publishes — the outermost commit does.
+ *
+ * @param parent - Ambient signal transaction
+ */
+function openChildSignalScope(parent: SignalTransaction): {
+  readonly transaction: SignalTransaction;
+  readonly merge: () => Promise<void>;
+  readonly discard: () => void;
+} {
+  const staged: StagedSignalOp[] = [];
+  let open = true;
+
+  function assertOpen(): void {
+    if (!open) throw new Error("transaction finished");
+  }
+
+  const transaction: SignalTransaction = {
+    async write(key, value) {
+      assertOpen();
+      staged.push({ kind: "write", key, value });
+    },
+    async emit(signal, payload, options) {
+      assertOpen();
+      staged.push(
+        options === undefined
+          ? { kind: "emit", signal, payload }
+          : { kind: "emit", signal, payload, options },
+      );
+    },
+    async commit() {
+      throw new Error("nested signal scope publishes on the outermost commit");
+    },
+    async rollback() {
+      open = false;
+      staged.length = 0;
+    },
+  };
+
+  return {
+    transaction,
+    async merge() {
+      if (!open) return;
+      open = false;
+      for (const op of staged) {
+        if (op.kind === "write") await parent.write(op.key, op.value);
+        else await parent.emit(op.signal, op.payload, op.options);
+      }
+    },
+    discard() {
+      open = false;
+      staged.length = 0;
+    },
+  };
 }
 
 /** Options for a SQL session. */
@@ -443,6 +569,9 @@ export interface SqlStoreHandle {
   /**
    * Run `fn` on one pinned connection. `fx.emit` inside `fn` stages on the
    * signal outbox and publishes only after this SQL transaction commits.
+   * A call that already has a pinned connection opens `SAVEPOINT` on that
+   * connection. Nested emits stage on a child scope and merge into the
+   * parent on success; only the outermost commit publishes.
    *
    * @param fn - Transaction body. `tx` is this handle, bound to the pin.
    */
@@ -606,7 +735,7 @@ export function createSqlStoreHandle(
   }
 
   function activeConnection(): SqlConnection {
-    return sqlTxStorage.getStore() ?? connection;
+    return sqlTxStorage.getStore()?.connection ?? connection;
   }
 
   function query(sql: string, params: readonly unknown[] = []): Promise<SqlRow[]> {
@@ -973,6 +1102,53 @@ export function createSqlStoreHandle(
         return filtered(where);
       },
     };
+  }
+
+  /**
+   * Nested `transaction()` on the pinned connection: `SAVEPOINT`, then
+   * `RELEASE` or `ROLLBACK TO`. Sibling calls share `parent.childTail`.
+   *
+   * @param parent - Frame already on the async store
+   * @param fn - Nested body
+   */
+  async function runNestedTransaction<T>(
+    parent: SqlTxFrame,
+    fn: (tx: SqlStoreHandle) => Promise<T>,
+  ): Promise<T> {
+    return withSqlChildLock(parent, async () => {
+      const depth = parent.depth + 1;
+      const name = quoteIdent(nextSavepointId(parent.connection, depth));
+      const conn = parent.connection;
+      await conn.exec(`SAVEPOINT ${name}`);
+      const child: SqlTxFrame = {
+        connection: conn,
+        depth,
+        childTail: Promise.resolve(),
+      };
+      const parentSignal = currentSignalTransaction();
+      const staging = parentSignal ? openChildSignalScope(parentSignal) : undefined;
+      let released = false;
+      try {
+        const result = await sqlTxStorage.run(child, () => {
+          const body = () => fn(handle as SqlStoreHandle);
+          return staging ? runInSignalTransaction(staging.transaction, body) : body();
+        });
+        await conn.exec(`RELEASE SAVEPOINT ${name}`);
+        released = true;
+        if (staging) await staging.merge();
+        return result;
+      } catch (err) {
+        if (!released) {
+          try {
+            await conn.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+          } catch {
+            // The pin may already be aborted; the original error still wins.
+          }
+        }
+        staging?.discard();
+        throw err;
+      }
+    });
   }
 
   const handle = {
@@ -1398,11 +1574,15 @@ export function createSqlStoreHandle(
     },
 
     async transaction<T>(fn: (tx: SqlStoreHandle) => Promise<T>): Promise<T> {
+      const current = sqlTxStorage.getStore();
+      if (current) return runNestedTransaction(current, fn);
       if (!connection.transaction) {
         throw new Error("fx.store().transaction needs SqlConnection.transaction");
       }
       return connection.transaction(async (txConn) =>
-        sqlTxStorage.run(txConn, () => fn(handle as SqlStoreHandle)),
+        sqlTxStorage.run({ connection: txConn, depth: 0, childTail: Promise.resolve() }, () =>
+          fn(handle as SqlStoreHandle),
+        ),
       );
     },
 

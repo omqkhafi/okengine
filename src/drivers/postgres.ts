@@ -88,6 +88,80 @@ export class SharedPostgresPausedError extends Error {
 }
 
 /**
+ * Bun.SQL rejected with a value that is not an {@link Error}.
+ *
+ * {@link Error.cause} is the original rejection. `code`, `errno`,
+ * `constraint`, `table`, and `column` are copied when the driver sent them
+ * so SQLSTATE mapping can read a plain object the same way it reads an Error.
+ */
+export class PostgresDriverError extends Error {
+  /** Driver `code` (`ERR_POSTGRES_*` or a five-character SQLSTATE). */
+  readonly code?: string;
+  /** SQLSTATE string, or a numeric errno when the driver sent one. */
+  readonly errno?: string | number;
+  /** Constraint name, when the driver sent one. */
+  readonly constraint?: string;
+  /** Table name, when the driver sent one. */
+  readonly table?: string;
+  /** Column name, when the driver sent one. */
+  readonly column?: string;
+
+  /**
+   * @param cause - Non-Error rejection from Bun.SQL
+   */
+  constructor(cause: unknown) {
+    super(postgresRejectionMessage(cause), { cause });
+    this.name = "PostgresDriverError";
+    if (cause === null || typeof cause !== "object") return;
+    const row = cause as Record<string, unknown>;
+    const code = readDriverString(row, "code");
+    const constraint = readDriverString(row, "constraint");
+    const table = readDriverString(row, "table");
+    const column = readDriverString(row, "column");
+    const errno = readDriverErrno(row);
+    if (code !== undefined) this.code = code;
+    if (errno !== undefined) this.errno = errno;
+    if (constraint !== undefined) this.constraint = constraint;
+    if (table !== undefined) this.table = table;
+    if (column !== undefined) this.column = column;
+  }
+}
+
+function postgresRejectionMessage(cause: unknown): string {
+  if (cause !== null && typeof cause === "object" && "message" in cause) {
+    const message = (cause as { message: unknown }).message;
+    if (typeof message === "string" && message.length > 0) return message;
+  }
+  return "Postgres query failed";
+}
+
+function readDriverString(row: Record<string, unknown>, key: string): string | undefined {
+  const value = row[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readDriverErrno(row: Record<string, unknown>): string | number | undefined {
+  const value = row.errno;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.length > 0) return value;
+  return undefined;
+}
+
+/**
+ * Await a Bun.SQL call. Non-Error rejections become {@link PostgresDriverError}.
+ *
+ * @param query - Driver promise
+ */
+async function settlePostgres<T>(query: PromiseLike<T>): Promise<T> {
+  try {
+    return await query;
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new PostgresDriverError(err);
+  }
+}
+
+/**
  * Resolve the Postgres URL (injected, `DATABASE_URL`, then localhost).
  *
  * @param url - Explicit URL
@@ -270,14 +344,14 @@ export async function withPinnedPostgres<T>(
   if (typeof client.reserve === "function") {
     const reserved = await client.reserve();
     try {
-      await reserved.unsafe("BEGIN");
+      await settlePostgres(reserved.unsafe("BEGIN"));
       try {
         const result = await fn(reserved);
-        await reserved.unsafe("COMMIT");
+        await settlePostgres(reserved.unsafe("COMMIT"));
         return result;
       } catch (err) {
         try {
-          await reserved.unsafe("ROLLBACK");
+          await settlePostgres(reserved.unsafe("ROLLBACK"));
         } catch {
           // Already aborted.
         }
@@ -365,14 +439,14 @@ function wrapPostgresClient(
       // Shared wrappers outlive pause — fail soft before Bun.SQL reconnects.
       if (opts.shared) assertSharedPostgresReady();
       const pg = toPostgresParams(sql, params);
-      const result = await client.unsafe(pg, [...params]);
+      const result = await settlePostgres(client.unsafe(pg, [...params]));
       if (Array.isArray(result)) return result as SqlRow[];
       return Array.from(result as ArrayLike<SqlRow>);
     },
     async exec(sql, params = []) {
       if (opts.shared) assertSharedPostgresReady();
       const pg = toPostgresParams(sql, params);
-      const result = await client.unsafe(pg, [...params]);
+      const result = await settlePostgres(client.unsafe(pg, [...params]));
       if (
         result &&
         typeof result === "object" &&

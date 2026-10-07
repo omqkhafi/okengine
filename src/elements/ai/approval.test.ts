@@ -325,7 +325,11 @@ describe("approval http", () => {
     apps.push(app);
 
     const parked = await app.fetch(
-      new Request("http://localhost/assist", { method: "POST", body: "{}" }),
+      new Request("http://localhost/assist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
     );
     expect(parked.status).toBeLessThan(500);
     const runs = await store.list();
@@ -450,7 +454,11 @@ describe("approval http", () => {
 
     const parkStream = async (app: OkeApp) => {
       const parked = await app.fetch(
-        new Request("http://localhost/assist", { method: "POST", body: "{}" }),
+        new Request("http://localhost/assist", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        }),
       );
       expect(parked.status).toBe(200);
       const body = await parked.text();
@@ -594,7 +602,11 @@ describe("approval http", () => {
     apps.push(app);
 
     const parked = await app.fetch(
-      new Request("http://localhost/assist", { method: "POST", body: "{}" }),
+      new Request("http://localhost/assist", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
     );
     expect(parked.status).toBe(200);
     const first = await parked.text();

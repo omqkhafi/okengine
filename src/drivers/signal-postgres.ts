@@ -1,9 +1,11 @@
 /**
  * `postgres` signal driver — transactional emit (dual-write fix).
  *
- * `fx.emit` inserts into the outbox on the caller's connection. Consumers
- * claim with `FOR UPDATE SKIP LOCKED`. Wakeups use `LISTEN` / `NOTIFY` when
- * the client has them; otherwise the boot scheduler polls `drain`.
+ * `fx.emit` inserts into the outbox on the caller's connection. `once`
+ * consumers claim with `FOR UPDATE SKIP LOCKED`. Broadcast and live stay
+ * unread in the table; each instance polls `db_at` from an in-memory cursor.
+ * Wakeups use `LISTEN` / `NOTIFY` when the client has them; otherwise the
+ * boot scheduler polls `drain`.
  */
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
@@ -52,6 +54,8 @@ interface MsgRow {
   lease_expires_at: number | null;
   delivered_to: string;
   parent_run_id: string | null;
+  /** Database clock at insert (`clock_timestamp`), not the application clock. */
+  db_at: number | null;
 }
 
 /** Minimal SQL + listen surface for the postgres signal driver. */
@@ -87,6 +91,215 @@ const CHANNEL = "oke_signal";
 /** Claim next once-row: pending/unlocked or lease-expired, blocked by same-key inflight. */
 const CLAIM_ONCE_SQL = `SELECT * FROM oke_signal_messages WHERE signal=? AND delivery='once' AND available_at<=? AND ((status='pending' AND locked_by IS NULL) OR (status='inflight' AND lease_expires_at IS NOT NULL AND lease_expires_at<=?)) AND (ordering_key IS NULL OR NOT EXISTS (SELECT 1 FROM oke_signal_messages h WHERE h.signal=oke_signal_messages.signal AND h.ordering_key=oke_signal_messages.ordering_key AND h.id<>oke_signal_messages.id AND h.status='inflight' AND h.lease_expires_at IS NOT NULL AND h.lease_expires_at>?)) ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
 
+/** `clock_timestamp()` in milliseconds. Stamped in SQL, not from the app clock. */
+const DB_CLOCK_MS_SQL = `(extract(epoch from clock_timestamp())*1000)::bigint`;
+
+/**
+ * Default overlap window for postgres broadcast and live polls (ms).
+ * A commit that lands more than this long after its `db_at` can be missed.
+ */
+export const POSTGRES_SIGNAL_DEFAULT_LAG_MS = 30_000;
+
+/**
+ * Broadcast/live statements the in-memory fake routes to one dedicated branch.
+ * Inserts stamp `db_at` from `clock_timestamp()`.
+ */
+export const POSTGRES_SIGNAL_FANOUT_SQL = {
+  /** Insert including `db_at` from the database clock. */
+  insert: `INSERT INTO oke_signal_messages (id, signal, payload, ordering_key, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to, parent_run_id, db_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${DB_CLOCK_MS_SQL})`,
+  /** Poll `db_at >=` and read the database clock from the same statement. */
+  poll: `SELECT m.id, m.signal, m.payload, m.ordering_key, m.delivery, m.attempts, m.failures, m.created_at, m.available_at, m.status, m.locked_by, m.lease_expires_at, m.delivered_to, m.parent_run_id, m.db_at, ${DB_CLOCK_MS_SQL} AS db_now FROM (SELECT ${DB_CLOCK_MS_SQL} AS db_now) AS clock LEFT JOIN oke_signal_messages m ON m.delivery IN ('broadcast', 'live') AND m.db_at >= ?`,
+  /** Backfill `db_at` from `created_at` (not 0). */
+  backfill: `UPDATE oke_signal_messages SET db_at = created_at WHERE db_at IS NULL`,
+  /** Supports the fan-out poll. */
+  index: `CREATE INDEX IF NOT EXISTS oke_signal_messages_delivery_db_at ON oke_signal_messages (signal, delivery, db_at)`,
+} as const;
+
+/** Drop broadcast rows only after the overlap window has closed. */
+const BROADCAST_TTL_DELETE_SQL = `DELETE FROM oke_signal_messages WHERE delivery = 'broadcast' AND db_at < ?`;
+
+function isOnceClaim(text: string): boolean {
+  return (
+    /FOR\s+UPDATE\s+SKIP\s+LOCKED/i.test(text) &&
+    /oke_signal_messages/i.test(text) &&
+    /delivery\s*=\s*'once'/i.test(text)
+  );
+}
+
+function isFanoutPoll(text: string): boolean {
+  return /^SELECT\b/i.test(text) && /db_at\s*>=/i.test(text) && /clock_timestamp\s*\(/i.test(text);
+}
+
+function isSelectStatus(text: string): boolean {
+  return /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+status\s*=\s*\?\s*$/i.test(
+    text,
+  );
+}
+
+function isSelectPending(text: string): boolean {
+  return /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+status\s+IN\s*\('pending',\s*'inflight'\)\s*$/i.test(
+    text,
+  );
+}
+
+function isSelectSignal(text: string): boolean {
+  return /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s*$/i.test(text);
+}
+
+function isSelectWrite(text: string): boolean {
+  return /^SELECT\s+value\s+FROM\s+oke_signal_writes\s+WHERE\s+key\s*=\s*\?\s*$/i.test(text);
+}
+
+function isSelectId(text: string): boolean {
+  return /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s*$/i.test(text);
+}
+
+function isSelectLive(text: string): boolean {
+  return /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+delivery\s*=\s*'live'\s+ORDER\s+BY\s+created_at\s+ASC\s*$/i.test(
+    text,
+  );
+}
+
+function isCreateTable(text: string): boolean {
+  return /^CREATE\s+TABLE/i.test(text);
+}
+
+function isDeliveryDbAtIndex(text: string): boolean {
+  return /^CREATE\s+INDEX\b/i.test(text) && /oke_signal_messages_delivery_db_at/i.test(text);
+}
+
+function isCreateIndex(text: string): boolean {
+  return /^CREATE\s+INDEX/i.test(text) && !isDeliveryDbAtIndex(text);
+}
+
+function isBroadcastTtlDelete(text: string): boolean {
+  return /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+delivery\s*=\s*'broadcast'\s+AND\s+db_at\s*<\s*\?\s*$/i.test(
+    text,
+  );
+}
+
+function isDeleteLive(text: string): boolean {
+  return /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+delivery\s*=\s*'live'\s*$/i.test(
+    text,
+  );
+}
+
+function isDeleteDead(text: string): boolean {
+  return /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+signal\s*=\s*\?\s+AND\s+status\s*=\s*'dead'\s*$/i.test(
+    text,
+  );
+}
+
+function isInsertDbAt(text: string): boolean {
+  return /^INSERT\s+INTO\s+oke_signal_messages\b/i.test(text) && /clock_timestamp\s*\(/i.test(text);
+}
+
+function isInsertMessage(text: string): boolean {
+  return (
+    /^INSERT\s+INTO\s+oke_signal_messages\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*$/i.test(text) &&
+    !isInsertDbAt(text)
+  );
+}
+
+function isInsertWrite(text: string): boolean {
+  return /^INSERT\s+INTO\s+oke_signal_writes\s*\(key,\s*value\)\s*VALUES\s*\(\?,\s*\?\)\s*$/i.test(
+    text,
+  );
+}
+
+function isBackfillDbAt(text: string): boolean {
+  return /^UPDATE\s+oke_signal_messages\s+SET\s+db_at\s*=\s*created_at\s+WHERE\s+db_at\s+IS\s+NULL\s*$/i.test(
+    text,
+  );
+}
+
+function isUpdateById(text: string): boolean {
+  return (
+    /^UPDATE\s+oke_signal_messages\s+SET\s+(.+)\s+WHERE\s+id\s*=\s*\?\s*$/i.test(text) &&
+    !isBackfillDbAt(text)
+  );
+}
+
+function isAlterAddColumn(text: string): boolean {
+  return /^ALTER\s+TABLE\s+oke_signal_messages\s+ADD\s+COLUMN/i.test(text);
+}
+
+const POSTGRES_SIGNAL_FAKE_BRANCHES: ReadonlyArray<{
+  readonly name: string;
+  readonly test: (text: string) => boolean;
+}> = [
+  { name: "once-claim", test: isOnceClaim },
+  { name: "fanout-poll", test: isFanoutPoll },
+  { name: "select-status", test: isSelectStatus },
+  { name: "select-pending", test: isSelectPending },
+  { name: "select-signal", test: isSelectSignal },
+  { name: "select-write", test: isSelectWrite },
+  { name: "select-id", test: isSelectId },
+  { name: "select-live", test: isSelectLive },
+  { name: "create-table", test: isCreateTable },
+  { name: "index-delivery-db-at", test: isDeliveryDbAtIndex },
+  { name: "create-index", test: isCreateIndex },
+  { name: "delete-broadcast-ttl", test: isBroadcastTtlDelete },
+  { name: "delete-live", test: isDeleteLive },
+  { name: "delete-dead", test: isDeleteDead },
+  { name: "insert-db-at", test: isInsertDbAt },
+  { name: "insert-message", test: isInsertMessage },
+  { name: "insert-write", test: isInsertWrite },
+  { name: "backfill-db-at", test: isBackfillDbAt },
+  { name: "update-by-id", test: isUpdateById },
+  { name: "alter-add-column", test: isAlterAddColumn },
+];
+
+/**
+ * In-memory fake branches whose predicates match `sql`.
+ *
+ * Broadcast/live statements must match exactly one branch so a broader
+ * regex cannot swallow them.
+ *
+ * @param sql - Statement text
+ */
+export function postgresSignalFakeBranches(sql: string): readonly string[] {
+  const text = sql.trim();
+  const names: string[] = [];
+  for (const branch of POSTGRES_SIGNAL_FAKE_BRANCHES) {
+    if (branch.test(text)) names.push(branch.name);
+  }
+  return names;
+}
+
+function fieldText(value: unknown, fallback: string): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+function msgRowFromFields(row: Record<string, unknown>): MsgRow {
+  const orderingKey = row.ordering_key;
+  const parentRunId = row.parent_run_id;
+  return {
+    id: fieldText(row.id, ""),
+    signal: fieldText(row.signal, ""),
+    payload: fieldText(row.payload, "null"),
+    ordering_key:
+      orderingKey === undefined || orderingKey === null ? null : fieldText(orderingKey, ""),
+    delivery: row.delivery as SignalDelivery,
+    attempts: Number(row.attempts ?? 0),
+    failures: fieldText(row.failures, "[]"),
+    created_at: Number(row.created_at),
+    available_at: Number(row.available_at),
+    status: (row.status as MsgRow["status"]) ?? "pending",
+    locked_by: (row.locked_by as string | null) ?? null,
+    lease_expires_at:
+      row.lease_expires_at === undefined || row.lease_expires_at === null
+        ? null
+        : Number(row.lease_expires_at),
+    delivered_to: fieldText(row.delivered_to, "[]"),
+    parent_run_id:
+      parentRunId === undefined || parentRunId === null ? null : fieldText(parentRunId, ""),
+    db_at: row.db_at === undefined || row.db_at === null ? null : Number(row.db_at),
+  };
+}
+
 /**
  * In-memory Postgres-protocol fake with transactions, SKIP LOCKED, LISTEN/NOTIFY.
  */
@@ -97,6 +310,7 @@ export function createPostgresSignalFake(options?: {
   /** Force-kill mid-transaction (drops uncommitted state). */
   killActiveTransaction(): void;
 } {
+  const clock = options?.now ?? (() => Date.now());
   const listeners = new Map<string, Set<(payload: string) => void>>();
 
   type State = {
@@ -123,6 +337,7 @@ export function createPostgresSignalFake(options?: {
         ordering_key: m.ordering_key ?? null,
         lease_expires_at: m.lease_expires_at ?? null,
         parent_run_id: m.parent_run_id ?? null,
+        db_at: m.db_at ?? null,
       })),
       writes: new Map(snap.writes),
     };
@@ -175,11 +390,7 @@ export function createPostgresSignalFake(options?: {
 
       // Claim: SELECT … FOR UPDATE SKIP LOCKED (pending or lease-expired inflight),
       // with per-key serialization when ordering_key is set.
-      const isOnceClaim =
-        /FOR\s+UPDATE\s+SKIP\s+LOCKED/i.test(text) &&
-        /oke_signal_messages/i.test(text) &&
-        /delivery\s*=\s*'once'/i.test(text);
-      if (isOnceClaim) {
+      if (isOnceClaim(text)) {
         const signal = String(params[0]);
         const t = Number(params[1]);
         const leaseCutoff = Number(params[2]);
@@ -213,52 +424,47 @@ export function createPostgresSignalFake(options?: {
         return [{ ...row }];
       }
 
-      const selMsg =
-        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+status\s*=\s*\?\s*$/i.exec(
-          text,
+      // Before broader SELECTs: poll reads db_at and the database clock together.
+      if (isFanoutPoll(text)) {
+        const lower = Number(params[0]);
+        const dbNow = clock();
+        const matched = state.messages.filter(
+          (m) =>
+            (m.delivery === "broadcast" || m.delivery === "live") &&
+            m.db_at != null &&
+            m.db_at >= lower,
         );
-      if (selMsg) {
+        if (matched.length === 0) return [{ db_now: dbNow }];
+        return matched.map((m) => ({ ...m, db_now: dbNow }));
+      }
+
+      if (isSelectStatus(text)) {
         return state.messages
           .filter((m) => m.signal === params[0] && m.status === params[1])
           .map((m) => ({ ...m }));
       }
 
-      const selPending =
-        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+status\s+IN\s*\('pending',\s*'inflight'\)\s*$/i.exec(
-          text,
-        );
-      if (selPending) {
+      if (isSelectPending(text)) {
         return state.messages
           .filter((m) => m.status === "pending" || m.status === "inflight")
           .map((m) => ({ ...m }));
       }
 
-      const selAll =
-        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s*$/i.exec(text);
-      if (selAll) {
+      if (isSelectSignal(text)) {
         return state.messages.filter((m) => m.signal === params[0]).map((m) => ({ ...m }));
       }
 
-      const selWrite =
-        /^SELECT\s+value\s+FROM\s+oke_signal_writes\s+WHERE\s+key\s*=\s*\?\s*$/i.exec(text);
-      if (selWrite) {
+      if (isSelectWrite(text)) {
         const v = state.writes.get(String(params[0]));
         if (v === undefined) return [];
         return [{ value: JSON.stringify(v) }];
       }
 
-      const byId = /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s*$/i.exec(
-        text,
-      );
-      if (byId) {
+      if (isSelectId(text)) {
         return state.messages.filter((m) => m.id === params[0]).map((m) => ({ ...m }));
       }
 
-      const selLive =
-        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+delivery\s*=\s*'live'\s+ORDER\s+BY\s+created_at\s+ASC\s*$/i.exec(
-          text,
-        );
-      if (selLive) {
+      if (isSelectLive(text)) {
         return state.messages
           .filter((m) => m.signal === params[0] && m.delivery === "live")
           .map((m) => ({ ...m }));
@@ -271,14 +477,25 @@ export function createPostgresSignalFake(options?: {
       const text = sql.trim();
       const state = view();
 
-      if (/^CREATE\s+TABLE/i.test(text)) return { changes: 0 };
-      if (/^CREATE\s+INDEX/i.test(text)) return { changes: 0 };
+      if (isCreateTable(text)) return { changes: 0 };
+      // Dedicated index branch before the broader CREATE INDEX match.
+      if (isDeliveryDbAtIndex(text)) return { changes: 0 };
+      if (isCreateIndex(text)) return { changes: 0 };
 
-      const delLive =
-        /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+delivery\s*=\s*'live'\s*$/i.exec(
-          text,
-        );
-      if (delLive) {
+      if (isBroadcastTtlDelete(text)) {
+        const cutoff = Number(params[0]);
+        let changes = 0;
+        for (let i = state.messages.length - 1; i >= 0; i--) {
+          const m = state.messages[i]!;
+          if (m.delivery === "broadcast" && m.db_at != null && m.db_at < cutoff) {
+            state.messages.splice(i, 1);
+            changes += 1;
+          }
+        }
+        return { changes };
+      }
+
+      if (isDeleteLive(text)) {
         let changes = 0;
         for (let i = state.messages.length - 1; i >= 0; i--) {
           const m = state.messages[i]!;
@@ -290,11 +507,7 @@ export function createPostgresSignalFake(options?: {
         return { changes };
       }
 
-      const delDead =
-        /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+signal\s*=\s*\?\s+AND\s+status\s*=\s*'dead'\s*$/i.exec(
-          text,
-        );
-      if (delDead) {
+      if (isDeleteDead(text)) {
         let changes = 0;
         for (let i = state.messages.length - 1; i >= 0; i--) {
           const m = state.messages[i]!;
@@ -306,54 +519,60 @@ export function createPostgresSignalFake(options?: {
         return { changes };
       }
 
-      const insertMsg =
-        /^INSERT\s+INTO\s+oke_signal_messages\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*$/i.exec(text);
+      // Before the generic INSERT: `db_at` is `clock_timestamp()`, not a placeholder.
+      if (isInsertDbAt(text)) {
+        const head =
+          /^INSERT\s+INTO\s+oke_signal_messages\s*\(([^)]+)\)\s*VALUES\s*\((.*)\)\s*$/i.exec(text);
+        if (!head) throw new Error(`postgres signal fake: unsupported exec: ${sql}`);
+        const cols = head[1]!.split(",").map((c) => c.trim());
+        const fields: Record<string, unknown> = {};
+        let pi = 0;
+        for (const col of cols) {
+          if (col === "db_at") {
+            fields.db_at = clock();
+            continue;
+          }
+          fields[col] = params[pi++];
+        }
+        state.messages.push(msgRowFromFields(fields));
+        return { changes: 1 };
+      }
+
+      const insertMsg = isInsertMessage(text)
+        ? /^INSERT\s+INTO\s+oke_signal_messages\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*$/i.exec(
+            text,
+          )
+        : null;
       if (insertMsg) {
         const cols = insertMsg[1]!.split(",").map((c) => c.trim());
         const row: Record<string, unknown> = {};
         cols.forEach((c, i) => {
           row[c] = params[i];
         });
-        state.messages.push({
-          id: String(row.id),
-          signal: String(row.signal),
-          payload: String(row.payload),
-          ordering_key:
-            row.ordering_key === undefined || row.ordering_key === null
-              ? null
-              : String(row.ordering_key),
-          delivery: row.delivery as SignalDelivery,
-          attempts: Number(row.attempts ?? 0),
-          failures: String(row.failures ?? "[]"),
-          created_at: Number(row.created_at),
-          available_at: Number(row.available_at),
-          status: (row.status as MsgRow["status"]) ?? "pending",
-          locked_by: (row.locked_by as string | null) ?? null,
-          lease_expires_at:
-            row.lease_expires_at === undefined || row.lease_expires_at === null
-              ? null
-              : Number(row.lease_expires_at),
-          delivered_to: String(row.delivered_to ?? "[]"),
-          parent_run_id:
-            row.parent_run_id === undefined || row.parent_run_id === null
-              ? null
-              : String(row.parent_run_id),
-        });
+        state.messages.push(msgRowFromFields(row));
         return { changes: 1 };
       }
 
-      const insertWrite =
-        /^INSERT\s+INTO\s+oke_signal_writes\s*\(key,\s*value\)\s*VALUES\s*\(\?,\s*\?\)\s*$/i.exec(
-          text,
-        );
-      if (insertWrite) {
+      if (isInsertWrite(text)) {
         state.writes.set(String(params[0]), JSON.parse(String(params[1])));
         return { changes: 1 };
       }
 
-      const upd = /^UPDATE\s+oke_signal_messages\s+SET\s+(.+)\s+WHERE\s+id\s*=\s*\?\s*$/i.exec(
-        text,
-      );
+      // Before the generic UPDATE: backfill `db_at` from `created_at`.
+      if (isBackfillDbAt(text)) {
+        let changes = 0;
+        for (const m of state.messages) {
+          if (m.db_at == null) {
+            m.db_at = m.created_at;
+            changes += 1;
+          }
+        }
+        return { changes };
+      }
+
+      const upd = isUpdateById(text)
+        ? /^UPDATE\s+oke_signal_messages\s+SET\s+(.+)\s+WHERE\s+id\s*=\s*\?\s*$/i.exec(text)
+        : null;
       if (upd) {
         const id = String(params[params.length - 1]);
         const row = state.messages.find((m) => m.id === id);
@@ -377,7 +596,7 @@ export function createPostgresSignalFake(options?: {
         return { changes: 1 };
       }
 
-      if (/^ALTER\s+TABLE\s+oke_signal_messages\s+ADD\s+COLUMN/i.test(text)) {
+      if (isAlterAddColumn(text)) {
         return { changes: 0 };
       }
 
@@ -444,7 +663,8 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     locked_by TEXT,
     lease_expires_at BIGINT,
     delivered_to TEXT,
-    parent_run_id TEXT
+    parent_run_id TEXT,
+    db_at BIGINT
   )`);
   // Existing tables created before leases / keys: add columns in place.
   try {
@@ -475,6 +695,21 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
   } catch {
     /* fake / older engines without IF NOT EXISTS — ignore */
   }
+  try {
+    await sql.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS db_at BIGINT`);
+  } catch {
+    /* fake / older engines without IF NOT EXISTS — ignore */
+  }
+  try {
+    await sql.exec(POSTGRES_SIGNAL_FANOUT_SQL.backfill);
+  } catch {
+    /* fake / older engines — ignore */
+  }
+  try {
+    await sql.exec(POSTGRES_SIGNAL_FANOUT_SQL.index);
+  } catch {
+    /* fake / older engines without IF NOT EXISTS — ignore */
+  }
 }
 
 function rowToMessage(row: Record<string, unknown>): SignalMessage {
@@ -502,14 +737,30 @@ function rowToMessage(row: Record<string, unknown>): SignalMessage {
 }
 
 /**
+ * Options for {@link openPostgresSignal}.
+ */
+export interface PostgresSignalOpenOptions extends SignalOpenOptions {
+  /**
+   * Overlap window (ms) for broadcast and live polls.
+   * Rows with `db_at >= cursor - lagMs` are re-read and deduped by id.
+   * Defaults to {@link POSTGRES_SIGNAL_DEFAULT_LAG_MS}.
+   */
+  readonly lagMs?: number;
+}
+
+/**
  * Open a postgres-backed signal bus.
  *
- * @param options - Declarations / sql fake / clock
+ * @param options - Declarations / sql fake / clock / lag window
  */
-export async function openPostgresSignal(options: SignalOpenOptions): Promise<SignalBus> {
+export async function openPostgresSignal(options: PostgresSignalOpenOptions): Promise<SignalBus> {
   const now = options.now ?? (() => Date.now());
   const signals = options.signals;
   const leaseMs = options.leaseMs ?? SIGNAL_DEFAULT_LEASE_MS;
+  const lagMs = options.lagMs ?? POSTGRES_SIGNAL_DEFAULT_LAG_MS;
+  // Broadcast retention stays strictly longer than the overlap window.
+  // Live retention stays on pruneLive (default unbounded).
+  const broadcastTtlMs = lagMs + 1_000;
   const sql =
     (options.sql as PostgresSignalSql | undefined) ??
     createPostgresSignalFake({
@@ -521,6 +772,37 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     await (sql as { _ensureReady: () => Promise<void> })._ensureReady();
   }
   await ensureSchema(sql);
+
+  // Best-effort within lagMs. A transaction that commits more than lagMs
+  // after its db_at can be missed. Not gap-free ordering. No persisted cursor table.
+  let fanoutCursor = 0;
+  const fanoutSeen = new Map<string, number>();
+
+  async function readFanout(lower: number): Promise<{
+    rows: Record<string, unknown>[];
+    dbNow: number;
+  }> {
+    const raw = await sql.query(POSTGRES_SIGNAL_FANOUT_SQL.poll, [lower]);
+    let dbNow = Number.NaN;
+    const rows: Record<string, unknown>[] = [];
+    for (const row of raw) {
+      if (Number.isNaN(dbNow)) dbNow = Number(row.db_now);
+      if (row.id == null) continue;
+      rows.push(row);
+    }
+    if (!Number.isFinite(dbNow)) {
+      throw new Error("postgres signal: fanout poll did not return db_now");
+    }
+    return { rows, dbNow };
+  }
+
+  // Start at the current database time so messages committed while this
+  // instance was offline are already behind the cursor.
+  const bootSnap = await readFanout(Number.MIN_SAFE_INTEGER);
+  fanoutCursor = bootSnap.dbNow;
+  for (const row of bootSnap.rows) {
+    fanoutSeen.set(String(row.id), bootSnap.dbNow);
+  }
 
   const consumers: Array<{
     signal: string;
@@ -619,25 +901,22 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       typeof options?.parentRunId === "string" && options.parentRunId.length > 0
         ? options.parentRunId
         : null;
-    await tx.exec(
-      `INSERT INTO oke_signal_messages (id, signal, payload, ordering_key, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to, parent_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        okid(),
-        signal,
-        JSON.stringify(payload ?? null),
-        orderingKey,
-        decl.delivery,
-        0,
-        "[]",
-        t,
-        t,
-        "pending",
-        null,
-        null,
-        "[]",
-        parentRunId,
-      ],
-    );
+    await tx.exec(POSTGRES_SIGNAL_FANOUT_SQL.insert, [
+      okid(),
+      signal,
+      JSON.stringify(payload ?? null),
+      orderingKey,
+      decl.delivery,
+      0,
+      "[]",
+      t,
+      t,
+      "pending",
+      null,
+      null,
+      "[]",
+      parentRunId,
+    ]);
   }
 
   async function begin(): Promise<SignalTransaction> {
@@ -867,87 +1146,64 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     return progress;
   }
 
-  async function drainBroadcastPass(): Promise<boolean> {
+  async function drainFanoutPass(): Promise<boolean> {
     let progress = false;
-    for (const consumer of consumers) {
-      const decl = signals.get(consumer.signal);
-      if (decl?.delivery !== "broadcast") continue;
-      const rows = await sql.query(`SELECT * FROM oke_signal_messages WHERE signal = ?`, [
-        consumer.signal,
-      ]);
-      for (const row of rows) {
-        if (row.status === "dead" || row.status === "delivered") continue;
-        if (row.delivery !== "broadcast") continue;
-        // Re-read delivered_to so concurrent drain (NOTIFY) cannot double-deliver.
-        const fresh = await sql.query(`SELECT * FROM oke_signal_messages WHERE signal = ?`, [
-          consumer.signal,
-        ]);
-        const current = fresh.find((r) => r.id === row.id);
-        if (!current || current.status === "delivered") continue;
-        const deliveredTo = new Set(JSON.parse(String(current.delivered_to ?? "[]")) as string[]);
-        if (deliveredTo.has(consumer.subscriberId)) continue;
-        // Claim this subscriber slot before invoking the handler.
-        deliveredTo.add(consumer.subscriberId);
-        const subs = consumers.filter((c) => c.signal === consumer.signal);
-        const status = subs.every((s) => deliveredTo.has(s.subscriberId)) ? "delivered" : "pending";
-        await sql.exec(
-          `UPDATE oke_signal_messages SET delivered_to = ?, status = ?, attempts = ? WHERE id = ?`,
-          [JSON.stringify([...deliveredTo]), status, Number(current.attempts) + 1, row.id],
-        );
+    const snap = await readFanout(fanoutCursor - lagMs);
+    const liveSignals = new Set<string>();
+    for (const row of snap.rows) {
+      const id = String(row.id);
+      if (fanoutSeen.has(id)) continue;
+      const delivery = String(row.delivery);
+      if (delivery === "broadcast") {
+        const name = String(row.signal);
+        const subs = consumers.filter((c) => c.signal === name);
+        if (subs.length === 0) continue;
+        fanoutSeen.set(id, snap.dbNow);
         progress = true;
-        const msg = rowToMessage(current);
-        try {
-          await consumer.handler(msg);
-          noteDelivered();
-        } catch (err) {
-          const failures = [...msg.failures, failureFromError(err, Number(current.attempts) + 1)];
-          const key = `${consumer.signal}::${consumer.subscriberId}`;
-          subscriberErrors.set(key, (subscriberErrors.get(key) ?? 0) + 1);
-          await sql.exec(`UPDATE oke_signal_messages SET failures = ? WHERE id = ?`, [
-            JSON.stringify(failures),
-            row.id,
-          ]);
+        const msg = rowToMessage(row);
+        for (const consumer of subs) {
+          try {
+            await consumer.handler(msg);
+            noteDelivered();
+          } catch (err) {
+            const failures = [...msg.failures, failureFromError(err, msg.attempts + 1)];
+            const key = `${name}::${consumer.subscriberId}`;
+            subscriberErrors.set(key, (subscriberErrors.get(key) ?? 0) + 1);
+            await sql.exec(`UPDATE oke_signal_messages SET failures = ? WHERE id = ?`, [
+              JSON.stringify(failures),
+              id,
+            ]);
+          }
         }
+      } else if (delivery === "live") {
+        fanoutSeen.set(id, snap.dbNow);
+        progress = true;
+        const name = String(row.signal);
+        liveSignals.add(name);
+        const handlers = liveHandlers.get(name);
+        const payload = JSON.parse(String(row.payload));
+        if (handlers) {
+          const event: LiveEvent = { id, payload };
+          for (const h of handlers) await h(event);
+        }
+        let list = recentLive.get(name);
+        if (!list) {
+          list = [];
+          recentLive.set(name, list);
+        }
+        list.push(payload);
+        while (list.length > 50) list.shift();
+        noteDelivered();
       }
     }
-    return progress;
-  }
-
-  async function drainLivePass(): Promise<boolean> {
-    let progress = false;
-    const pending = await sql.query(
-      `SELECT * FROM oke_signal_messages WHERE status IN ('pending', 'inflight')`,
-    );
-    for (const row of pending) {
-      if (row.delivery !== "live") continue;
-      progress = true;
-      const handlers = liveHandlers.get(String(row.signal));
-      const payload = JSON.parse(String(row.payload));
-      if (handlers) {
-        const event: LiveEvent = { id: String(row.id), payload };
-        for (const h of handlers) await h(event);
-      }
-      const sig = String(row.signal);
-      let list = recentLive.get(sig);
-      if (!list) {
-        list = [];
-        recentLive.set(sig, list);
-      }
-      list.push(payload);
-      while (list.length > 50) list.shift();
-      noteDelivered();
-      await sql.exec(
-        `UPDATE oke_signal_messages SET status = 'delivered', locked_by = NULL, lease_expires_at = NULL WHERE id = ?`,
-        [row.id],
-      );
+    const pruneBefore = snap.dbNow - lagMs;
+    for (const [id, seenAt] of fanoutSeen) {
+      if (seenAt < pruneBefore) fanoutSeen.delete(id);
     }
-    const pruned = new Set<string>();
-    for (const row of pending) {
-      if (row.delivery !== "live") continue;
-      const sig = String(row.signal);
-      if (pruned.has(sig)) continue;
-      pruned.add(sig);
-      await pruneLive(sig);
+    fanoutCursor = snap.dbNow;
+    await sql.exec(BROADCAST_TTL_DELETE_SQL, [snap.dbNow - broadcastTtlMs]);
+    for (const name of liveSignals) {
+      await pruneLive(name);
     }
     return progress;
   }
@@ -960,9 +1216,8 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     draining = (async () => {
       for (let i = 0; i < 1000; i++) {
         const a = await drainOncePass();
-        const b = await drainBroadcastPass();
-        const c = await drainLivePass();
-        if (!a && !b && !c) break;
+        const b = await drainFanoutPass();
+        if (!a && !b) break;
       }
     })();
     try {
@@ -1012,22 +1267,20 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       }
     }
     const subs = consumers.filter((c) => c.signal === name);
-    const subscribers = await Promise.all(
-      subs.map(async (c) => {
-        let lag = 0;
-        for (const row of rows) {
-          if (row.delivery !== "broadcast") continue;
-          if (row.status === "dead" || row.status === "delivered") continue;
-          const deliveredTo = new Set(JSON.parse(String(row.delivered_to ?? "[]")) as string[]);
-          if (!deliveredTo.has(c.subscriberId)) lag += 1;
-        }
-        return {
-          id: c.subscriberId,
-          lag,
-          errorCount: subscriberErrors.get(`${name}::${c.subscriberId}`) ?? 0,
-        };
-      }),
-    );
+    const subscribers = subs.map((c) => {
+      let lag = 0;
+      for (const row of rows) {
+        if (row.delivery !== "broadcast") continue;
+        if (row.status === "dead") continue;
+        if (fanoutSeen.has(String(row.id))) continue;
+        lag += 1;
+      }
+      return {
+        id: c.subscriberId,
+        lag,
+        errorCount: subscriberErrors.get(`${name}::${c.subscriberId}`) ?? 0,
+      };
+    });
     return {
       signal: name,
       delivery: decl.delivery,

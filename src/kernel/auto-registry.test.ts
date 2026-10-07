@@ -285,7 +285,11 @@ describe("oke() auto-registry — stores/secrets/signals/clocks/gates/channel.te
     });
 
     const res = await app.fetch(
-      new Request("http://127.0.0.1/ai-ping", { method: "POST", body: "{}" }),
+      new Request("http://127.0.0.1/ai-ping", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
     );
     expect(res.status).toBe(200);
     const json = (await res.json()) as { data: { summary: string } };

@@ -113,16 +113,16 @@ export function sqlErrorToFailure(
 }
 
 function mapConstraint(err: unknown): SqlFailure | undefined {
-  const code = sqlCode(err);
+  const state = sqlState(err);
   const names = publicNames(err);
 
-  if (CONFLICT_STATE.has(code)) return fail.conflict(names);
-  if (FOREIGN_KEY_STATE.has(code)) return fail.foreignKey(names);
-  if (NOT_NULL_STATE.has(code)) return fail.database({ reason: "not_null", ...names });
-  if (CHECK_STATE.has(code)) return fail.database({ reason: "check", ...names });
-  if (TOO_LONG_STATE.has(code)) return fail.database({ reason: "too_long", ...names });
-  if (OUT_OF_RANGE_STATE.has(code)) return fail.database({ reason: "out_of_range", ...names });
-  if (INVALID_STATE.has(code)) return fail.database({ reason: "invalid", ...names });
+  if (CONFLICT_STATE.has(state)) return fail.conflict(names);
+  if (FOREIGN_KEY_STATE.has(state)) return fail.foreignKey(names);
+  if (NOT_NULL_STATE.has(state)) return fail.database({ reason: "not_null", ...names });
+  if (CHECK_STATE.has(state)) return fail.database({ reason: "check", ...names });
+  if (TOO_LONG_STATE.has(state)) return fail.database({ reason: "too_long", ...names });
+  if (OUT_OF_RANGE_STATE.has(state)) return fail.database({ reason: "out_of_range", ...names });
+  if (INVALID_STATE.has(state)) return fail.database({ reason: "invalid", ...names });
 
   const sqlite = sqliteConstraint(err);
   if (sqlite === "unique") return fail.conflict(names);
@@ -134,8 +134,8 @@ function mapConstraint(err: unknown): SqlFailure | undefined {
 }
 
 function retrySignal(err: unknown): boolean {
-  const code = sqlCode(err);
-  if (RETRY_STATE.has(code)) return true;
+  const state = sqlState(err);
+  if (RETRY_STATE.has(state)) return true;
   const errno = sqlErrno(err);
   if (errno !== undefined && SQLITE_RETRY_ERRNO.has(errno)) return true;
   const named = sqlCode(err);
@@ -147,11 +147,14 @@ function retrySignal(err: unknown): boolean {
 
 function isConnectionUnavailable(err: unknown): boolean {
   const e = err as SqlErrShape;
+  const state = sqlState(err);
+  if (state.length > 0) {
+    // A SQLSTATE decides. `ERR_POSTGRES_SERVER_ERROR` is not unavailable on its own.
+    if (state.startsWith("08") || state.startsWith("53")) return true;
+    return UNAVAILABLE_STATE.has(state);
+  }
   const code = sqlCode(err);
-  if (code.startsWith("08")) return true;
-  if (code.startsWith("53")) return true;
-  if (UNAVAILABLE_STATE.has(code)) return true;
-  if (code.startsWith("ERR_POSTGRES_")) return true;
+  if (code.startsWith("ERR_POSTGRES_CONNECTION_")) return true;
   if (code === "ERR_OKE_POSTGRES_PAUSED") return true;
   if (typeof e.name === "string" && e.name === "SharedPostgresPausedError") return true;
   const errno = sqlErrno(err);
@@ -166,12 +169,31 @@ function isConnectionUnavailable(err: unknown): boolean {
 
 function looksLikeSqlError(err: unknown): boolean {
   const e = err as SqlErrShape;
+  if (sqlState(err).length > 0) return true;
   const code = sqlCode(err);
-  if (/^[0-9A-Z]{5}$/.test(code)) return true;
   if (code.startsWith("SQLITE_")) return true;
   if (typeof e.name === "string" && /postgres|sqlite|pglite|libsql/i.test(e.name)) return true;
   const message = typeof e.message === "string" ? e.message : "";
   return /sqlstate|constraint|syntax error/i.test(message);
+}
+
+/** Five-character Postgres SQLSTATE (`23505`). */
+const SQLSTATE_RE = /^[0-9A-Z]{5}$/;
+
+/**
+ * Postgres SQLSTATE on a driver error.
+ *
+ * A five-character `code` wins. Otherwise a five-character string `errno`
+ * (Bun puts `ERR_POSTGRES_SERVER_ERROR` on `code` and the SQLSTATE on `errno`).
+ *
+ * @param err - Caught driver value
+ */
+function sqlState(err: unknown): string {
+  if (!err || typeof err !== "object") return "";
+  const e = err as SqlErrShape;
+  if (typeof e.code === "string" && SQLSTATE_RE.test(e.code)) return e.code;
+  if (typeof e.errno === "string" && SQLSTATE_RE.test(e.errno)) return e.errno;
+  return "";
 }
 
 function sqlCode(err: unknown): string {
@@ -180,6 +202,7 @@ function sqlCode(err: unknown): string {
   return typeof code === "string" ? code : "";
 }
 
+/** Numeric errno only (bun:sqlite). String errno is a SQLSTATE — see {@link sqlState}. */
 function sqlErrno(err: unknown): number | undefined {
   if (!err || typeof err !== "object") return undefined;
   const errno = (err as SqlErrShape).errno;
@@ -193,7 +216,7 @@ function publicNames(err: unknown): {
   readonly column?: string;
 } {
   const e = err as SqlErrShape;
-  const sqlstate = sqlCode(err);
+  const sqlstate = sqlState(err);
   const constraint = firstString(e.constraint, e.constraint_name);
   const table = firstString(e.table, e.table_name);
   const column = firstString(e.column, e.column_name);

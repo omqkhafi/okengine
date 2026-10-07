@@ -237,6 +237,22 @@ Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated t
 | `console` | `6533`  | Console |
 | `mcp`     | `6535`  | MCP     |
 
+## App options
+
+These sit on `oke({ ... })`, not in `oke.config.ts`.
+
+| Option               | Default   | Meaning                                                                                                                                                                     |
+| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codeVersion`        | unset     | Opt-in durable stamp `app:<version>`. Unset checks nothing. A stored `0.23.1`-style stamp is compatible and restamped. A different `app:` stamp fails the run with OKE1076. |
+| `maxRequestBodySize` | `1048576` | Body cap in bytes. A route `maxBodySize` overrides it. Bun's listen backstop uses the same number.                                                                          |
+| `cache.maxEntries`   | `10000`   | Auto-cache entry cap.                                                                                                                                                       |
+| `cache.defaultTtlMs` | `60000`   | Auto-cache TTL when the flow does not set `cache: "5m"`.                                                                                                                    |
+| `cache.auto`         | on        | `false` turns automatic caching off. A flow can still opt in.                                                                                                               |
+
+Postgres broadcast and live poll with `lagMs`, default `30000`. That window is best-effort, not a gap-free cursor.
+
+A write drops the auto-cache on every instance. With Redis configured, the notice is published on `oke:cache:invalidate`. Otherwise a Postgres app polls `oke_cache_invalidations`. One process does not broadcast.
+
 ## console
 
 | Option         | Type                                 | Default | Meaning                   |

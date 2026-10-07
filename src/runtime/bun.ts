@@ -149,6 +149,7 @@ export function serveBunHttp(options: {
   readonly fetch: (request: Request) => Response | Promise<Response>;
   readonly routes?: Record<string, MethodHandlers>;
   readonly id?: string;
+  readonly maxRequestBodySize?: number;
 }): ReturnType<typeof Bun.serve> {
   const fetch = holdSseIdle(
     typeof options.fetch === "function"
@@ -158,6 +159,7 @@ export function serveBunHttp(options: {
   const base = {
     port: options.port,
     hostname: options.hostname,
+    maxRequestBodySize: options.maxRequestBodySize ?? 1_048_576,
     fetch,
     ...(options.id !== undefined ? { id: options.id } : {}),
   };
@@ -185,6 +187,9 @@ function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
     fetch: fetchHandler,
     routes,
     ...(options?.id !== undefined ? { id: options.id } : {}),
+    ...(options?.maxRequestBodySize !== undefined
+      ? { maxRequestBodySize: options.maxRequestBodySize }
+      : {}),
   });
 
   const closeIdle = (

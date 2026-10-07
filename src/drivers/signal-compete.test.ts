@@ -13,6 +13,7 @@ import {
   createBunSignalRedisClient,
   createSignalRedisFake,
   openRedisSignal,
+  SIGNAL_REDIS_MIN_IDLE_MS,
 } from "./signal-redis.ts";
 
 function decls(name: string, retries = 3) {
@@ -88,9 +89,11 @@ describe("redis streams competing consumers", () => {
   });
 
   test("another consumer reclaims an unacked entry", async () => {
-    const redis = createSignalRedisFake();
+    let nowMs = 0;
+    const now = () => nowMs;
+    const redis = createSignalRedisFake({ now });
     const name = "handoff";
-    const shared = { signals: decls(name, 3), redis, compete: true as const };
+    const shared = { signals: decls(name, 3), redis, compete: true as const, now };
     const a = await openRedisSignal({ ...shared, consumerId: "a" });
     const b = await openRedisSignal({ ...shared, consumerId: "b" });
     let aCalls = 0;
@@ -104,6 +107,7 @@ describe("redis streams competing consumers", () => {
     });
     await a.emit(name, { id: "1" });
     await a.drain();
+    nowMs += SIGNAL_REDIS_MIN_IDLE_MS;
     await b.drain();
     expect(aCalls).toBe(1);
     expect(got).toEqual(["b"]);

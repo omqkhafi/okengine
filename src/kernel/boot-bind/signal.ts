@@ -12,7 +12,11 @@ import {
 import type { PostgresClientLike } from "../../drivers/postgres.ts";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import type { PostgresSignalSql } from "../../drivers/signal-postgres.ts";
-import { postgresSignalDriver } from "../../drivers/signal-postgres.ts";
+import {
+  POSTGRES_SIGNAL_DEFAULT_LAG_MS,
+  openPostgresSignal,
+  postgresSignalDriver,
+} from "../../drivers/signal-postgres.ts";
 import { createBunSignalRedisClient, redisSignalDriver } from "../../drivers/signal-redis.ts";
 import type { SignalRedisClientLike } from "../../drivers/signal-types.ts";
 import { createSignalRuntime, type SignalRuntime } from "../../elements/signal.ts";
@@ -123,7 +127,14 @@ export async function bindSignal(
         );
       }
       signal = createSignalRuntime({
-        driver: postgresSignalDriver,
+        driver: {
+          id: postgresSignalDriver.id,
+          open: (openOptions) =>
+            openPostgresSignal({
+              ...openOptions,
+              lagMs: injected ? undefined : POSTGRES_SIGNAL_DEFAULT_LAG_MS,
+            }),
+        },
         now,
         sql: injected ?? asSignalSql(sharedPostgresClient(url)),
         pollMs: injected ? undefined : 1_000,

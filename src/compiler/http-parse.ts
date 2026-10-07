@@ -77,19 +77,154 @@ export function pathParamNames(path: string): string[] {
   return names;
 }
 
-/**
- * Parse JSON / text body. Empty body → `undefined`.
- *
- * @param request - Incoming request
- */
-export async function parseBody(request: Request): Promise<unknown> {
+/** Default request body cap (1 MiB). */
+export const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+
+/** A body the route refused before the flow ran. */
+export class HttpBodyRejected extends Error {
+  /** Builtin failure code. */
+  readonly code: "PayloadTooLarge" | "UnsupportedMediaType" | "InvalidQuery";
+  /** `InvalidQuery` reason, when set. */
+  readonly reason?: string;
+
+  /**
+   * @param code - Builtin failure code
+   * @param reason - Optional InvalidQuery reason
+   */
+  constructor(code: "PayloadTooLarge" | "UnsupportedMediaType" | "InvalidQuery", reason?: string) {
+    super(code);
+    this.name = "HttpBodyRejected";
+    this.code = code;
+    if (reason !== undefined) this.reason = reason;
+  }
+}
+
+/** Per-route body policy. */
+export interface ParseBodyOptions {
+  /** Byte cap. Default {@link DEFAULT_MAX_BODY_BYTES}. */
+  readonly maxBytes?: number;
+  /** Default `required`. `any` keeps today's parse-or-raw-string behavior. */
+  readonly jsonContentType?: "required" | "any";
+}
+
+function mediaType(request: Request): string {
+  const raw = request.headers.get("content-type");
+  if (!raw) return "";
+  return (raw.split(";")[0] ?? "").trim().toLowerCase();
+}
+
+function dropProto(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => dropProto(item));
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (key === "__proto__") continue;
+      out[key] = dropProto(item);
+    }
+    return out;
+  }
+  return value;
+}
+
+async function readDeclared(request: Request, max: number): Promise<string> {
   const text = await request.text();
-  if (text.length === 0) return undefined;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
+  if (byteLength(text) > max) throw new HttpBodyRejected("PayloadTooLarge");
+  return text;
+}
+
+function byteLength(text: string): number {
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) > 0x7f) return new TextEncoder().encode(text).byteLength;
+  }
+  return text.length;
+}
+
+async function readLimited(request: Request, max: number): Promise<string> {
+  const body = request.body;
+  if (!body) {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > max)
+      throw new HttpBodyRejected("PayloadTooLarge");
     return text;
   }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const step = await reader.read();
+    if (step.done) break;
+    total += step.value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      throw new HttpBodyRejected("PayloadTooLarge");
+    }
+    chunks.push(step.value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Parse a request body.
+ *
+ * Empty bodies are `undefined`. JSON content types must parse. A JSON-shaped
+ * body sent as text, form, or with no content type is 415 unless the route
+ * opts out. `__proto__` keys are dropped.
+ *
+ * @param request - Incoming request
+ * @param options - Cap and content-type policy
+ */
+export async function parseBody(request: Request, options?: ParseBodyOptions): Promise<unknown> {
+  const max = options?.maxBytes ?? DEFAULT_MAX_BODY_BYTES;
+  const declared = request.headers.get("content-length");
+  if (declared !== null && declared !== "" && Number(declared) > max) {
+    throw new HttpBodyRejected("PayloadTooLarge");
+  }
+  // A declared length inside the cap is buffered by the platform. Check the
+  // real byte length afterwards so an understated Content-Length is still 413.
+  // A missing length is counted while streaming and cancelled at the cap.
+  const text =
+    declared !== null && declared !== "" && Number(declared) <= max
+      ? await readDeclared(request, max)
+      : await readLimited(request, max);
+  if (text.length === 0) return undefined;
+  const mt = mediaType(request);
+  const jsonType =
+    mt === "application/json" || (mt.endsWith("+json") && mt.length > "+json".length);
+  if (jsonType) {
+    try {
+      return dropProto(JSON.parse(text) as unknown);
+    } catch {
+      throw new HttpBodyRejected("InvalidQuery", "malformed_body");
+    }
+  }
+  if (options?.jsonContentType === "any") {
+    try {
+      return dropProto(JSON.parse(text) as unknown);
+    } catch {
+      return text;
+    }
+  }
+  const loose =
+    mt === "" ||
+    mt === "text/plain" ||
+    mt === "application/x-www-form-urlencoded" ||
+    mt === "multipart/form-data";
+  const trimmed = text.trim();
+  if (loose && (trimmed.startsWith("{") || trimmed.startsWith("["))) {
+    try {
+      JSON.parse(trimmed);
+      throw new HttpBodyRejected("UnsupportedMediaType");
+    } catch (err) {
+      if (err instanceof HttpBodyRejected) throw err;
+    }
+  }
+  return text;
 }
 
 /**
@@ -158,7 +293,11 @@ export function assembleInput(parts: InputParts): unknown {
 
   if (parts.body !== undefined) {
     if (typeof parts.body === "object" && parts.body !== null && !Array.isArray(parts.body)) {
-      Object.assign(out, parts.body as Record<string, unknown>);
+      const body = parts.body as Record<string, unknown>;
+      for (const [key, value] of Object.entries(body)) {
+        if (key === "__proto__") continue;
+        out[key] = value;
+      }
     } else {
       out.body = parts.body;
     }
@@ -188,6 +327,7 @@ export async function extractParts(
   request: Request,
   params: Readonly<Record<string, string>>,
   inference: ContextInference,
+  options?: { readonly body?: ParseBodyOptions },
 ): Promise<InputParts> {
   const parts: {
     params?: Record<string, string>;
@@ -201,7 +341,7 @@ export async function extractParts(
   if (inference.query) parts.query = parseQuery(request);
   if (inference.headers) parts.headers = parseHeaders(request);
   if (inference.cookie) parts.cookie = parseCookie(request);
-  if (inference.body) parts.body = await parseBody(request);
+  if (inference.body) parts.body = await parseBody(request, options?.body);
 
   return parts;
 }

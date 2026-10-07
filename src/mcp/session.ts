@@ -29,6 +29,13 @@ export interface McpRequester {
   readonly principalId: string;
   readonly plane: AuthPlane;
   readonly scopes: readonly string[];
+  /**
+   * Auth session id (`claims.sid`).
+   *
+   * This is not the MCP transport session id minted at `initialize`
+   * ({@link newMcpTransportSessionId}). Confirmation binds this sid:
+   * the requester and the issuer must be different auth sessions.
+   */
   readonly sessionId: string;
 }
 

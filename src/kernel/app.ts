@@ -8,6 +8,7 @@
 
 import { bindAgentApprovalFlows } from "../elements/ai/approval-http.ts";
 import { compileRoute } from "../compiler/dynamic.ts";
+import { HttpBodyRejected, parseBody, type ParseBodyOptions } from "../compiler/http-parse.ts";
 import type { CompiledRoute } from "../compiler/aot.ts";
 import { encodeExecuteResult, encodeFailure } from "../compiler/response.ts";
 import { validate } from "../validation/standard-schema.ts";
@@ -87,9 +88,12 @@ import {
   createJournal,
   createJournalSlot,
   createMemoryJournalStore,
+  clearJournalHeartbeats,
   hasJournalLease,
   isJournalLeaseBusy,
   isJournalSuspend,
+  isLostJournalLease,
+  JournalLeaseBusy,
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalSession,
   type JournalStore,
@@ -376,6 +380,10 @@ export interface OkeOptions {
    */
   readonly cache?: {
     readonly auto?: boolean;
+    /** Auto-cache entry cap. Default 10_000. */
+    readonly maxEntries?: number;
+    /** Auto-cache TTL when a flow sets none. Default 60_000. */
+    readonly defaultTtlMs?: number;
   };
   /** Channel runtime options. */
   readonly channel?: BootOptions["channel"];
@@ -398,6 +406,15 @@ export interface OkeOptions {
   readonly schedulerIntervalMs?: number;
   /** Durable-run lease duration ms (default 30_000). Forwarded to boot. */
   readonly journalLeaseMs?: number;
+  /** Request body cap in bytes. Default 1 MiB. A route `maxBodySize` overrides it. */
+  readonly maxRequestBodySize?: number;
+  /**
+   * Opt-in durable code version. Unset stamps nothing and checks nothing.
+   * When set, new runs are stamped `app:<version>`. A stored stamp without
+   * the `app:` prefix (0.23.1 and earlier) is treated as compatible and
+   * restamped. An `app:` stamp that differs fails the run with OKE1076.
+   */
+  readonly codeVersion?: string;
 }
 
 /** Readiness probe state — see `GET /_/ready`. */
@@ -803,6 +820,7 @@ function registerHttpRoute(
   smart: { add(method: string, path: string, value: Binding): void },
   compiled: WeakMap<Binding, CompiledRoute>,
   aot: boolean,
+  maxRequestBodySize?: number,
 ): void {
   const trigger = binding.trigger;
   if (trigger.kind !== "http") return;
@@ -834,7 +852,7 @@ function registerHttpRoute(
     seenLiveExposures.set(exposure, binding.flow.name);
   }
   smart.add(trigger.method, trigger.path, binding);
-  compiled.set(binding, compileHttpBinding(binding, aot));
+  compiled.set(binding, compileHttpBinding(binding, aot, maxRequestBodySize));
 }
 
 /**
@@ -1125,7 +1143,15 @@ export function oke(options: OkeOptions): OkeApp {
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
-      registerHttpRoute(b, seenHttpRoutes, seenLiveExposures, smart, compiled, aot);
+      registerHttpRoute(
+        b,
+        seenHttpRoutes,
+        seenLiveExposures,
+        smart,
+        compiled,
+        aot,
+        options.maxRequestBodySize,
+      );
     }
     if (b.trigger.kind === "mcp") {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
@@ -1148,7 +1174,15 @@ export function oke(options: OkeOptions): OkeApp {
     registerFlow(b.flow);
     if (b.trigger.kind === "http") {
       assertHttpBindingReady(b);
-      registerHttpRoute(b, seenHttpRoutes, seenLiveExposures, smart, compiled, aot);
+      registerHttpRoute(
+        b,
+        seenHttpRoutes,
+        seenLiveExposures,
+        smart,
+        compiled,
+        aot,
+        options.maxRequestBodySize,
+      );
     }
     if (b.trigger.kind === "mcp") {
       registerMcpTool(b, seenMcpTools, mcpToolsByName);
@@ -1400,6 +1434,7 @@ export function oke(options: OkeOptions): OkeApp {
           journalStore: store,
           runId,
           ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
+          ...(options.codeVersion ? { codeVersion: options.codeVersion } : {}),
           now,
           fx: {
             ...durableResumeFx(),
@@ -1422,7 +1457,13 @@ export function oke(options: OkeOptions): OkeApp {
         });
       } catch (err) {
         if (isJournalLeaseBusy(err)) return;
-        throw err;
+        console.warn(
+          JSON.stringify({
+            event: "journal.resume.failed",
+            runId,
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        );
       }
     } finally {
       inflightRuns.delete(runId);
@@ -1598,6 +1639,19 @@ export function oke(options: OkeOptions): OkeApp {
       startScheduler: overrides?.startScheduler ?? options.startScheduler,
       schedulerIntervalMs: overrides?.schedulerIntervalMs ?? options.schedulerIntervalMs,
       journalLeaseMs: overrides?.journalLeaseMs ?? options.journalLeaseMs,
+      codeVersion: overrides?.codeVersion ?? options.codeVersion,
+      ...(options.cache
+        ? {
+            cache: {
+              ...(options.cache.maxEntries !== undefined
+                ? { maxEntries: options.cache.maxEntries }
+                : {}),
+              ...(options.cache.defaultTtlMs !== undefined
+                ? { defaultTtlMs: options.cache.defaultTtlMs }
+                : {}),
+            },
+          }
+        : {}),
       bindings: adopted,
       flows: [...flowsByName.values()],
       onCronFire: overrides?.onCronFire ?? handleCronFire,
@@ -1981,6 +2035,7 @@ export function oke(options: OkeOptions): OkeApp {
         // Hold the run lease for the request's lifetime — a crash mid-run
         // leaves an expired lease another instance can reclaim and resume.
         ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
+        ...(options.codeVersion ? { codeVersion: options.codeVersion } : {}),
       });
     };
 
@@ -2103,6 +2158,8 @@ export function oke(options: OkeOptions): OkeApp {
               locale: fx.locale,
               scopes: fx.auth.scopes,
               roles: principals?.cacheRoles ?? [],
+              verified: fx.auth.verified === true,
+              operatorId: fx.operator.id,
             };
             const cacheOk =
               cache !== undefined &&
@@ -2148,17 +2205,52 @@ export function oke(options: OkeOptions): OkeApp {
               journalSession?.rewind();
               return flowDef.do(input as never, fx);
             };
-            const raw = await (flowDef.retry ? fxRetry(run, flowDef.retry) : run());
+            const flightKey =
+              cacheOk && cache && dims && cacheEffects
+                ? cache.tier1KeysForReads(cacheEffects, dims)[0]
+                : undefined;
+            const flightResources = (cacheEffects?.reads ?? []).filter(
+              cache?.isStoreResourceRef ?? (() => false),
+            );
+            const generation =
+              storeRt && flightKey
+                ? Object.fromEntries(
+                    flightResources.map((resource) => [
+                      resource,
+                      storeRt.cache.generationOf(resource),
+                    ]),
+                  )
+                : undefined;
+            let raw: unknown;
+            let cacheable = true;
+            try {
+              const load = () => (flowDef.retry ? fxRetry(run, flowDef.retry) : run());
+              if (flightKey && storeRt) {
+                const flight = await storeRt.cache.coalesce(flightKey, flightResources, load);
+                raw = flight.value;
+                cacheable =
+                  flight.cacheable &&
+                  (generation === undefined || storeRt.cache.sameGeneration(generation));
+              } else {
+                raw = await load();
+              }
+            } finally {
+              if (cache && storeRt && cacheEffects) {
+                const ledgerFx = cache.effectsFromLedger(ledger.entries);
+                const writeEffects: Effects = {
+                  writes: [
+                    ...new Set([...(cacheEffects.writes ?? []), ...(ledgerFx.writes ?? [])]),
+                  ].filter(cache.isStoreResourceRef),
+                };
+                if ((writeEffects.writes?.length ?? 0) > 0) {
+                  storeRt.onWriteEffects(writeEffects);
+                }
+              }
+            }
             const output = isFlowFailure(raw) ? raw : await projectFlowOut(flowDef.out, raw);
             if (!isFlowFailure(output) && cache && storeRt && cacheEffects) {
               const ledgerFx = cache.effectsFromLedger(ledger.entries);
               const observed = cache.mergeEffects(cacheEffects, ledgerFx);
-              const writeEffects: Effects = {
-                writes: (observed.writes ?? []).filter(cache.isStoreResourceRef),
-              };
-              if ((writeEffects.writes?.length ?? 0) > 0) {
-                storeRt.onWriteEffects(writeEffects);
-              }
               const storeReads = (observed.reads ?? []).filter(cache.isStoreResourceRef);
               if (cache.autoCachePure(observed) && storeReads.length > 0) {
                 learnedTier1Reads.set(flowDef.name, storeReads);
@@ -2173,7 +2265,12 @@ export function oke(options: OkeOptions): OkeApp {
                   durable: flowDef.durable,
                   effects: observed,
                 });
-              if (storeAfter && output !== undefined && !loadFx().isJsonStreamResult(output)) {
+              if (
+                cacheable &&
+                storeAfter &&
+                output !== undefined &&
+                !loadFx().isJsonStreamResult(output)
+              ) {
                 const ttlMs =
                   typeof flowDef.cache === "string" ? cache.parseTtlMs(flowDef.cache) : undefined;
                 const putEffects: Effects = { reads: storeReads };
@@ -2231,6 +2328,9 @@ export function oke(options: OkeOptions): OkeApp {
               const journal = openJournal();
               const resumeId = claimed.kind === "reclaimed" ? claimed.row.runId : undefined;
               try {
+                if (resumeId && inflightRuns.has(resumeId)) {
+                  throw new JournalLeaseBusy(resumeId);
+                }
                 const session = resumeId
                   ? await journal.resume(resumeId)
                   : await journal.start(flowDef.name, validated);
@@ -2335,6 +2435,9 @@ export function oke(options: OkeOptions): OkeApp {
             };
             return undefined;
           }
+          if (flowDef.durable && journalSession && isLostJournalLease(err)) {
+            return fail("JournalLeaseBusy", {});
+          }
           throw err;
         }
       },
@@ -2383,13 +2486,22 @@ export function oke(options: OkeOptions): OkeApp {
           });
         } else if (!sleeping && isTerminalFailure(result)) {
           const terminalErr = result.failure ?? result.ctx.error;
-          await runCompensationPhase({
-            flow: flowDef,
-            input: ctx.input,
-            session: journalSession,
-            fx,
-            error: terminalErr,
-          });
+          const lost =
+            isLostJournalLease(terminalErr) ||
+            isJournalLeaseBusy(terminalErr) ||
+            (terminalErr != null &&
+              typeof terminalErr === "object" &&
+              "error" in terminalErr &&
+              (terminalErr as { error?: { code?: string } }).error?.code === "JournalLeaseBusy");
+          if (!lost) {
+            await runCompensationPhase({
+              flow: flowDef,
+              input: ctx.input,
+              session: journalSession,
+              fx,
+              error: terminalErr,
+            });
+          }
         } else if (parked && sleeping) {
           await journalSession.commit("sleeping", { wakeAt: sleeping.wakeAt });
         } else if (!sleeping) {
@@ -2503,6 +2615,7 @@ export function oke(options: OkeOptions): OkeApp {
     },
     async stop() {
       if (!bootResult) return;
+      clearJournalHeartbeats();
       bootResult.stopScheduler();
       // Realtime bridge down before connections close.
       {
@@ -2530,7 +2643,11 @@ export function oke(options: OkeOptions): OkeApp {
     /** Shared identity store when `gate.auth` is enabled. */
     identities: gateConfig.auth?.identities,
     async resumeDurable(now) {
-      const t = now ?? bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();
+      // Due selection uses one sample. The run itself must not: a frozen
+      // closure wrote leases that were already expired by the time persist ran.
+      const sample = (): number => bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();
+      const t = now ?? sample();
+      const live = typeof now === "number" ? (): number => now : sample;
       const { store, instanceId, leaseMs } = activeJournal();
       if (hasJournalLease(store)) {
         // Shared store is the wake schedule — claim due sleeps across all
@@ -2539,14 +2656,14 @@ export function oke(options: OkeOptions): OkeApp {
           const due = await store.claimDueSleep(instanceId, t, leaseMs);
           if (!due) break;
           sleepingRuns.delete(due.id);
-          await resumeDurableRun(due.id, due.flow, due.input, () => t);
+          await resumeDurableRun(due.id, due.flow, due.input, live);
         }
         // Crash sweep: the boot orphan scan is once-only, so each tick also
         // reclaims `running` runs whose holder's lease has expired (same
         // takeover physics as Clock: lease expiry + next tick).
         for (const orphan of await store.listOrphans(t)) {
           if (orphan.status !== "running") continue;
-          await resumeDurableRun(orphan.id, orphan.flow, orphan.input, () => t);
+          await resumeDurableRun(orphan.id, orphan.flow, orphan.input, live);
         }
         return;
       }
@@ -2559,7 +2676,7 @@ export function oke(options: OkeOptions): OkeApp {
           input: sleeper.input,
           journalStore: store,
           runId,
-          now: () => t,
+          now: live,
           fx: durableResumeFx(),
         });
         if (result.status === "sleeping") {
@@ -2700,9 +2817,15 @@ export function oke(options: OkeOptions): OkeApp {
           flowLabel = target.name;
           let internalInput: unknown;
           try {
-            internalInput = await request.json();
-          } catch {
-            internalInput = undefined;
+            internalInput = await parseBody(request, {
+              maxBytes: options.maxRequestBodySize,
+              jsonContentType: "required",
+            });
+          } catch (err) {
+            if (err instanceof HttpBodyRejected) {
+              return respond(encodeFailure(bodyFailure(err, request)));
+            }
+            throw err;
           }
           const internalResult = await execute(
             target,
@@ -2769,7 +2892,7 @@ export function oke(options: OkeOptions): OkeApp {
 
       let route = compiled.get(binding);
       if (!route && binding.trigger.kind === "http") {
-        route = compileHttpBinding(binding, aot);
+        route = compileHttpBinding(binding, aot, options.maxRequestBodySize);
         compiled.set(binding, route);
       }
 
@@ -2875,7 +2998,31 @@ export function oke(options: OkeOptions): OkeApp {
   return app;
 }
 
-function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
+function httpBodyOptions(trigger: HttpTrigger, maxRequestBodySize?: number): ParseBodyOptions {
+  const contract = trigger.contract as
+    | { readonly maxBodySize?: number; readonly jsonContentType?: "required" | "any" }
+    | undefined;
+  return {
+    maxBytes: contract?.maxBodySize ?? maxRequestBodySize,
+    ...(contract?.jsonContentType ? { jsonContentType: contract.jsonContentType } : {}),
+  };
+}
+
+function bodyFailure(err: HttpBodyRejected, request: Request): ReturnType<typeof fail> {
+  if (err.code === "InvalidQuery") {
+    return fail("InvalidQuery", { reason: err.reason ?? "malformed_body" });
+  }
+  if (err.code === "UnsupportedMediaType") {
+    return fail("UnsupportedMediaType", { contentType: request.headers.get("content-type") ?? "" });
+  }
+  return fail("PayloadTooLarge", {});
+}
+
+function compileHttpBinding(
+  binding: Binding,
+  aot: boolean,
+  maxRequestBodySize?: number,
+): CompiledRoute {
   const trigger = binding.trigger as HttpTrigger;
   const hookFns: Array<(...args: never[]) => unknown> = [];
   for (const list of Object.values(binding.flow.hooks)) {
@@ -2891,6 +3038,7 @@ function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
       handler: binding.flow.do as (...args: never[]) => unknown,
       hooks: hookFns,
       schema: binding.flow.in,
+      body: httpBodyOptions(trigger, maxRequestBodySize),
     },
     aot,
   );

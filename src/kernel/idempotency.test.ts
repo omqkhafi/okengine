@@ -349,13 +349,12 @@ describe("HTTP idempotency", () => {
     expect(await durableStore.idempotency!.forfeit(held!, held!.claimToken)).toBe(true);
     await Bun.sleep(120);
     const resumed = durable.fetch(post({ n: 1 }));
-    expect(await waitFor(() => blockers.length === 2)).toBe(true);
-    expect(step1).toEqual(["step1"]);
+    // The holder's heartbeat kept the lease, so the same process does not
+    // start a second session for the run still inside mid-flight.
+    expect((await resumed).status).toBe(409);
+    expect(blockers).toHaveLength(1);
     blockers[0]!();
-    blockers[1]!();
-    // The forfeited holder kept the old lease token. Its later write is rejected.
-    await expect(hung).rejects.toThrow(/OKE1074/);
-    expect((await resumed).status).toBe(200);
+    expect((await hung).status).toBe(200);
     expect(step1).toEqual(["step1"]);
   }, 30_000);
 

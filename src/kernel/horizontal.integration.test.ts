@@ -124,10 +124,26 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       const traffic = async () => {
         for (let i = 0; i < 8; i++) {
           await Promise.all([
-            fetch(`${urlA}/write`, { method: "POST", body: "{}" }),
-            fetch(`${urlB}/write`, { method: "POST", body: "{}" }),
-            fetch(`${urlA}/emit`, { method: "POST", body: "{}" }),
-            fetch(`${urlB}/emit`, { method: "POST", body: "{}" }),
+            fetch(`${urlA}/write`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+            fetch(`${urlB}/write`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+            fetch(`${urlA}/emit`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+            fetch(`${urlB}/emit`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
             fetch(`${urlA}/ping`),
             fetch(`${urlB}/ping`),
           ]);
@@ -150,7 +166,11 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       expect(limited).toBeGreaterThanOrEqual(1);
 
       // (2) Start durable on A; hang mid-step.
-      void fetch(`${urlA}/charge`, { method: "POST", body: "{}" });
+      void fetch(`${urlA}/charge`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
       expect(await waitForFile(join(dir, "hang-inst-a.json"), 15_000)).toBe(true);
 
       // (5) Kill A mid combined scenario — B keeps serving.
@@ -177,8 +197,24 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       // Keep traffic going on survivor (no deadlock).
       await trafficPromise.catch(() => {});
       for (let i = 0; i < 4; i++) {
-        expect((await fetch(`${urlB}/write`, { method: "POST", body: "{}" })).status).toBe(200);
-        expect((await fetch(`${urlB}/emit`, { method: "POST", body: "{}" })).status).toBe(200);
+        expect(
+          (
+            await fetch(`${urlB}/write`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            })
+          ).status,
+        ).toBe(200);
+        expect(
+          (
+            await fetch(`${urlB}/emit`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            })
+          ).status,
+        ).toBe(200);
       }
 
       // (1) Cron fired exactly once across both instances.
@@ -220,6 +256,94 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       await cleanupC.close();
     }
   }, 90_000);
+
+  test("broadcast, live, and cache invalidation reach the other instance", async () => {
+    const pg = LIVE!.pg;
+    const redis = LIVE!.redis;
+    const dir = await mkdtemp(join(tmpdir(), "oke-horizontal-bus-"));
+    const signalPath = join(dir, "signal.json");
+    const post = (url: string) =>
+      fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    const spawn = (instanceId: string, port: number) =>
+      Bun.spawn({
+        cmd: [
+          "bun",
+          childPath,
+          "serve",
+          instanceId,
+          String(port),
+          pg,
+          redis,
+          signalPath,
+          dir,
+          "5000",
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          DATABASE_URL: pg,
+          REDIS_URL: redis,
+          OKE_HORIZONTAL_REDIS_SIGNALS: "1",
+        },
+      });
+    const a = spawn("bus-a", 0);
+    const b = spawn("bus-b", 0);
+    try {
+      expect(await waitForFile(join(dir, "ready-bus-a.json"))).toBe(true);
+      expect(await waitForFile(join(dir, "ready-bus-b.json"))).toBe(true);
+      const readyA = (await Bun.file(join(dir, "ready-bus-a.json")).json()) as { port: number };
+      const readyB = (await Bun.file(join(dir, "ready-bus-b.json")).json()) as { port: number };
+      const urlA = `http://127.0.0.1:${readyA.port}`;
+      const urlB = `http://127.0.0.1:${readyB.port}`;
+      const first = (await (await fetch(`${urlA}/cached`)).json()) as { data: { reads: number } };
+      const second = (await (await fetch(`${urlA}/cached`)).json()) as { data: { reads: number } };
+      expect(first.data.reads).toBe(1);
+      expect(second.data.reads).toBe(1);
+      expect((await post(`${urlB}/write`)).status).toBe(200);
+      expect(
+        await waitFor(async () => {
+          const body = (await (await fetch(`${urlA}/cached`)).json()) as {
+            data: { reads: number };
+          };
+          return body.data.reads === 2;
+        }),
+      ).toBe(true);
+      expect((await post(`${urlA}/news`)).status).toBe(200);
+      expect((await post(`${urlA}/feed`)).status).toBe(200);
+      expect(
+        await waitFor(async () => {
+          const broadcast = await loadJsonl(join(dir, "broadcast.jsonl"));
+          const live = await loadJsonl(join(dir, "live.jsonl"));
+          const ids = (rows: Array<Record<string, unknown>>) =>
+            new Set(rows.map((row) => row.instanceId));
+          return (
+            ids(broadcast).has("bus-a") &&
+            ids(broadcast).has("bus-b") &&
+            ids(live).has("bus-a") &&
+            ids(live).has("bus-b")
+          );
+        }),
+      ).toBe(true);
+    } finally {
+      try {
+        a.kill(9);
+      } catch {
+        /* already dead */
+      }
+      try {
+        b.kill(9);
+      } catch {
+        /* ignore */
+      }
+      await Promise.allSettled([a.exited, b.exited]);
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 if (!LIVE) {

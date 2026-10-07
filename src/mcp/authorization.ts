@@ -225,25 +225,19 @@ export const MCP_TOOL_POLICIES: readonly McpToolPolicy[] = [
     name: "oke.action.confirm",
     scopes: ["mcp:action:invoke", "console:flows:invoke"],
     mutability: "read",
-    description: "Request a single-use confirmation token for a write tool (no caching).",
+    description:
+      "Issue a single-use confirmation token for a pending write. The caller must be a different auth session than the requester (no caching).",
     inputSchema: {
       type: "object",
       properties: {
-        tool: {
-          type: "string",
-          enum: ["oke.action.invoke", "oke.action.structural_propose"],
-        },
-        args: { type: "object" },
+        confirmationId: { type: "string", minLength: 1 },
         reason: { type: "string", minLength: 3 },
       },
-      required: ["tool", "args", "reason"],
+      required: ["confirmationId", "reason"],
       additionalProperties: false,
     },
     params: [
-      {
-        name: "tool",
-        enum: ["oke.action.invoke", "oke.action.structural_propose"],
-      },
+      { name: "confirmationId", maxLength: 200 },
       { name: "reason", maxLength: 2000 },
     ],
   },

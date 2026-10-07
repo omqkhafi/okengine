@@ -182,6 +182,13 @@ export interface BootOptions {
   readonly onDurableResume?: () => void | Promise<void>;
   /** Durable-run lease duration ms (default 30_000 — matches Signal claims). */
   readonly journalLeaseMs?: number;
+  /** Opt-in durable code version. Unset skips the stamp and the check. */
+  readonly codeVersion?: string;
+  /** Tier-1 cache bounds. Defaults: 10_000 entries, 60s TTL. */
+  readonly cache?: {
+    readonly maxEntries?: number;
+    readonly defaultTtlMs?: number;
+  };
   /** Injectable clock for test / frozen harnesses. */
   readonly now?: () => number;
   /**
@@ -539,16 +546,20 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
 
   // 4d. Scheduler — one timer drives clock ticks, durable-run resume, heartbeat.
   let schedulerTimer: ReturnType<typeof setInterval> | undefined;
+  const inflight = new Map<string, Promise<void>>();
+  let stopping = false;
   const startScheduler = options.startScheduler ?? env !== "test";
   const signalBus = signal?.bus ?? undefined;
   let refreshChannel: (() => Promise<void>) | undefined;
+  const pollCache = store?.cacheInvalidation === "postgres";
   if (
     startScheduler &&
     (clock !== undefined ||
       journal !== undefined ||
       instances !== undefined ||
       signalBus !== undefined ||
-      needs.channel)
+      needs.channel ||
+      pollCache)
   ) {
     const period = options.schedulerIntervalMs ?? 1000;
     const clockRt = clock;
@@ -560,18 +571,30 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       // Unexpected scheduler failures stay visible.
       console.error(err);
     };
+    const spawn = (name: string, task: () => Promise<unknown>): void => {
+      if (stopping || inflight.has(name)) return;
+      const run = Promise.resolve()
+        .then(task)
+        .then(() => undefined)
+        .catch(ignoreBenignSql)
+        .finally(() => {
+          inflight.delete(name);
+        });
+      inflight.set(name, run);
+    };
     schedulerTimer = setInterval(() => {
-      if (signalBus) void signalBus.drain().catch(ignoreBenignSql);
-      if (refreshChannel) void refreshChannel().catch(ignoreBenignSql);
-      if (clockRt) void Promise.resolve(clockRt.tick()).catch(ignoreBenignSql);
-      if (journal && durableResume) void Promise.resolve(durableResume()).catch(ignoreBenignSql);
-      if (fleet) void fleet.maybeHeartbeat().catch(ignoreBenignSql);
+      if (signalBus) spawn("signal", () => signalBus.drain());
+      if (refreshChannel) spawn("channel", () => refreshChannel!());
+      if (clockRt) spawn("clock", () => Promise.resolve(clockRt.tick()));
+      if (journal && durableResume) spawn("durable", () => Promise.resolve(durableResume()));
+      if (fleet) spawn("fleet", () => fleet.maybeHeartbeat());
+      if (pollCache && store) spawn("cache", () => store.pollCacheInvalidations());
       const stem = ["run", "events"].join("-");
-      void import(`../elements/ai/${stem}.ts`)
-        .then((mod: typeof import("../elements/ai/run-events.ts")) =>
-          mod.sweepInstalledAgentEvents(),
-        )
-        .catch(ignoreBenignSql);
+      spawn("agents", () =>
+        import(`../elements/ai/${stem}.ts`).then(
+          (mod: typeof import("../elements/ai/run-events.ts")) => mod.sweepInstalledAgentEvents(),
+        ),
+      );
     }, period);
     schedulerTimer.unref?.();
   }
@@ -653,7 +676,12 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     instanceId,
     instances,
     capabilities,
+    /**
+     * Stop the scheduler interval and wake timers.
+     * Does not wait for a tick that has already started — {@link BootResult.close} does.
+     */
     stopScheduler() {
+      stopping = true;
       if (schedulerTimer !== undefined) {
         clearInterval(schedulerTimer);
         schedulerTimer = undefined;
@@ -661,11 +689,13 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       clock?.stopWakes();
     },
     async close() {
+      stopping = true;
       if (schedulerTimer !== undefined) {
         clearInterval(schedulerTimer);
         schedulerTimer = undefined;
       }
       clock?.stopWakes();
+      await Promise.all([...inflight.values()]);
       await signal?.close();
       await vault?.close();
       await runs?.flush();

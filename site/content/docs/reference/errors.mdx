@@ -117,25 +117,37 @@ The typed client always includes built-in codes. A declared key still wins.
 A bare `404` with body `Not Found` means **no route matched**. `fx.fail.notFound` is a JSON envelope
 at **404**. Clients distinguish by envelope, not status. Domain codes stay **400**.
 
-| Code                                             | Status      | Helper                                                 |
-| ------------------------------------------------ | ----------- | ------------------------------------------------------ |
-| `ValidationError`                                | `422`       | none — failed `in`, `do` never runs                    |
-| `IdempotencyKeyMissing`                          | `400`       | none — `idempotency: "required"` and no header         |
-| `IdempotencyKeyInvalid`                          | `400`       | none — header is not 16–255 printable ASCII            |
-| `IdempotencyKeyReused`                           | `422`       | none — same key, different payload                     |
-| `IdempotencyInProgress`                          | `409`       | none — `Retry-After` until the in-flight call finishes |
-| `Unauthorized`                                   | `401`       | `unauthorized` · also a gate denial                    |
-| `Forbidden`                                      | `403`       | `forbidden` · also a gate denial                       |
-| `NotFound`                                       | `404`       | `notFound`                                             |
-| `Conflict` / `ForeignKey`                        | `409`       | `conflict` / `foreignKey`                              |
-| `UnsupportedMediaType`                           | `415`       | none — QUERY `Content-Type` is not `application/json`  |
-| `RateLimited` / `AuthRateLimited`                | `429`       | `rateLimited` · `AuthRateLimited` has none             |
-| `InvalidQuery`                                   | `400`       | none — QUERY missing `Content-Type` or body isn't JSON |
-| `AuthFailed`                                     | `400`       | none — credentials / policy, not “no session”          |
-| `DatabaseError`                                  | by `reason` | `database`                                             |
-| `ServiceUnavailable`                             | `503`       | `serviceUnavailable`                                   |
-| `InternalError`                                  | `500`       | `internal` — never copies a thrown `message`           |
-| Domain (`OutOfStock`, `FlightFull`, `Duplicate`) | `400`       | `fx.fail("OutOfStock", data)`                          |
+| Code                                             | Status      | Helper                                                                       |
+| ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------- |
+| `ValidationError`                                | `422`       | none — failed `in`, `do` never runs                                          |
+| `IdempotencyKeyMissing`                          | `400`       | none — `idempotency: "required"` and no header                               |
+| `IdempotencyKeyInvalid`                          | `400`       | none — header is not 16–255 printable ASCII                                  |
+| `IdempotencyKeyReused`                           | `422`       | none — same key, different payload                                           |
+| `IdempotencyInProgress`                          | `409`       | none — `Retry-After` until the in-flight call finishes                       |
+| `Unauthorized`                                   | `401`       | `unauthorized` · also a gate denial                                          |
+| `Forbidden`                                      | `403`       | `forbidden` · also a gate denial                                             |
+| `NotFound`                                       | `404`       | `notFound`                                                                   |
+| `Conflict` / `ForeignKey`                        | `409`       | `conflict` / `foreignKey`                                                    |
+| `UnsupportedMediaType`                           | `415`       | none — QUERY, or a JSON-shaped body that is not `application/json` / `+json` |
+| `PayloadTooLarge`                                | `413`       | none — body exceeds `maxRequestBodySize` or the route `maxBodySize`          |
+| `RateLimited` / `AuthRateLimited`                | `429`       | `rateLimited` · `AuthRateLimited` has none                                   |
+| `InvalidQuery`                                   | `400`       | none — QUERY or JSON body that does not parse (`malformed_body`)             |
+| `AuthFailed`                                     | `400`       | none — credentials / policy, not “no session”                                |
+| `DatabaseError`                                  | by `reason` | `database`                                                                   |
+| `ServiceUnavailable`                             | `503`       | `serviceUnavailable`                                                         |
+| `InternalError`                                  | `500`       | `internal` — never copies a thrown `message`                                 |
+| Domain (`OutOfStock`, `FlightFull`, `Duplicate`) | `400`       | `fx.fail("OutOfStock", data)`                                                |
+
+`UnsupportedMediaType` (415) is this rule, for a non-empty body. Let `mt` be the media type before `;`:
+
+1. `application/json` or `application/*+json` is parsed. A parse failure is 400 `InvalidQuery` with reason `malformed_body`.
+2. A route with `jsonContentType: "any"` tries JSON and otherwise keeps the raw string.
+3. `text/plain`, form-urlencoded, multipart, or a missing type, when the trimmed body starts with `{` or `[` and parses as JSON, is 415.
+4. Anything else is the raw string. `curl -d` needs `-H 'content-type: application/json'`.
+
+`OKE1074` means the durable run lost its lease. The step result is not written and compensation does not run. The caller sees a busy lease, not a new failure of the work.
+
+`OKE1076` means `codeVersion` was set and the stored stamp is a different `app:` value. Leave the old value pinned until sleeping runs drain, then change it. Unset `codeVersion` checks nothing. A stored stamp from 0.23.1 (no `app:` prefix) is restamped, not failed.
 
 ### Client chrome
 

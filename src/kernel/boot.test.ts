@@ -285,8 +285,8 @@ describe("boot — cron autostart via real timer loop", () => {
     // Drive the wall-clock interval that boot installed — not clock.advance /
     // runNow / dispatchEvery (those prove the harness, not autostart).
     jest.advanceTimersByTime(1000);
-    // Interval callback does `void clock.tick()`; drain the async store walk.
-    for (let i = 0; i < 50; i++) await Promise.resolve();
+    // The tick is guarded and async. Wait until it settles, but not forever.
+    for (let i = 0; i < 50 && ran < 1; i++) await Promise.resolve();
 
     expect(ran).toBeGreaterThanOrEqual(1);
 

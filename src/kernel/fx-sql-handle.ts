@@ -17,7 +17,7 @@ import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type { CapabilityToken } from "./capability.ts";
 import { DryRunWriteIsolationError, isDryRun } from "./dry-run.ts";
 import type { EffectExternal } from "./effects.ts";
-import { runInSignalTransaction } from "./signal-tx.ts";
+import { currentSignalTransaction, runInSignalTransaction } from "./signal-tx.ts";
 
 /** Capability-gated effect runner from {@link createFx}. */
 type Gated = <T>(
@@ -253,6 +253,12 @@ export function createGatedSqlHandle(options: GatedSqlHandleOptions): SqlStoreHa
     async transaction(fn) {
       refuseDryRunWrite();
       const h = await ensure();
+      // Already inside a signal transaction: do not begin or commit another
+      // one. sql-session opens a child staging scope and merges it; only the
+      // outermost commit publishes.
+      if (currentSignalTransaction()) {
+        return h.transaction(() => fn(api));
+      }
       const signalTx = options.beginSignal ? await options.beginSignal() : undefined;
       try {
         const result = await h.transaction(async () => {

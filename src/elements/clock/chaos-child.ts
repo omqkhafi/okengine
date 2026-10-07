@@ -206,7 +206,13 @@ if (mode === "tick-loop") {
     leaseMs,
     flow: chargeFlow(instanceId!, stepLogPath!, blockMs),
   });
-  void app.fetch(new Request("http://localhost/charge", { method: "POST", body: "{}" }));
+  void app.fetch(
+    new Request("http://localhost/charge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }),
+  );
   // Marker once step 1 is journaled — then hang; the parent SIGKILLs mid-run.
   const deadline = Date.now() + 15_000;
   for (;;) {
@@ -269,7 +275,11 @@ if (mode === "tick-loop") {
     flow: sleeperFlow(instanceId!, stepLogPath!, wakeMs),
   });
   const res = await app.fetch(
-    new Request("http://localhost/sleep", { method: "POST", body: "{}" }),
+    new Request("http://localhost/sleep", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }),
   );
   if (res.status !== 204) {
     console.error(`journal-pg-park: expected 204 park, got ${res.status}`);

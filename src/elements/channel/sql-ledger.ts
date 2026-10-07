@@ -3,6 +3,7 @@
  *
  * Reads are synchronous against a cache. Writes hit SQL and the cache.
  * Call {@link PostgresChannelLedger.reload} on another instance to see them.
+ * Receipt reloads merge rows touched since the last read and keep the rest.
  */
 
 import type { ChannelMedium } from "../../manifest/types.ts";
@@ -28,20 +29,42 @@ export interface ChannelLedgerSql {
   exec(sql: string, params?: readonly unknown[]): Promise<{ changes: number }>;
 }
 
+/**
+ * Durable receipt read used when the in-memory cache misses.
+ */
+export interface ChannelReceiptLookup {
+  /**
+   * Load one receipt by receipt id or provider message id.
+   *
+   * @param messageId - Receipt id or provider message id
+   */
+  lookup(messageId: string): Promise<DeliveryReceipt | undefined>;
+}
+
 /** Shared channel ledger (consent + suppression + receipts). */
 export interface PostgresChannelLedger {
   readonly consent: ConsentStore;
   readonly suppression: SuppressionStore;
-  readonly receipts: ReceiptLedger;
+  readonly receipts: ReceiptLedger & ChannelReceiptLookup;
   /** Wait for queued writes. */
   flush(): Promise<void>;
-  /** Wait for queued writes, then replace the cache from SQL. */
+  /**
+   * Wait for queued writes, then refresh the cache from SQL.
+   * Receipts merge by id. Rows absent from the delta stay cached.
+   */
   reload(): Promise<void>;
 }
 
 const CONSENT = "oke_channel_consent";
 const BOUNCE = "oke_channel_bounce";
 const RECEIPT = "oke_channel_receipt";
+/** Postgres `clock_timestamp()` in milliseconds. Writes use the database clock. */
+const DB_NOW_MS = "(extract(epoch from clock_timestamp())*1000)::bigint";
+/**
+ * Reload overlap. A commit that lands while a read is in flight still
+ * appears on the next pass because the cursor moves backward by this much.
+ */
+const RECEIPT_RELOAD_LAG_MS = 30_000;
 
 /**
  * Open the ledger tables and load the current rows.
@@ -58,10 +81,19 @@ export async function openPostgresChannelLedger(
     `CREATE TABLE IF NOT EXISTS ${BOUNCE} (subject TEXT NOT NULL, medium TEXT NOT NULL, at BIGINT NOT NULL, PRIMARY KEY (subject, medium))`,
   );
   await sql.exec(`CREATE TABLE IF NOT EXISTS ${RECEIPT} (id TEXT PRIMARY KEY, body TEXT NOT NULL)`);
+  await sql.exec(
+    `ALTER TABLE ${RECEIPT} ADD COLUMN IF NOT EXISTS updated_at BIGINT NOT NULL DEFAULT 0`,
+  );
+  await sql.exec(`ALTER TABLE ${RECEIPT} ADD COLUMN IF NOT EXISTS message_id TEXT`);
+  await sql.exec(
+    `CREATE INDEX IF NOT EXISTS oke_channel_receipt_message_id_idx ON ${RECEIPT} (message_id)`,
+  );
+  await sql.exec(
+    `CREATE INDEX IF NOT EXISTS oke_channel_receipt_updated_at_idx ON ${RECEIPT} (updated_at)`,
+  );
 
   const consents: OptOut[] = [];
   const bounces: OptOut[] = [];
-  const receipts: DeliveryReceipt[] = [];
   let chain: Promise<void> = Promise.resolve();
 
   function enqueue(work: () => Promise<void>): void {
@@ -176,50 +208,119 @@ export async function openPostgresChannelLedger(
     },
   };
 
-  const receiptLedger: ReceiptLedger = {
-    record(receipt) {
-      receipts.push(receipt);
+  const byId = new Map<string, DeliveryReceipt>();
+  const byMessage = new Map<string, string>();
+  /** `updated_at` cursor. Starts at 0 so legacy rows (`updated_at = 0`) load. */
+  let cursor = 0;
+  let reloading: Promise<void> | undefined;
+  let messageIdBackfill: Promise<void> | undefined;
+
+  function rememberReceipt(receipt: DeliveryReceipt): void {
+    const prev = byId.get(receipt.id);
+    if (prev?.messageId && prev.messageId !== receipt.messageId) {
+      if (byMessage.get(prev.messageId) === receipt.id) byMessage.delete(prev.messageId);
+    }
+    byId.set(receipt.id, receipt);
+    byMessage.set(receipt.id, receipt.id);
+    if (receipt.messageId) byMessage.set(receipt.messageId, receipt.id);
+  }
+
+  function findByMessageId(messageId: string): DeliveryReceipt | undefined {
+    const id = byMessage.get(messageId);
+    if (id === undefined) return undefined;
+    return byId.get(id);
+  }
+
+  function parseReceipt(body: unknown): DeliveryReceipt | undefined {
+    if (typeof body !== "string") return undefined;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return undefined;
+    }
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("id" in parsed) ||
+      typeof parsed.id !== "string"
+    ) {
+      return undefined;
+    }
+    return parsed as DeliveryReceipt;
+  }
+
+  function readMillis(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "bigint") return Number(value);
+    if (typeof value === "string" && value !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
+  }
+
+  const receiptLedger = {
+    record(receipt: DeliveryReceipt) {
+      rememberReceipt(receipt);
       enqueue(() =>
         sql
-          .exec(`INSERT INTO ${RECEIPT} (id, body) VALUES (?, ?)`, [
-            receipt.id,
-            JSON.stringify(receipt),
-          ])
+          .exec(
+            `INSERT INTO ${RECEIPT} (id, body, message_id, updated_at) VALUES (?, ?, ?, ${DB_NOW_MS})`,
+            [receipt.id, JSON.stringify(receipt), receipt.messageId ?? null],
+          )
           .then(() => undefined),
       );
     },
     all() {
-      return [...receipts];
+      return [...byId.values()];
     },
-    forTemplate(template) {
-      return receipts.filter((row) => row.template === template);
+    forTemplate(template: string) {
+      return [...byId.values()].filter((row) => row.template === template);
     },
-    byMessageId(messageId) {
-      for (let i = receipts.length - 1; i >= 0; i--) {
-        const row = receipts[i]!;
-        if (row.messageId === messageId || row.id === messageId) return row;
-      }
-      return undefined;
+    byMessageId(messageId: string) {
+      return findByMessageId(messageId);
     },
-    updateStatus(messageId, patch) {
-      const idx = receipts.findIndex((row) => row.messageId === messageId || row.id === messageId);
-      if (idx < 0) return undefined;
-      const prev = receipts[idx]!;
+    updateStatus(
+      messageId: string,
+      patch: {
+        readonly status: DeliveryReceipt["status"];
+        readonly at?: number;
+        readonly error?: string;
+      },
+    ) {
+      const prev = findByMessageId(messageId);
+      if (!prev) return undefined;
       const next: DeliveryReceipt = {
         ...prev,
         status: patch.status,
         at: patch.at ?? prev.at,
         ...(patch.error !== undefined ? { error: patch.error } : {}),
       };
-      receipts[idx] = next;
+      rememberReceipt(next);
       enqueue(() =>
         sql
-          .exec(`UPDATE ${RECEIPT} SET body = ? WHERE id = ?`, [JSON.stringify(next), next.id])
+          .exec(
+            `UPDATE ${RECEIPT} SET body = ?, message_id = ?, updated_at = ${DB_NOW_MS} WHERE id = ?`,
+            [JSON.stringify(next), next.messageId ?? null, next.id],
+          )
           .then(() => undefined),
       );
       return next;
     },
-  };
+    async lookup(messageId: string): Promise<DeliveryReceipt | undefined> {
+      const rows = await sql.query(
+        `SELECT id, body, message_id, updated_at FROM ${RECEIPT} WHERE id = ? OR message_id = ? LIMIT 1`,
+        [messageId, messageId],
+      );
+      const row = rows[0];
+      if (!row) return undefined;
+      const receipt = parseReceipt(row.body);
+      if (!receipt) return undefined;
+      rememberReceipt(receipt);
+      return receipt;
+    },
+  } satisfies ReceiptLedger & ChannelReceiptLookup;
 
   async function loadOptOuts(table: string, into: OptOut[]): Promise<void> {
     const rows = await sql.query(`SELECT subject, medium, at FROM ${table}`);
@@ -233,16 +334,59 @@ export async function openPostgresChannelLedger(
     }
   }
 
-  async function reload(): Promise<void> {
+  function backfillMessageIds(): Promise<void> {
+    if (messageIdBackfill) return messageIdBackfill;
+    const run = (async () => {
+      const rows = await sql.query(`SELECT id, body FROM ${RECEIPT} WHERE message_id IS NULL`);
+      for (const row of rows) {
+        const receipt = parseReceipt(row.body);
+        const messageId = receipt?.messageId;
+        if (!messageId) continue;
+        await sql.exec(`UPDATE ${RECEIPT} SET message_id = ? WHERE id = ? AND message_id IS NULL`, [
+          messageId,
+          String(row.id),
+        ]);
+      }
+    })().catch((err: unknown) => {
+      messageIdBackfill = undefined;
+      throw err;
+    });
+    messageIdBackfill = run;
+    return run;
+  }
+
+  async function loadReceiptDelta(): Promise<void> {
+    const since = cursor - RECEIPT_RELOAD_LAG_MS;
+    const rows = await sql.query(
+      `SELECT r.id, r.body, r.message_id, r.updated_at, now_ms.db_now FROM (SELECT ${DB_NOW_MS} AS db_now) AS now_ms LEFT JOIN ${RECEIPT} r ON r.updated_at >= ?`,
+      [since],
+    );
+    let dbNow: number | undefined;
+    for (const row of rows) {
+      const read = readMillis(row.db_now);
+      if (read !== undefined) dbNow = read;
+      if (row.id == null || row.body == null) continue;
+      const receipt = parseReceipt(row.body);
+      if (receipt) rememberReceipt(receipt);
+    }
+    if (dbNow !== undefined) cursor = dbNow;
+  }
+
+  async function reloadFromSql(): Promise<void> {
     await flush();
     await loadOptOuts(CONSENT, consents);
     await loadOptOuts(BOUNCE, bounces);
-    const rows = await sql.query(`SELECT id, body FROM ${RECEIPT}`);
-    receipts.length = 0;
-    for (const row of rows) {
-      const parsed: unknown = JSON.parse(String(row.body));
-      if (parsed && typeof parsed === "object") receipts.push(parsed as DeliveryReceipt);
-    }
+    await backfillMessageIds();
+    await loadReceiptDelta();
+  }
+
+  function reload(): Promise<void> {
+    if (reloading) return reloading;
+    const run = reloadFromSql().finally(() => {
+      if (reloading === run) reloading = undefined;
+    });
+    reloading = run;
+    return run;
   }
 
   await reload();

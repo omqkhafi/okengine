@@ -33,6 +33,7 @@ import {
   tier1KeysForReads,
   type StoreCache,
 } from "./cache.ts";
+import { openCacheInvalidation, type CacheBusOptions } from "./cache-bus.ts";
 import { resolveSqlTarget, type SqlBindingConfig } from "./replica.ts";
 import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
 import { classificationsFromTable, type TableHandle } from "./table.ts";
@@ -96,6 +97,15 @@ export interface CreateStoreRuntimeOptions {
   >;
   /** Clock for cache TTLs. */
   readonly now?: () => number;
+  /** Auto-cache entry cap. Default 10_000. */
+  readonly cacheMaxEntries?: number;
+  /** Auto-cache TTL when a flow sets none. Default 60_000. */
+  readonly cacheDefaultTtlMs?: number;
+  /**
+   * Cross-instance invalidation. Omit for a single process.
+   * Redis is push. Postgres is polled from the scheduler.
+   */
+  readonly cacheBus?: CacheBusOptions;
   /**
    * Domain DDL policy for SQL handles. Default `ensure` (test-friendly).
    * Boot sets `off` for docker/prod and local+autoPush.
@@ -278,6 +288,13 @@ export interface StoreRuntime {
   /** Close all open connections. */
   close(): Promise<void>;
   /**
+   * Pull Postgres cache invalidations. No-op unless {@link CreateStoreRuntimeOptions.cacheBus}
+   * is `postgres`.
+   */
+  pollCacheInvalidations(): Promise<void>;
+  /** Which invalidation transport this runtime opened. */
+  readonly cacheInvalidation: "off" | "redis" | "postgres";
+  /**
    * Capability-gated files handle for `fx.store` (CRUD + image pipeline).
    *
    * Lives on the runtime so the kernel edge profile does not pull Bun.Image.
@@ -300,7 +317,26 @@ export interface StoreRuntime {
  */
 export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRuntime {
   const now = options.now ?? (() => Date.now());
-  const cache = createStoreCache(now);
+  let publishInvalidation: ((resources: readonly ResourceRef[]) => void) | undefined;
+  const cache = createStoreCache({
+    now,
+    fanout: (resources) => {
+      publishInvalidation?.(resources);
+    },
+    ...(options.cacheMaxEntries !== undefined ? { maxEntries: options.cacheMaxEntries } : {}),
+    ...(options.cacheDefaultTtlMs !== undefined ? { defaultTtlMs: options.cacheDefaultTtlMs } : {}),
+  });
+  const cacheInvalidation = options.cacheBus?.kind ?? "off";
+  let pollInvalidation: (() => Promise<void>) | undefined;
+  let stopInvalidation: (() => Promise<void>) | undefined;
+  if (options.cacheBus) {
+    const bus = openCacheInvalidation(cache, options.cacheBus);
+    publishInvalidation = (resources) => {
+      bus.publish(resources);
+    };
+    pollInvalidation = () => bus.poll();
+    stopInvalidation = () => bus.stop();
+  }
   const declarations = new Map<string, StoreDecl>();
   const sqlConns = new Map<string, SqlConnection>();
   const kvNs = new Map<string, KvNamespace>();
@@ -570,7 +606,8 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     putTier1(effects, value, dimsByResource, ttlMs) {
       const keys = tier1KeysForReads(effects, dimsByResource);
       const resources = (effects.reads ?? []).filter((r): r is ResourceRef => r !== "runs");
-      const expiresAt = ttlMs !== undefined && ttlMs !== null && ttlMs > 0 ? now() + ttlMs : null;
+      const ttl = ttlMs !== undefined && ttlMs !== null && ttlMs > 0 ? ttlMs : cache.defaultTtlMs;
+      const expiresAt = now() + ttl;
       for (const key of keys) {
         cache.set({
           tier: 1,
@@ -582,7 +619,12 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       }
       return keys;
     },
+    cacheInvalidation,
+    async pollCacheInvalidations() {
+      if (pollInvalidation) await pollInvalidation();
+    },
     async close() {
+      if (stopInvalidation) await stopInvalidation();
       for (const c of sqlConns.values()) await c.close();
       for (const n of kvNs.values()) await n.close();
       for (const b of fileBuckets.values()) await b.close();

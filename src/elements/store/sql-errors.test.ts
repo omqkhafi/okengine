@@ -3,8 +3,22 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { encodeExecuteResult } from "../../compiler/response.ts";
+import { connectPostgres } from "../../drivers/postgres.ts";
 import { isFlowFailure } from "../../kernel/hooks.ts";
 import { isRetryableSqlError, sqlErrorToFailure } from "./sql-errors.ts";
+
+const LIVE_POSTGRES_URL =
+  process.env.OKE_TEST_POSTGRES_URL?.trim() ||
+  (process.env.OKE_TEST_POSTGRES === "1"
+    ? (process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL)?.trim()
+    : undefined);
+
+if (!LIVE_POSTGRES_URL) {
+  console.log(
+    "skip: bun duplicate-key SQLSTATE (set OKE_TEST_POSTGRES_URL or OKE_TEST_POSTGRES=1 + DATABASE_URL/OKE_STORE_SQL_URL)",
+  );
+}
 
 describe("sqlErrorToFailure", () => {
   test("unique / exclusion → Conflict  without copying message", () => {
@@ -193,5 +207,122 @@ describe("sqlErrorToFailure", () => {
 
     expect(sqlErrorToFailure(new Error("boom"))).toBeUndefined();
     expect(isFlowFailure(sqlErrorToFailure({ code: "23505" }))).toBe(true);
+  });
+
+  test("Bun ERR_POSTGRES_SERVER_ERROR + string errno 23505 → Conflict 409", async () => {
+    const driver = {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "23505",
+      constraint: "users_email_key",
+      table: "users",
+      message: 'duplicate key value violates unique constraint "users_email_key"',
+    };
+    const mapped = sqlErrorToFailure(driver);
+    expect(mapped?.error.code).toBe("Conflict");
+    expect(mapped?.error.data).toMatchObject({
+      sqlstate: "23505",
+      constraint: "users_email_key",
+      table: "users",
+    });
+
+    const res = await encodeExecuteResult({ error: driver });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("Conflict");
+    expect(JSON.stringify(body)).not.toContain("duplicate key");
+  });
+
+  test("string errno 40P01 is retryable; exhausted 40001 stays ServiceUnavailable", async () => {
+    expect(isRetryableSqlError({ errno: "40P01" })).toBe(true);
+    expect(
+      sqlErrorToFailure(
+        { code: "ERR_POSTGRES_SERVER_ERROR", errno: "40P01" },
+        { retryable: "leave" },
+      ),
+    ).toBeUndefined();
+    expect(
+      sqlErrorToFailure(
+        { code: "ERR_POSTGRES_SERVER_ERROR", errno: "40001" },
+        { retryable: "unavailable" },
+      )?.error.code,
+    ).toBe("ServiceUnavailable");
+
+    const exhausted = await encodeExecuteResult({
+      error: {
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        errno: "40001",
+        message: "could not serialize access",
+      },
+    });
+    expect(exhausted.status).toBe(503);
+    const body = (await exhausted.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("ServiceUnavailable");
+    expect(JSON.stringify(body)).not.toContain("serialize");
+  });
+
+  test("42804 stays 422; other 42xxx are DatabaseError unknown", async () => {
+    const datatype = await encodeExecuteResult({ error: { code: "42804" } });
+    expect(datatype.status).toBe(422);
+
+    const syntax = await encodeExecuteResult({
+      error: { code: "42601", message: "syntax error at or near" },
+    });
+    expect(syntax.status).toBe(500);
+    const body = (await syntax.json()) as {
+      error: { code: string; data?: { reason?: string; sqlstate?: string } };
+    };
+    expect(body.error.code).toBe("DatabaseError");
+    expect(body.error.data).toMatchObject({ reason: "unknown", sqlstate: "42601" });
+    expect(JSON.stringify(body)).not.toContain("syntax error");
+  });
+
+  test("ERR_POSTGRES_SERVER_ERROR without a SQLSTATE is not unavailable", () => {
+    const mapped = sqlErrorToFailure({
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      message: "syntax error at or near select",
+    });
+    expect(mapped?.error.code).toBe("DatabaseError");
+    expect(mapped?.error.code).not.toBe("ServiceUnavailable");
+    expect(sqlErrorToFailure({ code: "ERR_POSTGRES_CONNECTION_CLOSED" })?.error.code).toBe(
+      "ServiceUnavailable",
+    );
+    expect(
+      sqlErrorToFailure({ code: "ERR_POSTGRES_SERVER_ERROR", errno: "53300" })?.error.code,
+    ).toBe("ServiceUnavailable");
+  });
+});
+
+describe.skipIf(!LIVE_POSTGRES_URL)("bun postgres duplicate key", () => {
+  test("a real duplicate-key error is HTTP 409", async () => {
+    const url = LIVE_POSTGRES_URL;
+    if (!url) throw new Error("postgres url missing");
+    const conn = await connectPostgres({ url, pool: { max: 1 } });
+    const table = `oke_sqlstate_${crypto.randomUUID().replaceAll("-", "")}`;
+    try {
+      await conn.exec(`CREATE TABLE "${table}" (id text PRIMARY KEY)`);
+      await conn.exec(`INSERT INTO "${table}" (id) VALUES ('a')`);
+      let caught: unknown;
+      try {
+        await conn.exec(`INSERT INTO "${table}" (id) VALUES ('a')`);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeDefined();
+      const shape =
+        caught !== null && typeof caught === "object"
+          ? {
+              name: "name" in caught ? caught.name : undefined,
+              code: "code" in caught ? caught.code : undefined,
+              errno: "errno" in caught ? caught.errno : undefined,
+            }
+          : { caught };
+      const res = await encodeExecuteResult({ error: caught });
+      const body = (await res.json()) as { error: { code: string } };
+      expect(res.status, JSON.stringify(shape)).toBe(409);
+      expect(body.error.code).toBe("Conflict");
+    } finally {
+      await conn.exec(`DROP TABLE IF EXISTS "${table}"`);
+      await conn.close();
+    }
   });
 });

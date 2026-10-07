@@ -5,8 +5,13 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { OkeError } from "../kernel/errors.ts";
 import { createJournal, type JournalRun } from "../kernel/journal.ts";
-import { createPostgresJournalFake, createPostgresJournalStore } from "./journal-postgres.ts";
+import {
+  createPostgresJournalFake,
+  createPostgresJournalStore,
+  postgresJournalStatements,
+} from "./journal-postgres.ts";
 
 function seedRun(patch: Partial<JournalRun> & { id: string }): JournalRun {
   return {
@@ -194,5 +199,83 @@ describe("postgres JournalStore (fake)", () => {
     const row = await store.get(session.runId);
     expect(row?.entries).toHaveLength(steps);
     await store.close();
+  });
+
+  test("a stale fence cannot append, and an identical append is a no-op", async () => {
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    const journal = createJournal({
+      store,
+      now: () => 1_000,
+      codeVersion: "v1",
+      lease: { instanceId: "A", leaseMs: 5_000 },
+    });
+    const session = await journal.start("charge");
+    await session.step("one", () => 1);
+    const entry = { kind: "step" as const, name: "one", value: 1, at: 1_000 };
+    const append = store.appendEntry;
+    if (!append) throw new Error("appendEntry missing");
+    await append(session.runId, 0, entry, {
+      lockedBy: "A",
+      leaseToken: 1,
+      now: 1_000,
+    });
+    await expect(
+      append(
+        session.runId,
+        1,
+        { kind: "step", name: "two", value: 2, at: 1_000 },
+        { lockedBy: "A", leaseToken: 99, now: 1_000 },
+      ),
+    ).rejects.toBeInstanceOf(OkeError);
+    expect((await store.get(session.runId))?.entries).toHaveLength(1);
+    expect((await store.get(session.runId))?.leaseToken).toBe(1);
+    await store.close();
+  });
+
+  test("cas rewrites only the entries that changed", async () => {
+    const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
+    await store.put(
+      seedRun({
+        id: "cas",
+        lockedBy: "A",
+        leaseExpiresAt: 5_000,
+        leaseToken: 1,
+        entries: [
+          { kind: "step", name: "a", value: 1, at: 1 },
+          { kind: "step", name: "b", value: 2, at: 1 },
+          { kind: "step", name: "c", value: 3, at: 1 },
+        ],
+      }),
+    );
+    const before = store.writeBytes;
+    const result = await store.cas("cas", "A", 1_000, 5_000, (run) => ({
+      ...run,
+      entries: run.entries.map((item) =>
+        item.kind === "step" && item.name === "b" ? { ...item, value: 9 } : item,
+      ),
+    }));
+    expect(result).toBe("ok");
+    const row = await store.get("cas");
+    expect(row?.entries[1]).toMatchObject({ value: 9 });
+    expect(row?.entries[0]).toMatchObject({ value: 1 });
+    expect(store.writeBytes - before).toBeLessThan(JSON.stringify(row?.entries).length);
+    await store.close();
+  });
+
+  test("every journal statement matches the fake, and an unknown statement does not", async () => {
+    const sql = createPostgresJournalFake();
+    const pad = Array.from({ length: 20 }, () => 0);
+    for (const statement of postgresJournalStatements()) {
+      const run = /^\s*SELECT/i.test(statement)
+        ? sql.query(statement, pad)
+        : sql.exec(statement, pad);
+      try {
+        await run;
+      } catch (err) {
+        expect(String(err)).not.toContain("unsupported");
+      }
+    }
+    await expect(sql.exec("UPDATE oke_journal_runs SET nope = 1")).rejects.toThrow(/unsupported/);
+    await sql.close();
   });
 });

@@ -6,9 +6,11 @@
  * {@link compileDynamic} / `aot: false` on edge runtimes that ban `eval`.
  */
 
+import { fail } from "../kernel/errors.ts";
 import { validate, type SchemaInput } from "../validation/standard-schema.ts";
 import {
   assembleInput,
+  HttpBodyRejected,
   parseBody,
   parseCookie,
   parseHeaders,
@@ -33,6 +35,8 @@ export interface CompileRouteOptions {
   readonly hooks?: ReadonlyArray<(...args: never[]) => unknown>;
   /** Input schema (Standard Schema when present). */
   readonly schema?: SchemaInput | undefined;
+  /** Body cap and JSON content-type policy. */
+  readonly body?: import("./http-parse.ts").ParseBodyOptions;
 }
 
 /** Bundle returned by the compilers. */
@@ -55,6 +59,16 @@ interface AotHelpers {
   parseCookie: typeof parseCookie;
   assembleInput: typeof assembleInput;
   validate: typeof validate;
+  readonly body?: import("./http-parse.ts").ParseBodyOptions;
+  readBody: (
+    request: Request,
+  ) => Promise<
+    { ok: true; value: unknown } | { ok: false; failure: import("../kernel/errors.ts").FlowFailure }
+  >;
+  bodyFailure: (
+    err: unknown,
+    request: Request,
+  ) => { ok: false; failure: import("../kernel/errors.ts").FlowFailure } | undefined;
 }
 
 /**
@@ -82,6 +96,34 @@ export function compileAot(options: CompileRouteOptions): CompiledRoute {
     parseCookie,
     assembleInput,
     validate,
+    body: options.body,
+    async readBody(request: Request) {
+      try {
+        return { ok: true as const, value: await parseBody(request, options.body) };
+      } catch (err) {
+        const rejected = this.bodyFailure(err, request);
+        if (rejected) return rejected;
+        throw err;
+      }
+    },
+    bodyFailure(err, request) {
+      if (!(err instanceof HttpBodyRejected)) return undefined;
+      if (err.code === "InvalidQuery") {
+        return {
+          ok: false,
+          failure: fail("InvalidQuery", { reason: err.reason ?? "malformed_body" }),
+        };
+      }
+      if (err.code === "UnsupportedMediaType") {
+        return {
+          ok: false,
+          failure: fail("UnsupportedMediaType", {
+            contentType: request.headers.get("content-type") ?? "",
+          }),
+        };
+      }
+      return { ok: false, failure: fail("PayloadTooLarge", {}) };
+    },
   };
 
   try {
@@ -122,7 +164,9 @@ function generateParseValidate(
     lines.push("parts.cookie = helpers.parseCookie(request);");
   }
   if (inference.body) {
-    lines.push("parts.body = await helpers.parseBody(request);");
+    lines.push("const bodyResult = await helpers.readBody(request);");
+    lines.push("if (bodyResult.ok === false) return bodyResult;");
+    lines.push("parts.body = bodyResult.value;");
   }
 
   lines.push("const raw = helpers.assembleInput(parts);");

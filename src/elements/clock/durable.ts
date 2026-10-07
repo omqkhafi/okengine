@@ -14,7 +14,10 @@ import { isFlowFailure } from "../../kernel/hooks.ts";
 import { isJsonStreamResult } from "../../kernel/json-result.ts";
 import {
   createJournal,
+  isJournalLeaseBusy,
   isJournalSuspend,
+  isLostJournalLease,
+  JournalLeaseBusy,
   type Journal,
   type JournalLeaseOptions,
   type JournalSession,
@@ -55,6 +58,8 @@ export interface RunDurableOptions {
    * Resume throws `JournalLeaseBusy` when another live instance holds the run.
    */
   readonly lease?: JournalLeaseOptions;
+  /** Opt-in app code version. Unset skips the stamp and the check. */
+  readonly codeVersion?: string;
   /** Injectable clock. */
   readonly now?: () => number;
   /** Extra fx options (secrets, store runtime, …). */
@@ -74,6 +79,7 @@ export async function runDurable<O = unknown>(
     store: options.journalStore,
     now,
     ...(options.lease ? { lease: options.lease } : {}),
+    ...(options.codeVersion ? { codeVersion: options.codeVersion } : {}),
   });
 
   if (options.runId) {
@@ -121,6 +127,7 @@ export async function runDurable<O = unknown>(
   });
 
   if (session.run.status === "compensating") {
+    if (isLostJournalLease(session.run.error)) throw new JournalLeaseBusy(session.runId);
     await rebindUndosFromDo(options.flow, options.input, fx, session);
     const priorError = session.run.error ?? "Error";
     await runCompensationPhase({
@@ -170,6 +177,7 @@ export async function runDurable<O = unknown>(
     }
     const output = produced;
     if (isFlowFailure(output)) {
+      if (isLostJournalLease(output)) throw new JournalLeaseBusy(session.runId);
       await runCompensationPhase({
         flow: options.flow,
         input: options.input,
@@ -197,6 +205,9 @@ export async function runDurable<O = unknown>(
         wakeAt: err.wakeAt,
         label: err.label,
       };
+    }
+    if (isLostJournalLease(err) || isJournalLeaseBusy(err)) {
+      throw isJournalLeaseBusy(err) ? err : new JournalLeaseBusy(session.runId);
     }
     await runCompensationPhase({
       flow: options.flow,

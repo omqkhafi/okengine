@@ -12,9 +12,14 @@ import type { WideEvent } from "../runs/types.ts";
 import { authorizeToolCall, expandOperatorScopes } from "./authorization.ts";
 import { MCP_CONFIRM_PHRASE } from "./confirmation.ts";
 import { asData, isDataEnvelope, MCP_DATA_KIND } from "./data.ts";
-import { authenticateMcpRequest, mintMcpSession, MCP_AUDIENCE } from "./session.ts";
+import {
+  authenticateMcpRequest,
+  mintMcpSession,
+  MCP_AUDIENCE,
+  type McpRequester,
+} from "./session.ts";
 import { createMcpServer } from "./server.ts";
-import { createToolRuntime } from "./tools.ts";
+import { createToolRuntime, type McpContext } from "./tools.ts";
 import { MCP_CLIENT_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION } from "./versions.ts";
 
 const SECRET = "mcp-test-secret";
@@ -106,6 +111,69 @@ describe("MCP audience validation", () => {
   });
 });
 
+const CONFIRM_REASON = "operator approved test invoke";
+
+function stringField(content: unknown, key: string): string {
+  if (content === null || typeof content !== "object" || Array.isArray(content)) {
+    throw new Error(`expected object content for ${key}`);
+  }
+  const value = (content as Record<string, unknown>)[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`expected string ${key}`);
+  }
+  return value;
+}
+
+function runtimeWithInvoke(onInvoke: () => void): ReturnType<typeof createToolRuntime> {
+  const ctx: McpContext = {
+    getManifest: () => SAMPLE_MANIFEST,
+    listRuns: async () => [],
+    invokeFlow: async (input) => {
+      onInvoke();
+      return { ok: true, flowId: input.flowId };
+    },
+    proposeStructural: async () => {
+      onInvoke();
+      return { ok: true };
+    },
+  };
+  return createToolRuntime(ctx);
+}
+
+async function twoSessionsOf(
+  principalId: string,
+): Promise<{ readonly a: McpRequester; readonly b: McpRequester }> {
+  const store = createSessionStore();
+  const mint = () =>
+    mintMcpSession({
+      store,
+      secret: SECRET,
+      principalId,
+      scopes: ["console:*"],
+    });
+  const issuedA = await mint();
+  const issuedB = await mint();
+  const a = await authenticateMcpRequest(store, SECRET, issuedA.accessToken);
+  const b = await authenticateMcpRequest(store, SECRET, issuedB.accessToken);
+  return { a, b };
+}
+
+async function openConfirmation(
+  runtime: ReturnType<typeof createToolRuntime>,
+  requester: McpRequester,
+  tool: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const opened = await runtime.callTool(requester, tool, args);
+  expect(opened.ok).toBe(false);
+  if (opened.ok) throw new Error("expected confirmation challenge");
+  const confirmationId = stringField(opened.data.content, "confirmationId");
+  expect(confirmationId.startsWith("mcp_id_")).toBe(true);
+  expect(JSON.stringify(opened.data)).not.toContain("mcp_c_");
+  expect(JSON.stringify(opened.data)).not.toContain("confirmToken");
+  return confirmationId;
+}
+
 describe("MCP write confirmation", () => {
   test("agent cannot invoke a write tool without confirmation", async () => {
     const decision = authorizeToolCall(
@@ -119,12 +187,8 @@ describe("MCP write confirmation", () => {
       expect(decision.reason).toBe("confirmation-required");
     }
 
-    const runtime = createToolRuntime({
-      getManifest: () => SAMPLE_MANIFEST,
-      listRuns: async () => [],
-      invokeFlow: async () => {
-        throw new Error("must not invoke");
-      },
+    const runtime = runtimeWithInvoke(() => {
+      throw new Error("must not invoke");
     });
     const store = createSessionStore();
     const issued = await mintMcpSession({
@@ -143,58 +207,210 @@ describe("MCP write confirmation", () => {
       expect(result.code).toBe("forbidden");
       expect(result.message).toContain("confirmation");
       expect(isDataEnvelope(result.data)).toBe(true);
+      const confirmationId = stringField(result.data.content, "confirmationId");
+      expect(confirmationId.startsWith("mcp_id_")).toBe(true);
+      expect(JSON.stringify(result.data)).not.toContain("mcp_c_");
+      expect(JSON.stringify(result.data)).not.toContain("confirmToken");
     }
   });
 
-  test("write succeeds only with fresh per-call confirmation (no consent cache)", async () => {
+  test("one session cannot request, confirm, and invoke", async () => {
     let invoked = 0;
-    const runtime = createToolRuntime({
-      getManifest: () => SAMPLE_MANIFEST,
-      listRuns: async () => [],
-      invokeFlow: async (input) => {
-        invoked += 1;
-        return { ok: true, flowId: input.flowId };
-      },
+    const runtime = runtimeWithInvoke(() => {
+      invoked += 1;
     });
-    const store = createSessionStore();
-    const issued = await mintMcpSession({
-      store,
-      secret: SECRET,
-      principalId: "op1",
-      scopes: ["console:*"],
+    const { a } = await twoSessionsOf("op1");
+    const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
+    const confirmationId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+
+    const confirm = await runtime.callTool(a, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
     });
-    const requester = await authenticateMcpRequest(store, SECRET, issued.accessToken);
+    expect(confirm.ok).toBe(false);
+    if (!confirm.ok) {
+      expect(confirm.message).toContain("different auth session");
+      expect(JSON.stringify(confirm.data)).not.toContain("mcp_c_");
+    }
+
+    const invoke = await runtime.callTool(a, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      reason: CONFIRM_REASON,
+    });
+    expect(invoke.ok).toBe(false);
+    expect(invoked).toBe(0);
+  });
+
+  test("a second session of the same principal confirms and the first invokes once", async () => {
+    let invoked = 0;
+    const runtime = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const { a, b } = await twoSessionsOf("op1");
+    expect(a.principalId).toBe(b.principalId);
+    expect(a.sessionId).not.toBe(b.sessionId);
 
     const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
-    const confirm = await runtime.callTool(requester, "oke.action.confirm", {
-      tool: "oke.action.invoke",
-      args: actionArgs,
-      reason: "operator approved test invoke",
+    const confirmationId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+    const confirm = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
     });
     expect(confirm.ok).toBe(true);
     if (!confirm.ok) return;
-    const token = (confirm.data.content as { confirmToken: string }).confirmToken;
+    const token = stringField(confirm.data.content, "confirmToken");
     expect(token.startsWith("mcp_c_")).toBe(true);
+    expect(token).not.toBe(confirmationId);
 
-    const first = await runtime.callTool(requester, "oke.action.invoke", {
+    const first = await runtime.callTool(a, "oke.action.invoke", {
       ...actionArgs,
       confirmation: MCP_CONFIRM_PHRASE,
       confirmToken: token,
-      reason: "operator approved test invoke",
+      reason: CONFIRM_REASON,
     });
     expect(first.ok).toBe(true);
     expect(invoked).toBe(1);
+  });
 
-    // Same token cannot be reused — no session-level consent cache.
-    const replay = await runtime.callTool(requester, "oke.action.invoke", {
+  test("the issuer cannot consume the token", async () => {
+    let invoked = 0;
+    const runtime = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const { a, b } = await twoSessionsOf("op1");
+    const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
+    const confirmationId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+    const confirm = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
+    });
+    expect(confirm.ok).toBe(true);
+    if (!confirm.ok) return;
+    const token = stringField(confirm.data.content, "confirmToken");
+
+    const stolen = await runtime.callTool(b, "oke.action.invoke", {
       ...actionArgs,
       confirmation: MCP_CONFIRM_PHRASE,
       confirmToken: token,
-      reason: "operator approved test invoke",
+      reason: CONFIRM_REASON,
+    });
+    expect(stolen.ok).toBe(false);
+    if (!stolen.ok) expect(stolen.message).toContain("session-mismatch");
+    expect(invoked).toBe(0);
+  });
+
+  test("replay of a consumed token fails", async () => {
+    let invoked = 0;
+    const runtime = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const { a, b } = await twoSessionsOf("op1");
+    const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
+    const confirmationId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+    const confirm = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
+    });
+    expect(confirm.ok).toBe(true);
+    if (!confirm.ok) return;
+    const token = stringField(confirm.data.content, "confirmToken");
+
+    const first = await runtime.callTool(a, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: token,
+      reason: CONFIRM_REASON,
+    });
+    expect(first.ok).toBe(true);
+
+    const replay = await runtime.callTool(a, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: token,
+      reason: CONFIRM_REASON,
     });
     expect(replay.ok).toBe(false);
+    if (!replay.ok) expect(replay.message).toContain("unknown");
     expect(invoked).toBe(1);
     expect(runtime.confirmationSize()).toBe(0);
+  });
+
+  test("wrong tool or args is rejected", async () => {
+    let invoked = 0;
+    const runtime = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const { a, b } = await twoSessionsOf("op1");
+    const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
+
+    const argsId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+    const argsConfirm = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId: argsId,
+      reason: CONFIRM_REASON,
+    });
+    expect(argsConfirm.ok).toBe(true);
+    if (!argsConfirm.ok) return;
+    const argsToken = stringField(argsConfirm.data.content, "confirmToken");
+    const wrongArgs = await runtime.callTool(a, "oke.action.invoke", {
+      flowId: "bookings.create",
+      body: { name: "other" },
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: argsToken,
+      reason: CONFIRM_REASON,
+    });
+    expect(wrongArgs.ok).toBe(false);
+    if (!wrongArgs.ok) expect(wrongArgs.message).toContain("args-mismatch");
+
+    const toolId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+    const toolConfirm = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId: toolId,
+      reason: CONFIRM_REASON,
+    });
+    expect(toolConfirm.ok).toBe(true);
+    if (!toolConfirm.ok) return;
+    const toolToken = stringField(toolConfirm.data.content, "confirmToken");
+    const wrongTool = await runtime.callTool(a, "oke.action.structural_propose", {
+      title: "rename",
+      relativePath: "src/bookings.ts",
+      contents: "export {}",
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: toolToken,
+      reason: CONFIRM_REASON,
+    });
+    expect(wrongTool.ok).toBe(false);
+    if (!wrongTool.ok) expect(wrongTool.message).toContain("tool-mismatch");
+    expect(invoked).toBe(0);
+  });
+
+  test("a token issued on another runtime is unknown", async () => {
+    let invoked = 0;
+    const issuer = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const other = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const { a, b } = await twoSessionsOf("op1");
+    const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
+    const confirmationId = await openConfirmation(issuer, a, "oke.action.invoke", actionArgs);
+    const confirm = await issuer.callTool(b, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
+    });
+    expect(confirm.ok).toBe(true);
+    if (!confirm.ok) return;
+    const token = stringField(confirm.data.content, "confirmToken");
+
+    const cross = await other.callTool(a, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: token,
+      reason: CONFIRM_REASON,
+    });
+    expect(cross.ok).toBe(false);
+    if (!cross.ok) expect(cross.message).toContain("unknown");
+    expect(invoked).toBe(0);
   });
 });
 
@@ -293,6 +509,7 @@ describe("MCP HTTP server", () => {
       result: { tools: { name: string }[] };
     };
     expect(listBody.result.tools.some((t) => t.name === "oke.manifest.get")).toBe(true);
+    expect(listBody.result.tools.some((t) => t.name === "oke.action.invoke")).toBe(true);
 
     const call = await server.fetch(
       new Request("http://127.0.0.1:6535/mcp", {
@@ -314,6 +531,77 @@ describe("MCP HTTP server", () => {
     };
     expect(callBody.result.structuredContent.kind).toBe("data");
     expect(callBody.result.structuredContent.content.manifest.app).toBe("skyport");
+  });
+
+  test("read-only tools/list omits write tools and a hidden write call is 403", async () => {
+    let invoked = 0;
+    const store = createSessionStore();
+    const issued = await mintMcpSession({
+      store,
+      secret: SECRET,
+      principalId: "op-read",
+      scopes: ["mcp:manifest:read"],
+    });
+    const server = createMcpServer({
+      sessions: store,
+      secret: SECRET,
+      context: {
+        getManifest: () => SAMPLE_MANIFEST,
+        listRuns: async () => [],
+        invokeFlow: async () => {
+          invoked += 1;
+          return { ok: true };
+        },
+      },
+    });
+    const headers = {
+      host: "127.0.0.1:6535",
+      authorization: `Bearer ${issued.accessToken}`,
+      "content-type": "application/json",
+    };
+    const list = await server.fetch(
+      new Request("http://127.0.0.1:6535/mcp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/list",
+        }),
+      }),
+    );
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as {
+      result: {
+        tools: { name: string; annotations: { readOnlyHint: boolean; destructiveHint: boolean } }[];
+      };
+    };
+    expect(listBody.result.tools.some((t) => t.name === "oke.manifest.get")).toBe(true);
+    expect(listBody.result.tools.some((t) => t.name === "oke.action.invoke")).toBe(false);
+    expect(listBody.result.tools.some((t) => t.name === "oke.action.structural_propose")).toBe(
+      false,
+    );
+    expect(listBody.result.tools.every((t) => t.annotations.destructiveHint === false)).toBe(true);
+
+    const call = await server.fetch(
+      new Request("http://127.0.0.1:6535/mcp", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: {
+            name: "oke.action.invoke",
+            arguments: { flowId: "bookings.create", body: { name: "x" } },
+          },
+        }),
+      }),
+    );
+    expect(call.status).toBe(403);
+    const callBody = (await call.json()) as { error: { message: string } };
+    expect(callBody.error.message).toMatch(/missing one of/i);
+    expect(invoked).toBe(0);
   });
 
   test("initialize advertises 2024-11-05 and rejects a version the server does not implement", async () => {

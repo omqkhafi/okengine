@@ -24,6 +24,7 @@ import { postgresDriver } from "../../drivers/postgres.ts";
 import { redisDriver } from "../../drivers/redis.ts";
 import { s3Driver } from "../../drivers/s3.ts";
 import type { FilesDriver, IndexDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
+import { bunRedisCacheClient } from "../../elements/store/cache-bus.ts";
 import { createStoreRuntime, type StoreRuntime } from "../../elements/store.ts";
 import type { SqlRuntimeBinding } from "../../elements/store/runtime.ts";
 import type { StoreDecl } from "../../elements/store/declare.ts";
@@ -171,7 +172,14 @@ export function bindStore(
   const autoPush = resolveAutoPush(options);
   const domainDdl = resolveDomainDdlMode(env, autoPush);
 
-  const store = createStoreRuntime({
+  let store!: StoreRuntime;
+  const cacheBus =
+    kvId === "redis" && kvUrl
+      ? { kind: "redis" as const, redis: bunRedisCacheClient(kvUrl) }
+      : sqlId === "postgres" && sqlUrl
+        ? { kind: "postgres" as const, sql: () => store.primarySql() }
+        : undefined;
+  store = createStoreRuntime({
     drivers: {
       sql: sqlDriverFor(sqlId),
       kv: kvDriverFor(kvId),
@@ -183,6 +191,13 @@ export function bindStore(
     files: filesBindings,
     index: indexBindings,
     now,
+    ...(options.cache?.maxEntries !== undefined
+      ? { cacheMaxEntries: options.cache.maxEntries }
+      : {}),
+    ...(options.cache?.defaultTtlMs !== undefined
+      ? { cacheDefaultTtlMs: options.cache.defaultTtlMs }
+      : {}),
+    ...(cacheBus ? { cacheBus } : {}),
     domainDdl,
     sqlUrl,
   });

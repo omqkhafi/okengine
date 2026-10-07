@@ -72,6 +72,11 @@ export interface ServeOptions {
    * never replaces the mandatory check.
    */
   readonly allowedHosts?: readonly string[];
+  /**
+   * Bun.serve body backstop in bytes. Default 1 MiB. Raise it together with
+   * `maxRequestBodySize` when a route accepts a larger body.
+   */
+  readonly maxRequestBodySize?: number;
 }
 
 /** Handle returned by {@link Runtime.serve}. */

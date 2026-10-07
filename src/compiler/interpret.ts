@@ -5,13 +5,15 @@
  * requested, so eval-restricted runtimes do not carry the codegen.
  */
 
-import type { FlowFailure } from "../kernel/errors.ts";
+import { fail, type FlowFailure } from "../kernel/errors.ts";
 import { validate, type SchemaInput } from "../validation/standard-schema.ts";
 import {
   assembleInput,
   extractParts,
+  HttpBodyRejected,
   type ContextInference,
   type InputParts,
+  type ParseBodyOptions,
 } from "./http-parse.ts";
 
 /** Result of parse + validate for one request. */
@@ -34,9 +36,30 @@ export type CompiledParseValidate = (
 export function createInterpretedParseValidate(
   inference: ContextInference,
   schema: SchemaInput | undefined,
+  body?: ParseBodyOptions,
 ): CompiledParseValidate {
   return async (request, params) => {
-    const parts: InputParts = await extractParts(request, params, inference);
+    let parts: InputParts;
+    try {
+      parts = await extractParts(request, params, inference, { body });
+    } catch (err) {
+      if (!(err instanceof HttpBodyRejected)) throw err;
+      if (err.code === "InvalidQuery") {
+        return {
+          ok: false,
+          failure: fail("InvalidQuery", { reason: err.reason ?? "malformed_body" }),
+        };
+      }
+      if (err.code === "UnsupportedMediaType") {
+        return {
+          ok: false,
+          failure: fail("UnsupportedMediaType", {
+            contentType: request.headers.get("content-type") ?? "",
+          }),
+        };
+      }
+      return { ok: false, failure: fail("PayloadTooLarge", {}) };
+    }
     const raw = assembleInput(parts);
     const result = await validate(schema, raw);
     if (!result.ok) return { ok: false, failure: result.failure };

@@ -52,16 +52,16 @@ Two actions are write-class, and each call needs a **fresh, single-use** confirm
 <Steps>
 
 <Step>
-### Request a confirmation token
+### Ask for confirmation
 
-`oke.action.confirm` with the target `tool`, the exact `args`, and a human `reason` — it returns a single-use token.
+The write returns an opaque `confirmationId`. It does not return a token. Confirm from a **different auth session** (`claims.sid`) than the session that will invoke. The same principal is allowed. A confirmation issued on another process is unknown.
 
 </Step>
 
 <Step>
 ### Call the write tool
 
-Pass the token as `confirmToken` plus the phrase `CONFIRM` in `confirmation`. Token, phrase, args, and principal must all match what was confirmed.
+`oke.action.confirm(confirmationId, reason)` returns a single-use token. Pass it as `confirmToken` plus the phrase `CONFIRM`. The invoking session must be the one that asked, and it must not be the session that confirmed.
 
 </Step>
 

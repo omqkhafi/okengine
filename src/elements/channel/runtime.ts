@@ -170,11 +170,12 @@ export interface ChannelRuntime {
   /**
    * Ingest a post-send provider outcome (bounce / complaint / …).
    * Hard bounce auto-adds suppression. Console projects the ledger — never
-   * raw webhooks.
+   * raw webhooks. When the ledger can read SQL, a cache miss loads that
+   * receipt before a new one is recorded.
    *
    * @param input - Normalized outcome
    */
-  ingestOutcome(input: IngestOutcomeInput): DeliveryReceipt;
+  ingestOutcome(input: IngestOutcomeInput): Promise<DeliveryReceipt>;
 }
 
 /**
@@ -187,6 +188,28 @@ let channelProcessLocalWarned = false;
 /** Test helper — reset the one-shot Channel process-local warn. */
 export function resetChannelProcessLocalWarnForTests(): void {
   channelProcessLocalWarned = false;
+}
+
+/**
+ * SQL read for a receipt the cache does not have yet.
+ *
+ * @param ledger - Receipt ledger, possibly backed by Postgres
+ */
+function lookupReceipt(
+  ledger: ReceiptLedger,
+): ((messageId: string) => Promise<DeliveryReceipt | undefined>) | undefined {
+  if (!("lookup" in ledger)) return undefined;
+  const lookup = (ledger as { lookup?: unknown }).lookup;
+  if (typeof lookup !== "function") return undefined;
+  return (messageId: string) =>
+    Promise.resolve(
+      (
+        lookup as (
+          this: ReceiptLedger,
+          messageId: string,
+        ) => DeliveryReceipt | undefined | Promise<DeliveryReceipt | undefined>
+      ).call(ledger, messageId),
+    ).then((value) => value ?? undefined);
 }
 
 export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}): ChannelRuntime {
@@ -750,9 +773,13 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     async deliverOtp(opts) {
       return deliverOtpAcrossChannels(drivers, sendTemplate, opts, now);
     },
-    ingestOutcome(input) {
+    async ingestOutcome(input) {
       const at = input.at ?? now();
-      const existing = receipts.byMessageId(input.messageId);
+      let existing = receipts.byMessageId(input.messageId);
+      if (!existing) {
+        const lookup = lookupReceipt(receipts);
+        if (lookup) existing = await lookup(input.messageId);
+      }
       if (input.state === "hard-bounce") {
         const subject = input.to ?? existing?.to;
         const medium = (input.medium ?? existing?.medium ?? "email") as ChannelMedium;

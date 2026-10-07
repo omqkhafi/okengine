@@ -7,11 +7,10 @@
  * (four-applications · Provisions).
  */
 
-import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { okid } from "../okid.ts";
-import { throwOke } from "./errors.ts";
+import { OkeError, throwOke } from "./errors.ts";
 import type { DecisionLabelStore } from "./decision-label-store.ts";
 import type { IdempotencyStore } from "./idempotency-store.ts";
 import { JournalSuspend } from "./journal-suspend.ts";
@@ -146,6 +145,15 @@ export interface JournalLeaseStore {
    */
   acquireLease(runId: string, instanceId: string, now: number, leaseMs: number): Promise<boolean>;
   /**
+   * Extend `lease_expires_at` without changing the fencing token.
+   * Returns false when this holder no longer owns the run.
+   *
+   * @param runId - Run id
+   * @param expiresAt - New expiry, epoch-ms
+   * @param fence - Caller's lease fence
+   */
+  renewLeaseExpiry?(runId: string, expiresAt: number, fence: JournalWriteFence): Promise<boolean>;
+  /**
    * Take the lease and write `update(run)` in that same hold.
    * `undefined` from `update` keeps the previous entries and still holds the lease.
    * `"lease"` means another holder won. `"missing"` means no run.
@@ -259,6 +267,22 @@ export interface JournalStore extends Partial<JournalLeaseStore> {
     entry: JournalEntry,
     fence?: JournalWriteFence,
   ): Promise<void>;
+  /**
+   * Replace one existing entry under the caller's fence. Built-in stores
+   * implement this so approval and decide can correct a step without
+   * rewriting the run. Absent on a custom store — callers keep `put`.
+   *
+   * @param runId - Run id
+   * @param seq - Zero-based position
+   * @param entry - Replacement entry
+   * @param fence - Lease fence
+   */
+  updateEntry?(
+    runId: string,
+    seq: number,
+    entry: JournalEntry,
+    fence: JournalWriteFence,
+  ): Promise<void>;
   /** List all runs (test / console helper). */
   list(): Promise<readonly JournalRun[]>;
 }
@@ -294,6 +318,27 @@ export class JournalLeaseBusy extends Error {
 /** Type guard for {@link JournalLeaseBusy}. */
 export function isJournalLeaseBusy(err: unknown): err is JournalLeaseBusy {
   return err instanceof JournalLeaseBusy;
+}
+
+/**
+ * A fenced write lost the lease (OKE1074). The holder must not compensate
+ * or record the step — another instance may already own the run.
+ *
+ * @param err - Caught error
+ */
+export function isLostJournalLease(err: unknown): boolean {
+  return err instanceof OkeError && err.code === 1074;
+}
+
+const heartbeatTimers = new Set<ReturnType<typeof setInterval>>();
+
+/**
+ * Stop every session heartbeat. `stop` and `close` call this so a shut
+ * down process does not keep renewing leases it no longer owns.
+ */
+export function clearJournalHeartbeats(): void {
+  for (const timer of heartbeatTimers) clearInterval(timer);
+  heartbeatTimers.clear();
 }
 
 /** Live lease = a holder with an unexpired expiry. */
@@ -349,6 +394,20 @@ function leaseMethods(
       } finally {
         release();
       }
+    },
+    async renewLeaseExpiry(runId, expiresAt, fence) {
+      const map = await load();
+      const run = map.get(runId);
+      if (!run) return false;
+      const expired = run.leaseExpiresAt !== undefined && run.leaseExpiresAt <= fence.now;
+      if (run.lockedBy !== fence.lockedBy || run.leaseToken !== fence.leaseToken || expired) {
+        return false;
+      }
+      if (run.leaseExpiresAt === undefined || run.leaseExpiresAt < expiresAt) {
+        run.leaseExpiresAt = expiresAt;
+      }
+      await flush?.(map);
+      return true;
     },
     async releaseLease(runId, instanceId) {
       const map = await load();
@@ -409,6 +468,14 @@ export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalS
       if (!existing) throw new Error(`journal: run "${runId}" not found`);
       assertJournalFence(existing, fence);
       appendStoredEntry(existing, seq, entry);
+    },
+    async updateEntry(runId, seq, entry, fence) {
+      const existing = runs.get(runId);
+      if (!existing) throwOke("JOURNAL_STALE_LEASE", { runId });
+      assertJournalFence(existing, fence);
+      const entries = existing.entries as JournalEntry[];
+      if (!entries[seq]) throwOke("JOURNAL_STALE_LEASE", { runId });
+      entries[seq] = structuredClone(entry);
     },
     async list() {
       return [...runs.values()].map(cloneRun);
@@ -477,6 +544,16 @@ export function createFileJournalStore(path: string): JournalStore {
       if (!existing) throw new Error(`journal: run "${runId}" not found`);
       assertJournalFence(existing, fence);
       appendStoredEntry(existing, seq, entry);
+      await flush(map);
+    },
+    async updateEntry(runId, seq, entry, fence) {
+      const map = await load();
+      const existing = map.get(runId);
+      if (!existing) throwOke("JOURNAL_STALE_LEASE", { runId });
+      assertJournalFence(existing, fence);
+      const entries = existing.entries as JournalEntry[];
+      if (!entries[seq]) throwOke("JOURNAL_STALE_LEASE", { runId });
+      entries[seq] = structuredClone(entry);
       await flush(map);
     },
     async list() {
@@ -674,7 +751,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
   const now = options.now ?? (() => Date.now());
   const newId = options.id ?? (() => okid());
   const lease = options.lease;
-  const codeVersion = options.codeVersion ?? packageVersion();
+  const codeVersion = stampAppVersion(options.codeVersion);
   const coordinated = lease !== undefined && hasJournalLease(options.store);
 
   function openSession(run: JournalRun, leased: boolean): JournalSession {
@@ -697,6 +774,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
     }
 
     async function persist(entry?: JournalEntry): Promise<void> {
+      if (lostLease) throwOke("JOURNAL_STALE_LEASE", { runId: run.id });
       run.updatedAt = now();
       // Natural heartbeat — a live holder renews on every journal write.
       if (leaseHeld && lease) {
@@ -742,8 +820,52 @@ export function createJournal(options: CreateJournalOptions): Journal {
     }
 
     /** Parking / terminal states must not hold a short lease across days. */
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let lostLease = false;
+    let activeStep = "";
+
+    function stopHeartbeat(): void {
+      if (!heartbeat) return;
+      clearInterval(heartbeat);
+      heartbeatTimers.delete(heartbeat);
+      heartbeat = undefined;
+    }
+
+    function startHeartbeat(): void {
+      if (!leased || !lease || heartbeat) return;
+      const every = Math.max(1, Math.floor((lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS) / 3));
+      heartbeat = setInterval(() => {
+        void (async () => {
+          if (!leaseHeld || lostLease || !options.store.renewLeaseExpiry) return;
+          const writeFence = fence();
+          if (!writeFence) return;
+          const expiresAt = now() + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
+          const ok = await options.store.renewLeaseExpiry(run.id, expiresAt, writeFence);
+          if (!ok) {
+            lostLease = true;
+            console.warn(
+              JSON.stringify({
+                event: "journal.lease.lost",
+                runId: run.id,
+                step: activeStep,
+                instanceId: lease.instanceId,
+              }),
+            );
+            return;
+          }
+          if (run.leaseExpiresAt === undefined || run.leaseExpiresAt < expiresAt) {
+            run.leaseExpiresAt = expiresAt;
+          }
+        })();
+      }, every);
+      heartbeat.unref?.();
+      heartbeatTimers.add(heartbeat);
+    }
+
     function releaseLeaseLocally(): void {
       leaseHeld = false;
+      lostLease = false;
+      stopHeartbeat();
       delete run.lockedBy;
       delete run.leaseExpiresAt;
     }
@@ -772,6 +894,8 @@ export function createJournal(options: CreateJournalOptions): Journal {
       }
     }
 
+    if (leased) startHeartbeat();
+
     return {
       runId: run.id,
       run,
@@ -792,6 +916,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
           return value;
         }
         assertCanAppendStep(name);
+        activeStep = name;
         stepDepth += 1;
         let stored: unknown;
         try {
@@ -799,6 +924,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
         } finally {
           stepDepth -= 1;
         }
+        if (lostLease) throwOke("JOURNAL_STALE_LEASE", { runId: run.id });
         const value = reviveJournalValue(stored) as T;
         const entry: JournalStepEntry = {
           kind: "step",
@@ -808,7 +934,13 @@ export function createJournal(options: CreateJournalOptions): Journal {
         };
         run.entries.push(entry);
         cursor = run.entries.length;
-        await persist(entry);
+        try {
+          await persist(entry);
+        } catch (err) {
+          run.entries.pop();
+          cursor = run.entries.length;
+          throw err;
+        }
         if (!name.startsWith(JOURNAL_UNDO_PREFIX)) {
           registerUndo(name, value, opts);
         }
@@ -998,15 +1130,30 @@ export function createJournal(options: CreateJournalOptions): Journal {
         }
         throw new Error(`journal: run "${runId}" not found`);
       }
-      if (run.codeVersion !== undefined && run.codeVersion !== codeVersion) {
-        if (coordinated && lease) {
-          await options.store.releaseLease!(runId, lease.instanceId);
+      if (
+        codeVersion !== undefined &&
+        run.codeVersion !== undefined &&
+        run.codeVersion !== codeVersion
+      ) {
+        if (run.codeVersion.startsWith("app:")) {
+          run.status = "failed";
+          run.error = "OKE1076";
+          run.updatedAt = now();
+          const skewFence =
+            coordinated && lease && run.leaseToken !== undefined && run.lockedBy !== undefined
+              ? { lockedBy: run.lockedBy, leaseToken: run.leaseToken, now: now() }
+              : undefined;
+          await options.store.put(cloneRun(run), skewFence);
+          if (coordinated && lease) {
+            await options.store.releaseLease!(runId, lease.instanceId);
+          }
+          throwOke("JOURNAL_CODE_VERSION", {
+            runId,
+            expected: run.codeVersion,
+            actual: codeVersion,
+          });
         }
-        throwOke("JOURNAL_CODE_VERSION", {
-          runId,
-          expected: run.codeVersion,
-          actual: codeVersion,
-        });
+        run.codeVersion = codeVersion;
       }
       // Leave status intact — the durable runner parks or continues.
       run.updatedAt = now();
@@ -1014,7 +1161,11 @@ export function createJournal(options: CreateJournalOptions): Journal {
         run.lockedBy = lease.instanceId;
         run.leaseExpiresAt = now() + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
       }
-      await options.store.put(cloneRun(run));
+      const resumeFence =
+        coordinated && lease && run.leaseToken !== undefined && run.lockedBy !== undefined
+          ? { lockedBy: run.lockedBy, leaseToken: run.leaseToken, now: now() }
+          : undefined;
+      await options.store.put(cloneRun(run), resumeFence);
       return openSession(run, coordinated);
     },
   };
@@ -1159,19 +1310,13 @@ function entryLabel(entry: JournalEntry): string {
   return `effect ${entry.effectKind} ${entry.resource}`;
 }
 
-let cachedPackageVersion: string | undefined;
-
 /**
- * Package version used when a journal is not given an explicit code version.
+ * Namespace an opt-in code version so an okengine package version stored by
+ * 0.23.1 (`"0.23.1"`) is not compared with an app stamp (`"app:1"`).
+ *
+ * @param version - Caller version, or unset to skip the check
  */
-function packageVersion(): string {
-  if (cachedPackageVersion !== undefined) return cachedPackageVersion;
-  try {
-    const raw = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
-    const parsed = JSON.parse(raw) as { version?: string };
-    cachedPackageVersion = parsed.version && parsed.version.length > 0 ? parsed.version : "0";
-  } catch {
-    cachedPackageVersion = "0";
-  }
-  return cachedPackageVersion;
+function stampAppVersion(version: string | undefined): string | undefined {
+  if (version === undefined || version.length === 0) return undefined;
+  return version.startsWith("app:") ? version : `app:${version}`;
 }

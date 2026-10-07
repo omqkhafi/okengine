@@ -258,3 +258,62 @@ describe("autoCacheEligible", () => {
     expect(tier1Lookup((key) => cache.get<number>(key), ["a", "b"])).toBe(1);
   });
 });
+
+describe("tier-1 cache bounds", () => {
+  test("LRU drops the oldest entry past the cap and a remote invalidation is not republished", () => {
+    const seen: string[][] = [];
+    let now = 1_000;
+    const cache = createStoreCache({
+      now: () => now,
+      maxEntries: 2,
+      fanout: (resources) => {
+        seen.push([...resources]);
+      },
+    });
+    cache.set({ tier: 1, key: "a", value: 1, resources: ["sql:a"], expiresAt: now + 60_000 });
+    cache.set({ tier: 1, key: "b", value: 2, resources: ["sql:b"], expiresAt: now + 60_000 });
+    cache.get("a");
+    cache.set({ tier: 1, key: "c", value: 3, resources: ["sql:c"], expiresAt: now + 60_000 });
+    expect(cache.get<number>("b")).toBeUndefined();
+    expect(cache.get<number>("a")).toBe(1);
+    cache.invalidate(["sql:a"]);
+    expect(seen).toEqual([["sql:a"]]);
+    expect(cache.generationOf("sql:a")).toBe(1);
+    cache.acceptRemote(["sql:c"]);
+    expect(seen).toEqual([["sql:a"]]);
+    expect(cache.get("c")).toBeUndefined();
+  });
+
+  test("a flight that is invalidated does not cache, and the waiter refetches", async () => {
+    const cache = createStoreCache({ maxEntries: 10 });
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const leader = cache.coalesce("k", ["sql:notes"], async () => {
+      reads += 1;
+      await gate;
+      return reads;
+    });
+    const waiter = cache.coalesce("k", ["sql:notes"], async () => {
+      reads += 1;
+      return reads;
+    });
+    cache.invalidate(["sql:notes"]);
+    release();
+    const first = await leader;
+    const second = await waiter;
+    expect(first.cacheable).toBe(false);
+    expect(second.value).not.toBe(first.value);
+    expect(reads).toBe(2);
+  });
+
+  test("verified and operator are part of the key", () => {
+    const anon = tier1FlowDims("read", {}, { verified: false, operatorId: null });
+    const verified = tier1FlowDims("read", {}, { verified: true, operatorId: "op-1" });
+    expect(anon.join("/")).not.toBe(verified.join("/"));
+    expect(verified.join("/")).toContain("v:1");
+    expect(verified.join("/")).toContain("o:op-1");
+  });
+});

@@ -12,7 +12,9 @@ import { authorizeToolCall, MCP_TOOL_POLICIES, type McpToolPolicy } from "./auth
 import {
   createConfirmationGate,
   MCP_CONFIRM_PHRASE,
+  type ConfirmationGate,
   type ConfirmationGateOptions,
+  type ConfirmIssueResult,
 } from "./confirmation.ts";
 import { asData, freezeData, type McpDataEnvelope } from "./data.ts";
 import type { McpRequester } from "./session.ts";
@@ -68,6 +70,9 @@ export type ToolCallResult =
 /**
  * Create the tool runtime bound to a context + confirmation gate.
  *
+ * `listTools` receives the requester and omits tools their scopes cannot call.
+ * Confirmation is not required to appear in the list; `callTool` still enforces it.
+ *
  * @param ctx - Manifest / runs / action adapters
  * @param confirmOptions - Confirmation gate options
  */
@@ -75,7 +80,7 @@ export function createToolRuntime(
   ctx: McpContext,
   confirmOptions: ConfirmationGateOptions = {},
 ): {
-  readonly listTools: () => readonly McpToolPolicy[];
+  readonly listTools: (requester: McpRequester) => readonly McpToolPolicy[];
   readonly callTool: (
     requester: McpRequester,
     name: string,
@@ -87,7 +92,14 @@ export function createToolRuntime(
   const confirm = createConfirmationGate(confirmOptions);
 
   return {
-    listTools: () => MCP_TOOL_POLICIES,
+    listTools(requester) {
+      // Same scope check as authorizeToolCall. Listing ignores confirmation;
+      // a later call to a write tool still requires a token.
+      return MCP_TOOL_POLICIES.filter((policy) => {
+        const decision = authorizeToolCall(policy.name, {}, requester.scopes, { confirmed: true });
+        return decision.ok;
+      });
+    },
     confirmationSize: () => confirm.size(),
     async callTool(requester, name, args) {
       const policy = MCP_TOOL_POLICIES.find((p) => p.name === name);
@@ -113,15 +125,42 @@ export function createToolRuntime(
       }
 
       // Write path: consume a fresh per-call confirmation (no session cache).
+      // A call with no token is rejected and returns an opaque confirmationId
+      // bound to this requester — never the token.
       if (policy?.mutability === "write") {
         const token = typeof args.confirmToken === "string" ? args.confirmToken : "";
         const phrase = typeof args.confirmation === "string" ? args.confirmation : "";
         const reason = typeof args.reason === "string" ? args.reason : "";
         const boundArgs = stripConfirmFields(args);
+        if (token.length === 0) {
+          const opened = confirm.open({
+            tool: name,
+            args: boundArgs,
+            target: {
+              principalId: requester.principalId,
+              sid: requester.sessionId,
+            },
+          });
+          return {
+            ok: false,
+            code: "forbidden",
+            message: "write tool requires fresh human confirmation (missing)",
+            data: asData(
+              {
+                tool: name,
+                confirmationId: opened.confirmationId,
+                requiredPhrase: MCP_CONFIRM_PHRASE,
+                confirmVia: "oke.action.confirm",
+                reason: "missing",
+              },
+              "error",
+            ),
+          };
+        }
         const consumed = confirm.consume({
           tool: name,
           args: boundArgs,
-          principalId: requester.principalId,
+          consumerSid: requester.sessionId,
           token,
           phrase,
           reason,
@@ -412,28 +451,23 @@ async function decisionsList(
 }
 
 function actionConfirm(
-  confirm: ReturnType<typeof createConfirmationGate>,
+  confirm: ConfirmationGate,
   requester: McpRequester,
   args: Record<string, unknown>,
 ): ToolCallResult {
-  const tool = String(args.tool ?? "");
-  const reason = String(args.reason ?? "");
-  const toolArgs =
-    args.args !== null && typeof args.args === "object" && !Array.isArray(args.args)
-      ? (args.args as Record<string, unknown>)
-      : {};
-  const issued = confirm.request({
-    tool,
-    args: toolArgs,
-    principalId: requester.principalId,
+  const confirmationId = typeof args.confirmationId === "string" ? args.confirmationId : "";
+  const reason = typeof args.reason === "string" ? args.reason : "";
+  const issued = confirm.issue({
+    confirmationId,
     reason,
+    callerSid: requester.sessionId,
   });
-  if ("error" in issued) {
+  if (!issued.ok) {
     return {
       ok: false,
-      code: "invalid",
-      message: "reason must be at least 3 characters",
-      data: asData({ error: issued.error }, "error"),
+      code: issued.reason === "reason-short" ? "invalid" : "forbidden",
+      message: confirmIssueMessage(issued.reason),
+      data: asData({ error: issued.reason }, "error"),
     };
   }
   return okData(
@@ -443,10 +477,25 @@ function actionConfirm(
       phrase: MCP_CONFIRM_PHRASE,
       expiresAt: issued.expiresAt,
       notice:
-        "Present confirmToken + confirmation phrase on the write call. Tokens are single-use; there is no session consent cache.",
+        "Present confirmToken + confirmation phrase on the write call from the session that requested it. Tokens are single-use; the issuer session cannot consume them.",
     },
     "action-result",
   );
+}
+
+function confirmIssueMessage(reason: Extract<ConfirmIssueResult, { ok: false }>["reason"]): string {
+  switch (reason) {
+    case "reason-short":
+      return "reason must be at least 3 characters";
+    case "same-session":
+      return "confirmation must be issued by a different auth session";
+    case "unknown":
+      return "unknown confirmation";
+    case "expired":
+      return "confirmation expired";
+    case "already-issued":
+      return "confirmation already issued";
+  }
 }
 
 async function actionInvoke(

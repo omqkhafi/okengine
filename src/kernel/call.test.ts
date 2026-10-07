@@ -112,6 +112,7 @@ describe("fx.call — untriggered flows", () => {
     const a = await app.fetch(
       new Request("http://localhost/work", {
         method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ v: 10 }),
       }),
     );

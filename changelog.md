@@ -12,11 +12,49 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.23.2 — 2026-10-07
+
+### ♻️ Changed
+
+#### Runtime
+
+- Durable code-version checks are opt-in. Set `codeVersion` when a durable flow's structure changes, and keep that value until in-flight runs drain. Unset stamps nothing and checks nothing.
+- HTTP and MCP bodies default to 1 MiB. Raise it with `maxRequestBodySize`, or per route with `maxBodySize`.
+- Auto-cache entries expire after 60 seconds unless the flow sets `cache: "5m"` (or another duration). Override the default with `cache.defaultTtlMs`.
+- The auto-cache keeps at most 10,000 entries. Override it with `cache.maxEntries`.
+- A JSON-shaped body sent as `text/plain`, form data, or with no content type is 415. Send `Content-Type: application/json`, or set `jsonContentType: "any"` on the route.
+- Export gzip baselines in `budgets.json` match the journal fence, shared signal delivery, cache invalidation, and body-cap work. Kernel edge stays 14.36 kB and client runtime stays 5.10 kB.
+
 ### 🐛 Fixed
 
 #### Docs
 
 - The auth, vault, and search note names the secrets protocol. It does not name removed vault vendor ids.
+
+#### Runtime
+
+- A durable resume writes its lease from a live clock. The tick sample is only used to choose which sleeps are due.
+- Journal entry writes land only while the caller's lease fence still holds. A lost lease is OKE1074. Approval and decide update the changed entries under their own token.
+- A session heartbeat extends the lease during a long step and stops recording the step result if the lease is lost. That is a lost lease, not a failure to compensate.
+- One scheduler tick does not start a second copy of the same task. `stopScheduler()` still returns immediately. `close()` waits for the tick that already started.
+- Redis `once` reads Bun's stream replies, reclaims idle entries after 30 seconds, and dead-letters from its own attempt count.
+- Redis broadcast and live messages reach other instances. A process skips its own publish.
+- Postgres broadcast and live are delivered once per instance from a database-time cursor. A subscriber that was offline misses them. `once` is unchanged.
+- A nested `transaction()` uses a savepoint on the connection already held. An inner throw rolls back only that savepoint.
+- A Postgres error's SQLSTATE is read from `errno` before the `ERR_POSTGRES_` prefix, so a duplicate key is 409. Retries that are exhausted still return 503.
+- Auto-cache keys include verified and operator. A write drops the entry even when the flow then fails. A flight that sees a write does not cache, and a waiter refetches.
+- Invalidating a cache entry tells other instances. Redis publishes on `oke:cache:invalidate`. Without Redis, Postgres polls `oke_cache_invalidations` on database time. A process does not republish its own notice. A missed notice expires with the 60s cache TTL.
+- Channel receipt reload merges rows newer than the last database time instead of clearing the cache, and a missing receipt is loaded before one is invented.
+
+### 🔒 Security
+
+#### Runtime
+
+- An MCP write confirmation token can only be issued by a different auth session from the one that will use it. The same principal is allowed. The pending confirmation stays in the process that created it.
+- `tools/list` omits tools the caller cannot call. Calling a hidden tool is still 403.
+- Request bodies are capped at 1 MiB unless you raise the limit. A larger `Content-Length`, or a body that grows past the cap while streaming, is 413.
+- JSON objects drop a `__proto__` key. A field named `constructor` is left alone.
+- A body that is JSON but not declared as JSON is 415. Unparseable JSON declared as JSON is 400.
 
 ## v0.23.1 — 2026-10-06
 

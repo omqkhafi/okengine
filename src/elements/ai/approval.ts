@@ -9,7 +9,6 @@ import {
   hasJournalLease,
   JOURNAL_DEFAULT_LEASE_MS,
   type JournalEntry,
-  type JournalRun,
   type JournalStore,
 } from "../../kernel/journal.ts";
 import { parseDurationMs } from "../clock/duration.ts";
@@ -212,15 +211,22 @@ export async function resolveAgentApproval(
       if (item.kind === "sleep" && item.label === name) return { ...item, wakeAt: at };
       return item;
     });
-    const updated: JournalRun = {
-      ...run,
-      entries,
-      wakeAt: at,
-      status: run.status === "sleeping" ? "sleeping" : run.status,
-      lockedBy: run.lockedBy,
-      leaseExpiresAt: run.leaseExpiresAt,
+    const fence = {
+      lockedBy: run.lockedBy ?? token,
+      leaseToken: run.leaseToken ?? 0,
+      now: at,
     };
-    await store.put(updated);
+    if (store.updateEntry) {
+      for (let seq = 0; seq < entries.length; seq++) {
+        const item = entries[seq];
+        const prev = run.entries[seq];
+        if (!item || !prev || JSON.stringify(item) === JSON.stringify(prev)) continue;
+        await store.updateEntry(parsed.runId, seq, item, fence);
+      }
+      await store.put({ ...run, entries: [], wakeAt: at, updatedAt: at }, fence);
+    } else {
+      await store.put({ ...run, entries, wakeAt: at, updatedAt: at });
+    }
     return { ok: true };
   } finally {
     if (hold === undefined) await store.releaseLease(parsed.runId, token);

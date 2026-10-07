@@ -20,6 +20,8 @@ import { dirname, join } from "node:path";
 import { createPostgresCronStore } from "../drivers/clock-postgres.ts";
 import { createPostgresJournalStore } from "../drivers/journal-postgres.ts";
 import { memorySignalDriver } from "../drivers/signal-memory.ts";
+import { createBunSignalRedisClient, redisSignalDriver } from "../drivers/signal-redis.ts";
+import { bunRedisCacheClient } from "../elements/store/cache-bus.ts";
 import { postgresDriver } from "../drivers/postgres.ts";
 import { redisDriver } from "../drivers/redis.ts";
 import { clock } from "../elements/clock/declare.ts";
@@ -99,14 +101,40 @@ clockRt.onCron(CRON, async () => {
   await Bun.write(path, prev + line);
 });
 
+const redisSignals = process.env.OKE_HORIZONTAL_REDIS_SIGNALS === "1";
 const signalRt = createSignalRuntime({
-  driver: memorySignalDriver,
+  driver: redisSignals ? redisSignalDriver : memorySignalDriver,
+  ...(redisSignals
+    ? { redis: createBunSignalRedisClient(redisUrl), compete: true, consumerId: instanceId }
+    : {}),
   durablePath: signalPath,
   leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
 });
 const job = signal.once(SIG, { retries: 3, deadLetter: true, optional: true });
 signalRt.register(job);
+const news = signal.broadcast("horizontal-news", { optional: true });
+const feed = signal.live("horizontal-feed", { optional: true });
+if (redisSignals) {
+  signalRt.register(news);
+  signalRt.register(feed);
+}
 const bus = await signalRt.start();
+if (redisSignals) {
+  await bus.subscribe("horizontal-news", `news-${instanceId}`, async (msg) => {
+    const line = `${JSON.stringify({ instanceId, kind: "broadcast", id: msg.id, at: Date.now() })}\n`;
+    const path = join(workDir, "broadcast.jsonl");
+    const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+    await Bun.write(path, prev + line);
+  });
+  void (async () => {
+    for await (const event of bus.live("horizontal-feed")) {
+      const line = `${JSON.stringify({ instanceId, kind: "live", id: event.id, at: Date.now() })}\n`;
+      const path = join(workDir, "live.jsonl");
+      const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+      await Bun.write(path, prev + line);
+    }
+  })();
+}
 await bus.subscribe(SIG, `consumer-${instanceId}`, async (msg) => {
   const line = `${JSON.stringify({ instanceId, kind: "signal", id: msg.id, at: Date.now() })}\n`;
   const path = join(workDir, "signal.jsonl");
@@ -129,6 +157,7 @@ const storeRt = createStoreRuntime({
   drivers: { sql: postgresDriver },
   sql: { db: { name: "db", primary: { url: pgUrl } } },
   now: () => Date.now(),
+  cacheBus: { kind: "redis", redis: bunRedisCacheClient(redisUrl), origin: instanceId },
 });
 storeRt.register(db);
 
@@ -138,7 +167,16 @@ const ping = flow("horizontal.ping", {
 const rate = flow("horizontal.rate", {
   do: () => ({ ok: true as const, instanceId }),
 });
+let cachedReads = 0;
+const cached = flow("horizontal.cached", {
+  effects: { reads: ["sql:db"] },
+  do: () => {
+    cachedReads += 1;
+    return { reads: cachedReads, instanceId };
+  },
+});
 const write = flow("horizontal.write", {
+  effects: { writes: ["sql:db"] },
   do: async (_input, fx) => {
     const id = okid();
     await fx
@@ -156,6 +194,18 @@ const write = flow("horizontal.write", {
 const emit = flow("horizontal.emit", {
   do: async (_input, fx) => {
     await fx.emit(SIG, { from: instanceId, at: Date.now() });
+    return { emitted: true as const };
+  },
+});
+const publishNews = flow("horizontal.news", {
+  do: async (_input, fx) => {
+    await fx.emit("horizontal-news", { from: instanceId, at: Date.now() });
+    return { emitted: true as const };
+  },
+});
+const publishFeed = flow("horizontal.feed", {
+  do: async (_input, fx) => {
+    await fx.emit("horizontal-feed", { from: instanceId, at: Date.now() });
     return { emitted: true as const };
   },
 });
@@ -193,8 +243,11 @@ const charge = flow("horizontal.charge", {
 const bindings: Binding[] = [
   { trigger: http.get("/ping").public(), flow: ping as AnyFlowDef },
   { trigger: http.get("/rate").gate(rateGate), flow: rate as AnyFlowDef },
+  { trigger: http.get("/cached").public(), flow: cached as AnyFlowDef },
   { trigger: http.post("/write").public(), flow: write as AnyFlowDef },
   { trigger: http.post("/emit").public(), flow: emit as AnyFlowDef },
+  { trigger: http.post("/news").public(), flow: publishNews as AnyFlowDef },
+  { trigger: http.post("/feed").public(), flow: publishFeed as AnyFlowDef },
   { trigger: http.post("/charge").public(), flow: charge as AnyFlowDef },
 ];
 

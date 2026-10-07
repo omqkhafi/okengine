@@ -11,6 +11,7 @@ import {
   forbiddenResponse,
   resolveAllowedHosts,
 } from "../runtime/security.ts";
+import { HttpBodyRejected, parseBody } from "../compiler/http-parse.ts";
 import { DOCS_MCP_PORT, type ServerHandle } from "../runtime/types.ts";
 import { asData } from "./data.ts";
 import { defaultDocsContentDir, loadDocsIndex, type DocsIndex } from "./docs-index.ts";
@@ -81,8 +82,11 @@ export async function createDocsMcpServer(
 
     let body: unknown;
     try {
-      body = await request.json();
-    } catch {
+      body = await parseBody(request);
+    } catch (err) {
+      if (err instanceof HttpBodyRejected && err.code === "PayloadTooLarge") {
+        return new Response("Payload Too Large", { status: 413 });
+      }
       return jsonRpcHttp(rpcError(null, RpcErrorCode.parse, "invalid JSON body"), 400);
     }
 
@@ -202,6 +206,7 @@ export async function serveDocsMcp(
   const server = Bun.serve({
     hostname,
     port,
+    maxRequestBodySize: 1_048_576,
     fetch: mcp.fetch,
   });
   const boundPort = server.port ?? port;

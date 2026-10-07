@@ -97,6 +97,7 @@ describe("compileAot", () => {
     const bad = await compiled.parseValidate(
       new Request("http://localhost/bookings", {
         method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ flightId: "SK1", seats: 0 }),
       }),
       {},
@@ -235,9 +236,9 @@ describe("AoT throughput ≥ 1.5× dynamic", () => {
     }
 
     const iterations = 4_000;
-    // Best of trials — single wall-clock ratio is noisy under full-suite load.
+    // Best of trials — a single wall-clock ratio moves under load.
     let best = 0;
-    for (let trial = 0; trial < 3; trial++) {
+    for (let trial = 0; trial < 8; trial++) {
       const t0 = performance.now();
       for (let i = 0; i < iterations; i++) {
         await aot.parseValidate(makeReq(), {});

@@ -28,7 +28,7 @@ function loadAot(): typeof import("./aot.ts") {
 export function compileDynamic(options: CompileRouteOptions): CompiledRoute {
   return {
     inference: FULL_INFERENCE,
-    parseValidate: createInterpretedParseValidate(FULL_INFERENCE, options.schema),
+    parseValidate: createInterpretedParseValidate(FULL_INFERENCE, options.schema, options.body),
     aot: false,
   };
 }

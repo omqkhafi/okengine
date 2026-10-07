@@ -15,6 +15,7 @@ export const BUILTIN_ERROR_STATUS = {
   Conflict: 409,
   ForeignKey: 409,
   UnsupportedMediaType: 415,
+  PayloadTooLarge: 413,
   RateLimited: 429,
   AuthRateLimited: 429,
   InvalidQuery: 400,
@@ -78,6 +79,7 @@ export type BuiltinErrorMap = {
   readonly Conflict: BuiltinErrorBag;
   readonly ForeignKey: BuiltinErrorBag;
   readonly UnsupportedMediaType: BuiltinErrorBag;
+  readonly PayloadTooLarge: BuiltinErrorBag;
   readonly RateLimited: { readonly retryAfterMs?: number };
   readonly AuthRateLimited: BuiltinErrorBag;
   readonly InvalidQuery: BuiltinErrorBag;

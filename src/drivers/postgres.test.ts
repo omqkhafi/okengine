@@ -9,6 +9,7 @@ import {
   isPostgresConnectionNoise,
   isSharedPostgresPaused,
   pauseSharedPostgresClients,
+  PostgresDriverError,
   resumeSharedPostgresClients,
   SharedPostgresPausedError,
   sharedPostgresClient,
@@ -99,5 +100,64 @@ describe("pauseSharedPostgresClients", () => {
     ).toBe(true);
     expect(isPostgresConnectionNoise(new SharedPostgresPausedError())).toBe(true);
     expect(isPostgresConnectionNoise(new Error("relation missing"))).toBe(false);
+  });
+});
+
+describe("PostgresDriverError", () => {
+  test("a non-Error rejection copies SQLSTATE fields and sets cause", async () => {
+    const cause = {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "23505",
+      constraint: "users_pkey",
+      table: "users",
+      column: "id",
+      message: "duplicate key",
+    };
+    const conn = await connectPostgres({
+      client: {
+        async unsafe() {
+          throw cause;
+        },
+      },
+    });
+    let caught: unknown;
+    try {
+      await conn.query("SELECT 1");
+    } catch (err) {
+      caught = err;
+    } finally {
+      await conn.close();
+    }
+    expect(caught).toBeInstanceOf(PostgresDriverError);
+    const wrapped = caught as PostgresDriverError;
+    expect(wrapped.code).toBe("ERR_POSTGRES_SERVER_ERROR");
+    expect(wrapped.errno).toBe("23505");
+    expect(wrapped.constraint).toBe("users_pkey");
+    expect(wrapped.table).toBe("users");
+    expect(wrapped.column).toBe("id");
+    expect(wrapped.cause).toBe(cause);
+  });
+
+  test("an Error rejection is rethrown unchanged", async () => {
+    const original = Object.assign(new Error("duplicate key"), {
+      code: "23505",
+      errno: "23505",
+    });
+    const conn = await connectPostgres({
+      client: {
+        async unsafe() {
+          throw original;
+        },
+      },
+    });
+    let caught: unknown;
+    try {
+      await conn.query("SELECT 1");
+    } catch (err) {
+      caught = err;
+    } finally {
+      await conn.close();
+    }
+    expect(caught).toBe(original);
   });
 });
