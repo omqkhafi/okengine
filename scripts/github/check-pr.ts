@@ -168,6 +168,11 @@ function isTitleType(value: string): value is TitleType {
   return (TITLE_TYPES as readonly string[]).includes(value);
 }
 
+function isNotFound(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b404\b/.test(message) || message.includes("Not Found");
+}
+
 interface EventPull {
   readonly title: string;
   readonly body: string;
@@ -228,8 +233,9 @@ async function fileAt(repo: string, path: string, ref: string): Promise<string> 
       "-H",
       "Accept: application/vnd.github.raw",
     ]);
-  } catch {
-    return "";
+  } catch (error) {
+    if (isNotFound(error)) return "";
+    throw error;
   }
 }
 
@@ -242,7 +248,8 @@ async function loadIssue(
   let payload: unknown;
   try {
     payload = JSON.parse(await ghApi([`repos/${repo}/issues/${number}`]));
-  } catch {
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
     return {
       number,
       exists: false,

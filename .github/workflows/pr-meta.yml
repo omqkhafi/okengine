@@ -27,5 +27,6 @@ jobs:
           bun-version: "1.4.2"
       - name: Check pull request metadata
         env:
+          GH_TOKEN: ${{ github.token }}
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: bun scripts/github/check-pr.ts

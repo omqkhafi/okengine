@@ -26,8 +26,23 @@ jobs:
       - name: Diff against the merge base
         id: diff
         continue-on-error: true
-        run: bun src/cli/manifest-pr-diff.ts manifest-diff.md
+        run: |
+          set +e
+          output=$(bun src/cli/manifest-pr-diff.ts manifest-diff.md 2>&1)
+          code=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$code" -eq 0 ]; then
+            exit 0
+          fi
+          # This repository is the framework, not an app, so there is no manifest to diff.
+          if printf '%s\n' "$output" | grep -q "no oke.manifest.json"; then
+            echo "no app manifest; skipping"
+            exit 0
+          fi
+          exit "$code"
       - name: Comment
+        if: hashFiles('manifest-diff.md') != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh pr comment ${{ github.event.pull_request.number }} --body-file manifest-diff.md
