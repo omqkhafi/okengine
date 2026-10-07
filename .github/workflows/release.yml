@@ -20,8 +20,12 @@ permissions:
 jobs:
   checks:
     name: CI
+    # ci.yml requests these three. A caller that grants less fails at startup
+    # before any job runs. Job permissions replace the workflow permissions.
     permissions:
       contents: read
+      issues: read
+      pull-requests: write
     uses: ./.github/workflows/ci.yml
 
   release:
