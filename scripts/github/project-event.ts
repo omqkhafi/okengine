@@ -5,8 +5,9 @@
  * Skips when PROJECT_TOKEN is unset. Adds the issue or pull request if it
  * is missing, then:
  * - a new issue goes to Triage
- * - an opened pull request, and issues it `Closes`, go to In review
- * - a closed issue or pull request goes to Done
+ * - an opened pull request, and issues it `Closes` or `Refs`, go to In review
+ * - a pull request merged into `dev` moves those linked issues to Merged
+ * - a closed issue or pull request goes to Done (issues close on the release to `main`)
  * - a milestone change copies the title into Release, or clears it
  */
 
@@ -62,6 +63,14 @@ async function main(): Promise<void> {
     }
   } else if (event["action"] === "closed") {
     await setOption(project, item, "Status", "Done", token);
+    if (eventName === "pull_request_target" && mergedBase(event) === "dev") {
+      for (const number of linkedIssueNumbers(subject.body)) {
+        const linked = await issueNode(subject.repo, number);
+        if (linked === null) continue;
+        const linkedItem = await ensureItem(project.id, linked, token);
+        await setOption(project, linkedItem, "Status", "Merged", token);
+      }
+    }
   } else if (event["action"] === "milestoned" || event["action"] === "demilestoned") {
     const title = milestoneTitle(event);
     if (event["action"] === "demilestoned" || title === null) {
@@ -99,6 +108,15 @@ const RELEASE_OPTION: Readonly<Record<string, string>> = {
 
 function releaseOption(title: string): string {
   return RELEASE_OPTION[title] ?? title;
+}
+
+/** Base branch when this event is a merged pull request. */
+function mergedBase(event: Record<string, unknown>): string | null {
+  const pullRequest = event["pull_request"];
+  if (!isRecord(pullRequest) || pullRequest["merged"] !== true) return null;
+  const base = pullRequest["base"];
+  if (!isRecord(base) || typeof base["ref"] !== "string") return null;
+  return base["ref"];
 }
 
 function milestoneTitle(event: Record<string, unknown>): string | null {

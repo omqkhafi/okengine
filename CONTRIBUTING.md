@@ -44,7 +44,7 @@ Until then it stays in Triage. Backlog means it is accepted and not Ready.
 
 Branch from `dev`. Name the branch `type/short-name`, for example `feat/pluggable-decider` or `chore/github-workflow`.
 
-`dev` is the integration branch. `main` is the release branch: it only accepts pull requests from `dev`, and version tags (`v*`) are cut from it. Do not push directly to `dev` or `main`.
+`dev` is the integration branch. `main` is the release branch and stays the default branch. It only accepts pull requests from `dev`, and version tags (`v*`) are cut from it. Do not push directly to `dev` or `main`. A feature branch squashes into `dev`. At release, `dev` merges into `main` with a merge commit, which keeps `dev`'s history and its `Closes #N` commit messages. Issues close on that release, not when the feature pull request lands on `dev`.
 
 ### Pull requests
 
@@ -70,7 +70,7 @@ Milestones are the release trains. `0.24` is pluggable deciders. `0.25` is image
 
 `changelog.md` needs an entry under `## Unreleased`, except for `type: chore`, `type: test`, and `type: docs`.
 
-Merge is squash. The commit title is the pull request title and the body is the description. The head branch is deleted.
+A feature pull request into `dev` is squash. The commit title is the pull request title and the body is the description, and the head branch is deleted. The release pull request from `dev` into `main` is a merge commit. Rebase is off. Do not delete `dev`.
 
 ### Board
 
@@ -82,11 +82,11 @@ Merge is squash. The commit title is the pull request title and the body is the 
 | Triage          | Status is Triage, or Priority, Size, or a milestone is missing |
 | My work         | Assigned to you, and In progress or In review                  |
 
-A new item starts in Triage. An open pull request moves its issue to In review. Merge or close moves it to Done. Done items are archived after 14 days.
+A new item starts in Triage. An open pull request moves its issue to In review. Merged means the pull request landed on `dev` and the issue is still open. Done means the issue is closed. Issues close when the release reaches `main`, and that close moves them to Done. Done items are archived after 14 days.
 
 ### Release
 
-`bun run bump` promotes `## Unreleased` into `## vX.Y.Z`. Pushing the `v*` tag opens the GitHub Release from that section and closes the matching milestone. npm and JSR publish from the release workflow on that tag, not from a pull request.
+`bun run bump` promotes `## Unreleased` into `## vX.Y.Z`. The release pull request merges `dev` into `main` with a merge commit. That merge closes the issues whose `Closes #N` messages are on `dev`, including the release issue. Pushing the `v*` tag opens the GitHub Release from that section and closes the matching milestone. npm and JSR publish from the release workflow on that tag, not from a pull request.
 
 ## Propose a change
 
