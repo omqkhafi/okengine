@@ -23,7 +23,7 @@ gh api --method PATCH repos/omqkhafi/okengine \
 
 ## Rulesets
 
-`dev` and `main` require a pull request, block direct pushes, force pushes, and deletion, and require review threads to be resolved. Required checks are `lint · fmt`, `typecheck`, `test · console`, `test · elements`, `test · kernel`, `test · cli`, `test · drivers`, `test · core`, `gate`, `site`, and `pr-meta`, all jobs of `.github/workflows/ci.yml`. A failing test shard does not cancel the others. There is no aggregator job. This repository has no app manifest, so CI does not run a manifest diff. Runners are `ubuntu-24.04`. npm and JSR publish run in `.github/workflows/release.yml` on a `v*` tag, so they are not pull-request checks.
+`dev` and `main` require a pull request, block direct pushes, force pushes, and deletion, and require review threads to be resolved. Required checks are `lint · fmt`, `typecheck`, `test · console`, `test · elements`, `test · kernel`, `test · cli`, `test · drivers`, `test · core`, `gate`, `site`, and `pr-meta`, all jobs of `.github/workflows/ci.yml`. A failing test shard does not cancel the others. There is no aggregator job. This repository has no app manifest, so CI does not run a manifest diff. Runners are `ubuntu-24.04`. npm and JSR publish run in `.github/workflows/release.yml` on a `v*` tag, so they are not pull-request checks. That workflow calls `ci.yml`, and the caller job grants `contents: read`, `issues: read`, and `pull-requests: write`. A smaller grant fails at startup.
 
 The npm trusted publisher was `ci.yml` / `publish-npm`. Point it at `.github/workflows/release.yml`, job `publish-npm`, for `okengine` and `create-oke`, before the next tag. No `NPM_TOKEN`.
 

@@ -39,6 +39,7 @@ describe("publish workflow", () => {
       permissions?: { contents?: string; "id-token"?: string };
     };
     const ci = Bun.YAML.parse(ciYml) as {
+      permissions?: Record<string, string>;
       on?: { push?: { tags?: string | string[] }; workflow_call?: unknown };
       jobs?: {
         lint?: unknown;
@@ -54,7 +55,7 @@ describe("publish workflow", () => {
     const release = Bun.YAML.parse(releaseYml) as {
       on?: { push?: { tags?: string | string[] } };
       jobs?: {
-        checks?: { uses?: string };
+        checks?: { uses?: string; permissions?: Record<string, string> };
         "publish-npm"?: PublishJob;
         "publish-jsr"?: PublishJob;
       };
@@ -69,6 +70,10 @@ describe("publish workflow", () => {
     const tagList = Array.isArray(tags) ? tags : tags ? [tags] : [];
     expect(tagList).toContain("v*");
     expect(release.jobs?.checks?.uses).toBe("./.github/workflows/ci.yml");
+    const callerPermissions = release.jobs?.checks?.permissions;
+    for (const [key, value] of Object.entries(ci.permissions ?? {})) {
+      expect(callerPermissions?.[key]).toBe(value);
+    }
 
     for (const key of ["lint", "typecheck", "test", "gate", "site"] as const) {
       expect(ci.jobs?.[key]).toBeTruthy();
