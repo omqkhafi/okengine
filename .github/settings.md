@@ -21,7 +21,9 @@ gh api --method PATCH repos/omqkhafi/okengine \
 
 ## Rulesets
 
-`dev` and `main` require a pull request, block direct pushes, force pushes, and deletion, and require review threads to be resolved. Required checks are the CI matrix job names plus `pr-meta`. Publish jobs are not required: they run only on a `v*` tag.
+`dev` and `main` require a pull request, block direct pushes, force pushes, and deletion, and require review threads to be resolved. Required checks are the CI matrix job names plus `pr-meta`. npm and JSR publish run in `.github/workflows/release.yml` on a `v*` tag, so they are not pull-request checks.
+
+The npm trusted publisher was `ci.yml` / `publish-npm`. Point it at `.github/workflows/release.yml`, job `publish-npm`, for `okengine` and `create-oke`, before the next tag. No `NPM_TOKEN`.
 
 Pull requests into `main` must come from `dev`. The ruleset schema has no source-branch rule, so `scripts/github/check-pr.ts` rejects any other head. That check is part of `pr-meta`.
 

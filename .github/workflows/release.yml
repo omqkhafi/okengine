@@ -1,4 +1,9 @@
-# GitHub Release from the changelog. Does not publish to npm or JSR.
+# Tag release. Runs the CI jobs, then the GitHub Release, npm, and JSR.
+# These jobs are not part of a pull request.
+#
+# npm trusted publishing (OIDC, no NPM_TOKEN) must name this file:
+# workflow `.github/workflows/release.yml`, job `publish-npm`,
+# for both `okengine` and `create-oke`. JSR packages are linked to this repo.
 
 name: Release
 
@@ -10,11 +15,22 @@ on:
 permissions:
   contents: write
   issues: write
+  id-token: write
 
 jobs:
+  checks:
+    name: CI
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   release:
     name: GitHub release
+    needs: checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -26,3 +42,45 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun scripts/github/github-release.ts
+
+  publish-npm:
+    name: Publish npm
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Ensure npm supports trusted publishing
+        run: npm install -g npm@latest
+      - name: Publish to npm (trusted publisher / OIDC)
+        run: bun run scripts/publish.ts -- --npm-only --force
+
+  publish-jsr:
+    name: Publish JSR
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Publish to JSR
+        run: bun run scripts/publish.ts -- --jsr-only --force

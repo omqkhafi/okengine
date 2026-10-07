@@ -86,7 +86,7 @@ A new item starts in Triage. An open pull request moves its issue to In review. 
 
 ### Release
 
-`bun run bump` promotes `## Unreleased` into `## vX.Y.Z`. Pushing the `v*` tag opens the GitHub Release from that section and closes the matching milestone. Package publishing stays on the existing tag workflow.
+`bun run bump` promotes `## Unreleased` into `## vX.Y.Z`. Pushing the `v*` tag opens the GitHub Release from that section and closes the matching milestone. npm and JSR publish from the release workflow on that tag, not from a pull request.
 
 ## Propose a change
 
