@@ -1,0 +1,25 @@
+name: Task
+description: A piece of work that is not a feature or a bug
+title: "chore: "
+labels: ["needs triage"]
+type: Task
+projects:
+  - "omqkhafi/2"
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: The work, and why it is worth doing now
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Acceptance points. One checkbox per point.
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true

@@ -1,0 +1,118 @@
+# Area labels for pull requests. `area: ci` and `area: release` cover the
+# workflow and version paths; element paths follow the source tree.
+
+"area: kernel":
+  - changed-files:
+      - any-glob-to-any-file: "src/kernel/**"
+
+"area: ai":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/elements/ai/**"
+          - "src/drivers/ai-*"
+
+"area: http":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/http.ts"
+          - "src/kernel/router/**"
+
+"area: store":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/elements/store/**"
+          - "src/drivers/postgres.ts"
+          - "src/drivers/postgres.test.ts"
+          - "src/drivers/pglite.ts"
+          - "src/drivers/memory.ts"
+          - "src/drivers/memory-ddl.test.ts"
+          - "src/drivers/redis.ts"
+          - "src/drivers/s3.ts"
+          - "src/drivers/s3-ensure-bucket.ts"
+          - "src/drivers/s3-ensure-bucket.test.ts"
+          - "src/drivers/fs.ts"
+          - "src/drivers/meilisearch.ts"
+          - "src/drivers/meilisearch.test.ts"
+          - "src/drivers/meilisearch.integration.test.ts"
+          - "src/drivers/pgvector.ts"
+          - "src/drivers/pg-extensions.ts"
+          - "src/drivers/pg-extensions.test.ts"
+          - "src/drivers/pg-rls.ts"
+          - "src/drivers/pg-rls.test.ts"
+          - "src/drivers/pg-rls-row-passes.ts"
+          - "src/drivers/kv-lua.ts"
+          - "src/drivers/drizzle-dialect.ts"
+          - "src/drivers/drizzle-dialect.test.ts"
+
+"area: channel":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/elements/channel/**"
+          - "src/drivers/channel-*"
+
+"area: auth":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/auth/**"
+          - "src/plugins/auth/**"
+          - "src/plugins/oauth/**"
+          - "src/plugins/oauth.ts"
+          - "src/plugins/anonymous.ts"
+          - "src/plugins/magic-link.ts"
+          - "src/plugins/otp.ts"
+          - "src/plugins/otp.test.ts"
+          - "src/plugins/passkey.ts"
+          - "src/plugins/passkey-webauthn.ts"
+          - "src/plugins/mcp-oauth.ts"
+          - "src/drivers/oauth*"
+
+"area: compiler":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/compiler/**"
+          - "src/compiler-entry.ts"
+
+"area: manifest":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/manifest/**"
+          - "manifest.v1.schema.json"
+
+"area: cli":
+  - changed-files:
+      - any-glob-to-any-file: "src/cli/**"
+
+"area: console":
+  - changed-files:
+      - any-glob-to-any-file: "src/console/**"
+
+"area: client":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/client/**"
+          - "src/client-react/**"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "site/content/docs/**"
+          - "docs/**"
+
+"area: site":
+  - changed-files:
+      - any-glob-to-any-file: "site/**"
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "scripts/github/**"
+          - "scripts/ci.ts"
+
+"area: release":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/release/**"
+          - "scripts/bump-version.ts"
+          - "scripts/publish.ts"
+          - "scripts/publish.gate.test.ts"

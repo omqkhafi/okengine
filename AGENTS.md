@@ -108,6 +108,10 @@ Engine: Bun `>=1.4.2`.
 
 **If the documentation is silent, stop and ask.**
 
+## GitHub workflow
+
+Branch from `dev` with `type/short-name`. Never commit on `dev` or `main`, and never merge. A pull request closes a leaf issue (Feature, Bug, or Task), not an Epic. The title is `type(scope): summary`, with one `type:` label, at least one `area:` label, a milestone, and `Closes #N` (or `Refs #N`). The loop, Ready, and the board are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## After every implementation
 
 Before claiming work done: run [`.agents/skills/oke-ship`](.agents/skills/oke-ship/SKILL.md) — append notes to `changelog.md` under `## Unreleased` (never under a shipped `## v…` section), and update site docs via [`.agents/skills/oke-docs`](.agents/skills/oke-docs/SKILL.md) for any user-facing surface. Version bump is separate: `bun run bump` promotes Unreleased into the next `## vX.Y.Z`. Before that bump, run [`.agents/skills/oke-perf`](.agents/skills/oke-perf/SKILL.md).

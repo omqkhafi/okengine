@@ -12,6 +12,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ✨ Added
+
+- Contributor workflow lives in the repository: issue forms, labels, the okengine board, pull-request checks, and a GitHub Release cut from the changelog. See CONTRIBUTING.md.
+
 ## v0.23.2 — 2026-10-07
 
 ### ♻️ Changed
