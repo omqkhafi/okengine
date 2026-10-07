@@ -27,7 +27,7 @@ jobs:
   release:
     name: GitHub release
     needs: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       issues: write
@@ -46,7 +46,7 @@ jobs:
   publish-npm:
     name: Publish npm
     needs: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     permissions:
       contents: read
@@ -70,7 +70,7 @@ jobs:
   publish-jsr:
     name: Publish JSR
     needs: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     permissions:
       contents: read

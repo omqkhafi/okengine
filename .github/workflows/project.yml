@@ -14,7 +14,7 @@ permissions:
 jobs:
   add:
     name: add to project
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
     steps:
@@ -27,7 +27,7 @@ jobs:
 
   sync:
     name: sync fields
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
       PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
