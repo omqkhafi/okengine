@@ -13,14 +13,30 @@
  * adapter must say so.
  */
 
-import { toPostgresParams, withPinnedPostgres } from "../../drivers/postgres.ts";
+import { affectedRows } from "../../drivers/affected-rows.ts";
+import {
+  toPostgresParams,
+  withPinnedPostgres,
+  type PostgresQueryResult,
+} from "../../drivers/postgres.ts";
 import type { PostgresSignalSql } from "../../drivers/signal-postgres.ts";
 
 interface UnsafeClient {
-  unsafe(
-    sql: string,
-    values?: readonly unknown[],
-  ): PromiseLike<Record<string, unknown>[] | { length: number; changes?: number }>;
+  unsafe(sql: string, values?: readonly unknown[]): PromiseLike<PostgresQueryResult>;
+}
+
+/**
+ * Bun.SQL adapter for the postgres signal bus. Tests inject a client
+ * whose `unsafe` returns the real driver shape.
+ *
+ * @param client - Bun.SQL-compatible client
+ * @param listeners - In-process NOTIFY fanout
+ */
+export function signalPgFromClient(
+  client: UnsafeClient,
+  listeners: Map<string, Set<(payload: string) => void>> = new Map(),
+): PostgresSignalSql {
+  return wrap(client, listeners);
 }
 
 function wrap(
@@ -35,16 +51,7 @@ function wrap(
     },
     async exec(sql, params = []) {
       const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof (result as { changes: unknown }).changes === "number"
-      ) {
-        return { changes: (result as { changes: number }).changes };
-      }
-      if (Array.isArray(result)) return { changes: result.length };
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
     // withPinnedPostgres pins ONE pooled connection — required behind pgdog.
     begin: (fn) =>

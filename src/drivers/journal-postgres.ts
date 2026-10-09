@@ -33,12 +33,14 @@ import {
   type JournalStore,
   type JournalWriteFence,
 } from "../kernel/journal.ts";
+import { affectedRows } from "./affected-rows.ts";
 import {
   resolvePostgresUrl,
   sharedPostgresClient,
   toPostgresParams,
   withPinnedPostgres,
   type PostgresClientLike,
+  type PostgresQueryResult,
 } from "./postgres.ts";
 
 /** Row shape in `oke_journal_runs` (lease columns mirror `oke_crons`). */
@@ -156,10 +158,7 @@ export interface CreatePostgresJournalStoreOptions {
 
 /** Minimal Bun.SQL surface used by the real driver. */
 export interface BunJournalClient {
-  unsafe(
-    sql: string,
-    values?: unknown[],
-  ): PromiseLike<Record<string, unknown>[] | { length: number; changes?: number }>;
+  unsafe(sql: string, values?: unknown[]): PromiseLike<PostgresQueryResult>;
   begin<T>(fn: (tx: BunJournalClient) => Promise<T> | T): Promise<T>;
   close?(options?: { timeout?: number }): Promise<void>;
 }
@@ -175,16 +174,7 @@ function wrapBunClient(client: PostgresClientLike): PostgresJournalSql {
     async exec(sql, params = []) {
       const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof (result as { changes: unknown }).changes === "number"
-      ) {
-        return { changes: (result as { changes: number }).changes };
-      }
-      if (Array.isArray(result)) return { changes: result.length };
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
     async begin(fn) {
       return withPinnedPostgres(client, (tx) => fn(wrapBunClient(tx)));
