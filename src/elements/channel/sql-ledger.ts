@@ -233,6 +233,31 @@ export async function openPostgresChannelLedger(
     if (receipt.messageId) byMessage.set(receipt.messageId, receipt.id);
   }
 
+  function applyStatus(
+    prev: DeliveryReceipt,
+    patch: {
+      readonly status: DeliveryReceipt["status"];
+      readonly at?: number;
+      readonly error?: string;
+    },
+  ): DeliveryReceipt {
+    return {
+      ...prev,
+      status: patch.status,
+      at: patch.at ?? prev.at,
+      ...(patch.error !== undefined ? { error: patch.error } : {}),
+    };
+  }
+
+  function writeStatus(next: DeliveryReceipt): Promise<void> {
+    return sql
+      .exec(
+        `UPDATE ${RECEIPT} SET body = ?, message_id = ?, updated_at = ${DB_NOW_MS} WHERE id = ?`,
+        [JSON.stringify(next), next.messageId ?? null, next.id],
+      )
+      .then(() => undefined);
+  }
+
   function findByMessageId(messageId: string): DeliveryReceipt | undefined {
     const id = byMessage.get(messageId);
     if (id === undefined) return undefined;
@@ -298,22 +323,19 @@ export async function openPostgresChannelLedger(
       },
     ) {
       const prev = findByMessageId(messageId);
-      if (!prev) return undefined;
-      const next: DeliveryReceipt = {
-        ...prev,
-        status: patch.status,
-        at: patch.at ?? prev.at,
-        ...(patch.error !== undefined ? { error: patch.error } : {}),
-      };
+      if (!prev) {
+        enqueue(async () => {
+          const loaded = await receiptLedger.lookup(messageId);
+          if (!loaded) return;
+          const next = applyStatus(loaded, patch);
+          rememberReceipt(next);
+          await writeStatus(next);
+        });
+        return undefined;
+      }
+      const next = applyStatus(prev, patch);
       rememberReceipt(next);
-      enqueue(() =>
-        sql
-          .exec(
-            `UPDATE ${RECEIPT} SET body = ?, message_id = ?, updated_at = ${DB_NOW_MS} WHERE id = ?`,
-            [JSON.stringify(next), next.messageId ?? null, next.id],
-          )
-          .then(() => undefined),
-      );
+      enqueue(() => writeStatus(next));
       return next;
     },
     async lookup(messageId: string): Promise<DeliveryReceipt | undefined> {
