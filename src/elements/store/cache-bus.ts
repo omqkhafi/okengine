@@ -164,51 +164,86 @@ function openPostgres(
   lagMs: number,
 ): CacheInvalidationBus {
   let stopped = false;
-  let ready: Promise<void> | undefined;
+  let opening: Promise<void> | undefined;
   let cursor = 0;
-  let head = true;
   const seen = new Set<string>();
+
+  async function anchor(conn: CacheBusSql): Promise<void> {
+    const rows = await conn.query(ANCHOR_SQL);
+    let dbNow = 0;
+    for (const row of rows) {
+      const clock = asNumber(row.db_now);
+      if (clock > dbNow) dbNow = clock;
+      const id = asString(row.id);
+      if (id) seen.add(id);
+    }
+    cursor = dbNow;
+  }
+
+  function startOpening(): Promise<void> {
+    if (!opening) {
+      opening = (async () => {
+        const conn = await connect();
+        if (!conn || stopped) return;
+        await ensure(conn);
+        await anchor(conn);
+      })();
+    }
+    return opening;
+  }
 
   async function sql(): Promise<CacheBusSql | undefined> {
     if (stopped) return undefined;
+    await startOpening();
+    if (stopped) return undefined;
     const conn = await connect();
     if (!conn || stopped) return undefined;
-    if (!ready) ready = ensure(conn);
-    await ready;
     return conn;
   }
+
+  async function poll(): Promise<void> {
+    const conn = await sql();
+    if (!conn || stopped) return;
+    const clock = await conn.query(DB_NOW_SQL);
+    const dbNow = asNumber(clock[0]?.db_now);
+    const since = cursor - lagMs;
+    const rows = await conn.query(POLL_SQL, [since]);
+    const fresh: ResourceRef[] = [];
+    for (const row of rows) {
+      const id = asString(row.id);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      if (asString(row.origin) === origin) continue;
+      const resource = asString(row.resource);
+      if (resource) fresh.push(resource as ResourceRef);
+    }
+    if (fresh.length > 0) cache.acceptRemote(fresh);
+    cursor = dbNow;
+    await conn.exec(DELETE_SQL, [dbNow - RETAIN_MS]);
+    if (seen.size > 10_000) seen.clear();
+  }
+
+  const timer = setInterval(() => {
+    void poll().catch((err: unknown) => {
+      console.error(err);
+    });
+  }, POLL_INTERVAL_MS);
+  timer.unref?.();
+  // After the caller finishes `let store = createStoreRuntime(...)`, so `sql()`
+  // can close over that binding.
+  queueMicrotask(() => {
+    if (!stopped) void startOpening();
+  });
 
   return {
     publish(resources) {
       if (stopped || resources.length === 0) return;
       void insert(sql, origin, resources);
     },
-    async poll() {
-      const conn = await sql();
-      if (!conn || stopped) return;
-      const clock = await conn.query(DB_NOW_SQL);
-      const dbNow = asNumber(clock[0]?.db_now);
-      const since = head ? 0 : cursor - lagMs;
-      const rows = await conn.query(POLL_SQL, [since]);
-      const fresh: ResourceRef[] = [];
-      for (const row of rows) {
-        const id = asString(row.id);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        if (head || asString(row.origin) === origin) continue;
-        const resource = asString(row.resource);
-        if (resource) fresh.push(resource as ResourceRef);
-      }
-      if (!head && fresh.length > 0) cache.acceptRemote(fresh);
-      head = false;
-      cursor = dbNow;
-      await conn.exec(DELETE_SQL, [dbNow - RETAIN_MS]);
-      if (seen.size > 10_000) {
-        seen.clear();
-      }
-    },
+    poll,
     async stop() {
       stopped = true;
+      clearInterval(timer);
     },
   };
 }
@@ -272,8 +307,16 @@ const INDEX_SQL = `CREATE INDEX IF NOT EXISTS ${CACHE_INVALIDATIONS_TABLE}_creat
 
 const INSERT_SQL = `INSERT INTO ${CACHE_INVALIDATIONS_TABLE} (id, resource, origin) VALUES (?, ?, ?)`;
 
-const DB_NOW_SQL = `SELECT (extract(epoch from clock_timestamp()) * 1000)::bigint AS db_now`;
+const DB_NOW_EXPR = "(extract(epoch from clock_timestamp()) * 1000)::bigint";
+
+const DB_NOW_SQL = `SELECT ${DB_NOW_EXPR} AS db_now`;
+
+/** Existing rows plus the database clock, one statement. */
+const ANCHOR_SQL = `SELECT i.id, i.resource, i.origin, i.created_at, cache_clock.db_now FROM (SELECT ${DB_NOW_EXPR} AS db_now) AS cache_clock LEFT JOIN ${CACHE_INVALIDATIONS_TABLE} i ON TRUE`;
 
 const POLL_SQL = `SELECT id, resource, origin, created_at FROM ${CACHE_INVALIDATIONS_TABLE} WHERE created_at >= ?`;
+
+/** Own poll, independent of the boot scheduler. Under the 2s convergence window. */
+const POLL_INTERVAL_MS = 1_000;
 
 const DELETE_SQL = `DELETE FROM ${CACHE_INVALIDATIONS_TABLE} WHERE created_at < ?`;

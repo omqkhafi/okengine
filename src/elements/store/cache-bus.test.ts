@@ -1,6 +1,20 @@
 import { expect, test } from "bun:test";
 
+import { postgresDriver } from "../../drivers/postgres.ts";
+import { oke } from "../../kernel/app.ts";
+import { flow, type AnyFlowDef } from "../../kernel/flow.ts";
+import type { Binding } from "../../kernel/on.ts";
+import { http } from "../../kernel/triggers.ts";
+import { gate } from "../gate.ts";
 import { computedCacheKey, createStoreCache, type StoreCache } from "./cache.ts";
+import { sql } from "./declare.ts";
+import { createStoreRuntime, type StoreRuntime } from "./runtime.ts";
+
+const LIVE_PG =
+  process.env.OKE_TEST_POSTGRES_URL?.trim() ||
+  (process.env.OKE_TEST_POSTGRES === "1"
+    ? (process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL)?.trim()
+    : undefined);
 import {
   CACHE_INVALIDATE_CHANNEL,
   openCacheInvalidation,
@@ -87,6 +101,9 @@ test("postgres invalidation is polled once and skips the sender", async () => {
       throw new Error(`unmatched ${statement}`);
     },
     async query(statement) {
+      if (statement.includes("cache_clock")) {
+        return [{ db_now: now }, ...rows.map((row) => ({ ...row, db_now: now }))];
+      }
       if (statement.includes("db_now")) return [{ db_now: now }];
       if (statement.includes("FROM oke_cache_invalidations"))
         return rows.map((row) => ({ ...row }));
@@ -119,3 +136,135 @@ test("postgres invalidation is polled once and skips the sender", async () => {
   await a.stop();
   await b.stop();
 });
+
+test("a row that already exists at open is not applied, and the first later poll is", async () => {
+  const rows: Array<{ id: string; resource: string; origin: string; created_at: number }> = [
+    { id: "old", resource: "sql:notes", origin: "b", created_at: 1_000 },
+  ];
+  let now = 1_000;
+  const sql = (): CacheBusSql => ({
+    async exec(statement, params) {
+      if (statement.startsWith("CREATE")) return { changes: 0 };
+      if (statement.startsWith("INSERT")) {
+        rows.push({
+          id: String(params?.[0]),
+          resource: String(params?.[1]),
+          origin: String(params?.[2]),
+          created_at: now,
+        });
+        return { changes: 1 };
+      }
+      if (statement.startsWith("DELETE")) return { changes: 0 };
+      throw new Error(`unmatched ${statement}`);
+    },
+    async query(statement) {
+      if (statement.includes("cache_clock")) {
+        return [{ db_now: now }, ...rows.map((row) => ({ ...row, db_now: now }))];
+      }
+      if (statement.includes("db_now")) return [{ db_now: now }];
+      if (statement.includes("FROM oke_cache_invalidations"))
+        return rows.map((row) => ({ ...row }));
+      throw new Error(`unmatched ${statement}`);
+    },
+  });
+  const cacheA = createStoreCache();
+  const key = seed(cacheA, "sql:notes");
+  const a = openCacheInvalidation(cacheA, {
+    kind: "postgres",
+    origin: "a",
+    sql: async () => sql(),
+  });
+  await a.poll();
+  expect(cacheA.get<{ n: number }>(key)).toEqual({ n: 1 });
+  now += 5;
+  rows.push({ id: "new", resource: "sql:notes", origin: "b", created_at: now });
+  await a.poll();
+  expect(cacheA.get(key)).toBeUndefined();
+  await a.stop();
+});
+
+test.skipIf(!LIVE_PG)(
+  "two postgres runtimes drop a cached read within 2s when the scheduler is off",
+  async () => {
+    const url = LIVE_PG!;
+    const db = sql("db");
+    let reads = 0;
+    const read = flow("cache.poll.read", {
+      effects: { reads: ["sql:db"] },
+      do: () => {
+        reads += 1;
+        return { n: reads };
+      },
+    });
+    const write = flow("cache.poll.write", {
+      effects: { writes: ["sql:db"] },
+      do: () => ({ ok: true as const }),
+    });
+    const storeFor = (origin: string): StoreRuntime => {
+      let store!: StoreRuntime;
+      store = createStoreRuntime({
+        drivers: { sql: postgresDriver },
+        sql: { db: { name: "db", primary: { url } } },
+        cacheBus: { kind: "postgres", origin, sql: () => store.primarySql() },
+      });
+      store.register?.(db);
+      return store;
+    };
+    const appFor = (name: string, origin: string, bindings: Binding[]) =>
+      oke({
+        name,
+        env: "test",
+        autoBoot: false,
+        startScheduler: false,
+        stores: [db],
+        bindings,
+        gate: { unguardedHttp: "allow", policies: [gate.public] },
+        elements: { store: storeFor(origin) },
+      });
+    const appA = appFor("cache-poll-a", "a", [
+      { trigger: http.get("/read").public(), flow: read as AnyFlowDef },
+    ]);
+    const appB = appFor("cache-poll-b", "b", [
+      { trigger: http.post("/write").public(), flow: write as AnyFlowDef },
+    ]);
+    try {
+      await appA.boot();
+      await appB.boot();
+      expect((await appA.fetch(new Request("http://127.0.0.1/read"))).status).toBe(200);
+      expect((await appA.fetch(new Request("http://127.0.0.1/read"))).status).toBe(200);
+      expect(reads).toBe(1);
+      expect(
+        (
+          await appB.fetch(
+            new Request("http://127.0.0.1/write", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+          )
+        ).status,
+      ).toBe(200);
+      const deadline = Date.now() + 2_000;
+      let dropped = false;
+      while (Date.now() < deadline) {
+        await appA.fetch(new Request("http://127.0.0.1/read"));
+        if (reads >= 2) {
+          dropped = true;
+          break;
+        }
+        await Bun.sleep(50);
+      }
+      expect(dropped).toBe(true);
+    } finally {
+      await appA.stop();
+      await appB.stop();
+    }
+  },
+  10_000,
+);
+
+if (!LIVE_PG) {
+  test("skip: postgres cache poll (set OKE_TEST_POSTGRES_URL or OKE_TEST_POSTGRES=1 + DATABASE_URL)", () => {
+    expect(LIVE_PG).toBeUndefined();
+  });
+}
