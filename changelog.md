@@ -12,6 +12,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+- Export gzip baselines in `budgets.json` match the 0.24.1 Postgres fixes. Past the previous ceiling: `okengine` +2,573 B, `store` +1,337 B, `pg-rls` +546 B, `instances-postgres` +302 B. Also recorded: `full` +2,424 B, `console` +2,328 B, `drivers` +550 B, and new rows `pg-ddl` (752 B) and `affected-rows` (316 B).
+
 ## v0.24.1 — 2026-10-10
 
 ### ♻️ Changed
