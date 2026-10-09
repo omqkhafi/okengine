@@ -20,6 +20,7 @@ import { bootApplication } from "../boot.ts";
 
 describe("boot binders honour drivers.* config", () => {
   const prevCwd = process.cwd();
+  const prevRedisUrl = process.env.REDIS_URL;
   let tmp: string | undefined;
 
   afterEach(async () => {
@@ -30,7 +31,8 @@ describe("boot binders honour drivers.* config", () => {
     }
     delete process.env.OKE_VAULT_URL;
     delete process.env.OKE_VAULT_TOKEN;
-    delete process.env.REDIS_URL;
+    if (prevRedisUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = prevRedisUrl;
   });
 
   test("vault: drivers.vault env builds env chain layers", async () => {
