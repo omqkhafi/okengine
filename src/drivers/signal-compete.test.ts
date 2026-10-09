@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { startupRedisUrl } from "../test/reset-element-registries.ts";
 import { signal } from "../elements/signal.ts";
 import {
   openPostgresChannelLedger,
@@ -16,8 +17,8 @@ import {
   SIGNAL_REDIS_MIN_IDLE_MS,
 } from "./signal-redis.ts";
 
-/** Captured at load so a later suite cannot clear it and skip this file. */
-const redisUrlAtLoad = process.env.REDIS_URL;
+/** Process-start URL. A suite that deletes `REDIS_URL` must not skip this file. */
+const redisUrlAtLoad = startupRedisUrl();
 
 function decls(name: string, retries = 3) {
   const decl = signal.once(name, { retries, deadLetter: true });

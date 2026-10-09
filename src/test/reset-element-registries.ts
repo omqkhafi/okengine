@@ -17,6 +17,21 @@
  */
 
 import { afterEach } from "bun:test";
+
+const startupEnv = globalThis as { __okeTestRedisUrl?: string };
+
+if (!("__okeTestRedisUrl" in startupEnv)) {
+  startupEnv.__okeTestRedisUrl = process.env.REDIS_URL ?? process.env.OKE_TEST_REDIS_URL;
+}
+
+/**
+ * Redis URL from process start.
+ * Later suites must not treat a temporary delete as "redis was never configured".
+ */
+export function startupRedisUrl(): string | undefined {
+  const url = startupEnv.__okeTestRedisUrl;
+  return url === undefined || url.trim() === "" ? undefined : url;
+}
 import {
   aiAgentRegistry,
   aiEmbedRegistry,

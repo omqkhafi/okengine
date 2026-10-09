@@ -3,6 +3,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { startupRedisUrl } from "../../test/reset-element-registries.ts";
 import { files, store } from "../../elements/store.ts";
 import {
   bindStore,
@@ -135,8 +136,9 @@ describe("bindStore durable KV routing", () => {
 
   afterEach(() => {
     resetKvDurableWarnsForTests();
-    if (prev.redis === undefined) delete process.env.REDIS_URL;
-    else process.env.REDIS_URL = prev.redis;
+    const redis = prev.redis ?? startupRedisUrl();
+    if (redis === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = redis;
     if (prev.kv === undefined) delete process.env.OKE_STORE_KV_URL;
     else process.env.OKE_STORE_KV_URL = prev.kv;
     if (prev.database === undefined) delete process.env.DATABASE_URL;

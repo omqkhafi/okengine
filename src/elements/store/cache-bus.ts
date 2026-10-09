@@ -75,6 +75,8 @@ export type CacheBusOptions =
       readonly origin?: string;
       /** Overlap behind the cursor. Default 30_000. */
       readonly lagMs?: number;
+      /** Clock for the fleet snapshot. Default `Date.now`. */
+      readonly now?: () => number;
     };
 
 /** Handle returned by {@link openCacheInvalidation}. */
@@ -99,7 +101,13 @@ export function openCacheInvalidation(
 ): CacheInvalidationBus {
   const origin = options.origin ?? crypto.randomUUID();
   if (options.kind === "redis") return openRedis(cache, options.redis, origin);
-  return openPostgres(cache, options.sql, origin, options.lagMs ?? DEFAULT_LAG_MS);
+  return openPostgres(
+    cache,
+    options.sql,
+    origin,
+    options.lagMs ?? DEFAULT_LAG_MS,
+    options.now ?? Date.now,
+  );
 }
 
 /**
@@ -162,12 +170,21 @@ function openPostgres(
   connect: () => Promise<CacheBusSql | undefined>,
   origin: string,
   lagMs: number,
+  now: () => number,
 ): CacheInvalidationBus {
   let stopped = false;
   let opening: Promise<void> | undefined;
   let cursor = 0;
   let othersAlive = false;
+  let registryKnown = false;
+  let fleetCheckedAt = 0;
   const seen = new Set<string>();
+
+  function shouldNotify(): boolean {
+    if (!registryKnown) return true;
+    if (now() - fleetCheckedAt > POLL_INTERVAL_MS) return true;
+    return othersAlive;
+  }
 
   async function anchor(conn: CacheBusSql): Promise<void> {
     const rows = await conn.query(ANCHOR_SQL);
@@ -230,8 +247,13 @@ function openPostgres(
     try {
       const rows = await conn.query(FLEET_SQL, [origin]);
       othersAlive = asNumber(rows[0]?.n) > 0;
+      registryKnown = true;
+      fleetCheckedAt = now();
     } catch (err) {
-      if (isUndefinedTable(err)) othersAlive = false;
+      if (isUndefinedTable(err)) {
+        registryKnown = false;
+        fleetCheckedAt = 0;
+      }
     }
   }
 
@@ -250,7 +272,7 @@ function openPostgres(
   return {
     publish(resources) {
       if (stopped || resources.length === 0) return;
-      void insert(sql, origin, resources, () => othersAlive);
+      void insert(sql, origin, resources, shouldNotify);
     },
     poll,
     async stop() {
@@ -269,10 +291,10 @@ async function insert(
   connect: () => Promise<CacheBusSql | undefined>,
   origin: string,
   resources: readonly ResourceRef[],
-  othersAlive: () => boolean,
+  shouldNotify: () => boolean,
 ): Promise<void> {
   const conn = await connect();
-  if (!conn || !othersAlive() || resources.length === 0) return;
+  if (!conn || !shouldNotify() || resources.length === 0) return;
   const params: unknown[] = [];
   const tuples = resources.map((resource) => {
     params.push(crypto.randomUUID(), resource, origin);

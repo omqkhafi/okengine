@@ -211,14 +211,30 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
           ]);
         }
       };
-      const trafficPromise = traffic();
+      // SIGKILL of A lands while this burst is still in flight. Requests already
+      // on A's socket reset; that is the crash, not a failed peer. Attach the
+      // catch now so the rejection is not unhandled before the later await.
+      let killingA = false;
+      const trafficPromise = traffic().catch((err: unknown) => {
+        const path =
+          err !== null && typeof err === "object" && "path" in err
+            ? String((err as { path?: unknown }).path)
+            : "";
+        const code =
+          err !== null && typeof err === "object" && "code" in err
+            ? (err as { code?: unknown }).code
+            : undefined;
+        if (killingA && path.startsWith(urlA) && code === "ECONNRESET") return;
+        throw err;
+      });
 
       // (3) Gate rate — 5 ok shared across A+B, 6th limited.
+      const rateIp = `203.0.113.${1 + (Date.now() % 200)}`;
       const rateStatuses: number[] = [];
       for (let i = 0; i < 6; i++) {
         const target = i % 2 === 0 ? urlA : urlB;
         const res = await fetch(`${target}/rate`, {
-          headers: { "x-forwarded-for": "203.0.113.50" },
+          headers: { "x-forwarded-for": rateIp },
         });
         rateStatuses.push(res.status);
       }
@@ -236,6 +252,7 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       expect(await waitForFile(join(dir, "hang-inst-a.json"), 15_000)).toBe(true);
 
       // (5) Kill A mid combined scenario — B keeps serving.
+      killingA = true;
       a.kill(9);
       await a.exited;
       await charge;
@@ -257,8 +274,9 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
         }, 20_000),
       ).toBe(true);
 
-      // Keep traffic going on survivor (no deadlock).
-      await trafficPromise.catch(() => {});
+      // Keep traffic going on survivor (no deadlock). A's in-flight sockets
+      // already reset when it was killed; anything else still rejects here.
+      await trafficPromise;
       for (let i = 0; i < 4; i++) {
         expect(
           (
@@ -352,6 +370,9 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
           DATABASE_URL: pg,
           REDIS_URL: redis,
           OKE_HORIZONTAL_REDIS_SIGNALS: "1",
+          // A different cron row, so this test's ticks do not consume the
+          // combined test's one due fire while both run in the same file.
+          OKE_HORIZONTAL_CRON: "horizontal-bus-cron",
         },
       });
     const a = spawn("bus-a", 0);

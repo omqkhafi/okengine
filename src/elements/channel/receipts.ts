@@ -74,7 +74,7 @@ export interface ReceiptLedger {
       readonly at?: number;
       readonly error?: string;
     },
-  ): DeliveryReceipt | undefined;
+  ): DeliveryReceipt | undefined | Promise<DeliveryReceipt | undefined>;
 }
 
 /**

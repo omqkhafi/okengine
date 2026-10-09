@@ -2,9 +2,9 @@
  * Race-safe `CREATE … IF NOT EXISTS`.
  *
  * Two sessions can both pass the existence check and then one loses with
- * `23505` (pg_type / index name) or `42P07` (duplicate table). A transaction
- * lock serializes the create. Surfaces with no `begin` treat those two
- * codes as success.
+ * `23505` (pg_type / index name), `42P07` (duplicate table), or `XX000`
+ * `tuple concurrently updated`. A transaction lock serializes the create.
+ * Surfaces with no `begin` treat those outcomes as success.
  */
 
 /** Fixed int4 keys, one per relation. Held only until the create transaction commits. */
@@ -21,6 +21,7 @@ export const PG_DDL_LOCK = {
   signalDeliveryDbAt: 724014,
   crons: 724021,
   horizontalWrites: 724061,
+  rlsHelpers: 724080,
 } as const;
 
 const DUPLICATE_RELATION = new Set(["23505", "42P07"]);
@@ -31,7 +32,8 @@ const DUPLICATE_RELATION = new Set(["23505", "42P07"]);
  * @param err - Thrown driver error
  */
 export function isDuplicateRelation(err: unknown): boolean {
-  return codesOf(err).some((code) => DUPLICATE_RELATION.has(code));
+  if (codesOf(err).some((code) => DUPLICATE_RELATION.has(code))) return true;
+  return messagesOf(err).some((message) => message.includes("tuple concurrently updated"));
 }
 
 /**
@@ -48,7 +50,7 @@ export async function lockRelation(
 }
 
 /**
- * Run one `CREATE`. `23505` and `42P07` mean the other session won.
+ * Run one `CREATE`. `23505`, `42P07`, and a concurrent catalog update mean the other session won.
  *
  * @param sql - SQL surface with no transaction helper
  * @param statement - `CREATE TABLE` or `CREATE INDEX`
@@ -76,5 +78,14 @@ function codesOf(err: unknown, depth = 0): string[] {
     if (match?.[1]) found.push(match[1]);
   }
   if (row.cause !== undefined && row.cause !== err) found.push(...codesOf(row.cause, depth + 1));
+  return found;
+}
+
+function messagesOf(err: unknown, depth = 0): string[] {
+  if (depth > 4 || err === null || typeof err !== "object") return [];
+  const row = err as { message?: unknown; cause?: unknown };
+  const found: string[] = [];
+  if (typeof row.message === "string") found.push(row.message);
+  if (row.cause !== undefined && row.cause !== err) found.push(...messagesOf(row.cause, depth + 1));
   return found;
 }

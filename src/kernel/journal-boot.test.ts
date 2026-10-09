@@ -459,6 +459,7 @@ describe.skipIf(!LIVE_URL)("chaos — postgres journal multi-process boot", () =
     const url = LIVE_URL!;
     resetFlowSeq();
     const store = await createPostgresJournalStore({ url });
+    await store.sql.exec(`DELETE FROM oke_journal_entries WHERE run_id = 'fence-stale'`);
     await store.sql.exec(
       `DELETE FROM oke_journal_runs WHERE flow IN ('fence.steps', 'fence.stale')`,
     );
@@ -543,6 +544,7 @@ describe.skipIf(!LIVE_URL)("chaos — postgres journal multi-process boot", () =
       expect((caught as OkeError).code).toBe(1074);
     } finally {
       await app.stop();
+      await store.sql.exec(`DELETE FROM oke_journal_entries WHERE run_id = 'fence-stale'`);
       await store.sql.exec(
         `DELETE FROM oke_journal_runs WHERE flow IN ('fence.steps', 'fence.stale')`,
       );

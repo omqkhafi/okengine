@@ -105,10 +105,10 @@ export async function openPostgresChannelLedger(
   let chain: Promise<void> = Promise.resolve();
 
   function enqueue(work: () => Promise<void>): void {
-    chain = chain.then(work);
+    chain = chain.then(work, work);
   }
 
-  async function flush(): Promise<void> {
+  async function drain(): Promise<void> {
     await chain;
   }
 
@@ -265,11 +265,14 @@ export async function openPostgresChannelLedger(
   }
 
   function parseReceipt(body: unknown): DeliveryReceipt | undefined {
-    if (typeof body !== "string") return undefined;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(body);
-    } catch {
+    let parsed: unknown = body;
+    if (typeof body === "string") {
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return undefined;
+      }
+    } else if (body === null || typeof body !== "object") {
       return undefined;
     }
     if (
@@ -314,6 +317,9 @@ export async function openPostgresChannelLedger(
     byMessageId(messageId: string) {
       return findByMessageId(messageId);
     },
+    flush() {
+      return drain();
+    },
     updateStatus(
       messageId: string,
       patch: {
@@ -324,14 +330,14 @@ export async function openPostgresChannelLedger(
     ) {
       const prev = findByMessageId(messageId);
       if (!prev) {
-        enqueue(async () => {
+        return (async () => {
           const loaded = await receiptLedger.lookup(messageId);
-          if (!loaded) return;
+          if (!loaded) return undefined;
           const next = applyStatus(loaded, patch);
           rememberReceipt(next);
           await writeStatus(next);
-        });
-        return undefined;
+          return next;
+        })();
       }
       const next = applyStatus(prev, patch);
       rememberReceipt(next);
@@ -339,9 +345,10 @@ export async function openPostgresChannelLedger(
       return next;
     },
     async lookup(messageId: string): Promise<DeliveryReceipt | undefined> {
+      const needle = `"messageId":${JSON.stringify(messageId)}`;
       const rows = await sql.query(
-        `SELECT id, body, message_id, updated_at FROM ${RECEIPT} WHERE id = ? OR message_id = ? LIMIT 1`,
-        [messageId, messageId],
+        `SELECT id, body, message_id, updated_at FROM ${RECEIPT} WHERE id = ? OR message_id = ? OR position(? in body) > 0 LIMIT 1`,
+        [messageId, messageId, needle],
       );
       const row = rows[0];
       if (!row) return undefined;
@@ -350,7 +357,11 @@ export async function openPostgresChannelLedger(
       rememberReceipt(receipt);
       return receipt;
     },
-  } satisfies ReceiptLedger & ChannelReceiptLookup;
+  } satisfies ReceiptLedger &
+    ChannelReceiptLookup & {
+      /** Drain queued receipt writes. The channel runtime awaits this after a status change. */
+      flush(): Promise<void>;
+    };
 
   async function loadOptOuts(table: string, into: OptOut[]): Promise<void> {
     const rows = await sql.query(`SELECT subject, medium, at FROM ${table}`);
@@ -403,7 +414,7 @@ export async function openPostgresChannelLedger(
   }
 
   async function reloadFromSql(): Promise<void> {
-    await flush();
+    await drain();
     await loadOptOuts(CONSENT, consents);
     await loadOptOuts(BOUNCE, bounces);
     await backfillMessageIds();
@@ -421,5 +432,5 @@ export async function openPostgresChannelLedger(
 
   await reload();
 
-  return { consent, suppression, receipts: receiptLedger, flush, reload };
+  return { consent, suppression, receipts: receiptLedger, flush: drain, reload };
 }

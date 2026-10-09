@@ -504,11 +504,19 @@ export function createPostgresFakeClient(): PostgresClientLike & {
       // Accept both ? (pre-conversion) and $n forms.
       const normalised = text.replace(/\$\d+/g, "?");
       if (
-        /^(begin|commit|rollback|set\b|select set_config|create\b|grant\b|do\b|alter\b)\b/i.test(
+        /^(begin|commit|rollback|set\b|select set_config|select pg_advisory_(xact_)?lock\b|create\b|grant\b|do\b|alter\b)\b/i.test(
           normalised,
         )
       ) {
         return [];
+      }
+
+      const regclass = /^SELECT\s+to_regclass\(\?\)\s+IS\s+NOT\s+NULL\s+AS\s+present\s*$/i.exec(
+        normalised,
+      );
+      if (regclass) {
+        const name = String(values[0] ?? "").replaceAll('"', "");
+        return [{ present: tables.has(name) }];
       }
 
       const create =

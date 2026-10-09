@@ -249,6 +249,55 @@ test("a single instance and an uncached resource write no rows, and a second ins
   await peerBus.stop();
 });
 
+test("a missing or stale registry still publishes", async () => {
+  const inserts: string[] = [];
+  let missing = true;
+  let clock = 0;
+  const sql = (): CacheBusSql => ({
+    async exec(statement) {
+      if (statement.startsWith("INSERT")) inserts.push(statement);
+      return { changes: 0 };
+    },
+    async query(statement) {
+      if (statement.includes("cache_clock") || statement.includes("db_now")) return [{ db_now: 1 }];
+      if (statement.includes("oke_instances")) {
+        if (missing) throw Object.assign(new Error("undefined_table"), { code: "42P01" });
+        return [{ n: 0 }];
+      }
+      if (statement.includes("oke_cache_invalidations")) return [];
+      throw new Error(`unmatched ${statement}`);
+    },
+  });
+  let bus!: ReturnType<typeof openCacheInvalidation>;
+  const cache = createStoreCache({
+    fanout: (resources) => {
+      bus.publish(resources);
+    },
+  });
+  bus = openCacheInvalidation(cache, {
+    kind: "postgres",
+    origin: "self",
+    now: () => clock,
+    sql: async () => sql(),
+  });
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(1);
+
+  missing = false;
+  inserts.length = 0;
+  await bus.poll();
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(0);
+
+  clock += 1_001;
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(1);
+  await bus.stop();
+});
+
 test.skipIf(!LIVE_PG)(
   "two postgres runtimes drop a cached read within 2s when the scheduler is off",
   async () => {
@@ -262,9 +311,7 @@ test.skipIf(!LIVE_PG)(
       env TEXT NOT NULL,
       pid INTEGER
     )`);
-    await admin.unsafe(
-      `INSERT INTO oke_instances (id, started_at, heartbeat_at, lease_expires_at, env, pid) VALUES ('peer', 1, 1, 9999999999999, 'test', 1) ON CONFLICT (id) DO UPDATE SET lease_expires_at = EXCLUDED.lease_expires_at`,
-    );
+    await admin.unsafe(`DELETE FROM oke_instances WHERE id = 'peer'`);
     const db = sql("db");
     let reads = 0;
     const read = flow("cache.poll.read", {
@@ -302,15 +349,19 @@ test.skipIf(!LIVE_PG)(
     const appA = appFor("cache-poll-a", "a", [
       { trigger: http.get("/read").public(), flow: read as AnyFlowDef },
     ]);
-    const appB = appFor("cache-poll-b", "b", [
-      { trigger: http.post("/write").public(), flow: write as AnyFlowDef },
-    ]);
+    let appB: ReturnType<typeof appFor> | undefined;
     try {
       await appA.boot();
-      await appB.boot();
       expect((await appA.fetch(new Request("http://127.0.0.1/read"))).status).toBe(200);
       expect((await appA.fetch(new Request("http://127.0.0.1/read"))).status).toBe(200);
       expect(reads).toBe(1);
+      await admin.unsafe(
+        `INSERT INTO oke_instances (id, started_at, heartbeat_at, lease_expires_at, env, pid) VALUES ('peer', 1, 1, 9999999999999, 'test', 1) ON CONFLICT (id) DO UPDATE SET lease_expires_at = EXCLUDED.lease_expires_at`,
+      );
+      appB = appFor("cache-poll-b", "b", [
+        { trigger: http.post("/write").public(), flow: write as AnyFlowDef },
+      ]);
+      await appB.boot();
       expect(
         (
           await appB.fetch(
@@ -335,7 +386,7 @@ test.skipIf(!LIVE_PG)(
       expect(dropped).toBe(true);
     } finally {
       await appA.stop();
-      await appB.stop();
+      await appB?.stop();
     }
   },
   10_000,

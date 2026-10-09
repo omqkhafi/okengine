@@ -62,7 +62,7 @@ const leaseMs = Number(process.argv[9] ?? "300");
 mkdirSync(workDir, { recursive: true });
 mkdirSync(dirname(signalPath), { recursive: true });
 
-const CRON = "horizontal-cron";
+const CRON = process.env.OKE_HORIZONTAL_CRON ?? "horizontal-cron";
 const SIG = "horizontal-job";
 const rateGate = gate.rate({
   max: 5,
@@ -115,12 +115,6 @@ try {
   });
   clockRt.register(clock(CRON, { every: "1h" }));
   await clockRt.reconcile();
-  clockRt.onCron(CRON, async () => {
-    const line = `${JSON.stringify({ instanceId, kind: "cron", at: Date.now() })}\n`;
-    const path = join(workDir, "cron.jsonl");
-    const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
-    await Bun.write(path, prev + line);
-  });
 
   const redisSignals = process.env.OKE_HORIZONTAL_REDIS_SIGNALS === "1";
   const signalRt = createSignalRuntime({
@@ -297,6 +291,15 @@ try {
   });
 
   await app.boot();
+
+  // Boot installs its own cron handler and would replace one registered earlier.
+  // The file this test watches has to be the handler that actually runs.
+  clockRt.onCron(CRON, async () => {
+    const line = `${JSON.stringify({ instanceId, kind: "cron", at: Date.now() })}\n`;
+    const path = join(workDir, "cron.jsonl");
+    const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+    await Bun.write(path, prev + line);
+  });
 
   // Background: clock ticks + signal drain (concurrent with HTTP).
   void (async () => {

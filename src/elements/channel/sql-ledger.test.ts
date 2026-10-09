@@ -201,8 +201,12 @@ function ledgerSqlFake(): LedgerSqlFake {
       run: (params) => {
         lookupReadCount += 1;
         const key = sqlText(params[0]);
+        const needle = sqlText(params[2]);
         const found = [...receipts.values()].find(
-          (row) => row.id === key || row.message_id === key,
+          (row) =>
+            row.id === key ||
+            row.message_id === key ||
+            (needle.length > 0 && row.body.includes(needle)),
         );
         if (!found) return Promise.resolve([]);
         return Promise.resolve([
@@ -331,9 +335,9 @@ describe("postgres channel receipt ledger", () => {
     const reader = await openPostgresChannelLedger(sql);
     writer.receipts.record(receipt({ id: "r1", messageId: "m1", status: "sent" }));
     await writer.flush();
-    expect(writer.receipts.updateStatus("m1", { status: "hard-bounce", at: 5 })?.status).toBe(
-      "hard-bounce",
-    );
+    expect(
+      (await writer.receipts.updateStatus("m1", { status: "hard-bounce", at: 5 }))?.status,
+    ).toBe("hard-bounce");
     await writer.flush();
 
     sql.setNow(200_000);
@@ -388,12 +392,51 @@ describe("postgres channel receipt ledger", () => {
     writer.receipts.record(receipt({ id: "r1", messageId: "m1", status: "sent" }));
     await writer.flush();
     expect(reader.receipts.byMessageId("m1")).toBeUndefined();
-    expect(reader.receipts.updateStatus("m1", { status: "hard-bounce", at: 9 })).toBeUndefined();
-    await reader.flush();
+    expect(
+      await reader.receipts.updateStatus("m1", { status: "hard-bounce", at: 9 }),
+    ).toMatchObject({
+      id: "r1",
+      status: "hard-bounce",
+    });
     const stored = JSON.parse(sql.receipt("r1")?.body ?? "{}") as DeliveryReceipt;
     expect(stored.status).toBe("hard-bounce");
     expect(stored.at).toBe(9);
     expect(reader.receipts.byMessageId("m1")?.status).toBe("hard-bounce");
+    expect(reader.receipts.all()).toHaveLength(1);
+  });
+
+  test("a cold ledger updates a receipt whose message id is only in the body", async () => {
+    const sql = ledgerSqlFake();
+    const reader = await openPostgresChannelLedger(sql);
+    const stored = receipt({
+      id: "r1",
+      messageId: "provider-1",
+      status: "sent",
+      template: "note",
+      to: "a@b.c",
+    });
+    sql.seedReceipt({
+      id: "r1",
+      body: JSON.stringify(stored),
+      message_id: null,
+      updated_at: 1,
+    });
+    expect(reader.receipts.byMessageId("provider-1")).toBeUndefined();
+
+    const runtime = createChannelRuntime({
+      receipts: reader.receipts,
+      suppression: reader.suppression,
+    });
+    const result = await runtime.ingestOutcome({
+      messageId: "provider-1",
+      state: "hard-bounce",
+      medium: "email",
+    });
+
+    expect(result.id).toBe("r1");
+    expect(result.status).toBe("hard-bounce");
+    const body = JSON.parse(sql.receipt("r1")?.body ?? "{}") as DeliveryReceipt;
+    expect(body.status).toBe("hard-bounce");
     expect(reader.receipts.all()).toHaveLength(1);
   });
 
@@ -461,9 +504,8 @@ describe.skipIf(!LIVE_URL)("channel ledger — two postgres connections", () => 
       expect(result.id).toBe(id);
       expect(result.status).toBe("hard-bounce");
       expect(
-        reader.receipts.updateStatus(directMessage, { status: "fallback", at: 4 }),
-      ).toBeUndefined();
-      await reader.flush();
+        await reader.receipts.updateStatus(directMessage, { status: "fallback", at: 4 }),
+      ).toMatchObject({ id: directId, status: "fallback" });
 
       const rows = await sql.query(
         `SELECT id, body FROM oke_channel_receipt WHERE id = ? OR id = ?`,
