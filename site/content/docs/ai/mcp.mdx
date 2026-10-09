@@ -54,7 +54,7 @@ Two actions are write-class, and each call needs a **fresh, single-use** confirm
 <Step>
 ### Ask for confirmation
 
-The write returns an opaque `confirmationId`. It does not return a token. Confirm from a **different auth session** (`claims.sid`) than the session that will invoke. The same principal is allowed. A confirmation issued on another process is unknown.
+The write returns an opaque `confirmationId`. It does not return a token. Confirm from a **different auth session** (`claims.sid`) than the session that will invoke. The same principal is allowed. A rejected same-session confirm leaves the pending confirmation in place. A confirmation issued on another process is unknown.
 
 </Step>
 

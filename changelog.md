@@ -12,9 +12,19 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+- MCP confirm uses `confirmationId`. Confirming is a different session. A rejected confirm does not consume the pending confirmation or the token.
+
 ### 🐛 Fixed
 
 - The release workflow grants `ci.yml` its `contents: read`, `issues: read`, and `pull-requests: write` permissions. A smaller grant fails at startup, before npm, JSR, or the GitHub Release run.
+- Postgres `exec` reads `count` and `affectedRows`, so a leased durable flow no longer throws OKE1074 on Bun 1.4.2.
+- 0.23.2 and 0.24.0 do not work with Postgres on Bun 1.4.2. Upgrade to 0.24.1.
+
+### 🔒 Security
+
+- MCP confirm uses `confirmationId`. Confirming is a different session. A rejected confirm does not consume the pending confirmation or the token.
 
 ## v0.24.0 — 2026-10-07
 
@@ -53,7 +63,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Auto-cache entries expire after 60 seconds unless the flow sets `cache: "5m"` (or another duration). Override the default with `cache.defaultTtlMs`.
 - The auto-cache keeps at most 10,000 entries. Override it with `cache.maxEntries`.
 - A JSON-shaped body sent as `text/plain`, form data, or with no content type is 415. Send `Content-Type: application/json`, or set `jsonContentType: "any"` on the route.
-- Export gzip baselines in `budgets.json` match the journal fence, shared signal delivery, cache invalidation, and body-cap work. Kernel edge stays 14.36 kB and client runtime stays 5.10 kB.
+- Export gzip baselines in `budgets.json` match the journal fence, shared signal delivery, cache invalidation, and body-cap work. Kernel edge stays 14.8 kB (14,835 B) and client runtime stays 5.10 kB.
 
 ### 🐛 Fixed
 
