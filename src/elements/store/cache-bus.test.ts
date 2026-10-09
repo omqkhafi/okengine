@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { postgresDriver } from "../../drivers/postgres.ts";
+import { postgresDriver, sharedPostgresClient } from "../../drivers/postgres.ts";
 import { oke } from "../../kernel/app.ts";
 import { flow, type AnyFlowDef } from "../../kernel/flow.ts";
 import type { Binding } from "../../kernel/on.ts";
@@ -105,6 +105,7 @@ test("postgres invalidation is polled once and skips the sender", async () => {
         return [{ db_now: now }, ...rows.map((row) => ({ ...row, db_now: now }))];
       }
       if (statement.includes("db_now")) return [{ db_now: now }];
+      if (statement.includes("oke_instances")) return [{ n: 1 }];
       if (statement.includes("FROM oke_cache_invalidations"))
         return rows.map((row) => ({ ...row }));
       throw new Error(`unmatched ${statement}`);
@@ -162,6 +163,7 @@ test("a row that already exists at open is not applied, and the first later poll
         return [{ db_now: now }, ...rows.map((row) => ({ ...row, db_now: now }))];
       }
       if (statement.includes("db_now")) return [{ db_now: now }];
+      if (statement.includes("oke_instances")) return [{ n: 1 }];
       if (statement.includes("FROM oke_cache_invalidations"))
         return rows.map((row) => ({ ...row }));
       throw new Error(`unmatched ${statement}`);
@@ -183,10 +185,86 @@ test("a row that already exists at open is not applied, and the first later poll
   await a.stop();
 });
 
+test("a single instance and an uncached resource write no rows, and a second instance batches", async () => {
+  const inserts: Array<{ sql: string; params: readonly unknown[] }> = [];
+  const sqlFor = (alive: number): (() => CacheBusSql) => {
+    return () => ({
+      async exec(statement, params) {
+        if (statement.startsWith("INSERT")) inserts.push({ sql: statement, params: params ?? [] });
+        return { changes: 0 };
+      },
+      async query(statement) {
+        if (statement.includes("cache_clock")) return [{ db_now: 1 }];
+        if (statement.includes("db_now")) return [{ db_now: 1 }];
+        if (statement.includes("oke_instances")) return [{ n: alive }];
+        if (statement.includes("oke_cache_invalidations")) return [];
+        throw new Error(`unmatched ${statement}`);
+      },
+    });
+  };
+  let aloneBus!: ReturnType<typeof openCacheInvalidation>;
+  const alone = createStoreCache({
+    fanout: (resources) => {
+      aloneBus.publish(resources);
+    },
+  });
+  aloneBus = openCacheInvalidation(alone, {
+    kind: "postgres",
+    origin: "self",
+    sql: async () => sqlFor(0)(),
+  });
+  await aloneBus.poll();
+  alone.invalidate(["sql:notes"]);
+  alone.set({
+    tier: 1,
+    key: "held",
+    value: 1,
+    resources: ["sql:notes"],
+    expiresAt: null,
+  });
+  alone.invalidate(["sql:notes"]);
+  let peerBus!: ReturnType<typeof openCacheInvalidation>;
+  const peer = createStoreCache({
+    fanout: (resources) => {
+      peerBus.publish(resources);
+    },
+  });
+  peerBus = openCacheInvalidation(peer, {
+    kind: "postgres",
+    origin: "self",
+    sql: async () => sqlFor(1)(),
+  });
+  await peerBus.poll();
+  peer.set({ tier: 1, key: "a", value: 1, resources: ["sql:notes"], expiresAt: null });
+  peer.set({ tier: 1, key: "b", value: 2, resources: ["sql:orders"], expiresAt: null });
+  peer.invalidate(["sql:notes", "sql:orders"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(1);
+  expect(inserts[0]?.sql).toBe(
+    "INSERT INTO oke_cache_invalidations (id, resource, origin) VALUES (?, ?, ?), (?, ?, ?)",
+  );
+  expect(inserts[0]?.params[1]).toBe("sql:notes");
+  expect(inserts[0]?.params[4]).toBe("sql:orders");
+  await aloneBus.stop();
+  await peerBus.stop();
+});
+
 test.skipIf(!LIVE_PG)(
   "two postgres runtimes drop a cached read within 2s when the scheduler is off",
   async () => {
     const url = LIVE_PG!;
+    const admin = sharedPostgresClient(url);
+    await admin.unsafe(`CREATE TABLE IF NOT EXISTS oke_instances (
+      id TEXT PRIMARY KEY,
+      started_at BIGINT NOT NULL,
+      heartbeat_at BIGINT NOT NULL,
+      lease_expires_at BIGINT NOT NULL,
+      env TEXT NOT NULL,
+      pid INTEGER
+    )`);
+    await admin.unsafe(
+      `INSERT INTO oke_instances (id, started_at, heartbeat_at, lease_expires_at, env, pid) VALUES ('peer', 1, 1, 9999999999999, 'test', 1) ON CONFLICT (id) DO UPDATE SET lease_expires_at = EXCLUDED.lease_expires_at`,
+    );
     const db = sql("db");
     let reads = 0;
     const read = flow("cache.poll.read", {

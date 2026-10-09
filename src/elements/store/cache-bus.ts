@@ -166,6 +166,7 @@ function openPostgres(
   let stopped = false;
   let opening: Promise<void> | undefined;
   let cursor = 0;
+  let othersAlive = false;
   const seen = new Set<string>();
 
   async function anchor(conn: CacheBusSql): Promise<void> {
@@ -187,6 +188,7 @@ function openPostgres(
         if (!conn || stopped) return;
         await ensure(conn);
         await anchor(conn);
+        await refreshFleet(conn);
       })();
     }
     return opening;
@@ -220,7 +222,17 @@ function openPostgres(
     if (fresh.length > 0) cache.acceptRemote(fresh);
     cursor = dbNow;
     await conn.exec(DELETE_SQL, [dbNow - RETAIN_MS]);
+    await refreshFleet(conn);
     if (seen.size > 10_000) seen.clear();
+  }
+
+  async function refreshFleet(conn: CacheBusSql): Promise<void> {
+    try {
+      const rows = await conn.query(FLEET_SQL, [origin]);
+      othersAlive = asNumber(rows[0]?.n) > 0;
+    } catch (err) {
+      if (isUndefinedTable(err)) othersAlive = false;
+    }
   }
 
   const timer = setInterval(() => {
@@ -238,7 +250,7 @@ function openPostgres(
   return {
     publish(resources) {
       if (stopped || resources.length === 0) return;
-      void insert(sql, origin, resources);
+      void insert(sql, origin, resources, () => othersAlive);
     },
     poll,
     async stop() {
@@ -257,12 +269,19 @@ async function insert(
   connect: () => Promise<CacheBusSql | undefined>,
   origin: string,
   resources: readonly ResourceRef[],
+  othersAlive: () => boolean,
 ): Promise<void> {
   const conn = await connect();
-  if (!conn) return;
-  for (const resource of resources) {
-    await conn.exec(INSERT_SQL, [crypto.randomUUID(), resource, origin]);
-  }
+  if (!conn || !othersAlive() || resources.length === 0) return;
+  const params: unknown[] = [];
+  const tuples = resources.map((resource) => {
+    params.push(crypto.randomUUID(), resource, origin);
+    return "(?, ?, ?)";
+  });
+  await conn.exec(
+    `INSERT INTO ${CACHE_INVALIDATIONS_TABLE} (id, resource, origin) VALUES ${tuples.join(", ")}`,
+    params,
+  );
 }
 
 function resourcesFromMessage(message: string, origin: string): ResourceRef[] {
@@ -280,6 +299,17 @@ function resourcesFromMessage(message: string, origin: string): ResourceRef[] {
   } catch {
     return [];
   }
+}
+
+function isUndefinedTable(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; depth < 4 && current != null && typeof current === "object"; depth++) {
+    const rec = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (rec.code === "42P01") return true;
+    if (typeof rec.message === "string" && rec.message.includes("42P01")) return true;
+    current = rec.cause;
+  }
+  return false;
 }
 
 function asString(value: unknown): string {
@@ -305,9 +335,9 @@ const CREATE_SQL = `CREATE TABLE IF NOT EXISTS ${CACHE_INVALIDATIONS_TABLE} (
 
 const INDEX_SQL = `CREATE INDEX IF NOT EXISTS ${CACHE_INVALIDATIONS_TABLE}_created_at ON ${CACHE_INVALIDATIONS_TABLE} (created_at)`;
 
-const INSERT_SQL = `INSERT INTO ${CACHE_INVALIDATIONS_TABLE} (id, resource, origin) VALUES (?, ?, ?)`;
-
 const DB_NOW_EXPR = "(extract(epoch from clock_timestamp()) * 1000)::bigint";
+
+const FLEET_SQL = `SELECT count(*)::int AS n FROM oke_instances WHERE lease_expires_at > ${DB_NOW_EXPR} AND id <> ?`;
 
 const DB_NOW_SQL = `SELECT ${DB_NOW_EXPR} AS db_now`;
 
