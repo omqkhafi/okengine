@@ -9,6 +9,7 @@
  * bounded by the cache TTL.
  */
 
+import { execIfNotExists } from "../../drivers/pg-ddl.ts";
 import type { ResourceRef } from "../../manifest/types.ts";
 import type { StoreCache } from "./cache.ts";
 
@@ -213,8 +214,8 @@ function openPostgres(
 }
 
 async function ensure(conn: CacheBusSql): Promise<void> {
-  await conn.exec(CREATE_SQL);
-  await conn.exec(INDEX_SQL);
+  await execIfNotExists(conn, CREATE_SQL);
+  await execIfNotExists(conn, INDEX_SQL);
 }
 
 async function insert(

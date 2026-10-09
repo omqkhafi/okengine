@@ -19,6 +19,7 @@ import { dirname, join } from "node:path";
 
 import { createPostgresCronStore } from "../drivers/clock-postgres.ts";
 import { createPostgresJournalStore } from "../drivers/journal-postgres.ts";
+import { lockRelation, PG_DDL_LOCK } from "../drivers/pg-ddl.ts";
 import { memorySignalDriver } from "../drivers/signal-memory.ts";
 import { createBunSignalRedisClient, redisSignalDriver } from "../drivers/signal-redis.ts";
 import { bunRedisCacheClient } from "../elements/store/cache-bus.ts";
@@ -77,230 +78,254 @@ const writesTable = defineTable("oke_horizontal_writes", {
   at: true,
 });
 
-const cronStore = await createPostgresCronStore({ url: pgUrl });
-const journalStore = await createPostgresJournalStore({ url: pgUrl });
-await journalStore.sql.exec(`
+const BOOT_DEADLINE_MS = 15_000;
+
+/**
+ * Print one reason and stop. The parent reads this line from stderr.
+ *
+ * @param reason - Why boot did not become ready
+ */
+function childFail(reason: string): never {
+  console.error(`horizontal-child: ${reason}`);
+  process.exit(1);
+}
+
+const bootTimer = setTimeout(() => {
+  childFail("boot deadline exceeded");
+}, BOOT_DEADLINE_MS);
+
+try {
+  const cronStore = await createPostgresCronStore({ url: pgUrl });
+  const journalStore = await createPostgresJournalStore({ url: pgUrl });
+  await journalStore.sql.begin(async (tx) => {
+    await lockRelation(tx, PG_DDL_LOCK.horizontalWrites);
+    await tx.exec(`
   CREATE TABLE IF NOT EXISTS oke_horizontal_writes (
     id TEXT PRIMARY KEY,
     instance_id TEXT NOT NULL,
     at BIGINT NOT NULL
   )
 `);
+  });
 
-const clockRt = createClockRuntime({
-  store: cronStore,
-  instanceId,
-  leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
-});
-clockRt.register(clock(CRON, { every: "1h" }));
-await clockRt.reconcile();
-clockRt.onCron(CRON, async () => {
-  const line = `${JSON.stringify({ instanceId, kind: "cron", at: Date.now() })}\n`;
-  const path = join(workDir, "cron.jsonl");
-  const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
-  await Bun.write(path, prev + line);
-});
-
-const redisSignals = process.env.OKE_HORIZONTAL_REDIS_SIGNALS === "1";
-const signalRt = createSignalRuntime({
-  driver: redisSignals ? redisSignalDriver : memorySignalDriver,
-  ...(redisSignals
-    ? { redis: createBunSignalRedisClient(redisUrl), compete: true, consumerId: instanceId }
-    : {}),
-  durablePath: signalPath,
-  leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
-});
-const job = signal.once(SIG, { retries: 3, deadLetter: true, optional: true });
-signalRt.register(job);
-const news = signal.broadcast("horizontal-news", { optional: true });
-const feed = signal.live("horizontal-feed", { optional: true });
-if (redisSignals) {
-  signalRt.register(news);
-  signalRt.register(feed);
-}
-const bus = await signalRt.start();
-if (redisSignals) {
-  await bus.subscribe("horizontal-news", `news-${instanceId}`, async (msg) => {
-    const line = `${JSON.stringify({ instanceId, kind: "broadcast", id: msg.id, at: Date.now() })}\n`;
-    const path = join(workDir, "broadcast.jsonl");
+  const clockRt = createClockRuntime({
+    store: cronStore,
+    instanceId,
+    leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
+  });
+  clockRt.register(clock(CRON, { every: "1h" }));
+  await clockRt.reconcile();
+  clockRt.onCron(CRON, async () => {
+    const line = `${JSON.stringify({ instanceId, kind: "cron", at: Date.now() })}\n`;
+    const path = join(workDir, "cron.jsonl");
     const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
     await Bun.write(path, prev + line);
   });
-  void (async () => {
-    for await (const event of bus.live("horizontal-feed")) {
-      const line = `${JSON.stringify({ instanceId, kind: "live", id: event.id, at: Date.now() })}\n`;
-      const path = join(workDir, "live.jsonl");
+
+  const redisSignals = process.env.OKE_HORIZONTAL_REDIS_SIGNALS === "1";
+  const signalRt = createSignalRuntime({
+    driver: redisSignals ? redisSignalDriver : memorySignalDriver,
+    ...(redisSignals
+      ? { redis: createBunSignalRedisClient(redisUrl), compete: true, consumerId: instanceId }
+      : {}),
+    durablePath: signalPath,
+    leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
+  });
+  const job = signal.once(SIG, { retries: 3, deadLetter: true, optional: true });
+  signalRt.register(job);
+  const news = signal.broadcast("horizontal-news", { optional: true });
+  const feed = signal.live("horizontal-feed", { optional: true });
+  if (redisSignals) {
+    signalRt.register(news);
+    signalRt.register(feed);
+  }
+  const bus = await signalRt.start();
+  if (redisSignals) {
+    await bus.subscribe("horizontal-news", `news-${instanceId}`, async (msg) => {
+      const line = `${JSON.stringify({ instanceId, kind: "broadcast", id: msg.id, at: Date.now() })}\n`;
+      const path = join(workDir, "broadcast.jsonl");
       const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
       await Bun.write(path, prev + line);
-    }
-  })();
-}
-await bus.subscribe(SIG, `consumer-${instanceId}`, async (msg) => {
-  const line = `${JSON.stringify({ instanceId, kind: "signal", id: msg.id, at: Date.now() })}\n`;
-  const path = join(workDir, "signal.jsonl");
-  const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
-  await Bun.write(path, prev + line);
-});
-
-const kv = await redisDriver.open({
-  name: GATE_KV_NAMESPACE,
-  url: redisUrl,
-  nowMs: () => Date.now(),
-});
-const gateRt = createGateRuntime({
-  gates: [rateGate, gate.public],
-  kv,
-  now: () => Date.now(),
-});
-
-const storeRt = createStoreRuntime({
-  drivers: { sql: postgresDriver },
-  sql: { db: { name: "db", primary: { url: pgUrl } } },
-  now: () => Date.now(),
-  cacheBus: { kind: "redis", redis: bunRedisCacheClient(redisUrl), origin: instanceId },
-});
-storeRt.register(db);
-
-const ping = flow("horizontal.ping", {
-  do: () => ({ ok: true as const, instanceId }),
-});
-const rate = flow("horizontal.rate", {
-  do: () => ({ ok: true as const, instanceId }),
-});
-let cachedReads = 0;
-const cached = flow("horizontal.cached", {
-  effects: { reads: ["sql:db"] },
-  do: () => {
-    cachedReads += 1;
-    return { reads: cachedReads, instanceId };
-  },
-});
-const write = flow("horizontal.write", {
-  effects: { writes: ["sql:db"] },
-  do: async (_input, fx) => {
-    const id = okid();
-    await fx
-      .store(db)
-      .insert(writesTable)
-      .values({ id, instance_id: instanceId, at: Date.now() })
-      .execute();
-    const line = `${JSON.stringify({ instanceId, kind: "write", id, at: Date.now() })}\n`;
-    const path = join(workDir, "writes.jsonl");
+    });
+    void (async () => {
+      for await (const event of bus.live("horizontal-feed")) {
+        const line = `${JSON.stringify({ instanceId, kind: "live", id: event.id, at: Date.now() })}\n`;
+        const path = join(workDir, "live.jsonl");
+        const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+        await Bun.write(path, prev + line);
+      }
+    })();
+  }
+  await bus.subscribe(SIG, `consumer-${instanceId}`, async (msg) => {
+    const line = `${JSON.stringify({ instanceId, kind: "signal", id: msg.id, at: Date.now() })}\n`;
+    const path = join(workDir, "signal.jsonl");
     const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
     await Bun.write(path, prev + line);
-    return { id };
-  },
-});
-const emit = flow("horizontal.emit", {
-  do: async (_input, fx) => {
-    await fx.emit(SIG, { from: instanceId, at: Date.now() });
-    return { emitted: true as const };
-  },
-});
-const publishNews = flow("horizontal.news", {
-  do: async (_input, fx) => {
-    await fx.emit("horizontal-news", { from: instanceId, at: Date.now() });
-    return { emitted: true as const };
-  },
-});
-const publishFeed = flow("horizontal.feed", {
-  do: async (_input, fx) => {
-    await fx.emit("horizontal-feed", { from: instanceId, at: Date.now() });
-    return { emitted: true as const };
-  },
-});
-const charge = flow("horizontal.charge", {
-  durable: true,
-  do: async (_input, fx) => {
-    await fx.step("create-intent", async () => {
-      const line = `${JSON.stringify({ instanceId, step: "create-intent", at: Date.now() })}\n`;
-      const path = join(workDir, "steps.jsonl");
-      const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
-      await Bun.write(path, prev + line);
-      return { id: "pi_h" };
-    });
-    await fx.step("mid-flight", async () => {
-      await Bun.write(join(workDir, `hang-${instanceId}.json`), JSON.stringify({ hung: true }));
-      // Parent writes allow-complete.json after SIGKILL so the survivor finishes.
-      const allow = join(workDir, "allow-complete.json");
-      const deadline = Date.now() + 45_000;
-      while (!(await Bun.file(allow).exists()) && Date.now() < deadline) {
-        await Bun.sleep(20);
-      }
-      if (!(await Bun.file(allow).exists())) {
-        throw new Error("horizontal.charge: timed out waiting for allow-complete");
-      }
-      const line = `${JSON.stringify({ instanceId, step: "mid-flight", at: Date.now() })}\n`;
-      const path = join(workDir, "steps.jsonl");
-      const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
-      await Bun.write(path, prev + line);
-      return "done";
-    });
-    return { ok: true as const };
-  },
-});
+  });
 
-const bindings: Binding[] = [
-  { trigger: http.get("/ping").public(), flow: ping as AnyFlowDef },
-  { trigger: http.get("/rate").gate(rateGate), flow: rate as AnyFlowDef },
-  { trigger: http.get("/cached").public(), flow: cached as AnyFlowDef },
-  { trigger: http.post("/write").public(), flow: write as AnyFlowDef },
-  { trigger: http.post("/emit").public(), flow: emit as AnyFlowDef },
-  { trigger: http.post("/news").public(), flow: publishNews as AnyFlowDef },
-  { trigger: http.post("/feed").public(), flow: publishFeed as AnyFlowDef },
-  { trigger: http.post("/charge").public(), flow: charge as AnyFlowDef },
-];
+  const kv = await redisDriver.open({
+    name: GATE_KV_NAMESPACE,
+    url: redisUrl,
+    nowMs: () => Date.now(),
+  });
+  const gateRt = createGateRuntime({
+    gates: [rateGate, gate.public],
+    kv,
+    now: () => Date.now(),
+  });
 
-const app = oke({
-  name: `horizontal-${instanceId}`,
-  env: "test",
-  startScheduler: false,
-  gate: { unguardedHttp: "allow", policies: [rateGate, gate.public] },
-  journalLeaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
-  bindings,
-  clocks: [clock(CRON, { every: "1h" })],
-  signals: [job],
-  stores: [db],
-  elements: {
-    clock: clockRt,
-    signal: signalRt,
-    gate: gateRt,
-    store: storeRt,
-    journal: {
-      store: journalStore,
-      instanceId,
-      leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
-      driverId: "postgres",
+  const storeRt = createStoreRuntime({
+    drivers: { sql: postgresDriver },
+    sql: { db: { name: "db", primary: { url: pgUrl } } },
+    now: () => Date.now(),
+    cacheBus: { kind: "redis", redis: bunRedisCacheClient(redisUrl), origin: instanceId },
+  });
+  storeRt.register(db);
+
+  const ping = flow("horizontal.ping", {
+    do: () => ({ ok: true as const, instanceId }),
+  });
+  const rate = flow("horizontal.rate", {
+    do: () => ({ ok: true as const, instanceId }),
+  });
+  let cachedReads = 0;
+  const cached = flow("horizontal.cached", {
+    effects: { reads: ["sql:db"] },
+    do: () => {
+      cachedReads += 1;
+      return { reads: cachedReads, instanceId };
     },
-  },
-});
+  });
+  const write = flow("horizontal.write", {
+    effects: { writes: ["sql:db"] },
+    do: async (_input, fx) => {
+      const id = okid();
+      await fx
+        .store(db)
+        .insert(writesTable)
+        .values({ id, instance_id: instanceId, at: Date.now() })
+        .execute();
+      const line = `${JSON.stringify({ instanceId, kind: "write", id, at: Date.now() })}\n`;
+      const path = join(workDir, "writes.jsonl");
+      const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+      await Bun.write(path, prev + line);
+      return { id };
+    },
+  });
+  const emit = flow("horizontal.emit", {
+    do: async (_input, fx) => {
+      await fx.emit(SIG, { from: instanceId, at: Date.now() });
+      return { emitted: true as const };
+    },
+  });
+  const publishNews = flow("horizontal.news", {
+    do: async (_input, fx) => {
+      await fx.emit("horizontal-news", { from: instanceId, at: Date.now() });
+      return { emitted: true as const };
+    },
+  });
+  const publishFeed = flow("horizontal.feed", {
+    do: async (_input, fx) => {
+      await fx.emit("horizontal-feed", { from: instanceId, at: Date.now() });
+      return { emitted: true as const };
+    },
+  });
+  const charge = flow("horizontal.charge", {
+    durable: true,
+    do: async (_input, fx) => {
+      await fx.step("create-intent", async () => {
+        const line = `${JSON.stringify({ instanceId, step: "create-intent", at: Date.now() })}\n`;
+        const path = join(workDir, "steps.jsonl");
+        const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+        await Bun.write(path, prev + line);
+        return { id: "pi_h" };
+      });
+      await fx.step("mid-flight", async () => {
+        await Bun.write(join(workDir, `hang-${instanceId}.json`), JSON.stringify({ hung: true }));
+        // Parent writes allow-complete.json after SIGKILL so the survivor finishes.
+        const allow = join(workDir, "allow-complete.json");
+        const deadline = Date.now() + 45_000;
+        while (!(await Bun.file(allow).exists()) && Date.now() < deadline) {
+          await Bun.sleep(20);
+        }
+        if (!(await Bun.file(allow).exists())) {
+          throw new Error("horizontal.charge: timed out waiting for allow-complete");
+        }
+        const line = `${JSON.stringify({ instanceId, step: "mid-flight", at: Date.now() })}\n`;
+        const path = join(workDir, "steps.jsonl");
+        const prev = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
+        await Bun.write(path, prev + line);
+        return "done";
+      });
+      return { ok: true as const };
+    },
+  });
 
-await app.boot();
+  const bindings: Binding[] = [
+    { trigger: http.get("/ping").public(), flow: ping as AnyFlowDef },
+    { trigger: http.get("/rate").gate(rateGate), flow: rate as AnyFlowDef },
+    { trigger: http.get("/cached").public(), flow: cached as AnyFlowDef },
+    { trigger: http.post("/write").public(), flow: write as AnyFlowDef },
+    { trigger: http.post("/emit").public(), flow: emit as AnyFlowDef },
+    { trigger: http.post("/news").public(), flow: publishNews as AnyFlowDef },
+    { trigger: http.post("/feed").public(), flow: publishFeed as AnyFlowDef },
+    { trigger: http.post("/charge").public(), flow: charge as AnyFlowDef },
+  ];
 
-// Background: clock ticks + signal drain (concurrent with HTTP).
-void (async () => {
-  for (;;) {
-    try {
-      await clockRt.tick();
-      await bus.drain();
-      await app.resumeDurable();
-    } catch (err) {
-      console.error("horizontal-child tick error", err);
+  const app = oke({
+    name: `horizontal-${instanceId}`,
+    env: "test",
+    startScheduler: false,
+    gate: { unguardedHttp: "allow", policies: [rateGate, gate.public] },
+    journalLeaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
+    bindings,
+    clocks: [clock(CRON, { every: "1h" })],
+    signals: [job],
+    stores: [db],
+    elements: {
+      clock: clockRt,
+      signal: signalRt,
+      gate: gateRt,
+      store: storeRt,
+      journal: {
+        store: journalStore,
+        instanceId,
+        leaseMs: Number.isFinite(leaseMs) ? leaseMs : 300,
+        driverId: "postgres",
+      },
+    },
+  });
+
+  await app.boot();
+
+  // Background: clock ticks + signal drain (concurrent with HTTP).
+  void (async () => {
+    for (;;) {
+      try {
+        await clockRt.tick();
+        await bus.drain();
+        await app.resumeDurable();
+      } catch (err) {
+        console.error("horizontal-child tick error", err);
+      }
+      await Bun.sleep(20);
     }
-    await Bun.sleep(20);
-  }
-})();
+  })();
 
-const handle = createBunRuntime().serve(app, {
-  port,
-  hostname: "127.0.0.1",
-});
-installGracefulShutdown({ app, handle, exit: true });
+  const handle = createBunRuntime().serve(app, {
+    port,
+    hostname: "127.0.0.1",
+  });
+  installGracefulShutdown({ app, handle, exit: true });
 
-await Bun.write(
-  join(workDir, `ready-${instanceId}.json`),
-  JSON.stringify({ port: handle.port, instanceId }),
-);
+  await Bun.write(
+    join(workDir, `ready-${instanceId}.json`),
+    JSON.stringify({ port: handle.port, instanceId }),
+  );
+} catch (err) {
+  childFail(err instanceof Error ? err.message : String(err));
+}
+clearTimeout(bootTimer);
 
 // Keep alive
 await new Promise(() => {});

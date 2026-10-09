@@ -43,6 +43,64 @@ async function waitForFile(path: string, timeoutMs = 20_000): Promise<boolean> {
   return false;
 }
 
+/** Drain a child pipe so a full buffer cannot stall boot. */
+function collectText(stream: ReadableStream<Uint8Array> | number | null | undefined): {
+  snapshot(): string;
+} {
+  let text = "";
+  if (!stream || typeof stream === "number") return { snapshot: () => "" };
+  const decoder = new TextDecoder();
+  void (async () => {
+    const reader = stream.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) text += decoder.decode(value, { stream: true });
+      }
+    } catch {
+      /* closed */
+    }
+  })();
+  return { snapshot: () => text };
+}
+
+/**
+ * Ready file, or the child's last stderr line as soon as it exits.
+ *
+ * @param proc - Spawned horizontal child
+ * @param stderr - Live stderr text
+ * @param path - `ready-*.json`
+ * @param timeoutMs - Upper bound when the child neither exits nor writes the file
+ */
+async function waitForReady(
+  proc: { exitCode: number | null },
+  stderr: { snapshot(): string },
+  path: string,
+  timeoutMs = 20_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await Bun.file(path).exists()) return;
+    if (proc.exitCode !== null) {
+      await Bun.sleep(30);
+      throw new Error(lastLine(stderr.snapshot()) || `child exited ${proc.exitCode}`);
+    }
+    await Bun.sleep(20);
+  }
+  throw new Error(lastLine(stderr.snapshot()) || `timed out waiting for ${path}`);
+}
+
+function lastLine(text: string): string {
+  return (
+    text
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .at(-1) ?? ""
+  );
+}
+
 async function waitFor(cond: () => Promise<boolean>, timeoutMs = 20_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -98,10 +156,14 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
 
     const a = spawn("inst-a", 0);
     const b = spawn("inst-b", 0);
+    const stderrA = collectText(a.stderr);
+    const stderrB = collectText(b.stderr);
+    collectText(a.stdout);
+    collectText(b.stdout);
 
     try {
-      expect(await waitForFile(join(dir, "ready-inst-a.json"))).toBe(true);
-      expect(await waitForFile(join(dir, "ready-inst-b.json"))).toBe(true);
+      await waitForReady(a, stderrA, join(dir, "ready-inst-a.json"));
+      await waitForReady(b, stderrB, join(dir, "ready-inst-b.json"));
       const readyA = (await Bun.file(join(dir, "ready-inst-a.json")).json()) as {
         port: number;
       };
@@ -165,17 +227,18 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       expect(okRates).toBe(5);
       expect(limited).toBeGreaterThanOrEqual(1);
 
-      // (2) Start durable on A; hang mid-step.
-      void fetch(`${urlA}/charge`, {
+      // (2) Start durable on A; hang mid-step. SIGKILL resets this socket.
+      const charge = fetch(`${urlA}/charge`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",
-      });
+      }).catch(() => undefined);
       expect(await waitForFile(join(dir, "hang-inst-a.json"), 15_000)).toBe(true);
 
       // (5) Kill A mid combined scenario — B keeps serving.
       a.kill(9);
       await a.exited;
+      await charge;
 
       // B still serves unrelated HTTP while absorbing responsibilities.
       expect((await fetch(`${urlB}/ping`)).status).toBe(200);
@@ -293,9 +356,13 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       });
     const a = spawn("bus-a", 0);
     const b = spawn("bus-b", 0);
+    const stderrA = collectText(a.stderr);
+    const stderrB = collectText(b.stderr);
+    collectText(a.stdout);
+    collectText(b.stdout);
     try {
-      expect(await waitForFile(join(dir, "ready-bus-a.json"))).toBe(true);
-      expect(await waitForFile(join(dir, "ready-bus-b.json"))).toBe(true);
+      await waitForReady(a, stderrA, join(dir, "ready-bus-a.json"));
+      await waitForReady(b, stderrB, join(dir, "ready-bus-b.json"));
       const readyA = (await Bun.file(join(dir, "ready-bus-a.json")).json()) as { port: number };
       const readyB = (await Bun.file(join(dir, "ready-bus-b.json")).json()) as { port: number };
       const urlA = `http://127.0.0.1:${readyA.port}`;
@@ -351,3 +418,29 @@ if (!LIVE) {
     expect(LIVE).toBeUndefined();
   });
 }
+
+test("a child that exits is reported from stderr without waiting out the file timeout", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oke-horizontal-exit-"));
+  const started = Date.now();
+  const proc = Bun.spawn({
+    cmd: ["bun", childPath],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stderr = collectText(proc.stderr);
+  collectText(proc.stdout);
+  try {
+    await expect(waitForReady(proc, stderr, join(dir, "ready-missing.json"))).rejects.toThrow(
+      /usage:/,
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+  } finally {
+    try {
+      proc.kill();
+    } catch {
+      /* already dead */
+    }
+    await proc.exited;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

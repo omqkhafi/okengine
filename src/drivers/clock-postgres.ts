@@ -8,6 +8,7 @@
 
 import type { CronRow, CronStatus, CronStore } from "../elements/clock/reconcile.ts";
 import { affectedRows } from "./affected-rows.ts";
+import { lockRelation, PG_DDL_LOCK } from "./pg-ddl.ts";
 import {
   resolvePostgresUrl,
   sharedPostgresClient,
@@ -154,7 +155,9 @@ function cronToParams(row: CronRow): unknown[] {
 }
 
 async function ensureSchema(sql: PostgresCronSql): Promise<void> {
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_crons (
+  await sql.begin(async (tx) => {
+    await lockRelation(tx, PG_DDL_LOCK.crons);
+    await tx.exec(`CREATE TABLE IF NOT EXISTS oke_crons (
     name TEXT PRIMARY KEY,
     declared_cron TEXT,
     declared_every TEXT,
@@ -171,6 +174,7 @@ async function ensureSchema(sql: PostgresCronSql): Promise<void> {
     next_run_at BIGINT,
     dst_ambiguity TEXT
   )`);
+  });
 }
 
 /**
@@ -256,6 +260,7 @@ export function createPostgresCronFake(): PostgresCronSql & {
       const text = sql.trim();
       const state = view();
 
+      if (/pg_advisory_xact_lock/i.test(text)) return { changes: 0 };
       if (/^CREATE\s+TABLE/i.test(text)) return { changes: 0 };
 
       const upsert =

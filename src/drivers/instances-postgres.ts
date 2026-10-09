@@ -8,6 +8,7 @@
 import type { ConfigEnv } from "../config/index.ts";
 import type { InstanceRow, InstanceStore } from "../kernel/instances.ts";
 import { affectedRows } from "./affected-rows.ts";
+import { execIfNotExists } from "./pg-ddl.ts";
 import {
   resolvePostgresUrl,
   sharedPostgresClient,
@@ -78,15 +79,19 @@ function rowFromDb(row: Record<string, unknown>): InstanceRow {
 }
 
 async function ensureSchema(sql: PostgresInstanceSql): Promise<void> {
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_instances (
+  await execIfNotExists(
+    sql,
+    `CREATE TABLE IF NOT EXISTS oke_instances (
     id TEXT PRIMARY KEY,
     started_at BIGINT NOT NULL,
     heartbeat_at BIGINT NOT NULL,
     lease_expires_at BIGINT NOT NULL,
     env TEXT NOT NULL,
     pid INTEGER
-  )`);
-  await sql.exec(
+  )`,
+  );
+  await execIfNotExists(
+    sql,
     `CREATE INDEX IF NOT EXISTS oke_instances_lease ON oke_instances (lease_expires_at)`,
   );
 }

@@ -35,6 +35,7 @@ import {
   type SignalUnsubscribe,
   type LiveSubscribeOptions,
 } from "./signal-types.ts";
+import { lockRelation, PG_DDL_LOCK } from "./pg-ddl.ts";
 import { createLiveIterable } from "./signal-live-iter.ts";
 import { liveIdsToPrune, skipAfterId } from "./signal-retention.ts";
 
@@ -477,6 +478,7 @@ export function createPostgresSignalFake(options?: {
       const text = sql.trim();
       const state = view();
 
+      if (/pg_advisory_xact_lock/i.test(text)) return { changes: 0 };
       if (isCreateTable(text)) return { changes: 0 };
       // Dedicated index branch before the broader CREATE INDEX match.
       if (isDeliveryDbAtIndex(text)) return { changes: 0 };
@@ -649,7 +651,9 @@ export function createPostgresSignalFake(options?: {
 }
 
 async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_signal_messages (
+  await sql.begin(async (tx) => {
+    await lockRelation(tx, PG_DDL_LOCK.signalMessages);
+    await tx.exec(`CREATE TABLE IF NOT EXISTS oke_signal_messages (
     id TEXT PRIMARY KEY,
     signal TEXT,
     payload TEXT,
@@ -666,50 +670,54 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     parent_run_id TEXT,
     db_at BIGINT
   )`);
-  // Existing tables created before leases / keys: add columns in place.
-  try {
-    await sql.exec(
-      `ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS lease_expires_at BIGINT`,
-    );
-  } catch {
-    /* fake / older engines without IF NOT EXISTS — ignore */
-  }
-  try {
-    await sql.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS ordering_key TEXT`);
-  } catch {
-    /* fake / older engines without IF NOT EXISTS — ignore */
-  }
-  try {
-    await sql.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS parent_run_id TEXT`);
-  } catch {
-    /* fake / older engines without IF NOT EXISTS — ignore */
-  }
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_signal_writes (
+    // Existing tables created before leases / keys: add columns in place.
+    try {
+      await tx.exec(
+        `ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS lease_expires_at BIGINT`,
+      );
+    } catch {
+      /* fake / older engines without IF NOT EXISTS — ignore */
+    }
+    try {
+      await tx.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS ordering_key TEXT`);
+    } catch {
+      /* fake / older engines without IF NOT EXISTS — ignore */
+    }
+    try {
+      await tx.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS parent_run_id TEXT`);
+    } catch {
+      /* fake / older engines without IF NOT EXISTS — ignore */
+    }
+    await lockRelation(tx, PG_DDL_LOCK.signalWrites);
+    await tx.exec(`CREATE TABLE IF NOT EXISTS oke_signal_writes (
     key TEXT PRIMARY KEY,
     value TEXT
   )`);
-  try {
-    await sql.exec(
-      `CREATE INDEX IF NOT EXISTS oke_signal_messages_live_created ON oke_signal_messages (signal, delivery, created_at)`,
-    );
-  } catch {
-    /* fake / older engines without IF NOT EXISTS — ignore */
-  }
-  try {
-    await sql.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS db_at BIGINT`);
-  } catch {
-    /* fake / older engines without IF NOT EXISTS — ignore */
-  }
-  try {
-    await sql.exec(POSTGRES_SIGNAL_FANOUT_SQL.backfill);
-  } catch {
-    /* fake / older engines — ignore */
-  }
-  try {
-    await sql.exec(POSTGRES_SIGNAL_FANOUT_SQL.index);
-  } catch {
-    /* fake / older engines without IF NOT EXISTS — ignore */
-  }
+    try {
+      await lockRelation(tx, PG_DDL_LOCK.signalLiveCreated);
+      await tx.exec(
+        `CREATE INDEX IF NOT EXISTS oke_signal_messages_live_created ON oke_signal_messages (signal, delivery, created_at)`,
+      );
+    } catch {
+      /* fake / older engines without IF NOT EXISTS — ignore */
+    }
+    try {
+      await tx.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS db_at BIGINT`);
+    } catch {
+      /* fake / older engines without IF NOT EXISTS — ignore */
+    }
+    try {
+      await tx.exec(POSTGRES_SIGNAL_FANOUT_SQL.backfill);
+    } catch {
+      /* fake / older engines — ignore */
+    }
+    try {
+      await lockRelation(tx, PG_DDL_LOCK.signalDeliveryDbAt);
+      await tx.exec(POSTGRES_SIGNAL_FANOUT_SQL.index);
+    } catch {
+      /* fake / older engines without IF NOT EXISTS — ignore */
+    }
+  });
 }
 
 function rowToMessage(row: Record<string, unknown>): SignalMessage {

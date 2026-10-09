@@ -6,6 +6,7 @@
  * Receipt reloads merge rows touched since the last read and keep the rest.
  */
 
+import { execIfNotExists } from "../../drivers/pg-ddl.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
 import type { ConsentStore, OptOut } from "./consent.ts";
 import type { DeliveryReceipt, ReceiptLedger } from "./receipts.ts";
@@ -74,21 +75,28 @@ const RECEIPT_RELOAD_LAG_MS = 30_000;
 export async function openPostgresChannelLedger(
   sql: ChannelLedgerSql,
 ): Promise<PostgresChannelLedger> {
-  await sql.exec(
+  await execIfNotExists(
+    sql,
     `CREATE TABLE IF NOT EXISTS ${CONSENT} (subject TEXT NOT NULL, medium TEXT NOT NULL, at BIGINT NOT NULL, PRIMARY KEY (subject, medium))`,
   );
-  await sql.exec(
+  await execIfNotExists(
+    sql,
     `CREATE TABLE IF NOT EXISTS ${BOUNCE} (subject TEXT NOT NULL, medium TEXT NOT NULL, at BIGINT NOT NULL, PRIMARY KEY (subject, medium))`,
   );
-  await sql.exec(`CREATE TABLE IF NOT EXISTS ${RECEIPT} (id TEXT PRIMARY KEY, body TEXT NOT NULL)`);
+  await execIfNotExists(
+    sql,
+    `CREATE TABLE IF NOT EXISTS ${RECEIPT} (id TEXT PRIMARY KEY, body TEXT NOT NULL)`,
+  );
   await sql.exec(
     `ALTER TABLE ${RECEIPT} ADD COLUMN IF NOT EXISTS updated_at BIGINT NOT NULL DEFAULT 0`,
   );
   await sql.exec(`ALTER TABLE ${RECEIPT} ADD COLUMN IF NOT EXISTS message_id TEXT`);
-  await sql.exec(
+  await execIfNotExists(
+    sql,
     `CREATE INDEX IF NOT EXISTS oke_channel_receipt_message_id_idx ON ${RECEIPT} (message_id)`,
   );
-  await sql.exec(
+  await execIfNotExists(
+    sql,
     `CREATE INDEX IF NOT EXISTS oke_channel_receipt_updated_at_idx ON ${RECEIPT} (updated_at)`,
   );
 
