@@ -23,7 +23,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - The release workflow grants `ci.yml` its `contents: read`, `issues: read`, and `pull-requests: write` permissions. A smaller grant fails at startup, before npm, JSR, or the GitHub Release run.
 - Postgres `exec` reads `count` and `affectedRows`, so a leased durable flow no longer throws OKE1074 on Bun 1.4.2.
 - 0.23.2 and 0.24.0 do not work with Postgres on Bun 1.4.2. Upgrade to 0.24.1.
-- Cache invalidation is skipped only when the instance registry is fresh and shows no other live instance. A missing table, a registry that has not been read, or a snapshot older than one poll still publishes.
+- Cache invalidation is skipped only when a fresh read of the instance registry shows no other live instance. A snapshot that says the process is alone is read again before the skip, so a peer that registered during the last poll is still notified. A missing table, a registry that has not been read, or a snapshot older than one poll still publishes.
 - A channel receipt update on an instance that has not reloaded loads the stored row, including a provider message id that exists only in the body, and writes the new status before it returns.
 - Two instances installing the `oke.*` row-security helpers, or creating the same table on the first insert, no longer fail the request with `tuple concurrently updated`. A clock handler that is killed mid-run is tried again when its lease expires.
 - The Redis competing-consumer test reads the process-start `REDIS_URL`, so a suite that clears the variable cannot skip it.

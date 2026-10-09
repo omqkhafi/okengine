@@ -298,6 +298,58 @@ test("a missing or stale registry still publishes", async () => {
   await bus.stop();
 });
 
+test("a peer that appears inside the poll window is published, and an expired peer does not latch the skip", async () => {
+  const inserts: string[] = [];
+  let peers = 0;
+  let clock = 0;
+  const sql = (): CacheBusSql => ({
+    async exec(statement) {
+      if (statement.startsWith("INSERT")) inserts.push(statement);
+      return { changes: 0 };
+    },
+    async query(statement) {
+      if (statement.includes("cache_clock") || statement.includes("db_now")) return [{ db_now: 1 }];
+      if (statement.includes("oke_instances")) return [{ n: peers }];
+      if (statement.includes("oke_cache_invalidations")) return [];
+      throw new Error(`unmatched ${statement}`);
+    },
+  });
+  let bus!: ReturnType<typeof openCacheInvalidation>;
+  const cache = createStoreCache({
+    fanout: (resources) => {
+      bus.publish(resources);
+    },
+  });
+  bus = openCacheInvalidation(cache, {
+    kind: "postgres",
+    origin: "self",
+    now: () => clock,
+    sql: async () => sql(),
+  });
+  await bus.poll();
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(0);
+
+  peers = 1;
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(1);
+
+  peers = 0;
+  inserts.length = 0;
+  await bus.poll();
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(0);
+
+  peers = 1;
+  cache.invalidate(["sql:notes"]);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(inserts).toHaveLength(1);
+  await bus.stop();
+});
+
 test.skipIf(!LIVE_PG)(
   "two postgres runtimes drop a cached read within 2s when the scheduler is off",
   async () => {
@@ -387,6 +439,110 @@ test.skipIf(!LIVE_PG)(
     } finally {
       await appA.stop();
       await appB?.stop();
+    }
+  },
+  10_000,
+);
+
+test.skipIf(!LIVE_PG)(
+  "a peer registered inside the last poll still drops a cached read within 2s",
+  async () => {
+    const url = LIVE_PG!;
+    const admin = sharedPostgresClient(url);
+    await admin.unsafe(`CREATE TABLE IF NOT EXISTS oke_instances (
+      id TEXT PRIMARY KEY,
+      started_at BIGINT NOT NULL,
+      heartbeat_at BIGINT NOT NULL,
+      lease_expires_at BIGINT NOT NULL,
+      env TEXT NOT NULL,
+      pid INTEGER
+    )`);
+    await admin.unsafe(`DELETE FROM oke_instances WHERE id = 'peer-window'`);
+    await admin.unsafe(
+      `INSERT INTO oke_instances (id, started_at, heartbeat_at, lease_expires_at, env, pid) VALUES ('peer-window', 1, 1, 1, 'test', 1)`,
+    );
+    const db = sql("db");
+    let reads = 0;
+    const read = flow("cache.window.read", {
+      effects: { reads: ["sql:db"] },
+      do: () => {
+        reads += 1;
+        return { n: reads };
+      },
+    });
+    const write = flow("cache.window.write", {
+      effects: { writes: ["sql:db"] },
+      do: () => ({ ok: true as const }),
+    });
+    const storeFor = (origin: string): StoreRuntime => {
+      let store!: StoreRuntime;
+      store = createStoreRuntime({
+        drivers: { sql: postgresDriver },
+        sql: { db: { name: "db", primary: { url } } },
+        cacheBus: { kind: "postgres", origin, sql: () => store.primarySql() },
+      });
+      store.register?.(db);
+      return store;
+    };
+    const storeA = storeFor("window-reader");
+    const storeB = storeFor("window-writer");
+    const appA = oke({
+      name: "cache-window-a",
+      env: "test",
+      autoBoot: false,
+      startScheduler: false,
+      stores: [db],
+      bindings: [{ trigger: http.get("/read").public(), flow: read as AnyFlowDef }],
+      gate: { unguardedHttp: "allow", policies: [gate.public] },
+      elements: { store: storeA },
+    });
+    const appB = oke({
+      name: "cache-window-b",
+      env: "test",
+      autoBoot: false,
+      startScheduler: false,
+      stores: [db],
+      bindings: [{ trigger: http.post("/write").public(), flow: write as AnyFlowDef }],
+      gate: { unguardedHttp: "allow", policies: [gate.public] },
+      elements: { store: storeB },
+    });
+    try {
+      await appA.boot();
+      await appB.boot();
+      expect((await appA.fetch(new Request("http://127.0.0.1/read"))).status).toBe(200);
+      expect((await appA.fetch(new Request("http://127.0.0.1/read"))).status).toBe(200);
+      expect(reads).toBe(1);
+      await storeB.pollCacheInvalidations();
+      await admin.unsafe(
+        `UPDATE oke_instances SET lease_expires_at = 9999999999999, heartbeat_at = 9999999999999 WHERE id = 'peer-window'`,
+      );
+      expect(
+        (
+          await appB.fetch(
+            new Request("http://127.0.0.1/write", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            }),
+          )
+        ).status,
+      ).toBe(200);
+      const deadline = Date.now() + 2_000;
+      let dropped = false;
+      while (Date.now() < deadline) {
+        await appA.fetch(new Request("http://127.0.0.1/read"));
+        if (reads >= 2) {
+          dropped = true;
+          break;
+        }
+        await Bun.sleep(20);
+      }
+      expect(dropped).toBe(true);
+    } finally {
+      await appA.stop();
+      await appB.stop();
+      await admin.unsafe(`DELETE FROM oke_instances WHERE id = 'peer-window'`);
+      await admin.unsafe(`DELETE FROM oke_cache_invalidations WHERE origin = 'window-writer'`);
     }
   },
   10_000,

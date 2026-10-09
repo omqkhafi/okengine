@@ -243,17 +243,26 @@ function openPostgres(
     if (seen.size > 10_000) seen.clear();
   }
 
-  async function refreshFleet(conn: CacheBusSql): Promise<void> {
+  /**
+   * Recount live peers.
+   *
+   * @returns Whether another lease is live. `undefined` when the read failed
+   * and the previous snapshot must not be trusted.
+   */
+  async function refreshFleet(conn: CacheBusSql): Promise<boolean | undefined> {
     try {
       const rows = await conn.query(FLEET_SQL, [origin]);
       othersAlive = asNumber(rows[0]?.n) > 0;
       registryKnown = true;
       fleetCheckedAt = now();
+      return othersAlive;
     } catch (err) {
       if (isUndefinedTable(err)) {
         registryKnown = false;
         fleetCheckedAt = 0;
+        othersAlive = false;
       }
+      return undefined;
     }
   }
 
@@ -272,7 +281,14 @@ function openPostgres(
   return {
     publish(resources) {
       if (stopped || resources.length === 0) return;
-      void insert(sql, origin, resources, shouldNotify);
+      void insert(sql, origin, resources, async (conn) => {
+        if (shouldNotify()) return true;
+        // A fresh "no peers" snapshot is only a hint. A peer that registered
+        // during this poll is invisible until the next refresh, and one missed
+        // write then sits until the cache TTL. Re-read before skipping.
+        const alive = await refreshFleet(conn);
+        return alive !== false;
+      });
     },
     poll,
     async stop() {
@@ -291,10 +307,10 @@ async function insert(
   connect: () => Promise<CacheBusSql | undefined>,
   origin: string,
   resources: readonly ResourceRef[],
-  shouldNotify: () => boolean,
+  shouldNotify: (conn: CacheBusSql) => Promise<boolean>,
 ): Promise<void> {
   const conn = await connect();
-  if (!conn || !shouldNotify() || resources.length === 0) return;
+  if (!conn || resources.length === 0 || !(await shouldNotify(conn))) return;
   const params: unknown[] = [];
   const tuples = resources.map((resource) => {
     params.push(crypto.randomUUID(), resource, origin);

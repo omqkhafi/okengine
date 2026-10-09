@@ -183,50 +183,69 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       ).toBe(true);
 
       // Concurrent Store + Signal + Gate traffic on both instances.
+      // SIGKILL of A resets sockets that were already open. A reset of A
+      // before that kill, or a request started after it, still fails the test.
+      let killingA = false;
+      const isSocketReset = (err: unknown): boolean => {
+        if (err === null || typeof err !== "object") return false;
+        const row = err as { code?: unknown; message?: unknown };
+        return (
+          row.code === "ECONNRESET" ||
+          (typeof row.message === "string" && row.message.includes("ECONNRESET"))
+        );
+      };
+      const fetchBurst = (url: string, init?: RequestInit): Promise<Response | undefined> => {
+        const startedBeforeKill = !killingA;
+        if (!startedBeforeKill && url.startsWith(urlA)) return Promise.resolve(undefined);
+        return fetch(url, init).catch((err: unknown) => {
+          const path =
+            err !== null && typeof err === "object" && "path" in err
+              ? String((err as { path?: unknown }).path)
+              : url;
+          if (killingA && startedBeforeKill && path.startsWith(urlA) && isSocketReset(err)) {
+            return undefined;
+          }
+          throw err;
+        });
+      };
       const traffic = async () => {
         for (let i = 0; i < 8; i++) {
+          if (killingA) return;
           await Promise.all([
-            fetch(`${urlA}/write`, {
+            fetchBurst(`${urlA}/write`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlB}/write`, {
+            fetchBurst(`${urlB}/write`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlA}/emit`, {
+            fetchBurst(`${urlA}/emit`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlB}/emit`, {
+            fetchBurst(`${urlB}/emit`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlA}/ping`),
-            fetch(`${urlB}/ping`),
+            fetchBurst(`${urlA}/ping`),
+            fetchBurst(`${urlB}/ping`),
           ]);
         }
       };
-      // SIGKILL of A lands while this burst is still in flight. Requests already
-      // on A's socket reset; that is the crash, not a failed peer. Attach the
-      // catch now so the rejection is not unhandled before the later await.
-      let killingA = false;
-      const trafficPromise = traffic().catch((err: unknown) => {
-        const path =
-          err !== null && typeof err === "object" && "path" in err
-            ? String((err as { path?: unknown }).path)
-            : "";
-        const code =
-          err !== null && typeof err === "object" && "code" in err
-            ? (err as { code?: unknown }).code
-            : undefined;
-        if (killingA && path.startsWith(urlA) && code === "ECONNRESET") return;
-        throw err;
-      });
+      let trafficError: unknown;
+      const trafficPromise = traffic().then(
+        () => undefined,
+        (err: unknown) => {
+          trafficError = err;
+          throw err;
+        },
+      );
+      void trafficPromise.catch(() => {});
 
       // (3) Gate rate — 5 ok shared across A+B, 6th limited.
       const rateIp = `203.0.113.${1 + (Date.now() % 200)}`;
@@ -252,6 +271,9 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       expect(await waitForFile(join(dir, "hang-inst-a.json"), 15_000)).toBe(true);
 
       // (5) Kill A mid combined scenario — B keeps serving.
+      // A reset already queued must surface before the flag can hide it.
+      await Bun.sleep(0);
+      if (trafficError) throw trafficError;
       killingA = true;
       a.kill(9);
       await a.exited;
