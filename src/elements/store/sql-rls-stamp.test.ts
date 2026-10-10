@@ -94,7 +94,8 @@ describe("sql-session RLS stamp on pooled postgres", () => {
 
     expect(a).toEqual([{ id: "a", owner: "alice" }]);
     expect(b).toEqual([{ id: "a", owner: "alice" }]);
-    expect(pool.reserveCalls.n).toBe(2);
+    // One shared checkout installs oke.* helpers, then each query reserves its stamp.
+    expect(pool.reserveCalls.n).toBe(3);
     expect(pool.rootBegins.n).toBe(0);
   });
 
@@ -110,7 +111,8 @@ describe("sql-session RLS stamp on pooled postgres", () => {
     });
     const rows = await handle.raw(`SELECT * FROM "notes" LIMIT 50`);
     expect(rows).toEqual([{ id: "a", owner: "alice" }]);
-    expect(pool.reserveCalls.n).toBe(1);
+    // Helper install, then the stamped browse. Neither is a root BEGIN.
+    expect(pool.reserveCalls.n).toBe(2);
     expect(pool.rootBegins.n).toBe(0);
   });
 

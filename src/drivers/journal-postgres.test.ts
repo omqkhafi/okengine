@@ -11,7 +11,9 @@ import {
   createPostgresJournalFake,
   createPostgresJournalStore,
   postgresJournalStatements,
+  type BunJournalClient,
 } from "./journal-postgres.ts";
+import type { PostgresQueryResult } from "./postgres.ts";
 
 function seedRun(patch: Partial<JournalRun> & { id: string }): JournalRun {
   return {
@@ -277,5 +279,22 @@ describe("postgres JournalStore (fake)", () => {
     }
     await expect(sql.exec("UPDATE oke_journal_runs SET nope = 1")).rejects.toThrow(/unsupported/);
     await sql.close();
+  });
+
+  test("a Bun UPDATE array with count and no changes is one affected row", async () => {
+    const client: BunJournalClient = {
+      async unsafe() {
+        return Object.assign([] as PostgresQueryResult, { count: 1 });
+      },
+      async begin(fn) {
+        return fn(client);
+      },
+      async close() {},
+    };
+    const store = await createPostgresJournalStore({ client });
+    expect((await store.sql.exec("UPDATE oke_journal_runs SET status = 'running'")).changes).toBe(
+      1,
+    );
+    await store.close();
   });
 });

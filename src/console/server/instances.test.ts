@@ -11,9 +11,20 @@ import { createConsoleState } from "./state.ts";
 
 describe("listInstances", () => {
   test("unbound registry is empty, not alive 0", async () => {
-    const state = createConsoleState({ silentClaim: true });
-    const list = await state.listInstances();
-    expect(list).toEqual({ kind: "empty" });
+    const prevDatabase = process.env.DATABASE_URL;
+    const prevStoreSql = process.env.OKE_STORE_SQL_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.OKE_STORE_SQL_URL;
+    try {
+      const state = createConsoleState({ silentClaim: true });
+      const list = await state.listInstances();
+      expect(list).toEqual({ kind: "empty" });
+    } finally {
+      if (prevDatabase === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = prevDatabase;
+      if (prevStoreSql === undefined) delete process.env.OKE_STORE_SQL_URL;
+      else process.env.OKE_STORE_SQL_URL = prevStoreSql;
+    }
   });
 
   test("injected store returns fleet + lease join", async () => {

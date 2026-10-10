@@ -242,8 +242,9 @@ export function createConfirmationGate(options: ConfirmationGateOptions = {}): C
         // Missing locally — including a token issued on another process.
         return { ok: false, reason: "unknown" };
       }
-      // Single-use: remove before further checks so replay fails.
-      drop(byId, byToken, entry);
+      // Reject before drop. A wrong session must not burn the single-use token.
+      // There is no await between the checks and the drop, so one process
+      // still consumes the token at most once.
       if (entry.expiresAt <= now()) {
         return { ok: false, reason: "expired" };
       }
@@ -262,6 +263,7 @@ export function createConfirmationGate(options: ConfirmationGateOptions = {}): C
       if (entry.token === null) {
         return { ok: false, reason: "unknown" };
       }
+      drop(byId, byToken, entry);
       return {
         ok: true,
         pending: {

@@ -252,7 +252,7 @@ These sit on `oke({ ... })`, not in `oke.config.ts`.
 
 Postgres broadcast and live poll with `lagMs`, default `30000`. That window is best-effort, not a gap-free cursor.
 
-A write drops the auto-cache on every instance. With Redis configured, the notice is published on `oke:cache:invalidate`. Otherwise a Postgres app polls `oke_cache_invalidations`. One process does not broadcast.
+A write drops the auto-cache on every instance. With Redis configured, the notice is published on `oke:cache:invalidate`. Otherwise a Postgres app polls `oke_cache_invalidations` on its own one-second timer, including when `startScheduler` is false. One process does not broadcast. Before it skips that insert it reads `oke_instances` again, so a peer that registered during the last poll is still notified.
 
 ## console
 

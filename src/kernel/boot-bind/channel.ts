@@ -4,6 +4,7 @@
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { CHANNEL_EMAIL_DEFAULTS, CHANNEL_SMS_DEFAULTS } from "../../config/driver-defaults.ts";
+import { affectedRows } from "../../drivers/affected-rows.ts";
 import { sharedPostgresClient, toPostgresParams } from "../../drivers/postgres.ts";
 import type { PostgresClientLike } from "../../drivers/postgres.ts";
 import { openConsoleChannel } from "../../drivers/channel-console.ts";
@@ -30,7 +31,7 @@ import type { BootOptions } from "../boot.ts";
  *
  * @param client - Shared postgres client
  */
-function asChannelSql(client: PostgresClientLike): ChannelLedgerSql {
+export function asChannelSql(client: PostgresClientLike): ChannelLedgerSql {
   return {
     async query(sql, params = []) {
       const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
@@ -39,16 +40,7 @@ function asChannelSql(client: PostgresClientLike): ChannelLedgerSql {
     },
     async exec(sql, params = []) {
       const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof result.changes === "number"
-      ) {
-        return { changes: result.changes };
-      }
-      if (Array.isArray(result)) return { changes: result.length };
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
   };
 }

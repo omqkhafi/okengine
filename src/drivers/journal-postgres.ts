@@ -33,12 +33,15 @@ import {
   type JournalStore,
   type JournalWriteFence,
 } from "../kernel/journal.ts";
+import { affectedRows } from "./affected-rows.ts";
+import { lockRelation, PG_DDL_LOCK } from "./pg-ddl.ts";
 import {
   resolvePostgresUrl,
   sharedPostgresClient,
   toPostgresParams,
   withPinnedPostgres,
   type PostgresClientLike,
+  type PostgresQueryResult,
 } from "./postgres.ts";
 
 /** Row shape in `oke_journal_runs` (lease columns mirror `oke_crons`). */
@@ -156,10 +159,7 @@ export interface CreatePostgresJournalStoreOptions {
 
 /** Minimal Bun.SQL surface used by the real driver. */
 export interface BunJournalClient {
-  unsafe(
-    sql: string,
-    values?: unknown[],
-  ): PromiseLike<Record<string, unknown>[] | { length: number; changes?: number }>;
+  unsafe(sql: string, values?: unknown[]): PromiseLike<PostgresQueryResult>;
   begin<T>(fn: (tx: BunJournalClient) => Promise<T> | T): Promise<T>;
   close?(options?: { timeout?: number }): Promise<void>;
 }
@@ -175,16 +175,7 @@ function wrapBunClient(client: PostgresClientLike): PostgresJournalSql {
     async exec(sql, params = []) {
       const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof (result as { changes: unknown }).changes === "number"
-      ) {
-        return { changes: (result as { changes: number }).changes };
-      }
-      if (Array.isArray(result)) return { changes: result.length };
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
     async begin(fn) {
       return withPinnedPostgres(client, (tx) => fn(wrapBunClient(tx)));
@@ -358,7 +349,9 @@ function runToParams(run: JournalRun): unknown[] {
 }
 
 async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_journal_runs (
+  await sql.begin(async (tx) => {
+    await lockRelation(tx, PG_DDL_LOCK.journalRuns);
+    await tx.exec(`CREATE TABLE IF NOT EXISTS oke_journal_runs (
     id TEXT PRIMARY KEY,
     flow TEXT NOT NULL,
     input TEXT,
@@ -373,10 +366,11 @@ async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
     updated_at BIGINT NOT NULL,
     tenant TEXT
   )`);
-  await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS tenant TEXT`);
-  await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS lease_token BIGINT`);
-  await sql.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS code_version TEXT`);
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_journal_entries (
+    await tx.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS tenant TEXT`);
+    await tx.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS lease_token BIGINT`);
+    await tx.exec(`ALTER TABLE oke_journal_runs ADD COLUMN IF NOT EXISTS code_version TEXT`);
+    await lockRelation(tx, PG_DDL_LOCK.journalEntries);
+    await tx.exec(`CREATE TABLE IF NOT EXISTS oke_journal_entries (
     run_id TEXT NOT NULL,
     seq BIGINT NOT NULL,
     kind TEXT NOT NULL,
@@ -386,13 +380,16 @@ async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
     at BIGINT NOT NULL,
     PRIMARY KEY (run_id, seq)
   )`);
-  await sql.exec(
-    `CREATE INDEX IF NOT EXISTS oke_journal_runs_wake ON oke_journal_runs (status, wake_at)`,
-  );
-  await sql.exec(
-    `CREATE INDEX IF NOT EXISTS oke_journal_runs_lease ON oke_journal_runs (status, lease_expires_at)`,
-  );
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_idempotency (
+    await lockRelation(tx, PG_DDL_LOCK.journalRunsWake);
+    await tx.exec(
+      `CREATE INDEX IF NOT EXISTS oke_journal_runs_wake ON oke_journal_runs (status, wake_at)`,
+    );
+    await lockRelation(tx, PG_DDL_LOCK.journalRunsLease);
+    await tx.exec(
+      `CREATE INDEX IF NOT EXISTS oke_journal_runs_lease ON oke_journal_runs (status, lease_expires_at)`,
+    );
+    await lockRelation(tx, PG_DDL_LOCK.idempotency);
+    await tx.exec(`CREATE TABLE IF NOT EXISTS oke_idempotency (
     tenant TEXT NOT NULL DEFAULT '',
     principal TEXT NOT NULL,
     flow TEXT NOT NULL,
@@ -409,9 +406,11 @@ async function ensureSchema(sql: PostgresJournalSql): Promise<void> {
     expires_at BIGINT NOT NULL,
     PRIMARY KEY (tenant, principal, flow, key)
   )`);
-  await sql.exec(
-    `CREATE INDEX IF NOT EXISTS oke_idempotency_expires ON oke_idempotency (expires_at)`,
-  );
+    await lockRelation(tx, PG_DDL_LOCK.idempotencyExpires);
+    await tx.exec(
+      `CREATE INDEX IF NOT EXISTS oke_idempotency_expires ON oke_idempotency (expires_at)`,
+    );
+  });
 }
 
 /**
@@ -720,6 +719,7 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
       const text = sql.trim();
       const state = view();
 
+      if (/pg_advisory_xact_lock/i.test(text)) return { changes: 0 };
       if (/^CREATE\s+(TABLE|INDEX)/i.test(text) || /^ALTER\s+TABLE/i.test(text))
         return { changes: 0 };
 

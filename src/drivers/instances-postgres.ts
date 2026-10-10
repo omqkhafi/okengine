@@ -7,7 +7,14 @@
 
 import type { ConfigEnv } from "../config/index.ts";
 import type { InstanceRow, InstanceStore } from "../kernel/instances.ts";
-import { resolvePostgresUrl, sharedPostgresClient, toPostgresParams } from "./postgres.ts";
+import { affectedRows } from "./affected-rows.ts";
+import { execIfNotExists } from "./pg-ddl.ts";
+import {
+  resolvePostgresUrl,
+  sharedPostgresClient,
+  toPostgresParams,
+  type PostgresQueryResult,
+} from "./postgres.ts";
 
 /** Minimal SQL surface for the postgres instance store. */
 export interface PostgresInstanceSql {
@@ -28,10 +35,7 @@ export interface CreatePostgresInstanceStoreOptions {
 
 /** Minimal Bun.SQL surface used by the real driver. */
 export interface BunInstanceClient {
-  unsafe(
-    sql: string,
-    values?: unknown[],
-  ): PromiseLike<Record<string, unknown>[] | { length: number; changes?: number }>;
+  unsafe(sql: string, values?: unknown[]): PromiseLike<PostgresQueryResult>;
   close?(options?: { timeout?: number }): Promise<void>;
 }
 
@@ -48,16 +52,7 @@ function wrapBunClient(client: BunInstanceClient): PostgresInstanceSql {
     async exec(sql, params = []) {
       const pg = toPostgresParams(sql, params);
       const result = await client.unsafe(pg, [...params]);
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof (result as { changes: unknown }).changes === "number"
-      ) {
-        return { changes: (result as { changes: number }).changes };
-      }
-      if (Array.isArray(result)) return { changes: result.length };
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
     async close() {
       await client.close?.();
@@ -84,15 +79,19 @@ function rowFromDb(row: Record<string, unknown>): InstanceRow {
 }
 
 async function ensureSchema(sql: PostgresInstanceSql): Promise<void> {
-  await sql.exec(`CREATE TABLE IF NOT EXISTS oke_instances (
+  await execIfNotExists(
+    sql,
+    `CREATE TABLE IF NOT EXISTS oke_instances (
     id TEXT PRIMARY KEY,
     started_at BIGINT NOT NULL,
     heartbeat_at BIGINT NOT NULL,
     lease_expires_at BIGINT NOT NULL,
     env TEXT NOT NULL,
     pid INTEGER
-  )`);
-  await sql.exec(
+  )`,
+  );
+  await execIfNotExists(
+    sql,
     `CREATE INDEX IF NOT EXISTS oke_instances_lease ON oke_instances (lease_expires_at)`,
   );
 }

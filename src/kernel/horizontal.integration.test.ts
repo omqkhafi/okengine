@@ -43,6 +43,64 @@ async function waitForFile(path: string, timeoutMs = 20_000): Promise<boolean> {
   return false;
 }
 
+/** Drain a child pipe so a full buffer cannot stall boot. */
+function collectText(stream: ReadableStream<Uint8Array> | number | null | undefined): {
+  snapshot(): string;
+} {
+  let text = "";
+  if (!stream || typeof stream === "number") return { snapshot: () => "" };
+  const decoder = new TextDecoder();
+  void (async () => {
+    const reader = stream.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) text += decoder.decode(value, { stream: true });
+      }
+    } catch {
+      /* closed */
+    }
+  })();
+  return { snapshot: () => text };
+}
+
+/**
+ * Ready file, or the child's last stderr line as soon as it exits.
+ *
+ * @param proc - Spawned horizontal child
+ * @param stderr - Live stderr text
+ * @param path - `ready-*.json`
+ * @param timeoutMs - Upper bound when the child neither exits nor writes the file
+ */
+async function waitForReady(
+  proc: { exitCode: number | null },
+  stderr: { snapshot(): string },
+  path: string,
+  timeoutMs = 20_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await Bun.file(path).exists()) return;
+    if (proc.exitCode !== null) {
+      await Bun.sleep(30);
+      throw new Error(lastLine(stderr.snapshot()) || `child exited ${proc.exitCode}`);
+    }
+    await Bun.sleep(20);
+  }
+  throw new Error(lastLine(stderr.snapshot()) || `timed out waiting for ${path}`);
+}
+
+function lastLine(text: string): string {
+  return (
+    text
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .at(-1) ?? ""
+  );
+}
+
 async function waitFor(cond: () => Promise<boolean>, timeoutMs = 20_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -98,10 +156,14 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
 
     const a = spawn("inst-a", 0);
     const b = spawn("inst-b", 0);
+    const stderrA = collectText(a.stderr);
+    const stderrB = collectText(b.stderr);
+    collectText(a.stdout);
+    collectText(b.stdout);
 
     try {
-      expect(await waitForFile(join(dir, "ready-inst-a.json"))).toBe(true);
-      expect(await waitForFile(join(dir, "ready-inst-b.json"))).toBe(true);
+      await waitForReady(a, stderrA, join(dir, "ready-inst-a.json"));
+      await waitForReady(b, stderrB, join(dir, "ready-inst-b.json"));
       const readyA = (await Bun.file(join(dir, "ready-inst-a.json")).json()) as {
         port: number;
       };
@@ -121,42 +183,77 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       ).toBe(true);
 
       // Concurrent Store + Signal + Gate traffic on both instances.
+      // SIGKILL of A resets sockets that were already open. A reset of A
+      // before that kill, or a request started after it, still fails the test.
+      let killingA = false;
+      const isSocketReset = (err: unknown): boolean => {
+        if (err === null || typeof err !== "object") return false;
+        const row = err as { code?: unknown; message?: unknown };
+        return (
+          row.code === "ECONNRESET" ||
+          (typeof row.message === "string" && row.message.includes("ECONNRESET"))
+        );
+      };
+      const fetchBurst = (url: string, init?: RequestInit): Promise<Response | undefined> => {
+        const startedBeforeKill = !killingA;
+        if (!startedBeforeKill && url.startsWith(urlA)) return Promise.resolve(undefined);
+        return fetch(url, init).catch((err: unknown) => {
+          const path =
+            err !== null && typeof err === "object" && "path" in err
+              ? String((err as { path?: unknown }).path)
+              : url;
+          if (killingA && startedBeforeKill && path.startsWith(urlA) && isSocketReset(err)) {
+            return undefined;
+          }
+          throw err;
+        });
+      };
       const traffic = async () => {
         for (let i = 0; i < 8; i++) {
+          if (killingA) return;
           await Promise.all([
-            fetch(`${urlA}/write`, {
+            fetchBurst(`${urlA}/write`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlB}/write`, {
+            fetchBurst(`${urlB}/write`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlA}/emit`, {
+            fetchBurst(`${urlA}/emit`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlB}/emit`, {
+            fetchBurst(`${urlB}/emit`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: "{}",
             }),
-            fetch(`${urlA}/ping`),
-            fetch(`${urlB}/ping`),
+            fetchBurst(`${urlA}/ping`),
+            fetchBurst(`${urlB}/ping`),
           ]);
         }
       };
-      const trafficPromise = traffic();
+      let trafficError: unknown;
+      const trafficPromise = traffic().then(
+        () => undefined,
+        (err: unknown) => {
+          trafficError = err;
+          throw err;
+        },
+      );
+      void trafficPromise.catch(() => {});
 
       // (3) Gate rate — 5 ok shared across A+B, 6th limited.
+      const rateIp = `203.0.113.${1 + (Date.now() % 200)}`;
       const rateStatuses: number[] = [];
       for (let i = 0; i < 6; i++) {
         const target = i % 2 === 0 ? urlA : urlB;
         const res = await fetch(`${target}/rate`, {
-          headers: { "x-forwarded-for": "203.0.113.50" },
+          headers: { "x-forwarded-for": rateIp },
         });
         rateStatuses.push(res.status);
       }
@@ -165,17 +262,22 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
       expect(okRates).toBe(5);
       expect(limited).toBeGreaterThanOrEqual(1);
 
-      // (2) Start durable on A; hang mid-step.
-      void fetch(`${urlA}/charge`, {
+      // (2) Start durable on A; hang mid-step. SIGKILL resets this socket.
+      const charge = fetch(`${urlA}/charge`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",
-      });
+      }).catch(() => undefined);
       expect(await waitForFile(join(dir, "hang-inst-a.json"), 15_000)).toBe(true);
 
       // (5) Kill A mid combined scenario — B keeps serving.
+      // A reset already queued must surface before the flag can hide it.
+      await Bun.sleep(0);
+      if (trafficError) throw trafficError;
+      killingA = true;
       a.kill(9);
       await a.exited;
+      await charge;
 
       // B still serves unrelated HTTP while absorbing responsibilities.
       expect((await fetch(`${urlB}/ping`)).status).toBe(200);
@@ -194,8 +296,9 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
         }, 20_000),
       ).toBe(true);
 
-      // Keep traffic going on survivor (no deadlock).
-      await trafficPromise.catch(() => {});
+      // Keep traffic going on survivor (no deadlock). A's in-flight sockets
+      // already reset when it was killed; anything else still rejects here.
+      await trafficPromise;
       for (let i = 0; i < 4; i++) {
         expect(
           (
@@ -289,13 +392,20 @@ describe.skipIf(!LIVE)("horizontal — two OS processes, Postgres + Redis", () =
           DATABASE_URL: pg,
           REDIS_URL: redis,
           OKE_HORIZONTAL_REDIS_SIGNALS: "1",
+          // A different cron row, so this test's ticks do not consume the
+          // combined test's one due fire while both run in the same file.
+          OKE_HORIZONTAL_CRON: "horizontal-bus-cron",
         },
       });
     const a = spawn("bus-a", 0);
     const b = spawn("bus-b", 0);
+    const stderrA = collectText(a.stderr);
+    const stderrB = collectText(b.stderr);
+    collectText(a.stdout);
+    collectText(b.stdout);
     try {
-      expect(await waitForFile(join(dir, "ready-bus-a.json"))).toBe(true);
-      expect(await waitForFile(join(dir, "ready-bus-b.json"))).toBe(true);
+      await waitForReady(a, stderrA, join(dir, "ready-bus-a.json"));
+      await waitForReady(b, stderrB, join(dir, "ready-bus-b.json"));
       const readyA = (await Bun.file(join(dir, "ready-bus-a.json")).json()) as { port: number };
       const readyB = (await Bun.file(join(dir, "ready-bus-b.json")).json()) as { port: number };
       const urlA = `http://127.0.0.1:${readyA.port}`;
@@ -351,3 +461,29 @@ if (!LIVE) {
     expect(LIVE).toBeUndefined();
   });
 }
+
+test("a child that exits is reported from stderr without waiting out the file timeout", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "oke-horizontal-exit-"));
+  const started = Date.now();
+  const proc = Bun.spawn({
+    cmd: ["bun", childPath],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stderr = collectText(proc.stderr);
+  collectText(proc.stdout);
+  try {
+    await expect(waitForReady(proc, stderr, join(dir, "ready-missing.json"))).rejects.toThrow(
+      /usage:/,
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+  } finally {
+    try {
+      proc.kill();
+    } catch {
+      /* already dead */
+    }
+    await proc.exited;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

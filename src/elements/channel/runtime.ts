@@ -669,6 +669,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
         error: suppressed.reason === "opted-out" ? "opted out" : "prior hard bounce",
       };
       receipts.record(receipt);
+      await persistReceipts();
       return {
         ok: false,
         messageId: receipt.id,
@@ -751,8 +752,14 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
               .join("; "),
           }),
     });
+    await persistReceipts();
 
     return { ...result, attempts };
+  }
+
+  async function persistReceipts(): Promise<void> {
+    const pending = receipts as ReceiptLedger & { flush?: () => Promise<void> };
+    if (pending.flush) await pending.flush();
   }
 
   return {
@@ -789,11 +796,12 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       }
 
       if (existing) {
-        const updated = receipts.updateStatus(input.messageId, {
+        const updated = await receipts.updateStatus(input.messageId, {
           status: input.state,
           at,
           error: input.error,
         });
+        await persistReceipts();
         return updated ?? existing;
       }
 
@@ -809,6 +817,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
         ...(input.error !== undefined ? { error: input.error } : {}),
       };
       receipts.record(receipt);
+      await persistReceipts();
       return receipt;
     },
     send: sendTemplate,

@@ -177,7 +177,11 @@ export function bindStore(
     kvId === "redis" && kvUrl
       ? { kind: "redis" as const, redis: bunRedisCacheClient(kvUrl) }
       : sqlId === "postgres" && sqlUrl
-        ? { kind: "postgres" as const, sql: () => store.primarySql() }
+        ? {
+            kind: "postgres" as const,
+            origin: options.instanceId,
+            sql: () => store.primarySql(),
+          }
         : undefined;
   store = createStoreRuntime({
     drivers: {

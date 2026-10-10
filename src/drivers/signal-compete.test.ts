@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { startupRedisUrl } from "../test/reset-element-registries.ts";
 import { signal } from "../elements/signal.ts";
 import {
   openPostgresChannelLedger,
@@ -15,6 +16,9 @@ import {
   openRedisSignal,
   SIGNAL_REDIS_MIN_IDLE_MS,
 } from "./signal-redis.ts";
+
+/** Process-start URL. A suite that deletes `REDIS_URL` must not skip this file. */
+const redisUrlAtLoad = startupRedisUrl();
 
 function decls(name: string, retries = 3) {
   const decl = signal.once(name, { retries, deadLetter: true });
@@ -115,8 +119,8 @@ describe("redis streams competing consumers", () => {
     await b.close();
   });
 
-  test.skipIf(!process.env.REDIS_URL)("REDIS_URL: two clients ack once", async () => {
-    const url = process.env.REDIS_URL;
+  test.skipIf(!redisUrlAtLoad)("REDIS_URL: two clients ack once", async () => {
+    const url = redisUrlAtLoad;
     const name = `oke-compete-${Date.now()}`;
     const redisA = createBunSignalRedisClient(url);
     const redisB = createBunSignalRedisClient(url);

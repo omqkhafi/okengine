@@ -4,6 +4,7 @@
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { SIGNAL_DEFAULTS } from "../../config/driver-defaults.ts";
+import { affectedRows } from "../../drivers/affected-rows.ts";
 import {
   sharedPostgresClient,
   toPostgresParams,
@@ -50,7 +51,7 @@ function redisUrlFor(docker: boolean): string | undefined {
  *
  * @param client - Shared postgres pool
  */
-function asSignalSql(client: PostgresClientLike): PostgresSignalSql {
+export function asSignalSql(client: PostgresClientLike): PostgresSignalSql {
   return {
     async query(sql, params = []) {
       const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
@@ -59,16 +60,7 @@ function asSignalSql(client: PostgresClientLike): PostgresSignalSql {
     },
     async exec(sql, params = []) {
       const result = await client.unsafe(toPostgresParams(sql, params), [...params]);
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof result.changes === "number"
-      ) {
-        return { changes: result.changes };
-      }
-      if (Array.isArray(result)) return { changes: result.length };
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
     begin: (fn) => withPinnedPostgres(client, (tx) => fn(asSignalSql(tx))),
     async close() {
