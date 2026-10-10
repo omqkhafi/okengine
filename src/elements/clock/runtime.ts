@@ -164,7 +164,9 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
     if (!fresh) return false;
     if (!opts?.force && !isDue(fresh, now())) return false;
 
-    // Claim the slot before the handler so a stacked 1s tick cannot re-enter.
+    // The lease stops a second tick from entering. Record after the handler so
+    // a kill mid-handler is tried again once the lease expires. A thrown
+    // handler still claims the interval — the next tick must not retry it.
     const ranAt = now();
     const sched = effectiveSchedule(fresh);
     let nextRunAt = fresh.nextRunAt;
@@ -174,15 +176,20 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
     } else if (sched.cron) {
       nextRunAt = nextCronFireAt(sched.cron, ranAt, fresh.timezone) ?? fresh.nextRunAt;
     }
+    const template = templateNameOf(name);
+    const handler = handlers.get(name) ?? (template ? handlers.get(template) : undefined);
+    let thrown: unknown;
+    try {
+      if (handler) await handler(fresh);
+    } catch (err) {
+      thrown = err;
+    }
     await store.put({
       ...fresh,
       lastRunAt: ranAt,
       nextRunAt,
     });
-
-    const template = templateNameOf(name);
-    const handler = handlers.get(name) ?? (template ? handlers.get(template) : undefined);
-    if (handler) await handler(fresh);
+    if (thrown !== undefined) throw thrown;
     return true;
   }
 

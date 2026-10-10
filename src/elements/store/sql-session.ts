@@ -6,6 +6,7 @@
  */
 
 import type { DomainDdlMode } from "../../config/index.ts";
+import { execIfNotExists, lockRelation } from "../../drivers/pg-ddl.ts";
 import type { SignalEmitOptions, SignalTransaction } from "../../drivers/signal-types.ts";
 import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/types.ts";
 import {
@@ -189,10 +190,37 @@ export async function withCdcMutationId<T>(mutationId: string, fn: () => Promise
  */
 const rlsHelperInstalls = new WeakMap<SqlConnection, Promise<void>>();
 
+/**
+ * Tables already confirmed on this connection. A handle is built per request,
+ * so a per-handle set would re-run `to_regclass` on every insert and, under a
+ * burst, stall the shared pool.
+ */
+const ensuredTablesByConnection = new WeakMap<SqlConnection, Set<string>>();
+
+/** Tables this connection has already confirmed. */
+function ensuredTablesFor(connection: SqlConnection): Set<string> {
+  let set = ensuredTablesByConnection.get(connection);
+  if (!set) {
+    set = new Set<string>();
+    ensuredTablesByConnection.set(connection, set);
+  }
+  return set;
+}
+
 async function ensureOkeRlsHelpers(connection: SqlConnection): Promise<void> {
   let installing = rlsHelperInstalls.get(connection);
   if (!installing) {
-    installing = installOkeRlsHelpers((sql) => connection.exec(sql));
+    installing = (async () => {
+      // One short transaction so `pg_advisory_xact_lock` covers every helper
+      // statement. The lock drops at COMMIT, before the caller's own transaction.
+      if (connection.transaction) {
+        await connection.transaction(async (tx) => {
+          await installOkeRlsHelpers((sql) => tx.exec(sql), { transactional: true });
+        });
+        return;
+      }
+      await installOkeRlsHelpers((sql) => connection.exec(sql));
+    })();
     rlsHelperInstalls.set(connection, installing);
     // Failed install must not poison the cache — allow a retry.
     void installing.catch(() => rlsHelperInstalls.delete(connection));
@@ -721,7 +749,16 @@ export function createSqlStoreHandle(
    */
   async function withSchemaGuard<T>(fn: () => Promise<T>): Promise<T> {
     try {
-      return await fn();
+      let last: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          return await fn();
+        } catch (err) {
+          last = err;
+          if (!isConcurrentTupleUpdate(err)) throw err;
+        }
+      }
+      throw last;
     } catch (err) {
       if (isFlowFailure(err)) throw err;
       if (domainDdl === "off" && isMissingDomainRelationError(err)) {
@@ -729,7 +766,12 @@ export function createSqlStoreHandle(
       }
       if (isRetryableSqlError(err)) throw err;
       const failure = sqlErrorToFailure(err, { retryable: "leave" });
-      if (failure) throw failure;
+      if (failure) {
+        if (typeof failure === "object" && failure !== null && !("cause" in failure)) {
+          Object.defineProperty(failure, "cause", { value: err, enumerable: false });
+        }
+        throw failure;
+      }
       throw err;
     }
   }
@@ -793,11 +835,14 @@ export function createSqlStoreHandle(
     return connection.transaction(frame);
   }
 
+  const ensuredTables = ensuredTablesFor(connection);
+
   async function ensureFromMeta(table: TableHandle | unknown): Promise<void> {
     if (domainDdl !== "ensure") return;
     const cols = resolveColumns(table);
     if (cols.length === 0) return;
     const name = resolveTableName(table);
+    if (ensuredTables.has(name)) return;
     const pk = cols.find((c) => c.primary)?.sqlName;
     // ddlTypeOf already widens the int family to BIGINT; memory/SQLite accept
     // it too (dynamic typing), so no per-driver remap is needed.
@@ -808,7 +853,41 @@ export function createSqlStoreHandle(
         return `${quoteIdent(c.sqlName)} ${typ}`;
       })
       .join(", ");
-    await exec(`CREATE TABLE IF NOT EXISTS ${quoteIdent(name)} (${colSql})`);
+    const statement = `CREATE TABLE IF NOT EXISTS ${quoteIdent(name)} (${colSql})`;
+    if (connection.driverId === "postgres" && connection.transaction && !sqlTxStorage.getStore()) {
+      const present = await connection.query(`SELECT to_regclass(?) IS NOT NULL AS present`, [
+        name,
+      ]);
+      if (present[0]?.present === true) {
+        ensuredTables.add(name);
+        return;
+      }
+      await connection.transaction(async (tx) => {
+        await lockRelation(tx, domainDdlLock(name));
+        await tx.exec(statement);
+      });
+    } else {
+      await execIfNotExists({ exec: (sql) => activeConnection().exec(sql) }, statement);
+    }
+    ensuredTables.add(name);
+  }
+
+  function isConcurrentTupleUpdate(err: unknown): boolean {
+    let current: unknown = err;
+    for (let depth = 0; depth < 4 && current != null && typeof current === "object"; depth++) {
+      const row = current as { message?: unknown; cause?: unknown };
+      if (typeof row.message === "string" && row.message.includes("tuple concurrently updated")) {
+        return true;
+      }
+      current = row.cause;
+    }
+    return false;
+  }
+
+  function domainDdlLock(name: string): number {
+    let hash = 724_100;
+    for (let i = 0; i < name.length; i++) hash = Math.imul(hash, 33) + name.charCodeAt(i);
+    return hash & 0x7fffffff;
   }
 
   function toJs(table: TableHandle | unknown, rows: SqlRow[]): SqlRow[] {

@@ -649,6 +649,11 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     },
   };
 
+  Object.assign(runtime, {
+    stopCacheInvalidation: async () => {
+      if (stopInvalidation) await stopInvalidation();
+    },
+  });
   return runtime;
 }
 

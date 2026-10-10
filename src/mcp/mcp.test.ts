@@ -242,6 +242,71 @@ describe("MCP write confirmation", () => {
     expect(invoked).toBe(0);
   });
 
+  test("a rejected confirm stays open, and a wrong session does not burn the token", async () => {
+    let invoked = 0;
+    const runtime = runtimeWithInvoke(() => {
+      invoked += 1;
+    });
+    const { a, b } = await twoSessionsOf("op1");
+    const { a: other } = await twoSessionsOf("op2");
+    const actionArgs = { flowId: "bookings.create", body: { name: "Ada" } };
+    const confirmationId = await openConfirmation(runtime, a, "oke.action.invoke", actionArgs);
+    expect(runtime.confirmationSize()).toBe(1);
+
+    const same = await runtime.callTool(a, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
+    });
+    expect(same.ok).toBe(false);
+    expect(runtime.confirmationSize()).toBe(1);
+
+    const confirm = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
+    });
+    expect(confirm.ok).toBe(true);
+    if (!confirm.ok) return;
+    const token = stringField(confirm.data.content, "confirmToken");
+
+    const second = await runtime.callTool(b, "oke.action.confirm", {
+      confirmationId,
+      reason: CONFIRM_REASON,
+    });
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.message).toContain("already issued");
+
+    const stolen = await runtime.callTool(other, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: token,
+      reason: CONFIRM_REASON,
+    });
+    expect(stolen.ok).toBe(false);
+    if (!stolen.ok) expect(stolen.message).toContain("session-mismatch");
+    expect(runtime.confirmationSize()).toBe(1);
+    expect(invoked).toBe(0);
+
+    const first = await runtime.callTool(a, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: token,
+      reason: CONFIRM_REASON,
+    });
+    expect(first.ok).toBe(true);
+    expect(invoked).toBe(1);
+
+    const replay = await runtime.callTool(a, "oke.action.invoke", {
+      ...actionArgs,
+      confirmation: MCP_CONFIRM_PHRASE,
+      confirmToken: token,
+      reason: CONFIRM_REASON,
+    });
+    expect(replay.ok).toBe(false);
+    if (!replay.ok) expect(replay.message).toContain("unknown");
+    expect(invoked).toBe(1);
+    expect(runtime.confirmationSize()).toBe(0);
+  });
+
   test("a second session of the same principal confirms and the first invokes once", async () => {
     let invoked = 0;
     const runtime = runtimeWithInvoke(() => {

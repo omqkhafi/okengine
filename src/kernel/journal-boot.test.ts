@@ -22,7 +22,8 @@ import {
   type PostgresJournalStore,
 } from "../drivers/journal-postgres.ts";
 import { oke, type OkeApp } from "./app.ts";
-import { clearJournalHeartbeats } from "./journal.ts";
+import { OkeError } from "./errors.ts";
+import { clearJournalHeartbeats, type JournalRun } from "./journal.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { flow, resetFlowSeq, type AnyFlowDef } from "./flow.ts";
 import type { Binding } from "./on.ts";
@@ -451,6 +452,104 @@ describe.skipIf(!LIVE_URL)("chaos — postgres journal multi-process boot", () =
       const cleanup = await createPostgresJournalStore({ url });
       await cleanup.sql.exec(`DELETE FROM oke_journal_runs WHERE flow LIKE 'chaos.journal.%'`);
       await cleanup.close();
+    }
+  });
+
+  test("three leased steps complete, and a stale holder is still OKE1074", async () => {
+    const url = LIVE_URL!;
+    resetFlowSeq();
+    const store = await createPostgresJournalStore({ url });
+    await store.sql.exec(`DELETE FROM oke_journal_entries WHERE run_id = 'fence-stale'`);
+    await store.sql.exec(
+      `DELETE FROM oke_journal_runs WHERE flow IN ('fence.steps', 'fence.stale')`,
+    );
+    const steps: string[] = [];
+    const charge = flow("fence.steps", {
+      durable: true,
+      do: async (_input, fx) => {
+        await fx.step("one", () => {
+          steps.push("one");
+          return 1;
+        });
+        await fx.step("two", () => {
+          steps.push("two");
+          return 2;
+        });
+        await fx.step("three", () => {
+          steps.push("three");
+          return 3;
+        });
+        return { ok: true as const };
+      },
+    });
+    const app = await bootDurableApp({
+      name: "fence-steps",
+      journal: journalRuntime(store, "A", 30_000),
+      bindings: [{ trigger: http.post("/fence"), flow: charge as AnyFlowDef }],
+    });
+    try {
+      const res = await app.fetch(
+        new Request("http://localhost/fence", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(steps).toEqual(["one", "two", "three"]);
+      const runs = (await store.list()).filter((run) => run.flow === "fence.steps");
+      expect(runs).toHaveLength(1);
+      expect(runs[0]?.status).toBe("completed");
+      expect(runs[0]?.entries.filter((entry) => entry.kind === "step")).toHaveLength(3);
+      expect(runs[0]?.error).toBeUndefined();
+
+      const now = Date.now();
+      const stale: JournalRun = {
+        id: "fence-stale",
+        flow: "fence.stale",
+        input: undefined,
+        status: "running",
+        entries: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      await store.put(stale);
+      expect(await store.acquireLease(stale.id, "A", now, 60_000)).toBe(true);
+      const held = await store.get(stale.id);
+      const token = held?.leaseToken;
+      expect(token).toBeGreaterThan(0);
+      await store.appendEntry!(
+        stale.id,
+        0,
+        { kind: "step", name: "held", value: 1, at: now },
+        { lockedBy: "A", leaseToken: token!, now },
+      );
+      await store.sql.exec(`UPDATE oke_journal_runs SET lease_expires_at = ? WHERE id = ?`, [
+        now - 1,
+        stale.id,
+      ]);
+      expect(await store.acquireLease(stale.id, "B", now + 1, 60_000)).toBe(true);
+      let caught: unknown;
+      try {
+        await store.appendEntry!(
+          stale.id,
+          1,
+          { kind: "step", name: "stale", value: 2, at: now + 1 },
+          { lockedBy: "A", leaseToken: token!, now: now + 1 },
+        );
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(OkeError);
+      expect((caught as OkeError).code).toBe(1074);
+    } finally {
+      await app.stop();
+      await store.sql.exec(`DELETE FROM oke_journal_entries WHERE run_id = 'fence-stale'`);
+      await store.sql.exec(
+        `DELETE FROM oke_journal_runs WHERE flow IN ('fence.steps', 'fence.stale')`,
+      );
+      await store.close();
+      resetFlowSeq();
     }
   });
 });

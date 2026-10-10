@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { signal } from "../elements/signal.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
+import { asSignalSql } from "../kernel/boot-bind/signal.ts";
 import {
   POSTGRES_SIGNAL_FANOUT_SQL,
   createPostgresSignalFake,
@@ -166,5 +167,14 @@ describe("postgres broadcast and live fan-out", () => {
     await bus.drain();
     expect(got).toEqual([{ n: 1 }]);
     await bus.close();
+  });
+
+  test("a Bun UPDATE array with count and no changes is one affected row", async () => {
+    const sql = asSignalSql({
+      async unsafe() {
+        return Object.assign([], { count: 1 });
+      },
+    });
+    expect((await sql.exec("UPDATE oke_signal_messages SET status = 'pending'")).changes).toBe(1);
   });
 });

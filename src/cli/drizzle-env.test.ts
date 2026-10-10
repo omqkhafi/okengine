@@ -3,6 +3,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { startupRedisUrl } from "../test/reset-element-registries.ts";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -87,8 +88,9 @@ describe("applyComposeEnvToProcess", () => {
     } finally {
       if (prevDb === undefined) delete process.env["DATABASE_URL"];
       else process.env["DATABASE_URL"] = prevDb;
-      if (prevRedis === undefined) delete process.env["REDIS_URL"];
-      else process.env["REDIS_URL"] = prevRedis;
+      const redis = prevRedis ?? startupRedisUrl();
+      if (redis === undefined) delete process.env["REDIS_URL"];
+      else process.env["REDIS_URL"] = redis;
     }
   });
 });

@@ -12,9 +12,29 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+### ♻️ Changed
+
+- Export gzip baselines in `budgets.json` match the 0.24.1 Postgres fixes. Past the previous ceiling: `okengine` +2,573 B, `store` +1,337 B, `pg-rls` +546 B, `instances-postgres` +302 B. Also recorded: `full` +2,424 B, `console` +2,328 B, `drivers` +550 B, and new rows `pg-ddl` (752 B) and `affected-rows` (316 B).
+
+## v0.24.1 — 2026-10-10
+
+### ♻️ Changed
+
+- MCP confirm stays pending when the confirmation is rejected. See Security.
+
 ### 🐛 Fixed
 
 - The release workflow grants `ci.yml` its `contents: read`, `issues: read`, and `pull-requests: write` permissions. A smaller grant fails at startup, before npm, JSR, or the GitHub Release run.
+- Postgres `exec` reads `count` and `affectedRows`, so a leased durable flow no longer throws OKE1074 on Bun 1.4.2.
+- 0.23.2 and 0.24.0 do not work with Postgres on Bun 1.4.2. Upgrade to 0.24.1.
+- Cache invalidation is skipped only when a fresh read of the instance registry shows no other live instance. A snapshot that says the process is alone is read again before the skip, so a peer that registered during the last poll is still notified. A missing table, a registry that has not been read, or a snapshot older than one poll still publishes.
+- A channel receipt update on an instance that has not reloaded loads the stored row, including a provider message id that exists only in the body, and writes the new status before it returns.
+- Two instances installing the `oke.*` row-security helpers, or creating the same table on the first insert, no longer fail the request with `tuple concurrently updated`. A clock handler that is killed mid-run is tried again when its lease expires.
+- The Redis competing-consumer test reads the process-start `REDIS_URL`, so a suite that clears the variable cannot skip it.
+
+### 🔒 Security
+
+- MCP confirm uses `confirmationId`. Confirming is a different session. A rejected confirm does not consume the pending confirmation or the token.
 
 ## v0.24.0 — 2026-10-07
 
@@ -53,7 +73,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - Auto-cache entries expire after 60 seconds unless the flow sets `cache: "5m"` (or another duration). Override the default with `cache.defaultTtlMs`.
 - The auto-cache keeps at most 10,000 entries. Override it with `cache.maxEntries`.
 - A JSON-shaped body sent as `text/plain`, form data, or with no content type is 415. Send `Content-Type: application/json`, or set `jsonContentType: "any"` on the route.
-- Export gzip baselines in `budgets.json` match the journal fence, shared signal delivery, cache invalidation, and body-cap work. Kernel edge stays 14.36 kB and client runtime stays 5.10 kB.
+- Export gzip baselines in `budgets.json` match the journal fence, shared signal delivery, cache invalidation, and body-cap work. Kernel edge stays about 14.8 kB (14,835 B) and client runtime stays 5.10 kB.
 
 ### 🐛 Fixed
 

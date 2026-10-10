@@ -3,6 +3,7 @@
  * Drizzle emit, and Gate identity helpers (`oke.gate` / `oke.user` / `oke.has_scope`).
  */
 
+import { isDuplicateRelation, PG_DDL_LOCK } from "./pg-ddl.ts";
 import { lazyRequire } from "../kernel/lazy-require.ts";
 
 /** Policy command (`FOR`). */
@@ -148,21 +149,78 @@ export const OKE_PG_STAT_STATEMENTS_SQL = "CREATE EXTENSION IF NOT EXISTS pg_sta
  * `pg_stat_statements` is created first when the engine allows it, so Store
  * performance does not depend on a later manual `CREATE EXTENSION`.
  *
+ * Pass `transactional: true` only when `exec` already runs inside a
+ * transaction. The advisory lock is then held until that transaction
+ * commits, and a statement Postgres rejects is rolled back to a savepoint
+ * so the rest of the install still runs. Two processes can both reach
+ * `CREATE OR REPLACE FUNCTION` / `GRANT` otherwise, and Postgres fails the
+ * loser with `tuple concurrently updated`.
+ *
  * @param exec - Statement runner
+ * @param options - Set `transactional` when `exec` is already inside `BEGIN`
  */
-export async function installOkeRlsHelpers(exec: (sql: string) => Promise<unknown>): Promise<void> {
-  try {
-    await exec(OKE_PG_STAT_STATEMENTS_SQL);
-  } catch {
-    // Not preloaded, or this engine has no pg_stat_statements (pglite, cockroach).
-  }
+export async function installOkeRlsHelpers(
+  exec: (sql: string) => Promise<unknown>,
+  options?: { readonly transactional?: boolean },
+): Promise<void> {
+  const transactional = options?.transactional === true;
+  // Engines without advisory locks (PGlite) install without the cross-process lock.
+  await execTolerant(
+    exec,
+    `SELECT pg_advisory_xact_lock(${PG_DDL_LOCK.rlsHelpers})`,
+    () => true,
+    transactional,
+  );
+  // Not preloaded, or this engine has no pg_stat_statements (pglite, cockroach).
+  await execTolerant(exec, OKE_PG_STAT_STATEMENTS_SQL, () => true, transactional);
   for (const stmt of OKE_RLS_HELPER_STATEMENTS) {
-    await exec(stmt);
+    await execTolerant(exec, stmt, isDuplicateRelation, transactional);
   }
   const { attach } = lazyRequire<{
     attach: (exec: (sql: string) => Promise<unknown>) => Promise<void>;
   }>(import.meta.dir, ["pg", "vault", "rls"].join("-"));
   await attach(exec);
+}
+
+let rlsSavepointSeq = 0;
+
+/**
+ * Run one install statement. Inside a transaction, wrap it in a savepoint so
+ * a rejected statement does not abort the rest. Outside a transaction, a
+ * caught error does not abort anything.
+ *
+ * @param exec - Statement runner
+ * @param statement - SQL to run
+ * @param accept - True when the error should be ignored
+ * @param transactional - `exec` is already inside `BEGIN`
+ */
+async function execTolerant(
+  exec: (sql: string) => Promise<unknown>,
+  statement: string,
+  accept: (err: unknown) => boolean,
+  transactional: boolean,
+): Promise<void> {
+  if (!transactional) {
+    try {
+      await exec(statement);
+    } catch (err) {
+      if (!accept(err)) throw err;
+    }
+    return;
+  }
+  const name = `oke_rls_${rlsSavepointSeq++}`;
+  await exec(`SAVEPOINT ${name}`);
+  try {
+    await exec(statement);
+    await exec(`RELEASE SAVEPOINT ${name}`);
+  } catch (err) {
+    try {
+      await exec(`ROLLBACK TO SAVEPOINT ${name}`);
+    } catch {
+      // The transaction is already aborted.
+    }
+    if (!accept(err)) throw err;
+  }
 }
 
 /**

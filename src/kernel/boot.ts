@@ -702,6 +702,9 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       const journalStore = journal?.store as { close?: () => Promise<void> } | undefined;
       await journalStore?.close?.();
       await instances?.close();
+      await (
+        store as { stopCacheInvalidation?: () => Promise<void> } | undefined
+      )?.stopCacheInvalidation?.();
     },
   };
 }

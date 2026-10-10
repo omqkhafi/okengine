@@ -121,8 +121,9 @@ void seats;
       }),
     );
 
-    // `bunx tsc` under full-suite contention can exceed the default 5s budget.
-    const proc = Bun.spawn(["bunx", "tsc", "--project", tsconfig], {
+    // The temp project has no `tsc` script. Use the repo binary.
+    const tsc = join(import.meta.dir, "../../node_modules/typescript/bin/tsc");
+    const proc = Bun.spawn(["bun", tsc, "--project", tsconfig], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",

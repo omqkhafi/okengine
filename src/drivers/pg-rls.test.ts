@@ -160,8 +160,10 @@ describe("OKE_RLS_HELPER_STATEMENTS", () => {
         throw new Error("stop before vault attach");
       }
     }).catch(() => undefined);
-    expect(ran[0]).toBe(OKE_PG_STAT_STATEMENTS_SQL);
-    expect(ran[1]).toBe(OKE_RLS_HELPER_STATEMENTS[0]);
+    expect(ran[0]).toContain("pg_advisory_xact_lock");
+    const extensionAt = ran.indexOf(OKE_PG_STAT_STATEMENTS_SQL);
+    expect(extensionAt).toBeGreaterThanOrEqual(0);
+    expect(ran[extensionAt + 1]).toBe(OKE_RLS_HELPER_STATEMENTS[0]);
   });
 
   test("a rejected pg_stat_statements create still installs helpers", async () => {
@@ -176,7 +178,7 @@ describe("OKE_RLS_HELPER_STATEMENTS", () => {
         throw new Error("stop");
       }
     }).catch(() => undefined);
-    expect(ran[0]).toBe(OKE_PG_STAT_STATEMENTS_SQL);
+    expect(ran).toContain(OKE_PG_STAT_STATEMENTS_SQL);
     expect(ran.some((sql) => sql.includes("CREATE SCHEMA IF NOT EXISTS oke"))).toBe(true);
   });
 

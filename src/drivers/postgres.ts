@@ -4,6 +4,7 @@
  * Protocol-named: Neon, Supabase, RDS, Timescale all speak postgres.
  */
 
+import { affectedRows } from "./affected-rows.ts";
 import type { SqlConnectOptions, SqlConnection, SqlDriver, SqlRole, SqlRow } from "./types.ts";
 import { hostFromUrl } from "./external.ts";
 
@@ -13,12 +14,19 @@ export interface PostgresReservedClient extends PostgresClientLike {
   release(): void;
 }
 
+/**
+ * Bun.SQL `unsafe` result. DML is an array with `count` or `affectedRows`.
+ * `changes` is the older fake shape.
+ */
+export type PostgresQueryResult = SqlRow[] & {
+  readonly count?: number;
+  readonly affectedRows?: number;
+  readonly changes?: number;
+};
+
 /** Minimal surface we use from Bun.SQL (and test fakes). */
 export interface PostgresClientLike {
-  unsafe(
-    sql: string,
-    values?: unknown[],
-  ): PromiseLike<SqlRow[] | { length: number; changes?: number } | SqlRow[]>;
+  unsafe(sql: string, values?: unknown[]): PromiseLike<PostgresQueryResult>;
   /**
    * Pin one pooled TCP connection. Required in front of PgDog — `begin()`
    * then `unsafe()` on the parent client can checkout a second slot and
@@ -447,18 +455,7 @@ function wrapPostgresClient(
       if (opts.shared) assertSharedPostgresReady();
       const pg = toPostgresParams(sql, params);
       const result = await settlePostgres(client.unsafe(pg, [...params]));
-      if (
-        result &&
-        typeof result === "object" &&
-        "changes" in result &&
-        typeof (result as { changes: unknown }).changes === "number"
-      ) {
-        return { changes: (result as { changes: number }).changes };
-      }
-      if (Array.isArray(result)) {
-        return { changes: result.length };
-      }
-      return { changes: 0 };
+      return { changes: affectedRows(result) };
     },
     async transaction(fn) {
       if (opts.shared) assertSharedPostgresReady();
@@ -485,6 +482,11 @@ export function createPostgresFakeClient(): PostgresClientLike & {
     return raw.replaceAll('"', "").trim();
   }
 
+  /** Bun 1.4.2 DML shape: an array plus `count`, never `changes`. */
+  function counted(rows: SqlRow[], count: number): SqlRow[] {
+    return Object.assign(rows, { count });
+  }
+
   return {
     tables,
     async begin(fn) {
@@ -502,11 +504,19 @@ export function createPostgresFakeClient(): PostgresClientLike & {
       // Accept both ? (pre-conversion) and $n forms.
       const normalised = text.replace(/\$\d+/g, "?");
       if (
-        /^(begin|commit|rollback|set\b|select set_config|create\b|grant\b|do\b|alter\b)\b/i.test(
+        /^(begin|commit|rollback|set\b|select set_config|select pg_advisory_(xact_)?lock\b|create\b|grant\b|do\b|alter\b)\b/i.test(
           normalised,
         )
       ) {
         return [];
+      }
+
+      const regclass = /^SELECT\s+to_regclass\(\?\)\s+IS\s+NOT\s+NULL\s+AS\s+present\s*$/i.exec(
+        normalised,
+      );
+      if (regclass) {
+        const name = String(values[0] ?? "").replaceAll('"', "");
+        return [{ present: tables.has(name) }];
       }
 
       const create =
@@ -558,10 +568,10 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         }
         const list = tables.get(name) ?? [];
         const row = list.find((r) => r[whereCol] === values[1]);
-        if (!row) return [];
+        if (!row) return counted([], 0);
         const next = Number(row[setCol] ?? 0) + Number(values[0]);
         row[setCol] = next;
-        return [{ [retCol]: next }];
+        return counted([{ [retCol]: next }], 1);
       }
 
       // CTE-shaped atomic increment with jsonb image capture:
@@ -584,10 +594,10 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         }
         const list = tables.get(updateTable) ?? [];
         const row = list.find((r) => r[parseIdent(cteIncrement[1]!)] === values[0]);
-        if (!row) return [];
+        if (!row) return counted([], 0);
         const next = Number(row[setCol] ?? 0) + Number(values[1]);
         row[setCol] = next;
-        return [{ __oke_after_data: { ...row }, [retCol]: next }];
+        return counted([{ __oke_after_data: { ...row }, [retCol]: next }], 1);
       }
 
       const insertReturning =
@@ -604,7 +614,7 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         const list = tables.get(name) ?? [];
         list.push(row);
         tables.set(name, list);
-        return [{ ...row }];
+        return counted([{ ...row }], 1);
       }
 
       const insert =
@@ -621,7 +631,7 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         const list = tables.get(name) ?? [];
         list.push(row);
         tables.set(name, list);
-        return [];
+        return counted([], 1);
       }
 
       const del =
@@ -633,9 +643,9 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         const col = parseIdent(del[2]!);
         const list = tables.get(name) ?? [];
         const next = list.filter((r) => r[col] !== values[0]);
-        const changes = list.length - next.length;
+        const count = list.length - next.length;
         tables.set(name, next);
-        return Object.assign([], { changes });
+        return counted([], count);
       }
 
       throw new Error(`postgres fake: unsupported SQL: ${sql}`);

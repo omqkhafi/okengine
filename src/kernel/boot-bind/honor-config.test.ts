@@ -5,6 +5,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { startupRedisUrl } from "../../test/reset-element-registries.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +21,7 @@ import { bootApplication } from "../boot.ts";
 
 describe("boot binders honour drivers.* config", () => {
   const prevCwd = process.cwd();
+  const prevRedisUrl = process.env.REDIS_URL;
   let tmp: string | undefined;
 
   afterEach(async () => {
@@ -30,7 +32,9 @@ describe("boot binders honour drivers.* config", () => {
     }
     delete process.env.OKE_VAULT_URL;
     delete process.env.OKE_VAULT_TOKEN;
-    delete process.env.REDIS_URL;
+    const redis = prevRedisUrl ?? startupRedisUrl();
+    if (redis === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = redis;
   });
 
   test("vault: drivers.vault env builds env chain layers", async () => {
